@@ -85,19 +85,33 @@ def test_an_unknown_role_is_denied(gate):
 # ------------------------------------------- superadmin and case, at the root
 
 
-def test_superadmin_is_not_a_role_member_and_is_not_silently_treated_as_one():
-    """``Role("superadmin")`` raises, and this resolver does not paper over it.
+def test_superadmin_is_a_role_member_that_resolves_to_no_permissions():
+    """#13854 landed the first-class member; the answer it gives is unchanged.
 
-    An earlier version of this change mapped it onto admin's set via
-    ``ADMIN_ROLES``. That reads as a fix and is an authorisation expansion: it
-    granted 54 permissions including shell execution to a role that held none of
-    them. The genuine fix is a first-class ``Role`` member with its own
-    ``ROLE_PERMISSIONS`` entry — #13854.
+    This test used to assert ``Role("superadmin")`` *raises*. That was the
+    defect, not the contract: the empty permission list was produced by a failed
+    enum lookup, so superadmin was indistinguishable from a typo, and
+    ``role_has_permission`` — reading a different source — granted it everything
+    at the same time.
+
+    It is now a member with an explicitly empty ``ROLE_PERMISSIONS`` entry. The
+    resolved answer here is byte-identical to before; what changed is that it is
+    now stated in the canonical mapping rather than inferred from an exception.
     """
-    with pytest.raises(ValueError):
-        Role("superadmin")
-
+    assert Role("superadmin") is Role.SUPERADMIN
+    assert ROLE_PERMISSIONS[Role.SUPERADMIN] == []
     assert canonical_role_permissions("superadmin") == []
+
+
+def test_an_unrecognised_role_is_still_distinguishable_from_superadmin():
+    """Both resolve to ``[]``; only one of them is a role.
+
+    The point of the change is that these two cases stopped being the same
+    event. If superadmin were dropped from the enum again, this fails.
+    """
+    assert Role("superadmin") is Role.SUPERADMIN
+    with pytest.raises(ValueError):
+        Role("not-a-role")
 
 
 @pytest.mark.parametrize("role", ["Admin", "ADMIN", "  admin  ", "aDmIn"])
@@ -191,9 +205,10 @@ def test_a_role_that_may_not_run_a_shell_command_is_denied_at_the_gate(gate, rol
 def test_superadmin_gains_no_permissions_from_this_change(gate):
     """It is administrative via ``ADMIN_ROLES`` but holds no canonical grants.
 
-    Mapping it onto admin's set would hand it 54 permissions including shell
-    execution that it did not previously have — an authorisation expansion, not
-    the resolver fix #13820 decided. Tracked separately in #13854.
+    Still true after #13854 made it a ``Role`` member: the entry it gained is
+    an explicitly empty one. Mapping it onto admin's set would hand it 54
+    permissions including shell execution — an authorisation expansion, which
+    neither #13820 nor #13854 decided to make.
     """
     assert gate.check_permission("superadmin", "allow_shell_execute") is False
     assert gate.check_permission("superadmin", "admin.system") is False

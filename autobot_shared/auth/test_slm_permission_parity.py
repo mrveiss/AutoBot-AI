@@ -162,14 +162,11 @@ def test_slm_role_permissions_align_with_shared(slm_role):
     to ROLE_PERMISSIONS[Role.X] in the shared module but forgets to update
     SYSTEM_ROLES['x'] in the SLM backend → this test fails immediately.
     """
-    role_name_map = {
-        Role.ADMIN: "admin",
-        Role.OPERATOR: "operator",
-        Role.ANALYST: "analyst",
-        Role.EDITOR: "editor",
-        Role.USER: "user",
-        Role.READONLY: "readonly",
-    }
+    # Derived, not hand-listed (#13854). This was a hardcoded dict of the six
+    # members that existed when it was written; a seventh would have been
+    # skipped silently, which is exactly the drift the test exists to catch.
+    # Every Role member's SLM key is its own value.
+    role_name_map = {role: role.value for role in Role}
     gaps: dict[str, set[str]] = {}
     for shared_role, slm_key in role_name_map.items():
         if slm_key not in slm_role.SYSTEM_ROLES:

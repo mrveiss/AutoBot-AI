@@ -28,7 +28,7 @@ import uuid
 
 import aiohttp
 
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, is_admin_role
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
@@ -174,13 +174,16 @@ class MCPDispatcher:
         if declared is None:
             return "undeclared"
 
-        # superadmin is administrative but is not a Role enum member (see
-        # ADMIN_ROLES in autobot_shared.auth.permissions), so resolving it
-        # through Role() would report the most privileged role in the system as
-        # denied on every tool. is_admin_role is the canonical, case-insensitive
-        # answer.
-        if is_admin_role(role):
-            return None
+        # #13854 removed an ``is_admin_role`` short-circuit that stood here. It
+        # existed because ``superadmin`` was not a ``Role`` member, so resolving
+        # it through ``Role()`` raised and reported the most privileged role in
+        # the system as denied on every tool. It is a Role member now, so the
+        # canonical mapping answers for it like any other role — and what that
+        # mapping says is that superadmin holds no granular permission, so an
+        # MCP tool requiring one is refused. That is the deliberate reading of
+        # an empty ROLE_PERMISSIONS entry, not an accident of resolution: the
+        # short-circuit was the last place where being in ``ADMIN_ROLES``
+        # granted access that ``ROLE_PERMISSIONS`` never wrote down.
         try:
             held = _ROLE_PERMISSION_VALUES[Role(str(role or "").lower())]
         except (ValueError, KeyError):
