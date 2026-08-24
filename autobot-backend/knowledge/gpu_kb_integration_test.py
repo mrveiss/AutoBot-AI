@@ -53,6 +53,7 @@ def _require_real_redis(request) -> None:
         return
     require_real_redis_client("the knowledge base")
 
+
 # Long enough that chunking has something to divide, short enough to stay fast.
 SAMPLE_TEXT = (
     "AutoBot is an advanced Linux administration platform designed for intelligent automation. "

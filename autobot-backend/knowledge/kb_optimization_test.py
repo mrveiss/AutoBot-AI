@@ -48,6 +48,7 @@ def _require_real_redis(request) -> None:
         return
     require_real_redis_client("the knowledge base")
 
+
 # Test document content
 TEST_DOCUMENT_CONTENT = """
 AutoBot System Architecture and Design Philosophy
