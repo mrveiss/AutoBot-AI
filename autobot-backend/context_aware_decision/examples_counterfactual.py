@@ -14,6 +14,7 @@ Not included in package; for development and documentation only.
 import time
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.status_enums import Severity
 
 from .counterfactual_reasoner import CounterfactualReasoner
 from .decision_engine import DecisionEngine
@@ -54,7 +55,7 @@ async def example_network_timeout():
                 relevance_score=0.9,
                 timestamp=time.time(),
                 source="network_monitor",
-                metadata={"type": "network", "severity": "high"},
+                metadata={"type": "network", "severity": Severity.HIGH.value},
             ),
         ],
         constraints=[],
@@ -81,7 +82,7 @@ async def example_network_timeout():
         risk_factors=[
             {
                 "risk_type": "network_timeout",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "description": "Network connectivity issue",
             }
         ],
@@ -213,7 +214,7 @@ async def example_database_exhaustion():
         risk_factors=[
             {
                 "risk_type": "resource_exhaustion",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "description": "All connections in use",
             }
         ],

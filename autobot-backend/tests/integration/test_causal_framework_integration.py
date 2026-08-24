@@ -45,6 +45,7 @@ from typing import Any, Dict, List
 import pytest
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 
 logger = get_logger(__name__)
 
@@ -190,7 +191,7 @@ class TestScenarioTimeoutFailure:
                 },
             ],
             "confounder_candidates": ["query_complexity", "table_scan_required"],
-            "severity": "critical",
+            "severity": Severity.CRITICAL.value,
         }
 
     async def _analyze_timeout_chain(self, event: Dict[str, Any]) -> Dict[str, Any]:
@@ -449,7 +450,7 @@ class TestScenarioDatabasePoolExhaustion:
                 },
             ],
             "confounders": ["request_volume_increase", "concurrent_batch_job"],
-            "severity": "critical",
+            "severity": Severity.CRITICAL.value,
         }
 
     async def _analyze_pool_chain(self, event: Dict[str, Any]) -> Dict[str, Any]:

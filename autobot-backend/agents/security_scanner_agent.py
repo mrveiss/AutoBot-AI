@@ -12,6 +12,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 from utils.agent_command_helpers import run_agent_command
@@ -469,7 +470,7 @@ class SecurityScannerAgent(StandardizedAgent):
                     vulnerabilities.append(
                         {
                             "vulnerability": lines[0].strip(),
-                            "severity": "unknown",
+                            "severity": Severity.UNKNOWN.value,
                             "description": ("\n".join(lines[1:3]) if len(lines) > 1 else ""),
                         }
                     )
