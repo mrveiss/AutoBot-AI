@@ -12,6 +12,7 @@
 
 import { ref, computed, onScopeDispose, getCurrentScope, watch, unref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
+import { redactUrlForLogging } from '@/utils/redactUrlForLogging'
 
 // Create scoped logger for useWebSocket
 const logger = createLogger('useWebSocket')
@@ -190,7 +191,7 @@ export function useWebSocket(
 
     const wsUrl = unref(url)
     if (!wsUrl) {
-      logger.error('Invalid URL:', wsUrl)
+      logger.error('Invalid URL:', redactUrlForLogging(wsUrl))
       return
     }
 
@@ -220,7 +221,7 @@ export function useWebSocket(
         errors.value = []
         clearTimers()
 
-        logger.info('Connected to:', wsUrl)
+        logger.info('Connected to:', redactUrlForLogging(wsUrl))
 
         // Start heartbeat
         startHeartbeat()

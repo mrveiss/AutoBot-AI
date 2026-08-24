@@ -14,6 +14,7 @@ import apiClient from '@/utils/ApiClient'
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
 import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
+import { redactUrlForLogging } from '@/utils/redactUrlForLogging'
 
 const logger = createLogger('TerminalService')
 
@@ -381,7 +382,10 @@ class TerminalService {
   /** Throw if the URL is not a valid WebSocket URL. */
   private _validateWsUrl(wsUrl: string): void {
     if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
-      throw new Error(`Invalid WebSocket URL: ${wsUrl}`)
+      // #14989: wsUrl carries the auth token (buildAuthenticatedWsUrl) --
+      // this message reaches logger.error('Failed to connect...', err) via
+      // _handleConnectCatchError, so it must not embed the raw value.
+      throw new Error(`Invalid WebSocket URL: ${redactUrlForLogging(wsUrl)}`)
     }
   }
 
