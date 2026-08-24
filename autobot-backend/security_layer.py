@@ -21,7 +21,7 @@ from functools import lru_cache
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role, role_value
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.paths import project_root
@@ -99,8 +99,11 @@ def _normalise_role(user_role: str) -> str:
     resolver, and leaving one of them out is what created the gap in the first
     place. The audit entry stays with ``_handle_deprecated_role`` so a downgrade is
     still logged exactly once.
+
+    Takes the role string via ``role_value`` so a ``Role`` **member** normalises
+    to its value rather than to ``"role.admin"`` (#14944).
     """
-    normalised = str(user_role or "").strip().lower()
+    normalised = role_value(user_role).strip().lower()
     return Role.ADMIN.value if normalised in DEPRECATED_PRIVILEGED_ROLES else normalised
 
 
@@ -125,8 +128,14 @@ def canonical_role_permissions(user_role: str) -> List[str]:
     so.
 
     An unrecognised role yields ``[]`` — no grant, and no exception either.
+
+    A ``Role`` member resolves the same as its value (#14944); it previously
+    stringified to ``"role.admin"`` and yielded ``[]``. Note this function is
+    ``lru_cache``d and a member does NOT share a cache entry with its value
+    (``lru_cache`` fast-paths exact ``str`` only), so the two were cached
+    separately and the wrong answer was deterministic, not call-order dependent.
     """
-    normalised = str(user_role or "").strip().lower()
+    normalised = role_value(user_role).strip().lower()
     if not normalised:
         return []
     try:

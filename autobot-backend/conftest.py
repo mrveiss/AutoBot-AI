@@ -868,6 +868,43 @@ if "auth_middleware" not in sys.modules:
         return _device_jwt_dep
 
     _auth_stub.require_device_jwt = _require_device_jwt_stub  # type: ignore[attr-defined]
+
+    # get_auth_middleware must yield a middleware whose get_user_from_request()
+    # returns a REAL dict -- #13253's rule applied to this module's sibling
+    # accessor, which it missed (#14944).
+    #
+    # Without this, the catch-all below hands out a bare MagicMock, so
+    # ``get_auth_middleware().get_user_from_request(request)`` auto-vivifies a
+    # mock "user", and ``user.get("role")`` auto-vivifies another. Nothing
+    # errored, because everything downstream stringified it: the old
+    # ``is_admin_role`` computed ``str(<MagicMock ...>).lower()``, matched
+    # nothing, and returned False. Twelve tests across three shards asserted
+    # non-admin behaviour and passed for that reason rather than on the auth
+    # logic they name. Typing ``role_value`` strictly (#14944) turned that
+    # silent wrong answer into a TypeError, which is how the gap surfaced.
+    #
+    # Only get_user_from_request is pinned. The middleware carries a dozen other
+    # attributes (create_jwt_token, security_layer, enable_auth, ...) that tests
+    # legitimately auto-mock, so the object stays a MagicMock and only the value
+    # whose *shape* is load-bearing is made real -- a fresh dict per call, so a
+    # test mutating it cannot leak into the next.
+    _auth_middleware_stub_instance = MagicMock()
+    _auth_middleware_stub_instance.get_user_from_request.side_effect = (
+        lambda *_args, **_kwargs: _get_current_user_stub()
+    )
+
+    def _get_auth_middleware_stub():  # noqa: E301
+        return _auth_middleware_stub_instance
+
+    _auth_stub.get_auth_middleware = _get_auth_middleware_stub  # type: ignore[attr-defined]
+
+    # NOTE: this catch-all is why the gap above was silent -- a name nobody
+    # stubbed becomes a MagicMock that answers every call rather than an
+    # AttributeError that names the missing stub. It is deliberately left in
+    # place here: `authenticate_websocket`, `verify_internal_api_key` and
+    # `AuthenticationMiddleware` still reach it, and several tests configure
+    # them as mocks, so removing it belongs in its own change with its own CI
+    # run rather than riding along inside an auth fix (#14982).
     _auth_stub.__getattr__ = lambda attr: MagicMock()  # type: ignore[attr-defined]
     sys.modules["auth_middleware"] = _auth_stub
 
