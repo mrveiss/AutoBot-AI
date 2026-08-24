@@ -210,6 +210,78 @@ _COMMAND_RISK_BLOCKING: "frozenset[CommandRisk]" = frozenset(
 )
 
 
+class SecretType(str, Enum):
+    """What kind of credential a secret is (#13846).
+
+    Canonical union of three definitions that classified the same thing under
+    two names, in three layers:
+
+    * ``models.secret.SecretType`` — the persisted classification on the
+      ``secrets`` row. Had all nine concrete kinds.
+    * ``api.schemas_system.SecretType`` — the request/response vocabulary.
+      Had eight: no ``OAUTH_REFRESH_TOKEN``, so ``POST /secrets`` could not
+      accept the one kind the row could already store.
+    * ``services.agent_secrets_integration.SecretRequirement`` — what an agent
+      type may request. Had six of the nine, duplicated verbatim down to the
+      identical ``# nosec B105`` / ``# nosemgrep`` comments, plus ``ANY``.
+      With no ``OAUTH_REFRESH_TOKEN`` member, an ``AgentSecretMapping`` could
+      only describe an OAuth-authenticating agent as ``ANY`` — the blanket
+      "every available secret" grant standing in for the most specific one.
+
+    Every member of every side is here. ``str`` subclass so the persisted
+    ``secrets.type`` column, which stores these values, keeps comparing and
+    serializing exactly as before.
+
+    ``ANY`` is the odd one out: a wildcard *quantifier* over the taxonomy, not
+    a kind of credential. It is legal in a requirement (an agent that may use
+    any secret) and illegal at rest — nothing may be stored with type "any".
+    Use :meth:`concrete` for every persistence or presentation surface, and
+    :meth:`expand` to resolve a requirement set into concrete kinds.
+    """
+
+    SSH_KEY = "ssh_key"
+    # nosemgrep: autobot-hardcoded-secret-key
+    PASSWORD = "password"  # nosec B105  # enum value, not actual password
+    # nosemgrep: autobot-hardcoded-secret-key
+    API_KEY = "api_key"
+    # nosemgrep: autobot-hardcoded-secret-key
+    TOKEN = "token"  # nosec B105  # enum value, not actual token
+    OAUTH_REFRESH_TOKEN = "oauth_refresh_token"  # nosec B105  # enum value
+    # nosemgrep: autobot-hardcoded-secret-key
+    # #13846: the OAuth bundle the knowledge connectors persist. It was a bare
+    # string in credential_store.py, commented "SecretType label" while being
+    # absent from every SecretType there was. The value is unchanged so rows
+    # already written keep resolving.
+    CONNECTOR_OAUTH_TOKEN = "connector_oauth_token"  # nosec B105  # enum value
+    CERTIFICATE = "certificate"
+    DATABASE_URL = "database_url"
+    INFRASTRUCTURE_HOST = "infrastructure_host"
+    OTHER = "other"
+    ANY = "any"  # Wildcard: "any available secret". Never persisted.
+
+    @classmethod
+    def concrete(cls) -> "tuple[SecretType, ...]":
+        """Every real credential kind — the taxonomy without the wildcard.
+
+        Derived by excluding ``ANY`` rather than by listing the members, so a
+        kind added later is included here without a second edit.
+        """
+        return tuple(member for member in cls if member is not cls.ANY)
+
+    @classmethod
+    def expand(cls, requirements: "Iterable[SecretType]") -> "frozenset[SecretType]":
+        """Resolve a requirement set into the concrete kinds it asks for.
+
+        ``ANY`` expands to the whole taxonomy; everything else maps to itself.
+        Without this, a requirement of ``{ANY}`` would be looked up as the
+        literal type ``"any"`` and match nothing at all.
+        """
+        wanted = set(requirements)
+        if cls.ANY in wanted:
+            return frozenset(cls.concrete())
+        return frozenset(wanted)
+
+
 class Priority(Enum):
     """
     Priority level enumeration.
@@ -409,6 +481,7 @@ __all__ = [
     "Severity",
     "RiskLevel",
     "CommandRisk",
+    "SecretType",
     "Priority",
     "TaskPriority",
     "LLMProvider",

@@ -11,7 +11,6 @@ Part of Issue #870 - User-Centric Session Tracking (#608 Phase 1-2).
 
 import uuid
 from datetime import datetime
-from enum import Enum
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -19,6 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
 from autobot_shared.scoping import Principal, ResourceDescriptor, ScopeLevel, is_visible
+from autobot_shared.status_enums import SecretType
 from autobot_shared.time_utils import now_utc
 from user_management.models.base import Base
 
@@ -28,23 +28,6 @@ from user_management.models.base import Base
 # (user/session/shared/group/organization/workflow) are unchanged — the
 # canonical enum carries the same .value strings.
 SecretScope = ScopeLevel
-
-
-class SecretType(str, Enum):
-    """Secret type classification."""
-
-    SSH_KEY = "ssh_key"
-    # nosemgrep: autobot-hardcoded-secret-key
-    PASSWORD = "password"  # nosec B105  # enum value, not actual password
-    # nosemgrep: autobot-hardcoded-secret-key
-    API_KEY = "api_key"
-    # nosemgrep: autobot-hardcoded-secret-key
-    TOKEN = "token"  # nosec B105  # enum value, not actual token
-    OAUTH_REFRESH_TOKEN = "oauth_refresh_token"  # nosec B105  # enum value
-    CERTIFICATE = "certificate"
-    DATABASE_URL = "database_url"
-    INFRASTRUCTURE_HOST = "infrastructure_host"
-    OTHER = "other"
 
 
 class Secret(Base):

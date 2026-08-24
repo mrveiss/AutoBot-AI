@@ -42,7 +42,6 @@ from api.schemas_system import (
     SecretsStatusResponse,
     SecretTransferData,
     SecretTransferRequest,
-    SecretType,
     SecretTypesData,
     SecretUpdateRequest,
 )
@@ -51,6 +50,7 @@ from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter
+from autobot_shared.status_enums import SecretType
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import parse_utc_iso
 from middleware.proxy_utils import get_client_ip
@@ -692,7 +692,9 @@ async def get_secret_types(
     return JSONResponse(
         status_code=200,
         content={
-            "types": [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in SecretType],
+            # #13846: ``concrete()``, not the whole enum — ANY is a requirement
+            # wildcard and must never be offered as a storable type.
+            "types": [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in SecretType.concrete()],
             "scopes": [{"value": s.value, "label": s.value.title()} for s in ChatSecretScope],
         },
     )
