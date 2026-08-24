@@ -208,6 +208,39 @@ Why the audit blocks rather than warns: an entry naming a path that has moved
 exempts nothing today, but silently re-permits the value the moment that path
 comes back.
 
+### Adding a baseline entry (#14919)
+
+There is exactly one route, and it does not exist for the case the guard was
+built to stop. An entry may be **added** only when both hold:
+
+1. **The file is byte-identical to the base ref.** A detection-rule change that
+   suddenly matches code which was already in the tree is a legitimate
+   addition — nothing in your change wrote that value. A file your change
+   *touches* is the bypass itself (hardcode a value, append its key in the same
+   commit) and has **no override at all**: not an env var, not a label, not a
+   marker. The two cases are separated by the diff, not by permission.
+2. **This change adds a written justification directly above the entry**, of the
+   form:
+
+   ```
+   # reviewed: #<issue> why this cannot be fixed at the source
+   1|ssot|path/to/file.py|value
+   ```
+
+   It must be a *new* line in your diff. A justification already in the file
+   covers the entry it was written for, not a later append that happens to sit
+   under it.
+
+The justification is a preceding **comment**, never a suffix on the entry: the
+key is everything after the first `|`, so a trailing `# reviewed: …` would
+change the key until it matched no finding at all.
+
+Every permitted addition is printed in full and annotated on the run
+(`::warning::`), so growth is loud rather than silent. A **rename** of a file
+carrying a baselined value is deliberately not covered — the new path is absent
+at the base ref, so the addition is refused, and loosening that to "the content
+existed somewhere at base" would also admit a verbatim copy.
+
 ---
 
 ## ConfigRegistry Fallback Pattern (Issue #2671)
