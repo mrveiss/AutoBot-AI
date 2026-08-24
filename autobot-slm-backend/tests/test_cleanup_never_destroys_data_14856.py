@@ -65,10 +65,65 @@ _CALL_SITES = (
 # explicitly-named operation, not a cleanup. That is a boundary, not an
 # exception: nothing here exempts a component directory from the rule.
 #
-# `{{ ... }}` is collapsed first so that "/opt/autobot/{{ role_target_dir }}" is
-# recognised as one of these and a fully-templated "{{ some_path }}" is not.
+# `{{ ... }}` is collapsed AFTER the install root is resolved, so that both
+# "<root>/{{ role_target_dir }}" and "{{ autobot.base_dir }}/{{ dir }}" are
+# recognised, while a fully-templated "{{ some_path }}" is not.
 _TEMPLATE = re.compile(r"\{\{.*?\}\}")
-_INSTALL_ROOT = "/opt/autobot"
+
+# #14914: `{{ autobot.base_dir }}`, in any spacing. Substituted for its SSOT
+# value BEFORE the generic collapse, because a path built from the variable
+# otherwise flattens to a placeholder that is under no root at all — and this
+# classifier answers False for everything it cannot place, so the tree-wide
+# sweep below would pass over an empty set. Rendering the WHOLE string instead
+# would be worse: the unknown vars would blank too, turning
+# "<root>/{{ role_target_dir }}" into the bare root and un-classifying a real
+# component removal.
+_BASE_DIR_REF = re.compile(r"\{\{\s*autobot\.base_dir\s*\}\}")
+
+# Roots under which a single trailing segment is a component directory.
+#
+# Deliberately NOT "whatever base_dir happens to be" alone, and not a frozen
+# literal either — the two shapes have different natures:
+#
+#   * the canonical install root comes from the inventory SSOT. It is a setting,
+#     it can move, and this follows it.
+#   * the historical roots are a fact about hosts that already exist, not a
+#     setting. /opt/slm-agent and friends predate the rename and are still
+#     cleaned up by this file's own subject; they do not move when base_dir
+#     does. /opt/autobot stays in this set for the same reason even when it is
+#     no longer the configured base: a host mid-migration still carries one and
+#     the playbooks still target it, so dropping it would lose coverage at
+#     exactly the moment the tree is most dangerous.
+_HISTORICAL_ROOTS = ("/opt/autobot", "/opt")
+
+
+def _base_dir() -> str:
+    return str(_inventory_vars()["autobot"]["base_dir"]).rstrip("/")
+
+
+def _component_roots() -> tuple[str, ...]:
+    """Every root, longest first.
+
+    Order matters: "/opt/autobot/backend" must be read as <root>/backend and not
+    as the flat /opt/<autobot/backend>, whose tail contains a slash and would be
+    dismissed.
+    """
+    return tuple(sorted({_base_dir(), *_HISTORICAL_ROOTS}, key=len, reverse=True))
+
+
+def _normalised_path(raw: str) -> str:
+    return _TEMPLATE.sub("TPL", _BASE_DIR_REF.sub(_base_dir(), raw)).strip().rstrip("/")
+
+
+def _under_a_known_root(raw: str) -> bool:
+    """Whether the classifier had a subject to adjudicate at all.
+
+    Distinct from being a component directory: "<root>/backend/data" is under a
+    root and is NOT a component directory. Counting these is what tells the
+    sweep apart from a sweep that classified nothing.
+    """
+    path = _normalised_path(raw)
+    return any(path == root or path.startswith(root + "/") for root in _component_roots())
 
 
 _GROUP_VARS_ALL = _ANSIBLE / "inventory" / "group_vars" / "all.yml"
@@ -107,13 +162,16 @@ def _inventory_vars() -> dict[str, Any]:
 
 
 def _is_component_dir(raw: str) -> bool:
-    path = _TEMPLATE.sub("TPL", raw).strip().rstrip("/")
-    if not path.startswith("/opt/") or path == _INSTALL_ROOT:
-        return False
-    tail = path[len("/opt/") :]
-    if tail.startswith("autobot/"):
-        tail = tail[len("autobot/") :]
-    return bool(tail) and "/" not in tail
+    path = _normalised_path(raw)
+    for root in _component_roots():
+        if path == root:
+            # The root itself contains component directories; removing it is
+            # decommissioning a node, a different and explicitly-named operation.
+            return False
+        if path.startswith(root + "/"):
+            tail = path[len(root) + 1 :]
+            return bool(tail) and "/" not in tail
+    return False
 
 
 # --------------------------------------------------------------------------
@@ -329,6 +387,7 @@ def test_no_component_directory_is_removed_outside_the_primitive() -> None:
     """
     files_scanned = 0
     deletions_seen = 0
+    candidates_seen = 0
     offenders: list[str] = []
 
     for path in sorted(_ANSIBLE.rglob("*.yml")) + sorted(_ANSIBLE.rglob("*.yaml")):
@@ -343,16 +402,73 @@ def test_no_component_directory_is_removed_outside_the_primitive() -> None:
             deletions_seen += 1
             spec = _module(task, "ansible.builtin.file", "file") or {}
             raw = str(spec.get("path") or spec.get("dest") or "")
+            if _under_a_known_root(raw):
+                candidates_seen += 1
             if _is_component_dir(raw):
                 offenders.append(f"{path.relative_to(_ANSIBLE)}: {task.get('name')} -> {raw}")
 
     # Presence, not absence of failure: an empty scan reads as a clean scan.
     assert files_scanned > 100, f"only {files_scanned} ansible files scanned — the sweep is not reaching the tree"
     assert deletions_seen > 50, f"only {deletions_seen} state=absent tasks found — the sweep is not finding deletions"
+    # #14914: the two assertions above prove the sweep READ the tree. This one
+    # proves the classifier was actually asked something. `offenders` is empty in
+    # a healthy tree, so it can never evidence that — a classifier that answered
+    # False for every path in the repository would produce exactly the same empty
+    # list as a clean tree. That is not hypothetical: before this change
+    # `_is_component_dir` matched a hardcoded "/opt/" prefix, so moving
+    # autobot.base_dir (or writing a deletion path from the variable, which the
+    # playbooks now do) placed every target outside every root it knew, and this
+    # whole sweep would have passed over nothing at all.
+    assert candidates_seen > 0, (
+        "no state=absent path resolved to anything under a known install root, so the "
+        f"component-directory classifier adjudicated nothing across {deletions_seen} deletions. "
+        f"Roots it recognised: {list(_component_roots())}. Either the tree stopped removing "
+        "anything under the install root, or the roots have drifted from what the playbooks "
+        "actually build — and the second one is a silent hole in this guard."
+    )
     assert not offenders, (
         "these tasks remove a whole component directory themselves instead of delegating to "
         f"{_PRIMITIVE.name}, so nothing checks whether the directory holds data/:\n  " + "\n  ".join(offenders)
     )
+
+
+def test_the_component_classifier_recognises_every_root_shape() -> None:
+    """#14914: the sweep's classifier, exercised directly on every shape it claims.
+
+    The tree-wide sweep asserts an EMPTY result, so it cannot tell a working
+    classifier from one that answers False for everything. This is the positive
+    half: every root shape the classifier documents is fed to it, and a fixture
+    that stops being recognised fails here by name instead of quietly shrinking
+    what the sweep covers.
+
+    Fixtures are built from the inventory SSOT, not written out, so they follow a
+    moved base_dir the same way the classifier does. A hardcoded "/opt/autobot"
+    here would keep testing the old root after the real one moved — which is the
+    exact defect this test exists to pin.
+    """
+    base = _base_dir()
+    assert base.startswith("/") and base != "/", f"the SSOT install root is unusable: {base!r}"
+
+    must_classify = {
+        f"{base}/autobot-backend": "a component directory at the configured root",
+        "{{ autobot.base_dir }}/autobot-backend": "the same, written through the SSOT variable",
+        f"{base}/{{{{ role_target_dir }}}}": "a templated component, root spelled out",
+        "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}": "a templated component, root from the variable",
+        "/opt/slm-agent": "a flat pre-rename root, a historical fact that does not move",
+        "/opt/autobot/autobot-backend": "the historical canonical root, still on deployed hosts",
+    }
+    must_not_classify = {
+        base: "the install root itself — removing it is decommissioning, not cleanup",
+        "/opt": "the parent of the flat legacy roots",
+        f"{base}/autobot-backend/data": "a path INSIDE a component, not the component",
+        "{{ remove_dir_path }}": "a fully-templated path that names no root",
+        "/var/lib/redis": "not an AutoBot install path at all",
+    }
+
+    for raw, why in must_classify.items():
+        assert _is_component_dir(raw), f"classifier no longer recognises {raw!r} — {why}"
+    for raw, why in must_not_classify.items():
+        assert not _is_component_dir(raw), f"classifier wrongly claims {raw!r} — {why}"
 
 
 def _delegated_targets(task: dict) -> list[str]:
@@ -794,10 +910,18 @@ def test_legacy_data_probe_defaults_to_assuming_data() -> None:
     looked. The probe must now answer "assume data" when it has no result.
     """
     tasks = [t for t in _load(_LEGACY) if isinstance(t, dict)]
+    # #14914: matched after resolving `{{ autobot.base_dir }}`, and against a
+    # path built from the SSOT rather than a literal. The exact-string form was
+    # the third site in this file keyed to "/opt/autobot"; it fails loudly rather
+    # than quietly (the presence assertion below catches it), but it would have
+    # failed saying "nothing probes the legacy directory" when the truth was that
+    # the probe had simply adopted the variable.
+    expected_probe = _base_dir() + "/{{ dir_name }}/data"
     probes = [
         t
         for t in tasks
-        if (_module(t, "ansible.builtin.stat", "stat") or {}).get("path") == "/opt/autobot/{{ dir_name }}/data"
+        if _BASE_DIR_REF.sub(_base_dir(), str((_module(t, "ansible.builtin.stat", "stat") or {}).get("path") or ""))
+        == expected_probe
     ]
     assert probes, "nothing probes the legacy directory for data/"
     assert "when" not in probes[0], (
