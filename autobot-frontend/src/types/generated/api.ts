@@ -9934,7 +9934,7 @@ export interface paths {
          *             {
          *                 "conflict_id": "...",
          *                 "description": "...",
-         *                 "severity": Severity.HIGH.value,
+         *                 "severity": "high",
          *                 "resolution": "pending_review",
          *                 "timestamp": 1234567890
          *             }
