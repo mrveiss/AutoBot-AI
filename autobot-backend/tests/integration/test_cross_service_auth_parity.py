@@ -50,7 +50,7 @@ for p in (_AUTOBOT_BACKEND, str(_AUTOBOT_SHARED)):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role, is_admin_role
 
 # ---------------------------------------------------------------------------
 # Helpers — replicate each backend's enforcement path without FastAPI imports
@@ -253,14 +253,58 @@ class TestPermissionCompleteness:
             f"Add them to the appropriate role(s) in autobot_shared/auth/permissions.py."
         )
 
-    @pytest.mark.parametrize("role", list(Role))
-    def test_role_has_at_least_one_permission(self, role: Role):
-        """Every Role must have at least one permission (no empty-set roles)."""
+    # #13854: the invariant is "a role authorised by GRANT must grant
+    # something" — not "every role must". Administrative roles are authorised
+    # by PREDICATE: ``require_role`` and ``is_admin_role`` admit them directly,
+    # so ``superadmin``'s empty entry is a deliberate statement of policy, not a
+    # wiring omission. Asserting the old, broader form here would contradict
+    # ``roles_are_canonical_test``, which asserts the opposite on purpose.
+    #
+    # The exemption is DERIVED from ``is_admin_role`` — the same predicate the
+    # live gates use — rather than a second hand-written list of administrative
+    # roles. Such a list is exactly the fork #13854/#12786 removed, and it would
+    # silently stop exempting the right roles the moment ``ADMIN_ROLES`` changed.
+    # ``role.value`` (not the member) is passed deliberately: ``str()`` on a
+    # ``(str, Enum)`` member yields "Role.ADMIN", not "admin" — see #14944.
+    @pytest.mark.parametrize("role", [r for r in Role if not is_admin_role(r.value)])
+    def test_non_administrative_role_has_at_least_one_permission(self, role: Role):
+        """Every role that grants access through ROLE_PERMISSIONS must grant something."""
         perms = ROLE_PERMISSIONS.get(role, [])
         assert perms, (
             f"Role {role.value!r} has no permissions in ROLE_PERMISSIONS — "
-            f"every role must grant at least one permission."
+            f"every non-administrative role must grant at least one permission."
         )
+
+    def test_the_permissionless_roles_are_exactly_the_administrative_ones(self):
+        """The contrapositive, so the exemption above cannot quietly widen.
+
+        Stated as a property over every role rather than as an allowlist: ANY
+        role with an empty grant list must be administrative. A new empty
+        NON-administrative role is excluded from the parametrisation above and
+        would therefore never be checked there — this is the hole that leaves,
+        closed.
+        """
+        ungranted = {r.value for r in Role if not ROLE_PERMISSIONS.get(r, [])}
+
+        assert ungranted == {"superadmin"}, (
+            f"the set of roles holding zero permissions changed to {sorted(ungranted)}. "
+            "Only an administrative, predicate-authorised role may hold none (#13854). "
+            "Confirm the change is deliberate and record it here."
+        )
+        for value in ungranted:
+            assert is_admin_role(value), f"role {value!r} holds no permissions and is not administrative"
+
+    def test_the_parametrisation_above_is_not_empty(self):
+        """Guard against vacuity.
+
+        If the derived filter ever excluded every role, each parametrised case
+        would silently vanish rather than fail — an absent result reading as a
+        clean one.
+        """
+        graded = [r for r in Role if not is_admin_role(r.value)]
+
+        assert len(graded) >= 5, f"expected the non-administrative roles to be graded, got {graded}"
+        assert Role.ADMIN not in graded and Role.SUPERADMIN not in graded
 
 
 # ---------------------------------------------------------------------------
