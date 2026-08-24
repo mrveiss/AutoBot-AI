@@ -194,3 +194,163 @@ class TestGetSecretDualRead:
         with patch("api.secrets.load_imported_json_secret", AsyncMock(return_value=unified)):
             with pytest.raises(PermissionError):
                 await _get_secret_dual_read("s3", chat_id="chat-b")
+
+
+# ---------------------------------------------------------------------------
+# #14974 — the wildcard must not be advertised where it is refused
+# ---------------------------------------------------------------------------
+#
+# `SecretType.ANY` is a quantifier over the taxonomy, not a kind of credential.
+# It is legal in the requirement layer (`AgentSecretMapping`, resolved by
+# `SecretType.expand`) and illegal at the secrets API boundary, where a secret
+# has exactly one kind. Before #14974 the boundary *declared* it and *refused*
+# it: the generated client type offered "any" on the request body and the
+# server answered 422. These tests pin both halves to the same population, so
+# neither can widen without the other.
+
+
+def _secrets_app():
+    """A real app carrying the real secrets router, admin check overridden.
+
+    Drives what a caller actually gets — the served OpenAPI document and real
+    request validation — rather than the enum in isolation.
+    """
+    from fastapi import FastAPI
+
+    from api.secrets import router
+    from auth_middleware import check_admin_permission
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/secrets")
+    app.dependency_overrides[check_admin_permission] = lambda: True
+    return app
+
+
+def _served_type_schema():
+    """The `type` property of SecretCreateRequest as the OpenAPI document serves it."""
+    schema = _secrets_app().openapi()["components"]["schemas"]["SecretCreateRequest"]
+    return schema["properties"]["type"]
+
+
+class TestTheWildcardIsNotAdvertised:
+    """#14974: the declared secret type must equal the accepted secret type."""
+
+    def test_served_schema_offers_only_the_concrete_taxonomy(self):
+        """The generated client type is the narrowing, not a superset of it."""
+        served = _served_type_schema()
+        assert served["enum"] == [member.value for member in SecretType.concrete()]
+        assert EXPECTED_WILDCARD not in served["enum"]
+        # Inline, not a `$ref` to the whole enum — a `$ref` would drag the
+        # wildcard back in however the schema was narrowed alongside it.
+        assert "$ref" not in served
+        assert "allOf" not in served
+
+    def test_served_schema_is_derived_not_hand_listed(self):
+        """A kind added to the enum reaches the API with no second edit.
+
+        Hand-listing the members here is the drift #13846 was filed about, so
+        this asserts the served list tracks `SecretType.concrete()` exactly —
+        including order — rather than a copy that can silently fall behind.
+        """
+        served = _served_type_schema()
+        assert served["enum"] == [t["value"] for t in EXPECTED_TYPES]
+        assert len(served["enum"]) == len(SecretType) - 1
+
+    def test_no_reachable_property_anywhere_offers_the_wildcard(self):
+        """Nothing a caller can send or receive names "any" as a kind.
+
+        Resolves `$ref` before looking: a property pointing at the canonical
+        enum advertises the wildcard just as loudly as an inline copy of it.
+        """
+        schemas = _secrets_app().openapi()["components"]["schemas"]
+
+        def _values(spec):
+            ref = spec.get("$ref", "")
+            target = schemas.get(ref.rsplit("/", 1)[-1], {}) if ref else spec
+            return target.get("enum") or []
+
+        offenders = [
+            f"{name}.{prop}"
+            for name, body in schemas.items()
+            for prop, spec in (body.get("properties") or {}).items()
+            if EXPECTED_WILDCARD in _values(spec)
+        ]
+        assert offenders == []
+
+    def test_post_refuses_the_wildcard_as_a_body_field_error(self):
+        """POST /api/secrets/ answers 422 and blames the `type` field."""
+        from fastapi.testclient import TestClient
+
+        with TestClient(_secrets_app()) as client:
+            response = client.post(
+                "/api/secrets/",
+                json={
+                    "name": "wildcard_attempt",
+                    "type": EXPECTED_WILDCARD,
+                    "scope": ChatSecretScope.GENERAL.value,
+                    "value": "irrelevant",
+                },
+            )
+        assert response.status_code == 422
+        locations = [tuple(error["loc"]) for error in response.json()["detail"]]
+        assert ("body", "type") in locations
+
+    def test_post_still_accepts_every_concrete_kind(self):
+        """The runtime narrowing refuses only the wildcard — not one real kind.
+
+        `AfterValidator` sits on every secret-classifying field, so a check
+        that grew past `ANY` would silently make real credential kinds
+        unstorable. Over-narrowing the *advertised* enum is a different
+        failure, caught by the two schema tests above.
+        """
+        from fastapi.testclient import TestClient
+
+        for member in SecretType.concrete():
+            with (
+                patch("api.secrets.check_rate_limit", AsyncMock(return_value=None)),
+                patch("api.secrets._mirror_llm_provider_key", AsyncMock(return_value=None)),
+                patch("api.secrets.audit_log", MagicMock()),
+                patch("api.secrets.audit_record", MagicMock()),
+                patch("api.secrets.get_auth_middleware", MagicMock()),
+                patch("api.secrets.secrets_manager") as manager,
+            ):
+                manager.create_secret = MagicMock(side_effect=_stored_secret)
+                with TestClient(_secrets_app()) as client:
+                    response = client.post(
+                        "/api/secrets/",
+                        json={
+                            "name": f"concrete_{member.value}",
+                            "type": member.value,
+                            "scope": ChatSecretScope.GENERAL.value,
+                            "value": "irrelevant",
+                        },
+                    )
+            assert response.status_code == 201, f"{member.value}: {response.text}"
+            assert response.json()["secret"]["type"] == member.value
+
+    def test_a_stored_wildcard_row_fails_to_parse(self):
+        """`SecretModel` is also the parse boundary over persisted rows.
+
+        `update_secret` rebuilds a `SecretModel` straight from the stored row,
+        so a row carrying "any" — however it got there — must fail loudly
+        rather than be served back as a secret of kind "any".
+        """
+        from pydantic import ValidationError
+
+        from api.schemas_system import SecretModel
+
+        row = {
+            "name": "smuggled",
+            "type": EXPECTED_WILDCARD,
+            "scope": ChatSecretScope.GENERAL.value,
+        }
+        with pytest.raises(ValidationError):
+            SecretModel(**row)
+
+        row["type"] = SecretType.API_KEY.value
+        assert SecretModel(**row).type is SecretType.API_KEY
+
+
+def _stored_secret(request):
+    """Stand in for the encrypting store: echo the validated request back."""
+    return request.to_secret_model()

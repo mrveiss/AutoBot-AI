@@ -92061,7 +92061,12 @@ export interface components {
         SecretCreateRequest: {
             /** Name */
             name: string;
-            type: components["schemas"]["SecretType"];
+            /**
+             * StorableSecretType
+             * @description A single credential kind. The canonical SecretType taxonomy without its 'any' wildcard, which quantifies over the taxonomy in agent requirements and is never a secret's own kind.
+             * @enum {string}
+             */
+            type: "ssh_key" | "password" | "api_key" | "token" | "oauth_refresh_token" | "connector_oauth_token" | "certificate" | "database_url" | "infrastructure_host" | "other";
             scope: components["schemas"]["ChatSecretScope"];
             /** Value */
             value: string;
