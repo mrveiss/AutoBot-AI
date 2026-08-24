@@ -95,6 +95,55 @@ StartLimitBurst=5
 # Matches the convention used by every other AutoBot unit (slm-agent, frontend,
 # ollama, browser, coordinator = 65535/65536).
 LimitNOFILE={{ backend_nofile_limit | default(65536) }}
+# #13765: memory limits DERIVED from detected host memory, never a literal.
+#
+# This host ran for months under MemoryHigh=8G/MemoryMax=12G applied by hand
+# with `systemctl set-property`, which writes into /etc/systemd/system.control/
+# — a tree no template, role or repo artifact mentions. On 2026-08-03 the
+# backend pinned itself at that 8 GiB watermark with `memory.events high` at
+# 21,052, the process in STAT=D and /health timing out, while `systemctl`
+# reported `active` throughout. MemoryHigh does not kill; it applies escalating
+# reclaim pressure, so the unit never crashed, never restarted and never entered
+# `failed`.
+#
+# Owner decision (#13765, 2026-08-09): "8 GB is our dev box, RTX 4070 RAM max.
+# Different users have different hardware — it should be autodetected." A
+# literal here would ship one machine's hardware to every install: the same
+# defect as the drop-in, only versioned and therefore harder to notice.
+#
+# The percentages, and the ratio between them, are the tunables — see
+# defaults/main.yml for why each number is what it is. On a 16 GiB host they
+# reproduce the hand-applied 8 GiB / 12 GiB exactly, which is the check that
+# this derivation replaces the override rather than merely differing from it.
+#
+# MemoryAccounting is emitted UNCONDITIONALLY, limits or not. It is what makes
+# memory.current / memory.events exist for CgroupMemoryCollector, and the
+# reclaim counter is the only signal that separates a throttled service from a
+# healthy one. A host with no limits still needs to be able to say so.
+MemoryAccounting=yes
+{% set _mem_total_mb = ansible_memtotal_mb | default(0) | int %}
+{% set _high_mb = ((_mem_total_mb * (backend_memory_high_pct | default(50) | int)) / 100) | round | int %}
+{% set _max_mb = ((_mem_total_mb * (backend_memory_max_pct | default(75) | int)) / 100) | round | int %}
+{% if _high_mb >= (backend_memory_floor_mb | default(6144) | int) %}
+MemoryHigh={{ _high_mb }}M
+MemoryMax={{ _max_mb }}M
+{% else %}
+# No memory limits on this host: a derived MemoryHigh of {{ _high_mb }}M is below
+# the {{ backend_memory_floor_mb | default(6144) | int }}M floor
+# (detected host memory: {{ _mem_total_mb }}M).
+#
+# Deliberately emitting NOTHING rather than a smaller cap. This backend's
+# observed steady state is ~4.3 GiB, so a watermark under the floor throttles it
+# at idle — which is precisely the incident this block exists to prevent, and
+# handing an undersized host a cap it cannot meet would reproduce it by
+# template on every small install.
+#
+# A rendered comment rather than silence: an operator reading `systemctl cat`
+# must be able to tell "this host was evaluated and deliberately left
+# unlimited" from "the memory fact never resolved". If the detected memory
+# above reads 0, the fact was missing — tasks/memory_limits.yml exists to stop
+# that reaching here and fails loudly when it cannot.
+{% endif %}
 StandardOutput=append:{{ backend_log_dir }}/backend.log
 StandardError=append:{{ backend_log_dir }}/backend-error.log
 

@@ -42,9 +42,31 @@ class TestRoleSatisfies:
         assert _role_satisfies("admin", _WRITE_PERM) is True
         assert _role_satisfies("admin", _ADMIN_ONLY_PERM) is True
 
-    def test_superadmin_holds_every_permission(self):
-        """`superadmin` is administrative but not a `Role` enum member (#12704/#12717)."""
-        assert _role_satisfies("superadmin", _ADMIN_ONLY_PERM) is True
+    def test_superadmin_holds_no_permission(self):
+        """The inversion #13854 made deliberately, at the gate that enforces it.
+
+        This asserted the opposite until #13854, and it passed for a reason that
+        was never a decision: ``role_has_permission`` short-circuited on
+        ``is_admin_role``, so being in ``ADMIN_ROLES`` — a *predicate* — silently
+        granted every permission in the system. ``SecurityLayer.check_permission``
+        denied superadmin those same permissions at the same time.
+
+        ``superadmin`` is now a first-class ``Role`` whose ``ROLE_PERMISSIONS``
+        entry is explicitly empty, and every resolver reads that one mapping. It
+        remains administrative (``require_role`` at 17 endpoints, ``is_admin_role``
+        at the imperative checks) — it simply holds no granular grant, so this
+        extension refuses it a tool that requires one.
+        """
+        assert _role_satisfies("superadmin", _ADMIN_ONLY_PERM) is False
+        assert _role_satisfies("superadmin", _READ_PERM) is False
+
+    def test_superadmin_is_still_administrative(self):
+        """The tightening above is about grants, not about retiring the role."""
+        from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, is_admin_role
+
+        assert is_admin_role("superadmin") is True
+        assert Role("superadmin") is Role.SUPERADMIN
+        assert ROLE_PERMISSIONS[Role.SUPERADMIN] == []
 
     def test_operator_lacks_an_admin_only_permission(self):
         assert _role_satisfies("operator", _ADMIN_ONLY_PERM) is False

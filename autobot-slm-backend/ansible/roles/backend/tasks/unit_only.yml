@@ -32,6 +32,10 @@
 #
 # Looped rather than three copied tasks: a fourth unit added to the role should
 # need a list entry, not another block to forget.
+- name: "Backend | Resolve host memory before rendering the unit (#13765)"
+  ansible.builtin.include_tasks: memory_limits.yml
+  tags: [backend, systemd, unit]
+
 - name: "Backend | Render systemd units from templates (#12777, #13828)"
   ansible.builtin.template:
     src: "{{ item }}.j2"
@@ -52,4 +56,67 @@
     daemon_reload: true
   become: true
   when: _backend_units_rendered.changed
+  tags: [backend, systemd, unit]
+
+# #13765: retire the out-of-band memory override, but ONLY once the rendered
+# unit demonstrably carries limits of its own.
+#
+# /etc/systemd/system.control/ is where `systemctl set-property` writes, and a
+# drop-in there OVERRIDES the unit file — so shipping derived limits without
+# this leaves the hand-applied 8G/12G in force and changes nothing on the host
+# that reported the incident. Removing it is therefore part of the fix, not
+# cleanup afterwards.
+#
+# The ordering the owner set on #13765 is load-bearing in the other direction
+# too: "removed only after the template lands", because a host stripped of the
+# override while the template emits nothing (small host, or a missing memory
+# fact) loses a protection someone deliberately added and gains none.
+#
+# So the gate OBSERVES the rendered unit rather than recomputing the template's
+# condition. Predicting it here would put the same decision in two places, free
+# to disagree — and the half that silently answered "no limits" would be the
+# half that deletes the only limits the host has.
+- name: "Backend | Read back the rendered unit to see whether limits landed (#13765)"
+  ansible.builtin.slurp:
+    src: /etc/systemd/system/autobot-backend.service
+  become: true
+  register: _backend_unit_rendered_bytes
+  tags: [backend, systemd, unit]
+
+- name: "Backend | Record whether the unit declares its own memory limits (#13765)"
+  ansible.builtin.set_fact:
+    backend_unit_declares_memory_limits: >-
+      {{ (_backend_unit_rendered_bytes.content | b64decode)
+         is search('(?m)^MemoryHigh=') }}
+  tags: [backend, systemd, unit]
+
+- name: "Backend | Remove the out-of-band set-property memory override (#13765)"
+  ansible.builtin.file:
+    path: "{{ item }}/autobot-backend.service.d"
+    state: absent
+  become: true
+  loop:
+    - /etc/systemd/system.control
+    - /run/systemd/system.control
+  when: backend_unit_declares_memory_limits | bool
+  register: _backend_out_of_band_removed
+  tags: [backend, systemd, unit]
+
+# Say so when the override is being LEFT in place. An operator reading a green
+# run must not have to infer from a skipped task that this host is still running
+# under limits no artifact records — that invisibility is the defect (#13765).
+- name: "Backend | Report an out-of-band override left in place (#13765)"
+  ansible.builtin.debug:
+    msg: >-
+      autobot-backend's rendered unit declares no memory limits, so any
+      out-of-band /etc/systemd/system.control override is being LEFT in place
+      (#13765). This host is running under limits no repo artifact records.
+  when: not (backend_unit_declares_memory_limits | bool)
+  tags: [backend, systemd, unit]
+
+- name: "Backend | Reload systemd after removing the override (#13765)"
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+  when: _backend_out_of_band_removed is changed
   tags: [backend, systemd, unit]

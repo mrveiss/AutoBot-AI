@@ -131,7 +131,7 @@ async def _search_users_from_db(q: str, limit: int) -> UserSearchResponse:
             results = [
                 UserSearchResult(
                     id=str(user.id),
-                    name=user.display_name or user.username,
+                    name=user.full_name,  # #13957: the canonical rule, not a sixth copy of it
                     type="user",
                 )
                 for user in users

@@ -51,6 +51,27 @@ backend_core_dir: /var/lib/autobot/cores
 # backend_core_capture is true; the unit omits LimitCORE entirely otherwise.
 backend_core_limit: infinity
 
+# #13765: backend memory limits, DERIVED from detected host memory by
+# autobot-backend.service.j2. Percentages, never byte counts — the owner's
+# decision was explicitly that the number is a property of the box, not a
+# policy, so a literal here would ship one machine's hardware fleet-wide.
+#
+# 50/75 is not arbitrary: the ratio between them is 1.5x, which reproduces the
+# hand-applied MemoryHigh=8G / MemoryMax=12G on the 16 GiB host this issue was
+# filed from. MemoryHigh throttles (escalating reclaim pressure, no kill),
+# MemoryMax kills — so the gap between them is the warning band, and it is
+# derived along with the limits rather than being a second literal.
+backend_memory_high_pct: 50
+backend_memory_max_pct: 75
+
+# Floor below which NO limits are emitted at all, rather than a smaller cap.
+# The backend's observed steady state is ~4.3 GiB, so any watermark near or
+# below that throttles it at idle — the exact failure #13765 documents, which a
+# template would then reproduce on every small install. 6 GiB leaves real
+# headroom above the observed working set; hosts under ~12 GiB total therefore
+# run unlimited, which is the honest answer for a box that cannot afford a cap.
+backend_memory_floor_mb: 6144
+
 # Celery worker settings (Issue #863)
 celery_concurrency: 4  # Number of worker processes
 celery_max_tasks_per_child: 1000  # Restart worker after N tasks (prevents memory leaks)

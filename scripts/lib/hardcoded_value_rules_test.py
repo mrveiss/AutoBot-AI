@@ -177,3 +177,73 @@ def test_the_severity_distinction_survived() -> None:
     """offset=0 is a WARNING, not a VIOLATION — a rule in its own right."""
     assert _scan("offset = 0").startswith("WARNING|")
     assert _scan("limit = 10").startswith("VIOLATION|")
+
+
+# ---------------------------------------------------------------------------
+# #14024: the ROLE rule's suggestion must not name one vocabulary for a value
+# that lives in several. The near-miss this prevents is recorded in #13934:
+# an RBAC field was about to be pointed at a chat presentation constant because
+# both hold "user".
+# ---------------------------------------------------------------------------
+
+_SUGGESTION_FIELD = 5  # VIOLATION|class|file|lineno|value|suggestion
+
+
+def _suggestions(line: str) -> list[str]:
+    """The suggestion field of every record `line` produces."""
+    records = [r for r in _scan(line).splitlines() if r]
+    return [r.split("|")[_SUGGESTION_FIELD] for r in records]
+
+
+def test_an_ambiguous_role_value_is_not_given_a_single_vocabularys_constant() -> None:
+    """`user` is in the chat vocabulary AND in platform RBAC.
+
+    Naming either one is advice that is wrong half the time and looks
+    authoritative both times.
+    """
+    suggestions = _suggestions('TASK = {"role": "user"}')
+
+    assert suggestions, "the role rule stopped firing on its own ambiguous value"
+    for suggestion in suggestions:
+        assert "AMBIGUOUS" in suggestion, suggestion
+        assert "ROLE_USER" not in suggestion.replace("CategoryDefaults.ROLE_USER)", ""), suggestion
+
+
+def test_the_ambiguous_suggestion_names_both_vocabularies() -> None:
+    """Reporting "ambiguous" is only useful if it says ambiguous between what."""
+    suggestions = _suggestions('TASK = {"role": "user"}')
+
+    assert suggestions
+    for suggestion in suggestions:
+        assert "CategoryDefaults" in suggestion, suggestion
+        assert "Role" in suggestion, suggestion
+        assert "#14024" in suggestion, suggestion
+
+
+@pytest.mark.parametrize("value", ["assistant", "system"])
+def test_an_unambiguous_chat_role_still_gets_the_concrete_suggestion(value: str) -> None:
+    """Only the shared literal loses its suggestion; the rest keep working.
+
+    Blanking the advice for every role value would be a regression dressed as a
+    fix, so this pins the half that must not change.
+    """
+    suggestions = _suggestions(f'MSG = {{"role": "{value}"}}')
+
+    assert suggestions, f"the role rule stopped firing on {value!r}"
+    for suggestion in suggestions:
+        assert "CategoryDefaults" in suggestion, suggestion
+        assert "AMBIGUOUS" not in suggestion, suggestion
+
+
+def test_the_role_rule_still_detects_the_same_values_as_before() -> None:
+    """#14024 changed the ADVICE, not the detection set.
+
+    If this rule started firing on more or fewer lines, the baseline of known
+    findings would need regenerating — which is exactly the kind of coupled
+    change that hides a real new violation among the churn.
+    """
+    assert _suggestions('MSG = {"role": "user"}')
+    assert _suggestions('MSG = {"role": "assistant"}')
+    assert _suggestions('MSG = {"role": "system"}')
+    assert not _scan("MSG = {'role': CategoryDefaults.ROLE_USER}")
+    assert not _scan('ROLE_USER = "user"')
