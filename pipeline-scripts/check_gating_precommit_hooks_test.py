@@ -97,9 +97,7 @@ def test_ansi_coloured_output_is_still_read(gate, tmp_path):
 
 def test_no_files_to_check_postfix_is_parsed(gate, tmp_path):
     """pre-commit's own skip wording, which carries a parenthesised postfix."""
-    output = _output(None).replace(
-        "black", _GUARD + "." * 10 + "(no files to check)Skipped\nblack", 1
-    )
+    output = _output(None).replace("black", _GUARD + "." * 10 + "(no files to check)Skipped\nblack", 1)
     assert _run(gate, tmp_path, output) == 1
 
 

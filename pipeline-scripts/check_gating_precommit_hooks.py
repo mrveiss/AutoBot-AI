@@ -156,8 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     problems = _verdicts(output, hook_names(Path(args.config).read_text(encoding="utf-8")))
     if not problems:
         print(  # noqa: print
-            "check-gating-precommit-hooks: every behavioural hook passed "
-            f"({', '.join(GATING_HOOK_IDS)})"
+            "check-gating-precommit-hooks: every behavioural hook passed " f"({', '.join(GATING_HOOK_IDS)})"
         )
         return 0
 
