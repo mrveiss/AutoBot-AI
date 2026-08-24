@@ -158,7 +158,12 @@ many baselined findings it suppressed.
 ### What blocks a build (#14914)
 
 **Severity decides, not class.** Every `VIOLATION` blocks — both the `ssot`
-class and the `other` class. The two classes differ in what the fix *looks
+class and the `other` class, and this is now true at *both* entry points. The
+pre-commit hook has always counted `^VIOLATION|` class-agnostically and exited
+1; the tree scan keyed its verdict on `ssot_violations` alone. The same finding,
+from the same rule in the same library, blocked a commit and passed CI — the
+commit-time gate was stricter than the merge-time one, which is backwards, since
+the local one is the one a developer can skip. The two classes differ in what the fix *looks
 like*: an `ssot` finding names the exact config key that replaces the value, an
 `other` finding names the family. They do not differ in whether the value
 belongs in the source, so they do not differ in whether they block.

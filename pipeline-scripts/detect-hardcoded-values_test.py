@@ -525,6 +525,53 @@ def test_a_warning_only_tree_stays_advisory(tmp_path):
     assert report["status"] == "pass", f"a WARNING blocked the gate: {report}"
 
 
+_HOOK_REL = Path("autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values")
+_HOOK = Path(__file__).resolve().parent.parent / _HOOK_REL
+
+
+def test_both_entry_points_agree_on_what_blocks(tmp_path):
+    """#14914: the two entry points onto ONE rule set disagreed about the verdict.
+
+    The pre-commit hook counts ``^VIOLATION|`` — class-agnostic, keyed on
+    severity — and exits 1. The tree scan keyed its verdict on
+    ``ssot_violations`` alone. So the same finding, produced by the same rule
+    from the same library, blocked a commit and passed CI. The commit-time gate
+    was strictly stricter than the merge-time one, which is backwards: the
+    stricter check is the one a developer can skip locally.
+
+    Driven end-to-end through BOTH real entry points on the same fixture rather
+    than compared as source text, because the claim is about their verdicts.
+    """
+    root = _hermetic_repo(tmp_path)
+    hook = root / _HOOK_REL
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(_HOOK, hook)
+    hook.chmod(hook.stat().st_mode | stat.S_IEXEC)
+    shutil.copytree(_HOOK.parent / "lib", hook.parent / "lib")
+
+    target = root / "autobot-backend" / "db.py"
+    target.write_text('ENGINE = "' + "sqlite" + ':///./app.db"\n', encoding="utf-8")
+
+    hook_result = subprocess.run(  # nosec B603  # fixed argv, no shell
+        ["bash", str(hook), "autobot-backend/db.py"],
+        capture_output=True, text=True, cwd=root,
+    )
+    report = _run(root)
+
+    # Assert the fixture reached BOTH before comparing verdicts: two entry points
+    # that each found nothing also "agree", and that agreement proves nothing.
+    assert report["other_violations"] >= 1, f"the tree scan never saw the fixture: {report}"
+    assert "VIOLATION" in hook_result.stdout, (
+        f"the hook never saw the fixture, so its exit code says nothing: {hook_result.stdout!r}"
+    )
+
+    assert hook_result.returncode == 1, "the hook stopped blocking on an `other`-class violation"
+    assert report["status"] == "fail", (
+        "the tree scan passes a finding the commit-time hook blocks — the two entry points "
+        f"onto one rule set disagree again: {report}"
+    )
+
+
 _WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ssot-coverage.yml"
 _GATE_STEP = "Set job status"
 
