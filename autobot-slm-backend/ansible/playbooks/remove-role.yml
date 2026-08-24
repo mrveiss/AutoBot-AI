@@ -220,7 +220,7 @@
       # #14914: the install root was spelled out twice inside the expression
       # below, once per branch. Hoisted to a single task-scoped var so the path
       # this summary NAMES is the same string in both branches and cannot drift
-      # between them. It stays a literal on purpose -- see this file's header.
+      # between them.
       vars:
         _role_dir: "{{ autobot.base_dir }}/{{ role_target_dir | default('') }}"
       ansible.builtin.set_fact:
