@@ -21,6 +21,7 @@ from datetime import timedelta
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.status_enums import SecretType
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from services.credential_read import load_imported_credential
 from services.credential_write import delete_credential_from_vault, mirror_credential_to_vault
@@ -343,7 +344,7 @@ class ConnectorCredentialStore:
             None,
             lambda: self._svc.create_secret(
                 name=name,
-                secret_type="connector_oauth_token",  # nosec B106  # SecretType label, not a credential
+                secret_type=SecretType.CONNECTOR_OAUTH_TOKEN.value,
                 value=value,
                 scope="user",
                 created_by=owner_id,
@@ -356,7 +357,7 @@ class ConnectorCredentialStore:
                 owner_id,
                 value,
                 name=name,
-                secret_type="connector_oauth_token",  # nosec B106  # SecretType label, not a credential
+                secret_type=SecretType.CONNECTOR_OAUTH_TOKEN.value,
             )
         return result["id"]
 

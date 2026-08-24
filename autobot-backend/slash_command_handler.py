@@ -1184,7 +1184,8 @@ Your secret has been securely encrypted and stored.
             return validation_error
 
         try:
-            from api.secrets import ChatSecretScope, SecretCreateRequest, SecretType
+            from api.secrets import ChatSecretScope, SecretCreateRequest
+            from autobot_shared.status_enums import SecretType
 
             scope = ChatSecretScope.CHAT if self.chat_id else ChatSecretScope.GENERAL
             request = SecretCreateRequest(

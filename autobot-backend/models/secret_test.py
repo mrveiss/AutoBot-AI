@@ -17,7 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.datetime_utils import datetime_now
-from models.secret import Secret, SecretScope, SecretType
+from autobot_shared.status_enums import SecretType
+from models.secret import Secret, SecretScope
 
 
 class TestSecretModel:

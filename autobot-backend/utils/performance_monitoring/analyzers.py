@@ -16,6 +16,7 @@ import time
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from utils.performance_monitoring.types import (
     CRITICAL_SERVICE_STATUSES,
     DEFAULT_PERFORMANCE_BASELINES,
@@ -40,7 +41,7 @@ class AlertAnalyzer:
             alerts.append(
                 {
                     "category": "gpu",
-                    "severity": "warning",
+                    "severity": Severity.WARNING.value,
                     "message": (
                         f"GPU utilization below target: {gpu['utilization_percent']:.1f}% < "
                         f"{self.baselines['gpu_utilization_target']}%"
@@ -54,7 +55,7 @@ class AlertAnalyzer:
             alerts.append(
                 {
                     "category": "gpu",
-                    "severity": "critical",
+                    "severity": Severity.CRITICAL.value,
                     "message": f"GPU thermal throttling active at {gpu['temperature_celsius']}°C",
                     "recommendation": "Check cooling and reduce workload",
                     "timestamp": time.time(),
@@ -70,7 +71,7 @@ class AlertAnalyzer:
             alerts.append(
                 {
                     "category": "npu",
-                    "severity": "warning",
+                    "severity": Severity.WARNING.value,
                     "message": (
                         f"NPU acceleration ratio below target: {npu['acceleration_ratio']:.1f}x < "
                         f"{self.baselines['npu_acceleration_target']}x"
@@ -89,7 +90,7 @@ class AlertAnalyzer:
             alerts.append(
                 {
                     "category": "memory",
-                    "severity": "warning",
+                    "severity": Severity.WARNING.value,
                     "message": f"High memory usage: {system['memory_usage_percent']:.1f}%",
                     "recommendation": "Enable aggressive cleanup or check for memory leaks",
                     "timestamp": time.time(),
@@ -100,7 +101,7 @@ class AlertAnalyzer:
             alerts.append(
                 {
                     "category": "cpu",
-                    "severity": "warning",
+                    "severity": Severity.WARNING.value,
                     "message": (
                         f"High CPU load: {system['cpu_load_1m']:.1f} " f"on {system['cpu_cores_logical']}-core system"
                     ),
@@ -118,7 +119,7 @@ class AlertAnalyzer:
             alerts.append(
                 {
                     "category": "service",
-                    "severity": "critical",
+                    "severity": Severity.CRITICAL.value,
                     "message": f"Service {service['service_name']} is {service['status']}",
                     "recommendation": "Check service health and restart if necessary",
                     "timestamp": time.time(),
@@ -129,7 +130,7 @@ class AlertAnalyzer:
             alerts.append(
                 {
                     "category": "performance",
-                    "severity": "warning",
+                    "severity": Severity.WARNING.value,
                     "message": f"{service['service_name']} slow response: {service['response_time_ms']:.0f}ms",
                     "recommendation": "Investigate service performance bottlenecks",
                     "timestamp": time.time(),

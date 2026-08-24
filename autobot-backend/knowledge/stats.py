@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import parse_utc_iso
 
 if TYPE_CHECKING:
@@ -606,7 +607,7 @@ class StatsMixin:
                     {
                         "fact_id": fact_id,
                         "type": "missing_category",
-                        "severity": "warning",
+                        "severity": Severity.WARNING.value,
                         "message": "Fact missing category",
                     }
                 )
@@ -615,7 +616,7 @@ class StatsMixin:
                     {
                         "fact_id": fact_id,
                         "type": "missing_tags",
-                        "severity": "info",
+                        "severity": Severity.INFO.value,
                         "message": "Fact has no tags",
                     }
                 )
@@ -625,7 +626,7 @@ class StatsMixin:
                 {
                     "fact_id": fact.get("fact_id"),
                     "type": "incomplete_data",
-                    "severity": "critical",
+                    "severity": Severity.CRITICAL.value,
                     "message": "Fact missing required fields",
                 }
             )
@@ -676,7 +677,7 @@ class StatsMixin:
             issues.append(
                 {
                     "type": "category_fragmentation",
-                    "severity": "warning",
+                    "severity": Severity.WARNING.value,
                     "message": "Too many categories (%d), consider consolidating" % len(categories),
                 }
             )
@@ -686,7 +687,7 @@ class StatsMixin:
             issues.append(
                 {
                     "type": "sparse_categories",
-                    "severity": "info",
+                    "severity": Severity.INFO.value,
                     "message": "%d categories have fewer than 3 facts" % len(small_categories),
                 }
             )
@@ -707,7 +708,7 @@ class StatsMixin:
             issues.append(
                 {
                     "type": "tag_format_inconsistency",
-                    "severity": "warning",
+                    "severity": Severity.WARNING.value,
                     "message": "%d tags have inconsistent format" % inconsistent_tags,
                 }
             )
@@ -807,7 +808,7 @@ class StatsMixin:
             issues.append(
                 {
                     "type": "stale_data",
-                    "severity": "warning",
+                    "severity": Severity.WARNING.value,
                     "message": "%d facts are over 1 year old" % age_buckets["older"],
                 }
             )
@@ -815,7 +816,7 @@ class StatsMixin:
             issues.append(
                 {
                     "type": "missing_timestamps",
-                    "severity": "warning",
+                    "severity": Severity.WARNING.value,
                     "message": "%d facts have no timestamp" % age_buckets["unknown"],
                 }
             )
@@ -857,7 +858,7 @@ class StatsMixin:
                             "fact_id": fact.get("fact_id"),
                             "duplicate_of": content_hashes[content_hash],
                             "type": "exact_duplicate",
-                            "severity": "warning",
+                            "severity": Severity.WARNING.value,
                             "message": "Exact duplicate content found",
                         }
                     )
@@ -899,7 +900,7 @@ class StatsMixin:
                 {
                     "fact_id": fact_id,
                     "type": "short_content",
-                    "severity": "warning",
+                    "severity": Severity.WARNING.value,
                     "message": "Content is too short (< 10 chars)",
                 }
             )
@@ -909,7 +910,7 @@ class StatsMixin:
                 {
                     "fact_id": fact_id,
                     "type": "long_content",
-                    "severity": "info",
+                    "severity": Severity.INFO.value,
                     "message": "Content is very long (> 100k chars)",
                 }
             )
@@ -921,7 +922,7 @@ class StatsMixin:
                 {
                     "fact_id": fact_id,
                     "type": "invalid_metadata",
-                    "severity": "critical",
+                    "severity": Severity.CRITICAL.value,
                     "message": "Metadata is not a valid dictionary",
                 }
             )
@@ -933,7 +934,7 @@ class StatsMixin:
                 {
                     "fact_id": fact_id,
                     "type": "invalid_fact_id",
-                    "severity": "critical",
+                    "severity": Severity.CRITICAL.value,
                     "message": "Invalid or missing fact_id",
                 }
             )

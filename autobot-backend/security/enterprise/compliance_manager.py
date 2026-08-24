@@ -24,6 +24,7 @@ import yaml
 from cryptography.fernet import Fernet
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 
@@ -720,7 +721,7 @@ class ComplianceManager:
                 {
                     "framework": "SOC2",
                     "violation_type": "unauthorized_admin_action",
-                    "severity": "high",
+                    "severity": Severity.HIGH.value,
                     "control": "CC6.1",
                     "description": ("Administrative action performed without proper authorization"),
                 }
@@ -743,7 +744,7 @@ class ComplianceManager:
                 {
                     "framework": "GDPR",
                     "violation_type": "pii_access_without_consent",
-                    "severity": "high",
+                    "severity": Severity.HIGH.value,
                     "article": "Article 6",
                     "description": "PII accessed without valid legal basis or consent",
                 }

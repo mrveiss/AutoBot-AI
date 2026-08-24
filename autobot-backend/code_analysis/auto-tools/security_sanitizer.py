@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from utils.line_index import LineIndex  # #12884
 
 # Configure logging
@@ -44,7 +45,13 @@ import re  # noqa: E402
 from datetime import datetime, timezone  # noqa: E402
 from typing import Any, Dict, List, Tuple  # noqa: E402
 
-from tool_base import SecurityFixToolBase  # noqa: E402
+from tool_base import (  # noqa: E402
+    SEVERITY_REPORT_ICONS,
+    SEVERITY_REPORT_ORDER,
+    SecurityFixToolBase,
+    severity_icon,
+    severity_label,
+)
 
 
 class SecurityFixAgent(SecurityFixToolBase):
@@ -153,13 +160,13 @@ class SecurityFixAgent(SecurityFixToolBase):
         medium_vulns = ["outerHTML_assignment", "insertAdjacentHTML"]
 
         if vuln_type in critical_vulns:
-            return "CRITICAL"
+            return Severity.CRITICAL.value
         elif vuln_type in high_vulns:
-            return "HIGH"
+            return Severity.HIGH.value
         elif vuln_type in medium_vulns:
-            return "MEDIUM"
+            return Severity.MEDIUM.value
         else:
-            return "LOW"
+            return Severity.LOW.value
 
     def apply_security_fixes(
         self, content: str, vulnerabilities: List[Dict[str, Any]]
@@ -347,10 +354,9 @@ class SecurityFixAgent(SecurityFixToolBase):
 
         Issue #1183: Extracted from fix_file() to reduce function length.
         """
-        severity_icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
         for vuln in vulnerabilities:
-            icon = severity_icon.get(vuln["severity"], "⚪")
-            logger.info(f"  {icon} Line {vuln['line']}: {vuln['type']} ({vuln['severity']})")
+            icon = severity_icon(vuln["severity"])
+            logger.info(f"  {icon} Line {vuln['line']}: {vuln['type']} ({severity_label(vuln['severity'])})")
             logger.info("     Match: %s", vuln["match"][:100])
 
     def _apply_fixes_and_write(
@@ -500,7 +506,6 @@ class SecurityFixAgent(SecurityFixToolBase):
         Issue #281: Extracted from generate_report to reduce function length.
         """
         content = ""
-        severity_icons = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
 
         # Vulnerability breakdown by severity
         severity_counts = {}
@@ -510,21 +515,21 @@ class SecurityFixAgent(SecurityFixToolBase):
 
         if severity_counts:
             content += "### Vulnerabilities by Severity:\n\n"
-            for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
-                if severity in severity_counts:
-                    icon = severity_icons[severity]
-                    content += f"- {icon} **{severity}:** {severity_counts[severity]} vulnerabilities\n"
+            for level in SEVERITY_REPORT_ORDER:
+                if level.value in severity_counts:
+                    icon = SEVERITY_REPORT_ICONS[level]
+                    content += f"- {icon} **{level.name}:** {severity_counts[level.value]} vulnerabilities\n"
             content += "\n"
 
         # Detailed vulnerability list
         if self.report["vulnerabilities"]:
             content += "### Detailed Vulnerabilities:\n\n"
             for i, vuln in enumerate(self.report["vulnerabilities"], 1):
-                icon = severity_icons.get(vuln["severity"], "⚪")
+                icon = severity_icon(vuln["severity"])
                 content += f"**{i}. {vuln['type'].replace('_', ' ').title()}** {icon}\n"
                 content += f"- **File:** `{vuln['file']}`\n"
                 content += f"- **Line:** {vuln['line']}\n"
-                content += f"- **Severity:** {vuln['severity']}\n"
+                content += f"- **Severity:** {severity_label(vuln['severity'])}\n"
                 match_preview = vuln["match"][:100] + ("..." if len(vuln["match"]) > 100 else "")
                 content += f"- **Pattern:** `{match_preview}`\n\n"
 
