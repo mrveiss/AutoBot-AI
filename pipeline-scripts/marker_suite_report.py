@@ -137,7 +137,7 @@ def render(per_report: dict[str, Counts], total: Counts, marker_expression: str)
 
 def _emit_summary(text: str) -> None:
     """Print, and append to the GitHub step summary when running in Actions."""
-    print(text)
+    print(text)  # noqa: print
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not summary_path:
         return
@@ -194,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             per_report[name] = parse_report(Path(raw_path))
         except ReportError as exc:
-            print(f"::error::marker-suite report: {exc}", file=sys.stderr)
+            print(f"::error::marker-suite report: {exc}", file=sys.stderr)  # noqa: print
             return 1
 
     total = Counts()
@@ -205,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
 
     problems = check(per_report, args.min_collected, args.min_passed)
     for problem in problems:
-        print(f"::error::marker-suite report: {problem}", file=sys.stderr)
+        print(f"::error::marker-suite report: {problem}", file=sys.stderr)  # noqa: print
     return 1 if problems else 0
 
 
