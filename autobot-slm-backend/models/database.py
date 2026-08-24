@@ -118,10 +118,17 @@ class BackupServiceType(str, enum.Enum):
         without a second class to keep in step — and collapses it to one
         canonical member at the boundary, so nothing downstream branches twice.
         """
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            if normalized in _BACKUP_SERVICE_TYPE_ALIASES:
-                return _BACKUP_SERVICE_TYPE_ALIASES[normalized]
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip().lower()
+        if normalized in _BACKUP_SERVICE_TYPE_ALIASES:
+            return _BACKUP_SERVICE_TYPE_ALIASES[normalized]
+        # Case only. Without this the resolution is inconsistent in a way that
+        # reads as a bug from outside: "POSTGRESQL" would resolve through the
+        # alias table while "POSTGRES" — the canonical spelling — would 422.
+        for member in cls:
+            if member.value == normalized:
+                return member
         return None
 
 
