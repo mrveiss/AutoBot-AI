@@ -14,7 +14,13 @@ than only through one caller's delegate.
 
 import pytest
 
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role, role_has_permission
+from autobot_shared.auth.permissions import (
+    ROLE_PERMISSIONS,
+    Permission,
+    Role,
+    is_admin_role,
+    role_has_permission,
+)
 
 # A permission every non-readonly role holds, and one only admin holds —
 # picked from the real enum/mapping rather than invented values, so a
@@ -41,11 +47,46 @@ def test_admin_holds_every_permission():
         assert role_has_permission("admin", perm.value) is True, perm.value
 
 
-def test_superadmin_holds_every_permission():
-    """`superadmin` is administrative but not a `Role` enum member (#12704/#12717) —
-    `is_admin_role` is the canonical, case-insensitive answer."""
+def test_superadmin_holds_no_permission():
+    """The inversion #13854 made deliberately, asserted as the whole set.
+
+    This test previously asserted the exact opposite — superadmin held every
+    permission — and it passed for a reason that was never a decision:
+    `role_has_permission` short-circuited on `is_admin_role`, so `ADMIN_ROLES`
+    was silently the most permissive permission source in the system. Meanwhile
+    `SecurityLayer.check_permission` denied superadmin those same permissions.
+    Two canonical resolvers, opposite answers, for the most privileged role.
+
+    Superadmin is now a `Role` member with an explicitly empty
+    `ROLE_PERMISSIONS` entry, and every resolver reads that one mapping. It is
+    administrative as a predicate (see `is_admin_role`) and holds no granular
+    grant.
+    """
     for perm in Permission:
-        assert role_has_permission("superadmin", perm.value) is True, perm.value
+        assert role_has_permission("superadmin", perm.value) is False, perm.value
+
+
+def test_superadmin_is_still_administrative():
+    """The predicate is unchanged — this is not a retirement of the role.
+
+    The 17 `require_role("admin", "superadmin")` endpoints and every
+    `is_admin_role` caller admit it exactly as before.
+    """
+    assert is_admin_role("superadmin") is True
+    assert Role("superadmin") is Role.SUPERADMIN
+    assert ROLE_PERMISSIONS[Role.SUPERADMIN] == []
+
+
+def test_being_administrative_does_not_grant_permissions():
+    """#13854 AC: `ADMIN_ROLES` must not be a permission source.
+
+    Membership of ADMIN_ROLES and possession of a permission are now decided by
+    different data. Asserted through a role that is in one and not the other, so
+    a reintroduced short-circuit fails here rather than being invisible.
+    """
+    assert is_admin_role("superadmin") is True
+    assert role_has_permission("superadmin", Permission.SHELL_EXECUTE.value) is False
+    assert role_has_permission("superadmin", Permission.ADMIN_SYSTEM.value) is False
 
 
 def test_admin_role_is_case_insensitive():

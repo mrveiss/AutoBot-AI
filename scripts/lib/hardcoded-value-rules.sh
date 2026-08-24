@@ -381,12 +381,38 @@ _hv_rule_account() {
 }
 
 # Role strings (detector 3).
+#
+# #14024: THREE unrelated vocabularies use the word "role" and share literals —
+# platform RBAC (auth.permissions.Role), company membership
+# (llc.models.enums.MembershipRole) and chat message roles
+# (CategoryDefaults.ROLE_*). This rule detects the chat vocabulary's values, but
+# "user" is in the RBAC one as well, so naming a chat constant for it is a coin
+# flip that a reader then applies mechanically.
+#
+# That is not hypothetical. `tools/tool_registry` had `"user_role": "user"`, an
+# RBAC input read by `worker_node._validate_user_role`. This rule suggested
+# `CategoryDefaults.ROLE_USER`. Applying it would have tied an authorization
+# decision to a presentation constant, gone green, and been invisible in review
+# (#13934); a later re-tuning of the chat vocabulary would then have silently
+# changed an authz value.
+#
+# So for an ambiguous value the guard now REPORTS the ambiguity instead of
+# picking a side. "assistant" and "system" belong to the chat vocabulary alone
+# and keep the concrete suggestion. The detection set is unchanged — only the
+# advice — so this adds no findings and needs no baseline change.
+_HV_ROLE_AMBIGUOUS_VALUES_RE='(user)'
+_HV_ROLE_CHAT_SUGGESTION="CategoryDefaults.ROLE_ASSISTANT/ROLE_SYSTEM (chat message vocabulary)"
+_HV_ROLE_AMBIGUOUS_SUGGESTION="AMBIGUOUS (#14024): this value is in more than one role vocabulary \
+- chat (CategoryDefaults.ROLE_USER) and platform RBAC (auth.permissions.Role.USER). \
+Trace the consumer before replacing it; do not apply a suggestion blind."
 _hv_rule_role() {
     [[ $3 =~ $_HV_ROLE_SKIP_RE ]] && return 0
     [[ $3 =~ $_HV_UNION_TYPE_RE ]] && return 0
     [[ $3 =~ $_HV_ROLE_KEYWORD_RE ]] || _hv_get_call_argument "$3" 'role' "$_HV_ROLE_VALUE_RE" || return 0
     _hv_match "$3" "$_HV_ROLE_VALUE_RE" || return 0
-    _hv_emit VIOLATION other "$1" "$2" "$HV_MATCH" "CategoryDefaults.ROLE_USER/ROLE_ASSISTANT/ROLE_SYSTEM"
+    local _hv_role_suggestion="$_HV_ROLE_CHAT_SUGGESTION"
+    [[ $HV_MATCH =~ $_HV_ROLE_AMBIGUOUS_VALUES_RE ]] && _hv_role_suggestion="$_HV_ROLE_AMBIGUOUS_SUGGESTION"
+    _hv_emit VIOLATION other "$1" "$2" "$HV_MATCH" "$_hv_role_suggestion"
 }
 
 # Category / search-mode strings (detector 3, #14005).

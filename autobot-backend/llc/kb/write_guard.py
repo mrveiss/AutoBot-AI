@@ -20,7 +20,28 @@ from user_management.models.organization import Organization
 
 logger = get_logger(__name__)
 
-_SUPERADMIN_ROLES: frozenset[str] = frozenset({"platform_admin", "superadmin"})
+# "May write KB content across an organisation boundary" (#12786).
+#
+# This is a DIFFERENT question from ``is_admin_role`` and the member sets differ
+# on purpose — compare them rather than the names:
+#
+#     ADMIN_ROLES         : admin, superadmin
+#     CROSS_ORG_KB_ROLES  : platform_admin, superadmin
+#
+# ``admin`` is administrative *within its own organisation* and is deliberately
+# absent here: the whole point of the guard below is that an org admin must not
+# reach a parent org's KB namespace. Folding this into ``ADMIN_ROLES`` would add
+# ``admin`` and delete the property the guard exists to enforce, so it stays a
+# separate, named set.
+#
+# ``platform_admin``: no code path anywhere mints this role string — the
+# platform-level flag the rest of the codebase uses is the boolean
+# ``users.is_platform_admin`` / ``TenantContext.is_platform_admin``, not a role
+# named ``platform_admin``. It is preserved rather than dropped (removing it
+# would silently change this guard's behaviour if any deployment does set it),
+# and reconciling the two spellings is tracked separately — see the PR for
+# #12786.
+CROSS_ORG_KB_ROLES: frozenset[str] = frozenset({"platform_admin", "superadmin"})
 
 
 async def assert_not_writing_to_ancestor_kb(

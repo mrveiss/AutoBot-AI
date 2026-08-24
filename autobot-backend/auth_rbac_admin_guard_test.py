@@ -16,9 +16,18 @@ and #12717 (a superadmin silently *downgraded* rather than denied).
 the class from returning: a new ``role == "admin"`` comparison fails here rather
 than becoming the next incident.
 
-Adding ``superadmin``/``platform_admin`` to the shared ``Role`` enum is the
-deeper fix and is still open on #12786 — that enum drives ``ROLE_PERMISSIONS``
-for both backends, so it needs a cross-backend review rather than a drive-by.
+#13854/#12786 did the deeper fix for ``superadmin``: it is a first-class
+``Role`` member with an explicit (empty) ``ROLE_PERMISSIONS`` entry, and
+``ADMIN_ROLES`` is now derived from the enum, so it can no longer name a role
+the enum does not have.
+
+``platform_admin`` is deliberately NOT in that enum. Nothing anywhere mints it
+as a role string — the platform-level signal the codebase actually uses is the
+boolean ``users.is_platform_admin`` — so adding it would invent a role rather
+than canonicalise one. It stays in ``ADMIN_ROLE_LITERALS`` below because this
+guard's job is to catch hand-rolled comparisons against ANY administrative
+literal, and a comparison against a role nothing mints is still a bug worth
+failing on.
 """
 
 import ast
