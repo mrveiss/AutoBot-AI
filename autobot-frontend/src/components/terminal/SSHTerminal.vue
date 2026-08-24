@@ -316,7 +316,7 @@ defineExpose({
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #1e1e1e;
+  background: var(--terminal-chrome-bg-alt);
 }
 
 .connection-bar {
@@ -325,27 +325,27 @@ defineExpose({
   gap: var(--spacing-2);
   padding: var(--spacing-1-5) var(--spacing-3);
   font-size: var(--text-xs);
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--terminal-border-subtle);
 }
 
 .connection-bar.disconnected {
-  background: #2d2d2d;
-  color: #888;
+  background: var(--terminal-chrome-bg);
+  color: var(--terminal-text-muted);
 }
 
 .connection-bar.connecting {
-  background: #3d3d00;
-  color: #ffc107;
+  background: var(--terminal-status-bg-connecting);
+  color: var(--terminal-status-text-connecting);
 }
 
 .connection-bar.connected {
-  background: #1e3d1e;
-  color: #4caf50;
+  background: var(--terminal-status-bg-connected);
+  color: var(--terminal-status-text-connected);
 }
 
 .connection-bar.error {
-  background: #3d1e1e;
-  color: #f44336;
+  background: var(--terminal-status-bg-error);
+  color: var(--terminal-status-text-error);
 }
 
 .status-indicator {
