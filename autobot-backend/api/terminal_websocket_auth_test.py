@@ -18,12 +18,30 @@ constructor was never awaited, and an acceptance test proves the route
 reaches it without spawning a real PTY.
 """
 
+import logging
 import uuid
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from api.terminal import session_manager, terminal_websocket
+
+
+@contextmanager
+def _no_ws_credentials():
+    """Patch every credential source _resolve_ws_user tries (#14960) to deny.
+
+    See api/vnc_proxy_websocket_auth_test.py::_no_ws_credentials for why all
+    three must be closed off, not just the query-param JWT.
+    """
+    with (
+        patch("auth_middleware.authenticate_websocket", new=AsyncMock(return_value=None)),
+        patch("auth_middleware.verify_internal_api_key", return_value=False),
+        patch("auth_middleware.get_auth_middleware") as mock_get_auth_middleware,
+    ):
+        mock_get_auth_middleware.return_value.get_user_from_request.return_value = None
+        yield
 
 
 def _fake_websocket() -> MagicMock:
@@ -60,7 +78,7 @@ class TestTerminalWebsocketAuthentication:
         ws = _fake_websocket()
 
         with (
-            patch("auth_middleware.authenticate_websocket", new=AsyncMock(return_value=None)),
+            _no_ws_credentials(),
             patch("api.terminal._lookup_terminal_session") as mock_lookup,
             patch("api.terminal._init_terminal_handler", new=AsyncMock()) as mock_init,
         ):
@@ -75,9 +93,18 @@ class TestTerminalWebsocketAuthentication:
 
 class TestTerminalWebsocketUnknownSession:
     @pytest.mark.asyncio
-    async def test_unknown_session_id_is_rejected_no_default(self):
+    async def test_unknown_session_id_is_rejected_no_default(self, caplog):
         """#14961 AC: a session_id that was never created is rejected; no
         TerminalWebSocket is constructed and no default SecurityLevel is used.
+
+        Asserts the specific "unknown session_id" log line _lookup_terminal_session
+        emits only on the missing-config branch, distinct from the
+        "is not the owner" line the ownership-mismatch branch emits -- both
+        exit through the same close(1008), so the outcome alone can't tell
+        them apart. Reverting the existence check to `.get(id, {})` (the
+        original #14961 shape) still passes through the owner check (an
+        empty dict has no "owner" key either) and would pass this test for
+        the wrong reason without this assertion.
         """
         ws = _fake_websocket()
         unknown_session_id = str(uuid.uuid4())
@@ -86,6 +113,7 @@ class TestTerminalWebsocketUnknownSession:
         with (
             patch("auth_middleware.authenticate_websocket", new=AsyncMock(return_value={"username": "alice"})),
             patch("api.terminal._init_terminal_handler", new=AsyncMock()) as mock_init,
+            caplog.at_level(logging.WARNING, logger="api.terminal"),
         ):
             await terminal_websocket(ws, unknown_session_id)
 
@@ -93,11 +121,13 @@ class TestTerminalWebsocketUnknownSession:
         assert ws.close.await_args.kwargs.get("code") == 1008
         ws.accept.assert_not_awaited()
         mock_init.assert_not_awaited()
+        assert any("unknown session_id" in record.message for record in caplog.records)
+        assert not any("is not the owner" in record.message for record in caplog.records)
 
 
 class TestTerminalWebsocketOwnership:
     @pytest.mark.asyncio
-    async def test_non_owner_is_rejected(self, owned_session_id):
+    async def test_non_owner_is_rejected(self, owned_session_id, caplog):
         """#14960 AC: an authenticated user connecting to another user's
         session is rejected."""
         ws = _fake_websocket()
@@ -105,6 +135,7 @@ class TestTerminalWebsocketOwnership:
         with (
             patch("auth_middleware.authenticate_websocket", new=AsyncMock(return_value={"username": "mallory"})),
             patch("api.terminal._init_terminal_handler", new=AsyncMock()) as mock_init,
+            caplog.at_level(logging.WARNING, logger="api.terminal"),
         ):
             await terminal_websocket(ws, owned_session_id)
 
@@ -112,6 +143,8 @@ class TestTerminalWebsocketOwnership:
         assert ws.close.await_args.kwargs.get("code") == 1008
         ws.accept.assert_not_awaited()
         mock_init.assert_not_awaited()
+        assert any("is not the owner" in record.message for record in caplog.records)
+        assert not any("unknown session_id" in record.message for record in caplog.records)
 
     @pytest.mark.asyncio
     async def test_owner_connects_normally(self, owned_session_id):

@@ -17,11 +17,31 @@ verification here -- these tests exercise the route's wiring to that
 helper, not the helper's own internals.
 """
 
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from api.vnc_proxy import websocket_proxy
+
+
+@contextmanager
+def _no_ws_credentials():
+    """Patch every credential source _resolve_ws_user tries (#14959) to deny.
+
+    Widening enforce_ws_authentication to a union of credential checks means
+    a test asserting "unauthenticated" must close off all of them, not just
+    the query-param JWT -- otherwise it passes for the wrong reason if any
+    one of the others is left to the conftest auth_middleware stub, whose
+    ``__getattr__`` fabricates a truthy MagicMock for anything unpatched.
+    """
+    with (
+        patch("auth_middleware.authenticate_websocket", new=AsyncMock(return_value=None)),
+        patch("auth_middleware.verify_internal_api_key", return_value=False),
+        patch("auth_middleware.get_auth_middleware") as mock_get_auth_middleware,
+    ):
+        mock_get_auth_middleware.return_value.get_user_from_request.return_value = None
+        yield
 
 
 def _fake_websocket(*, origin: str | None = None) -> MagicMock:
@@ -42,7 +62,7 @@ class TestVncWebsocketProxyAuthentication:
         """#14959 AC: unauthenticated -> close(1008), accept() never called."""
         ws = _fake_websocket()
 
-        with patch("auth_middleware.authenticate_websocket", new=AsyncMock(return_value=None)):
+        with _no_ws_credentials():
             await websocket_proxy(ws, "desktop")
 
         ws.close.assert_awaited_once()
