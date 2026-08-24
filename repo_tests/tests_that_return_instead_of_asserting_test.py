@@ -21,7 +21,8 @@ for this file, for two reasons:
 * it only ever sees tests that **run**. Of the returns measured on this branch,
   141 of 277 are in trees no pytest invocation collects, so the warning would
   never be emitted for them and the config would report a clean tree while more
-  than half the population sat outside its reach.
+  than half the population sat outside its reach. #14928 covers the related
+  hazard: ``pytest`` is unpinned, so the flip arrives on a release nobody chose.
 * it fires per test execution, so a test skipped in a shard, deselected by a
   marker, or living behind a collection error contributes nothing.
 
@@ -40,10 +41,13 @@ WHAT IS DELIBERATELY NOT COUNTED, AND WHY
 -----------------------------------------
 Measured on this branch, each derived from the code rather than from a list:
 
-* **121** returns in ``test_*`` methods of classes that do not match
+* **152** returns in ``test_*`` methods of classes that do not match
   ``python_classes`` — pytest never collects them, so they are ordinary
-  methods that happen to be named like tests. Counting them would demand
-  edits that change nothing.
+  methods that happen to be named like tests. Counting them would demand edits
+  to code nothing executes, and the conversion has to wait until the methods
+  are actually collected. That is its own defect, filed as **#14927** (120
+  methods in 23 classes across 19 files, including 13 in an IDOR hotfix suite),
+  and it must be fixed first.
 * **11** returns in ``test_*`` functions decorated with ``@pytest.fixture`` —
   a fixture is *supposed* to return; its name is the only thing test-shaped
   about it.
