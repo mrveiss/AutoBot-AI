@@ -493,6 +493,7 @@ To add a new variable:
 | `AUTOBOT_INJECTION_HARDBLOCK_THRESHOLD` | auth | float | `0.75` | Confidence in [0.0, 1.0] at or above which a detected injection is hard-blocked. 0.75 maps to HIGH; 1.0 would block only CRITICAL. |
 | `AUTOBOT_INTERNAL_API_KEY` | auth | str | `""` | Shared secret used to authenticate internal service-to-service calls. |
 | `AUTOBOT_KB_TIMEOUT` | kb | int | `30` | Timeout in seconds for knowledge-base HTTP requests. Range: 1–300. |
+| `AUTOBOT_LIVE_PROBE_TIMEOUT_SECONDS` | testing | float | `1.0` | Seconds a test's live-service precondition probe waits for a TCP connect before reporting the service as absent and skipping (autobot_shared/live_service_probe.py, #14930). Short by default: a refused loopback connect returns immediately, and this runs once per endpoint per process. Raise it when probing a fleet host across a link slow enough that a live service could be mistaken for a missing one. Range: 0.1–60.0. |
 | `AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL` | orchestrator | int | `86400` | Cache lifetime in seconds for a human-to-agent handoff brief (llc/services/handoff.py). One day. |
 | `AUTOBOT_LLM_MAX_RETRY_AFTER_SECONDS` | ai | float | `30.0` | Cap applied to a provider's `Retry-After`. Without it a provider advertising a long back-off would stall a request for that whole period (services/llm_service.py). |
 | `AUTOBOT_LLM_TOKEN_BUDGET_PER_RUN` | ai | int | `0` | Cumulative token ceiling (input plus output) for one run. Zero disables the gate, which is the shipped default (#11541). |
@@ -584,5 +585,5 @@ To add a new variable:
 | `AUTOBOT_USERS_DATABASE_URL` | postgres | str | *(none)* | Full SQLAlchemy connection URL for the users database. Overrides AUTOBOT_POSTGRES_* individual vars when set. |
 | `AUTOBOT_VOICE_TOOLSETS` | voice | str | `'voice_safe'` | Comma-separated toolset bundles a voice session may call. Defaults to the restricted `voice_safe` bundle — voice input is harder to confirm than typed input, so the surface is narrowed by default. |
 
-*146 variables registered as of last generation.*
+*147 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->
