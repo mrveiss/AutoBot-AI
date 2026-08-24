@@ -27,10 +27,10 @@ KNOWN_LARGE = {
 def main() -> int:
     violations = []
     for arg in sys.argv[1:]:
-        p = pathlib.Path(arg)
+        p = pathlib.Path(arg).resolve()
         # Normalise to forward-slash relative path for set lookup
-        rel = str(p).replace("\\", "/")
-        if any(rel.endswith(known.replace("\\", "/")) for known in KNOWN_LARGE):
+        rel = p.relative_to(pathlib.Path.cwd()).as_posix()
+        if rel in {known.replace("\\", "/") for known in KNOWN_LARGE}:
             continue
         try:
             line_count = sum(1 for _ in p.open(encoding="utf-8"))
