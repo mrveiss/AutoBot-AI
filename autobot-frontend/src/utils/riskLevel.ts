@@ -18,15 +18,23 @@
  * The wider `CommandRisk` enum (`SAFE/MODERATE/HIGH/CRITICAL/DANGEROUS/
  * FORBIDDEN`) is converted to the vocabulary above at the backend boundary
  * by `services/agent_terminal/utils.py::map_risk_to_level`. That boundary
- * must be applied at EVERY call site that turns a `CommandRisk` into a
- * `risk_level` string for the UI — #14955 found one that skipped it
- * (`services/agent_terminal/service.py::_queue_command_for_approval` was
- * forwarding the raw `CommandRisk.value`, e.g. `"dangerous"`, straight into
- * the pending-approval response; fixed alongside this file to reuse the
- * already-converted `cmd_execution.risk_level`). Do NOT widen this table to
- * accept `MODERATE`/`DANGEROUS`/`FORBIDDEN`/`SAFE` as a workaround for a
- * producer that skips the conversion — fix that producer instead, the same
- * way this one was fixed.
+ * must be applied at every call site that turns a `CommandRisk` into a
+ * `risk_level` string FOR THE UI — #14955 found one that skipped it:
+ * `services/agent_terminal/service.py::_queue_command_for_approval`'s
+ * returned response (what `chat_workflow/tool_handler.py` reads into
+ * `metadata["risk_level"]`) was forwarding the raw `CommandRisk.value`, e.g.
+ * `"dangerous"`. Fixed to reuse the already-converted
+ * `cmd_execution.risk_level`.
+ *
+ * That same method's internal `session.pending_approval["risk"]` is
+ * deliberately NOT converted — it feeds the auto-approve rules engine
+ * (`CommandApprovalManager`/`approval_memory.py`), which matches on the
+ * 6-member `CommandRisk` vocabulary and would silently stop matching stored
+ * rules if fed the narrower 4-member one. Only the UI-facing response is a
+ * `RiskLevel`; internal approval state stays a `CommandRisk`. Do NOT widen
+ * this table to accept `MODERATE`/`DANGEROUS`/`FORBIDDEN`/`SAFE` as a
+ * workaround for a producer that skips the UI-response conversion — fix
+ * that producer instead, the same way this one was fixed.
  */
 
 export type RiskSeverity = 'low' | 'medium' | 'high' | 'critical'
