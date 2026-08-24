@@ -49,8 +49,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.legacy_secret_keys import derive_llc_company_fernet
 from autobot_shared.secrets_envelope import derive_vault_key, seal, wrap_dek
 from autobot_shared.secrets_vault import VaultKind, VaultRef
+from autobot_shared.status_enums import SecretType
 from llc.models.secret import LLCSecret
-from models.secret import Secret, SecretType
+from models.secret import Secret
 from models.secret_grant import SecretGrant
 
 _MARKER = "imported_from_llc_secrets"

@@ -18,7 +18,7 @@ import pytest
 # Import the modules to test
 import security_layer
 from autobot_shared.paths import project_root
-from secure_command_executor import CommandRisk
+from autobot_shared.status_enums import CommandRisk
 from security_layer import SecurityLayer
 
 

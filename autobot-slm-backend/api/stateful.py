@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
-from models.database import Backup, BackupStatus, Node, Replication, ReplicationStatus
+from models.database import Backup, BackupServiceType, BackupStatus, Node, Replication, ReplicationStatus
 from models.schemas import (
     ActionResponse,
     BackupCreate,
@@ -49,7 +49,7 @@ async def list_backups(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
     node_id: str | None = Query(None),
-    service_type: str | None = Query(None),
+    service_type: BackupServiceType | None = Query(None),
     status_filter: str | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -60,7 +60,9 @@ async def list_backups(
     if node_id:
         query = query.where(Backup.node_id == node_id)
     if service_type:
-        query = query.where(Backup.service_type == service_type)
+        # #14944: compare the stored string against ``.value``, never the
+        # member — str() of a (str, Enum) member is "BackupServiceType.REDIS".
+        query = query.where(Backup.service_type == service_type.value)
     if status_filter:
         query = query.where(Backup.status == status_filter)
 
@@ -121,7 +123,7 @@ async def create_backup(
     backup = Backup(
         backup_id=backup_id,
         node_id=request.node_id,
-        service_type=request.service_type,
+        service_type=request.service_type.value,
         status=BackupStatus.PENDING.value,
     )
     db.add(backup)
@@ -315,7 +317,7 @@ async def start_replication(
         replication_id=replication_id,
         source_node_id=request.source_node_id,
         target_node_id=request.target_node_id,
-        service_type=request.service_type,
+        service_type=request.service_type.value,
         status=ReplicationStatus.PENDING.value,
     )
     db.add(replication)
@@ -489,7 +491,7 @@ async def verify_data(
     details = {}
     is_healthy = True
 
-    if request.service_type == "redis":
+    if request.service_type is BackupServiceType.REDIS:
         verify_result = await _verify_redis(node.ip_address)
         checks = verify_result["checks"]
         details = verify_result["details"]
@@ -499,13 +501,13 @@ async def verify_data(
             {
                 "name": "service_check",
                 "status": "skipped",
-                "message": f"Verification not implemented for {request.service_type}",
+                "message": f"Verification not implemented for {request.service_type.value}",
             }
         )
 
     return DataVerifyResponse(
         is_healthy=is_healthy,
-        service_type=request.service_type,
+        service_type=request.service_type.value,
         details=details,
         checks=checks,
     )
@@ -516,12 +518,12 @@ async def verify_data(
 # =============================================================================
 
 
-async def _run_backup(backup_id: str, host: str, service_type: str) -> None:
+async def _run_backup(backup_id: str, host: str, service_type: BackupServiceType) -> None:
     """Execute backup operation asynchronously using the backup service."""
     from services.backup import backup_service
     from services.database import db_service
 
-    logger.info("Running backup %s for host %s (service: %s)", backup_id, host, service_type)
+    logger.info("Running backup %s for host %s (service: %s)", backup_id, host, service_type.value)
 
     async with db_service.session() as db:
         # Get the backup record
@@ -546,10 +548,13 @@ async def _run_backup(backup_id: str, host: str, service_type: str) -> None:
         # #13307: PostgreSQL holds users, LLC work items and chat/session data.
         # It was simply absent from a feature called "Backups", so a restore
         # silently omitted all of it — discovered only during recovery.
+        # #13578: keyed on enum members. The table used to carry two spellings
+        # of postgres because nothing constrained what a caller could send;
+        # ``BackupServiceType._missing_`` now folds "postgresql" into POSTGRES
+        # at the boundary, so this dispatch has one key per engine again.
         runners = {
-            "redis": backup_service.execute_redis_backup,
-            "postgres": backup_service.execute_postgres_backup,
-            "postgresql": backup_service.execute_postgres_backup,
+            BackupServiceType.REDIS: backup_service.execute_redis_backup,
+            BackupServiceType.POSTGRES: backup_service.execute_postgres_backup,
         }
         runner = runners.get(service_type)
         if runner is not None:
@@ -560,11 +565,11 @@ async def _run_backup(backup_id: str, host: str, service_type: str) -> None:
                 # #13307: prune here rather than on a timer — a new good backup
                 # is the only moment it is safe to drop an old one, and it keeps
                 # retention working without a scheduler this service does not have.
-                await backup_service.apply_retention(db, backup.node_id, service_type)
+                await backup_service.apply_retention(db, backup.node_id, service_type.value)
         else:
             # For unsupported service types, mark as failed
             backup.status = BackupStatus.FAILED.value
-            backup.error = f"Unsupported service type: {service_type}"
+            backup.error = f"Unsupported service type: {service_type.value}"
             backup.completed_at = datetime.now(timezone.utc)
             await db.commit()
             logger.warning("Backup %s failed: unsupported service type", backup_id)

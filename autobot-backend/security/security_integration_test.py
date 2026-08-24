@@ -15,7 +15,8 @@ from fastapi.testclient import TestClient
 
 # Import system components
 from app_factory import create_app
-from secure_command_executor import CommandRisk, SecureCommandExecutor
+from autobot_shared.status_enums import CommandRisk
+from secure_command_executor import SecureCommandExecutor
 from security_layer import SecurityLayer
 
 

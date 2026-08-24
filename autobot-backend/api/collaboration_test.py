@@ -29,7 +29,8 @@ from api.collaboration import (
     remove_collaborator,
     share_secret_with_session,
 )
-from models.secret import Secret, SecretScope, SecretType
+from autobot_shared.status_enums import SecretType
+from models.secret import Secret, SecretScope
 from models.session_collaboration import PermissionLevel, SessionCollaboration
 
 
