@@ -204,10 +204,7 @@ def test_celery_worker_status():
     )
 
     logs = log_file.read_text(encoding="utf-8", errors="replace")
-    assert logs.strip(), (
-        f"{log_file} is empty — the worker process produced no output at all, "
-        "so it did not come up"
-    )
+    assert logs.strip(), f"{log_file} is empty — the worker process produced no output at all, " "so it did not come up"
 
     missing = [marker for marker in _WORKER_READY_MARKERS if marker not in logs]
     assert not missing, (

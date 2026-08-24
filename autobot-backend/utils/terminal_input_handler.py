@@ -196,9 +196,7 @@ class TerminalInputHandler:
         # #315 because the test that covers it sat in a class pytest could not
         # collect, so it never ran. A numbered selection is phrased at least as
         # often with "select" or "option" as with "choice".
-        if any(word in prompt_lower for word in _CHOICE_KEYWORDS) and any(
-            char.isdigit() for char in prompt
-        ):
+        if any(word in prompt_lower for word in _CHOICE_KEYWORDS) and any(char.isdigit() for char in prompt):
             numbers = [char for char in prompt if char.isdigit()]
             return numbers[0] if numbers else config.misc.default_choice or _get_config_default("default_choice", "1")
 
