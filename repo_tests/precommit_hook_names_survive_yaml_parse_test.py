@@ -36,6 +36,7 @@ are broken:
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -171,6 +172,74 @@ def test_the_detector_rejects_a_config_that_loses_a_name_to_a_comment() -> None:
     )
     assert not truncated_names(synthetic.replace(bad, f"'{bad}'")), (
         "a quoted name keeps its text and must not be reported"
+    )
+
+
+def test_every_gated_hook_id_resolves_to_an_untruncated_name() -> None:
+    """The pairing with #14921's gate, verified rather than assumed.
+
+    ``pipeline-scripts/check_gating_precommit_hooks.py`` resolves each id in
+    ``GATING_HOOK_IDS`` to a name and then looks for that exact name in
+    pre-commit's transcript. If the name loses text to a YAML comment the gate
+    searches for a string the log never contains, finds no result line, and — in
+    the shape this whole cluster is about — a gate that matched nothing is a
+    gate that reported nothing.
+
+    Today's single gated hook, ``ssot-config-lib-guard``, was never affected:
+    its ``#`` is preceded directly by ``(``, which is not a comment start. That
+    is luck, not design, and it is exactly the sort of thing that stops being
+    true when the second id is appended. Asserted here so the next append
+    cannot silently pick a truncated name.
+
+    ``GATING_HOOK_IDS`` is read out of the source with the AST rather than
+    imported: importing the module for one tuple would install it in
+    ``sys.modules`` for the rest of the session, which this repository has been
+    bitten by before.
+    """
+    consumer = _REPO_ROOT / "pipeline-scripts" / "check_gating_precommit_hooks.py"
+    assert consumer.is_file(), f"{consumer.name} is gone — #14921's gate has no subject"
+    tree = ast.parse(consumer.read_text(encoding="utf-8"))
+    gated: tuple[str, ...] = ()
+    for node in ast.walk(tree):
+        targets = [node.target] if isinstance(node, ast.AnnAssign) else getattr(node, "targets", [])
+        if any(isinstance(name, ast.Name) and name.id == "GATING_HOOK_IDS" for name in targets):
+            gated = tuple(ast.literal_eval(node.value))
+    assert gated, (
+        "GATING_HOOK_IDS could not be read from "
+        f"{consumer.name} — the constant was renamed or restructured, and this "
+        "check would otherwise verify an empty set and pass"
+    )
+
+    text = _CONFIG.read_text(encoding="utf-8")
+    document = yaml.safe_load(text) or {}
+    resolved = {
+        hook["id"]: str(hook.get("name") or hook["id"])
+        for repo in document.get("repos", [])
+        for hook in repo.get("hooks", [])
+        if "id" in hook
+    }
+    missing = [hook_id for hook_id in gated if hook_id not in resolved]
+    assert not missing, (
+        f"these gated hook ids are not in .pre-commit-config.yaml: {missing}. "
+        "#14921's gate fails closed on this, but it should never get the chance"
+    )
+    # `resolved` holds the PARSED name — the string pre-commit will print and
+    # the gate will look for. A truncation finding reports (line, written,
+    # parsed), so the comparison has to be against its parsed element. Matching
+    # the written one instead is a check that can never fire, and a first
+    # attempt at this test did exactly that: it passed while a deliberately
+    # truncated hook sat in GATING_HOOK_IDS.
+    losses = {parsed: written for _, written, parsed in truncated_names(text)}
+    truncated = {
+        hook_id: (losses[resolved[hook_id]], resolved[hook_id])
+        for hook_id in gated
+        if resolved[hook_id] in losses
+    }
+    assert not truncated, (
+        "a gated hook's printed name is not the name that was written "
+        f"(written, printed): {truncated}. #14921's gate matches on the printed "
+        "form, so it would search the transcript for a string that is never "
+        "there — and a gate that matches nothing reports nothing (#14923)"
     )
 
 
