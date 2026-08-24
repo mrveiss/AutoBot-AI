@@ -235,6 +235,12 @@ The justification is a preceding **comment**, never a suffix on the entry: the
 key is everything after the first `|`, so a trailing `# reviewed: …` would
 change the key until it matched no finding at all.
 
+An entry naming a **symlink** is refused. A symlink's content is the target
+path, so "byte-identical to the base ref" stays true however much the file it
+points at was rewritten — and the detector never attributes a finding to a
+symlink path anyway, because its tree walk does not follow them. Baseline the
+real path.
+
 An entry whose key does not carry **exactly two** `|` separators is refused
 outright rather than parsed. `|` is a legal byte in a filename and the record
 format does not escape it, so a crafted path can make the file field resolve to

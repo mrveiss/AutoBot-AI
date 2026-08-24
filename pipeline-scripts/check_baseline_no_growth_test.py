@@ -446,3 +446,31 @@ def test_an_empty_file_field_is_refused(repo) -> None:
     result = _run(repo)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "file field is empty" in result.stdout
+
+
+def test_an_entry_naming_a_symlink_is_refused(repo) -> None:
+    """A symlink's blob is the target PATH, so 'unchanged' says nothing about content.
+
+    Found in review, and reproduced before the check existed: base carries
+    `alias.py -> settled.py`; the change rewrites `settled.py` to add a value
+    and baselines `alias.py`. `git diff --quiet` is silent on the link object,
+    so the byte-identical test passed on the wrong file and the guard exited 0.
+    """
+    root, _ = repo
+    alias = root / "autobot-backend/alias.py"
+    alias.symlink_to("settled.py")
+    _git(root, "add", "autobot-backend/alias.py")
+    _git(root, "commit", "--quiet", "-m", "add the symlink at base")
+    base = _git(root, "rev-parse", "HEAD").stdout.strip()
+    (root / SETTLED_REL).write_text('HOST = "10.0.0.7"\n', encoding="utf-8")
+    _append(root, MARKER, "1|ssot|autobot-backend/alias.py|10.0.0.7")
+    result = subprocess.run(
+        ["bash", str(root / GUARD_REL)],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", "HOME": str(root), "BASE_SHA": base},
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "is a symlink" in result.stdout
+    assert "ALLOWED" not in result.stdout

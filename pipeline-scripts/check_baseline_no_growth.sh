@@ -296,6 +296,29 @@ while IFS= read -r gline; do
         continue
     fi
 
+    # A SYMLINK IS NOT THE CONTENT THE FINDING IS ABOUT.
+    #
+    # A symlink's blob is the target PATH STRING, so `git diff --quiet` below
+    # reports it unchanged however much the file it points at was rewritten.
+    # Found in review: base has `alias.py -> real.py`, the change rewrites
+    # `real.py` to add a secret and baselines `alias.py`, and the byte-identical
+    # test passes on the link object while the value is brand new.
+    #
+    # Refusing costs nothing, because a finding can never legitimately be
+    # attributed to a symlink path in the first place: hv_scan_tree walks the
+    # tree with `grep -r`, which does not follow symlinks during traversal, so
+    # the detector reports the finding under the real path. An entry naming a
+    # symlink is therefore always either a mistake or a decoy.
+    if [ -L "$entry_file" ]; then
+        echo "  REFUSED  ${key}"
+        echo "           ${entry_file} is a symlink. Its content is the target PATH, so"
+        echo "           'byte-identical to the base ref' says nothing about the file the"
+        echo "           value actually lives in. The detector never attributes a finding"
+        echo "           to a symlink path either — baseline the real path."
+        refused=$((refused + 1))
+        continue
+    fi
+
     if ! git rev-parse --verify --quiet "${base}:${entry_file}" >/dev/null; then
         echo "  REFUSED  ${key}"
         echo "           ${entry_file} does not exist at ${base}: this change created it,"
