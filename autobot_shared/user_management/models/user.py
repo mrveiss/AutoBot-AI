@@ -42,8 +42,9 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 
 from autobot_shared.time_utils import now_utc
@@ -56,6 +57,42 @@ if TYPE_CHECKING:
     from user_management.models.role import UserRole
     from user_management.models.sso import UserSSOLink
     from user_management.models.team import TeamMembership
+
+
+def resolve_display_name(
+    display_name: str | None,
+    username: str | None,
+    fallback: str | None = None,
+) -> str | None:
+    """The display-label rule for callers that hold columns, not an entity (#13957).
+
+    :attr:`UserCore.full_name` is the same rule and is preferred wherever a
+    loaded ``User`` (or a ``select(User.full_name)`` column) is available. This
+    function exists for the case ``full_name`` genuinely cannot serve: a LEFT
+    OUTER JOIN onto ``users`` where the user row may be absent entirely, so
+    ``username`` — ``NOT NULL`` in the table — still arrives as ``NULL``.
+
+    It carries the **union** of the fallback depths the five copies had drifted
+    to, rather than picking one and silently shortening the others:
+
+    - ``display_name``, then ``username`` — every copy agreed this far;
+    - then *fallback*, the extra rung ``llc.api.companies._compose_human_nodes``
+      needed so an orphaned membership renders its user id instead of nothing;
+    - then ``None``, which ``llc.api.work_items._assignee_display`` relies on to
+      distinguish "no assignee" from a named one.
+
+    Passing no *fallback* therefore reproduces the two-rung behaviour exactly;
+    no call site loses a rung it had.
+
+    Args:
+        display_name: The user's optional display name.
+        username: The user's username; ``None`` only when the row is absent.
+        fallback: Final rung when neither name is present — e.g. ``str(user_id)``.
+
+    Returns:
+        The first non-empty value of the three, or ``None`` if all are empty.
+    """
+    return display_name or username or fallback or None
 
 
 class UserCore(Base):
@@ -269,10 +306,38 @@ class UserCore(Base):
         current[keys[-1]] = value
         self.preferences = preferences
 
-    @property
+    @hybrid_property
     def full_name(self) -> str:
-        """Return display name or username as fallback."""
+        """The person's display label: ``display_name``, falling back to ``username``.
+
+        A ``hybrid_property`` rather than a plain ``property`` (#13957). The rule
+        was re-implemented at five call sites for one reason: a plain property is
+        only reachable from a loaded entity, so any ``select(User.display_name,
+        User.username)`` column tuple had to spell the fallback out again. Three
+        of those copies had already drifted to different fallback depths. The
+        ``expression`` half below makes the identical rule usable directly in a
+        column select, so there is one place to change how a person is named.
+
+        ``username`` is ``NOT NULL``, so this is non-``None`` for any row that
+        exists. It is **not** safe for an outer join, where the whole user row
+        may be absent and both columns arrive as ``NULL`` — that case needs a
+        third fallback rung and belongs to :func:`resolve_display_name`.
+        """
         return self.display_name or self.username
+
+    @full_name.expression  # type: ignore[no-redef]
+    def full_name(cls):  # noqa: N805 - SQLAlchemy hybrid expression takes the class
+        """SQL half of :meth:`full_name`, usable inside ``select(...)``.
+
+        ``coalesce`` and Python's ``or`` are not the same test: ``coalesce``
+        returns the first non-NULL, while ``or`` skips any falsy value. They
+        differ only for an empty-string ``display_name``, which the Python half
+        skips and this would return. ``display_name`` is normalised to ``None``
+        rather than ``""`` on write (see ``user_service.create_user``), so no
+        stored row distinguishes them; ``NULLIF`` keeps the two halves identical
+        even if one ever does.
+        """
+        return func.coalesce(func.nullif(cls.display_name, ""), cls.username)
 
     def record_login(self) -> None:
         """Record a successful login."""
