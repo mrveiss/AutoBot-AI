@@ -154,6 +154,7 @@ from api.system_health import ComponentHealth, register_health_probe
 # Response schemas for OpenAPI documentation and response validation
 from api.ws_security import enforce_ws_authentication, enforce_ws_origin
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
@@ -1093,9 +1094,36 @@ async def ssh_terminal_websocket(
 
     This endpoint remains for backward compatibility but returns a deprecation
     message directing clients to use SLM for infrastructure connections.
+
+    Issue #14991: this had no authentication at all -- any caller who knew or
+    guessed a host_id reached SSHTerminalWebSocket (today an inert stub, but
+    the live shape of an interactive infrastructure shell). There is no
+    per-host permission model anywhere in this codebase to scope host_id
+    against a caller's permitted set, and #14958 explicitly rules out
+    inventing one here. The strictest reading available without inventing a
+    new capability model is the one this router already declares its intent
+    with (`Depends(check_admin_permission)` at router level, which does not
+    actually run for WebSocket routes -- FastAPI does not resolve an
+    HTTP-`Request`-typed router dependency against a WebSocket scope): admin
+    role, checked explicitly here, for every host_id. A finer-grained,
+    per-host model is out of scope (belongs with #14964).
     """
     if not await enforce_ws_origin(websocket):
         return
+
+    user = await enforce_ws_authentication(websocket)
+    if user is None:
+        return
+
+    if not is_admin_role(user.get("role")):
+        logger.warning(
+            "SSH terminal WebSocket rejected: %s is not an admin (host %s)",
+            user.get("username"),
+            host_id,
+        )
+        await websocket.close(code=1008, reason="Admin role required for infrastructure SSH access")
+        return
+
     await websocket.accept()
     session_id = f"ssh-{host_id}-{uuid.uuid4().hex[:8]}"
 
