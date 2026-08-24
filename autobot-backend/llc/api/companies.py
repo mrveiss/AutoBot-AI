@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import _parse_uuid_safe, get_current_user, require_org_context
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.user_management.models.user import resolve_display_name
 from llc.deps import assert_company_access, get_session, service_dep
 from llc.kb.collections import KbCollectionManager
 from llc.models.company import (
@@ -589,15 +590,18 @@ async def list_members(
     # a member, and which of them can take an assignment.
     active: Dict[uuid.UUID, bool] = {}
     if user_ids:
+        # #13957: ``User.full_name`` is a hybrid property, so the canonical
+        # "display_name, else username" rule is selected in SQL here rather than
+        # re-spelled in the comprehension below. This is an inner select on
+        # ``users``, so a returned row always has the NOT NULL ``username`` to
+        # fall back to and the two-rung rule is complete.
         rows = (
             await session.execute(
-                select(User.id, User.display_name, User.username, User.is_active, User.deleted_at).where(
-                    User.id.in_(user_ids)
-                )
+                select(User.id, User.full_name, User.is_active, User.deleted_at).where(User.id.in_(user_ids))
             )
         ).all()
-        names = {uid: (dn or un) for uid, dn, un, _ia, _da in rows}
-        active = {uid: _person_is_active(ia, da) for uid, _dn, _un, ia, da in rows}
+        names = {uid: name for uid, name, _ia, _da in rows}
+        active = {uid: _person_is_active(ia, da) for uid, _name, ia, da in rows}
     return [
         {
             **_to_member_read(m),
@@ -1038,7 +1042,11 @@ async def _compose_human_nodes(session: AsyncSession, company_id: uuid.UUID) -> 
                 # ``assignee_user_id`` references.
                 id=f"user:{user_id}",
                 node_id=str(user_id),
-                name=display_name or username or str(user_id),
+                # #13957: the canonical rule plus the third rung this site
+                # needs -- the join below is a LEFT OUTER JOIN, so a membership
+                # whose user row is gone yields NULL for both names and must
+                # still render something the caller can key on.
+                name=resolve_display_name(display_name, username, str(user_id)),
                 title=role_label,
                 # ``idle`` is exactly what ``_heartbeat_status_to_org_status``
                 # returns for an agent with no run, so it asserts no liveness we

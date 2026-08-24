@@ -105,7 +105,7 @@ def _scim_error(detail: str, scim_type: str = "invalidValue", status_code: int =
 
 def _user_to_scim(user: User, base_url: str) -> dict:
     """Serialise a User ORM instance to a SCIM 2.0 User resource dict."""
-    name_parts = (user.display_name or user.username).split(" ", 1)
+    name_parts = user.full_name.split(" ", 1)  # #13957: the canonical rule
     given = name_parts[0]
     family = name_parts[1] if len(name_parts) > 1 else ""
     return {

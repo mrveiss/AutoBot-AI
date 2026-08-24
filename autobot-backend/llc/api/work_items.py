@@ -39,6 +39,7 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.user_management.models.user import resolve_display_name
 from llc.deps import assert_company_access, get_session, service_dep
 from models.agent_org import AgentOrgNode
 from user_management.models.user import User
@@ -270,7 +271,7 @@ async def _assignee_display(item: Any, session: AsyncSession) -> Optional[Dict[s
         row = (
             await session.execute(select(User.display_name, User.username).where(User.id == item.assignee_user_id))
         ).one_or_none()
-        name = (row.display_name or row.username) if row else None
+        name = resolve_display_name(row.display_name, row.username) if row else None
         return {
             "type": AssigneeType.USER.value,
             "id": str(item.assignee_user_id),
