@@ -38,6 +38,7 @@ from typing import Dict, List
 import aiohttp
 
 from autobot_shared.ssot_config import config
+from autobot_shared.status_enums import Severity
 
 # Add AutoBot paths
 sys.path.append(config.project_root)
@@ -872,7 +873,7 @@ class MonitoringAndAlertingTester:
                             f"{backend_url}{endpoint}",
                             json={
                                 "type": scenario["trigger"],
-                                "severity": "warning",
+                                "severity": Severity.WARNING.value,
                                 "test": True,
                             },
                         ) as response:

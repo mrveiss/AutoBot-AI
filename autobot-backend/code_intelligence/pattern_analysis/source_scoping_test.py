@@ -32,6 +32,7 @@ from typing import Any, Dict
 import pytest
 
 from api.codebase_analytics.endpoints.pattern_analysis import _build_chromadb_where_filter
+from autobot_shared.status_enums import Severity
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +137,7 @@ class TestBuildChromaDBWhereFilter:
 
     def test_folds_extra_conditions_with_and(self):
         where = _build_chromadb_where_filter("duplicate", "high", source_id="A")
-        assert where == {"$and": [{"source_id": "A"}, {"pattern_type": "duplicate"}, {"severity": "high"}]}
+        assert where == {"$and": [{"source_id": "A"}, {"pattern_type": "duplicate"}, {"severity": Severity.HIGH.value}]}
 
 
 # ---------------------------------------------------------------------------

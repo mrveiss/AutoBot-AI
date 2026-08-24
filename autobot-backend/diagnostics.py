@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 import psutil
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 
 try:
     from autobot_shared.redis_client import get_redis_client
@@ -300,7 +301,7 @@ class PerformanceOptimizedDiagnostics:
             analysis["bottlenecks"].append(
                 {
                     "type": "cpu",
-                    "severity": "high",
+                    "severity": Severity.HIGH.value,
                     "message": f"CPU usage at {cpu_usage}% - potential bottleneck",
                 }
             )
@@ -323,7 +324,7 @@ class PerformanceOptimizedDiagnostics:
                 analysis["warnings"].append(
                     {
                         "type": "gpu",
-                        "severity": "medium",
+                        "severity": Severity.MEDIUM.value,
                         "message": (
                             f"GPU utilization low at {gpu_util}% - " f"AI workloads may not be GPU-accelerated"
                         ),
@@ -333,7 +334,7 @@ class PerformanceOptimizedDiagnostics:
                 analysis["bottlenecks"].append(
                     {
                         "type": "gpu",
-                        "severity": "medium",
+                        "severity": Severity.MEDIUM.value,
                         "message": (f"GPU utilization at {gpu_util}% - may be saturated"),
                     }
                 )
@@ -359,7 +360,7 @@ class PerformanceOptimizedDiagnostics:
                 analysis["bottlenecks"].append(
                     {
                         "type": "memory",
-                        "severity": "high",
+                        "severity": Severity.HIGH.value,
                         "message": (f"Memory usage at {memory_info.get('used_percent', 0)}% " f"- approaching limit"),
                     }
                 )
