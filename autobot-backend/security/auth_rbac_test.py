@@ -275,10 +275,12 @@ class TestPermissionIntegration:
 class TestIsAdminRole:
     """#12717: the single answer to "is this role administrative?".
 
-    "superadmin" is passed as a raw string to require_role() at 17 call sites
-    but is NOT a member of the canonical Role enum, so hand-rolled
+    "superadmin" is passed as a raw string to require_role() at 17 call sites.
+    It was not a member of the canonical Role enum, so hand-rolled
     ``role == "admin"`` checks silently locked superadmins out of read paths
-    whose write paths already allowed them.
+    whose write paths already allowed them. #13854 made it a first-class Role
+    member; ``is_admin_role`` remains the answer for imperative checks, and this
+    class pins that it still admits both administrative roles.
     """
 
     def test_accepts_both_administrative_roles(self):

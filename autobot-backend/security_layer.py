@@ -114,13 +114,15 @@ def canonical_role_permissions(user_role: str) -> List[str]:
     lookups always agree on who a role is — a normalisation applied to one source
     of three creates a second identity that holds some grants and not others.
 
-    ``superadmin`` deliberately resolves to ``[]`` here. It is administrative per
-    ``ADMIN_ROLES`` and is **not** a ``Role`` member, so mapping it onto admin's
-    set would hand it 54 permissions including shell execution that it did not
-    previously hold — a live authorisation expansion, which is not what #13820
-    decided. The real fix is making it a first-class ``Role`` with its own
-    ``ROLE_PERMISSIONS`` entry (see the TODO in ``autobot_shared.auth.permissions``);
-    tracked in #13854.
+    ``superadmin`` resolves to ``[]`` here, and since #13854 it does so for a
+    stated reason rather than by accident. It is now a first-class ``Role``
+    member whose ``ROLE_PERMISSIONS`` entry is explicitly empty: administrative
+    as a predicate (``require_role``, ``is_admin_role``), holder of no granular
+    permission. Before #13854 this ``[]`` came from ``Role("superadmin")``
+    *raising* — the same answer, but indistinguishable from an unrecognised
+    role, and contradicted by ``role_has_permission``, which granted superadmin
+    everything. Both paths now agree, and they agree because one mapping says
+    so.
 
     An unrecognised role yields ``[]`` — no grant, and no exception either.
     """
