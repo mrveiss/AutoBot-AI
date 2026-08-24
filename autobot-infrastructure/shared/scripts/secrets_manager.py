@@ -49,6 +49,13 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
+# Standalone copy of the secret-kind vocabulary (#13846).
+# Canonical enum: autobot_shared/status_enums.py::SecretType.
+# Deliberately NOT converged and NOT imported: this script is run standalone on
+# infrastructure hosts and never imports application packages — the same reason
+# ChatSecretScope below is duplicated (#11759). WEBHOOK_URL and CUSTOM are
+# infra-only kinds with no backend producer; CUSTOM is this layer's spelling of
+# the canonical OTHER. Keep in step by hand when the canonical enum changes.
 class SecretType:
     """Supported secret types."""
 

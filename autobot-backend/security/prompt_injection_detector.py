@@ -189,7 +189,18 @@ INVISIBLE_UNICODE_RANGES = {
 
 
 class InjectionRisk(Enum):
-    """Risk levels for detected injection patterns"""
+    """Risk levels for detected injection patterns.
+
+    #13845: deliberately NOT the canonical ``autobot_shared.status_enums``
+    ``CommandRisk``, and not ``Severity`` either, despite the overlapping
+    member names. This grades a piece of *text* for injection patterns; those
+    grade a *command* for execution policy and an *outcome* for how bad it is.
+    The scales differ at both ends — ``LOW`` exists only here, ``DANGEROUS``
+    and ``FORBIDDEN`` only there — and a value from this enum must never reach
+    a ``.blocks`` check, which answers a question about running a command.
+    ``repo_tests/enum_union_guard_test.py`` records this as a known-distinct
+    enum so the fork scan does not flag it.
+    """
 
     SAFE = "safe"
     LOW = "low"

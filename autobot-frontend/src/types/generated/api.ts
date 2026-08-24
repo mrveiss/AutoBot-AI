@@ -92225,10 +92225,35 @@ export interface components {
         };
         /**
          * SecretType
-         * @description Secret type enumeration.
+         * @description What kind of credential a secret is (#13846).
+         *
+         *     Canonical union of three definitions that classified the same thing under
+         *     two names, in three layers:
+         *
+         *     * ``models.secret.SecretType`` — the persisted classification on the
+         *       ``secrets`` row. Had all nine concrete kinds.
+         *     * ``api.schemas_system.SecretType`` — the request/response vocabulary.
+         *       Had eight: no ``OAUTH_REFRESH_TOKEN``, so ``POST /secrets`` could not
+         *       accept the one kind the row could already store.
+         *     * ``services.agent_secrets_integration.SecretRequirement`` — what an agent
+         *       type may request. Had six of the nine, duplicated verbatim down to the
+         *       identical ``# nosec B105`` / ``# nosemgrep`` comments, plus ``ANY``.
+         *       With no ``OAUTH_REFRESH_TOKEN`` member, an ``AgentSecretMapping`` could
+         *       only describe an OAuth-authenticating agent as ``ANY`` — the blanket
+         *       "every available secret" grant standing in for the most specific one.
+         *
+         *     Every member of every side is here. ``str`` subclass so the persisted
+         *     ``secrets.type`` column, which stores these values, keeps comparing and
+         *     serializing exactly as before.
+         *
+         *     ``ANY`` is the odd one out: a wildcard *quantifier* over the taxonomy, not
+         *     a kind of credential. It is legal in a requirement (an agent that may use
+         *     any secret) and illegal at rest — nothing may be stored with type "any".
+         *     Use :meth:`concrete` for every persistence or presentation surface, and
+         *     :meth:`expand` to resolve a requirement set into concrete kinds.
          * @enum {string}
          */
-        SecretType: "ssh_key" | "password" | "api_key" | "token" | "certificate" | "database_url" | "infrastructure_host" | "other";
+        SecretType: "ssh_key" | "password" | "api_key" | "token" | "oauth_refresh_token" | "connector_oauth_token" | "certificate" | "database_url" | "infrastructure_host" | "other" | "any";
         /**
          * SecretTypesData
          * @description Response data for get_secret_types.
