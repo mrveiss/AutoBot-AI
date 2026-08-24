@@ -152,7 +152,7 @@ from api.system_health import ComponentHealth, register_health_probe
 
 # Import models from dedicated module (Issue #185 - split oversized files)
 # Response schemas for OpenAPI documentation and response validation
-from api.ws_security import enforce_ws_origin
+from api.ws_security import enforce_ws_authentication, enforce_ws_origin
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
@@ -160,6 +160,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import CommandRisk
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
+from security.session_ownership import build_owner_metadata
 from services.simple_pty import simple_pty_manager
 
 # Import terminal secrets service for SSH key integration (Issue #211)
@@ -334,9 +335,15 @@ async def create_terminal_session(
     session_id = str(uuid.uuid4())
 
     # Store session configuration for WebSocket connection
+    # Issue #14960/#14961: the authenticated creator is the session's owner --
+    # never the client-supplied, unauthenticated request.user_id field below,
+    # which is display metadata only. build_owner_metadata is the one builder
+    # every ownership-stamping path uses (security/session_ownership.py).
+    owner = build_owner_metadata(current_user).get("owner")
     session_config = {
         "session_id": session_id,
         "user_id": request.user_id,
+        "owner": owner,
         "conversation_id": (request.conversation_id),  # For linking chat to terminal logging
         "chat_id": request.chat_id,  # For chat-scoped SSH keys (Issue #211)
         "security_level": request.security_level,
@@ -818,23 +825,56 @@ async def get_session_audit_log(
 # WebSocket Endpoints
 
 
+def _lookup_terminal_session(session_id: str, user: dict) -> "dict | None":
+    """Resolve an existing, owned terminal session config; deny by default.
+
+    Issue #14961: an unknown session_id must never resolve to a live
+    terminal -- absence is a terminal condition, not a signal to fall back
+    to defaults, so this never applies a default config for a missing
+    session_id.
+    Issue #14960: the authenticated caller must own the session; ownership
+    is stamped at creation time by create_terminal_session (#14960) via
+    security.session_ownership.build_owner_metadata.
+
+    Returns the session config only when the session exists AND the
+    authenticated user owns it; otherwise None.
+    """
+    config = session_manager.session_configs.get(session_id)
+    if config is None:
+        logger.warning("Terminal WebSocket rejected: unknown session_id %s", session_id)
+        return None
+    owner = config.get("owner")
+    if not owner or owner != user.get("username"):
+        logger.warning(
+            "Terminal WebSocket rejected: %s is not the owner of session %s",
+            user.get("username"),
+            session_id,
+        )
+        return None
+    return config
+
+
 async def _init_terminal_handler(
     websocket: WebSocket,
     session_id: str,
+    config: dict,
 ) -> "TerminalWebSocket":
-    """Helper for terminal_websocket. Ref: #1088.
+    """Helper for terminal_websocket. Ref: #1088, #14961.
 
-    Resolves session config, acquires Redis client, constructs and starts
-    the terminal handler, and registers it with the session manager.
+    Acquires a Redis client, constructs and starts the terminal handler from
+    an already-validated session config, and registers it with the session
+    manager. Callers must resolve `config` via _lookup_terminal_session first
+    -- this never defaults a security level for a session that does not
+    exist, only for a known field missing on a real config.
 
     Args:
         websocket: Active WebSocket connection
         session_id: Session identifier
+        config: Validated session config (existence + ownership already checked)
 
     Returns:
         Started TerminalWebSocket instance
     """
-    config = session_manager.session_configs.get(session_id, {})
     security_level = SecurityLevel(config.get("security_level", SecurityLevel.STANDARD.value))
     conversation_id = config.get("conversation_id")
 
@@ -907,14 +947,30 @@ async def terminal_websocket(websocket: WebSocket, session_id: str):
     Replaces both /ws/simple and /ws/secure endpoints.
     Issue #1088: Extracted _init_terminal_handler and _run_terminal_message_loop
     helpers to reduce to <=65 lines.
+    Issue #14960/#14961: authenticates and validates session ownership before
+    accept() -- see _lookup_terminal_session and enforce_ws_authentication.
     """
     if not await enforce_ws_origin(websocket):
         return
+
+    user = await enforce_ws_authentication(websocket)
+    if user is None:
+        return
+
+    config = _lookup_terminal_session(session_id, user)
+    if config is None:
+        await websocket.close(code=1008, reason="Unknown or unauthorized terminal session")
+        return
+
     await websocket.accept()
 
     try:
-        terminal = await _init_terminal_handler(websocket, session_id)
-        logger.info("WebSocket connection established for session %s", session_id)
+        terminal = await _init_terminal_handler(websocket, session_id, config)
+        logger.info(
+            "WebSocket connection established for session %s (user=%s)",
+            session_id,
+            user.get("username"),
+        )
         await _run_terminal_message_loop(websocket, terminal, session_id)
 
     except Exception as e:
