@@ -67,7 +67,7 @@ def test_health():
     data = response.json()
     print("✅ Test 1: Health Check - PASSED")  # noqa: print
     print(f"   Status: {data['status']}, Database: {data['database']}, Hosts: {data['total_hosts']}")  # noqa: print
-    return True
+    return
 
 
 def test_list_roles():
@@ -77,7 +77,7 @@ def test_list_roles():
     role_names = [r["name"] for r in data]
     print("✅ Test 2: List Roles - PASSED")  # noqa: print
     print(f"   Found {len(data)} roles: {role_names}")  # noqa: print
-    return True
+    return
 
 
 def test_statistics():
@@ -88,7 +88,7 @@ def test_statistics():
     print(  # noqa: print
         f"   Hosts: {data['total_hosts']}, Roles: {data['total_roles']}, Deployments: {data['total_deployments']}"
     )
-    return True
+    return
 
 
 def test_list_hosts_empty():
@@ -97,7 +97,7 @@ def test_list_hosts_empty():
     data = response.json()
     print("✅ Test 4: List Hosts (Empty) - PASSED")  # noqa: print
     print(f"   Pagination: page={data['pagination']['page']}, total={data['pagination']['total']}")  # noqa: print
-    return True
+    return
 
 
 def test_create_host():
@@ -148,7 +148,7 @@ def test_list_hosts_after_create():
     first_host = data["hosts"][0]["hostname"] if data["hosts"] else "None"
     print("✅ Test 7: List Hosts After Creation - PASSED")  # noqa: print
     print(f"   Total hosts: {data['pagination']['total']}, First host: {first_host}")  # noqa: print  # noqa: print
-    return True
+    return
 
 
 def check_delete_host(host_id):

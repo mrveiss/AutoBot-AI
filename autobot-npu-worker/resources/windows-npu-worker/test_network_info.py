@@ -70,7 +70,7 @@ def test_platform_info():
         print("  NPU:       ✗ Not detected (CPU fallback)")
 
     print()
-    return True
+    return
 
 
 def test_primary_ip():
@@ -107,7 +107,7 @@ def test_connection_info_box():
     print(box)
     print()
 
-    return True
+    return
 
 
 def test_registration_config():
@@ -121,7 +121,7 @@ def test_registration_config():
     print("\n✓ Generated Registration Configuration:\n")
     print(config)
 
-    return True
+    return
 
 
 def main():

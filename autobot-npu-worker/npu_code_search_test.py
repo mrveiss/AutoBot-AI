@@ -210,7 +210,7 @@ async def test_development_speedup():
     except Exception as e:
         print(f"   ❌ Comprehensive analysis failed: {e}")
 
-    return True
+    return
 
 
 async def test_performance_comparison():
@@ -258,7 +258,7 @@ async def test_performance_comparison():
     print(f"   🚀 NPU acceleration used: {npu_used_count}/{len(test_queries)} queries")
     print("   💾 Redis indexing: ✅ Active")
 
-    return True
+    return
 
 
 async def test_cache_performance():
@@ -306,7 +306,7 @@ async def test_cache_performance():
     else:
         print(f"   ⚠️  Result mismatch: {len(results1)} vs {len(results2)}")
 
-    return True
+    return
 
 
 async def main():

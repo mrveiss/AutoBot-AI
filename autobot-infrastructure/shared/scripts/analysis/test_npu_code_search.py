@@ -212,7 +212,7 @@ async def test_development_speedup():
     except Exception as e:
         logger.error(f"   ❌ Comprehensive analysis failed: {e}")
 
-    return True
+    return
 
 
 async def test_performance_comparison():
@@ -260,7 +260,7 @@ async def test_performance_comparison():
     logger.info(f"   🚀 NPU acceleration used: {npu_used_count}/{len(test_queries)} queries")
     logger.info("   💾 Redis indexing: ✅ Active")
 
-    return True
+    return
 
 
 async def test_cache_performance():
@@ -308,7 +308,7 @@ async def test_cache_performance():
     else:
         logger.warning(f"   ⚠️  Result mismatch: {len(results1)} vs {len(results2)}")
 
-    return True
+    return
 
 
 async def main():

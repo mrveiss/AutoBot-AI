@@ -81,7 +81,7 @@ async def test_workflow_scheduling():
 
     print(f"✅ Scheduled workflow with natural time: {natural_workflow_id}")  # noqa: print  # noqa: print
 
-    return True
+    return
 
 
 async def test_workflow_management():
@@ -133,7 +133,7 @@ async def test_workflow_management():
         else:
             print("❌ Failed to retrieve workflow details")  # noqa: print
 
-    return True
+    return
 
 
 async def test_workflow_rescheduling():
@@ -181,7 +181,7 @@ async def test_workflow_rescheduling():
     else:
         print("❌ Failed to cancel workflow")  # noqa: print
 
-    return True
+    return
 
 
 async def test_queue_operations():
@@ -226,7 +226,7 @@ async def test_queue_operations():
     print(f"✅ Queued workflows: {len(queued_workflows)}")  # noqa: print
     print(f"✅ Running workflows: {len(running_workflows)}")  # noqa: print
 
-    return True
+    return
 
 
 async def test_scheduler_status():
@@ -270,7 +270,7 @@ async def test_scheduler_status():
 
     print("✅ Priority distribution test completed")  # noqa: print
 
-    return True
+    return
 
 
 async def test_persistence():
@@ -301,7 +301,7 @@ async def test_persistence():
     else:
         print("⚠️  Some workflows may not have been persisted correctly")  # noqa: print
 
-    return True
+    return
 
 
 async def test_scheduler_api_integration():
@@ -338,7 +338,7 @@ async def test_scheduler_api_integration():
     except Exception as e:
         print(f"⚠️  API test failed: {e}")  # noqa: print
 
-    return True
+    return
 
 
 async def main():
