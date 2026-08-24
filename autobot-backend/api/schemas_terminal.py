@@ -470,15 +470,6 @@ class SecurityLevel(Enum):
     RESTRICTED = "restricted"
 
 
-class CommandRiskLevel(Enum):
-    """Risk assessment levels for commands"""
-
-    SAFE = "safe"
-    MODERATE = "moderate"
-    HIGH = "high"
-    DANGEROUS = "dangerous"
-
-
 # Request/Response Models
 class CommandRequest(BaseModel):
     command: str

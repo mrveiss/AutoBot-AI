@@ -15,35 +15,40 @@ Related Issues:
 
 import threading
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Dict, List, Set
+from typing import Dict, Iterable, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.status_enums import SecretType
 from services.secrets_service import SecretsService, get_secrets_service
 
 logger = get_logger(__name__)
 
 
-class SecretRequirement(Enum):
-    """Types of secrets that agents may require."""
-
-    SSH_KEY = "ssh_key"
-    API_KEY = "api_key"  # nosemgrep
-    PASSWORD = "password"  # nosemgrep  # nosec B105
-    TOKEN = "token"  # nosemgrep  # nosec B105
-    CERTIFICATE = "certificate"
-    DATABASE_URL = "database_url"
-    ANY = "any"  # Agent can use any available secrets
+# #13846: ``SecretRequirement`` used to be declared here — six members copied
+# verbatim from ``SecretType``, down to the identical ``# nosec B105`` and
+# ``# nosemgrep`` comments, plus ``ANY``. It had no ``OAUTH_REFRESH_TOKEN``, so
+# an agent that authenticates by OAuth could only be described as ``ANY``: the
+# blanket "every available secret" grant standing in for the most specific
+# requirement there is. The requirement vocabulary is now the canonical
+# ``SecretType`` itself, wildcard included, so a mapping can name the exact
+# kind it needs.
 
 
 @dataclass
 class AgentSecretMapping:
-    """Defines which secret types an agent needs."""
+    """Defines which secret types an agent needs.
+
+    ``required_types`` / ``optional_types`` hold :class:`SecretType` members —
+    not bare strings. A typo used to produce a set that matched no secret and
+    reported success; an unknown member is now impossible to construct.
+    ``SecretType.ANY`` is legal here and means "any available secret"; it is
+    resolved by :meth:`SecretType.expand` before any lookup.
+    """
 
     agent_type: str
-    required_types: Set[str] = field(default_factory=set)
-    optional_types: Set[str] = field(default_factory=set)
+    required_types: Set[SecretType] = field(default_factory=set)
+    optional_types: Set[SecretType] = field(default_factory=set)
     auto_inject: bool = True  # Whether to automatically inject secrets
     description: str = ""
 
@@ -55,14 +60,14 @@ AGENT_SECRET_MAPPINGS: Dict[str, AgentSecretMapping] = {
     "interactive_terminal": AgentSecretMapping(
         agent_type="interactive_terminal",
         required_types=set(),
-        optional_types={"ssh_key", "password"},
+        optional_types={SecretType.SSH_KEY, SecretType.PASSWORD},
         auto_inject=True,
         description="Terminal agent may use SSH keys for remote connections",
     ),
     "system_command": AgentSecretMapping(
         agent_type="system_command",
         required_types=set(),
-        optional_types={"ssh_key", "password", "api_key"},
+        optional_types={SecretType.SSH_KEY, SecretType.PASSWORD, SecretType.API_KEY},
         auto_inject=True,
         description="System command agent for remote command execution",
     ),
@@ -70,21 +75,21 @@ AGENT_SECRET_MAPPINGS: Dict[str, AgentSecretMapping] = {
     "research": AgentSecretMapping(
         agent_type="research",
         required_types=set(),
-        optional_types={"api_key", "token"},
+        optional_types={SecretType.API_KEY, SecretType.TOKEN},
         auto_inject=True,
         description="Research agent may need API keys for external services",
     ),
     "web_research": AgentSecretMapping(
         agent_type="web_research",
         required_types=set(),
-        optional_types={"api_key", "token"},
+        optional_types={SecretType.API_KEY, SecretType.TOKEN},
         auto_inject=True,
         description="Web research agent for API-based searches",
     ),
     "advanced_web_research": AgentSecretMapping(
         agent_type="advanced_web_research",
         required_types=set(),
-        optional_types={"api_key", "token"},
+        optional_types={SecretType.API_KEY, SecretType.TOKEN},
         auto_inject=True,
         description="Advanced research with external API support",
     ),
@@ -92,14 +97,14 @@ AGENT_SECRET_MAPPINGS: Dict[str, AgentSecretMapping] = {
     "security_scanner": AgentSecretMapping(
         agent_type="security_scanner",
         required_types=set(),
-        optional_types={"ssh_key", "password", "api_key", "token"},
+        optional_types={SecretType.SSH_KEY, SecretType.PASSWORD, SecretType.API_KEY, SecretType.TOKEN},
         auto_inject=True,
         description="Security scanner may need credentials for authenticated scans",
     ),
     "network_discovery": AgentSecretMapping(
         agent_type="network_discovery",
         required_types=set(),
-        optional_types={"ssh_key", "password"},
+        optional_types={SecretType.SSH_KEY, SecretType.PASSWORD},
         auto_inject=True,
         description="Network discovery agent for authenticated scanning",
     ),
@@ -107,14 +112,14 @@ AGENT_SECRET_MAPPINGS: Dict[str, AgentSecretMapping] = {
     "rag": AgentSecretMapping(
         agent_type="rag",
         required_types=set(),
-        optional_types={"database_url", "api_key"},
+        optional_types={SecretType.DATABASE_URL, SecretType.API_KEY},
         auto_inject=True,
         description="RAG agent for knowledge retrieval",
     ),
     "knowledge_retrieval": AgentSecretMapping(
         agent_type="knowledge_retrieval",
         required_types=set(),
-        optional_types={"database_url", "api_key"},
+        optional_types={SecretType.DATABASE_URL, SecretType.API_KEY},
         auto_inject=True,
         description="Knowledge retrieval agent",
     ),
@@ -186,19 +191,39 @@ class AgentSecretsIntegration:
         self._custom_mappings[mapping.agent_type] = mapping
         logger.info("Registered secret mapping for agent: %s", mapping.agent_type)
 
+    @staticmethod
+    def _coerce_types(values: "Iterable[SecretType | str]") -> Set[SecretType]:
+        """Accept members or their wire strings; reject anything else loudly.
+
+        #13846: callers outside this module pass raw strings. A string that
+        names no kind used to become a filter that matched nothing and
+        returned an empty result — a silent miss dressed as "no secrets".
+        """
+        coerced: Set[SecretType] = set()
+        for value in values:
+            coerced.add(value if isinstance(value, SecretType) else SecretType(value))
+        return coerced
+
     def _determine_types_to_fetch(
         self,
         mapping: AgentSecretMapping,
-        secret_types: List[str] | None,
-    ) -> Set[str]:
-        """Determine which secret types to fetch based on mapping and overrides (Issue #665: extracted helper)."""
+        secret_types: "List[SecretType | str] | None",
+    ) -> Set[SecretType]:
+        """Determine which secret types to fetch based on mapping and overrides (Issue #665: extracted helper).
+
+        #13846: ``SecretType.ANY`` is expanded here into the concrete taxonomy.
+        Left unexpanded it would be looked up as the literal type "any", which
+        no stored secret carries — so the broadest possible requirement used to
+        fetch the narrowest possible result: nothing.
+        """
         if secret_types:
-            return set(secret_types)
-        return mapping.required_types | mapping.optional_types
+            return set(SecretType.expand(self._coerce_types(secret_types)))
+        requested = mapping.required_types | mapping.optional_types
+        return set(SecretType.expand(requested))
 
     async def _fetch_and_merge_secrets(
         self,
-        types_to_fetch: Set[str],
+        types_to_fetch: Set[SecretType],
         agent_type: str,
         chat_id: str | None,
         include_general: bool,
@@ -232,7 +257,7 @@ class AgentSecretsIntegration:
         agent_type: str,
         chat_id: str | None = None,
         include_general: bool = True,
-        secret_types: List[str] | None = None,
+        secret_types: "List[SecretType | str] | None" = None,
         accessed_by: str | None = None,
     ) -> Dict[str, str]:
         """Get relevant secrets for a specific agent type.
@@ -278,7 +303,7 @@ class AgentSecretsIntegration:
 
     async def _fetch_secrets_by_types(
         self,
-        secret_types: Set[str],
+        secret_types: Set[SecretType],
         scope: str,
         chat_id: str | None,
         accessed_by: str | None,
@@ -300,7 +325,10 @@ class AgentSecretsIntegration:
             secrets = self.secrets_service.list_secrets(
                 scope=scope,
                 chat_id=chat_id,
-                secret_type=secret_type,
+                # #14944: ``.value``, never the member. ``SecretType`` is a str
+                # subclass, but str() of a member is "SecretType.API_KEY" and
+                # this value reaches a SQL parameter.
+                secret_type=secret_type.value,
                 include_expired=False,
             )
 
@@ -334,7 +362,7 @@ class AgentSecretsIntegration:
         keys = self.secrets_service.list_secrets(  # nosec B106  # secret type filter
             scope=scope,
             chat_id=chat_id,
-            secret_type="ssh_key",
+            secret_type=SecretType.SSH_KEY.value,
         )
         for key in keys:
             full_key = self.secrets_service.get_secret(
@@ -407,7 +435,7 @@ class AgentSecretsIntegration:
             secrets = self.secrets_service.list_secrets(  # nosec B106
                 scope="chat",
                 chat_id=chat_id,
-                secret_type="api_key",
+                secret_type=SecretType.API_KEY.value,
             )
             for secret in secrets:
                 if service_name.lower() in secret["name"].lower():
@@ -422,7 +450,7 @@ class AgentSecretsIntegration:
         # Try general scope
         secrets = self.secrets_service.list_secrets(  # nosec B106  # secret type filter
             scope="general",
-            secret_type="api_key",
+            secret_type=SecretType.API_KEY.value,
         )
         for secret in secrets:
             if service_name.lower() in secret["name"].lower():
@@ -436,19 +464,24 @@ class AgentSecretsIntegration:
 
         return None
 
-    def get_available_secret_types(self, agent_type: str) -> Set[str]:
-        """Get the set of secret types available for an agent.
+    def get_available_secret_types(self, agent_type: str) -> Set[SecretType]:
+        """Get the concrete secret kinds available to an agent.
+
+        #13846: returns :class:`SecretType` members, and expands
+        ``SecretType.ANY`` to the whole concrete taxonomy so a wildcard
+        requirement reports the kinds it actually grants rather than the
+        wildcard itself.
 
         Args:
             agent_type: Type of agent to query
 
         Returns:
-            Set of secret type strings the agent can use
+            Set of SecretType members the agent can use
         """
         mapping = self.get_agent_mapping(agent_type)
         if mapping is None:
             return set()
-        return mapping.required_types | mapping.optional_types
+        return set(SecretType.expand(mapping.required_types | mapping.optional_types))
 
     def is_auto_inject_enabled(self, agent_type: str) -> bool:
         """Check if auto-injection is enabled for an agent type.

@@ -125,7 +125,6 @@ from api.schemas_terminal import (
     AdminExecuteResponse,
     CommandAssessResponse,
     CommandRequest,
-    CommandRiskLevel,
     SecurityLevel,
     SSHKeyAgentRequest,
     SSHKeyAgentResponse,
@@ -158,6 +157,7 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import CommandRisk
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 from services.simple_pty import simple_pty_manager
@@ -654,17 +654,17 @@ async def execute_single_command(
     # Assess command for security risk
 
     # Assess command risk
-    risk_level = CommandRiskLevel.SAFE
+    risk_level = CommandRisk.SAFE
     command_lower = request.command.lower().strip()
 
     for pattern in RISKY_COMMAND_PATTERNS:
         if pattern in command_lower:
-            risk_level = CommandRiskLevel.DANGEROUS
+            risk_level = CommandRisk.DANGEROUS
             break
     else:
         for pattern in MODERATE_RISK_PATTERNS:
             if pattern in command_lower:
-                risk_level = CommandRiskLevel.MODERATE
+                risk_level = CommandRisk.MODERATE
                 break
 
     # Log command execution attempt
@@ -676,7 +676,7 @@ async def execute_single_command(
         "risk_level": risk_level.value,
         "status": "assessed",
         "message": f"Command assessed as {risk_level.value} risk",
-        "requires_confirmation": risk_level != CommandRiskLevel.SAFE,
+        "requires_confirmation": risk_level != CommandRisk.SAFE,
     }
 
 

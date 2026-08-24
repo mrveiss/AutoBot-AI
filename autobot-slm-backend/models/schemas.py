@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .database import NodeStatus
+from .database import BackupServiceType, NodeStatus
 
 # =============================================================================
 # Authentication Schemas
@@ -320,10 +320,15 @@ class DeploymentListResponse(BaseModel):
 
 
 class BackupCreate(BaseModel):
-    """Backup request."""
+    """Backup request.
+
+    #13578: ``service_type`` is the enum, not a bare string, so FastAPI rejects
+    an unknown engine with 422 *before* ``_run_backup`` writes a ``Backup`` row
+    that would otherwise sit there as a FAILED record for a typo.
+    """
 
     node_id: str
-    service_type: str = "redis"
+    service_type: BackupServiceType = BackupServiceType.REDIS
 
 
 class BackupResponse(BaseModel):
@@ -725,11 +730,11 @@ class UpdateApplyAllRequest(BaseModel):
 
 
 class ReplicationCreate(BaseModel):
-    """Replication request."""
+    """Replication request (#13578: enum-constrained service_type)."""
 
     source_node_id: str
     target_node_id: str
-    service_type: str = "redis"
+    service_type: BackupServiceType = BackupServiceType.REDIS
 
 
 class ReplicationResponse(BaseModel):
@@ -785,10 +790,10 @@ class BackupRestoreResponse(BaseModel):
 
 
 class DataVerifyRequest(BaseModel):
-    """Data verification request."""
+    """Data verification request (#13578: enum-constrained service_type)."""
 
     node_id: str
-    service_type: str = "redis"
+    service_type: BackupServiceType = BackupServiceType.REDIS
 
 
 class DataVerifyResponse(BaseModel):

@@ -23,7 +23,8 @@ shapes that the prefix-form / first-token-only rules missed:
 
 import pytest
 
-from secure_command_executor import CommandRisk, SecureCommandExecutor
+from autobot_shared.status_enums import CommandRisk
+from secure_command_executor import SecureCommandExecutor
 
 
 @pytest.fixture

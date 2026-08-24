@@ -22,6 +22,7 @@ Usage:
 """
 
 from enum import Enum
+from typing import Iterable
 
 
 class TaskStatus(Enum):
@@ -134,6 +135,147 @@ class Severity(Enum):
 # rather than "severity"; canonically the same enum (#6689). Use whichever
 # name reads clearer at the call site.
 RiskLevel = Severity
+
+
+class CommandRisk(Enum):
+    """Risk classification for a shell command, for policy decisions (#13845).
+
+    Canonical union of two forks that modelled the same concept under
+    different names, so neither side's tail is lost:
+
+    * ``secure_command_executor.CommandRisk`` — SAFE / MODERATE / HIGH /
+      CRITICAL / FORBIDDEN, used for executor policy decisions.
+    * ``api.schemas_terminal.CommandRiskLevel`` — SAFE / MODERATE / HIGH /
+      DANGEROUS, the wire schema for the *same* subsystem.
+
+    Three members matched; the tails did not. A command the executor rated
+    ``FORBIDDEN`` had no faithful representation in its own wire schema, and
+    ``DANGEROUS`` — already serialized by ``POST /terminal/command`` and by
+    the terminal WebSocket — existed nowhere in the executor's vocabulary.
+    Both tails are kept here rather than one being picked as the survivor.
+
+    ``DANGEROUS`` and ``FORBIDDEN`` are distinct *reasons* that reach the same
+    verdict: DANGEROUS means the command matched a destructive pattern
+    (``RISKY_COMMAND_PATTERNS``), FORBIDDEN means the base command is on the
+    executor's deny list (``FORBIDDEN_COMMANDS``). They keep separate values
+    because ``"dangerous"`` is already on the wire; ask ``.blocks`` rather
+    than comparing against one of them, or a blocking verdict raised by the
+    other producer reads as permitted.
+
+    Not to be confused with ``Severity``/``RiskLevel`` above, which grades how
+    bad an *outcome* is. This grades what a *command* is allowed to do.
+    """
+
+    SAFE = "safe"
+    MODERATE = "moderate"
+    HIGH = "high"
+    CRITICAL = "critical"
+    DANGEROUS = "dangerous"
+    FORBIDDEN = "forbidden"
+
+    @property
+    def rank(self) -> int:
+        """Strictness rank, ascending. Declaration order is the ordering.
+
+        Derived from the enum itself so a member added later cannot be missed
+        by a hand-written rank table — which is exactly how ``DANGEROUS`` was
+        absent from both of the ones this replaces.
+        """
+        return _COMMAND_RISK_RANK[self]
+
+    @property
+    def blocks(self) -> bool:
+        """True when the verdict is "do not run this", whatever the reason."""
+        return self in _COMMAND_RISK_BLOCKING
+
+    @classmethod
+    def strictest(cls, risks: "Iterable[CommandRisk]") -> "CommandRisk | None":
+        """Highest-ranked risk in ``risks``, or None when empty."""
+        ranked = sorted(risks, key=lambda risk: risk.rank)
+        return ranked[-1] if ranked else None
+
+
+# Rank table derived from declaration order — never hand-written, so it cannot
+# narrow silently when a member is added (#13845).
+_COMMAND_RISK_RANK: "dict[CommandRisk, int]" = {member: index for index, member in enumerate(CommandRisk)}
+
+# The verdicts that mean "refuse". DANGEROUS blocks because the command matched
+# a destructive pattern; FORBIDDEN because the base command is denied outright.
+# CRITICAL is deliberately not here: the approval layer grants it under
+# ``allow_dangerous`` rather than refusing it.
+_COMMAND_RISK_BLOCKING: "frozenset[CommandRisk]" = frozenset({CommandRisk.DANGEROUS, CommandRisk.FORBIDDEN})
+
+
+class SecretType(str, Enum):
+    """What kind of credential a secret is (#13846).
+
+    Canonical union of three definitions that classified the same thing under
+    two names, in three layers:
+
+    * ``models.secret.SecretType`` — the persisted classification on the
+      ``secrets`` row. Had all nine concrete kinds.
+    * ``api.schemas_system.SecretType`` — the request/response vocabulary.
+      Had eight: no ``OAUTH_REFRESH_TOKEN``, so ``POST /secrets`` could not
+      accept the one kind the row could already store.
+    * ``services.agent_secrets_integration.SecretRequirement`` — what an agent
+      type may request. Had six of the nine, duplicated verbatim down to the
+      identical ``# nosec B105`` / ``# nosemgrep`` comments, plus ``ANY``.
+      With no ``OAUTH_REFRESH_TOKEN`` member, an ``AgentSecretMapping`` could
+      only describe an OAuth-authenticating agent as ``ANY`` — the blanket
+      "every available secret" grant standing in for the most specific one.
+
+    Every member of every side is here. ``str`` subclass so the persisted
+    ``secrets.type`` column, which stores these values, keeps comparing and
+    serializing exactly as before.
+
+    ``ANY`` is the odd one out: a wildcard *quantifier* over the taxonomy, not
+    a kind of credential. It is legal in a requirement (an agent that may use
+    any secret) and illegal at rest — nothing may be stored with type "any".
+    Use :meth:`concrete` for every persistence or presentation surface, and
+    :meth:`expand` to resolve a requirement set into concrete kinds.
+    """
+
+    SSH_KEY = "ssh_key"
+    # nosemgrep: autobot-hardcoded-secret-key
+    PASSWORD = "password"  # nosec B105  # enum value, not actual password
+    # nosemgrep: autobot-hardcoded-secret-key
+    API_KEY = "api_key"
+    # nosemgrep: autobot-hardcoded-secret-key
+    TOKEN = "token"  # nosec B105  # enum value, not actual token
+    OAUTH_REFRESH_TOKEN = "oauth_refresh_token"  # nosec B105  # enum value
+    # nosemgrep: autobot-hardcoded-secret-key
+    # #13846: the OAuth bundle the knowledge connectors persist. It was a bare
+    # string in credential_store.py, commented "SecretType label" while being
+    # absent from every SecretType there was. The value is unchanged so rows
+    # already written keep resolving.
+    CONNECTOR_OAUTH_TOKEN = "connector_oauth_token"  # nosec B105  # enum value
+    CERTIFICATE = "certificate"
+    DATABASE_URL = "database_url"
+    INFRASTRUCTURE_HOST = "infrastructure_host"
+    OTHER = "other"
+    ANY = "any"  # Wildcard: "any available secret". Never persisted.
+
+    @classmethod
+    def concrete(cls) -> "tuple[SecretType, ...]":
+        """Every real credential kind — the taxonomy without the wildcard.
+
+        Derived by excluding ``ANY`` rather than by listing the members, so a
+        kind added later is included here without a second edit.
+        """
+        return tuple(member for member in cls if member is not cls.ANY)
+
+    @classmethod
+    def expand(cls, requirements: "Iterable[SecretType]") -> "frozenset[SecretType]":
+        """Resolve a requirement set into the concrete kinds it asks for.
+
+        ``ANY`` expands to the whole taxonomy; everything else maps to itself.
+        Without this, a requirement of ``{ANY}`` would be looked up as the
+        literal type ``"any"`` and match nothing at all.
+        """
+        wanted = set(requirements)
+        if cls.ANY in wanted:
+            return frozenset(cls.concrete())
+        return frozenset(wanted)
 
 
 class Priority(Enum):
@@ -334,6 +476,8 @@ __all__ = [
     "WorkflowStatus",
     "Severity",
     "RiskLevel",
+    "CommandRisk",
+    "SecretType",
     "Priority",
     "TaskPriority",
     "LLMProvider",
