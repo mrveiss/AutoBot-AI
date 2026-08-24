@@ -87,9 +87,7 @@ class TestChatSecretScopeEnum:
         pinning -- that `any` exists as a requirement vocabulary member and is
         excluded from every storable/presentable surface.
         """
-        assert [t.value for t in SecretType] == [
-            t["value"] for t in EXPECTED_TYPES
-        ] + [EXPECTED_WILDCARD]
+        assert [t.value for t in SecretType] == [t["value"] for t in EXPECTED_TYPES] + [EXPECTED_WILDCARD]
         assert [t.value for t in SecretType.concrete()] == [t["value"] for t in EXPECTED_TYPES]
         assert EXPECTED_WILDCARD not in {t.value for t in SecretType.concrete()}
 
