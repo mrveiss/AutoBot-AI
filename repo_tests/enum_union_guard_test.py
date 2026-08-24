@@ -19,7 +19,7 @@ So these tests pin **member sets**, not names. A rename is a member-set change
 and fails here by name; a member quietly dropped fails here by name. Both
 directions were mutation-checked before this file was committed.
 
-Three traps this file is deliberately built against:
+Four traps this file is deliberately built against:
 
 * *An empty result reads as clean.* Every scan asserts it reached something
   before it asserts anything about what it found.
@@ -28,6 +28,11 @@ Three traps this file is deliberately built against:
   came from, and floors the file enumeration.
 * *A guard whose target is missing reports a false PASS.* Each mapping test
   asserts the target table exists and is non-empty first.
+* *A sweep that edits by pattern edits prose too.* #14956's regex conversion
+  rewrote a literal inside a docstring's ```json response body, producing
+  documentation no reader could copy. Prose is exempt from the ratchet, never a
+  target for it, and ``test_no_enum_read_was_written_inside_a_string`` fails if
+  an enum read lands inside a string constant again.
 """
 
 from __future__ import annotations
