@@ -136,7 +136,7 @@ class TestEntityResolution:
 
         print("✓ Similarity detection working correctly")  # noqa: print
 
-        return True
+        return
 
     async def test_entity_type_classification(self):
         """Test automatic entity type classification."""

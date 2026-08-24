@@ -30,13 +30,20 @@ guarded, so the next one is an append rather than a redesign.
 
 WHY THE ALLOWLIST IS KEYED BY HOOK ``id``, NOT BY NAME
 ------------------------------------------------------
-pre-commit prints the hook's ``name``, and names in this repository are not
-stable identifiers. Several are written unquoted in the YAML with a ``#``
-issue reference — ``name: Function Length Check (Issue #5512)`` — where the
-space-``#`` opens a YAML comment, so the parsed name is
-``Function Length Check (Issue`` and that truncated string is what pre-commit
-prints. Resolving ``id -> name`` through the same YAML parser reproduces
-exactly what lands in the log; hard-coding either spelling would not.
+pre-commit prints the hook's ``name``, and a name is not a stable identifier:
+it is prose, it gets reworded, and until #14923 it could not even survive its
+own file. 23 names were written unquoted with a ``#`` issue reference —
+``name: Function Length Check (Issue #620)`` — where the space-``#`` opens a
+YAML comment, so the parsed name was ``Function Length Check (Issue`` and that
+truncated string is what pre-commit printed. Those names are quoted now, and
+``repo_tests/precommit_hook_names_survive_yaml_parse_test.py`` fails if a new
+one loses text the same way.
+
+Resolving ``id -> name`` through the same YAML parser stays correct either
+way, which is the point: it reproduces whatever pre-commit will print without
+this module having to know which spelling won. Hard-coding a name would have
+matched nothing before #14923 and would break again on the next reword — and
+in a gate, matching nothing reads as clean.
 
 The allowlist is self-guarding in both directions:
 
