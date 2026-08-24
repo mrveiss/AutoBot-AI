@@ -22,9 +22,22 @@ incident.
 | File | Role |
 |---|---|
 | `batch-implement.md` | Drives `/batch-implement <issues>` — full implement→review→merge→close→discover loop with self-healing retry, Phase 0c verification mandate, and Phase 0d behavioral grep for extraction PRs |
+| `implement.md` | Drives `/implement <issue>` — umbrella gate, worktree, design, code, verify, PR, CI, three-gate closure |
+| `pr.md` | PR creation with pre-flight branch checks, the four required body headings, targeting `Dev_new_gui` |
+| `pre-merge-validate.md` | Pre-merge validation — syntax, imports, call-site impact, tests, types, linting |
+| `github-cli.md` | `gh` CLI usage for every GitHub operation — issues, PRs, reviews, merges, local workarounds |
+| `debug-autobot.md` | Full-stack debugging — parallel per-layer investigators then a synthesis protocol |
+| `api-wiring-audit.md` | Frontend/backend API contract wiring audit — unmounted routers, dead buttons, 404s, drift |
+| `dead-code-audit.md` | Unwired-code audit — unregistered routers, uninvoked hooks, orphaned components → wire-in issues |
+| `review-fleet.md` | 10-angle parallel PR review fleet — finders + adversarial verifiers, one deduped comment |
+| `review.md` | PR review cycle — CI diagnosis, three-angle finder pass, lint-only auto-fix, merge decision |
+| `session-lifecycle.md` | Start/end-of-session protocol — worktree setup, stale-branch cleanup, rebase, handoff |
+| `drain.md` | Selects backlog issues needing no decision; delegates execution to `batch-implement` |
 
-Other skills (e.g. `commit`, `pr`, `issue`) are not yet mirrored here. Add
-them as they need updates worth reviewing.
+The 11 AutoBot-specific skills above were mirrored here in #14994. General-purpose
+skills were extracted to a separate public collection instead (`process`, `commit`,
+`review-lenses`, `gap-audit`, `web-audit`, `ui-design`, `memory-cleanup`,
+`canonical-coding`).
 
 `team-implement.md` was consolidated into `batch-implement.md` in #5454 —
 the two skills' scopes overlapped (both did parallel-issue implementation),
