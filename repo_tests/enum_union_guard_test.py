@@ -261,9 +261,9 @@ def test_the_backup_dispatch_no_longer_carries_two_spellings():
 _SEVERITY_LITERAL = re.compile(r"""["']severity["']\s*:\s*["'][A-Za-z_]+["']""")
 
 # #13597 filed this at 119; it had grown to 169 before the ratchet stopped it.
-# #14956 converted 145 of those 169, leaving only the entries below. Lower it as
+# #14956 converted 144 of those 169, leaving only the entries below. Lower it as
 # literals are converted; never raise it.
-SEVERITY_LITERAL_CEILING = 24
+SEVERITY_LITERAL_CEILING = 25
 
 # Floor for the literal population itself. Zero must FAIL, not read as clean —
 # a matcher that stopped matching, a moved root, or an `OSError` swallowed per
@@ -272,10 +272,11 @@ SEVERITY_LITERAL_CEILING = 24
 # than a silent drift.
 SEVERITY_LITERAL_FLOOR = 20
 
-# The files where a bare literal is the RIGHT thing to write, and why. Every one
-# of these is a value crossing an external boundary: writing the enum there would
-# assert the enum against itself instead of against the contract.
-EXTERNAL_SEVERITY_VOCABULARIES = {
+# The files where a bare literal is the RIGHT thing to write, and why. Two
+# reasons qualify, and nothing else does: the value crosses an external
+# boundary, or the line is documentation prose rather than a producer.
+DELIBERATE_SEVERITY_LITERALS = {
+    # --- external boundary: writing the enum would assert it against itself ---
     # Inbound Prometheus Alertmanager webhook payloads. The literal is the
     # third party's label, replayed verbatim.
     "autobot-backend/monitoring/alertmanager_webhook_test.py",
@@ -284,10 +285,16 @@ EXTERNAL_SEVERITY_VOCABULARIES = {
     # (Extreme/Severe/Moderate/Minor/Unknown), passed straight through by
     # NOAASource — a different taxonomy that happens to share the field name.
     "autobot-backend/tests/test_osint_engine.py",
-    # Docstring usage examples. Graph node properties are caller-supplied
-    # key/value data; the example is prose, not a producer.
+    # --- documentation prose: the line is read, not executed ---
+    # Graph node properties are caller-supplied key/value data; the docstring
+    # example illustrates the shape, it does not produce a severity.
     "autobot-backend/autobot_memory_graph/property_graph.py",
     "autobot-backend/autobot_memory_graph/property_graph_mixin.py",
+    # A ```json response body inside the endpoint docstring. #14956's first
+    # sweep rewrote this one to an enum read and produced invalid JSON in the
+    # documentation — see test_no_enum_read_was_written_inside_a_string below,
+    # which exists because of it.
+    "autobot-backend/api/knowledge_grounding.py",
 }
 
 # Floor for the enumeration itself. An empty walk must not read as "clean".
@@ -370,7 +377,7 @@ def test_bare_severity_literals_do_not_grow():
         f"#14956: the sweep found only {len(hits)} severity literals (floor "
         f"{SEVERITY_LITERAL_FLOOR}). The sweep no longer finds what it is meant "
         f"to scan — a broken matcher or a moved root, not a clean tree. If an "
-        f"entry in EXTERNAL_SEVERITY_VOCABULARIES was genuinely converted, drop "
+        f"entry in DELIBERATE_SEVERITY_LITERALS was genuinely converted, drop "
         f"it from that set and lower both bounds in the same commit."
     )
     assert len(hits) <= SEVERITY_LITERAL_CEILING, (
@@ -383,22 +390,22 @@ def test_no_new_file_carries_a_bare_severity_literal():
     """The ceiling alone would let one file shed a literal while another gained one."""
     offenders = {rel for rel, _ in _severity_literal_hits()}
     assert offenders, "matcher reached nothing — broken matcher, not a clean tree"
-    unexpected = offenders - EXTERNAL_SEVERITY_VOCABULARIES
+    unexpected = offenders - DELIBERATE_SEVERITY_LITERALS
     assert not unexpected, (
         f"#14956: bare severity literals reappeared in {sorted(unexpected)}. Use "
         f"autobot_shared.status_enums.Severity, or add the file to "
-        f"EXTERNAL_SEVERITY_VOCABULARIES with the boundary it crosses."
+        f"DELIBERATE_SEVERITY_LITERALS with the boundary it crosses."
     )
 
 
-def test_every_externally_sourced_severity_file_still_has_one():
+def test_every_deliberate_severity_literal_file_still_has_one():
     """A stale allowlist entry exempts nothing and hides that it exempts nothing."""
     offenders = {rel for rel, _ in _severity_literal_hits()}
-    stale = EXTERNAL_SEVERITY_VOCABULARIES - offenders
+    stale = DELIBERATE_SEVERITY_LITERALS - offenders
     assert not stale, (
         f"#14956: these files no longer carry a bare severity literal, so their "
         f"exemption is dead weight — remove them from "
-        f"EXTERNAL_SEVERITY_VOCABULARIES: {sorted(stale)}"
+        f"DELIBERATE_SEVERITY_LITERALS: {sorted(stale)}"
     )
 
 
@@ -734,3 +741,63 @@ def test_the_rendered_report_text_survived_the_value_change():
     assert base.severity_label(Severity.CRITICAL.value) == "CRITICAL"
     assert base.severity_icon("not-a-severity") == base.UNRANKED_SEVERITY_ICON
     assert base.severity_label("not-a-severity") == "not-a-severity"
+
+
+# --------------------------------------------------------------------------
+# #14956 — an enum read must never be written INSIDE a string
+# --------------------------------------------------------------------------
+
+# The sweep's own regression, caught by CI and pinned here. Rewriting every
+# `"severity": "<literal>"` by regex also rewrote one inside an endpoint
+# docstring, turning a documented ```json response body into invalid JSON that
+# no reader could copy. A docstring is prose: it is exempt from the ratchet, not
+# a target for it. Any file with a literal in prose belongs in
+# DELIBERATE_SEVERITY_LITERALS instead.
+_ENUM_READ_IN_PROSE = re.compile(r"\bSeverity\.[A-Z_]+\.value")
+
+# Floor for this scan. Counted from the modules that actually mention the enum,
+# so an import that stops resolving cannot quietly empty the walk.
+_ENUM_MENTION_FLOOR = 25
+
+
+def _modules_mentioning_severity() -> list[tuple[str, str]]:
+    """(path, source) for every module under the roots that names the enum."""
+    found = []
+    for rel in _tracked_python_files():
+        if not (rel.startswith("autobot-backend/") or rel.startswith("autobot_shared/")):
+            continue
+        try:
+            text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if "Severity." in text:
+            found.append((rel, text))
+    return found
+
+
+def test_the_prose_scan_reaches_the_modules_that_use_the_enum():
+    """An empty walk would agree that no docstring was ever mangled."""
+    mentions = _modules_mentioning_severity()
+    assert len(mentions) >= _ENUM_MENTION_FLOOR, (
+        f"#14956: only {len(mentions)} modules mention Severity (floor "
+        f"{_ENUM_MENTION_FLOOR}) — the scan is broken, not the tree"
+    )
+
+
+def test_no_enum_read_was_written_inside_a_string():
+    offenders = []
+    for rel, text in _modules_mentioning_severity():
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+                continue
+            if _ENUM_READ_IN_PROSE.search(node.value):
+                offenders.append(f"{rel}:{node.lineno}")
+    assert not offenders, (
+        f"#14956: an enum read was written inside a string literal at "
+        f"{sorted(offenders)}. Prose that shows a severity keeps the plain "
+        f"value; add the file to DELIBERATE_SEVERITY_LITERALS instead."
+    )
