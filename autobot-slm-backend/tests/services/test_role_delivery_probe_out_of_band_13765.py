@@ -77,7 +77,7 @@ def _resolvable_cgroup_memory():
     the repo-wide leak guard (#13337) sees a zero delta and this fixture does not
     become the next file in the paragraph above.
     """
-    names = (_CGROUP_MEMORY, "autobot_shared.monitoring.metrics")
+    names = (_CGROUP_MEMORY, "autobot_shared.monitoring.metrics", "autobot_shared.logging_manager")
     saved = {name: sys.modules.get(name) for name in names}
     try:
         importlib.import_module(_CGROUP_MEMORY)
@@ -85,13 +85,40 @@ def _resolvable_cgroup_memory():
         # Rebuild only what is missing: a real path-carrying package entry, then
         # the module itself loaded from disk. Deliberately does NOT execute
         # `metrics/__init__.py`, which would drag in every other collector.
+        #
+        # `logging_manager` is stubbed across the exec for the same reason
+        # `_load` above stubs it, and the first attempt at this fixture proved
+        # why the hard way. `cgroup_memory` calls `get_logger(__name__)` at
+        # module scope; the REAL logging_manager then builds a
+        # RotatingFileHandler from config values that a leaked
+        # `autobot_shared.ssot_config` stub had turned into MagicMocks, and
+        # `maxBytes > 0` raised TypeError inside the fixture. Loading a module
+        # past one leaked stub is no good if the load itself trips over the
+        # next one.
+        sys.modules["autobot_shared.logging_manager"] = MagicMock()
         pkg = types.ModuleType("autobot_shared.monitoring.metrics")
         pkg.__path__ = [str(_METRICS_DIR)]
         sys.modules["autobot_shared.monitoring.metrics"] = pkg
         spec = importlib.util.spec_from_file_location(_CGROUP_MEMORY, _METRICS_DIR / "cgroup_memory.py")
         module = importlib.util.module_from_spec(spec)
         sys.modules[_CGROUP_MEMORY] = module
-        spec.loader.exec_module(module)
+        try:
+            spec.loader.exec_module(module)
+        except BaseException:
+            # Un-register the half-built module before re-raising. Without this
+            # the first failure poisons every later test: `module_from_spec`
+            # registers BEFORE `exec_module` runs, the fixture dies before its
+            # `yield` so no teardown happens, and the broken object stays in
+            # sys.modules. The next test's `import_module` then SUCCEEDS,
+            # returning a module with no `has_out_of_band_limits` -- so the
+            # fixture reports itself healthy and the tests fail on bare
+            # `assert False` instead of on the real cause.
+            #
+            # Observed exactly that: one honest ERROR naming the TypeError,
+            # followed by seven failures pointing nowhere near it. A diagnostic
+            # that degrades after its first use is its own bug.
+            sys.modules.pop(_CGROUP_MEMORY, None)
+            raise
     yield
     for name, previous in saved.items():
         if previous is None:
