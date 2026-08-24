@@ -114,8 +114,14 @@ _SKIP = {
 # only be declared drained while its own population is still demonstrably
 # there. Delete an entry once its budget genuinely reaches zero.
 _KNOWN_OFFENDERS = {
-    "autobot-backend": (136, 18000),
-    "autobot-infrastructure": (134, 250),
+    # Lowered in the same commit that removed the offences, as this file's own
+    # ratchet requires: 136 -> 78 and 134 -> 126. The drop is not a sweep
+    # collapse — `offending_returns` stopped counting a test that asserts AND
+    # returns, because that test can fail and its return value is a separate
+    # driver contract (#14920). The population floors below are untouched and
+    # still pass, which is what tells the two apart.
+    "autobot-backend": (78, 18000),
+    "autobot-infrastructure": (126, 250),
     "autobot-npu-worker": (7, 150),
 }
 
