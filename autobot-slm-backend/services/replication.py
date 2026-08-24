@@ -78,7 +78,7 @@ class ReplicationService:
         # it would have silently passed a plain "redis" from any caller and
         # silently failed on any other spelling.
         if service_type is not BackupServiceType.REDIS:
-            return False, f"Unsupported service type: {BackupServiceType(service_type).value}"
+            return False, f"Unsupported service type: {service_type.value}"
 
         replication = await self._log_and_load_replication(db, replication_id, source_node, target_node)
         if not replication:

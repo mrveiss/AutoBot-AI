@@ -378,6 +378,16 @@ def _local_enum_names(tree: ast.Module) -> set[str]:
     makes the scan survive ``from enum import Enum as _E``. Matching the word
     alone reported a re-declared ``CommandRiskLevel`` as absent — a fail-open
     found by mutating this guard, not by reading it.
+
+    Boundary of what this resolves, stated so the next reader does not assume
+    more: it follows a DIRECT ``from enum import ...`` in the module being
+    scanned. A two-hop re-export — module A doing ``from enum import Enum as
+    _E; Base = _E``, module B doing ``from A import Base`` — is not resolved
+    and would be invisible. That is evasion-only rather than a shape anyone
+    writes by accident, and closing it means resolving imports across modules;
+    ``test_a_two_hop_re_export_is_a_known_blind_spot`` pins the limit so it is
+    a documented boundary rather than a silent one. A star-import and
+    subclassing an already-populated Enum are both covered.
     """
     local = set()
     for node in ast.walk(tree):
@@ -457,6 +467,23 @@ def test_the_scan_sees_an_enum_whose_base_was_imported_under_an_alias():
     assert _enums_in_tree(plain) == [("Plain", frozenset({"SAFE"}))]
 
     assert _enums_in_tree(ast.parse("class NotAnEnum:\n    SAFE = 'safe'\n")) == []
+
+
+def test_a_two_hop_re_export_is_a_known_blind_spot():
+    """Pin the scan's limit so it is documented rather than discovered.
+
+    ``_local_enum_names`` resolves a direct ``from enum import ...``. It does
+    not chase a base re-exported through another module. This test asserts the
+    CURRENT behaviour: if someone teaches the scan to follow re-exports, this
+    test goes red and should be updated to assert the enum IS found — which is
+    the point. A limit nobody wrote down is the one that gets mistaken for
+    coverage.
+    """
+    two_hop = ast.parse("from shims import Base\n\n\nclass Hidden(Base):\n    SAFE = 'safe'\n")
+    assert _enums_in_tree(two_hop) == [], (
+        "the scan now follows two-hop re-exports — good; update this test to "
+        "assert the enum is found rather than deleting it"
+    )
 
 
 def _enums_matching(predicate) -> list[str]:
