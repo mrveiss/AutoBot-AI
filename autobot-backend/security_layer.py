@@ -127,7 +127,7 @@ def canonical_role_permissions(user_role: str) -> List[str]:
     so.
 
     An unrecognised role yields ``[]`` — no grant, and no exception either.
-   
+
     A ``Role`` member resolves the same as its value (#14944); it previously
     stringified to ``"role.admin"`` and yielded ``[]``. Note this function is
     ``lru_cache``d and a member does NOT share a cache entry with its value
