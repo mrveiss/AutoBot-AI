@@ -414,7 +414,7 @@ class BugPredictor(_BaseClass):
         high_risk_count = sum(1 for a in assessments if a.risk_level in (RiskLevel.CRITICAL, RiskLevel.HIGH))
 
         # Risk distribution
-        risk_dist = {level.value: 0 for level in RiskLevel}
+        risk_dist = {level.value: 0 for level in RiskLevel.score_ladder()}
         for a in assessments:
             risk_dist[a.risk_level.value] += 1
 

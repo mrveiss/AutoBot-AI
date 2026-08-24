@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 
@@ -800,7 +801,7 @@ class ExistingOperationMigrator:
             vulnerabilities.append(
                 {
                     "type": "hardcoded_credential",
-                    "severity": "high",
+                    "severity": Severity.HIGH.value,
                     "description": "Potential hardcoded password detected",
                 }
             )
@@ -809,7 +810,7 @@ class ExistingOperationMigrator:
             vulnerabilities.append(
                 {
                     "type": "hardcoded_api_key",
-                    "severity": "high",
+                    "severity": Severity.HIGH.value,
                     "description": "Potential hardcoded API key detected",
                 }
             )
@@ -822,7 +823,7 @@ class ExistingOperationMigrator:
             vulnerabilities.append(
                 {
                     "type": "potential_secret",
-                    "severity": "medium",
+                    "severity": Severity.MEDIUM.value,
                     "description": "Long string detected, might be a secret",
                 }
             )

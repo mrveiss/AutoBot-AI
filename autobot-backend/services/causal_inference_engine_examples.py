@@ -140,7 +140,7 @@ EXAMPLE_1_POOL_EXHAUSTION = {
             "evidence": ["Queries now hold connections 45-60 seconds"],
         },
     ],
-    "severity": "critical",
+    "severity": CausalSeverity.CRITICAL.value,
     "confidence": 0.88,
     "recommendations": [
         "[URGENT] SHORT-TERM: Increase connection pool size from 30 to 100 connections (85% success likelihood). Reason: More connections available reduces queueing and timeout rate",
@@ -238,7 +238,7 @@ EXAMPLE_2_MEMORY_LEAK = {
             "evidence": ["OOM killer is heavy-handed, graceful restart is cleaner"],
         },
     ],
-    "severity": "degraded",
+    "severity": CausalSeverity.DEGRADED.value,
     "confidence": 0.92,
     "recommendations": [
         "SHORT-TERM: Increase memory allocation to system from 12 GB to 28 GB (95% success likelihood). Reason: Process can grow larger before hitting OOM limit",
@@ -351,7 +351,7 @@ EXAMPLE_3_MULTI_FACTOR = {
             "evidence": ["Confounder: network flakiness normally tolerated via retries"],
         },
     ],
-    "severity": "critical",
+    "severity": CausalSeverity.CRITICAL.value,
     "confidence": 0.90,
     "recommendations": [
         "[URGENT] IMMEDIATE: Revert problematic deployment (commit 7f3a2c) to restore max_retries=3 (98% success likelihood). Reason: Retry logic restored, transient failures now succeed on retry",
@@ -422,7 +422,7 @@ EXAMPLE_4_SINGLE_CLEAR_CAUSE = {
             "evidence": ["Scheduled maintenance confirmed in calendar"],
         },
     ],
-    "severity": "warning",
+    "severity": CausalSeverity.WARNING.value,
     "confidence": 0.99,
     "recommendations": [
         "WAIT: Scheduled maintenance in progress (ends 2026-04-10T02:30:00Z). Service will return to normal. No action needed.",
@@ -488,7 +488,7 @@ EXAMPLE_5_SPARSE_DATA = {
             "evidence": ["Without root cause data, defensive approach is best guess"],
         },
     ],
-    "severity": "warning",
+    "severity": CausalSeverity.WARNING.value,
     "confidence": 0.35,  # Low confidence
     "recommendations": [
         "ENABLE PROFILING: Collect detailed logs and stack traces on next occurrence (80% likelihood improves diagnosis). Reason: Current data insufficient to identify root cause",

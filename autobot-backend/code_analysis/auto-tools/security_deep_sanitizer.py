@@ -28,6 +28,7 @@ import sys
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from utils.line_index import LineIndex  # #12884
 
 # Configure logging
@@ -108,7 +109,13 @@ import re  # noqa: E402
 from datetime import datetime, timezone  # noqa: E402
 from typing import Any, Dict, List, Tuple  # noqa: E402
 
-from tool_base import SecurityFixToolBase  # noqa: E402
+from tool_base import (  # noqa: E402
+    SEVERITY_REPORT_ICONS,
+    SEVERITY_REPORT_ORDER,
+    SecurityFixToolBase,
+    severity_icon,
+    severity_label,
+)
 
 
 class SecurityFixAgent(SecurityFixToolBase):
@@ -132,7 +139,7 @@ class SecurityFixAgent(SecurityFixToolBase):
         return {
             "direct_innerHTML": {
                 "pattern": r"(?<![\w\.])([\w\.]+)\.innerHTML\s*=\s*([^;]+);",
-                "severity": "HIGH",
+                "severity": Severity.HIGH.value,
                 "context_safe": [
                     'element.innerHTML=""',
                     "innerHTML=null",
@@ -141,47 +148,47 @@ class SecurityFixAgent(SecurityFixToolBase):
             },
             "innerHTML_concat": {
                 "pattern": r"(?<![\w\.])([\w\.]+)\.innerHTML\s*\+=\s*([^;]+);",
-                "severity": "HIGH",
+                "severity": Severity.HIGH.value,
                 "context_safe": [],
             },
             "outerHTML_write": {
                 "pattern": r"(?<![\w\.])([\w\.]+)\.outerHTML\s*=\s*([^;]+);",
-                "severity": "HIGH",
+                "severity": Severity.HIGH.value,
                 "context_safe": [],
             },
             "insertAdjacentHTML_usage": {
                 "pattern": r'\.insertAdjacentHTML\s*\(\s*[\'"](\w+)[\'"]\s*,\s*([^)]+)\)',
-                "severity": "MEDIUM",
+                "severity": Severity.MEDIUM.value,
                 "context_safe": [],
             },
             "document_write_usage": {
                 "pattern": r"document\.write(?:ln)?\s*\(([^)]+)\)",
-                "severity": "HIGH",
+                "severity": Severity.HIGH.value,
                 "context_safe": [],
             },
             "eval_execution": {
                 "pattern": r"\beval\s*\(([^)]+)\)",
-                "severity": "CRITICAL",
+                "severity": Severity.CRITICAL.value,
                 "context_safe": [],
             },
             "function_constructor": {
                 "pattern": r"new\s+Function\s*\(([^)]+)\)",
-                "severity": "CRITICAL",
+                "severity": Severity.CRITICAL.value,
                 "context_safe": [],
             },
             "javascript_protocol": {
                 "pattern": r'(?:href|src)\s*=\s*[\'"]javascript:([^\'\"]+)[\'"]',
-                "severity": "HIGH",
+                "severity": Severity.HIGH.value,
                 "context_safe": [],
             },
             "data_uri_html": {
                 "pattern": r'(?:href|src)\s*=\s*[\'"]data:text/html[^\'\"]*[\'"]',
-                "severity": "MEDIUM",
+                "severity": Severity.MEDIUM.value,
                 "context_safe": [],
             },
             "react_dangerously_set": {
                 "pattern": r"dangerouslySetInnerHTML\s*=\s*\{\s*__html:\s*([^}]+)\s*\}",
-                "severity": "HIGH",
+                "severity": Severity.HIGH.value,
                 "context_safe": [],
             },
         }
@@ -651,16 +658,10 @@ class SecurityFixAgent(SecurityFixToolBase):
         content = ""
         if severity_counts:
             content += "### Vulnerabilities by Severity:\n\n"
-            severity_icons = {
-                "CRITICAL": "🔴",
-                "HIGH": "🟠",
-                "MEDIUM": "🟡",
-                "LOW": "🟢",
-            }
-            for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
-                if severity in severity_counts:
-                    icon = severity_icons[severity]
-                    content += f"- {icon} **{severity}:** {severity_counts[severity]} vulnerabilities\n"
+            for level in SEVERITY_REPORT_ORDER:
+                if level.value in severity_counts:
+                    icon = SEVERITY_REPORT_ICONS[level]
+                    content += f"- {icon} **{level.name}:** {severity_counts[level.value]} vulnerabilities\n"
             content += f"- 📚 **Library/Framework Code:** {library_vulns} vulnerabilities (mitigated with CSP)\n\n"
 
         return content
@@ -682,18 +683,12 @@ class SecurityFixAgent(SecurityFixToolBase):
         direct_vulns = [v for v in self.report["vulnerabilities"] if not v.get("is_library_code", False)]
         if direct_vulns:
             content += "### Critical Vulnerabilities Fixed:\n\n"
-            severity_icon = {
-                "CRITICAL": "🔴",
-                "HIGH": "🟠",
-                "MEDIUM": "🟡",
-                "LOW": "🟢",
-            }
             for i, vuln in enumerate(direct_vulns, 1):
-                icon = severity_icon.get(vuln["severity"], "⚪")
+                icon = severity_icon(vuln["severity"])
                 content += f"**{i}. {vuln['type'].replace('_', ' ').title()}** {icon}\n"
                 content += f"- **File:** `{vuln['file']}`\n"
                 content += f"- **Line:** {vuln['line']}\n"
-                content += f"- **Severity:** {vuln['severity']}\n"
+                content += f"- **Severity:** {severity_label(vuln['severity'])}\n"
                 match_preview = vuln["match"][:100] + ("..." if len(vuln["match"]) > 100 else "")
                 content += f"- **Pattern:** `{match_preview}`\n\n"
 
@@ -702,7 +697,7 @@ class SecurityFixAgent(SecurityFixToolBase):
             for i, fix in enumerate(self.report["fixes_applied"], 1):
                 content += f"**Fix {i}:** {fix['type'].replace('_', ' ').title()}\n"
                 content += f"- **Line:** {fix['line']}\n"
-                content += f"- **Severity:** {fix['severity']}\n"
+                content += f"- **Severity:** {severity_label(fix['severity'])}\n"
                 orig_preview = fix["original"][:80] + ("..." if len(fix["original"]) > 80 else "")
                 fixed_preview = fix["fixed"][:80] + ("..." if len(fix["fixed"]) > 80 else "")
                 content += f"- **Original:** `{orig_preview}`\n"

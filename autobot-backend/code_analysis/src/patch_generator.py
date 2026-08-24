@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_1_HOUR
+from autobot_shared.status_enums import Severity
 
 logger = get_logger(__name__)
 
@@ -686,7 +687,7 @@ async def main():
                     "file": "src/example.py",
                     "line": 42,
                     "type": "sql_injection",
-                    "severity": "critical",
+                    "severity": Severity.CRITICAL.value,
                     "description": "SQL injection vulnerability",
                 }
             ]
@@ -697,7 +698,7 @@ async def main():
                     "file": "src/example.py",
                     "line": 15,
                     "type": "memory_leaks",
-                    "severity": "high",
+                    "severity": Severity.HIGH.value,
                     "description": "File handle not closed",
                 }
             ]
