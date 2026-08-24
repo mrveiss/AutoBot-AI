@@ -12,7 +12,7 @@
 
 import { ref, computed, onScopeDispose, getCurrentScope, watch, unref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import { redactUrlForLogging } from '@/utils/redactUrlForLogging'
+import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
 
 // Create scoped logger for useWebSocket
 const logger = createLogger('useWebSocket')
@@ -288,7 +288,11 @@ export function useWebSocket(
         }
       }
     } catch (err) {
-      logger.error('Connection error:', err)
+      // #14989: no upstream scheme validation here (unlike TerminalService),
+      // so a misconfigured base URL reaches new WebSocket() and throws a
+      // SyntaxError whose .message embeds the full attempted URL -- token
+      // included -- verbatim, in every major browser.
+      logger.error('Connection error:', redactErrorForLogging(err))
       errors.value = [...errors.value, err instanceof Error ? err : new Error('Connection error')]
       isConnecting.value = false
     }

@@ -3,7 +3,7 @@
 // AutoBot - AI-Powered Automation Platform
 
 import { ref, computed, onScopeDispose, unref, type Ref } from 'vue'
-import { createLogger, redactUrlForLogging } from '../utils'
+import { createLogger, redactUrlForLogging, redactErrorForLogging } from '../utils'
 
 const logger = createLogger('useWebSocket')
 
@@ -121,7 +121,11 @@ export function useWebSocket(url: Ref<string> | string, options: UseWebSocketOpt
         }
       }
     } catch (err) {
-      logger.error('Failed to create WebSocket:', err)
+      // #14989: same defensive redaction as the autobot-frontend copy --
+      // a wrong-scheme new WebSocket() throw can embed the raw URL.
+      // createLogger() is a no-op today, so this is not live yet either,
+      // same as the two log calls above.
+      logger.error('Failed to create WebSocket:', redactErrorForLogging(err))
       isConnecting.value = false
       errorList.value = [...errorList.value, err instanceof Error ? err : new Error(String(err))]
     }

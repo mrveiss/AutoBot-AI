@@ -14,7 +14,7 @@ import apiClient from '@/utils/ApiClient'
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
 import { buildAuthenticatedWsUrl } from '@/utils/buildAuthenticatedWsUrl'
-import { redactUrlForLogging } from '@/utils/redactUrlForLogging'
+import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
 
 const logger = createLogger('TerminalService')
 
@@ -494,7 +494,11 @@ class TerminalService {
     reject: (reason: Error) => void,
   ): void {
     const err = error instanceof Error ? error : new Error(String(error))
-    logger.error(`Failed to connect to terminal session ${sessionId}:`, err)
+    // #14989: _validateWsUrl closes the wrong-scheme case, but not every
+    // WHATWG URL parse failure (unusual host, percent-encoding) -- a
+    // native new WebSocket() SyntaxError can still embed the raw
+    // token-bearing URL in .message, so redact defensively here too.
+    logger.error(`Failed to connect to terminal session ${sessionId}:`, redactErrorForLogging(err))
     this.setConnectionState(sessionId, CONNECTION_STATES.ERROR)
     this.triggerCallback(sessionId, 'onError', err.message)
     reject(err)
