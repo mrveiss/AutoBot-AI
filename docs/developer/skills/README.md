@@ -33,10 +33,11 @@ AutoBot-specific one stays where its conventions (`Dev_new_gui`, `autobot_shared
 the PR-body headings) apply. `debug-autobot` reads service hosts from `$REDIS_HOST` / `$NPU_HOST` /
 `$BROWSER_HOST` / `$AISTACK_HOST` — export them from your deployment before use.
 
-## Skills that still live in this repo
+## No skills live in this repo anymore
 
-A few skills are canonically version-controlled here rather than in a marketplace, because they are
-tightly bound to code in this tree:
+Every Claude dev skill now installs from one of the two marketplaces above. This directory is kept
+for its history and the notes below; it no longer holds a skill file. `tools/install_skills.sh`
+is dormant (it symlinks whatever `*.md` skills are here — currently none).
 
 ### Why a skill stays in-repo
 
@@ -51,25 +52,22 @@ machine. Without this directory:
 #5094 was the discovery that surfaced this. See that issue for the full
 incident.
 
-## Files
+## Where the skills are
 
-| File | Role |
-|---|---|
-| `batch-implement.md` | Drives `/batch-implement <issues>` — full implement→review→merge→close→discover loop with self-healing retry, Phase 0c verification mandate, and Phase 0d behavioral grep for extraction PRs |
+`batch-implement` moved to the AutoBot marketplace with the other AutoBot skills (see **Installing
+the skill sets** above). `autobot-llc` is not a Claude skill at all — it is an AutoBot runtime
+module loaded by `autobot-backend/llc/`, and stays in the codebase.
 
-The general and AutoBot-specific skills now live in the two marketplaces above. What remains
-in this directory is `batch-implement.md` (below); the `autobot-llc` skill lives in
-`autobot-backend/llc/skills/` beside the LLC code it drives.
-
-`team-implement.md` was consolidated into `batch-implement.md` in #5454 —
+The `team-implement` skill was consolidated into `batch-implement` in #5454 —
 the two skills' scopes overlapped (both did parallel-issue implementation),
 and the methodology rules (Phase 0c, Phase 0d) were silently living in
-the wrong file. Consolidation makes `batch-implement` the single source
-of truth for the end-to-end workflow.
+the wrong file. Consolidation made `batch-implement` the single source of truth for the end-to-end workflow;
+it now ships from the marketplace.
 
 ## Setup (one-time per developer)
 
-Install the two marketplaces (above) for most skills. For the in-repo skills in this directory:
+Install the two marketplaces (above) — that is the whole skill set. `tools/install_skills.sh`
+remains only to symlink any future in-repo skill and currently does nothing:
 
 ```bash
 tools/install_skills.sh
@@ -90,9 +88,8 @@ needed.
 
 ## Skill-authoring guidelines
 
-- One skill = one responsibility. If `batch-implement.md` grows past ~700
-  lines, consider splitting (e.g., extract `pre-merge-validate` into its
-  own skill).
+- One skill = one responsibility. If a skill's `SKILL.md` grows past ~700
+  lines, consider splitting it.
 - Use clearly-numbered phase headings (`## Phase 0`, `## Phase 1`, …) so
   cross-references stay stable.
 - Reference issues in the body when adding rules tied to specific incidents
