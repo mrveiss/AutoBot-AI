@@ -13,16 +13,20 @@ from unittest.mock import MagicMock, patch
 
 from workers.audit_tasks import (
     _DEFERRED_FINDINGS_KEY,
+    _FILING_STATUS_KEY,
     _TESTGAPS_LAST_RUN_KEY,
+    FilingOutcome,
     _dead_code_fingerprint,
     _dedupe_and_file,
     _find_test_file,
     _gh_available,
     _persist_deferred,
     _redis_set,
+    _run_status,
     audit_claims,
     audit_dead_code,
     audit_testgaps,
+    check_filing_credential_at_startup,
 )
 
 # ---------------------------------------------------------------------------
@@ -43,7 +47,7 @@ class TestDedupeAndFile:
             patch("workers.audit_tasks._persist_deferred", return_value=0),
             patch("workers.audit_tasks._file_issue", return_value=True) as mock_file,
         ):
-            filed, deferred = _dedupe_and_file(findings, existing, "enhancement")
+            filed, deferred, _lost, _ok = _dedupe_and_file(findings, existing, "enhancement")
 
         assert (filed, deferred) == (1, 0)
         mock_file.assert_called_once_with("discovery: new issue", "body2", "enhancement")
@@ -60,7 +64,7 @@ class TestDedupeAndFile:
             patch("workers.audit_tasks._persist_deferred", return_value=0),
             patch("workers.audit_tasks._file_issue") as mock_file,
         ):
-            filed, deferred = _dedupe_and_file(findings, existing, "enhancement")
+            filed, deferred, _lost, _ok = _dedupe_and_file(findings, existing, "enhancement")
 
         assert (filed, deferred) == (0, 0)
         mock_file.assert_not_called()
@@ -77,7 +81,7 @@ class TestDedupeAndFile:
             patch("workers.audit_tasks._persist_deferred", return_value=0),
             patch("workers.audit_tasks._file_issue", return_value=True),
         ):
-            filed, deferred = _dedupe_and_file(findings, existing, "enhancement")
+            filed, deferred, _lost, _ok = _dedupe_and_file(findings, existing, "enhancement")
 
         assert filed == 1  # second identical title skipped because first added it to set
 
@@ -88,7 +92,7 @@ class TestDedupeAndFile:
             patch("workers.audit_tasks._persist_deferred", return_value=0),
             patch("workers.audit_tasks._file_issue") as mock_file,
         ):
-            filed, deferred = _dedupe_and_file([], set(), "enhancement")
+            filed, deferred, _lost, _ok = _dedupe_and_file([], set(), "enhancement")
 
         assert (filed, deferred) == (0, 0)
         mock_file.assert_not_called()
@@ -143,7 +147,7 @@ class TestNoDropGuarantee:
             patch("workers.audit_tasks._redis_set", side_effect=_set),
             patch("workers.audit_tasks._file_issue") as mock_file,
         ):
-            filed, deferred = _dedupe_and_file(findings, set(), "enhancement", client)
+            filed, deferred, _lost, _ok = _dedupe_and_file(findings, set(), "enhancement", client)
 
         assert filed == 0
         assert deferred == 1
@@ -162,7 +166,7 @@ class TestNoDropGuarantee:
             patch("workers.audit_tasks._redis_set", side_effect=_set),
             patch("workers.audit_tasks._file_issue", return_value=False),
         ):
-            filed, deferred = _dedupe_and_file(findings, set(), "enhancement", client)
+            filed, deferred, _lost, _ok = _dedupe_and_file(findings, set(), "enhancement", client)
 
         assert (filed, deferred) == (0, 1)
         assert store[_DEFERRED_FINDINGS_KEY][0]["title"] == "discovery: flaky"
@@ -182,7 +186,7 @@ class TestNoDropGuarantee:
             patch("workers.audit_tasks._redis_set", side_effect=_set),
             patch("workers.audit_tasks._file_issue", side_effect=_file),
         ):
-            filed, deferred = _dedupe_and_file(findings, set(), "enhancement", client)
+            filed, deferred, _lost, _ok = _dedupe_and_file(findings, set(), "enhancement", client)
 
         assert filed + deferred == len(findings)
         assert (filed, deferred) == (3, 2)
@@ -212,7 +216,7 @@ class TestNoDropGuarantee:
                 side_effect=lambda t, b, lbl: filed_titles.append(t) or True,
             ),
         ):
-            filed, deferred = _dedupe_and_file([], set(), "enh", client)
+            filed, deferred, _lost, _ok = _dedupe_and_file([], set(), "enh", client)
 
         assert filed_titles == ["discovery: retry me"]
         assert (filed, deferred) == (1, 0)
@@ -572,7 +576,7 @@ class TestDeferralIsObservedNotAssumed:
             patch("workers.audit_tasks._file_issue"),
         ):
             with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
-                filed, deferred = _dedupe_and_file(findings, set(), "enh", client)
+                filed, deferred, _lost, _ok = _dedupe_and_file(findings, set(), "enh", client)
 
         assert (filed, deferred) == (0, 0)
         assert "LOST" in caplog.text
@@ -592,7 +596,7 @@ class TestDeferralIsObservedNotAssumed:
             patch("workers.audit_tasks._file_issue"),
         ):
             with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
-                filed, deferred = _dedupe_and_file(findings, set(), "enh", client)
+                filed, deferred, _lost, _ok = _dedupe_and_file(findings, set(), "enh", client)
 
         assert (filed, deferred) == (0, 1)
         assert "LOST" not in caplog.text
@@ -682,7 +686,9 @@ class TestQueueIsNeverOverwrittenUnread:
             patch("workers.audit_tasks._file_issue"),
         ):
             with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
-                filed, deferred = _dedupe_and_file([{"title": "discovery: new", "body": "b"}], set(), "enh", client)
+                filed, deferred, _lost, _ok = _dedupe_and_file(
+                    [{"title": "discovery: new", "body": "b"}], set(), "enh", client
+                )
 
         assert (filed, deferred) == (0, 0)
         assert "could not be read" in caplog.text
@@ -700,7 +706,9 @@ class TestQueueIsNeverOverwrittenUnread:
             patch("workers.audit_tasks._redis_set", side_effect=_set),
             patch("workers.audit_tasks._file_issue"),
         ):
-            filed, deferred = _dedupe_and_file([{"title": "discovery: first", "body": "b"}], set(), "e", client)
+            filed, deferred, _lost, _ok = _dedupe_and_file(
+                [{"title": "discovery: first", "body": "b"}], set(), "e", client
+            )
 
         assert (filed, deferred) == (0, 1)
         assert [f["title"] for f in store[_DEFERRED_FINDINGS_KEY]] == ["discovery: first"]
@@ -802,3 +810,319 @@ class TestTruncationIsDeclared:
                 _persist_deferred(client, [{"title": "t", "body": "b", "label": "l"}])
 
         assert "TRUNCATED" not in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# #13570: a run that filed nothing must not report success, and "cannot file"
+# must be observable somewhere a check can query — not only in a log line.
+# ---------------------------------------------------------------------------
+
+
+class TestRunStatus:
+    """`status` was the string `"success"`, unconditionally, in all three tasks.
+
+    On the live host that meant a run which queued 1,644 findings it could not
+    file reported success to Celery — the one machine-readable surface these
+    tasks produce. The log said CRITICAL, the result said success, and nothing
+    polling task results could tell the difference.
+    """
+
+    def test_a_clean_run_is_still_success(self):
+        assert _run_status(FilingOutcome(filed=3, deferred=0, lost=0, filing_available=True)) == "success"
+
+    def test_nothing_to_do_is_success(self):
+        """An audit with no findings must not be dressed up as a problem."""
+        assert _run_status(FilingOutcome(filed=0, deferred=0, lost=0, filing_available=True)) == "success"
+
+    def test_deferred_findings_are_degraded_not_success(self):
+        assert _run_status(FilingOutcome(filed=0, deferred=1644, lost=0, filing_available=False)) == "degraded"
+
+    def test_unable_to_file_is_degraded_even_with_nothing_to_defer(self):
+        """The gap that hid the lapse for weeks.
+
+        Every clean run during the outage looked identical to a healthy one,
+        because the worker only noticed it could not file when it happened to
+        have a finding to lose. A worker that cannot file is degraded whether or
+        not this particular run produced anything.
+        """
+        assert _run_status(FilingOutcome(filed=0, deferred=0, lost=0, filing_available=False)) == "degraded"
+
+    def test_lost_findings_are_an_error_not_a_degradation(self):
+        """Queued is recoverable; lost is not. They must not share a status."""
+        assert _run_status(FilingOutcome(filed=0, deferred=0, lost=2, filing_available=False)) == "error"
+
+    def test_loss_outranks_a_partial_success(self):
+        assert _run_status(FilingOutcome(filed=9, deferred=1, lost=1, filing_available=True)) == "error"
+
+
+class TestLossIsCounted:
+    def test_lost_findings_are_counted_not_reported_as_zero_deferred(self):
+        """`deferred == 0` is both "nothing to defer" and "the queue ate them".
+
+        The unwritable-queue path already logged the findings in full, but the
+        number it returned was 0 — the same 0 a clean run returns. Every caller
+        then reported `issues_deferred: 0` and `status: success` for a run that
+        had just destroyed its own findings.
+        """
+        _store, _get, _set, client = _fake_redis_backing(writes_succeed=False)
+        findings = [{"title": "discovery: a", "body": "b"}, {"title": "discovery: b", "body": "b"}]
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            outcome = _dedupe_and_file(findings, set(), "enh", client)
+
+        assert outcome.deferred == 0
+        assert outcome.lost == 2
+        assert _run_status(outcome) == "error"
+
+    def test_a_successful_deferral_counts_as_deferred_not_lost(self):
+        """The fallback working must not be reported as data loss."""
+        _store, _get, _set, client = _fake_redis_backing()
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            outcome = _dedupe_and_file([{"title": "discovery: q", "body": "b"}], set(), "enh", client)
+
+        assert (outcome.deferred, outcome.lost) == (1, 0)
+        assert _run_status(outcome) == "degraded"
+
+    def test_a_drained_queue_is_not_reported_as_loss(self):
+        """The normal drain path writes an empty queue and returns 0.
+
+        Deriving loss from "deferred_count == 0" alone would call every healthy
+        run a data-loss event — a false alarm is the same defect class as a
+        false reassurance.
+        """
+        _store, _get, _set, client = _fake_redis_backing()
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=True),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue", return_value=True),
+        ):
+            outcome = _dedupe_and_file([{"title": "discovery: ok", "body": "b"}], set(), "enh", client)
+
+        assert (outcome.filed, outcome.deferred, outcome.lost) == (1, 0, 0)
+        assert _run_status(outcome) == "success"
+
+
+class TestFilingStatusIsQueryable:
+    """A CRITICAL log line is not a surface a check can query (#13852).
+
+    The umbrella's shared criterion is that a service which is running but not
+    working must be distinguishable from one that is working by something a
+    check can read. `audit:filing_status` is that something.
+    """
+
+    def test_every_run_publishes_filing_health(self):
+        store, _get, _set, client = _fake_redis_backing()
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            _dedupe_and_file([{"title": "discovery: q", "body": "b"}], set(), "enh", client)
+
+        # Assert PRESENCE. An absent key would read exactly like a healthy one
+        # to anything checking "is filing_available false?".
+        assert _FILING_STATUS_KEY in store
+        status = store[_FILING_STATUS_KEY]
+        assert status["filing_available"] is False
+        assert status["last_run_deferred"] == 1
+        assert status["last_run_lost"] == 0
+        assert status["checked_at"]
+
+    def test_a_healthy_run_publishes_health_too(self):
+        """Written on every run, not only on failure.
+
+        A key that only appears when something is wrong cannot distinguish "the
+        worker is fine" from "the worker never ran" — and the second is how this
+        lapse stayed invisible.
+        """
+        store, _get, _set, client = _fake_redis_backing()
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=True),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue", return_value=True),
+        ):
+            _dedupe_and_file([{"title": "discovery: ok", "body": "b"}], set(), "enh", client)
+
+        assert store[_FILING_STATUS_KEY]["filing_available"] is True
+
+    def test_status_records_that_loss_happened(self):
+        store: dict = {}
+
+        def _set(_redis, key, value, **_kw):
+            store[key] = value
+            return key == _FILING_STATUS_KEY  # the DLQ write fails, the status write lands
+
+        client = MagicMock()
+        client.exists.side_effect = lambda key: 1 if key in store else 0
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", return_value=None),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            outcome = _dedupe_and_file([{"title": "discovery: gone", "body": "b"}], set(), "enh", client)
+
+        assert outcome.lost == 1
+        assert store[_FILING_STATUS_KEY]["last_run_lost"] == 1
+
+
+class TestStartupCredentialGuard:
+    """#13570 fix 3, the one that never landed.
+
+    `_gh_available` runs inside a task, so the first signal that filing is
+    broken arrives whenever an audit next happens to produce a finding — weekly
+    for `audit_claims`. A worker that cannot file has been unable to file since
+    it started, and that fact is available the moment it starts.
+    """
+
+    def test_startup_reports_and_records_a_missing_credential(self, caplog):
+        store, _get, _set, client = _fake_redis_backing()
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+        ):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                available = check_filing_credential_at_startup(client)
+
+        assert available is False
+        assert "WITHOUT a working issue-filing credential" in caplog.text
+        assert store[_FILING_STATUS_KEY]["filing_available"] is False
+
+    def test_startup_is_quiet_and_still_records_when_filing_works(self, caplog):
+        """No CRITICAL on a healthy boot — an alarm that always fires is ignored."""
+        store, _get, _set, client = _fake_redis_backing()
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=True),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+        ):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                available = check_filing_credential_at_startup(client)
+
+        assert available is True
+        assert "WITHOUT a working issue-filing credential" not in caplog.text
+        assert store[_FILING_STATUS_KEY]["filing_available"] is True
+
+    def test_a_broken_check_never_stops_the_worker_booting(self):
+        """Degrading the audit is acceptable; refusing to start is not."""
+        with patch("workers.audit_tasks._gh_available", side_effect=RuntimeError("boom")):
+            assert check_filing_credential_at_startup(MagicMock()) is False
+
+    def test_the_guard_is_actually_wired_to_celery_startup(self):
+        """Assert the WIRING, not just the helper.
+
+        A startup guard nothing calls is exactly the shape of failure this issue
+        is about: present, correct, and never reached. Both signals matter —
+        Beat and the worker are separate processes with separate deployments.
+        """
+        import weakref
+
+        from celery.signals import beat_init, worker_ready
+
+        import workers.audit_tasks as audit_module
+
+        expected = {
+            worker_ready: audit_module._audit_worker_ready,
+            beat_init: audit_module._audit_beat_init,
+        }
+        for signal, handler in expected.items():
+            # Receivers may be stored as weakrefs. Deref only those: a plain
+            # function is callable too, and `r()` on one would INVOKE the
+            # startup guard instead of inspecting it.
+            resolved = [r() if isinstance(r, weakref.ReferenceType) else r for _, r in signal.receivers]
+            names = {getattr(r, "__name__", "") for r in resolved if r is not None}
+            assert handler.__name__ in names, f"{signal.name} has no audit receiver"
+
+    def test_the_module_carrying_the_guard_is_imported_at_worker_startup(self):
+        """Registering is only half the wiring — something has to import it.
+
+        The decorators above run at import time, so a guard in a module Celery
+        never loads is registered on nothing. The chain is
+        `autodiscover_tasks(["workers"], related_name=None)` -> `workers/__init__`
+        -> `.audit_tasks`; break any link and the guard is silently inert while
+        this file's other tests stay green, because they import it themselves.
+        """
+        from pathlib import Path
+
+        backend_root = Path(__file__).resolve().parents[1]
+        assert "from .audit_tasks import" in (backend_root / "workers" / "__init__.py").read_text(encoding="utf-8")
+        celery_src = (backend_root / "celery_app.py").read_text(encoding="utf-8")
+        assert 'autodiscover_tasks(["tasks", "workers", "llc.scheduler"], related_name=None)' in celery_src
+
+
+class TestTaskResultsCarryTheStatus:
+    def test_a_task_that_could_not_file_does_not_report_success(self):
+        """The end-to-end shape: drive the task, read the result it returns."""
+        with (
+            patch("workers.audit_tasks.reset_gh_env_cache"),
+            patch("workers.audit_tasks._get_redis", return_value=None),
+            patch("workers.audit_tasks._redis_get", return_value=None),
+            patch("workers.audit_tasks._redis_set", return_value=True),
+            patch("workers.audit_tasks._list_open_issues", return_value=[]),
+            patch("workers.audit_tasks._changed_python_modules", return_value=[]),
+            patch(
+                "workers.audit_tasks._dedupe_and_file",
+                return_value=FilingOutcome(filed=0, deferred=7, lost=0, filing_available=False),
+            ),
+        ):
+            result = audit_testgaps()
+
+        assert result["status"] == "degraded"
+        assert result["issues_deferred"] == 7
+        assert result["issues_lost"] == 0
+        assert result["filing_available"] is False
+
+    def test_a_task_that_lost_findings_reports_error(self):
+        with (
+            patch("workers.audit_tasks.reset_gh_env_cache"),
+            patch("workers.audit_tasks._get_redis", return_value=None),
+            patch("workers.audit_tasks._redis_get", return_value=None),
+            patch("workers.audit_tasks._redis_set", return_value=True),
+            patch("workers.audit_tasks._list_open_issues", return_value=[]),
+            patch("workers.audit_tasks._changed_python_modules", return_value=[]),
+            patch(
+                "workers.audit_tasks._dedupe_and_file",
+                return_value=FilingOutcome(filed=0, deferred=0, lost=3, filing_available=False),
+            ),
+        ):
+            result = audit_testgaps()
+
+        assert result["status"] == "error"
+        assert result["issues_lost"] == 3
+
+    def test_a_healthy_task_still_reports_success(self):
+        with (
+            patch("workers.audit_tasks.reset_gh_env_cache"),
+            patch("workers.audit_tasks._get_redis", return_value=None),
+            patch("workers.audit_tasks._redis_get", return_value=None),
+            patch("workers.audit_tasks._redis_set", return_value=True),
+            patch("workers.audit_tasks._list_open_issues", return_value=[]),
+            patch("workers.audit_tasks._changed_python_modules", return_value=[]),
+            patch(
+                "workers.audit_tasks._dedupe_and_file",
+                return_value=FilingOutcome(filed=2, deferred=0, lost=0, filing_available=True),
+            ),
+        ):
+            result = audit_testgaps()
+
+        assert result["status"] == "success"
+        assert result["issues_filed"] == 2
