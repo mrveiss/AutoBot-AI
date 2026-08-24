@@ -11,7 +11,18 @@ enabled_frameworks:
 
 # Audit storage configuration
 audit_storage:
-  base_path: "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/audit"
+  # #13658: `base_path` used to be
+  #   "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/audit"
+  # but this file is read with `yaml.safe_load`, which performs no variable
+  # expansion, and nothing in the codebase runs config through `expandvars`.
+  # The placeholder was therefore a literal, relative directory name, and
+  # ComplianceManager's `mkdir(parents=True)` created a junk tree under the
+  # working directory instead of writing audit records where anyone would look.
+  #
+  # Omitting the key lets ComplianceManager fall back to
+  # `PATH.get_log_path("audit")`, which resolves to <project_root>/logs/audit.
+  # Set an ABSOLUTE path here to override; a value containing "${...}" will NOT
+  # be expanded.
   encrypt_sensitive: true          # Encrypt PII and security incidents
   max_file_size_mb: 100           # Rotate files at 100MB
   compression_enabled: true        # Compress old audit files

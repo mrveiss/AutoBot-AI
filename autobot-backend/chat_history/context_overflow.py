@@ -18,11 +18,12 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import decode_redis_value
 
 logger = get_logger(__name__)
 
 # Redis key prefixes
-_TOKEN_TRACKER_KEY_PREFIX = "chat:tokens:"  # nosec B105 - Redis key prefix, not a password
+_TOKEN_TRACKER_KEY_PREFIX = "chat:tokens:"  # nosec B105  # Redis key prefix, not a password
 _SUMMARY_MARKER_KEY_PREFIX = "chat:summary_marker:"
 
 # Default thresholds (can be overridden)
@@ -123,11 +124,14 @@ class SessionTokenTracker:
                     "message_count": 0,
                 }
 
+            # add_message_tokens hincrby's str field names and the shared client is
+            # decode_responses=True, so hgetall yields str keys. Probing with bytes
+            # literals always missed and every counter read back 0 (#13274).
             return {
-                "total_tokens": int(data.get(b"total_tokens", 0)),
-                "prompt_tokens": int(data.get(b"prompt_tokens", 0)),
-                "completion_tokens": int(data.get(b"completion_tokens", 0)),
-                "message_count": int(data.get(b"message_count", 0)),
+                "total_tokens": int(decode_redis_value(data.get("total_tokens")) or 0),
+                "prompt_tokens": int(decode_redis_value(data.get("prompt_tokens")) or 0),
+                "completion_tokens": int(decode_redis_value(data.get("completion_tokens")) or 0),
+                "message_count": int(decode_redis_value(data.get("message_count")) or 0),
             }
         except Exception as e:
             logger.error("Failed to get session usage for %s: %s", session_id, e)

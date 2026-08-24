@@ -257,17 +257,12 @@
   tags: ['frontend', 'nginx']
 
 # Skip nginx config when co-located with SLM — SLM nginx handles both (#2829)
-- name: "Frontend | Configure nginx"
-  template:
-    src: nginx-frontend.conf.j2
-    dest: /etc/nginx/sites-available/autobot-frontend
-    mode: '0644'
-    backup: true
-  become: true
-  notify:
-    - test nginx config
-    - restart nginx
-  when: not (slm_colocated_frontend | default(false) | bool)
+# #13460: these service files are defined once, in code_only.yml, so the
+# builtin updater can deliver them without re-running provisioning. Copying
+# them into the playbook instead is the inline-vs-role duplication that made
+# this role undeliverable in the first place (#12959).
+- name: "Frontend | Deploy nginx config"
+  ansible.builtin.include_tasks: code_only.yml
   tags: ['frontend', 'nginx']
 
 - name: "Frontend | Enable nginx site"

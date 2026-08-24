@@ -9,6 +9,8 @@ Issue #4257: Verify that presence_ws router is properly registered
 in the feature routers configuration.
 """
 
+from pathlib import Path
+
 import pytest
 from fastapi import FastAPI
 
@@ -68,13 +70,16 @@ class TestPresenceWSConfiguration:
 
     def test_router_registered_in_feature_routers_config(self):
         """Test that presence_ws is properly registered in FEATURE_ROUTER_CONFIGS."""
-        # Read the configuration directly from the file
-        config_file = (
-            "/home/martins/AutoBot-Ai/AutoBot-AI/autobot-backend/initialization/router_registry/feature_routers.py"
-        )
+        # Resolve the config relative to THIS file so the guard runs anywhere
+        # (CI checkout, worktree, container) — #13409.
+        # autobot_shared.ssot_config.PROJECT_ROOT is deliberately NOT used: it
+        # walks up looking for a .env, which a git worktree has none of, so it
+        # silently resolves to the main checkout instead (#13357).
+        backend_root = Path(__file__).resolve().parents[1]
+        config_file = backend_root / "initialization" / "router_registry" / "feature_routers.py"
 
-        with open(config_file, "r", encoding="utf-8") as f:
-            content = f.read()
+        assert config_file.is_file(), f"feature_routers.py not found at {config_file}"
+        content = config_file.read_text(encoding="utf-8")
 
         # Verify presence_ws is in the file
         assert "api.presence_ws" in content, "api.presence_ws not found in config"

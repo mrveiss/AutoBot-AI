@@ -158,7 +158,7 @@ Supported relationship types:
 
 | Type | Description |
 |------|-------------|
-| `relates_to` | General relationship |
+| `related_to` | General relationship (legacy spelling `relates_to` is accepted and stored as `related_to`, #13452) |
 | `depends_on` | Dependency relationship |
 | `implements` | Implementation of a feature/design |
 | `fixes` | Bug fix relationship |

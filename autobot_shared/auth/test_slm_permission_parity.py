@@ -7,7 +7,8 @@ SLM permission parity tests (GH #6511).
 
 Placed in autobot_shared/auth/ so they run WITHOUT the autobot-slm-backend
 conftest.py stubs (which MagicMock user_management.models and sqlalchemy).
-Instead, the SLM role module is loaded directly from its file path.
+Instead, the SLM role module is loaded directly from its file path, with a
+real sqlalchemy — see ``_load_slm_role_module`` and #13758.
 
 Guarantees:
 - SYSTEM_PERMISSIONS covers every value in the canonical Permission enum.
@@ -17,10 +18,7 @@ Guarantees:
 """
 
 import importlib.util
-import sys
-import types
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -30,60 +28,34 @@ _SLM_ROOT = Path(__file__).parent.parent.parent / "autobot-slm-backend"
 
 
 def _load_slm_role_module():
-    """Load user_management/models/role.py directly without executing any __init__.py."""
+    """Load ``user_management/models/role.py`` from the SLM backend by path.
+
+    No ``sys.modules`` stubbing (#13758). This function used to install a dummy
+    ``user_management.models.base`` and a ``MagicMock`` ``sqlalchemy`` so that
+    the ORM class declarations *this file once contained* would not need a real
+    engine. #12647 turned the SLM module into a pure re-export shim, and from
+    that point the stubs were not protecting the load — they were breaking it:
+    the shim imports ``autobot_shared.user_management.models.role``, whose
+    package ``__init__`` reaches ``base.py`` and evaluates
+    ``class Base(AsyncAttrs, DeclarativeBase)`` against the mocked
+    ``sqlalchemy``, producing ``TypeError: metaclass conflict`` at **collection**
+    time. A collection error aborts the whole run, so this one file could mask
+    the other 1486 tests in the package.
+
+    The by-path load is kept rather than replaced with a plain import: it is
+    what proves the SLM shim itself resolves, and the SLM backend's own
+    ``user_management`` package must not shadow the shared one on ``sys.path``.
+    """
     role_path = _SLM_ROOT / "user_management" / "models" / "role.py"
     if not role_path.exists():
         return None
 
-    # Build minimal stubs so role.py's ORM class declarations don't fail.
-    # role.py does: class Permission(Base, TimestampMixin) — we need real
-    # classes (not MagicMock) as bases to avoid metaclass conflicts.
-    class _DummyBase:
-        pass
-
-    class _DummyMixin:
-        pass
-
-    _base_mod = types.ModuleType("user_management.models.base")
-    _base_mod.Base = _DummyBase  # type: ignore[attr-defined]
-    _base_mod.TimestampMixin = _DummyMixin  # type: ignore[attr-defined]
-    _base_mod.TenantMixin = _DummyMixin  # type: ignore[attr-defined]
-
-    # SQLAlchemy stubs — only needed for column decorators, not for constants.
-    _sa_stub = MagicMock()
-    _sa_orm_stub = MagicMock()
-    _sa_pg_stub = MagicMock()
-
-    stub_overrides: dict[str, object] = {
-        "user_management.models.base": _base_mod,
-        "sqlalchemy": _sa_stub,
-        "sqlalchemy.orm": _sa_orm_stub,
-        "sqlalchemy.ext": MagicMock(),
-        "sqlalchemy.ext.asyncio": MagicMock(),
-        "sqlalchemy.dialects": MagicMock(),
-        "sqlalchemy.dialects.postgresql": _sa_pg_stub,
-    }
-
-    saved: dict[str, object] = {}
-    for name, stub in stub_overrides.items():
-        saved[name] = sys.modules.get(name, _SENTINEL)
-        sys.modules[name] = stub  # type: ignore[assignment]
-
     spec = importlib.util.spec_from_file_location("_slm_role_isolated", role_path)
     mod = importlib.util.module_from_spec(spec)
-    try:
-        spec.loader.exec_module(mod)
-    finally:
-        for name, original in saved.items():
-            if original is _SENTINEL:
-                sys.modules.pop(name, None)
-            else:
-                sys.modules[name] = original  # type: ignore[assignment]
-
+    spec.loader.exec_module(mod)
     return mod
 
 
-_SENTINEL = object()
 _slm_role = _load_slm_role_module()
 
 
@@ -215,3 +187,35 @@ def test_slm_role_permissions_align_with_shared(slm_role):
             + "\n".join(lines)
             + "\nUpdate SYSTEM_ROLES in user_management/models/role.py to match."
         )
+
+
+# ---------------------------------------------------------------------------
+# The shim itself — #12647 / #13758
+# ---------------------------------------------------------------------------
+
+
+def test_slm_role_module_re_exports_the_shared_objects(slm_role):
+    """The SLM module is a re-export shim; nothing else guarded that it stayed one.
+
+    If it ever grows a second copy of these constants, the parity tests above
+    would still pass while the two backends silently diverged — they would be
+    comparing the copy against itself. Identity, not equality, is the assertion.
+    """
+    import autobot_shared.user_management.models.role as shared_role  # noqa: PLC0415
+
+    assert slm_role.SYSTEM_PERMISSIONS is shared_role.SYSTEM_PERMISSIONS
+    assert slm_role.SYSTEM_ROLES is shared_role.SYSTEM_ROLES
+    assert slm_role.Role is shared_role.Role
+    assert slm_role.Permission is shared_role.Permission
+
+
+def test_the_shim_loads_against_a_real_sqlalchemy(slm_role):
+    """#13758: the stubbed load raised TypeError at import time and aborted collection.
+
+    Reaching this test at all means the module executed; asserting on the ORM
+    base makes it explicit that a real ``DeclarativeBase`` — not a MagicMock —
+    was in play, which is the condition that used to fail.
+    """
+    from sqlalchemy.orm import DeclarativeBase  # noqa: PLC0415
+
+    assert issubclass(slm_role.Role, DeclarativeBase)

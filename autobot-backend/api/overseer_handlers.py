@@ -25,7 +25,6 @@ from agents.overseer.types import (
     StepStatus,
 )
 from api.schemas_agent import OverseerQueryData
-from api.schemas_common import DataResponse
 from api.schemas_system import OverseerStatusResponse
 from api.ws_security import enforce_ws_origin
 from auth_middleware import get_current_user
@@ -209,7 +208,7 @@ class OverseerWebSocketHandler:
                 text=message_text,
                 message_type="overseer_plan",
                 session_id=self.session_id,
-                metadata={
+                raw_data={
                     "plan": plan_data,  # Full plan object for OverseerPlanMessage component
                     "plan_id": plan.plan_id,
                     "total_steps": len(plan.steps),
@@ -260,7 +259,7 @@ class OverseerWebSocketHandler:
                 text=message_text,
                 message_type="overseer_step",
                 session_id=self.session_id,
-                metadata={
+                raw_data={
                     "step": step_data,
                     "step_number": result.step_number,
                     "total_steps": result.total_steps,
@@ -468,7 +467,7 @@ async def overseer_websocket(websocket: WebSocket, session_id: str):
         await handler.disconnect()
 
 
-@router.post("/query/{session_id}", response_model=DataResponse[OverseerQueryData])
+@router.post("/query/{session_id}", response_model=OverseerQueryData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="submit_query",

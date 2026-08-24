@@ -24,7 +24,7 @@ from typing import Sequence
 
 _DEFAULT_ALLOWED_ROOTS: tuple[str, ...] = (
     "/opt/autobot",
-    "/tmp",  # nosec B108 - test/controlled code uses tmpdir intentionally
+    "/tmp",  # nosec B108  # test/controlled code uses tmpdir intentionally
 )
 
 # Characters rejected outright in sandbox-relative user paths (Issue #326).

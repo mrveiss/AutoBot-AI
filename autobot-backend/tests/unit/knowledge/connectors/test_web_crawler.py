@@ -636,6 +636,14 @@ class TestFetchPageHttpErrorLabelling:
 
     async def test_connection_failure_labelled_connection(self) -> None:
         connector = WebCrawlerConnector(_make_config(["https://x"]))
+        # #13284: a (None, None) fetch is retryable, so fetch_with_retry burns
+        # its production backoff — backoff_time() is 2**(attempt-1), and
+        # max_attempts=5 means real sleeps of 1+2+4+8 = 15s. That is exactly
+        # the 15.02s the durations report attributes to this test; there is no
+        # network call here (the module mocks all I/O). Collapsing the delay
+        # keeps all five attempts and the retry-exhaustion path intact — only
+        # the wall-clock wait goes.
+        connector.backoff_time = lambda attempt: 0.0
         fetcher = WebFetcher(robots_cache=None)
 
         async def _side_effect(url, timeout=30.0):

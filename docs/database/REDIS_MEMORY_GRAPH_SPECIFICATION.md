@@ -142,7 +142,7 @@ DB 3-10: Reserved for future expansion
   "relations": [
     {
       "to": "target-uuid-1",
-      "type": "fixes|implements|depends_on|relates_to|informs|guides|blocks",
+      "type": "fixes|implements|depends_on|related_to|informs|guides|blocks",
       "created_at": 1728064800000,
       "metadata": {
         "strength": 0.95,
@@ -178,7 +178,7 @@ DB 3-10: Reserved for future expansion
 | `fixes` | Resolves issue | Bug fix → Bug report |
 | `implements` | Realizes requirement | Feature → Specification |
 | `depends_on` | Requires completion | Task B → Task A |
-| `relates_to` | Semantic connection | Conversation A ↔ Conversation B |
+| `related_to` | Semantic connection | Conversation A ↔ Conversation B (legacy spelling `relates_to` is accepted and stored as `related_to`, #13452) |
 | `informs` | Provides context | Research → Decision |
 | `guides` | Directs implementation | Plan → Implementation |
 | `blocks` | Prevents progress | Issue → Task |
@@ -652,7 +652,7 @@ def extract_conversation_relations(entities):
     """
     Extract relations between conversations based on shared topics.
 
-    Creates 'relates_to' relations when topic overlap >50%.
+    Creates 'related_to' relations when topic overlap >50%.
     """
     relations = []
 
@@ -675,7 +675,7 @@ def extract_conversation_relations(entities):
                 relations.append({
                     "from": entity_a['id'],
                     "to": entity_b['id'],
-                    "type": "relates_to",
+                    "type": "related_to",
                     "created_at": max(entity_a['created_at'], entity_b['created_at']),
                     "metadata": {
                         "strength": strength,

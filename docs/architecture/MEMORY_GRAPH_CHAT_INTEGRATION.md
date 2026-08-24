@@ -336,7 +336,7 @@ Entity not found, creating new entity for session: {session_id}
 
 2. **Automatic Relationship Creation**:
    - Link conversations to mentioned bugs/features
-   - Create "relates_to" relations automatically
+   - Create "related_to" relations automatically
    - Track conversation dependencies
 
 3. **Advanced Metadata Extraction**:

@@ -76,6 +76,13 @@ async def _stream_chunks_pipelined(
     Shared by both ``_synthesize_and_stream`` (full-duplex ``speak``)
     and ``_tts_queue_worker`` (streaming ``speak_sentence``).
 
+    ``stream_or_synthesize`` (not ``synthesize_stream``) is used so a worker
+    deployed before the streaming route existed degrades to the
+    whole-utterance route instead of 404ing (#12886). That 404 used to be
+    forwarded as an ``error`` frame with no audio, and the frontend only falls
+    back to HTTP when the *socket* fails — never on a per-utterance server
+    error — so the spoken reply was dropped in silence.
+
     Sends ``tts_start`` before the first chunk and ``tts_end`` after the
     last, keeping the WS protocol consistent (#1535, #1536).
     *cancel_event* is checked BETWEEN chunks so barge-in can interrupt
@@ -95,7 +102,7 @@ async def _stream_chunks_pipelined(
     tts = get_tts_client()
     index = 0
     try:
-        async with aclosing(tts.synthesize_stream(text, voice_id=voice_id, language=language)) as stream:
+        async with aclosing(tts.stream_or_synthesize(text, voice_id=voice_id, language=language)) as stream:
             async for wav_bytes in stream:
                 if cancel_event.is_set():
                     logger.debug("TTS cancelled mid-stream at chunk %d", index)

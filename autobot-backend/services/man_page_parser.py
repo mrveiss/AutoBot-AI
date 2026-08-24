@@ -418,7 +418,7 @@ class ManPageParser:
         """Helper for parse_man_page_with_subprocess. Ref: #1088."""
         _validate_man_args(command, section)
         cmd = ["man", section, command]
-        return subprocess.run(  # nosec B603 - args validated by _validate_man_args above; cmd is fixed 'man' binary
+        return subprocess.run(  # nosec B603  # args validated by _validate_man_args above; cmd is fixed 'man' binary
             cmd,
             capture_output=True,
             text=True,
@@ -502,7 +502,7 @@ class ManPageParser:
                 logger.warning("Invalid command name for summary: %s", command)
                 return ""
             cmd = ["man", "-k", f"^{command}$"]
-            proc = subprocess.run(  # nosec B603 - command validated by _VALID_COMMAND_RE above; 'man' is fixed binary
+            proc = subprocess.run(  # nosec B603  # command validated by _VALID_COMMAND_RE above; 'man' is fixed binary
                 cmd,
                 capture_output=True,
                 text=True,

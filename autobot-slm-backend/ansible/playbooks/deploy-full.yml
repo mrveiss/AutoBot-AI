@@ -70,8 +70,8 @@
 # -------------------------------------------------------------------
 # Phase 1.5: Language runtimes (#11374)
 # Install the target Python interpreter on every group whose service roles
-# build a venv, BEFORE those roles run. python3.14 for backend + AI/ML;
-# python3.11 (OpenVINO) for NPU. The python314 role is idempotent (skips when
+# build a venv, BEFORE those roles run. python3.14 fleet-wide, including the
+# NPU worker since #13747. The python314 role is idempotent (skips when
 # the interpreter is present) and fail-loud (verifies after install), so a
 # broken deadsnakes PPA fails the deploy here instead of leaving the wrong
 # interpreter for the venv step to trip over. Ordered AFTER deploy-base (needs
@@ -90,17 +90,21 @@
         python_interpreter_version: "3.14"
       tags: ['deps', 'python314', 'runtimes']
 
-- name: "Phase 1.5: Language runtimes (NPU python3.11)"
+# Kept as its own play rather than folded into the one above: `npu` is a
+# separate host group, and the backend:aiml pattern does not reach it. The
+# python314 role is idempotent, so a co-located host simply skips the second
+# install (#13747 moved this from 3.11 to 3.14).
+- name: "Phase 1.5: Language runtimes (NPU python3.14)"
   hosts: npu
   become: true
   gather_facts: true
   vars:
     deployment_phase: "language-runtimes-npu"
-    phase_description: "Install python3.11 (OpenVINO) interpreter before venv creation"
+    phase_description: "Install python3.14 interpreter before venv creation"
   roles:
     - role: python314
       vars:
-        python_interpreter_version: "3.11"
+        python_interpreter_version: "3.14"
       tags: ['deps', 'python314', 'runtimes']
 
 # Phase 2: Database Infrastructure

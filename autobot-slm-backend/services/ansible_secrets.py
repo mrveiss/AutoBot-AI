@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # backend_jwt_secret so AUTOBOT_JWT_SECRET == SLM_SECRET_KEY (same #7689 pattern as
 # SLM_AUTH_TOKEN). Adding it to this DB-keyed map would never resolve.
 _SECRET_TO_ANSIBLE_VAR: dict[str, str] = {
-    "hf_token": "tts_hf_token",  # nosec B105 - dict maps secret DB key names to Ansible variable names, not credential
+    "hf_token": "tts_hf_token",  # nosec B105  # dict maps secret DB key names to Ansible variable names, not credential
     "autobot_internal_api_key": "autobot_internal_api_key",
 }
 

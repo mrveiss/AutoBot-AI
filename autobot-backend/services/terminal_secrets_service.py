@@ -33,7 +33,7 @@ from autobot_shared.logging_manager import get_logger
 
 import asyncio
 import os
-import subprocess  # nosec B404 - Required for SSH key validation
+import subprocess  # nosec B404  # Required for SSH key validation
 import tempfile
 import threading
 from dataclasses import dataclass, field
@@ -280,7 +280,7 @@ class TerminalSecretsService:
         """
         try:
             # Try to read key without passphrase using ssh-keygen
-            result = subprocess.run(  # nosec B603 B607 - fixed ssh-keygen argv for passphrase check; key_path is an
+            result = subprocess.run(  # nosec B603 B607  # fixed ssh-keygen argv for passphrase check; key_path is an
                 ["ssh-keygen", "-y", "-P", "", "-f", key_path],
                 capture_output=True,
                 timeout=5,

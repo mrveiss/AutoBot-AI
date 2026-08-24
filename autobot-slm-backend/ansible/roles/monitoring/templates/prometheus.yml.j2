@@ -12,7 +12,11 @@ global:
 alerting:
   alertmanagers: []
 
-rule_files: []
+rule_files:
+  # #12460: was [], so no alert rule ever loaded on a fleet deployment —
+  # including the #7590 chat-SSOT rules. Populated from the repo's
+  # autobot-monitoring/alerts-*.yml by the 'Install Prometheus alert rules' task.
+  - "{{ prometheus_config_dir }}/rules/*.yml"
 
 scrape_configs:
   # Prometheus self-monitoring

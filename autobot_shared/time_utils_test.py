@@ -8,6 +8,8 @@ these tests pin the invariants so future format changes fail loudly.
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from autobot_shared.time_utils import (
     now_utc,
     parse_utc_iso,
@@ -175,3 +177,72 @@ def test_parse_utc_iso_non_string_does_not_raise_attribute_error() -> None:
         )
     except ValueError:
         pass  # expected
+
+
+# --------------------------------------------- Z shim removal (#13755)
+
+
+class TestZSuffixParsesWithoutAShim:
+    """The ``.replace("Z", "+00:00")`` shim is gone (#13755).
+
+    ``fromisoformat`` has accepted a ``Z`` suffix natively since 3.11 and the
+    platform floor is 3.14, enforced at boot (#13738). These assert the
+    behaviour the shim used to provide still holds, so its removal is not taken
+    on trust.
+    """
+
+    @pytest.mark.parametrize(
+        ("raw", "expected_offset"),
+        [
+            ("2026-01-01T00:00:00Z", timezone.utc),
+            ("2026-01-01T00:00:00.123456Z", timezone.utc),
+            ("2026-01-01T00:00:00+00:00", timezone.utc),
+            ("2026-01-01T12:30:00+02:00", timedelta(hours=2)),
+        ],
+    )
+    def test_offset_bearing_input_keeps_its_offset(self, raw, expected_offset):
+        parsed = parse_utc_iso(raw)
+
+        assert parsed.tzinfo is not None
+        expected = expected_offset if isinstance(expected_offset, timezone) else timezone(expected_offset)
+        assert parsed.utcoffset() == expected.utcoffset(None)
+
+    def test_a_z_suffixed_instant_equals_its_offset_spelling(self):
+        """The two spellings must not drift now that neither is rewritten."""
+        assert parse_utc_iso("2026-01-01T00:00:00Z") == parse_utc_iso("2026-01-01T00:00:00+00:00")
+
+    def test_a_naive_timestamp_is_still_tagged_utc(self):
+        """Input without a suffix is unaffected by the shim's removal."""
+        parsed = parse_utc_iso("2026-01-01T00:00:00")
+
+        assert parsed.tzinfo is timezone.utc
+
+    def test_a_non_string_still_raises_value_error(self):
+        """The isinstance check is now the only thing preserving this surface.
+
+        The shim's ``.replace()`` used to raise AttributeError on a non-string;
+        without the explicit check, ``fromisoformat`` would raise TypeError and
+        slip past the ``except (ValueError, TypeError)`` adopters were told to
+        write in #5464.
+        """
+        for bad in (123, None, ["2026-01-01T00:00:00Z"]):
+            with pytest.raises(ValueError):
+                parse_utc_iso(bad)
+
+    def test_malformed_input_still_raises_value_error(self):
+        with pytest.raises(ValueError):
+            parse_utc_iso("not-a-timestamp")
+
+    def test_the_migration_plan_has_no_expired_pending_step(self):
+        """A ⏳ step whose blocker cleared is noise, and this one sat for four
+        minor versions. The docstring count also has to match the code."""
+        import autobot_shared.time_utils as module  # noqa: PLC0415
+
+        assert "⏳" not in module.__doc__, "a pending step survived its precondition"
+
+        # Only the API section is checked for the deleted helper: the migration
+        # plan legitimately records "Deleted utc_timestamp_z()" as history, and
+        # asserting on the whole docstring would forbid saying so.
+        api_section = module.__doc__.split("Migration plan")[0]
+        assert "utc_timestamp_z" not in api_section, "the API docs describe a helper that was deleted"
+        assert not hasattr(module, "utc_timestamp_z"), "the helper is documented as deleted but still exists"

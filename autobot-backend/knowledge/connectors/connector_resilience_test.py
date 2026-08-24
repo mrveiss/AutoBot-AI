@@ -441,7 +441,14 @@ class TestWebCrawlerSyncCheckpoint:
 
     @pytest.mark.asyncio
     async def test_crawled_seeds_written_to_checkpoint(self):
-        """Each successfully crawled seed must be written to checkpoint."""
+        """Each successfully crawled seed must be written to checkpoint.
+
+        #12843 made checkpointing derive from the crawl *results*, not from the
+        pending-seed list, so a seed the crawl never fetched is deliberately not
+        checkpointed. The fake below therefore returns a fetch result per seed —
+        the shape of a backend that finished them. Returning nothing at all (as
+        this test used to) now correctly checkpoints nothing (#13551).
+        """
         from knowledge.connectors.web_crawler import _url_to_source_id
 
         seed_a = "https://a.example.com"
@@ -452,7 +459,7 @@ class TestWebCrawlerSyncCheckpoint:
         self.conn._clear_checkpoint = AsyncMock()
 
         async def _fake_crawl(**kwargs):
-            return []
+            return [MagicMock(url=url, content="", metadata={}) for url in kwargs.get("seed_urls", [])]
 
         self.conn.crawl = _fake_crawl
 
@@ -461,6 +468,42 @@ class TestWebCrawlerSyncCheckpoint:
         checkpointed = {call.args[0] for call in self.conn._write_checkpoint.call_args_list}
         assert _url_to_source_id(seed_a) in checkpointed
         assert _url_to_source_id(seed_b) in checkpointed
+
+    @pytest.mark.asyncio
+    async def test_unfetched_seeds_are_not_checkpointed(self):
+        """A seed with no fetch result must NOT be checkpointed (#12843).
+
+        crawl() stops dispatching once max_pages is exhausted; checkpointing a
+        seed it never reached would mark it done and make the next incremental
+        sync skip it permanently.
+
+        Two files pin this one contract: #12843 also added
+        tests/unit/knowledge/connectors/test_web_crawler.py::TestSync::
+        test_sync_only_checkpoints_crawled_seeds, which drives the same
+        guarantee through _crawl_seed and a max_pages budget.
+        This one covers it from the sync()/crawl() boundary these
+        TestWebCrawlerSyncCheckpoint cases share. Change both together.
+        """
+        from knowledge.connectors.web_crawler import _url_to_source_id
+
+        seed_a = "https://a.example.com"
+        seed_b = "https://b.example.com"
+
+        self.conn._read_checkpoint = AsyncMock(return_value=set())
+        self.conn._write_checkpoint = AsyncMock()
+        self.conn._clear_checkpoint = AsyncMock()
+
+        async def _fake_crawl(**kwargs):
+            # Budget exhausted after the first seed.
+            return [MagicMock(url=seed_a, content="", metadata={})]
+
+        self.conn.crawl = _fake_crawl
+
+        await self.conn.sync(incremental=True)
+
+        checkpointed = {call.args[0] for call in self.conn._write_checkpoint.call_args_list}
+        assert _url_to_source_id(seed_a) in checkpointed
+        assert _url_to_source_id(seed_b) not in checkpointed
 
 
 # ---------------------------------------------------------------------------

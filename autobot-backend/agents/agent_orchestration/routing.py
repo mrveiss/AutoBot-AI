@@ -12,8 +12,10 @@ Issue #2092: Added Q-learning RL router between pattern-match and LLM fallback.
 
 import json
 import os
+import re
 import time
-from typing import Any, Dict, List
+from functools import lru_cache
+from typing import AbstractSet, Any, Dict, FrozenSet, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import LLMDefaults
@@ -38,6 +40,26 @@ from .types import (
 )
 
 logger = get_logger(__name__)
+
+
+@lru_cache(maxsize=None)
+def _pattern_matcher(patterns: FrozenSet[str]) -> "re.Pattern[str]":
+    """Compile *patterns* into a whole-word alternation matcher.
+
+    Routing patterns are short tokens ("hi", "ps", "ls", "run"). Plain
+    substring containment made them match inside unrelated words — "hi" inside
+    "something", "ps" inside "perhaps", "ls" inside "tools" — which pinned
+    arbitrary requests to the wrong agent at high confidence and short-circuited
+    the RL and LLM routing stages. The lookarounds require a whole-word match at
+    both ends while still allowing multi-word patterns such as "how are you".
+    """
+    alternation = "|".join(re.escape(pattern) for pattern in sorted(patterns))
+    return re.compile(rf"(?<!\w)(?:{alternation})(?!\w)")
+
+
+def matches_any_pattern(request_lower: str, patterns: AbstractSet[str]) -> bool:
+    """Return True when *request_lower* contains any of *patterns* as whole words."""
+    return bool(_pattern_matcher(frozenset(patterns)).search(request_lower))
 
 
 class AgentRouter:
@@ -392,7 +414,7 @@ class AgentRouter:
         Returns:
             Routing dict if pattern matched, None otherwise
         """
-        if any(pattern in request_lower for pattern in GREETING_PATTERNS):
+        if matches_any_pattern(request_lower, GREETING_PATTERNS):
             return {
                 "strategy": "single_agent",
                 "primary_agent": AgentType.CHAT,
@@ -410,7 +432,7 @@ class AgentRouter:
         Returns:
             Routing dict if pattern matched, None otherwise
         """
-        if any(pattern in request_lower for pattern in SYSTEM_COMMAND_PATTERNS):
+        if matches_any_pattern(request_lower, SYSTEM_COMMAND_PATTERNS):
             return {
                 "strategy": "single_agent",
                 "primary_agent": AgentType.SYSTEM_COMMANDS,
@@ -428,7 +450,7 @@ class AgentRouter:
         Returns:
             Routing dict if pattern matched, None otherwise
         """
-        if any(pattern in request_lower for pattern in RESEARCH_PATTERNS):
+        if matches_any_pattern(request_lower, RESEARCH_PATTERNS):
             return {
                 "strategy": "multi_agent",
                 "primary_agent": AgentType.RESEARCH,
@@ -447,7 +469,7 @@ class AgentRouter:
         Returns:
             Routing dict if pattern matched, None otherwise
         """
-        if any(pattern in request_lower for pattern in KNOWLEDGE_PATTERNS):
+        if matches_any_pattern(request_lower, KNOWLEDGE_PATTERNS):
             return {
                 "strategy": "multi_agent",
                 "primary_agent": AgentType.KNOWLEDGE_RETRIEVAL,
@@ -508,7 +530,7 @@ class AgentRouter:
             ),
         ]
         for patterns, agent_type, reasoning in pattern_agent_map:
-            if any(pattern in request_lower for pattern in patterns):
+            if matches_any_pattern(request_lower, patterns):
                 return {
                     "strategy": "single_agent",
                     "primary_agent": agent_type,

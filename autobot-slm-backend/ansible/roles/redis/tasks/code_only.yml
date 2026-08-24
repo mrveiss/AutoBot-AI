@@ -1,0 +1,109 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The database role's service files that carry code changes: the Redis Stack
+# systemd override, the backup script, and the ChromaDB credential file + unit.
+# Split out of main.yml / chromadb.yml (#13535) so the builtin updater can
+# deliver them without re-running provisioning (apt, the redis-stack package,
+# service accounts, the chroma venv and its package installs, data directories).
+#
+# This role had NO delivery path at all before #13535: update-all-nodes.yml's
+# Play 2 targets the `infrastructure` group, which does not contain `database`,
+# and this role had no code-only task file for a play to apply. So the #12513
+# chroma-auth work merged in #13462/#13537 could not reach a database host —
+# the same silent "merged but never applied" shape as #12959.
+#
+# The chroma token read is part of this file, not an optional extra. The unit
+# template emits its credential through `chromadb_authn_env_file` only, and the
+# role default for `chromadb_auth_token` is "". Rendering the unit on the update
+# path without reading the SLM-managed token would redeploy chroma with
+# authentication SILENTLY DISABLED — undoing #12513 on every update, with
+# nothing failing.
+#
+# DELIBERATELY EXCLUDED — every artifact whose content depends on
+# `redis_password`: /etc/redis-stack.conf (`requirepass`) and the redis_exporter
+# unit (`REDIS_PASSWORD`). `redis_password` resolves from `vault_redis_password`
+# (roles/redis/vars/main.yml), which no inventory in this repository defines, so
+# a code-only render would emit both files WITHOUT the credential. On a host
+# that has one, that silently strips authentication from the live data store —
+# the exact class of regression this whole delivery mechanism exists to prevent.
+# /etc/redis-stack.conf additionally depends on the TLS stat facts registered by
+# _shared/tasks/stat_tls_certs.yml, so rendering it without them silently drops
+# every tls-* directive. Both need a guaranteed variable source before they can
+# join the update path; until then they stay on the provisioning path only.
+#
+# Handlers (`reload systemd`, `restart redis-stack`, `restart chromadb`) live in
+# the role, so this file is only usable via include_role/import_role.
+
+- name: "Redis | Create systemd override directory"
+  ansible.builtin.file:
+    path: /etc/systemd/system/redis-stack-server.service.d
+    state: directory
+    mode: '0755'
+  become: true
+  tags: ['redis', 'systemd']
+
+# Content comes entirely from roles/redis/vars/main.yml (redis_memory_limit,
+# redis_port), so a re-render on an unchanged host reports `ok` and the
+# restart handler never fires. Restarting the live data store on every update
+# would otherwise drop every client connection in the fleet.
+- name: "Redis | Configure systemd service override"
+  ansible.builtin.template:
+    src: redis-stack-override.conf.j2
+    dest: /etc/systemd/system/redis-stack-server.service.d/override.conf
+    mode: '0644'
+  become: true
+  notify:
+    - reload systemd
+    - restart redis-stack
+  tags: ['redis', 'systemd']
+
+# A shell script rendered from a role template — worker code by any other name,
+# and the same shape that left the TTS worker four days stale in #12886.
+- name: "Redis | Create backup script"
+  ansible.builtin.template:
+    src: redis-backup.sh.j2
+    dest: /usr/local/bin/redis-backup.sh
+    mode: '0755'
+    owner: root
+    group: root
+  become: true
+  tags: ['redis', 'backup']
+
+# #12513: the unit carries its credential through a MANDATORY EnvironmentFile,
+# and the role default for the token is "". Read the shared token the SLM
+# generates so the server credential matches the one the backend sends. Never
+# generate one here: two independent generators produce two values and a total
+# RAG outage.
+- name: "ChromaDB | Read the shared auth token from slm-secrets.env (#12513)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/read_chromadb_auth_token.yml
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Adopt the SLM-managed auth token when present (#12513)"
+  ansible.builtin.set_fact:
+    chromadb_auth_token: "{{ _chromadb_auth_token_read }}"
+  when: (_chromadb_auth_token_read | default('') | trim) | length > 0
+  no_log: true
+  tags: ['redis', 'chromadb']
+
+# Must precede the unit template below, and main.yml includes this file before
+# chromadb.yml starts the service: the unit declares a MANDATORY
+# EnvironmentFile at this exact path (#12513), so the file has to exist before
+# systemd is asked to (re)start chroma. Rendered unconditionally — it just
+# carries no authn keys when no token is configured.
+- name: "ChromaDB | Render the server-authn env file the unit reads (#12513)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/write_chromadb_authn_env.yml
+  tags: ['redis', 'chromadb']
+
+- name: "ChromaDB | Deploy systemd service unit"
+  ansible.builtin.template:
+    src: autobot-chromadb.service.j2
+    dest: /etc/systemd/system/autobot-chromadb.service
+    mode: "0644"
+  become: true
+  notify:
+    - reload systemd
+    - restart chromadb
+  tags: ['redis', 'chromadb']

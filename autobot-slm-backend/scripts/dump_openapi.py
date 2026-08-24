@@ -29,9 +29,14 @@ for _path in (str(_REPO_ROOT), str(_BACKEND_ROOT)):
 
 
 def main() -> int:
+    from autobot_shared.openapi_schema import normalize_pattern_anchors
     from main import app
 
-    spec = app.openapi()
+    # pydantic >= 2.12 emits the Rust end anchor `\\z` for a Field(pattern=...)
+    # written with `$`. JSON Schema's dialect is ECMA-262, which reads `\\z` as a
+    # literal `z` -- `^(hour|day)\\z` then rejects "hour" and accepts "hourz".
+    # Normalise before the spec becomes a published artifact (#12959 sweep).
+    spec = normalize_pattern_anchors(app.openapi())
     json.dump(spec, sys.stdout, indent=2, sort_keys=True, ensure_ascii=False)
     sys.stdout.write("\n")
     return 0

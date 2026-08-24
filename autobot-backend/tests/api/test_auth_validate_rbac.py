@@ -60,7 +60,7 @@ def _make_mw(payload: dict | None = None, session: dict | None = None) -> MagicM
     mw.verify_jwt_token.return_value = payload
     mw.get_session.return_value = session
     mw.jwt_public_key = "fake-pub-key"
-    mw.jwt_secret = "fake-secret"  # nosec B105 - test value only
+    mw.jwt_secret = "fake-secret"  # nosec B105  # test value only
     return mw
 
 

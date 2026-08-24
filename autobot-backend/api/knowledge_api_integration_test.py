@@ -24,6 +24,21 @@ import pytest
 
 
 @pytest.fixture
+def backend_url():
+    """Base URL the HTTP client is bound to.
+
+    Every request in this module patches ``aiohttp.ClientSession.get``, so no
+    traffic leaves the process — the session still needs a syntactically valid
+    base URL though. It used to come from a conftest that only covers
+    autobot-infrastructure/, so under this tree the fixture simply did not
+    exist and every test in the file errored at setup.
+    """
+    from constants.network_constants import ServiceURLs
+
+    return ServiceURLs.BACKEND_LOCAL
+
+
+@pytest.fixture
 async def api_client(backend_url):
     """Create async HTTP client for API testing"""
     async with aiohttp.ClientSession(base_url=backend_url) as session:

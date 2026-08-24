@@ -48,11 +48,11 @@ class TestSignatureVerification:
 
     def test_valid_signature_accepted(self):
         body = b'{"object":"whatsapp_business_account"}'
-        secret = "top-secret"  # nosec B105 - test fixture
+        secret = "top-secret"  # nosec B105  # test fixture
         assert verify_webhook_signature(body, self._sign(body, secret), secret) is True
 
     def test_tampered_body_rejected(self):
-        secret = "top-secret"  # nosec B105 - test fixture
+        secret = "top-secret"  # nosec B105  # test fixture
         sig = self._sign(b"original", secret)
         assert verify_webhook_signature(b"tampered", sig, secret) is False
 
@@ -226,7 +226,7 @@ class TestRoundTripSignatureOverRealPayload:
     """End-to-end: a signed Meta payload verifies and flattens to one message."""
 
     def test_signed_payload_verifies_and_flattens(self):
-        secret = "app-secret"  # nosec B105 - test fixture
+        secret = "app-secret"  # nosec B105  # test fixture
         payload = {
             "entry": [
                 {

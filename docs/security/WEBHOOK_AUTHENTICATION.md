@@ -38,30 +38,42 @@ X-Telegram-Bot-Api-Secret-Token: <secret_token>
 | Header invalid | `403 Forbidden` | Reject request |
 | Header valid | `200 OK` | Process webhook |
 
-**Implementation:**
+**Implementation:** `autobot-backend/api/telegram_bot.py` — `verify_telegram_secret`,
+declared as a route dependency (`dependencies=[Depends(verify_telegram_secret)]`)
+so it runs *before* FastAPI parses the body.
+
 ```python
-# autobot-backend/api/telegram_bot.py:264-280
+async def verify_telegram_secret(request: Request) -> None:
+    stored_secret = await get_telegram_webhook_secret()
+    if not stored_secret:
+        logger.error("Telegram webhook secret not configured - failing closed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Webhook authentication not configured",
+        )
 
-stored_secret = await get_telegram_webhook_secret()
-if not stored_secret:
-    logger.error("Telegram webhook secret not configured - failing closed")
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Webhook authentication not configured",
-    )
+    request_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+    if not request_secret:
+        logger.warning("Telegram webhook authentication failed - missing secret header")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication header",
+        )
 
-request_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-if not request_secret:
-    logger.warning("Telegram webhook authentication failed - missing secret header")
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Missing authentication header",
-    )
-
-if request_secret != stored_secret:
-    logger.warning("Telegram webhook authentication failed - invalid secret token")
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if not secrets.compare_digest(request_secret, stored_secret):
+        logger.warning("Telegram webhook authentication failed - invalid secret token")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 ```
+
+Two properties this shape guarantees (#13162):
+
+- **Authentication precedes body validation.** While the check lived inside the
+  handler, an unauthenticated caller whose body FastAPI rejected received a
+  `422` schema error instead of `503`/`401` — a payload-schema oracle available
+  without credentials. As a dependency it fails closed for any body.
+- **Constant-time comparison.** `secrets.compare_digest` replaces `!=`, which
+  short-circuits on the first differing byte and leaks the secret to a timing
+  oracle. This matches the AlertManager webhook.
 
 ### 2. AlertManager Webhook (`/api/webhook/alertmanager`)
 

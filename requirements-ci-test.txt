@@ -1,0 +1,29 @@
+# Test tool-chain for the CI Python suite (#13316).
+#
+# These packages used to be an inline `pip install ...` list inside the workflow.
+# That made them invisible to any dependency cache key: bumping pytest-xdist or
+# adding a plugin changed nothing that was hashed, so a cached environment would
+# be silently reused with the OLD tool versions still in it. Keeping the list in
+# a real requirements file means `hashFiles` sees it and a tool bump invalidates
+# the cache exactly like a runtime dependency bump does.
+#
+# Installed by .github/actions/setup-python-suite, which resolves it against the
+# CPU-only PyTorch index alongside requirements-ci.txt.
+
+# Test runner and the parallel/split plugins the sharded suite depends on.
+pytest
+pytest-asyncio
+pytest-cov
+pytest-xdist==3.8.0
+pytest-split==0.11.0
+
+# Redis test double, used by the tests that do not need the real service.
+fakeredis[lua]
+
+# Static analysis. code-quality.yml is the gate that enforces these (#13162);
+# they are installed here because some tests shell out to them.
+flake8
+black
+isort
+mypy
+bandit

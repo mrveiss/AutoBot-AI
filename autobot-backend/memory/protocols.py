@@ -47,18 +47,23 @@ class IGeneralStorage(Protocol):
 
     Implementing classes must provide category-based storage
     with metadata search capabilities.
+
+    #13688: reads are owner-scoped. Implementations must apply ``user_id`` as a
+    query predicate rather than trusting callers to filter afterwards.
     """
 
     async def store(self, entry: MemoryEntry) -> int:
-        """Store a memory entry"""
+        """Store a memory entry (must carry a ``user_id``)"""
         ...
 
-    async def retrieve(self, category: MemoryCategory | str, filters: Dict[str, Any]) -> List[MemoryEntry]:
-        """Retrieve memories by category and filters"""
+    async def retrieve(
+        self, user_id: str, category: MemoryCategory | str, filters: Dict[str, Any]
+    ) -> List[MemoryEntry]:
+        """Retrieve one owner's memories by category and filters"""
         ...
 
-    async def search(self, query: str) -> List[MemoryEntry]:
-        """Search memories by content/metadata"""
+    async def search(self, user_id: str, query: str) -> List[MemoryEntry]:
+        """Search one owner's memories by content/metadata"""
         ...
 
     async def cleanup_old(self, retention_days: int) -> int:

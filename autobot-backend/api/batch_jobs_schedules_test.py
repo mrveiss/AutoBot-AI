@@ -227,7 +227,7 @@ _real_load_schemas_workflows()
 _pkg_stub("constants")
 _leaf_stub(
     "constants.path_constants",
-    PATH=types.SimpleNamespace(PROJECT_ROOT="/tmp"),  # nosec B108 - test/controlled code uses tmpdir intentionally
+    PATH=types.SimpleNamespace(PROJECT_ROOT="/tmp"),  # nosec B108  # test/controlled code uses tmpdir intentionally
 )
 _leaf_stub("constants.threshold_constants", TimingConstants=MagicMock())
 

@@ -39,8 +39,42 @@ After agents complete:
    - Syntax: `npm run lint` / `python -m black --check`
    - Imports: `python -c 'import <module>'` for each modified file
    - Call sites: grep for removed/renamed functions
-4. **Merge:** each PR to `Dev_new_gui`
+4. **Merge:** each PR to `Dev_new_gui` — only with every required check green (see "Red CI Never Merges")
 5. **Verify count:** PR count should be 0 after all merges
+
+---
+
+## Red CI Never Merges (#13665)
+
+A red required check is a merge blocker, not an input to a judgement call. **Filing
+a tracking issue for a failing check and merging anyway is forbidden** — that is the
+exact anti-pattern this gate exists to stop (an api-wiring audit failed, got an issue
+filed against it, and the PR merged regardless; the audit was failing for a real
+reason).
+
+The check is telling you the change is wrong, or that the check is wrong. Both are
+root causes and both are yours to fix:
+
+1. **Confirm it is actually red**, not queued. Queued checks on the singleton
+   self-hosted runner are not failures — see "CI Diagnosis" below and verify the
+   verdict against the head SHA from `gh api repos/{owner}/{repo}/pulls/N --jq
+   '.head.sha'`, sorting check-runs by `started_at` (array order is not chronological,
+   so a stale FAILURE can sit next to the real SUCCESS).
+2. **Absence is not success.** A PR reporting "19 success, 0 failures" is still
+   blocked if a required context never reported at all. Count reported contexts
+   against `gh api repos/{owner}/{repo}/branches/Dev_new_gui/protection --jq
+   '.required_status_checks.contexts[]'`.
+3. **Root-cause and fix it** in the same PR. If the check itself is wrong, fix the
+   check — in the same PR or a fast-follow that lands first.
+4. **If it genuinely cannot be fixed now:** label the PR `blocked`, post a
+   one-paragraph root-cause writeup on it, and move to the next issue. Do not merge,
+   do not `--admin` past it, and do not interrupt a `/loop` to ask about it.
+
+Three failed attempts on the same red check is an escalation, not a fourth attempt:
+post the findings on the issue and move on.
+
+**Applies identically in autonomous `/loop` mode.** The loop merges what is green;
+red means the tick moves to the next non-colliding issue, never to a workaround.
 
 ---
 

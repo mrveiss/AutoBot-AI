@@ -7,14 +7,17 @@ A2A Protocol Unit Tests
 
 Issue #961: Tests for types, agent_card builder, and task_manager.
 Issue #4502: TaskManager tests now mock Redis instead of the in-process dict.
+Issue #13162: The fake Redis client moved to conftest so every A2A test module
+              shares one implementation that tracks the production commands.
 Uses no network connections and no external dependencies.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from a2a.agent_card import build_agent_card
+from a2a.conftest import make_redis_mock
 from a2a.task_manager import TaskManager
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill, TaskArtifact, TaskState
 
@@ -143,58 +146,6 @@ class TestBuildAgentCard:
 
 
 # ---------------------------------------------------------------------------
-# Redis mock fixture
-# ---------------------------------------------------------------------------
-
-
-def _make_redis_mock():
-    """Return a MagicMock that mimics the subset of redis.Redis used by TaskManager."""
-    store: dict = {}
-    audit_lists: dict = {}
-    task_set: set = set()
-
-    mock = MagicMock()
-
-    def _set(key, value, ex=None):
-        store[key] = value if isinstance(value, str) else value.decode("utf-8")
-
-    def _get(key):
-        v = store.get(key)
-        return v.encode("utf-8") if v is not None else None
-
-    def _sadd(key, member):
-        task_set.add(member if isinstance(member, str) else member.decode("utf-8"))
-
-    def _srem(key, member):
-        task_set.discard(member if isinstance(member, str) else member.decode("utf-8"))
-
-    def _smembers(key):
-        return {m.encode("utf-8") for m in task_set}
-
-    def _rpush(key, value):
-        audit_lists.setdefault(key, []).append(value if isinstance(value, str) else value.decode("utf-8"))
-
-    def _lrange(key, start, end):
-        entries = audit_lists.get(key, [])
-        result = entries[start : end + 1 if end != -1 else None]
-        return [e.encode("utf-8") for e in result]
-
-    def _expire(key, ttl):
-        pass  # TTL not needed in unit tests
-
-    mock.set.side_effect = _set
-    mock.get.side_effect = _get
-    mock.sadd.side_effect = _sadd
-    mock.srem.side_effect = _srem
-    mock.smembers.side_effect = _smembers
-    mock.rpush.side_effect = _rpush
-    mock.lrange.side_effect = _lrange
-    mock.expire.side_effect = _expire
-
-    return mock
-
-
-# ---------------------------------------------------------------------------
 # TaskManager tests
 # ---------------------------------------------------------------------------
 
@@ -202,7 +153,7 @@ def _make_redis_mock():
 class TestTaskManager:
     def setup_method(self):
         """Fresh manager with mocked Redis for each test."""
-        with patch("a2a.task_manager.get_redis_client", return_value=_make_redis_mock()):
+        with patch("a2a.task_manager.get_redis_client", return_value=make_redis_mock()):
             self.mgr = TaskManager()
 
     def test_create_task_returns_task(self):
@@ -339,7 +290,7 @@ class TestTaskManagerEviction:
     """
 
     def setup_method(self):
-        self._redis_mock = _make_redis_mock()
+        self._redis_mock = make_redis_mock()
         with patch("a2a.task_manager.get_redis_client", return_value=self._redis_mock):
             self.mgr = TaskManager()
 
@@ -406,7 +357,7 @@ class TestPublishEvent:
     """
 
     def setup_method(self):
-        self._redis_mock = _make_redis_mock()
+        self._redis_mock = make_redis_mock()
         with patch("a2a.task_manager.get_redis_client", return_value=self._redis_mock):
             self.mgr = TaskManager()
 
@@ -449,7 +400,7 @@ class TestGetTaskTTLSliding:
     """
 
     def setup_method(self):
-        self._redis_mock = _make_redis_mock()
+        self._redis_mock = make_redis_mock()
         with patch("a2a.task_manager.get_redis_client", return_value=self._redis_mock):
             self.mgr = TaskManager()
 
@@ -505,7 +456,7 @@ class TestSaveTTL:
     """
 
     def setup_method(self):
-        self._redis_mock = _make_redis_mock()
+        self._redis_mock = make_redis_mock()
         with patch("a2a.task_manager.get_redis_client", return_value=self._redis_mock):
             self.mgr = TaskManager()
 
@@ -634,7 +585,7 @@ class TestExecuteA2aTaskEvalGate:
     """
 
     def _make_manager(self):
-        with patch("a2a.task_manager.get_redis_client", return_value=_make_redis_mock()):
+        with patch("a2a.task_manager.get_redis_client", return_value=make_redis_mock()):
             mgr = TaskManager()
         return mgr
 
@@ -720,3 +671,43 @@ class TestExecuteA2aTaskEvalGate:
             if a.artifact_type == "json" and isinstance(a.content, dict) and "eval_reason" in a.content
         ]
         assert len(eval_artifacts) == 1, "Expected exactly one eval_reason artifact"
+
+
+class TestRedisClientRecovery:
+    """#13339: a backend that starts while Redis is down must recover.
+
+    ``TaskManager`` resolved its client once in ``__init__``, and the module-level
+    singleton is built at import. ``get_redis_client`` documents ``None`` as a
+    return value, so a process that started while Redis was unreachable held
+    ``None`` for its whole life: every store, fetch and audit append raised
+    ``AttributeError: 'NoneType' object has no attribute 'set'``, and nothing ever
+    retried. The A2A task store was permanently broken for that process.
+    """
+
+    def test_reresolves_after_redis_becomes_available(self):
+        good = make_redis_mock()
+        # None at construction (Redis down), a working client on the next attempt.
+        with patch("a2a.task_manager.get_redis_client", side_effect=[None, good]):
+            mgr = TaskManager()
+            assert mgr._redis is None, "precondition: constructed with no client"
+            task = mgr.create_task("recovered after redis came back")
+
+        assert task.id
+        assert mgr._redis is good, "should have re-resolved and cached the working client"
+
+    def test_raises_a_named_error_while_redis_stays_down(self):
+        """Not AttributeError on None — a message that says what is actually wrong."""
+        with patch("a2a.task_manager.get_redis_client", return_value=None):
+            mgr = TaskManager()
+            with pytest.raises(RuntimeError, match="task store unavailable"):
+                mgr.create_task("still down")
+
+    def test_a_working_client_is_resolved_once_not_per_call(self):
+        """The happy path must not add a lookup to every Redis operation."""
+        good = make_redis_mock()
+        with patch("a2a.task_manager.get_redis_client", return_value=good) as resolver:
+            mgr = TaskManager()
+            mgr.create_task("one")
+            mgr.create_task("two")
+
+        assert resolver.call_count == 1, "re-resolution should only happen while the client is None"

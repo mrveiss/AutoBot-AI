@@ -654,3 +654,25 @@ class AbstractConnector(ABC):
             await redis.set(self._job_redis_key(), state, ex=_JOB_TTL_S)
         except Exception as exc:
             self.logger.debug("Job state write failed (non-critical): %s", exc)
+
+
+def instance_host_egress() -> bool:
+    """Egress policy for an **operator-configured instance host** (#13625, Rule 8).
+
+    Returns the deployment's private-network opt-in, so a self-hosted
+    Confluence/GitLab/Nextcloud on an RFC-1918 address is reachable when the
+    operator has enabled it. Loopback, link-local (incl. cloud metadata),
+    multicast, reserved and unspecified stay refused either way.
+
+    Pass the result as ``guard_egress=`` to the shared HTTP client.
+    """
+    from autobot_shared.ssot_config import config
+
+    return bool(config.feature.connector_private_network_egress)
+
+
+# Egress policy for a URL that did NOT come from operator configuration —
+# anything read out of a document, an API response, or a user request. Always
+# public-only: the instance host's exemption must never extend to content it
+# serves, or a document becomes an SSRF vector into the operator's network.
+CONTENT_URL_EGRESS = False

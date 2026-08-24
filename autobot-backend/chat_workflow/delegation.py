@@ -179,12 +179,25 @@ async def run_delegated_subtask(
 ) -> str:
     """Run a delegated subtask as a governed subagent (GH#11207).
 
-    Raises ``ValueError`` past ``MAX_DELEGATION_DEPTH`` or for an unknown engine.
-    Emits an INFO log with engine, depth, parent_agent_id, and child agent_type
-    for observability (GH#11266 validation plan gate).
+    Raises ``ValueError`` past ``MAX_DELEGATION_DEPTH``, for an unknown engine, or
+    for an *unbounded* ``agent_type`` (GH#13588). Emits an INFO log with engine,
+    depth, parent_agent_id, and child agent_type for observability (GH#11266
+    validation plan gate).
     """
+    from orchestration.agent_registry import is_unbounded_agent_id
+
     if depth >= MAX_DELEGATION_DEPTH:
         raise ValueError(f"max delegation depth {MAX_DELEGATION_DEPTH} reached (depth={depth})")
+    # GH#13588: ``agent_type`` reaches here straight from the model's tool call, so a
+    # delegating agent could name a designated executor and obtain a subagent with no
+    # boundary — an escalation the parent's own manifest cannot express, since
+    # ``delegate`` is not itself an infra/shell tool. Unregistered ids are safe (they
+    # resolve to the default boundary); an executor id is the case to refuse.
+    if is_unbounded_agent_id(agent_type):
+        raise ValueError(
+            f"delegation to unbounded agent {agent_type!r} is refused: a subagent may not hold "
+            "a wider tool boundary than the profiles available to delegation (GH#13588)"
+        )
     runner = _ENGINES.get(engine)
     if runner is None:
         raise ValueError(f"unknown delegation engine: {engine!r} (available: {sorted(_ENGINES)})")

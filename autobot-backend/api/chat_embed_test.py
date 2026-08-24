@@ -17,20 +17,39 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def mock_redis():
-    """Mock Redis client for rate limiting tests."""
+    """Mock Redis client for rate limiting tests.
+
+    ``RateLimiter.acquire`` performs the check-and-record atomically in a Lua
+    script (Issue #9610), so ``eval`` — not ``zcount``/``pipeline`` — is the
+    call the endpoint's rate-limit decision hinges on. It returns 1 (allowed)
+    here; tests that exercise the limit set it to 0. ``zcount`` /
+    ``zrangebyscore`` still back ``get_retry_after_seconds``.
+    """
     mock = AsyncMock()
+    mock.eval = AsyncMock(return_value=1)
     mock.zcount = AsyncMock(return_value=0)
+    mock.zrangebyscore = AsyncMock(return_value=[])
     mock.zadd = AsyncMock(return_value=1)
     mock.zremrangebyscore = AsyncMock(return_value=0)
     mock.expire = AsyncMock(return_value=True)
-    mock.pipeline = MagicMock()
-    pipe_mock = AsyncMock()
-    pipe_mock.zadd = MagicMock(return_value=pipe_mock)
-    pipe_mock.zremrangebyscore = MagicMock(return_value=pipe_mock)
-    pipe_mock.expire = MagicMock(return_value=pipe_mock)
-    pipe_mock.execute = AsyncMock(return_value=[1, 0, True])
-    mock.pipeline.return_value = pipe_mock
     return mock
+
+
+@pytest.fixture(autouse=True)
+def restore_chat_embed_module():
+    """Reload api.chat_embed after every test in this module.
+
+    Several tests reload the module under a patched environment to pick up its
+    import-time origin/proxy allowlists. Without this teardown the reloaded
+    module — with origin enforcement still switched on — leaked into every
+    later test, which then got 403s from an endpoint they never configured.
+    """
+    yield
+    import importlib
+
+    import api.chat_embed
+
+    importlib.reload(api.chat_embed)
 
 
 @pytest.fixture
@@ -78,7 +97,9 @@ async def test_embed_message_rate_limit_allows_under_threshold(client, mock_redi
 @pytest.mark.asyncio
 async def test_embed_message_rate_limit_blocks_exceeded(client, mock_redis):
     """Rate limiter blocks requests when threshold exceeded."""
-    # Mock zcount to return count over limit (20 req/min for anonymous tier)
+    # Lua script reports "rate limited"; zcount/zrangebyscore feed Retry-After
+    # (25 requests recorded against the 20 req/min anonymous tier).
+    mock_redis.eval = AsyncMock(return_value=0)
     mock_redis.zcount = AsyncMock(return_value=25)
     mock_redis.zrangebyscore = AsyncMock(return_value=[("1000.0", 1000.0)])
 
@@ -97,6 +118,7 @@ async def test_embed_message_rate_limit_blocks_exceeded(client, mock_redis):
 @pytest.mark.asyncio
 async def test_embed_preflight_rate_limit(client, mock_redis):
     """Preflight requests are also rate limited."""
+    mock_redis.eval = AsyncMock(return_value=0)
     mock_redis.zcount = AsyncMock(return_value=25)
     mock_redis.zrangebyscore = AsyncMock(return_value=[("1000.0", 1000.0)])
 
@@ -197,10 +219,15 @@ async def test_origin_allowlist_allows_configured_origin(client, mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_client_ip_extraction_from_x_forwarded_for(client, mock_redis):
-    """Client IP is correctly extracted from X-Forwarded-For header."""
+async def test_client_ip_extraction_ignores_untrusted_x_forwarded_for(client, mock_redis):
+    """No trusted proxies configured → the rate-limit key uses the peer IP.
+
+    Honouring X-Forwarded-For from an untrusted peer would let any caller
+    reset their own bucket by rotating the header, so the limiter must key on
+    the direct connection instead (GH#9117).
+    """
     with patch("autobot_shared.rate_limiter.get_async_redis_client", new=AsyncMock(return_value=mock_redis)):
-        # X-Forwarded-For can have multiple IPs, first one is client
+        # X-Forwarded-For can have multiple IPs; none of them may be trusted here
         response = client.post(
             "/api/chats/embed/message",
             json={"message": "Hello"},
@@ -208,8 +235,11 @@ async def test_client_ip_extraction_from_x_forwarded_for(client, mock_redis):
         )
 
     assert response.status_code == 200
-    # Verify the rate limiter was called with the first IP
-    mock_redis.pipeline.assert_called()
+    # The rate limiter ran, and keyed on the peer rather than the spoofable header
+    mock_redis.eval.assert_called()
+    rate_limit_key = mock_redis.eval.call_args.args[2]
+    assert rate_limit_key.startswith("autobot:rl:embed:")
+    assert "203.0.113.5" not in rate_limit_key
 
 
 @pytest.mark.asyncio

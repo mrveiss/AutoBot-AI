@@ -7,6 +7,13 @@
 
 set -euo pipefail
 
+# #13149: this defaulted to the deployed install, so running from a checkout
+# operated on the LIVE install instead of this tree (the #13092 failure class).
+# The shared helper resolves the root from this file's own location and still
+# lets AUTOBOT_PROJECT_ROOT override it.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
@@ -340,8 +347,8 @@ test_file_sync_integrity() {
     local local_hash=""
     local remote_hash=""
 
-    if [ -f "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend/src/App.vue" ]; then
-        local_hash=$(sha256sum "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend/src/App.vue" | cut -d' ' -f1)
+    if [ -f "${PROJECT_ROOT}/autobot-slm-frontend/src/App.vue" ]; then
+        local_hash=$(sha256sum "${PROJECT_ROOT}/autobot-slm-frontend/src/App.vue" | cut -d' ' -f1)
     fi
 
     remote_hash=$(ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" \

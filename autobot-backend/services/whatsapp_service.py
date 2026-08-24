@@ -33,12 +33,12 @@ from integrations.whatsapp_integration import WhatsAppIntegration
 logger = get_logger(__name__)
 
 # Redis keys for storing WhatsApp channel config (key names, not secrets)
-WHATSAPP_ACCESS_TOKEN_KEY = "autobot:settings:whatsapp_access_token"  # nosec B105 - Redis key name
-WHATSAPP_APP_SECRET_KEY = "autobot:settings:whatsapp_app_secret"  # nosec B105 - Redis key name
-WHATSAPP_VERIFY_TOKEN_KEY = "autobot:settings:whatsapp_verify_token"  # nosec B105 - Redis key name
-WHATSAPP_PHONE_NUMBER_ID_KEY = "autobot:settings:whatsapp_phone_number_id"  # nosec B105 - Redis key name
-WHATSAPP_BUSINESS_ACCOUNT_ID_KEY = "autobot:settings:whatsapp_business_account_id"  # nosec B105 - Redis key name
-WHATSAPP_BASE_URL_KEY = "autobot:settings:whatsapp_base_url"  # nosec B105 - Redis key name
+WHATSAPP_ACCESS_TOKEN_KEY = "autobot:settings:whatsapp_access_token"  # nosec B105  # Redis key name
+WHATSAPP_APP_SECRET_KEY = "autobot:settings:whatsapp_app_secret"  # nosec B105  # Redis key name
+WHATSAPP_VERIFY_TOKEN_KEY = "autobot:settings:whatsapp_verify_token"  # nosec B105  # Redis key name
+WHATSAPP_PHONE_NUMBER_ID_KEY = "autobot:settings:whatsapp_phone_number_id"  # nosec B105  # Redis key name
+WHATSAPP_BUSINESS_ACCOUNT_ID_KEY = "autobot:settings:whatsapp_business_account_id"  # nosec B105  # Redis key name
+WHATSAPP_BASE_URL_KEY = "autobot:settings:whatsapp_base_url"  # nosec B105  # Redis key name
 
 # Sentinel prefix for encrypted values (backward compatibility with plaintext)
 _ENCRYPTED_PREFIX = "enc:"

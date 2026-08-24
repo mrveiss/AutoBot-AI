@@ -77,6 +77,52 @@ class DataClassification(Enum):
     SENSITIVE_PII = "sensitive_pii"
 
 
+#: The literal directory name the unexpanded placeholder produced (#13658).
+#: `yaml.safe_load` never expanded `${AUTOBOT_PROJECT_ROOT:-...}`, and the value
+#: is relative, so `mkdir(parents=True)` created this tree under whatever the
+#: working directory happened to be.
+#: Written as the original literal, not as hand-split components: the value
+#: contains a ``}`` that belongs to the ``code_source}`` element, and splitting
+#: it by eye drops the brace and produces a path that never matches.
+_LEGACY_AUDIT_ROOT = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/audit")
+
+
+def _warn_if_legacy_audit_store_exists(new_path: Path) -> None:
+    """Refuse to silently orphan audit records written under the old junk path.
+
+    Correcting the path is not free. `.audit_key` — the Fernet key that decrypts
+    every stored PII and security-incident record — lives *inside*
+    ``audit_base_path``. Pointing that at a new directory makes
+    :meth:`_get_encryption_key` mint a **fresh** key there, after which the
+    records under the old path can never be read again. Retention on that data
+    is up to 2555 days, so silently leaving it behind is data loss in substance
+    even though nothing is deleted.
+
+    Deliberately does not move anything. Relocating encrypted evidence while a
+    process may be mid-write is worse than reporting it, and the correct
+    destination depends on whether the operator wants the history merged or
+    archived. This logs what exists and where it must go, once, at ERROR.
+    """
+    legacy = Path.cwd() / _LEGACY_AUDIT_ROOT
+    if not legacy.exists() or legacy.resolve() == new_path.resolve():
+        return
+
+    had_key = (legacy / ".audit_key").exists()
+    logger.error(
+        "Legacy compliance audit store found at %s while the configured store is %s (#13658). "
+        "%s Nothing has been moved. Migrate the contents — including .audit_key — before "
+        "relying on this deployment's audit history; records encrypted under the old key "
+        "cannot be decrypted once a new key is generated.",
+        legacy,
+        new_path,
+        (
+            "It contains .audit_key, so encrypted records there are readable ONLY with it."
+            if had_key
+            else "No .audit_key is present there."
+        ),
+    )
+
+
 class ComplianceManager:
     """
     Enterprise compliance manager for audit logging, reporting, and regulatory compliance
@@ -90,10 +136,24 @@ class ComplianceManager:
         self.config_path = config_path
         self.config = self._load_config()
 
-        # Initialize audit storage
+        # Initialize audit storage.
+        #
+        # #13658: `compliance.yaml` set `base_path` to
+        # "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/audit" — a
+        # shell placeholder that `yaml.safe_load` does not expand, and nothing in
+        # this repository routes config through `expandvars`. Being relative, the
+        # `mkdir` below silently created a tree literally named
+        # "${AUTOBOT_PROJECT_ROOT:-" under the working directory, so the audit
+        # key and PII access logs landed where nobody reads them, at a location
+        # that moved with `cwd`.
+        #
+        # `.get(key, default)` could not save it: the fallback only fires when
+        # the key is *absent*, and it was present, just wrong. The placeholder is
+        # now gone from the YAML, so this correctly-resolving default applies.
         self.audit_base_path = Path(
             self.config.get("audit_storage", {}).get("base_path", str(PATH.get_log_path("audit")))
         )
+        _warn_if_legacy_audit_store_exists(self.audit_base_path)
         self.audit_base_path.mkdir(parents=True, exist_ok=True)
 
         # Initialize encryption for sensitive audit data

@@ -15,25 +15,21 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List
+from typing import ClassVar, Dict, FrozenSet, List
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from autobot_shared.paths import project_root
+from autobot_shared.secret_redaction import RedactedReprMixin
 from autobot_shared.ssot_config import TLSMode  # noqa: F401 — canonical enum
-from autobot_shared.ssot_config import config
 
-
-def _find_project_root() -> Path:
-    """Find the project root directory containing .env file."""
-    current = Path(__file__).resolve()
-    for parent in [current] + list(current.parents):
-        if (parent / ".env").exists():
-            return parent
-    return Path(config.base_dir)
-
-
-PROJECT_ROOT = _find_project_root()
+# #13149: this module carried its own ``.env``-walk copy of the project-root
+# search. It had no checkout step, so from a source tree with no ``.env`` it
+# resolved to the deployed install and pointed PKI's certificate paths at
+# production — the same failure #13646 fixed for ``ssot_config`` and #13092 for
+# ``run_agent.sh``. It now shares the one implementation.
+PROJECT_ROOT = project_root()
 
 
 class CertificateType(str, Enum):
@@ -69,12 +65,15 @@ class CertificateStatus:
     needs_renewal: bool = False
 
 
-class TLSConfig(BaseSettings):
+class TLSConfig(RedactedReprMixin, BaseSettings):
     """
     TLS/PKI Configuration - Part of SSOT system.
 
     Manages all TLS-related settings for the AutoBot distributed architecture.
     """
+
+    # Both hold filesystem PATHS to key material, not the material itself.
+    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset({"ca_key", "ssh_key"})
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),

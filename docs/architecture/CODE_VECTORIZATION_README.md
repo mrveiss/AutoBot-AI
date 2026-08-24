@@ -254,7 +254,7 @@ GET /api/analytics/code/reuse-opportunities
 - DevOps Engineer (2 weeks)
 
 ### Dependencies
-- Python 3.9+
+- Python 3.14
 - FastAPI
 - ChromaDB 0.4+
 - Redis 7+

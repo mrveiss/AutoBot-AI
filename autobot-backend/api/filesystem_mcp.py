@@ -219,6 +219,26 @@ def _should_include_file(filename: str, pattern: str, exclude_patterns: list) ->
     return not any(fnmatch.fnmatch(filename, pat) for pat in exclude_patterns)
 
 
+def _resolve_allowed_path(path: str):
+    """Resolve *path* inside :data:`ALLOWED_DIRECTORIES` or raise ``ValueError``.
+
+    Single validation seam for this bridge so the boolean check
+    (:func:`is_path_allowed`) and the resolving check (:func:`_validated_path`)
+    can never disagree about what is reachable.
+
+    Backslashes are rejected before resolution (#13162). POSIX treats ``\\`` as
+    an ordinary filename character, so ``/tmp/autobot/..\\..\\..\\etc\\passwd``
+    resolves to a *file inside* the sandbox instead of escaping it. This bridge
+    serves external MCP clients, and a client on Windows means the traversal it
+    wrote — so the same request string carries two meanings depending on the
+    sender. Rejecting removes the ambiguity at no cost: no AutoBot path
+    contains a backslash.
+    """
+    if "\\" in path:
+        raise ValueError("Path contains a backslash; use '/' as the separator")
+    return validate_path(path, allowed_roots=ALLOWED_DIRECTORIES)
+
+
 def is_path_allowed(path: str) -> bool:
     """
     Validate path is within allowed directories with security checks.
@@ -227,7 +247,7 @@ def is_path_allowed(path: str) -> bool:
     verify containment within allowed directories.
     """
     try:
-        validate_path(path, allowed_roots=ALLOWED_DIRECTORIES)
+        _resolve_allowed_path(path)
         return True
     except ValueError:
         logger.warning(
@@ -249,7 +269,7 @@ def _validated_path(path: str) -> str:
         HTTPException 403 when path is outside allowed directories.
     """
     try:
-        return str(validate_path(path, allowed_roots=ALLOWED_DIRECTORIES))
+        return str(_resolve_allowed_path(path))
     except ValueError:
         raise HTTPException(
             status_code=403,

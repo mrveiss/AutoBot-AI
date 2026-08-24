@@ -77,9 +77,22 @@ class TestHardwarePriorityEndpoint:
     def test_patch_returns_200_with_valid_payload(self):
         app = _make_app()
 
+        from hardware_acceleration import AccelerationType
+
         fake_config = {"hardware": {"acceleration": {"priority_order": ["npu", "gpu", "cpu"]}}}
         mock_hw = MagicMock()
         mock_hw.update_priorities = MagicMock()
+        # The endpoint echoes back the order the manager actually applied, read
+        # from current_config["priority_order"] (AccelerationType members, in
+        # availability order). A bare MagicMock iterates as empty, which is what
+        # made this assertion see [] instead of the requested ordering.
+        mock_hw.current_config = {
+            "priority_order": [
+                AccelerationType.GPU,
+                AccelerationType.NPU,
+                AccelerationType.CPU,
+            ]
+        }
         mock_revision = MagicMock()
         mock_revision.create_revision = AsyncMock()
 

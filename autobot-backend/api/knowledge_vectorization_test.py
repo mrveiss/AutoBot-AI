@@ -226,26 +226,35 @@ class TestJobStatusPolling:
 
     @pytest.mark.asyncio
     async def test_poll_job_with_timeout(self, mock_knowledge_base):
-        """Test polling job with timeout mechanism"""
-        # Simulate job never completing
+        """Polling an unfinished job ends at the timeout deadline, not the poll cap.
+
+        #13399: the old assertion (``elapsed >= timeout_seconds``) timed the
+        test's own ``asyncio.sleep`` calls rather than the loop's exit
+        condition, and failed ``0.40 >= 2`` on a loaded runner. Its deadline
+        branch was also dead code -- ``max_polls`` was always reached first.
+        A virtual clock makes the deadline the only reachable exit.
+        """
         mock_knowledge_base.check_vectorization_job.return_value = {
             "status": "in_progress",
             "progress": 0.5,
         }
+        timeout_seconds = 2.0
+        poll_interval = 0.5
+        max_polls = 100  # High enough that only the deadline can end the loop.
+        now = 0.0
+        timed_out = False
 
-        start_time = datetime.now()
-        timeout_seconds = 2
-        max_polls = 5
-
-        for i in range(max_polls):
-            if (datetime.now() - start_time).total_seconds() > timeout_seconds:
+        for _ in range(max_polls):
+            if now > timeout_seconds:
+                timed_out = True
                 break
-
             await mock_knowledge_base.check_vectorization_job("vec_job_123")
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0)  # Yield to the loop without wall-clock cost.
+            now += poll_interval
 
-        elapsed = (datetime.now() - start_time).total_seconds()
-        assert elapsed >= timeout_seconds
+        assert timed_out, "polling exhausted max_polls instead of hitting the timeout"
+        expected_polls = int(timeout_seconds / poll_interval) + 1
+        assert mock_knowledge_base.check_vectorization_job.call_count == expected_polls
 
     @pytest.mark.asyncio
     async def test_poll_nonexistent_job(self, mock_knowledge_base):

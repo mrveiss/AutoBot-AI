@@ -17,7 +17,11 @@ alerting:
   alertmanagers: []
 
 rule_files:
-  - "alerts-chat-ssot.yml"  # Phase 4 (#7590): SSOT cardinality + disk file alerts
+  # Absolute + globbed: Prometheus resolves a relative rule path against its
+  # working directory (the TSDB dir), not the config directory, so the previous
+  # bare filename never matched and NO rules loaded (#12460). The glob also means
+  # a new alerts-*.yml file needs no config change.
+  - "/etc/prometheus/alerts-*.yml"
 
 scrape_configs:
   # Prometheus self-monitoring

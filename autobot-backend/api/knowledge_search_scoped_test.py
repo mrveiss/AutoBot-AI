@@ -214,27 +214,42 @@ async def test_scoped_search_post_filter_removes_inaccessible():
 
 # ---------------------------------------------------------------------------
 # knowledge/search.py — ChromaDB where filter threading
+# The KB search implementation is the SearchMixin class; there has never been
+# a KnowledgeSearcher, which is what these two tests used to import.
+#
+# search() prefers the VectorSearchEngine and only reaches _query_chromadb on
+# the documented fallback, so the engine is stubbed out to raise — otherwise
+# these assertions depend on a live Redis/embedding stack being unreachable.
 # ---------------------------------------------------------------------------
+
+
+def _make_bare_searcher():
+    """Build a SearchMixin with just the attributes the basic path touches."""
+    from knowledge.search import SearchMixin
+
+    searcher = SearchMixin.__new__(SearchMixin)
+    searcher._tag_filter = None
+    searcher._keyword_searcher = None
+    searcher._hybrid_searcher = None
+    # Mock vector_store so ensure_initialized and _validate pass
+    searcher.vector_store = MagicMock()
+    return searcher
 
 
 @pytest.mark.asyncio
 async def test_search_passes_filters_to_query_chromadb():
-    """KnowledgeSearcher.search() threads filters= to _query_chromadb via where=."""
-    from knowledge.search import KnowledgeSearcher
-
-    searcher = KnowledgeSearcher.__new__(KnowledgeSearcher)
-    searcher._tag_filter = None
-    searcher._keyword_searcher = None
-    searcher._hybrid_searcher = None
-
-    # Mock vector_store so ensure_initialized and _validate pass
-    searcher.vector_store = MagicMock()
+    """SearchMixin.search() threads filters= to _query_chromadb via where=."""
+    searcher = _make_bare_searcher()
 
     where_filter = {"owner_id": "u1"}
     query_embedding = [0.1] * 768
     chromadb_result = {"documents": [[]], "metadatas": [[]], "distances": [[]]}
 
     with (
+        patch(
+            "knowledge.search.get_vector_search_engine",
+            new=AsyncMock(side_effect=RuntimeError("engine offline")),
+        ),
         patch.object(
             searcher,
             "ensure_initialized",
@@ -258,18 +273,16 @@ async def test_search_passes_filters_to_query_chromadb():
 @pytest.mark.asyncio
 async def test_search_no_filters_omits_where():
     """When filters=None, _query_chromadb is called without where."""
-    from knowledge.search import KnowledgeSearcher
-
-    searcher = KnowledgeSearcher.__new__(KnowledgeSearcher)
-    searcher._tag_filter = None
-    searcher._keyword_searcher = None
-    searcher._hybrid_searcher = None
-    searcher.vector_store = MagicMock()
+    searcher = _make_bare_searcher()
 
     query_embedding = [0.1] * 768
     chromadb_result = {"documents": [[]], "metadatas": [[]], "distances": [[]]}
 
     with (
+        patch(
+            "knowledge.search.get_vector_search_engine",
+            new=AsyncMock(side_effect=RuntimeError("engine offline")),
+        ),
         patch.object(searcher, "ensure_initialized"),
         patch.object(
             searcher,

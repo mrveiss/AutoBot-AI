@@ -265,7 +265,20 @@ class TestSystemPerformance:
         self.client = TestClient(self.app)
 
     def test_api_response_times(self):
-        """Test API response times are reasonable"""
+        """Test API response times are reasonable.
+
+        #13551: the first request into a freshly built app pays one-time costs
+        that have nothing to do with per-request latency — dependency graph
+        resolution, lazily imported handler modules, the first middleware pass.
+        Measured on a quiet dev box that first call takes ~0.30s against ~0.02s
+        for every later one; on a loaded CI runner it reached 1.22s and failed
+        this 1.0s budget. Timing the cold call measured start-up, not the API.
+
+        Warm each endpoint once and time the second call, so the budget applies
+        to the steady-state latency it was written for. The budget itself is
+        unchanged and the ~0.02s steady state leaves it two orders of magnitude
+        of headroom, so this stays a real assertion rather than a timing lottery.
+        """
         import time
 
         endpoints = [
@@ -276,15 +289,19 @@ class TestSystemPerformance:
         ]
 
         for endpoint in endpoints:
+            warmup = self.client.get(endpoint)
+            assert warmup.status_code == 200, f"Endpoint {endpoint} failed with {warmup.status_code}"
+
+        for endpoint in endpoints:
             start_time = time.time()
             response = self.client.get(endpoint)
             end_time = time.time()
 
             duration = end_time - start_time
 
+            assert response.status_code == 200, f"Endpoint {endpoint} failed with {response.status_code}"
             # API calls should be fast (under 1 second)
             assert duration < 1.0, f"Endpoint {endpoint} took {duration:.2f}s"
-            assert response.status_code == 200, f"Endpoint {endpoint} failed with {response.status_code}"
 
     def test_memory_usage_stability(self):
         """Test memory usage doesn't grow excessively"""

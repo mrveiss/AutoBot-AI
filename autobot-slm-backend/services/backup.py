@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -26,16 +26,46 @@ from models.database import Backup, BackupStatus, Node
 
 logger = logging.getLogger(__name__)
 
-# Backup storage directory
-BACKUP_STORAGE_DIR = Path(settings.backup_dir if hasattr(settings, "backup_dir") else "/var/lib/slm/backups")
+# Backup storage directory.
+#
+# #13307: the `hasattr` fallback was dead code — `settings` has always defined
+# `backup_dir` — so the /var/lib/slm/backups written here never applied and the
+# real destination was config.py's `~/slm-backups`. Two files naming different
+# defaults, with the unreachable one being the correct answer. `settings` is now
+# the single source and already resolves to /var/lib/slm/backups.
+BACKUP_STORAGE_DIR = Path(settings.backup_dir)
 
 
 class BackupService:
     """Manages backup operations for stateful services."""
 
     def __init__(self):
-        # Ensure backup directory exists
-        BACKUP_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+        # #13307: best-effort, never fatal. `backup_service` is instantiated at
+        # module import, and the destination moved from the service account's
+        # home directory (always writable) to /var/lib/slm/backups (owned by
+        # root until the slm_manager role creates it). An unguarded mkdir here
+        # raises PermissionError and makes `import services.backup` fail
+        # outright — taking the whole API down on any host where ansible has
+        # not run yet, and in CI. The directory is the role's responsibility;
+        # this is only a convenience for dev, and a failed backup reports the
+        # real reason at the point it actually matters.
+        self._ensure_storage_dir()
+
+    @staticmethod
+    def _ensure_storage_dir() -> bool:
+        """Create the backup directory if we can. Returns whether it is usable."""
+        try:
+            BACKUP_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+            return True
+        except OSError as exc:
+            logger.warning(
+                "Backup storage directory %s is not usable (%s). The slm_manager "
+                "ansible role creates it with the right ownership; backups will "
+                "fail until it exists.",
+                BACKUP_STORAGE_DIR,
+                exc,
+            )
+            return False
 
     async def _mark_backup_in_progress(self, db: AsyncSession, backup_id: str) -> "Backup" | None:
         """Mark backup as in_progress and return record. Helper for execute_redis_backup. Ref: #1088."""
@@ -78,7 +108,7 @@ class BackupService:
             await self._wait_for_bgsave(host, ssh_user, ssh_port, redis_auth_prefix)
 
             # Step 4: Get RDB file size and checksum
-            size_bytes, checksum = await self._get_rdb_file_info(host, ssh_user, ssh_port, rdb_path)
+            size_bytes, checksum = await self._get_remote_file_info(host, ssh_user, ssh_port, rdb_path)
 
             # Step 5: Copy backup to SLM storage
             copy_success, backup_path, copy_error = await self._copy_backup_to_storage(
@@ -102,6 +132,90 @@ class BackupService:
         except Exception as e:
             logger.exception("Backup error: %s", e)
             return await self._fail_backup(db, backup, "Backup operation failed")
+
+    async def execute_postgres_backup(
+        self,
+        db: AsyncSession,
+        backup_id: str,
+        node: Node,
+    ) -> Tuple[bool, str]:
+        """Execute a full PostgreSQL cluster dump (#13307).
+
+        Until this existed the Backups page created something called a backup
+        that contained only Redis. PostgreSQL holds users, LLC work items and
+        chat/session data — a restore would not bring any of it back, and you
+        would find that out during recovery.
+
+        The dump command mirrors ``roles/postgresql/templates/autobot-pg-backup.sh.j2``
+        exactly: ``su - postgres -c "pg_dumpall --clean --if-exists" | gzip``.
+        Same mechanism, so there is one way this cluster is dumped and no
+        password is ever embedded — postgres authenticates over the local socket
+        as its own user.
+        """
+        host = node.ip_address
+        ssh_user = node.ssh_user or "autobot"
+        ssh_port = node.ssh_port or 22
+
+        backup = await self._mark_backup_in_progress(db, backup_id)
+        if not backup:
+            return False, "Backup not found"
+
+        remote_path = f"/tmp/slm-pg-{backup_id}.sql.gz"
+
+        try:
+            # Dump to a .partial first and rename, so an interrupted run never
+            # leaves a half-written dump that the copy step could pick up —
+            # same guarantee the scheduled script gives.
+            logger.info("Starting pg_dumpall on %s", host)
+            dump_cmd = self._build_ssh_command(
+                host,
+                ssh_user,
+                ssh_port,
+                f'sudo su - postgres -c "pg_dumpall --clean --if-exists" | gzip > {remote_path}.partial '
+                f"&& mv {remote_path}.partial {remote_path}",
+            )
+            success, output = await self._run_command(dump_cmd, timeout=1800)
+            if not success:
+                return await self._fail_backup(db, backup, f"pg_dumpall failed: {output}")
+
+            size_bytes, checksum = await self._get_remote_file_info(host, ssh_user, ssh_port, remote_path)
+            if size_bytes == 0:
+                return await self._fail_backup(db, backup, "pg_dumpall produced an empty dump")
+
+            copy_success, backup_path, copy_error = await self._copy_backup_to_storage(
+                host, ssh_user, ssh_port, remote_path, backup_id, suffix=".sql.gz"
+            )
+
+            return await self._complete_backup(
+                db,
+                backup,
+                copy_success,
+                backup_path,
+                size_bytes,
+                checksum,
+                host,
+                copy_error,
+                remote_path=remote_path,
+            )
+
+        except asyncio.TimeoutError:
+            return await self._fail_backup(db, backup, "Backup timed out")
+        except Exception as e:
+            logger.exception("Postgres backup error: %s", e)
+            return await self._fail_backup(db, backup, "Backup operation failed")
+        finally:
+            # The staged dump is a full copy of the cluster sitting in /tmp on
+            # the node. Leaving it there on every backup would fill the disk and
+            # expose the data outside the backup store.
+            await self._remove_remote_file(host, ssh_user, ssh_port, remote_path)
+
+    async def _remove_remote_file(self, host: str, ssh_user: str, ssh_port: int, path: str) -> None:
+        """Best-effort cleanup of a staged file on a node (#13307)."""
+        try:
+            cmd = self._build_ssh_command(host, ssh_user, ssh_port, f"rm -f {path} {path}.partial")
+            await self._run_command(cmd, timeout=30)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not remove staged file %s on %s: %s", path, host, exc)
 
     async def _stop_redis_for_restore(self, host: str, ssh_user: str, ssh_port: int) -> None:
         """Stop Redis service on the target node.
@@ -417,12 +531,13 @@ class BackupService:
         logger.info("Redis RDB path discovered: %s", rdb_path)
         return redis_auth_prefix, rdb_path
 
-    async def _get_rdb_file_info(
+    async def _get_remote_file_info(
         self, host: str, ssh_user: str, ssh_port: int, rdb_path: str
     ) -> Tuple[int, str | None]:
-        """Get RDB file size and checksum from remote host.
+        """Get a remote file's size and checksum.
 
-        Helper for execute_redis_backup (Issue #665).
+        Helper for execute_redis_backup (Issue #665); also used by the Postgres
+        path (#13307), which is why it is no longer named for RDB files.
 
         Returns (size_bytes, checksum).
         """
@@ -459,15 +574,26 @@ class BackupService:
         ssh_port: int,
         rdb_path: str,
         backup_id: str,
+        suffix: str = ".rdb",
     ) -> Tuple[bool, Path, str]:
-        """Copy RDB backup file from remote host to local storage via SCP.
+        """Copy a backup file from the remote host to local storage via SCP.
 
-        Helper for execute_redis_backup (Issue #665).
+        Helper for execute_redis_backup (Issue #665). ``suffix`` exists because
+        the Postgres path stores ``.sql.gz`` (#13307) — the extension used to be
+        hardcoded to ``.rdb``, which would have labelled every Postgres dump as
+        a Redis one.
 
         Returns (success, backup_path, error_output).
         """
+        if not self._ensure_storage_dir():
+            return (
+                False,
+                BACKUP_STORAGE_DIR / backup_id,
+                f"Backup storage directory {BACKUP_STORAGE_DIR} is not writable",
+            )
+
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        backup_filename = f"{backup_id}_{timestamp}.rdb"
+        backup_filename = f"{backup_id}_{timestamp}{suffix}"
         backup_path = BACKUP_STORAGE_DIR / backup_filename
 
         scp_cmd = [
@@ -494,6 +620,7 @@ class BackupService:
         remote_checksum: str | None,
         host: str,
         copy_error: str = "",
+        remote_path: str = "/var/lib/redis/dump.rdb",
     ) -> Tuple[bool, str]:
         """Update backup record with results and complete the backup.
 
@@ -504,7 +631,9 @@ class BackupService:
         if not copy_success:
             # Backup exists on remote but copy failed - still record it
             backup.status = BackupStatus.COMPLETED.value
-            backup.backup_path = "/var/lib/redis/dump.rdb"
+            # #13307: was hardcoded to the Redis data path, so a Postgres backup
+            # whose copy failed would have pointed at Redis's live dump.rdb.
+            backup.backup_path = remote_path
             backup.size_bytes = size_bytes
             backup.checksum = remote_checksum
             backup.extra_data = {
@@ -543,6 +672,128 @@ class BackupService:
             backup.checksum,
         )
         return True, "Backup completed successfully"
+
+    # ------------------------------------------------------------------
+    # Deletion and retention (#13307)
+    #
+    # Before this there was no delete route at all — `@router.delete` count in
+    # api/stateful.py was 0 — so nothing in the system could reclaim space, and
+    # the destination was a home directory on the root filesystem. Retention was
+    # not a missing convenience; it was unimplementable.
+    # ------------------------------------------------------------------
+
+    async def delete_backup(self, db: AsyncSession, backup_id: str) -> Tuple[bool, str]:
+        """Delete a backup record and the file it points at.
+
+        The record is removed even when the file is already gone: a row pointing
+        at a missing file is exactly what a half-finished cleanup leaves behind,
+        and refusing to delete it would make the state unrecoverable through the
+        API — which is the situation #13307 is about.
+        """
+        result = await db.execute(select(Backup).where(Backup.backup_id == backup_id))
+        backup = result.scalar_one_or_none()
+        if not backup:
+            return False, "Backup not found"
+
+        if backup.status == BackupStatus.IN_PROGRESS.value:
+            return False, "Backup is in progress"
+
+        self._unlink_backup_file(backup)
+
+        await db.delete(backup)
+        await db.commit()
+        logger.info("Backup %s deleted", backup_id)
+        return True, "Backup deleted"
+
+    def _unlink_backup_file(self, backup: Backup) -> None:
+        """Remove a backup's local file, if it has one inside our storage dir.
+
+        Scoped to BACKUP_STORAGE_DIR on purpose. `_complete_backup` records the
+        REMOTE path when the copy to SLM storage failed — for Redis that is the
+        live ``/var/lib/redis/dump.rdb`` on the target node, and deleting it
+        would destroy the data the backup exists to protect.
+        """
+        path_str = backup.backup_path
+        if not path_str:
+            return
+
+        path = Path(path_str)
+        try:
+            path.relative_to(BACKUP_STORAGE_DIR)
+        except ValueError:
+            logger.info(
+                "Backup %s points outside %s (%s) — record removed, file left alone",
+                backup.backup_id,
+                BACKUP_STORAGE_DIR,
+                path_str,
+            )
+            return
+
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("Could not remove backup file %s: %s", path, exc)
+
+    async def apply_retention(
+        self,
+        db: AsyncSession,
+        node_id: str,
+        service_type: str,
+        keep_count: int | None = None,
+        max_age_days: int | None = None,
+    ) -> list[str]:
+        """Prune old backups for one (node, service_type), newest kept.
+
+        Returns the backup_ids removed. Both dimensions are independent and
+        either can be disabled with 0; a backup is pruned if *either* rule
+        selects it.
+
+        Only ``completed`` backups are counted toward ``keep_count``. Counting
+        failed ones would let a run of failures evict the last good backup,
+        which is the one moment it matters.
+        """
+        keep_count = settings.backup_retention_count if keep_count is None else keep_count
+        max_age_days = settings.backup_retention_days if max_age_days is None else max_age_days
+
+        result = await db.execute(
+            select(Backup)
+            .where(
+                Backup.node_id == node_id,
+                Backup.service_type == service_type,
+                Backup.status == BackupStatus.COMPLETED.value,
+            )
+            .order_by(Backup.created_at.desc())
+        )
+        completed = list(result.scalars().all())
+
+        doomed = {b.backup_id: b for b in completed[keep_count:]} if keep_count > 0 else {}
+
+        if max_age_days > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+            for backup in completed:
+                created = backup.created_at
+                if created is None:
+                    continue
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                if created < cutoff:
+                    doomed[backup.backup_id] = backup
+
+        for backup in doomed.values():
+            self._unlink_backup_file(backup)
+            await db.delete(backup)
+
+        if doomed:
+            await db.commit()
+            logger.info(
+                "Retention pruned %d backup(s) for node=%s service=%s (keep=%d, max_age_days=%d)",
+                len(doomed),
+                node_id,
+                service_type,
+                keep_count,
+                max_age_days,
+            )
+        return sorted(doomed)
 
 
 # Global service instance

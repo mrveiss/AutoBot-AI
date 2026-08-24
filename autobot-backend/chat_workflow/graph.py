@@ -605,9 +605,13 @@ async def _generate_response_planned(
 
     await _emit_planned_agent_complete_hook(session_id, iteration, llm_response or "")
 
+    # Issue #13295 (review B3): append unconditionally — iteration_count below
+    # increments every pass regardless of whether llm_response was falsy, so a
+    # skipped append here would desync all_responses[idx] from iteration=idx+1
+    # and misfile every later iteration's tool output under the wrong prose.
+    # _build_final_response_entry already no-ops on empty content.
     all_responses = list(state.get("all_llm_responses", []))
-    if llm_response:
-        all_responses.append(llm_response)
+    all_responses.append(llm_response or "")
 
     tool_calls = tool_calls or []
     for tc in tool_calls:
@@ -728,9 +732,11 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
     except Exception as _hook_exc:  # noqa: BLE001
         logger.debug("Plugin hook ON_AGENT_COMPLETE failed (non-fatal): %s", _hook_exc)
 
+    # Issue #13295 (review B3): append unconditionally — see the matching
+    # comment in _generate_response_planned for why a skipped append here
+    # would desync all_responses[idx] from iteration=idx+1.
     all_responses = list(state.get("all_llm_responses", []))
-    if llm_response:
-        all_responses.append(llm_response)
+    all_responses.append(llm_response or "")
     parsed_tool_calls = list(ctx.execution_history) if ctx.execution_history else []
 
     # Issue #3232: emit plan event when the response contains a planning block.
@@ -954,6 +960,12 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
     stream_cb = config["configurable"].get("stream_callback")
     messages = list(state.get("workflow_messages", []))
     session_id = state.get("session_id")
+    # Issue #13295 (review B1): the GH#11202 interrupt-resume dispatch below
+    # calls manager._process_tool_calls directly, bypassing
+    # _process_tool_results/_handle_tool_message_types entirely — so nothing
+    # tags these messages unless this node does it. generate_response already
+    # set iteration_count to the LLM pass that produced these tool_calls.
+    iteration = state.get("iteration_count", 0)
 
     decision = state.get("approval_decision")
     tool_calls = state.get("tool_calls", [])
@@ -1005,6 +1017,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         deny_msg = {
             "type": "response",
             "content": f"Command denied: {decision.get('reason', 'User denied')}",
+            "metadata": {"iteration": iteration},
         }
         messages.append(deny_msg)
         if stream_cb:
@@ -1086,6 +1099,12 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
             break_loop, _ = item
         else:
             msg_dict = item.to_dict() if hasattr(item, "to_dict") else item
+            # Issue #13295 (review B1): _process_tool_calls is the same
+            # producer _process_tool_results drives, but this interrupt-resume
+            # dispatch never routes through it — tag here so these messages
+            # interleave correctly instead of falling into the untagged
+            # leftover fallback.
+            msg_dict.setdefault("metadata", {})["iteration"] = iteration
             # Stream ALL messages for real-time display
             if stream_cb:
                 stream_cb(msg_dict)
@@ -1107,6 +1126,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
                 "and stopped the loop. Please let me know if you would like me to "
                 "try a different approach."
             ),
+            "metadata": {"iteration": iteration},
         }
         messages.append(abort_msg)
         if stream_cb:
@@ -1294,9 +1314,55 @@ async def _persist_error_turn(manager, state: ChatState) -> None:
             )
         ]
     try:
-        await manager._persist_workflow_messages(session_id, wf_messages, "")
+        # Issue #13295: no completed response exists on this path — an empty
+        # list (not "") falls through _build_persist_batch's iteration loop
+        # untouched, so every wf_messages entry is appended via its unchanged
+        # leftover fallback, exactly as before.
+        await manager._persist_workflow_messages(session_id, wf_messages, [])
     except Exception as exc:  # noqa: BLE001
         logger.error("Failed to persist error turn for session %s: %s", session_id, exc, exc_info=True)
+
+
+async def _emit_before_response_send_safe(combined_response: str, session_id: str | None) -> str:
+    """BEFORE_RESPONSE_SEND hook — lets extensions inspect/modify the response.
+
+    Issue #4263. Extracted from ``persist_conversation`` (#13303 review — keep
+    functions short). Failure is non-fatal: the original response is kept.
+    """
+    from chat_workflow.llm_handler import _emit_before_response_send
+
+    try:
+        return await _emit_before_response_send(combined_response, session_id, {})
+    except Exception as hook_exc:  # noqa: BLE001
+        logger.debug("BEFORE_RESPONSE_SEND hook failed (non-fatal): %s", hook_exc)
+        return combined_response
+
+
+async def _emit_after_response_send_safe(combined_response: str, session_id: str | None) -> None:
+    """AFTER_RESPONSE_SEND hook. Issue #4263. Extracted from ``persist_conversation``."""
+    from chat_workflow.llm_handler import _emit_after_response_send
+
+    try:
+        await _emit_after_response_send(combined_response, session_id, {})
+    except Exception as hook_exc:  # noqa: BLE001
+        logger.debug("AFTER_RESPONSE_SEND hook failed (non-fatal): %s", hook_exc)
+
+
+def _build_workflow_messages_from_state(state: ChatState) -> List[Any]:
+    """Rebuild ``WorkflowMessage`` objects from the graph's plain-dict state entries.
+
+    Extracted from ``persist_conversation`` (#13303 review).
+    """
+    from async_chat_workflow import WorkflowMessage
+
+    return [
+        WorkflowMessage(
+            type=msg_dict.get("type", "response"),
+            content=msg_dict.get("content", ""),
+            metadata=msg_dict.get("metadata", {}),
+        )
+        for msg_dict in state.get("workflow_messages", [])
+    ]
 
 
 async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict:
@@ -1311,71 +1377,46 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
 
     manager = config["configurable"]["manager"]
     session_id = state.get("session_id", "")
-    total_iterations = state.get("iteration_count", 0)
-    combined_response = "\n\n".join(state.get("all_llm_responses", []))
+    all_llm_responses = state.get("all_llm_responses", [])
+    # Review B3 makes ``all_llm_responses`` carry "" for an iteration with no
+    # prose, so the blanks must be dropped here or a leading/interior "\n\n"
+    # reaches conversation_history — which feeds the NEXT turn's LLM context —
+    # plus the transcript file and the LOOP_COMPLETE/BEFORE_RESPONSE_SEND hooks.
+    combined_response = "\n\n".join(r for r in all_llm_responses if r)
 
     # Emit LOOP_COMPLETE hook to notify extensions
-    await _emit_loop_complete(total_iterations, combined_response, session_id)
+    await _emit_loop_complete(state.get("iteration_count", 0), combined_response, session_id)
 
     try:
-        session = await manager.get_or_create_session(state["session_id"])
+        session = await manager.get_or_create_session(session_id)
+        # Issue #4263: allow extensions to inspect/modify response before sending.
+        # Issue #13295: the (rare, default no-op) hook output feeds the combined
+        # session-level view below; it is intentionally NOT threaded into
+        # all_llm_responses, since a single edited string cannot be split back
+        # into the per-iteration entries _persist_workflow_messages now needs
+        # to interleave with tool output.
+        combined_response = await _emit_before_response_send_safe(combined_response, session_id)
 
-        # Issue #4263: Emit BEFORE_RESPONSE_SEND hook before sending response
-        from chat_workflow.llm_handler import _emit_before_response_send
+        await manager._persist_conversation(session_id, session, state["user_message"], combined_response)
 
-        try:
-            # Allow extensions to inspect/modify response before sending
-            combined_response = await _emit_before_response_send(
-                combined_response,
-                state.get("session_id"),
-                {},
-            )
-        except Exception as hook_exc:  # noqa: BLE001
-            logger.debug("BEFORE_RESPONSE_SEND hook failed (non-fatal): %s", hook_exc)
-
-        await manager._persist_conversation(
-            state["session_id"],
-            session,
-            state["user_message"],
-            combined_response,
-        )
-
-        # Persist workflow messages to chat history
-        from async_chat_workflow import WorkflowMessage
-
-        wf_messages = []
-        for msg_dict in state.get("workflow_messages", []):
-            wf_messages.append(
-                WorkflowMessage(
-                    type=msg_dict.get("type", "response"),
-                    content=msg_dict.get("content", ""),
-                    metadata=msg_dict.get("metadata", {}),
-                )
-            )
-
+        wf_messages = _build_workflow_messages_from_state(state)
         await manager._persist_workflow_messages(
-            state["session_id"],
+            session_id,
             wf_messages,
-            combined_response,
+            all_llm_responses,
+            selected_model=state.get("llm_params", {}).get("selected_model", ""),
+            rag_citations=state.get("rag_citations", []),
+            used_knowledge=state.get("used_knowledge", False),
         )
 
         logger.info(
             "Persisted conversation for session=%s, messages=%d",
-            state["session_id"],
+            session_id,
             len(wf_messages),
         )
 
-        # Issue #4263: Emit AFTER_RESPONSE_SEND hook after response is sent
-        from chat_workflow.llm_handler import _emit_after_response_send
-
-        try:
-            await _emit_after_response_send(
-                combined_response,
-                state.get("session_id"),
-                {},
-            )
-        except Exception as hook_exc:  # noqa: BLE001
-            logger.debug("AFTER_RESPONSE_SEND hook failed (non-fatal): %s", hook_exc)
+        # Issue #4263: notify extensions after the response is sent
+        await _emit_after_response_send_safe(combined_response, session_id)
 
     except Exception as exc:
         logger.error("Failed to persist conversation: %s", exc, exc_info=True)

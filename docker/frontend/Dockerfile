@@ -5,8 +5,25 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
+# #13783: npm's defaults give a registry reset one short retry, and a bare
+# `npm ci` failing takes the whole image build — and with it hardened-smoke-test
+# — down on PRs that touch no frontend file. The runner is a singleton, so
+# several PRs building at once is exactly when the resets appear. Declared once
+# as ARGs and passed into both builder stages via ENV, rather than repeated as
+# `npm config set` per stage.
+ARG NPM_FETCH_RETRIES=5
+ARG NPM_FETCH_RETRY_MINTIMEOUT=20000
+ARG NPM_FETCH_RETRY_MAXTIMEOUT=120000
+
 # ---- Build main frontend ----
 FROM node:20-bookworm-slim AS builder
+
+ARG NPM_FETCH_RETRIES
+ARG NPM_FETCH_RETRY_MINTIMEOUT
+ARG NPM_FETCH_RETRY_MAXTIMEOUT
+ENV NPM_CONFIG_FETCH_RETRIES=$NPM_FETCH_RETRIES \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=$NPM_FETCH_RETRY_MINTIMEOUT \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=$NPM_FETCH_RETRY_MAXTIMEOUT
 
 WORKDIR /app
 
@@ -35,6 +52,15 @@ RUN npm run build
 
 # ---- Build SLM frontend ----
 FROM node:20-bookworm-slim AS slm-builder
+
+# Same retry posture as the main builder (#13783) — a stage does not inherit
+# another stage's ENV, so the ARGs are re-declared rather than assumed.
+ARG NPM_FETCH_RETRIES
+ARG NPM_FETCH_RETRY_MINTIMEOUT
+ARG NPM_FETCH_RETRY_MAXTIMEOUT
+ENV NPM_CONFIG_FETCH_RETRIES=$NPM_FETCH_RETRIES \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=$NPM_FETCH_RETRY_MINTIMEOUT \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=$NPM_FETCH_RETRY_MAXTIMEOUT
 
 WORKDIR /app
 

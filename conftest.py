@@ -15,3 +15,10 @@ from pathlib import Path
 _REPO_ROOT = str(Path(__file__).parent)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
+
+# Repo-wide sys.modules leak guard (#13337). Declared here — the rootdir
+# conftest is the only conftest where ``pytest_plugins`` is still legal in
+# pytest >= 9 — and loaded after the sys.path insert above, so ``repo_tests``
+# resolves. The plugin registers before any other conftest, which is what lets
+# it attribute each one's sys.modules delta.
+pytest_plugins = ["repo_tests.sys_modules_leak_guard"]

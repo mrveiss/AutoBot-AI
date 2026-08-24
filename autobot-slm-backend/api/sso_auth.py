@@ -94,31 +94,46 @@ async def get_audit_db():
         yield session
 
 
+_ALLOWED_CALLBACK_SCHEMES = frozenset({"http", "https"})
+
+
+def _reject_callback(reason: str, **extra) -> None:
+    """Log and raise the uniform 400 used by every _build_callback_url guard."""
+    logger.error("OAuth callback rejected: %s", reason, extra=extra)
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid callback host")
+
+
 def _build_callback_url(request: Request) -> str:
     """Build OAuth2 callback URL with security validation (MVA-3542)."""
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
     raw_host = request.headers.get("x-forwarded-host", request.url.netloc) or ""
 
+    # #13312: x-forwarded-proto is attacker-controlled like x-forwarded-host
+    # below but was reaching the returned redirect_uri unvalidated
+    # ("javascript" -> "javascript://host/...").
+    if scheme.lower() not in _ALLOWED_CALLBACK_SCHEMES:
+        _reject_callback("invalid scheme", scheme=scheme)
+
     # Block malicious characters (MVA-3542: SSRF/CRLF prevention)
     if any(c in raw_host for c in "@/\\#?"):
-        logger.error("OAuth callback rejected: malicious characters", extra={"host": raw_host})
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid callback host")
+        _reject_callback("malicious characters", host=raw_host)
 
-    # Parse with urlsplit to prevent parser differential attacks
+    # #13312: urlsplit() is lazy — .port re-parses on access and raises for a
+    # non-numeric/out-of-range port, so it must stay inside this try or a
+    # malformed port on this public, pre-auth endpoint 500s instead of 400ing.
     try:
         parsed = urlsplit(f"//{raw_host}")
         hostname = (parsed.hostname or "").lower().rstrip(".")
+        port = parsed.port
     except Exception as e:
-        logger.error("OAuth callback rejected: parse failed", extra={"host": raw_host, "error": str(e)})
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid callback host") from e
+        _reject_callback("parse failed", host=raw_host, error=str(e))
 
     # Validate hostname against allowlist
     if not hostname or hostname not in _ALLOWED_CALLBACK_HOSTS:
-        logger.error("OAuth callback rejected: not in allowlist", extra={"hostname": hostname})
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid callback host")
+        _reject_callback("not in allowlist", hostname=hostname)
 
     # Reconstruct netloc from validated components
-    netloc = hostname + (f":{parsed.port}" if parsed.port else "")
+    netloc = hostname + (f":{port}" if port else "")
     return f"{scheme}://{netloc}/api/auth/sso/callback"
 
 

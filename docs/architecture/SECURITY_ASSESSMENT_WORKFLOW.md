@@ -584,16 +584,20 @@ class SecurityMemoryGraph:
     # Combine with base entity types
     ENTITY_TYPES = AutoBotMemoryGraph.ENTITY_TYPES | SECURITY_ENTITY_TYPES
 
-    # Additional relation types
-    SECURITY_RELATION_TYPES = {
-        "contains",
-        "runs",
-        "has_vulnerability",
-        "exploited_by",
-        "targets",
+    # Security relation names are NOT added to the graph vocabulary — they are
+    # mapped onto it. AutoBotMemoryGraph.create_relation raises ValueError for
+    # anything outside RELATION_TYPES, so every security name needs an entry in
+    # SECURITY_TO_BASE_RELATION (services/security_memory_integration.py) or the
+    # edge is silently dropped (#13367, #13452).
+    SECURITY_TO_BASE_RELATION = {
+        "contains": "contains",
+        "runs": "contains",
+        "has_vulnerability": "contains",
+        "exploited_by": "contains",
+        "affects": "related_to",
+        "related_to": "related_to",
+        "depends_on": "depends_on",
     }
-
-    RELATION_TYPES = AutoBotMemoryGraph.RELATION_TYPES | SECURITY_RELATION_TYPES
 ```
 
 ---

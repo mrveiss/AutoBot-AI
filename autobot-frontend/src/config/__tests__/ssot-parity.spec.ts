@@ -139,7 +139,11 @@ const TS_ONLY_PORTS = ['slmAdmin'] as const
 
 describe('Python source parser (self-check)', () => {
   it('reads the canonical Python config off disk', () => {
-    expect(readPythonSsot()).toContain('class PortConfig(BaseSettings):')
+    // Deliberately does NOT pin the base class: #13325 changed every settings
+    // class from `BaseSettings` to `RedactedSettings` (a repr-redacting mixin)
+    // and broke this self-check, which only exists to prove we read the right
+    // file. `pythonClassBody` below is what actually parses the declarations.
+    expect(readPythonSsot()).toContain('class PortConfig(')
   })
 
   it('throws instead of returning nothing when a class is missing', () => {

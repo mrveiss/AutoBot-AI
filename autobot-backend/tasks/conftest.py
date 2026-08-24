@@ -81,8 +81,17 @@ def _ensure_stub(name: str) -> types.ModuleType:
 _logging_stub = _ensure_stub("autobot_shared.logging_manager")
 _logging_stub.get_logger = lambda name="autobot", *args, **kwargs: logging.getLogger(name)  # type: ignore[attr-defined]
 
-_async_compat_stub = _ensure_stub("autobot_shared.async_compat")
-_async_compat_stub.run_or_schedule = MagicMock()  # type: ignore[attr-defined]
+# #13162: ``autobot_shared.async_compat`` is deliberately NOT stubbed. It is
+# pure stdlib (asyncio + concurrent.futures), so it imports cleanly with no
+# infrastructure at all — there was never anything for a stub to break the
+# chain on. Worse, ``_ensure_stub`` hands back the ALREADY-IMPORTED real module
+# whenever some earlier import pulled it in (circuit_breaker.py, event_manager.py
+# and ~30 other backend modules import it at module level), so assigning
+# ``run_or_schedule`` here overwrote the real shared helper process-wide, exactly
+# like the GH#12522 ``get_logger`` trap noted above. Every test collected later
+# in that worker got the MagicMock: ``autobot_shared/async_compat_test.py``'s
+# whole file (7/7) failed in CI with ``assert <MagicMock name='mock()'> == 42``
+# and never in isolation.
 
 # type_defs.common is imported by knowledge_tasks.py
 _type_defs = _ensure_stub("type_defs")

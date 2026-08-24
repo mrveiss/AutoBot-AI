@@ -331,7 +331,7 @@ class AgentSecretsIntegration:
             List of SSH key dictionaries with id, name, value, scope, description
         """
         ssh_keys = []
-        keys = self.secrets_service.list_secrets(  # nosec B106 - secret type filter
+        keys = self.secrets_service.list_secrets(  # nosec B106  # secret type filter
             scope=scope,
             chat_id=chat_id,
             secret_type="ssh_key",
@@ -420,7 +420,7 @@ class AgentSecretsIntegration:
                         return full_secret["value"]
 
         # Try general scope
-        secrets = self.secrets_service.list_secrets(  # nosec B106 - secret type filter
+        secrets = self.secrets_service.list_secrets(  # nosec B106  # secret type filter
             scope="general",
             secret_type="api_key",
         )

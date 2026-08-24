@@ -1,0 +1,49 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #12513: read the shared ChromaDB auth token from the SLM secrets store.
+#
+# `slm-secrets.env` is the single source of truth for cross-service secrets (the
+# #11507 pattern, established for AUTOBOT_INTERNAL_API_KEY). The token has to be
+# identical on BOTH sides or chroma rejects every request: the server reads it as
+# CHROMA_SERVER_AUTHN_CREDENTIALS (rendered by the redis / ai-stack roles) and the
+# backend sends it as AUTOBOT_CHROMADB_AUTH_TOKEN (rendered by the backend role).
+# Two roles independently generating a token would produce two values and a total
+# RAG outage, so neither generates — both read from here.
+#
+# Sets `_chromadb_auth_token_read` (empty string when unavailable). Callers assign
+# it to their own variable name and MUST keep their existing value when it is
+# empty, so a host without slm-secrets.env falls back to inventory/vault rather
+# than silently disabling auth on one side of the pair.
+---
+
+- name: "Stat slm-secrets.env for the chroma-token read (#12513)"
+  ansible.builtin.stat:
+    path: /etc/autobot/slm-secrets.env
+  register: _chromadb_slm_secrets_stat
+
+- name: "Read AUTOBOT_CHROMADB_AUTH_TOKEN from slm-secrets.env (#12513)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_CHROMADB_AUTH_TOKEN=\K.*'
+      /etc/autobot/slm-secrets.env 2>/dev/null || true
+  register: _chromadb_auth_token_probe
+  changed_when: false
+  failed_when: false
+  become: true
+  no_log: true
+  # #12145 pattern: retry a transient empty read (file mid-write during a
+  # concurrent deploy) rather than silently leaving the two sides on different
+  # tokens; short-circuits immediately when the file is simply absent.
+  until: >-
+    (_chromadb_auth_token_probe.stdout | default('') | trim | length > 0)
+    or (not (_chromadb_slm_secrets_stat.stat.exists | default(false)))
+  retries: 5
+  delay: 2
+
+- name: "Expose the chroma token read result (#12513)"
+  ansible.builtin.set_fact:
+    _chromadb_auth_token_read: "{{ _chromadb_auth_token_probe.stdout | default('') | trim }}"
+  no_log: true

@@ -4,7 +4,8 @@
 # Python Provision Permissions Playbook (#11343)
 # Grants the autobot service user a narrowly-scoped NOPASSWD sudoers entry so
 # the SLM code-sync update path can install the target Python interpreter
-# (python3.14 for backends, python3.11 for NPU) when it is missing, by running
+# (python3.14 fleet-wide, including the NPU worker since #13747) when it is
+# missing, by running
 # ONLY the provision-local-python.yml playbook via ansible-playbook.
 #
 # Mirrors configure-redis-service-management.yml: validated with visudo,

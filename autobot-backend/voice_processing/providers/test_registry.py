@@ -29,6 +29,15 @@ from voice_processing.providers.generic_provider import GenericProvider
 from voice_processing.providers.lv.late_provider import LateProvider
 from voice_processing.providers.lv.tilde_provider import TildeProvider
 
+# #13162: TestGlobalRegistry::test_get_speech_provider_convenience asserts that
+# get_speech_provider("lv") resolves against the GLOBAL registry, but nothing in
+# this module ever populated it -- the assertion ran against an empty registry
+# and returned None. registry_init is the production seam that fills it (its
+# import-time initialize_providers() call is what initialization/lifespan.py
+# invokes at startup), so importing it here is what makes the global-registry
+# assertion below measure the real thing instead of an empty dict.
+from voice_processing.providers import registry_init  # noqa: F401  isort:skip
+
 
 class MockProvider(SpeechProvider):
     """Mock provider for testing."""

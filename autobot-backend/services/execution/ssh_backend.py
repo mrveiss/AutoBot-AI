@@ -142,9 +142,8 @@ class SSHBackend(ExecutionBackend):
         try:
             client = await self._get_ssh_client()
             # Try a simple command
-            stdin, stdout, stderr = client.exec_command(
-                "true"
-            )  # nosec B601 - hardcoded literal command in health check, not user input
+            # Hardcoded literal command in health check, not user input.
+            stdin, stdout, stderr = client.exec_command("true")  # nosec B601
             stdout.channel.recv_exit_status()
             return True
         except Exception as e:

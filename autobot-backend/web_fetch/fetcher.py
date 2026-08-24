@@ -227,23 +227,46 @@ async def _fetch_bs4(url: str, timeout: float) -> tuple[str | None, int | None]:
 
 
 async def _fetch_playwright(url: str, timeout: float) -> str | None:
-    """Fetch via Playwright bridge (services/playwright_service.py).
+    """Render *url* through the canonical browser interface (#13236, ADR-009).
 
-    SSRF guard enforced inline (defense in depth) — the Playwright service
-    runs in a separate container with potential network reach to private IPs,
-    so the URL must be validated even though the public ``WebFetcher.fetch``
-    pipeline already checks.
+    First caller migrated off a directly-named stack. The requirements express
+    what this fallback has always actually needed:
+
+    - ``EXTRACT_HTML`` — the result feeds a parser, so text will not do. Under
+      the earlier single ``EXTRACT`` capability the worker (registered first)
+      would have matched and returned ``get_text`` output, which is a valid
+      result shape and would have failed silently.
+    - ``OUT_OF_PROCESS`` — the whole point of this fallback is that Playwright
+      does not run inside the backend's own process.
+
+    Together those resolve to the container backend, which is exactly the
+    stack this function called directly before, with the same ``render``
+    endpoint and the caller's timeout preserved.
+
+    The inline SSRF check is **kept** even though the interface now enforces
+    the same DNS-resolving guard before dispatch. It is deliberate defence in
+    depth: the Playwright container has network reach to private IPs, and this
+    function is reachable from the render cascade, so the cost of one extra
+    resolution is worth not depending on a single chokepoint.
     """
     if not await _is_public_url(url):
         return None
     try:
-        from services.playwright_service import get_playwright_service
-
-        svc = await get_playwright_service()
-        result = await svc._post_and_parse(
-            "render", {"url": url, "wait": "networkidle", "timeout": int(timeout * 1000)}
+        import browser_backends
+        from autobot_shared.browser import (
+            Capability,
+            ContentFormat,
+            ExtractRequest,
+            get_browser,
         )
-        return result.get("html") or result.get("content")
+
+        browser_backends.register_all()  # idempotent
+
+        browser = await get_browser(
+            requires={Capability.EXTRACT_HTML, Capability.OUT_OF_PROCESS},
+        )
+        result = await browser.extract(ExtractRequest(url=url, format=ContentFormat.HTML, timeout_seconds=timeout))
+        return result.content if result.success else None
     except Exception as exc:
         logger.debug("Playwright fetch failed for %s: %s", url, exc)
         return None

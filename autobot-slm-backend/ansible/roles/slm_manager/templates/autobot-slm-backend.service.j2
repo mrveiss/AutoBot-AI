@@ -23,6 +23,15 @@ ExecStart={{ slm_backend_dir }}/venv/bin/uvicorn main:app --host {{ slm_backend_
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=5
+# #4090: without these, a unit that can never exec restarts forever and stays
+# out of `systemctl --failed`, so the one thing an operator checks cannot see it
+# (chromadb: 1681 restarts over ~4h45m, invisible). systemd's OWN defaults do not
+# help — DefaultStartLimitIntervalSec=10s with DefaultStartLimitBurst=5 needs 5
+# restarts inside 10s, and RestartSec spaces them further apart than that, so the
+# rate never reaches the limit. The window has to be wider than
+# RestartSec * StartLimitBurst for the limit to be reachable at all.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 TimeoutStopSec={{ slm_backend_stop_timeout_sec | default(45) }}
 StandardOutput=append:{{ slm_log_dir }}/slm-backend.log
 StandardError=append:{{ slm_log_dir }}/slm-backend-error.log

@@ -849,9 +849,12 @@ def _parse_openssl_date(raw: str | None) -> datetime | None:
             continue
     # Last resort: try ISO-8601 for already-formatted inputs
     try:
-        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        # #13755: no ``Z`` shim — parsed natively since 3.11. ``TypeError``
+        # joins the catch because it is what a non-string now raises, where
+        # ``.replace()`` used to raise AttributeError.
+        dt = datetime.fromisoformat(raw)
         return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-    except ValueError:
+    except (ValueError, TypeError):
         return None
 
 

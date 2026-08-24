@@ -64,13 +64,17 @@ if [ "$CHECK_MODE" = true ]; then
     ISORT_ARGS+=(--check-only)
 fi
 
-# Pick the best-available Python *that has black installed*. The project
-# pins py3.12 and Black's safety check parses the AST with whatever
-# interpreter we're on — running with py3.10 produces a "cannot parse
-# code formatted for Python 3.12" warning AND emits subtly different
-# output, which is the whole reason this wrapper exists. We prefer the
-# highest Python version that can actually run black (i.e. has it
-# installed); if only py3.10 has it, we fall back with a clear warning.
+# Pick the best-available Python *that has black installed*. The project runs
+# 3.14 and black's safety check parses the AST with whatever interpreter we're
+# on — running with py3.10 produces a "cannot parse code formatted for Python
+# 3.12" warning AND emits subtly different output, which is the whole reason
+# this wrapper exists. We prefer the highest Python version that can actually
+# run black (i.e. has it installed); a lower one still runs, with a warning,
+# because a formatter that refuses to start is worse than one that warns.
+#
+# Note the two versions are different things: black *runs* under 3.14, while
+# `target-version` in pyproject.toml controls the syntax it *emits* and stays
+# at py312 for the 3.11 NPU worker (#10877).
 PYTHON_BIN=""
 for candidate in python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
     command -v "$candidate" >/dev/null 2>&1 || continue
@@ -87,12 +91,18 @@ fi
 
 actual_ver=$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
 case "$actual_ver" in
-    3.12|3.13|3.14) ;;  # Project target — clean run, no parse warnings
+    3.14) ;;  # What CI runs — clean run, output matches the check
+    3.12 | 3.13)
+        echo "format.sh: NOTE — using Python $actual_ver; CI formats with 3.14." >&2
+        echo "  Parses cleanly, but if CI's format check disagrees with a local" >&2
+        echo "  clean run, this gap is the first thing to rule out." >&2
+        echo "" >&2
+        ;;
     *)
-        echo "format.sh: WARNING — using Python $actual_ver but project targets py3.12+." >&2
+        echo "format.sh: WARNING — using Python $actual_ver but the project runs 3.14." >&2
         echo "  Black will emit a 'cannot parse code formatted for Python 3.12'" >&2
-        echo "  warning. Install black on python3.14 to silence:" >&2
-        echo "    python3.12 -m pip install black==26.3.1 isort==8.0.1" >&2
+        echo "  warning and its output can differ from CI's. To silence:" >&2
+        echo "    python3.14 -m pip install black==26.3.1 isort==8.0.1" >&2
         echo "" >&2
         ;;
 esac

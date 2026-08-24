@@ -9,6 +9,12 @@
 
 set -e
 
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib/project_root.sh"
+
 echo "=================================================="
 echo "Knowledge Manager Test Suite Validation"
 echo "=================================================="
@@ -57,28 +63,28 @@ count_ts_tests() {
 
 echo "Checking Backend Unit Tests..."
 echo "------------------------------"
-check_file "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/unit/test_knowledge_categories.py"
-count_python_tests "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/unit/test_knowledge_categories.py"
+check_file "${PROJECT_ROOT}/tests/unit/test_knowledge_categories.py"
+count_python_tests "${PROJECT_ROOT}/tests/unit/test_knowledge_categories.py"
 
-check_file "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/unit/test_knowledge_vectorization.py"
-count_python_tests "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/unit/test_knowledge_vectorization.py"
+check_file "${PROJECT_ROOT}/tests/unit/test_knowledge_vectorization.py"
+count_python_tests "${PROJECT_ROOT}/tests/unit/test_knowledge_vectorization.py"
 
 echo ""
 echo "Checking Frontend Unit Tests..."
 echo "------------------------------"
-check_file "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend/src/composables/__tests__/useKnowledgeVectorization.test.ts"
-count_ts_tests "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend/src/composables/__tests__/useKnowledgeVectorization.test.ts"
+check_file "${PROJECT_ROOT}/autobot-slm-frontend/src/composables/__tests__/useKnowledgeVectorization.test.ts"
+count_ts_tests "${PROJECT_ROOT}/autobot-slm-frontend/src/composables/__tests__/useKnowledgeVectorization.test.ts"
 
 echo ""
 echo "Checking Integration Tests..."
 echo "------------------------------"
-check_file "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/integration/test_knowledge_api_integration.py"
-count_python_tests "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/integration/test_knowledge_api_integration.py"
+check_file "${PROJECT_ROOT}/tests/integration/test_knowledge_api_integration.py"
+count_python_tests "${PROJECT_ROOT}/tests/integration/test_knowledge_api_integration.py"
 
 echo ""
 echo "Checking Documentation..."
 echo "------------------------------"
-check_file "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/TEST_SUITE_SUMMARY.md"
+check_file "${PROJECT_ROOT}/tests/TEST_SUITE_SUMMARY.md"
 
 echo ""
 echo "=================================================="

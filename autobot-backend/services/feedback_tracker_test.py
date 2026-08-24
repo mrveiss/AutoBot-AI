@@ -61,7 +61,7 @@ def test_feedback_was_accepted_property() -> None:
 
 
 @patch("services.feedback_tracker.get_redis_client")
-@patch("services.feedback_tracker.create_engine")
+@patch("services.feedback_tracker.get_async_engine")
 def test_feedback_tracker_initialization(mock_engine, mock_redis) -> None:
     """Test FeedbackTracker initialization."""
     from services.feedback_tracker import FeedbackTracker
@@ -74,15 +74,37 @@ def test_feedback_tracker_initialization(mock_engine, mock_redis) -> None:
 
 
 @patch("services.feedback_tracker.get_redis_client")
-@patch("services.feedback_tracker.create_engine")
+@patch("services.feedback_tracker.get_async_engine")
 def test_record_feedback_creates_record(mock_engine, mock_redis) -> None:
     """Test feedback recording creates database record."""
     from services.feedback_tracker import FeedbackTracker
 
-    # Mock database session
+    # Mock database session. record_feedback opens it with `with
+    # self.SessionLocal() as db:`, so the mock must yield itself from
+    # __enter__ — otherwise `db` is a fresh child mock and the add/commit
+    # assertions below watch an object the code never touched.
     mock_session = MagicMock()
-    mock_engine.return_value.begin.return_value.__enter__.return_value = mock_session
-    mock_redis.return_value = MagicMock()
+    mock_session.__enter__.return_value = mock_session
+
+    # No stored retrain marker, so _check_retrain_threshold takes the
+    # "never retrained" branch instead of parsing a MagicMock as an ISO string.
+    redis_client = MagicMock()
+    redis_client.get.return_value = None
+    mock_redis.return_value = redis_client
+    mock_session.query.return_value.filter.return_value.scalar.return_value = 0
+
+    # pattern_id=1 below sends record_feedback through
+    # _update_pattern_statistics, which does integer arithmetic on the looked-up
+    # pattern — give it a real row rather than a child mock.
+    pattern = CodePattern(
+        id=1,
+        pattern_type="function",
+        language="python",
+        signature="def hello():",
+        times_suggested=4,
+        times_accepted=2,
+    )
+    mock_session.query.return_value.filter.return_value.first.return_value = pattern
 
     tracker = FeedbackTracker()
     tracker.SessionLocal = MagicMock(return_value=mock_session)
@@ -162,12 +184,16 @@ def test_acceptance_rate_after_rejection() -> None:
 
 
 @patch("services.feedback_tracker.get_redis_client")
-@patch("services.feedback_tracker.create_engine")
+@patch("services.feedback_tracker.get_async_engine")
 def test_get_acceptance_metrics(mock_engine, mock_redis) -> None:
     """Test metrics calculation."""
     from services.feedback_tracker import FeedbackTracker
 
+    # get_acceptance_metrics opens the session with `with self.SessionLocal()
+    # as db:` — the mock must yield itself so `db.query(...)` is the mock
+    # chain wired below.
     mock_session = MagicMock()
+    mock_session.__enter__.return_value = mock_session
     mock_redis.return_value = MagicMock()
 
     # Mock query results

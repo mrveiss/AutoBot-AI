@@ -1798,7 +1798,7 @@ class SessionCostResponse(BaseModel):
 class BudgetAlertRequest(BaseModel):
     name: str = Field(..., description="Alert name")
     threshold_usd: float = Field(..., gt=0, description="Budget threshold in USD")
-    period: str = Field(..., pattern="^(daily|weekly|monthly)$", description="Alert period")
+    period: str = Field(..., pattern=r"^(daily|weekly|monthly)\z", description="Alert period")
     notify_at_percent: List[int] = Field(default=[50, 75, 90, 100])
     enabled: bool = Field(default=True)
 
@@ -2652,7 +2652,7 @@ class NodeType(str, Enum):
     RAISE = "raise"
     BREAK = "break"
     CONTINUE = "continue"
-    PASS = "pass"  # nosec B105 - CFG statement type enum value, not a password
+    PASS = "pass"  # nosec B105  # CFG statement type enum value, not a password
 
 
 class EdgeType(str, Enum):

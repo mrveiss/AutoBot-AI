@@ -750,14 +750,14 @@ class ExistingOperationMigrator:
 
     def _run_single_test(self, test_file: Path) -> Dict[str, Any]:
         """Run a single test file (placeholder implementation)"""
-        import subprocess  # nosec B404 - controlled pytest execution
+        import subprocess  # nosec B404  # controlled pytest execution
         import time
 
         start_time = time.time()
 
         try:
             # Run pytest on single file
-            result = subprocess.run(  # nosec B603 B607 - sys.executable with fixed pytest args, no user input
+            result = subprocess.run(  # nosec B603 B607  # sys.executable with fixed pytest args, no user input
                 ["python", "-m", "pytest", str(test_file), "-v"],
                 capture_output=True,
                 text=True,

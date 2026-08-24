@@ -8,14 +8,18 @@ Focus: the dedupe-against-existing-issues logic must not spam GitHub with
 duplicate issues when an audit task runs multiple times without new findings.
 """
 
+import logging
 from unittest.mock import MagicMock, patch
 
 from workers.audit_tasks import (
     _DEFERRED_FINDINGS_KEY,
+    _TESTGAPS_LAST_RUN_KEY,
     _dead_code_fingerprint,
     _dedupe_and_file,
     _find_test_file,
+    _gh_available,
     _persist_deferred,
+    _redis_set,
     audit_claims,
     audit_dead_code,
     audit_testgaps,
@@ -35,7 +39,7 @@ class TestDedupeAndFile:
         ]
         with (
             patch("workers.audit_tasks._gh_available", return_value=True),
-            patch("workers.audit_tasks._load_deferred", return_value=[]),
+            patch("workers.audit_tasks._load_deferred", return_value=([], True)),
             patch("workers.audit_tasks._persist_deferred", return_value=0),
             patch("workers.audit_tasks._file_issue", return_value=True) as mock_file,
         ):
@@ -52,7 +56,7 @@ class TestDedupeAndFile:
         ]
         with (
             patch("workers.audit_tasks._gh_available", return_value=True),
-            patch("workers.audit_tasks._load_deferred", return_value=[]),
+            patch("workers.audit_tasks._load_deferred", return_value=([], True)),
             patch("workers.audit_tasks._persist_deferred", return_value=0),
             patch("workers.audit_tasks._file_issue") as mock_file,
         ):
@@ -69,7 +73,7 @@ class TestDedupeAndFile:
         ]
         with (
             patch("workers.audit_tasks._gh_available", return_value=True),
-            patch("workers.audit_tasks._load_deferred", return_value=[]),
+            patch("workers.audit_tasks._load_deferred", return_value=([], True)),
             patch("workers.audit_tasks._persist_deferred", return_value=0),
             patch("workers.audit_tasks._file_issue", return_value=True),
         ):
@@ -80,7 +84,7 @@ class TestDedupeAndFile:
     def test_zero_findings_files_nothing(self):
         with (
             patch("workers.audit_tasks._gh_available", return_value=True),
-            patch("workers.audit_tasks._load_deferred", return_value=[]),
+            patch("workers.audit_tasks._load_deferred", return_value=([], True)),
             patch("workers.audit_tasks._persist_deferred", return_value=0),
             patch("workers.audit_tasks._file_issue") as mock_file,
         ):
@@ -96,23 +100,41 @@ class TestDedupeAndFile:
 # ---------------------------------------------------------------------------
 
 
-def _fake_redis_backing():
-    """Return (store, get_fn, set_fn) emulating the JSON Redis helpers."""
+def _fake_redis_backing(writes_succeed: bool = True):
+    """Return (store, get_fn, set_fn) emulating the JSON Redis helpers.
+
+    #13570: ``_redis_set`` returns True only when the write actually landed, so
+    the fake must too. Returning None here — as it used to — made every test
+    below run against a queue that silently accepted nothing, which is precisely
+    the production bug they were supposed to rule out.
+
+    ``writes_succeed=False`` models an unavailable Redis: the store stays empty
+    and the helper reports failure.
+    """
     store: dict = {}
 
     def _get(_redis, key):
         return store.get(key)
 
     def _set(_redis, key, value, **_kw):
+        if not writes_succeed:
+            return False
         store[key] = value
+        return True
 
-    return store, _get, _set
+    # #13570 review: _load_deferred probes `exists` to distinguish "the queue is
+    # genuinely absent" from "the queue could not be read" — a distinction the
+    # code needs before it may overwrite the key, so the fake must model it.
+    client = MagicMock()
+    client.exists.side_effect = lambda key: 1 if key in store else 0
+
+    return store, _get, _set, client
 
 
 class TestNoDropGuarantee:
     def test_unfileable_finding_is_deferred_not_dropped(self):
         """gh unauthenticated → finding lands in the dead-letter queue, not /dev/null."""
-        store, _get, _set = _fake_redis_backing()
+        store, _get, _set, client = _fake_redis_backing()
         findings = [{"title": "discovery: lost me", "body": "body"}]
 
         with (
@@ -121,7 +143,7 @@ class TestNoDropGuarantee:
             patch("workers.audit_tasks._redis_set", side_effect=_set),
             patch("workers.audit_tasks._file_issue") as mock_file,
         ):
-            filed, deferred = _dedupe_and_file(findings, set(), "enhancement", object())
+            filed, deferred = _dedupe_and_file(findings, set(), "enhancement", client)
 
         assert filed == 0
         assert deferred == 1
@@ -131,7 +153,7 @@ class TestNoDropGuarantee:
 
     def test_file_failure_defers_finding(self):
         """gh authenticated but the create call fails → finding is still preserved."""
-        store, _get, _set = _fake_redis_backing()
+        store, _get, _set, client = _fake_redis_backing()
         findings = [{"title": "discovery: flaky", "body": "body"}]
 
         with (
@@ -140,14 +162,14 @@ class TestNoDropGuarantee:
             patch("workers.audit_tasks._redis_set", side_effect=_set),
             patch("workers.audit_tasks._file_issue", return_value=False),
         ):
-            filed, deferred = _dedupe_and_file(findings, set(), "enhancement", object())
+            filed, deferred = _dedupe_and_file(findings, set(), "enhancement", client)
 
         assert (filed, deferred) == (0, 1)
         assert store[_DEFERRED_FINDINGS_KEY][0]["title"] == "discovery: flaky"
 
     def test_processed_plus_deferred_equals_input(self):
         """Every non-duplicate finding is accounted for: filed + deferred == input."""
-        store, _get, _set = _fake_redis_backing()
+        store, _get, _set, client = _fake_redis_backing()
         findings = [{"title": f"discovery: {i}", "body": "b"} for i in range(5)]
 
         # Fail filing for odd indices, succeed for even.
@@ -160,14 +182,14 @@ class TestNoDropGuarantee:
             patch("workers.audit_tasks._redis_set", side_effect=_set),
             patch("workers.audit_tasks._file_issue", side_effect=_file),
         ):
-            filed, deferred = _dedupe_and_file(findings, set(), "enhancement", object())
+            filed, deferred = _dedupe_and_file(findings, set(), "enhancement", client)
 
         assert filed + deferred == len(findings)
         assert (filed, deferred) == (3, 2)
 
     def test_deferred_findings_retried_and_drained_when_gh_recovers(self):
         """Once gh is available again, queued findings file and leave the queue."""
-        store, _get, _set = _fake_redis_backing()
+        store, _get, _set, client = _fake_redis_backing()
 
         # Run 1: gh down — finding is deferred.
         with (
@@ -176,7 +198,7 @@ class TestNoDropGuarantee:
             patch("workers.audit_tasks._redis_set", side_effect=_set),
             patch("workers.audit_tasks._file_issue"),
         ):
-            _dedupe_and_file([{"title": "discovery: retry me", "body": "b"}], set(), "enh", object())
+            _dedupe_and_file([{"title": "discovery: retry me", "body": "b"}], set(), "enh", client)
         assert len(store[_DEFERRED_FINDINGS_KEY]) == 1
 
         # Run 2: gh restored, no new findings — the queued one is filed and drained.
@@ -190,33 +212,33 @@ class TestNoDropGuarantee:
                 side_effect=lambda t, b, lbl: filed_titles.append(t) or True,
             ),
         ):
-            filed, deferred = _dedupe_and_file([], set(), "enh", object())
+            filed, deferred = _dedupe_and_file([], set(), "enh", client)
 
         assert filed_titles == ["discovery: retry me"]
         assert (filed, deferred) == (1, 0)
         assert store[_DEFERRED_FINDINGS_KEY] == []
 
     def test_persist_deferred_dedupes_by_title(self):
-        store, _get, _set = _fake_redis_backing()
+        store, _get, _set, client = _fake_redis_backing()
         deferred = [
             {"title": "dup", "body": "a", "label": "l"},
             {"title": "dup", "body": "b", "label": "l"},
             {"title": "uniq", "body": "c", "label": "l"},
         ]
         with patch("workers.audit_tasks._redis_set", side_effect=_set):
-            size = _persist_deferred(object(), deferred)
+            size = _persist_deferred(client, deferred)
         assert size == 2
 
     def test_persist_deferred_cap_logs_dropped_titles(self):
         """Overflow sheds the oldest findings and logs their exact titles — no silent loss."""
-        store, _get, _set = _fake_redis_backing()
+        store, _get, _set, client = _fake_redis_backing()
         deferred = [{"title": f"t{i}", "body": "b", "label": "l"} for i in range(12)]
         with (
             patch("workers.audit_tasks._MAX_DEFERRED", 10),
             patch("workers.audit_tasks._redis_set", side_effect=_set),
             patch("workers.audit_tasks.logger.error") as mock_err,
         ):
-            size = _persist_deferred(object(), deferred)
+            size = _persist_deferred(client, deferred)
         assert size == 10
         mock_err.assert_called_once()
         dropped_arg = mock_err.call_args.args[-1]
@@ -490,3 +512,293 @@ class TestAuditClaims:
 
         assert "docs/verification.md" not in sources
         assert "docs/guide.md" in sources
+
+
+class TestDeferralIsObservedNotAssumed:
+    """#13570: the queue reported findings it never held.
+
+    On a live host the worker logged CRITICAL "N audit finding(s) deferred to
+    the Redis dead-letter queue (audit:deferred_findings) instead of being
+    filed" while `LLEN audit:deferred_findings` was 0 and no `audit:deferred*`
+    key existed at all. The message is the dangerous part: it reads as a safe
+    fallback and states the findings were preserved when they were not, so
+    nobody goes looking. Every automated audit since the credential lapsed
+    produced nothing, silently.
+
+    Root cause: `_redis_set` swallowed every failure and `_persist_deferred`
+    returned the count it *intended* to store.
+    """
+
+    def test_failed_persist_reports_zero_not_the_intended_count(self):
+        """The count must describe what landed, not what was handed over."""
+        _store, _get, _set, client = _fake_redis_backing(writes_succeed=False)
+        deferred = [{"title": "discovery: gone", "body": "b", "label": "l"}]
+
+        with patch("workers.audit_tasks._redis_set", side_effect=_set):
+            size = _persist_deferred(client, deferred)
+
+        assert size == 0, "a queue that stored nothing must not report a queue depth"
+
+    def test_failed_persist_dumps_the_findings_to_the_log(self, caplog):
+        """When the queue cannot hold them, the log is the queue of last resort —
+        a bare count would leave nothing recoverable."""
+        _store, _get, _set, client = _fake_redis_backing(writes_succeed=False)
+        deferred = [{"title": "discovery: recover me", "body": "important detail", "label": "l"}]
+
+        with patch("workers.audit_tasks._redis_set", side_effect=_set):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                _persist_deferred(client, deferred)
+
+        dumped = caplog.text
+        assert "discovery: recover me" in dumped
+        assert "important detail" in dumped
+        assert "NOT" in dumped, "the log must say the findings were not queued"
+
+    def test_no_redis_client_is_a_failed_persist_not_a_silent_success(self):
+        """`_get_redis()` returns None whenever the client cannot be built, and
+        that path reported success — the shape that produced an empty queue
+        alongside a reassuring log line."""
+        assert _persist_deferred(None, [{"title": "t", "body": "b", "label": "l"}]) == 0
+
+    def test_unauthenticated_and_unqueueable_says_lost_not_deferred(self, caplog):
+        """Both failures at once must not read as the benign one."""
+        _store, _get, _set, client = _fake_redis_backing(writes_succeed=False)
+        findings = [{"title": "discovery: double fault", "body": "b"}]
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                filed, deferred = _dedupe_and_file(findings, set(), "enh", client)
+
+        assert (filed, deferred) == (0, 0)
+        assert "LOST" in caplog.text
+        assert (
+            "instead of being filed or lost" not in caplog.text
+        ), "the reassuring deferral message must not be emitted when nothing was queued"
+
+    def test_successful_deferral_still_reports_the_reassuring_message(self, caplog):
+        """The fix must not turn a working fallback into an alarm."""
+        store, _get, _set, client = _fake_redis_backing()
+        findings = [{"title": "discovery: safely queued", "body": "b"}]
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                filed, deferred = _dedupe_and_file(findings, set(), "enh", client)
+
+        assert (filed, deferred) == (0, 1)
+        assert "LOST" not in caplog.text
+        assert [f["title"] for f in store[_DEFERRED_FINDINGS_KEY]] == ["discovery: safely queued"]
+
+    def test_the_queue_is_stored_without_a_ttl(self):
+        """The queue carried the module's default 14-day TTL, so a credential
+        broken for a fortnight — the exact case it exists for — expired
+        everything in it."""
+        seen: dict = {}
+
+        def _set(_redis, key, value, **kwargs):
+            seen[key] = kwargs
+            return True
+
+        with patch("workers.audit_tasks._redis_set", side_effect=_set):
+            _persist_deferred(object(), [{"title": "t", "body": "b", "label": "l"}])
+
+        assert seen[_DEFERRED_FINDINGS_KEY]["ttl"] is None
+
+
+class TestMissingCredentialIsReportedEveryRun:
+    """#13570: there was no way to tell when filing broke.
+
+    `_gh_available` was silent, so a run with no findings looked identical to a
+    healthy one and the lapse only surfaced when an audit happened to produce
+    something. The log now names the failure on every run.
+    """
+
+    def test_unauthenticated_gh_logs_critical_even_with_no_findings(self, caplog):
+        with patch(
+            "workers.audit_tasks._run",
+            return_value=(1, "", "You are not logged into any GitHub hosts."),
+        ):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                assert _gh_available() is False
+
+        assert "cannot file issues" in caplog.text
+        assert "not logged into any GitHub hosts" in caplog.text
+
+    def test_authenticated_gh_is_quiet(self, caplog):
+        with patch("workers.audit_tasks._run", return_value=(0, "Logged in", "")):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                assert _gh_available() is True
+
+        assert caplog.text == ""
+
+
+class TestQueueIsNeverOverwrittenUnread:
+    """#13570 review: a failed READ wiped the queue, silently.
+
+    `_redis_get` returns None for every failure mode and `_load_deferred`
+    collapsed that into `[]`, so a GET that timed out was indistinguishable from
+    an empty queue — and the unconditional persist that followed overwrote the
+    key with `[]`. Same defect class as the incident itself: acting on, and
+    reporting, an outcome that was never observed. Removing the TTL made it
+    worse, because the key now holds more.
+    """
+
+    def test_unreadable_queue_is_not_overwritten(self):
+        """The 3-findings-become-zero case, end to end."""
+        store, _get, _set, client = _fake_redis_backing()
+        store[_DEFERRED_FINDINGS_KEY] = [
+            {"title": f"discovery: queued {i}", "body": "b", "label": "l"} for i in range(3)
+        ]
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=True),
+            # GET fails while SET would succeed: a single-command timeout.
+            patch("workers.audit_tasks._redis_get", return_value=None),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue", return_value=True),
+        ):
+            _dedupe_and_file([], set(), "enh", client)
+
+        assert len(store[_DEFERRED_FINDINGS_KEY]) == 3, "an unread queue must survive the run"
+
+    def test_unreadable_queue_reports_zero_and_says_why(self, caplog):
+        """Not just preserved — the run must not claim a clean deferral either."""
+        store, _get, _set, client = _fake_redis_backing()
+        store[_DEFERRED_FINDINGS_KEY] = [{"title": "discovery: queued", "body": "b", "label": "l"}]
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", return_value=None),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                filed, deferred = _dedupe_and_file([{"title": "discovery: new", "body": "b"}], set(), "enh", client)
+
+        assert (filed, deferred) == (0, 0)
+        assert "could not be read" in caplog.text
+        assert "discovery: new" in caplog.text, "the new finding must still reach the log"
+
+    def test_absent_queue_is_readable_not_unobserved(self):
+        """A key that has genuinely never been written must NOT block persistence
+        — otherwise the first ever deferral could never be stored."""
+        store, _get, _set, client = _fake_redis_backing()
+        assert _DEFERRED_FINDINGS_KEY not in store
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            filed, deferred = _dedupe_and_file([{"title": "discovery: first", "body": "b"}], set(), "e", client)
+
+        assert (filed, deferred) == (0, 1)
+        assert [f["title"] for f in store[_DEFERRED_FINDINGS_KEY]] == ["discovery: first"]
+
+    def test_wrong_type_at_the_key_is_not_overwritten(self):
+        """A non-list value is someone else's data or corruption — either way,
+        clobbering it loses whatever it was."""
+        store, _get, _set, client = _fake_redis_backing()
+        store[_DEFERRED_FINDINGS_KEY] = {"not": "a list"}
+
+        with (
+            patch("workers.audit_tasks._gh_available", return_value=False),
+            patch("workers.audit_tasks._redis_get", side_effect=_get),
+            patch("workers.audit_tasks._redis_set", side_effect=_set),
+            patch("workers.audit_tasks._file_issue"),
+        ):
+            _dedupe_and_file([{"title": "discovery: x", "body": "b"}], set(), "e", client)
+
+        assert store[_DEFERRED_FINDINGS_KEY] == {"not": "a list"}
+
+    def test_empty_write_does_not_page_about_zero_lost_findings(self, caplog):
+        """The normal drain path writes an empty queue. A loss alarm there is
+        its own false alarm — the thing this issue is about."""
+        _store, _get, _set, client = _fake_redis_backing(writes_succeed=False)
+
+        with patch("workers.audit_tasks._redis_set", side_effect=_set):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                assert _persist_deferred(client, []) == 0
+
+        assert caplog.text == ""
+
+
+class TestRedisSetContract:
+    """#13570 review: the changed helper had no direct test.
+
+    Replacing its whole body with `return True` killed only one assertion, and
+    mutating it to re-apply the 14-day expiry left the suite green — so the
+    headline "the queue no longer expires" claim was untested at the layer that
+    implements it.
+    """
+
+    def test_ttl_none_is_passed_through_as_no_expiry(self):
+        client = MagicMock()
+
+        assert _redis_set(client, "k", {"a": 1}, ttl=None) is True
+
+        client.set.assert_called_once()
+        assert client.set.call_args.kwargs["ex"] is None
+
+    def test_default_ttl_is_still_applied_for_other_keys(self):
+        """Only the dead-letter queue is untimed; last-run markers keep expiring."""
+        client = MagicMock()
+
+        _redis_set(client, _TESTGAPS_LAST_RUN_KEY, "2026-08-09")
+
+        assert client.set.call_args.kwargs["ex"] == 86400 * 14
+
+    def test_a_failed_write_returns_false_and_logs(self, caplog):
+        client = MagicMock()
+        client.set.side_effect = RuntimeError("connection reset")
+
+        with caplog.at_level(logging.ERROR, logger="workers.audit_tasks"):
+            assert _redis_set(client, "k", "v") is False
+
+        assert "connection reset" in caplog.text
+
+    def test_no_client_is_a_failed_write(self):
+        assert _redis_set(None, "k", "v") is False
+
+    def test_the_queue_is_written_without_expiry_through_the_real_helper(self):
+        """End to end through the real _redis_set, so a regression that
+        re-applies a TTL to the queue cannot ship green."""
+        client = MagicMock()
+
+        _persist_deferred(client, [{"title": "t", "body": "b", "label": "l"}])
+
+        assert client.set.call_args.kwargs["ex"] is None
+
+
+class TestTruncationIsDeclared:
+    """#13570 review: "Full findings follow" then silently cut the JSON off."""
+
+    def test_an_oversized_dump_says_it_was_truncated(self, caplog):
+        _store, _get, _set, client = _fake_redis_backing(writes_succeed=False)
+        big = [{"title": f"discovery: {i}", "body": "x" * 2000, "label": "l"} for i in range(200)]
+
+        with patch("workers.audit_tasks._redis_set", side_effect=_set):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                _persist_deferred(client, big)
+
+        assert "TRUNCATED" in caplog.text
+        assert "200" in caplog.text, "the true count must survive the truncation"
+
+    def test_a_dump_that_fits_makes_no_truncation_claim(self, caplog):
+        _store, _get, _set, client = _fake_redis_backing(writes_succeed=False)
+
+        with patch("workers.audit_tasks._redis_set", side_effect=_set):
+            with caplog.at_level(logging.CRITICAL, logger="workers.audit_tasks"):
+                _persist_deferred(client, [{"title": "t", "body": "b", "label": "l"}])
+
+        assert "TRUNCATED" not in caplog.text

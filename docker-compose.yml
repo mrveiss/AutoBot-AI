@@ -714,7 +714,9 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - prometheus_data:/prometheus
-      - ./autobot-monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Whole directory, not just prometheus.yml: the alerts-*.yml rule files
+      # sit beside it and were otherwise absent from the container (#12460).
+      - ./autobot-monitoring:/etc/prometheus:ro
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus

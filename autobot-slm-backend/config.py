@@ -20,6 +20,8 @@ from typing import Optional
 from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
+from autobot_shared.secret_redaction import RedactedReprMixin
+
 logger = logging.getLogger(__name__)
 
 # Filename for the auto-generated persistent keys file inside data_dir.
@@ -174,7 +176,7 @@ _SSOT_POOL_SIZE, _SSOT_MAX_OVERFLOW, _SSOT_POOL_RECYCLE = _get_ssot_pool_default
 _SSOT_BACKEND_URL = _get_ssot_backend_url()
 
 
-class Settings(BaseSettings):
+class Settings(RedactedReprMixin, BaseSettings):
     """SLM Server Settings."""
 
     # Paths - relative to slm-server directory (where config.py lives)
@@ -182,7 +184,19 @@ class Settings(BaseSettings):
     data_dir: Path = Path(os.getenv("SLM_DATA_DIR", str(Path(__file__).parent / "data")))
     config_dir: Path = Path(os.getenv("SLM_CONFIG_DIR", str(Path(__file__).parent / "config")))
     ansible_dir: Path = Path(__file__).parent / "ansible"
-    backup_dir: Path = Path(os.getenv("SLM_BACKUP_DIR", str(Path.home() / "slm-backups")))
+    # #13307: was `Path.home() / "slm-backups"`, which put every backup in the
+    # service account's home directory — on the root filesystem, in a place
+    # nobody thinks to look, chosen by a fallback rather than a decision. It also
+    # contradicted services/backup.py, which named /var/lib/slm/backups as its
+    # own (dead) fallback. One answer now, and it is the FHS location for service
+    # state. The ansible backend role creates it with the right ownership.
+    backup_dir: Path = Path(os.getenv("SLM_BACKUP_DIR", "/var/lib/slm/backups"))
+
+    # #13307: how many backups to keep per (node, service_type), and how long.
+    # Without a delete route nothing could reclaim space, so storage only grew —
+    # on the root filesystem. 0 disables that dimension of the policy.
+    backup_retention_count: int = int(os.getenv("SLM_BACKUP_RETENTION_COUNT", "10"))
+    backup_retention_days: int = int(os.getenv("SLM_BACKUP_RETENTION_DAYS", "30"))
 
     # ==========================================================================
     # PostgreSQL Database Configuration (Issue #786)
@@ -212,7 +226,7 @@ class Settings(BaseSettings):
     db_pool_recycle: int = int(os.getenv("SLM_DB_POOL_RECYCLE", str(_SSOT_POOL_RECYCLE)))
 
     # Server
-    host: str = "0.0.0.0"  # nosec B104 — bound behind nginx reverse proxy
+    host: str = "0.0.0.0"  # nosec B104  # bound behind nginx reverse proxy
     port: int = 8000
     debug: bool = False
 

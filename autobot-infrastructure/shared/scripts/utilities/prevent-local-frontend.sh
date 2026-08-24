@@ -8,6 +8,12 @@
 
 set -e
 
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 AUTOBOT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -34,7 +40,7 @@ echo "  • vite dev"
 echo "  • Any command that starts a server on port 5173"
 echo ""
 echo "CORRECT DEVELOPMENT WORKFLOW:"
-echo "1. Edit code locally in: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend/"
+echo "1. Edit code locally in: ${PROJECT_ROOT}/autobot-slm-frontend/"
 echo "2. Sync to Frontend VM: ./sync-frontend.sh"
 echo "3. Frontend VM managed by: scripts/start-services.sh"
 echo ""

@@ -195,12 +195,16 @@ class GraphEntityExtractor:
             FactType.PREDICTION: "prediction",
         }
 
-        # Relationship inference keywords
+        # Relationship inference keywords. Keys MUST be canonical relation
+        # names (autobot_memory_graph.core.RELATION_TYPES) because
+        # _create_relations_in_graph feeds them straight to create_relation,
+        # which raises ValueError on anything else — and that ValueError is
+        # swallowed, so a non-canonical key silently drops the edge (#13452).
         self.relationship_keywords = {
             "fixes": ["fix", "resolve", "repair", "correct", "address"],
             "implements": ["implement", "add", "create", "build", "develop"],
             "depends_on": ["require", "need", "depend", "prerequisite"],
-            "relates_to": ["related", "similar", "like", "associated"],
+            "related_to": ["related", "similar", "like", "associated"],
             "informs": ["inform", "guide", "suggest", "recommend"],
             "blocks": ["block", "prevent", "stop", "hinder"],
         }
@@ -525,7 +529,7 @@ class GraphEntityExtractor:
                         RelationCandidate(
                             from_entity=entity_a.name,
                             to_entity=entity_b.name,
-                            relation_type="relates_to",
+                            relation_type="related_to",  # canonical spelling (#13452)
                             confidence=0.7,
                             evidence=co_occurrence_evidence,
                         )

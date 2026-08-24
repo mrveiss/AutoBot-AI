@@ -41,7 +41,10 @@ class SemanticAnalyzer:
     AUTOBOT_PATTERNS = {
         "ssot_config": re.compile(r"from autobot_shared\.ssot_config import"),
         "redis_client": re.compile(r"from autobot_shared\.redis_client import"),
-        "logger": re.compile(r"logger = logging\.getLogger\(__name__\)"),
+        # AutoBot's canonical logger is autobot_shared.logging_manager.get_logger,
+        # never stdlib logging.getLogger — matching the stdlib form made this
+        # detector dead against the entire codebase.
+        "logger": re.compile(r"logger = get_logger\(__name__\)"),
         "router": re.compile(r"router = APIRouter\("),
         "vue_composable": re.compile(r"export (function |const )use[A-Z]"),
     }
@@ -173,7 +176,7 @@ class SemanticAnalyzer:
             suggestions.append("from autobot_shared.redis_client import get_redis_client")
 
         if "logger" in context_patterns:
-            suggestions.append("import logging")
+            suggestions.append("from autobot_shared.logging_manager import get_logger")
 
         # Framework-based suggestions
         if "fastapi" in self.detected_frameworks:

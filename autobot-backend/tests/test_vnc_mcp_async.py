@@ -36,6 +36,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 _BACKEND_ROOT = Path(__file__).parent.parent
+_REPO_ROOT = _BACKEND_ROOT.parent
 _VNC_MCP_PATH = _BACKEND_ROOT / "api" / "vnc_mcp.py"
 
 
@@ -78,7 +79,29 @@ def _install_stubs() -> dict:
 
         post = get = put = delete = patch = _identity_decorator
 
-    _stub("fastapi", APIRouter=_IdentityRouter, Depends=MagicMock, HTTPException=Exception)
+    # #13198: Depends must NOT be the bare ``MagicMock`` class. vnc_mcp.py line 60
+    # evaluates ``Depends(check_admin_permission)`` at import time, and
+    # ``check_admin_permission`` is itself a MagicMock instance (stubbed below).
+    # ``MagicMock(<mock>)`` binds that mock to Mock's first positional parameter,
+    # which is ``spec`` — and Python >= 3.12 rejects speccing against a Mock with
+    # ``InvalidSpecError: Cannot spec a Mock object``, so the module never loaded.
+    # A minimal stand-in mirroring fastapi.params.Depends keeps the dependency
+    # object inspectable without going through Mock's constructor at all.
+    class _FakeDepends:
+        def __init__(self, dependency=None, *, use_cache=True):
+            self.dependency = dependency
+            self.use_cache = use_cache
+
+    # HTTPException is raised keyword-style in vnc_mcp.py (status_code=/detail=),
+    # which bare ``Exception`` cannot accept — mirror the real signature instead.
+    class _FakeHTTPException(Exception):
+        def __init__(self, status_code=500, detail=None, headers=None):
+            super().__init__(detail)
+            self.status_code = status_code
+            self.detail = detail
+            self.headers = headers
+
+    _stub("fastapi", APIRouter=_IdentityRouter, Depends=_FakeDepends, HTTPException=_FakeHTTPException)
 
     # services (top-level package only — prevent __init__ from running)
     _stub("services")
@@ -171,6 +194,17 @@ def _install_stubs() -> dict:
     )
     _stub("autobot_shared.http_client", get_http_client=MagicMock())
     _stub("autobot_shared.logging_manager", get_logger=lambda name: MagicMock())
+
+    # #13208: temp_files is the component under test for the leak, so load the
+    # REAL module rather than stubbing it — a MagicMock context manager would
+    # make the "temp file was removed" assertion pass vacuously.
+    saved["autobot_shared.temp_files"] = sys.modules.get("autobot_shared.temp_files")
+    _temp_spec = importlib.util.spec_from_file_location(
+        "autobot_shared.temp_files", str(_REPO_ROOT / "autobot_shared" / "temp_files.py")
+    )
+    _temp_mod = importlib.util.module_from_spec(_temp_spec)
+    sys.modules["autobot_shared.temp_files"] = _temp_mod
+    _temp_spec.loader.exec_module(_temp_mod)
     _stub("autobot_shared.time_utils", parse_utc_iso=MagicMock())
     _stub("autobot_shared.ssot_config", config=MagicMock())
 

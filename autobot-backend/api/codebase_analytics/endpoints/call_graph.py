@@ -16,9 +16,13 @@ import aiofiles
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from autobot_shared.code_graph import compute_node_id, module_path_from_rel_path
+from autobot_shared.code_graph import resolve_callee as _shared_resolve_callee
+from autobot_shared.env_utils import blank_to_none
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 from utils.io_executor import get_analytics_executor
 
@@ -29,6 +33,33 @@ logger = get_logger(__name__)
 # Issue #711: Cache configuration for call graph
 CALL_GRAPH_CACHE_PREFIX = "codebase:call_graph:cache"
 CALL_GRAPH_CACHE_TTL = TTL_5_MINUTES
+
+
+def _resolve_call_graph_max_files() -> int | None:
+    """Max files a call-graph scan analyses; ``None`` means unlimited.
+
+    Issue #13468: previously hardcoded to 300 with no comment, no config, and
+    no acknowledgement in the response that the reported statistics covered
+    8% of a 3,541-file backend. Configurable so a deployment that hits real
+    scan latency/memory limits (#12341) can re-cap without a code change --
+    but ``_build_call_graph_response`` reports ``files_scanned``/``files_total``/
+    ``truncated`` regardless, so the numbers are honest either way.
+    """
+    raw = blank_to_none(config.misc.call_graph_max_files)
+    if raw is None:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("AUTOBOT_CALL_GRAPH_MAX_FILES=%r is not an integer; scanning all files", raw)
+        return None
+    if value <= 0:
+        logger.warning("AUTOBOT_CALL_GRAPH_MAX_FILES=%d must be positive; scanning all files", value)
+        return None
+    return value
+
+
+CALL_GRAPH_MAX_FILES = _resolve_call_graph_max_files()
 
 
 def _get_cache_key(project_root: str) -> str:
@@ -309,46 +340,6 @@ def _build_call_edge(
     }
 
 
-def _resolve_via_import_context(
-    callee_name: str,
-    import_context: ImportContext,
-    functions: Dict,
-) -> tuple[str | None, bool]:
-    """
-    Resolve callee via import context.
-
-    Issue #713: Extracted from _resolve_callee_id to reduce function length.
-
-    Args:
-        callee_name: Name of the called function
-        import_context: Import context for the current file
-        functions: Dictionary of registered functions
-
-    Returns:
-        Tuple of (resolved_id, is_external)
-    """
-    imported_path = import_context.resolve_name(callee_name)
-    if not imported_path:
-        return None, False
-
-    # Check if it's an external library call
-    if import_context.is_external(callee_name):
-        return None, True  # External call, not truly unresolved
-
-    # Try the imported path directly
-    if imported_path in functions:
-        return imported_path, False
-
-    # Try variations (module.func vs module.Class.func)
-    parts = imported_path.split(".")
-    for i in range(len(parts) - 1, 0, -1):
-        candidate = ".".join(parts[:i]) + "." + parts[-1]
-        if candidate in functions:
-            return candidate, False
-
-    return None, False
-
-
 def _resolve_callee_id(
     callee_name: str,
     module_path: str,
@@ -361,6 +352,17 @@ def _resolve_callee_id(
 
     Issue #665: Extracted from _create_function_visitor to reduce function length.
     Issue #713: Enhanced with import context for cross-module resolution.
+    Issue #13470: Delegates the module-local/class-local/import-context
+    resolution to the canonical resolver in autobot_shared/code_graph/ —
+    the same one services/knowledge/code_indexer.py (#13469) uses — so this
+    module no longer keeps its own copy. ``functions`` (id -> info) is passed
+    straight through as the resolver's ``known_ids`` container; dict
+    membership checks by key, so this is not a behaviour change.
+
+    The trailing dotted-name check below is retained for exact behaviour
+    parity even though ``FunctionCallVisitor._extract_callee_name`` never
+    actually returns a name containing "." (attribute calls yield only the
+    final ``.attr`` component) — filed as a follow-up (#13470 remaining work).
 
     Args:
         callee_name: Name of the called function
@@ -374,24 +376,12 @@ def _resolve_callee_id(
         - resolved_id: Function ID if found, None otherwise
         - is_external: True if call is to external library (not unresolved)
     """
-    # Try module-level function first
-    possible_id = f"{module_path}.{callee_name}"
-    if possible_id in functions:
-        return possible_id, False
+    resolved_id, is_external = _shared_resolve_callee(
+        callee_name, module_path, current_class, functions, import_context
+    )
+    if resolved_id or is_external:
+        return resolved_id, is_external
 
-    # Try class method if in class context
-    if current_class:
-        possible_id = f"{module_path}.{current_class}.{callee_name}"
-        if possible_id in functions:
-            return possible_id, False
-
-    # Issue #713: Try resolving via import context
-    if import_context:
-        result = _resolve_via_import_context(callee_name, import_context, functions)
-        if result[0] or result[1]:  # Found or is external
-            return result
-
-    # Issue #713: Check if callee_name itself is external (e.g., json.loads)
     if callee_name and "." in callee_name:
         base = callee_name.split(".")[0]
         if base in STDLIB_MODULES or base in COMMON_THIRD_PARTY:
@@ -444,6 +434,10 @@ def _compute_func_identity(node_name: str, module_path: str, current_class: str 
 
     Issue #665: Extracted from _create_function_visitor._process_function
     to reduce nested class method size.
+    Issue #13470: The id itself now comes from the canonical
+    autobot_shared.code_graph.compute_node_id — this was the "richer" of the
+    two node-identity schemes in the codebase, so it became the shared one
+    rather than being duplicated here.
 
     Args:
         node_name: Name of the function node
@@ -453,12 +447,8 @@ def _compute_func_identity(node_name: str, module_path: str, current_class: str 
     Returns:
         Tuple of (func_id, full_name)
     """
-    if current_class:
-        func_id = f"{module_path}.{current_class}.{node_name}"
-        full_name = f"{current_class}.{node_name}"
-    else:
-        func_id = f"{module_path}.{node_name}"
-        full_name = node_name
+    func_id = compute_node_id(node_name, module_path, parent_class=current_class)
+    full_name = f"{current_class}.{node_name}" if current_class else node_name
     return func_id, full_name
 
 
@@ -651,11 +641,17 @@ async def _analyze_python_files(
 
     Issue #665: Extracted from get_call_graph to reduce function length.
     Issue #713: Added import context extraction for cross-module resolution.
+    Issue #13470: module_path now comes from the canonical
+    module_path_from_rel_path (identical output for .py files; shared with
+    services/knowledge/code_indexer.py).
+    Issue #13468: no longer slices to 300 files internally -- the caller
+    (``get_call_graph``) decides how much of ``python_files`` to pass in, so
+    it can report the true ``files_scanned``/``files_total`` split.
     """
-    for py_file in python_files[:300]:
+    for py_file in python_files:
         try:
             rel_path = str(py_file.relative_to(project_root))
-            module_path = rel_path.replace("/", ".").replace(".py", "")
+            module_path = module_path_from_rel_path(rel_path)
             try:
                 async with aiofiles.open(py_file, "r", encoding="utf-8") as f:
                     content = await f.read()
@@ -686,19 +682,36 @@ def _build_call_graph_response(
     top_callers: List,
     top_called: List,
     external_calls_count: int = 0,
+    files_scanned: int = 0,
+    files_total: int = 0,
 ) -> dict:
     """Build call graph response dictionary.
 
     Issue #665: Extracted from get_call_graph to reduce function length.
     Issue #713: Added external_calls_count to show filtered library calls.
+    Issue #13468: ``summary`` now states ``files_scanned``/``files_total``/
+    ``truncated`` -- every other statistic in ``summary`` describes exactly
+    ``files_scanned`` files, never silently the whole repo. The node/edge/
+    orphan lists are still capped at 500/2000/500 for response size, but that
+    cap is now disclosed via matching ``*_total``/``*_truncated`` fields
+    rather than silently dropping entries.
     """
     resolved_count = len([e for e in unique_edges if e["resolved"]])
     unresolved_count = len([e for e in unique_edges if not e["resolved"]])
 
     return {
         "status": "success",
-        "call_graph": {"nodes": nodes[:500], "edges": unique_edges[:2000]},
+        "call_graph": {
+            "nodes": nodes[:500],
+            "nodes_total": len(nodes),
+            "nodes_truncated": len(nodes) > 500,
+            "edges": unique_edges[:2000],
+            "edges_total": len(unique_edges),
+            "edges_truncated": len(unique_edges) > 2000,
+        },
         "orphaned_functions": orphaned_nodes[:500],
+        "orphaned_functions_total": len(orphaned_nodes),
+        "orphaned_functions_truncated": len(orphaned_nodes) > 500,
         "summary": {
             "total_functions": len(functions),
             "connected_functions": len(nodes),
@@ -711,6 +724,12 @@ def _build_call_graph_response(
             "resolution_rate": round(resolved_count / max(resolved_count + unresolved_count, 1) * 100, 1),
             "top_callers": top_callers,
             "most_called": top_called,
+            # Issue #13468: scope of the statistics above -- files_scanned may
+            # be less than files_total when AUTOBOT_CALL_GRAPH_MAX_FILES caps
+            # the scan; unset (default) scans every file, so truncated is False.
+            "files_scanned": files_scanned,
+            "files_total": files_total,
+            "truncated": files_scanned < files_total,
         },
         "from_cache": False,
     }
@@ -733,6 +752,11 @@ async def get_call_graph(
     Issue #12330: Scope the scan to the requested source's clone path so one
     project cannot see another's call graph. The cache key is derived from the
     resolved root (path-hashed) so each source keeps a distinct cache entry.
+    Issue #13468: scans every file by default (previously hardcoded to the
+    first 300 while reporting summary statistics as if they were repo-wide).
+    Configurable back down via AUTOBOT_CALL_GRAPH_MAX_FILES for a deployment
+    that needs to bound scan cost; either way the response states exactly
+    how many files it covers.
     """
     project_root = await resolve_scan_root(source_id)
 
@@ -743,11 +767,15 @@ async def get_call_graph(
             return JSONResponse(cached_data)
 
     python_files = await _get_python_files(project_root)
+    files_total = len(python_files)
+    scanned_files = python_files if CALL_GRAPH_MAX_FILES is None else python_files[:CALL_GRAPH_MAX_FILES]
+    files_scanned = len(scanned_files)
+
     functions: Dict[str, Dict] = {}
     call_edges: List[Dict] = []
     external_calls: List[Dict] = []  # Issue #713: Track external library calls
 
-    await _analyze_python_files(python_files, project_root, functions, call_edges, external_calls)
+    await _analyze_python_files(scanned_files, project_root, functions, call_edges, external_calls)
 
     nodes = _build_connected_nodes(functions, call_edges)
     orphaned_nodes = _build_orphaned_nodes(functions, call_edges)
@@ -762,6 +790,8 @@ async def get_call_graph(
         top_callers,
         top_called,
         external_calls_count=len(external_calls),  # Issue #713
+        files_scanned=files_scanned,
+        files_total=files_total,
     )
     await _set_cached_call_graph(str(project_root), response_data)
 

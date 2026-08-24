@@ -11,6 +11,7 @@ exercised rather than skipped.
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -76,10 +77,20 @@ def _make_app(session_item=None, suggester_result=None, caller_org_id=None):
 # ---------------------------------------------------------------------------
 
 
-class TestSuggestAcEndpoint:
-    def teardown_method(self, _method):
-        patch.stopall()
+@pytest.fixture(autouse=True)
+def _stop_patches():
+    """Undo every patch the app builder starts, for each test in this module.
 
+    Cleanup used to be restated as a ``teardown_method`` on each class, which is
+    cleanup a newly added class can silently omit — exactly how #13674 leaked
+    ``KbCollectionManager.ensure_collection`` into the rest of the session. A
+    module-level autouse fixture cannot be missed (#13678).
+    """
+    yield
+    patch.stopall()
+
+
+class TestSuggestAcEndpoint:
     def test_no_title_no_work_item_id_returns_422(self):
         """Neither title nor work_item_id supplied → 422 from route logic."""
         client = _make_app()

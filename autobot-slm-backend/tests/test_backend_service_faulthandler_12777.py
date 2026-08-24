@@ -47,6 +47,10 @@ def _render(**overrides) -> str:
     # the stdlib equivalents so the real template renders outside Ansible.
     env.filters["dirname"] = os.path.dirname
     env.filters["basename"] = os.path.basename
+    # `bool` is likewise Ansible-only. #13047 gates LimitCORE on
+    # `backend_core_capture | default(false) | bool`, so every render in this
+    # file needs it — without it the template raises before any assertion runs.
+    env.filters["bool"] = lambda v: str(v).strip().lower() in ("true", "yes", "1", "on")
     return env.get_template("autobot-backend.service.j2").render(**{**_CTX, **overrides})
 
 
@@ -88,14 +92,58 @@ def _yaml_text(relative: str) -> str:
     return (_ROLE_DIR / relative).read_text(encoding="utf-8")
 
 
-def test_unit_grants_a_core_limit():
-    """systemd defaults RLIMIT_CORE to 0 — without this no core is ever written."""
-    assert "LimitCORE=" in _render()
+def test_unit_grants_a_core_limit_when_capture_is_enabled():
+    """systemd defaults RLIMIT_CORE to 0 — without this no core is ever written.
+
+    #13047 narrowed this to the opt-in. It previously asserted the limit was
+    granted on EVERY render, which is the defect the issue is about, not a
+    property worth keeping.
+    """
+    assert "LimitCORE=" in _render(backend_core_capture=True)
 
 
-def test_core_limit_is_overridable():
-    """A node that must not write cores can cap it without editing the template."""
-    assert "LimitCORE=0" in _render(backend_core_limit="0")
+def test_no_core_limit_is_granted_by_default():
+    """The #13047 defect: a stock node was given permission to dump memory.
+
+    The old reasoning was that the limit is "harmless while capture is off"
+    because the kernel has nowhere to put the core. That holds only where
+    core_pattern pipes to a MISSING handler — the broken state of the #12777
+    node this was tested on. `systemd-coredump` is the distro default on Ubuntu,
+    Debian and Fedora, so a stock node went from never writing a core to writing
+    a full process-memory image on every abort — containing AUTOBOT_JWT_SECRET,
+    DB credentials and provider API keys in cleartext.
+    """
+    assert "LimitCORE" not in _render()
+
+
+def test_an_undefined_capture_flag_grants_nothing():
+    """An inventory that predates the opt-in must fail closed, not open."""
+    rendered = _render()
+    assert "LimitCORE" not in rendered
+
+
+def test_core_limit_is_overridable_when_capture_is_enabled():
+    """A node that captures cores can still cap their size without editing the template."""
+    assert "LimitCORE=0" in _render(backend_core_capture=True, backend_core_limit="0")
+
+
+def test_the_core_limit_is_declared_in_defaults():
+    """#13047: it existed only as an inline Jinja `default('infinity')`.
+
+    That made the one knob controlling how much process memory may be written to
+    disk invisible in defaults/, where every other tunable in this role is
+    documented.
+    """
+    assert "backend_core_limit:" in _yaml_text("defaults/main.yml")
+
+
+def test_the_crash_diagnostic_survives_with_capture_off():
+    """Gating the limit must not gate faulthandler — they solve different halves.
+
+    faulthandler is what makes a native abort printable at all (#12777) and is
+    not a memory-disclosure risk; only the core dump is.
+    """
+    assert 'Environment="PYTHONFAULTHANDLER=1"' in _render()
 
 
 def test_core_capture_is_opt_in():

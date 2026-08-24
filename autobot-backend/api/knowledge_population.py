@@ -1274,23 +1274,33 @@ async def _index_code_background(task_id: str, root_dir: str, force: bool):
 
         elapsed = time.time() - start_time
 
+        # #13510: name the code this run could not read. Without it the caller sees
+        # a skip count and no way to tell an under-covered graph from a complete one
+        # — the whole point of counting these files instead of dropping them.
+        unsupported = result.unsupported_extensions
+        coverage_note = ""
+        if unsupported:
+            breakdown = ", ".join(f"{ext} x{count}" for ext, count in sorted(unsupported.items()))
+            coverage_note = f"; no extractor for {sum(unsupported.values())} code files ({breakdown})"
+
         await TaskStatusManager.complete_task(
             task_id=task_id,
             message=(
                 f"Successfully indexed {result.success} code nodes "
-                f"({result.skipped} skipped, {result.failed} failed)"
+                f"({result.skipped} skipped, {result.failed} failed){coverage_note}"
             ),
             items_processed=result.success,
             elapsed_seconds=elapsed,
         )
 
         logger.info(
-            "[%s] Code indexing completed: root=%s success=%d failed=%d skipped=%d (%.1fs)",
+            "[%s] Code indexing completed: root=%s success=%d failed=%d skipped=%d unsupported=%s (%.1fs)",
             task_id,
             root_dir,
             result.success,
             result.failed,
             result.skipped,
+            dict(sorted(unsupported.items())) or "none",
             elapsed,
         )
     except Exception as e:

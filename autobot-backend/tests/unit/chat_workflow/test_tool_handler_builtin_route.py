@@ -121,7 +121,10 @@ async def test_uniform_gate_resets_invalid_call_counter() -> None:
     the four replaced branches."""
     mixin, calls = _mixin(), []
     mixin._handle_web_search_tool = _recording_handler(calls, "web_search")
-    ctx = SimpleNamespace(consecutive_invalid_tool_calls=2)
+    # `context` mirrors LLMIterationContext's own field: the seam's guards keep
+    # their per-turn state there (#11178 fact-forcing, #13590 repetition), so a
+    # double without it no longer stands in for a real ctx.
+    ctx = SimpleNamespace(consecutive_invalid_tool_calls=2, context={})
 
     messages = [
         msg

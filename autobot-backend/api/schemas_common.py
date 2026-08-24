@@ -22,6 +22,15 @@ from pydantic import BaseModel
 
 T = TypeVar("T")
 
+#: Upper bound on the thought counters accepted by the sequential-thinking and
+#: structured-thinking MCP bridges (#13162). Both fields carried ``ge=1`` with
+#: no ceiling, so a caller could submit ``total_thoughts=2**63``: harmless to
+#: Python's arbitrary-precision ints, but it overflows the signed 64-bit integer
+#: every non-Python MCP client decodes JSON numbers into — and the bridges echo
+#: the value straight back in their response. The ceiling is far above any real
+#: thinking session, so it constrains only nonsense.
+MAX_THOUGHT_COUNT = 10_000
+
 
 # ---------------------------------------------------------------------------
 # Generic / reusable (used across multiple unrelated domains)

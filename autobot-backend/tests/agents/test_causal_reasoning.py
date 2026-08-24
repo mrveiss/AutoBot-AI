@@ -23,9 +23,14 @@ import pytest
 # tests/orchestration/test_causal_error_recovery.py): the parent conftest stubs
 # ``orchestration.causal_error_analyzer`` (#7431) as a MagicMock package, so the
 # TestCausalErrorAnalyzer suite below was exercising a mock (``CausalErrorAnalyzer()``
-# returned MagicMocks).  Displace exactly that stub, import the real module, and
-# restore the displaced stub after this module's tests so sibling type-only tests
-# that patch it by name are unaffected.  Its import chain only needs
+# returned MagicMocks).  Displace exactly that stub and import the real module.
+#
+# #13651: the displaced entry is put back only if it was a real module. The
+# original text here said the mock was restored "so sibling type-only tests that
+# patch it by name are unaffected" — no test under tests/agents/ references
+# ``causal_error_analyzer`` at all, and reinstalling the mock left it installed
+# for everything collected afterwards, which the leak guard reported. Its import
+# chain only needs
 # agent_loop.think_tool / agent_loop.types, which the conftest already real-loads.
 # ---------------------------------------------------------------------------
 _CONFTEST_STUB_NAMES: tuple = ("orchestration.causal_error_analyzer",)
@@ -43,10 +48,20 @@ from orchestration.causal_error_analyzer import (  # noqa: E402
 
 @pytest.fixture(scope="module", autouse=True)
 def _restore_conftest_stubs():
-    """Restore the displaced parent-conftest stub after this module's tests."""
+    """Restore the displaced parent-conftest stub after this module's tests.
+
+    #13651: only if it was a real module. The parent conftest installs a
+    ``MagicMock`` here purely so the lightweight types-only tests can collect
+    without the heavy import chain (#7431); putting that mock back once this
+    module has successfully imported the genuine module leaves a mock installed
+    for everything collected afterwards, which is the leak the guard reports.
+    Keeping the real module is both correct and cheaper — the import has already
+    happened, so nothing downstream pays for it.
+    """
     yield
     for _sname, _smod in _SAVED_STUBS.items():
-        sys.modules[_sname] = _smod  # type: ignore[assignment]
+        if getattr(_smod, "__spec__", None) is not None:
+            sys.modules[_sname] = _smod  # type: ignore[assignment]
 
 
 from reasoning.causal_reasoning import (

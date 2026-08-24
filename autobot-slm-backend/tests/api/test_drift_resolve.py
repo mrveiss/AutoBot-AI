@@ -126,6 +126,23 @@ def _pin_private_code_sync():
                 setattr(_pkg, _child, _prev_attr)
 
 
+@pytest.fixture(autouse=True)
+def _clean_deletion_preview():
+    """Default every test to "the resolve would delete nothing" (#13851).
+
+    resolve_drift now dry-runs rsync before syncing, which in a unit test means
+    a real subprocess against a path that does not exist (#13312 guard). Tests
+    that are ABOUT the guard patch this target themselves — an inner patch()
+    wins over this one — so defaulting it clean here does not hide the
+    behaviour, it just keeps the pre-existing tests testing what they test.
+    """
+    # patch.object on the private module, not the "api.code_sync" string —
+    # fixture order does not guarantee _pin_private_code_sync has run yet, so
+    # the string target could resolve to the shared (stubbed) module instead.
+    with patch.object(_CS, "_preview_rsync_deletions", AsyncMock(return_value=(True, [], ""))):
+        yield
+
+
 # Stub user — endpoint only checks authentication via Depends(get_current_user)
 _FAKE_USER = {"username": "tester", "is_admin": True}
 
@@ -287,7 +304,7 @@ def test_shared_sync_failure_fails_resolve_and_skips_component_rsync(stub_user):
     rsync_mock = AsyncMock(return_value=(True, ""))
     shared_patch = patch(
         "api.code_sync._ensure_autobot_shared_synced",
-        AsyncMock(return_value=(False, "autobot_shared-first: resync failed")),
+        AsyncMock(return_value=(False, "autobot_shared-first: resync failed", [])),
     )
     rsync_patch = patch("api.code_sync._rsync_component_local", rsync_mock)
     with src_patch, dep_patch, shared_patch, rsync_patch, _noop_post_sync():
@@ -503,3 +520,87 @@ def test_autobot_shared_is_syncable_and_restarts_dependents():
     assert "autobot-backend" in deps
     assert "autobot-slm-backend" in deps
     assert len(deps) >= 2
+
+
+# ---------------------------------------------------------------------------
+# #13851 — the endpoint refuses a resolve that would delete files
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_refuses_when_it_would_delete_and_never_rsyncs(stub_user):
+    """The 55-deletion case: refuse, name the paths, and do not sync.
+
+    Returning success=False is not enough on its own — the rsync must not run,
+    because running it IS the deletion.
+    """
+    src_patch, dep_patch = _setup_dir_mocks()
+    doomed = ["plugins/core-plugins/hello/main.py", "logs/audit/audit_2026-08-03.jsonl"]
+    preview_patch = patch.object(_CS, "_preview_rsync_deletions", AsyncMock(return_value=(True, doomed, "")))
+    rsync_mock = AsyncMock(return_value=(True, ""))
+    with src_patch, dep_patch, preview_patch, patch.object(_CS, "_rsync_component_local", rsync_mock):
+        resp = _run(resolve_drift(DriftResolveRequest(component="autobot-slm-backend"), stub_user))
+
+    assert resp.success is False
+    assert resp.blocked_deletions == doomed
+    assert "would be DELETED" in resp.message
+    rsync_mock.assert_not_awaited()
+
+
+def test_force_proceeds_without_previewing(stub_user):
+    """force=true is the documented escape hatch — an operator who has read the
+    blocked list must be able to go ahead."""
+    src_patch, dep_patch = _setup_dir_mocks()
+    preview_mock = AsyncMock(return_value=(True, ["orphan.py"], ""))
+    rsync_mock = AsyncMock(return_value=(True, ""))
+    with (
+        src_patch,
+        dep_patch,
+        patch.object(_CS, "_preview_rsync_deletions", preview_mock),
+        # the autobot_shared-first sync (#11611) rsyncs too — patched out so the
+        # assertion below is about the COMPONENT's own sync.
+        patch.object(_CS, "_ensure_autobot_shared_synced", AsyncMock(return_value=(True, "", []))),
+        patch.object(_CS, "_rsync_component_local", rsync_mock),
+        _noop_post_sync(),
+        patch.object(_CS, "_advance_node_version_if_fully_synced", AsyncMock()),
+    ):
+        resp = _run(resolve_drift(DriftResolveRequest(component="autobot-slm-backend", force=True), stub_user))
+
+    assert resp.success is True
+    rsync_mock.assert_awaited_once()
+    preview_mock.assert_not_awaited()
+
+
+def test_shared_first_sync_is_guarded_too(stub_user):
+    """#11611's autobot_shared sync is itself a delete-style rsync that runs on
+    every backend resolve without the caller asking for it — unguarded it was
+    the one path that could still delete a deployed file source does not have."""
+    rsync_mock = AsyncMock(return_value=(True, ""))
+
+    # Per-component dirs (not the shared _setup_dir_mocks constant) so the two
+    # previews are distinguishable. Keyed on the SOURCE/DEST arguments (the last
+    # two), not on the whole argv: every backend's excludes now mention
+    # autobot_shared too (#13851 protects the symlink), so an `any(...)` match
+    # would fire on the component's own preview.
+    async def _fake_preview(cmd):
+        if "autobot_shared" in cmd[-1]:
+            return True, ["stale_helper.py"], ""
+        return True, [], ""
+
+    with (
+        patch("api.code_sync.get_default_source_dir", side_effect=lambda c: f"/opt/autobot/code_source/{c}"),
+        patch("api.code_sync.get_default_deployed_dir", side_effect=lambda c: f"/opt/autobot/{c}"),
+        patch.object(_CS, "_preview_rsync_deletions", AsyncMock(side_effect=_fake_preview)),
+        patch.object(_CS, "_rsync_component_local", rsync_mock),
+    ):
+        resp = _run(resolve_drift(DriftResolveRequest(component="autobot-slm-backend"), stub_user))
+
+    assert resp.success is False
+    assert "autobot_shared-first" in resp.message
+    assert "stale_helper.py" in resp.message
+    rsync_mock.assert_not_awaited()
+
+
+def test_resolve_defaults_to_not_forced(stub_user):
+    """An omitted `force` must mean "protect me" — the guard is only useful if
+    it is the default."""
+    assert DriftResolveRequest(component="autobot-slm-backend").force is False

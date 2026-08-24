@@ -32,7 +32,7 @@ from auth_middleware import get_current_user, require_device_jwt
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import client_getdel, get_redis_client
 from autobot_shared.time_utils import now_utc
 from models.mobile_device import DevicePlatform, MobileDevice
 
@@ -186,9 +186,17 @@ async def pair_device(
         )
 
     key = _redis_challenge_key(body.challenge_token)
-    raw = redis.get(key)
+    # #13408: fetch and consume in ONE atomic operation. This endpoint is
+    # deliberately unauthenticated — the docstring above states that
+    # authentication is delegated to the challenge token — so single-use is not
+    # a nicety here, it is the whole control. A separate GET then DELETE let two
+    # requests presenting the same QR token both read a value before either
+    # deleted it, and both then paired a device against the bound user_id.
+    # ``client_getdel`` issues GETDEL where the client supports it.
+    raw = await client_getdel(redis, key)
     if raw is None:
-        # GH#4463: Record expired/invalid pairing attempts
+        # GH#4463: Record expired/invalid pairing attempts. A loser of the race
+        # now lands here too, which is the correct answer for a consumed token.
         metrics.record_device_pairing_attempt("expired")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -196,8 +204,6 @@ async def pair_device(
         )
 
     user_id = raw.decode() if isinstance(raw, bytes) else raw
-    # Consume the token — one-time use
-    redis.delete(key)
 
     device = MobileDevice(
         user_id=user_id,

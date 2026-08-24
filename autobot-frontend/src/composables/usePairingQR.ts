@@ -55,6 +55,23 @@ export function usePairingQR() {
   let countdownInterval: number | null = null
   let pairingCheckInterval: number | null = null
 
+  // Device ids that already existed when this challenge was issued. Anything
+  // outside this set is necessarily the device that just paired.
+  let knownDeviceIds = new Set<string>()
+
+  async function snapshotKnownDevices() {
+    try {
+      const data: DeviceListResponse = await apiClient.get(`${getApiBase()}/devices`)
+      knownDeviceIds = new Set((data.devices ?? []).map((d) => d.id))
+    } catch (err) {
+      // An empty baseline would make every existing device look new, so treat a
+      // failed snapshot as "cannot detect pairing" rather than "everything is new".
+      knownDeviceIds = new Set()
+      logger.warn('Could not snapshot known devices; pairing detection disabled:', err)
+      throw err
+    }
+  }
+
   async function fetchChallenge() {
     stopCountdown()
     stopPairingCheck()
@@ -64,6 +81,8 @@ export function usePairingQR() {
     qrDataUrl.value = null
 
     try {
+      await snapshotKnownDevices()
+
       const response: QRChallengeResponse = await apiClient.get(
         `${getApiBase()}/devices/pair-qr`
       )
@@ -94,6 +113,9 @@ export function usePairingQR() {
         expiresInSeconds.value--
       } else {
         stopCountdown()
+        // An expired challenge can never be redeemed, so polling on would be a
+        // request every 2s for as long as the dialog stays open.
+        stopPairingCheck()
       }
     }, 1000)
   }
@@ -113,10 +135,10 @@ export function usePairingQR() {
         )
         if (!data.devices?.length) return
 
-        const recentDevice = data.devices.find((d) => {
-          const age = Date.now() - new Date(d.created_at).getTime()
-          return age < 10_000
-        })
+        // Identity, not age. Matching on "created less than 10s ago" fired for a
+        // device paired moments earlier in a previous run of this flow, so
+        // opening the dialog again auto-reported success with nothing scanned.
+        const recentDevice = data.devices.find((d) => !knownDeviceIds.has(d.id))
 
         if (recentDevice) {
           isPaired.value = true

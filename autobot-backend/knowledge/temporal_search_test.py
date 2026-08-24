@@ -9,10 +9,12 @@ Issue #1075: Test coverage for temporal search and causal chain traversal.
 """
 
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import RedisError
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.temporal_search import TemporalSearchService
@@ -25,9 +27,26 @@ logger = get_logger(__name__)
 
 @pytest.fixture
 def mock_redis():
-    """Create a mock Redis client."""
+    """Create a mock async Redis client.
+
+    ``TemporalSearchService`` awaits every command, so the command methods
+    must be ``AsyncMock``.  A plain ``MagicMock`` returns a non-awaitable,
+    ``await`` raises ``TypeError``, and the service's ``except Exception``
+    handlers turn that into an empty result — every assertion then compared
+    against zero regardless of the fixture data (#13270).
+
+    ``redis.json()`` itself is *synchronous* on ``redis.asyncio.Redis`` (it
+    returns the JSON command group), so it stays a ``MagicMock``; only the
+    commands it exposes are awaitable.
+    """
     redis = MagicMock()
-    redis.json.return_value = MagicMock()
+    redis.get = AsyncMock()
+    redis.smembers = AsyncMock()
+    redis.zrangebyscore = AsyncMock()
+
+    json_commands = MagicMock()
+    json_commands.get = AsyncMock()
+    redis.json.return_value = json_commands
     return redis
 
 
@@ -75,6 +94,8 @@ class TestSearchEventsInRange:
         end = datetime(2024, 12, 31)
         events = await service.search_events_in_range(start, end, event_types=["action"])
         assert len(events) == 0
+        # The event was fetched and then filtered out — not a failed query.
+        mock_redis.json().get.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_filters_by_participant(self, service, mock_redis, sample_event):
@@ -97,6 +118,8 @@ class TestSearchEventsInRange:
         end = datetime(2024, 12, 31)
         events = await service.search_events_in_range(start, end, participants=[uuid4()])
         assert len(events) == 0
+        # The event was fetched and then filtered out — not a failed query.
+        mock_redis.json().get.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_empty_range(self, service, mock_redis):
@@ -105,6 +128,8 @@ class TestSearchEventsInRange:
         end = datetime(2024, 1, 2)
         events = await service.search_events_in_range(start, end)
         assert events == []
+        # Empty range means nothing was fetched at all.
+        mock_redis.json().get.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_skips_missing_events(self, service, mock_redis):
@@ -147,10 +172,32 @@ class TestGetEventTimeline:
         assert events[0]["name"] == "First"
 
     @pytest.mark.asyncio
+    async def test_returns_events_with_decoded_responses_client(self, service, mock_redis):
+        """End-to-end guard for #13270.
+
+        The shared client decodes responses, so the entity-id lookup returns
+        ``str``.  ``.decode()`` on that raised AttributeError, which
+        get_event_timeline's ``except Exception`` turned into an empty
+        timeline for *every* entity — a user-visible defect on
+        ``GET /events/{entity_name}/timeline``.
+        """
+        mock_redis.get.return_value = str(uuid4())
+        mock_redis.smembers.return_value = ["e1"]
+        mock_redis.json().get.return_value = {
+            "name": "Only",
+            "timestamp": "2024-03-01T00:00:00",
+        }
+
+        events = await service.get_event_timeline("test_entity")
+        assert len(events) == 1
+        assert events[0]["name"] == "Only"
+
+    @pytest.mark.asyncio
     async def test_entity_not_found(self, service, mock_redis):
         mock_redis.get.return_value = None
         events = await service.get_event_timeline("unknown")
         assert events == []
+        mock_redis.smembers.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_respects_limit(self, service, mock_redis):
@@ -173,6 +220,8 @@ class TestGetEventTimeline:
 
         events = await service.get_event_timeline("entity")
         assert len(events) == 0
+        # The event was fetched and dropped for lacking a timestamp.
+        mock_redis.json().get.assert_awaited_once()
 
 
 # --- Causal Chain Traversal ---
@@ -214,26 +263,45 @@ class TestFindCausalChain:
         mock_redis.smembers.side_effect = [{f"e{i+1}"} for i in range(10)]
 
         chain = await service.find_causal_chain(uuid4(), direction="forward", max_depth=3)
-        assert len(chain) <= 3
+        # Exactly max_depth levels are visited before the recursion stops.
+        assert len(chain) == 3
 
     @pytest.mark.asyncio
     async def test_handles_cycles(self, service, mock_redis):
-        """Cycle detection via visited set prevents infinite recursion."""
-        event1 = {"id": "e1", "name": "A"}
-        event2 = {"id": "e2", "name": "B"}
+        """Cycle detection via visited set prevents infinite recursion.
 
-        mock_redis.json().get.side_effect = [event1, event2]
-        # e1 -> e2 -> e1 (cycle)
-        mock_redis.smembers.side_effect = [{"e2"}, {"e1"}]
+        The traversal starts at ``id_a``, so the ``id_b -> id_a`` edge is a
+        real cycle back to the root.  Keyed lookups (rather than a
+        side_effect list) keep the graph well-defined for every visit, so
+        the assertion proves the visited set stopped the walk instead of a
+        mock running out of values.
+        """
+        id_a = uuid4()
+        id_b = uuid4()
+        events = {
+            f"event:{id_a}": {"id": str(id_a), "name": "A"},
+            f"event:{id_b}": {"id": str(id_b), "name": "B"},
+        }
+        # a -> b -> a (cycle); default max_depth of 5 would otherwise
+        # produce a 5-event chain.
+        links = {
+            f"event:{id_a}:effects": {str(id_b)},
+            f"event:{id_b}:effects": {str(id_a)},
+        }
+        mock_redis.json().get.side_effect = lambda key: events.get(key)
+        mock_redis.smembers.side_effect = lambda key: links.get(key, set())
 
-        chain = await service.find_causal_chain(uuid4(), direction="forward")
+        chain = await service.find_causal_chain(id_a, direction="forward")
         assert len(chain) == 2
+        assert [e["name"] for e in chain] == ["A", "B"]
 
     @pytest.mark.asyncio
     async def test_empty_chain(self, service, mock_redis):
         mock_redis.json().get.return_value = None
         chain = await service.find_causal_chain(uuid4())
         assert chain == []
+        # A missing root event stops the walk before any link lookup.
+        mock_redis.smembers.assert_not_awaited()
 
 
 # --- Entity ID Lookup ---
@@ -242,18 +310,105 @@ class TestFindCausalChain:
 class TestGetEntityIdByName:
     """Tests for _get_entity_id_by_name."""
 
-    def test_found(self, service, mock_redis):
+    @pytest.mark.asyncio
+    async def test_found(self, service, mock_redis):
         mock_redis.get.return_value = b"some-uuid"
-        result = service._get_entity_id_by_name("Python")
+        result = await service._get_entity_id_by_name("Python")
         assert result == "some-uuid"
-        mock_redis.get.assert_called_with("entity:name:python")
+        mock_redis.get.assert_awaited_with("entity:name:python")
 
-    def test_not_found(self, service, mock_redis):
+    @pytest.mark.asyncio
+    async def test_found_with_decoded_responses_client(self, service, mock_redis):
+        """The live client sets decode_responses=True, so get() yields str.
+
+        A bare ``.decode()`` raised AttributeError on this — the shape that
+        actually runs in production (#13270).
+        """
+        mock_redis.get.return_value = "some-uuid"
+        result = await service._get_entity_id_by_name("Python")
+        assert result == "some-uuid"
+
+    @pytest.mark.asyncio
+    async def test_not_found(self, service, mock_redis):
         mock_redis.get.return_value = None
-        result = service._get_entity_id_by_name("Unknown")
+        result = await service._get_entity_id_by_name("Unknown")
         assert result is None
 
-    def test_normalizes_name(self, service, mock_redis):
+    @pytest.mark.asyncio
+    async def test_normalizes_name(self, service, mock_redis):
         mock_redis.get.return_value = b"id"
-        service._get_entity_id_by_name("  Python  ")
-        mock_redis.get.assert_called_with("entity:name:python")
+        await service._get_entity_id_by_name("  Python  ")
+        mock_redis.get.assert_awaited_with("entity:name:python")
+
+
+# --- Exception Propagation (#13273) ---
+
+
+class TestExceptionPropagation:
+    """A broad ``except Exception`` at all four sites converted every failure
+    into a success-shaped empty result, so callers could never distinguish
+    "no data" from "the query failed" — this pattern is what let the
+    ``.decode()`` defect fixed in #13270 ship undetected for months.
+
+    Only genuine Redis-connectivity failures (``RedisError``/
+    ``ConnectionError``) may still degrade to an empty result. Everything
+    else must propagate so the route handlers' own
+    ``except Exception -> HTTPException(500)`` (``api/knowledge_graph_routes.py``)
+    actually fires.
+    """
+
+    @pytest.mark.asyncio
+    async def test_search_events_in_range_reraises_non_redis_errors(self, service, mock_redis):
+        mock_redis.zrangebyscore.side_effect = AttributeError("'str' object has no attribute 'decode'")
+
+        with pytest.raises(AttributeError):
+            await service.search_events_in_range(datetime(2024, 1, 1), datetime(2024, 12, 31))
+
+    @pytest.mark.asyncio
+    async def test_search_events_in_range_degrades_on_redis_error(self, service, mock_redis):
+        mock_redis.zrangebyscore.side_effect = RedisConnectionError("redis down")
+
+        events = await service.search_events_in_range(datetime(2024, 1, 1), datetime(2024, 12, 31))
+        assert events == []
+
+    @pytest.mark.asyncio
+    async def test_get_event_timeline_reraises_non_redis_errors(self, service, mock_redis):
+        mock_redis.get.side_effect = AttributeError("'str' object has no attribute 'decode'")
+
+        with pytest.raises(AttributeError):
+            await service.get_event_timeline("test_entity")
+
+    @pytest.mark.asyncio
+    async def test_get_event_timeline_degrades_on_redis_error(self, service, mock_redis):
+        mock_redis.get.side_effect = RedisError("redis down")
+
+        events = await service.get_event_timeline("test_entity")
+        assert events == []
+
+    @pytest.mark.asyncio
+    async def test_find_causal_chain_reraises_non_redis_errors(self, service, mock_redis):
+        mock_redis.json().get.side_effect = TypeError("object dict can't be used in 'await' expression")
+
+        with pytest.raises(TypeError):
+            await service.find_causal_chain(uuid4())
+
+    @pytest.mark.asyncio
+    async def test_find_causal_chain_degrades_on_redis_error(self, service, mock_redis):
+        mock_redis.json().get.side_effect = RedisConnectionError("redis down")
+
+        chain = await service.find_causal_chain(uuid4())
+        assert chain == []
+
+    @pytest.mark.asyncio
+    async def test_get_event_reraises_non_redis_errors(self, service, mock_redis):
+        mock_redis.json().get.side_effect = ValueError("bad json")
+
+        with pytest.raises(ValueError):
+            await service._get_event("e1")
+
+    @pytest.mark.asyncio
+    async def test_get_event_degrades_on_redis_error(self, service, mock_redis):
+        mock_redis.json().get.side_effect = RedisError("redis down")
+
+        event = await service._get_event("e1")
+        assert event is None

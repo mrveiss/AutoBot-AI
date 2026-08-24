@@ -795,3 +795,101 @@ async def test_hybrid_score_clamped_at_0_0(graph_rag_service) -> None:
 
     assert len(ranked) == 1
     assert ranked[0].hybrid_score >= 0.0
+
+
+# ============================================================================
+# find_connection_path — #13474 wiring of the shortest-path traversal
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_find_connection_path_delegates_to_memory_graph(graph_rag_service, mock_memory_graph) -> None:
+    """The service must not reimplement traversal — it forwards to find_path (#13474)."""
+    mock_memory_graph.find_path = AsyncMock(
+        return_value={
+            "found": True,
+            "reason": None,
+            "missing_entities": [],
+            "from_entity": {"id": "e1", "name": "Redis Config", "type": "decision"},
+            "to_entity": {"id": "e2", "name": "Incident 7", "type": "incident"},
+            "hops": 1,
+            "path": [{"relation": "CAUSED", "direction": "outgoing"}],
+            "query": {},
+        }
+    )
+
+    result = await graph_rag_service.find_connection_path(
+        from_entity="Redis Config",
+        to_entity="Incident 7",
+        relation="CAUSED",
+        max_depth=4,
+        direction="outgoing",
+    )
+
+    mock_memory_graph.find_path.assert_awaited_once_with(
+        from_entity="Redis Config",
+        to_entity="Incident 7",
+        relation="CAUSED",
+        max_depth=4,
+        direction="outgoing",
+    )
+    assert result["found"] is True
+    assert result["hops"] == 1
+
+
+@pytest.mark.asyncio
+async def test_find_connection_path_records_traversal_time(graph_rag_service, mock_memory_graph) -> None:
+    mock_memory_graph.find_path = AsyncMock(
+        return_value={"found": False, "reason": "no_path", "hops": 0, "path": [], "missing_entities": []}
+    )
+
+    result = await graph_rag_service.find_connection_path("A", "B")
+
+    assert result["traversal_time"] >= 0.0
+    assert result["found"] is False
+
+
+@pytest.mark.asyncio
+async def test_find_connection_path_defaults_to_undirected(graph_rag_service, mock_memory_graph) -> None:
+    """ "How are these connected" is undirected by default (#13474)."""
+    mock_memory_graph.find_path = AsyncMock(return_value={"found": True, "hops": 0, "path": []})
+
+    await graph_rag_service.find_connection_path("A", "B")
+
+    assert mock_memory_graph.find_path.await_args.kwargs["direction"] == "both"
+    assert mock_memory_graph.find_path.await_args.kwargs["max_depth"] == 6
+
+
+@pytest.mark.asyncio
+async def test_find_connection_path_does_not_swallow_failures(graph_rag_service, mock_memory_graph) -> None:
+    """A failed traversal must surface as an error, never as "no path" (#13474)."""
+    mock_memory_graph.find_path = AsyncMock(side_effect=ConnectionError("redis down"))
+
+    with pytest.raises(ConnectionError):
+        await graph_rag_service.find_connection_path("A", "B")
+
+
+@pytest.mark.asyncio
+async def test_find_connection_path_enforces_the_timeout(graph_rag_service, mock_memory_graph) -> None:
+    """#13474 review: an unbounded 'both'-direction walk is a DoS vector, so the
+    service enforces the deadline rather than trusting the traversal to end."""
+    import asyncio
+
+    async def _never_finishes(*args, **kwargs):
+        await asyncio.sleep(10)
+
+    mock_memory_graph.find_path = _never_finishes
+
+    with pytest.raises(asyncio.TimeoutError):
+        await graph_rag_service.find_connection_path("A", "B", timeout=0.05)
+
+
+@pytest.mark.asyncio
+async def test_find_connection_path_without_timeout_is_unbounded(graph_rag_service, mock_memory_graph) -> None:
+    """timeout=None must not silently impose one — callers outside the API
+    (tests, batch jobs) may legitimately want the full walk."""
+    mock_memory_graph.find_path = AsyncMock(return_value={"found": True, "hops": 1, "path": []})
+
+    result = await graph_rag_service.find_connection_path("A", "B", timeout=None)
+
+    assert result["found"] is True

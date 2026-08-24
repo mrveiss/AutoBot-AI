@@ -66,6 +66,12 @@ class TestAgentRegistryAccessors:
         assert "docker" in forbidden
 
     def test_unknown_agent_degrades_to_empty(self) -> None:
+        """The raw accessor reports "no profile" as an empty manifest.
+
+        Not a security property, and not what any enforcement seam sees: those go
+        through ``resolve_forbidden_tools``, which turns this same miss into the
+        default boundary plus a warning (GH#13588, ``test_agent_registry_fail_closed``).
+        """
         reg = AgentCapabilityRegistry(initialize_defaults=True)
         assert reg.forbidden_tools("does-not-exist") == frozenset()
         assert reg.work_boundary("does-not-exist") == ([], [])

@@ -168,7 +168,7 @@ class TestDiskWriteBeforeRedis:
                 pass
 
             def _get_chats_directory(self):
-                return "/tmp/chat_test"  # nosec B108 - test/controlled code uses tmpdir intentionally
+                return "/tmp/chat_test"  # nosec B108  # test/controlled code uses tmpdir intentionally
 
             async def _ensure_chats_directory_exists(self, _):
                 pass
@@ -196,7 +196,7 @@ class TestDiskWriteBeforeRedis:
 
         with patch(
             "autobot_shared.security.path_validator.validate_relative_path",
-            return_value="/tmp/s.json",  # nosec B108 - test/controlled code uses tmpdir intentionally
+            return_value="/tmp/s.json",  # nosec B108  # test/controlled code uses tmpdir intentionally
         ):
             await mgr.save_session("sess-xyz")
 

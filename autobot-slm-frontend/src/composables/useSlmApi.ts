@@ -387,6 +387,12 @@ export function useSlmApi() {
     return response.data
   }
 
+  // #13307: there was no delete route at all, so nothing could reclaim space and
+  // retention was unimplementable while backups accumulated on the root filesystem.
+  async function deleteBackup(backupId: string): Promise<void> {
+    await client.delete(`/stateful/backups/${backupId}`)
+  }
+
   // Replications
   async function getReplications(): Promise<Replication[]> {
     const response = await client.get<ReplicationsResponse>('/stateful/replications')
@@ -1312,6 +1318,7 @@ export function useSlmApi() {
     getBackup,
     createBackup,
     restoreBackup,
+    deleteBackup,
     // Replications
     getReplications,
     getReplication,

@@ -71,17 +71,11 @@
   become: true
   tags: ['redis', 'chromadb']
 
-- name: "ChromaDB | Deploy systemd service unit"
-  ansible.builtin.template:
-    src: autobot-chromadb.service.j2
-    dest: /etc/systemd/system/autobot-chromadb.service
-    mode: "0644"
-  become: true
-  notify:
-    - reload systemd
-    - restart chromadb
-  tags: ['redis', 'chromadb']
-
+# #13535: the token read, the credential file and the unit template moved to
+# code_only.yml, which main.yml includes BEFORE importing this file — so the
+# mandatory EnvironmentFile (#12513) is already on disk by the time the service
+# is started below, on the provisioning path and the updater's path alike.
+# Repeating them here would give the fix two definitions and let them drift.
 - name: "ChromaDB | Enable and start service"
   ansible.builtin.systemd:
     name: autobot-chromadb

@@ -56,11 +56,17 @@ class ConversationFilesMigration:
 
         Args:
             data_dir: Directory for database files (default: PATH.DATA_DIR)
-            schema_dir: Directory containing schema files (default: PATH.DATABASE_DIR / "schemas")
+            schema_dir: Directory containing schema files
+                (default: PATH.BACKEND_DIR / "database" / "schemas")
             db_path: Full path to database file (optional, overrides data_dir/conversation_files.db)
         """
         self.data_dir = data_dir or PATH.DATA_DIR
-        self.schema_dir = schema_dir or PATH.DATABASE_DIR / "schemas"
+        # #13162: was ``PATH.DATABASE_DIR``, which PathConstants has never
+        # defined — every construction without an explicit ``schema_dir``
+        # (both module entrypoints below, and the two migration tests) died
+        # with AttributeError before reaching any SQL. The schema files live
+        # under the backend package, so derive the directory from BACKEND_DIR.
+        self.schema_dir = schema_dir or PATH.BACKEND_DIR / "database" / "schemas"
 
         # Allow custom database path OR use default in data_dir
         if db_path:
@@ -455,8 +461,11 @@ class ConversationFilesMigration:
                 for view in views:
                     # Identifier can't be a bind param; quote it (SQLite rules)
                     # so any metacharacter is treated as a name, not SQL. (#12284)
+                    # The identifier is safely quoted, so B608 does not apply here.
+                    # Prose after "nosec" is parsed by bandit as further test ids
+                    # and warns on every word, so the id stands alone. (#13162)
                     stmt = f"DROP VIEW IF EXISTS {_quote_sqlite_identifier(view)}"
-                    cursor.execute(stmt)  # nosec B608 - identifier safely quoted
+                    cursor.execute(stmt)  # nosec B608
                     logger.info(f"Dropped view: {view}")
 
                 # Drop tables (in reverse dependency order)
@@ -472,8 +481,9 @@ class ConversationFilesMigration:
                 for table in tables_to_drop:
                     # Names come from the hardcoded allowlist above; quote them
                     # (SQLite rules) as defence-in-depth against injection. (#12284)
+                    # Bare B608 for the same reason as the view drop above. (#13162)
                     stmt = f"DROP TABLE IF EXISTS {_quote_sqlite_identifier(table)}"
-                    cursor.execute(stmt)  # nosec B608 - identifier safely quoted
+                    cursor.execute(stmt)  # nosec B608
                     logger.info(f"Dropped table: {table}")
 
                 self.connection.commit()

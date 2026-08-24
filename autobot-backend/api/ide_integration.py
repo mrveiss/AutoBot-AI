@@ -55,6 +55,7 @@ from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.singleton_factory import lazy_optional_singleton, lazy_singleton
 from autobot_shared.ssot_constants import TTL_10_SECONDS
 from models.completion_context import CompletionContext
@@ -680,7 +681,7 @@ class IDEIntegrationEngine:
         cached_result = _get_redis_client().get(cache_key)
         if not cached_result:
             return None
-        completions_data = json.loads(cached_result.decode())
+        completions_data = json.loads(decode_redis_value(cached_result))
         elapsed_ms = (_time.time() - start_time) * 1000
         return CompletionResponse(
             completions=[CompletionItem(**c) for c in completions_data],

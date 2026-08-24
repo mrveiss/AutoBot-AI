@@ -1,0 +1,41 @@
+# Canonical path set for "does this change require the frontend test suite?"
+#
+# SINGLE SOURCE OF TRUTH — do not inline a copy back into either workflow.
+#
+# Two workflows load this file with dorny/paths-filter, and between them they
+# publish exactly one conclusion for the REQUIRED `Unit & Integration Tests`
+# status context:
+#
+#   .github/workflows/frontend-test.yml
+#       job `unit-tests`, self-hosted, runs when `frontend == 'true'`
+#       (the real gate)
+#
+#   .github/workflows/frontend-required-context.yml
+#       job `unit-tests-skip`, ubuntu-latest, runs when `frontend != 'true'`
+#       (reports the context green when the suite does not apply)
+#
+# The two `if:` conditions are exact complements, so the split is only correct
+# while both workflows compute the SAME value for `frontend`. If they ever
+# disagreed in one particular direction — the shim seeing "no frontend change"
+# while frontend-test.yml sees one — a pull request would take the shim's green
+# while the real suite never ran. That is a silent gate bypass, not a flake.
+#
+# Keeping the patterns in one file that both jobs read from the same checkout of
+# the same commit removes that divergence by construction (#13405).
+#
+# The list is also mirrored in frontend-test.yml's `on.push.paths`, because
+# GitHub requires event path filters to be inline. That copy only decides
+# whether a POST-merge run happens on an integration branch; it never gates a
+# required context, so a drift there is visible and harmless. This file remains
+# authoritative.
+frontend:
+  - 'autobot-frontend/**'
+  - '.github/workflows/frontend-test.yml'
+  # The shim workflow gates a required context, so editing it must run the real
+  # suite for the same reason editing frontend-test.yml does.
+  - '.github/workflows/frontend-required-context.yml'
+  # A change to this file changes what "frontend" means for both workflows.
+  - '.github/filters/frontend-paths.yml'
+  # Canonical source for the cross-language parity guard (#13073, #13074):
+  # a port/enum edit here with no frontend edit must still run the suite.
+  - 'autobot_shared/ssot_config.py'

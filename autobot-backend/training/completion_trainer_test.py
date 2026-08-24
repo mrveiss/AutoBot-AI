@@ -14,9 +14,17 @@ from pathlib import Path
 
 import pytest
 
-# Optional ML dependency (torch is in requirements-gpu.txt, never default reqs).
-# Skip cleanly when absent; run for real when torch IS installed (e.g. GPU CI).
+# Optional ML training stack — a LOCAL-DEV guard, not a CI opt-out (#13086).
+# CI installs both: torch arrives transitively via sentence-transformers and
+# torchmetrics is pinned in requirements-ci/ai-ml.txt, so all 17 tests below run
+# on every shard. These two lines only spare a dev box that has neither.
+#
+# BOTH must be guarded. `training/evaluator.py` — pulled in below — imports
+# `torchmetrics` at module level. Guarding torch alone let the guard pass in CI
+# (torch present) and then blow up on torchmetrics, turning this module into a
+# hard collection ERROR on every shard rather than a skip.
 pytest.importorskip("torch.nn.functional", reason="torch not installed — optional ML dep")
+pytest.importorskip("torchmetrics", reason="torchmetrics not installed — optional ML dep (training/evaluator.py)")
 
 import torch  # noqa: E402 — after importorskip by design
 
@@ -163,16 +171,23 @@ def test_completion_model_config():
 
 def test_evaluator_initialization():
     """Test evaluator initialization."""
-    evaluator = CompletionEvaluator(device="cpu")
+    evaluator = CompletionEvaluator(vocab_size=100, device="cpu")
 
     assert evaluator.device == "cpu"
+    assert evaluator.vocab_size == 100
     assert evaluator.accuracy is not None
     assert evaluator.mrr is not None
 
 
+def test_evaluator_rejects_non_positive_vocab_size():
+    """Issue #13162: the metric size must come from the model, not a constant."""
+    with pytest.raises(ValueError, match="vocab_size must be positive"):
+        CompletionEvaluator(vocab_size=0, device="cpu")
+
+
 def test_evaluator_update():
     """Test evaluator metric updates."""
-    evaluator = CompletionEvaluator(device="cpu")
+    evaluator = CompletionEvaluator(vocab_size=100, device="cpu")
 
     # Create dummy predictions and targets
     logits = torch.randn(2, 10, 100)  # [batch, seq_len, vocab]
@@ -191,7 +206,7 @@ def test_evaluator_update():
 
 def test_evaluator_reset():
     """Test evaluator reset."""
-    evaluator = CompletionEvaluator(device="cpu")
+    evaluator = CompletionEvaluator(vocab_size=100, device="cpu")
 
     # Update with dummy data
     logits = torch.randn(2, 10, 100)
@@ -244,7 +259,14 @@ def test_model_training_mode():
 
 
 def test_model_gradient_flow():
-    """Test gradient flow through model."""
+    """Gradients reach every parameter on the path the training loss drives.
+
+    Issue #13162: this asserted that a logits-only loss reaches *all* parameters.
+    It cannot. ``forward()`` bypasses ``self.attention`` entirely when no
+    pattern_embeddings are supplied, and ``self.confidence_layer`` contributes to
+    the confidence output only, which a cross-entropy-over-logits loss does not
+    touch. Those two branches are covered by the test below instead.
+    """
     model = CompletionModel(vocab_size=1000, embedding_dim=128, hidden_dim=256)
     model.train()
 
@@ -261,9 +283,39 @@ def test_model_gradient_flow():
     # Backward pass
     loss.backward()
 
-    # Check gradients exist
-    for param in model.parameters():
-        assert param.grad is not None
+    trained_path = ("embedding", "lstm", "output_layer")
+    checked = 0
+    for name, param in model.named_parameters():
+        if name.startswith(trained_path):
+            assert param.grad is not None, f"{name} received no gradient"
+            checked += 1
+    assert checked > 0, "no parameters matched the trained path"
+
+
+def test_model_gradient_flow_through_optional_branches():
+    """The attention and confidence branches are differentiable when driven.
+
+    Issue #13162: they carry no gradient under the trainer's current objective —
+    ``completion_trainer.train_epoch`` calls ``model(input_ids)`` with no pattern
+    embeddings and takes cross-entropy over logits alone — so this pins that the
+    branches are correctly wired and the gap is in the objective, not the model.
+    """
+    hidden_dim = 256
+    model = CompletionModel(vocab_size=1000, embedding_dim=128, hidden_dim=hidden_dim)
+    model.train()
+
+    input_ids = torch.randint(0, 1000, (2, 10))
+    targets = torch.randint(0, 1000, (2, 10))
+    pattern_embeddings = torch.randn(2, 5, hidden_dim * 2)
+
+    logits, confidence = model(input_ids, pattern_embeddings=pattern_embeddings)
+
+    criterion = torch.nn.CrossEntropyLoss()
+    loss = criterion(logits.view(-1, 1000), targets.view(-1)) + confidence.mean()
+    loss.backward()
+
+    for name, param in model.named_parameters():
+        assert param.grad is not None, f"{name} received no gradient"
 
 
 def test_mrr_metric():

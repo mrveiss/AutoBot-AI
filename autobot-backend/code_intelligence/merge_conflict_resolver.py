@@ -30,6 +30,7 @@ import ast
 import re
 from dataclasses import dataclass, field
 from enum import Enum
+from functools import total_ordering
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -38,14 +39,41 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 
+@total_ordering
 class ConflictSeverity(Enum):
-    """Severity levels for merge conflicts."""
+    """Severity levels for merge conflicts.
+
+    Ordered, because ``_select_strategy`` asks "is this at least COMPLEX?".
+    A plain ``Enum`` is not comparable, so ``severity >= COMPLEX`` raised
+    ``TypeError`` and **safe mode crashed instead of requiring review** — a
+    safety control that never fired (#13162).
+
+    Ordering is defined by an explicit rank rather than by switching to
+    ``IntEnum``, because the string values are the serialized form and must
+    not change.
+    """
 
     TRIVIAL = "trivial"  # Whitespace, formatting only
     SIMPLE = "simple"  # Non-overlapping logic changes
     MODERATE = "moderate"  # Some semantic overlap
     COMPLEX = "complex"  # Significant semantic conflict
     CRITICAL = "critical"  # Incompatible changes, manual review required
+
+    @property
+    def rank(self) -> int:
+        """Position in the severity order, low to high."""
+        return _SEVERITY_ORDER.index(self.value)
+
+    def __lt__(self, other: "ConflictSeverity") -> bool:
+        if not isinstance(other, ConflictSeverity):
+            return NotImplemented
+        return self.rank < other.rank
+
+
+#: Severity order, low to high. Defined beside the enum so adding a level
+#: without ranking it fails loudly (ValueError) rather than sorting silently
+#: wrong.
+_SEVERITY_ORDER = ("trivial", "simple", "moderate", "complex", "critical")
 
 
 class ResolutionStrategy(Enum):

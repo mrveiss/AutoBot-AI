@@ -62,15 +62,15 @@ jobs:
           fi
           echo "✓ All required hooks (black, isort, flake8, autoflake, mypy) are configured"
 
+      # #13517: shared composite action (also upgrades pip/setuptools/wheel).
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: ./.github/actions/setup-python-ci
         with:
-          python-version: '3.14'
+          extra-packages: pre-commit
 
-      - name: Install pre-commit
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install pre-commit
+      # #13517: pre-commit is installed by the composite action above via
+      # extra-packages, which also upgrades pip/setuptools/wheel — this step
+      # duplicated both.
 
       - name: Run pre-commit on all files
         run: |

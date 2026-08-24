@@ -72,9 +72,19 @@ check_python_print() {
         # Skip noqa exemption (specific "noqa: print" or bare "noqa" suppressing all rules)
         echo "$line" | grep -qE '# noqa(: print)?($| )' && continue
 
-        # Skip string definitions containing "print" (not actual calls)
+        # Strip quoted spans BEFORE matching (#13880). The comment below used to
+        # claim string definitions were skipped, but a word boundary alone does
+        # not do that: `"... e.g. \`print(json.dumps(x))\` ..."` inside a prompt
+        # or docstring was reported as a logging violation. Removing "..." and
+        # '...' spans first keeps real calls (`print("hi")` -> `print()`, still
+        # matched) while dropping mentions (`log.info("use print(x)")` ->
+        # `log.info()`, no longer matched).
+        # Known limitation: line-based, so a print( inside a TRIPLE-quoted block
+        # spanning lines is still reported. Add `# noqa: print` there.
+        stripped=$(printf '%s' "$line" | sed 's/"[^"]*"//g; s/'"'"'[^'"'"']*'"'"'//g')
+
         # Match actual print( calls — word boundary before print
-        if echo "$line" | grep -qE '(^|[^a-zA-Z0-9_.])print\s*\('; then
+        if printf '%s' "$stripped" | grep -qE '(^|[^a-zA-Z0-9_.])print\s*\('; then
             echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
             echo "    ${line:0:100}"
             ((VIOLATIONS++))

@@ -11,37 +11,14 @@ functionality across the codebase.
 
 import json
 import logging
-import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.sql_identifier import validate_sql_identifier
 
 logger = get_logger(__name__)
-
-_SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-
-def _validate_sql_identifier(name: str, label: str = "identifier") -> str:
-    """Validate a SQL identifier (table or column name) against an allowlist pattern.
-
-    Only permits names composed of ASCII letters, digits, and underscores, starting
-    with a letter or underscore. Prevents SQL injection via identifier interpolation. (#2845)
-
-    Args:
-        name: The identifier to validate.
-        label: Human-readable label used in the error message.
-
-    Returns:
-        The validated name unchanged.
-
-    Raises:
-        ValueError: If the name contains characters outside the allowed set.
-    """
-    if not _SQL_IDENTIFIER_RE.match(name):
-        raise ValueError(f"Invalid SQL {label} '{name}': only letters, digits, and underscores allowed")
-    return name
 
 
 def _is_path_in_allowed_dir(path_obj: Path, allowed_dirs: list) -> bool:
@@ -429,8 +406,8 @@ class DatabaseUtils:
             # A table name cannot be a bind parameter; validate it against a
             # strict allowlist (letters/digits/underscore) before interpolation
             # so metacharacters can never reach the SQL engine. (#12284, #2845)
-            safe_table = _validate_sql_identifier(table_name, "table name")
-            query = f"SELECT COUNT(*) FROM {safe_table}"  # nosec B608 - identifier allowlisted
+            safe_table = validate_sql_identifier(table_name, "table name")
+            query = f"SELECT COUNT(*) FROM {safe_table}"  # nosec B608  # identifier allowlisted
             cursor = conn.cursor()
             cursor.execute(query)
             result = cursor.fetchone()

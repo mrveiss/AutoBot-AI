@@ -508,9 +508,8 @@ class NPUWorkerManager(AsyncInitializable):
             models_list = models_data.get("models", [])
             if not models_list:
                 return  # nothing to probe
-            model_id = random.choice(
-                models_list
-            )  # nosec B311 - random probe selection for health check, not cryptographic
+            # Random probe selection for health check, not cryptographic.
+            model_id = random.choice(models_list)  # nosec B311
         except Exception as e:
             logger.debug("Pulse-probe: could not fetch models for worker %s: %s", worker_id, e)
             return
@@ -651,7 +650,7 @@ class NPUWorkerManager(AsyncInitializable):
                         logger.debug("Pulse-probe error for worker %s: %s", worker_id, e)
 
                 # Jitter: ±20 % of base_interval
-                jitter = base_interval * 0.2 * (random.random() * 2 - 1)  # nosec B311 - interval jitter to prevent
+                jitter = base_interval * 0.2 * (random.random() * 2 - 1)  # nosec B311  # interval jitter to prevent
                 await asyncio.sleep(max(base_interval + jitter, 60))
 
             except asyncio.CancelledError:

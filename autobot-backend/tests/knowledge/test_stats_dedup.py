@@ -12,45 +12,26 @@ Tests:
 3. Core numbers emitted by both endpoints originate from the same dict, so they
    cannot drift independently.
 
-Heavy transitive deps (Redis, ChromaDB, llama_index, FastAPI request context)
-are stubbed via sys.modules and AsyncMock so no live infrastructure is needed.
+The FastAPI request context is an AsyncMock; nothing else needs standing in
+for, so no live infrastructure is required either (#13361).
 """
 
 from __future__ import annotations
 
-import sys
-import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Stub heavy modules BEFORE any knowledge/* or api/* import
-# ---------------------------------------------------------------------------
+from services.knowledge.stats_service import fetch_kb_core_stats
 
-for _mod_name in (
-    "llama_index",
-    "llama_index.core",
-    "llama_index.vector_stores",
-    "llama_index.vector_stores.chroma",
-    "llama_index.llms",
-    "llama_index.llms.ollama",
-    "llama_index.embeddings",
-    "llama_index.embeddings.ollama",
-    "chromadb",
-    "redis",
-    "redis.asyncio",
-):
-    sys.modules.setdefault(_mod_name, types.ModuleType(_mod_name))
-
-# Redis stubs need concrete attributes
-_redis_mod = sys.modules["redis"]
-_redis_mod.RedisError = Exception  # type: ignore[attr-defined]
-_redis_mod.Redis = MagicMock  # type: ignore[attr-defined]
-_redis_mod.asyncio = sys.modules["redis.asyncio"]  # type: ignore[attr-defined]
-sys.modules["redis.asyncio"].Redis = MagicMock  # type: ignore[attr-defined]
-
-from services.knowledge.stats_service import fetch_kb_core_stats  # noqa: E402
+# #13361: eleven ``sys.modules.setdefault`` stubs used to precede this import —
+# the eight llama_index names, chromadb, redis and redis.asyncio — plus four
+# lines that rebound ``RedisError``/``Redis``/``asyncio`` on whatever object
+# ``setdefault`` handed back. That object is the REAL redis module whenever an
+# earlier import already loaded it, so those four lines silently replaced
+# ``redis.Redis`` and ``redis.asyncio.Redis`` with ``MagicMock`` for the whole
+# session — a mutation no sys.modules guard can see, and one other tests were
+# unknowingly relying on. ``stats_service`` needs none of it.
 
 # ---------------------------------------------------------------------------
 # Helpers

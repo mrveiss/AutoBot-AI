@@ -158,11 +158,11 @@ class NetworkConstants(metaclass=_LazyConfigMeta):
     LOCALHOST_IP: str = "127.0.0.1"
     LOCALHOST_IPV6: str = "::1"  # IPv6 loopback address
     LOCALHOST_NAME: str = "localhost"
-    BIND_ALL_INTERFACES: str = "0.0.0.0"  # nosec B104 - intentional for servers
+    BIND_ALL_INTERFACES: str = "0.0.0.0"  # nosec B104  # intentional for servers
 
     # === Loopback/Local IP sets for O(1) membership checks (#625) ===
     # Use these frozensets instead of inline lists for `in` checks
-    # nosec B104 - These contain intentional bind-all-interfaces for loopback checking
+    # nosec B104  # These contain intentional bind-all-interfaces for loopback checking
     LOOPBACK_IPS: frozenset = frozenset({"127.0.0.1", "localhost", "0.0.0.0", "::1"})  # nosec B104
     LOOPBACK_IPS_V4: frozenset = frozenset({"127.0.0.1", "localhost", "0.0.0.0"})  # nosec B104
 

@@ -91,7 +91,9 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
         threat_level = ThreatLevel.CRITICAL if any("malicious_content" in t for t in threats) else ThreatLevel.HIGH
 
         # Issue #372: Use SecurityEvent methods to reduce feature envy
-        base_fields = event.get_threat_base_fields()
+        # Overrides go through get_threat_base_fields so the key appears once
+        # in the ThreatEvent call (#13551).
+        base_fields = event.get_threat_base_fields(resource=filename)
 
         return ThreatEvent(
             event_id=event.generate_threat_id("malicious_file"),
@@ -99,7 +101,6 @@ class MaliciousFileAnalyzer(ThreatAnalyzer):
             threat_category=ThreatCategory.MALICIOUS_UPLOAD,
             threat_level=threat_level,
             confidence_score=confidence,
-            resource=filename,  # Override base resource
             details={
                 "detected_threats": threats,
                 "filename": filename,

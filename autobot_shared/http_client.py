@@ -33,6 +33,34 @@ from autobot_shared.ssot_constants import TimingConstants
 logger = logging.getLogger(__name__)
 
 
+class EgressBlockedError(aiohttp.ClientError, ValueError):
+    """Raised when a guarded request targets an address egress policy forbids.
+
+    #13625: deliberately an ``aiohttp.ClientError`` as well as a ``ValueError``.
+    Every connector already wraps its outbound call in
+    ``except (RetryableError, aiohttp.ClientError)`` and returns a structured
+    error; a bare ``ValueError`` escaped that and handed the operator a traceback
+    instead. ``ValueError`` is kept so existing callers of the url-safety layer
+    that catch it keep working.
+    """
+
+
+async def _assert_egress_allowed(url: str, *, allow_private: bool) -> None:
+    """Refuse a URL that outbound connector traffic must not reach (#13625).
+
+    Imported lazily so ``http_client`` keeps its stdlib+aiohttp dependency
+    surface for callers that never opt in.
+    """
+    from autobot_shared.url_safety import is_public_url_async
+
+    if not await is_public_url_async(url, allow_private=allow_private):
+        raise EgressBlockedError(
+            f"Refusing outbound request to a disallowed address: {url!r}. "
+            "If this is a self-hosted instance on a private network, set "
+            "AUTOBOT_CONNECTOR_PRIVATE_NETWORK_EGRESS=true."
+        )
+
+
 class HTTPClientManager:
     """
     Singleton aiohttp ClientSession manager for efficient HTTP requests.
@@ -203,6 +231,7 @@ class HTTPClientManager:
         url: str,
         *,
         suppress_error_log: bool = False,
+        guard_egress: bool | None = None,
         **kwargs,
     ) -> aiohttp.ClientResponse:
         """
@@ -216,6 +245,21 @@ class HTTPClientManager:
                 expected and noisy (e.g. health probes to optional services like
                 Ollama / NPU worker). Default False so genuine outbound-call
                 failures are still surfaced at ERROR everywhere else (#9767).
+            guard_egress: Opt in to SSRF validation of *url* (#13625, Rule 8).
+                ``None`` (default) means **no guarding**, which is the behaviour
+                every existing caller has today. Pass ``False`` to permit only
+                public addresses, or ``True`` to additionally permit RFC-1918/ULA
+                when the deployment has enabled it — loopback, link-local
+                (incl. cloud metadata), multicast, reserved and unspecified are
+                refused in both cases.
+
+                Deliberately opt-in rather than default-on: this client is shared
+                by ~103 call sites, most of them internal service-to-service
+                traffic (NPU workers, SLM nodes) that legitimately targets private
+                addresses. Guarding everything here would either break that
+                traffic or silently widen egress policy for all of it. Connectors
+                and integrations pass this explicitly, so "this request is
+                guarded" is visible at the call site.
             **kwargs: Additional arguments for aiohttp request
 
         Returns:
@@ -232,6 +276,20 @@ class HTTPClientManager:
         beyond a single block — it balances the counter for you and therefore
         cannot be forgotten.
         """
+        if guard_egress is not None:
+            # A guard on the initial URL alone is worthless: aiohttp follows
+            # redirects by default, so one 302 reaches anything the guard just
+            # refused — including cloud metadata (#13625). Refuse redirects on
+            # guarded requests instead of validating a URL we then abandon.
+            if kwargs.get("allow_redirects"):
+                raise ValueError(
+                    "guard_egress cannot be combined with allow_redirects=True — a redirect escapes the check. "
+                    "Use autobot_shared.security.ssrf_guard.pinned_request_with_redirects, which re-validates "
+                    "and re-pins every hop."
+                )
+            kwargs["allow_redirects"] = False
+            await _assert_egress_allowed(url, allow_private=guard_egress)
+
         # Check if pool adjustment needed (non-blocking)
         asyncio.create_task(self._adjust_pool_size())
 
@@ -372,6 +430,7 @@ class HTTPClientManager:
         raises. A failure inside ``request()`` itself decrements there, so the
         slot is never released twice.
         """
+        # ``guard_egress`` (#13625) passes straight through to ``request``.
         response = await self.request(method, url, **kwargs)
         try:
             async with response:

@@ -9,6 +9,13 @@
 
 set -e
 
+# #13149: this defaulted to the deployed install, so running from a checkout
+# operated on the LIVE install instead of this tree (the #13092 failure class).
+# The shared helper resolves the root from this file's own location and still
+# lets AUTOBOT_PROJECT_ROOT override it.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/lib/project_root.sh"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
 
@@ -140,22 +147,22 @@ copy_configs() {
     log "Copying configuration files to $TARGET_HOST..."
 
     # Copy Prometheus config
-    scp -i "$SSH_KEY" ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/config/prometheus/prometheus.yml \
+    scp -i "$SSH_KEY" ${PROJECT_ROOT}/config/prometheus/prometheus.yml \
         "$TARGET_USER@$TARGET_HOST:/tmp/prometheus.yml"
     ssh -i "$SSH_KEY" "$TARGET_USER@$TARGET_HOST" "sudo mv /tmp/prometheus.yml /etc/prometheus/prometheus.yml && sudo chown prometheus:prometheus /etc/prometheus/prometheus.yml"
 
     # Copy AlertManager config
-    scp -i "$SSH_KEY" ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/config/prometheus/alertmanager.yml \
+    scp -i "$SSH_KEY" ${PROJECT_ROOT}/config/prometheus/alertmanager.yml \
         "$TARGET_USER@$TARGET_HOST:/tmp/alertmanager.yml"
     ssh -i "$SSH_KEY" "$TARGET_USER@$TARGET_HOST" "sudo mv /tmp/alertmanager.yml /etc/alertmanager/alertmanager.yml && sudo chown alertmanager:alertmanager /etc/alertmanager/alertmanager.yml"
 
     # Copy AlertManager rules
-    scp -i "$SSH_KEY" ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/config/prometheus/alertmanager_rules.yml \
+    scp -i "$SSH_KEY" ${PROJECT_ROOT}/config/prometheus/alertmanager_rules.yml \
         "$TARGET_USER@$TARGET_HOST:/tmp/alertmanager_rules.yml"
     ssh -i "$SSH_KEY" "$TARGET_USER@$TARGET_HOST" "sudo mv /tmp/alertmanager_rules.yml /etc/prometheus/alertmanager_rules.yml && sudo chown prometheus:prometheus /etc/prometheus/alertmanager_rules.yml"
 
     # Copy Grafana datasource config
-    scp -i "$SSH_KEY" ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/config/grafana/provisioning/datasources/prometheus.yml \
+    scp -i "$SSH_KEY" ${PROJECT_ROOT}/config/grafana/provisioning/datasources/prometheus.yml \
         "$TARGET_USER@$TARGET_HOST:/tmp/prometheus_datasource.yml"
     ssh -i "$SSH_KEY" "$TARGET_USER@$TARGET_HOST" "sudo mkdir -p /etc/grafana/provisioning/datasources && sudo mv /tmp/prometheus_datasource.yml /etc/grafana/provisioning/datasources/prometheus.yml"
 

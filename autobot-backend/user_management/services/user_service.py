@@ -20,6 +20,7 @@ from sqlalchemy.orm import selectinload
 from autobot_shared.auth.jwt_core import hash_password, verify_password
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
+from autobot_shared.user_management.password_epoch import set_password_epoch
 from user_management.models import Role, User, UserRole
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
@@ -267,6 +268,29 @@ class UserService(BaseService):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    def _build_user_list_base_query(self, include_inactive: bool, search: str | None):
+        """Build filtered base query for user listing.
+
+        Helper for list_users (Issue #576).
+        """
+        base_query = select(User).where(User.deleted_at.is_(None))
+
+        if not include_inactive:
+            base_query = base_query.where(User.is_active.is_(True))
+
+        base_query = self.apply_tenant_filter(base_query, User)
+
+        if search:
+            search_pattern = f"%{search}%"
+            base_query = base_query.where(
+                or_(
+                    User.email.ilike(search_pattern),
+                    User.username.ilike(search_pattern),
+                    User.display_name.ilike(search_pattern),
+                )
+            )
+        return base_query
+
     async def list_users(
         self,
         limit: int = 50,
@@ -286,22 +310,7 @@ class UserService(BaseService):
         Returns:
             Tuple of (users list, total count)
         """
-        base_query = select(User).where(User.deleted_at.is_(None))
-
-        if not include_inactive:
-            base_query = base_query.where(User.is_active.is_(True))
-
-        base_query = self.apply_tenant_filter(base_query, User)
-
-        if search:
-            search_pattern = f"%{search}%"
-            base_query = base_query.where(
-                or_(
-                    User.email.ilike(search_pattern),
-                    User.username.ilike(search_pattern),
-                    User.display_name.ilike(search_pattern),
-                )
-            )
+        base_query = self._build_user_list_base_query(include_inactive, search)
 
         # Get total count
         count_query = select(func.count()).select_from(base_query.subquery())
@@ -465,9 +474,17 @@ class UserService(BaseService):
         user.updated_at = now_utc()
         await self.session.flush()
 
-        # Invalidate all sessions except current one
+        # Invalidate all sessions except current one.
+        #
+        # #12924: the blacklist below is kept — it is still the only mechanism
+        # that can spare `current_token` — but on its own it revoked nothing:
+        # `is_token_blacklisted` has no production caller, and this backend's
+        # token extraction is synchronous so it cannot consult Redis. The
+        # password epoch is what actually stops the old sessions; it is checked
+        # on the async auth path in `auth_middleware.get_current_user`.
         session_service = SessionService()
         invalidated_count = await session_service.invalidate_user_sessions(user_id=user_id, except_token=current_token)
+        await set_password_epoch(user.username)
 
         await self._audit_log(
             action=AuditAction.PASSWORD_CHANGED,

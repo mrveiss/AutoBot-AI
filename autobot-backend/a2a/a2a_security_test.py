@@ -7,12 +7,18 @@ A2A Security, Tracing & Capability Tests
 
 Issue #968: Unit tests for the new security cards, distributed tracing,
 capability verifier, and updated task manager.
+Issue #13162: TaskManager is Redis-backed (#4502), so its tests build the
+              manager on the shared fake Redis client and read trace events
+              back through get_audit_log() — the persisted trace record —
+              rather than off a stale local Task object.
 """
 
 import time
 from unittest.mock import patch
 
 import pytest
+
+from a2a.conftest import make_redis_mock
 
 # ---------------------------------------------------------------------------
 # SecurityCardSigner tests
@@ -171,7 +177,8 @@ class TestTaskManagerWithTrace:
     def setup_method(self):
         from a2a.task_manager import TaskManager
 
-        self.mgr = TaskManager()
+        with patch("a2a.task_manager.get_redis_client", return_value=make_redis_mock()):
+            self.mgr = TaskManager()
 
     def test_create_task_assigns_trace(self):
         task = self.mgr.create_task("Hello", caller_id="agent:bot")
@@ -189,14 +196,14 @@ class TestTaskManagerWithTrace:
         task = self.mgr.create_task("Test")
         self.mgr.update_state(task.id, TaskState.WORKING)
         self.mgr.update_state(task.id, TaskState.COMPLETED)
-        events = [e.event for e in task.trace_context.events]
+        events = [entry["event"] for entry in self.mgr.get_audit_log(task.id)]
         assert "task.submitted" in events
-        assert "task.state_transition" in events
+        assert events.count("task.state_transition") == 2
 
     def test_cancel_records_trace_event(self):
         task = self.mgr.create_task("Cancel me")
         self.mgr.cancel_task(task.id)
-        events = [e.event for e in task.trace_context.events]
+        events = [entry["event"] for entry in self.mgr.get_audit_log(task.id)]
         assert "task.cancelled" in events
 
     def test_get_audit_log(self):

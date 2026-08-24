@@ -244,7 +244,37 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
     )
 
 
-@router.post("/telegram/webhook")
+async def verify_telegram_secret(request: Request) -> None:
+    """Authenticate a Telegram webhook call (MVA-2074, GH#9657 fail-closed).
+
+    Declared as a route dependency rather than an in-body check so the secret is
+    verified *before* FastAPI validates the request body: an unauthenticated
+    caller must not be able to probe the payload schema with a 422, and a request
+    that arrives while no webhook secret is stored must fail closed with 503
+    whatever its body looks like.
+    """
+    stored_secret = await get_telegram_webhook_secret()
+    if not stored_secret:
+        logger.error("Telegram webhook secret not configured - failing closed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Webhook authentication not configured",
+        )
+
+    request_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+    if not request_secret:
+        logger.warning("Telegram webhook authentication failed - missing secret header")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication header",
+        )
+
+    if not secrets.compare_digest(request_secret, stored_secret):
+        logger.warning("Telegram webhook authentication failed - invalid secret token")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+
+@router.post("/telegram/webhook", dependencies=[Depends(verify_telegram_secret)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="telegram_webhook",
@@ -260,7 +290,9 @@ async def telegram_webhook(
     This endpoint is called by Telegram servers when a message is sent to the bot.
     Messages are normalized via TelegramAdapter and routed to AutoBot chat.
 
-    Security: Verifies X-Telegram-Bot-Api-Secret-Token header matches stored secret.
+    Security: Verifies the X-Telegram-Bot-Api-Secret-Token header matches the
+    stored secret, enforced by the ``verify_telegram_secret`` route dependency
+    so authentication runs before the request body is parsed.
 
     Args:
         request: FastAPI request (for header access)
@@ -270,27 +302,6 @@ async def telegram_webhook(
         200 OK to acknowledge receipt
     """
     try:
-        # Verify webhook secret token (MVA-2074 security requirement, GH#9657 fail-closed fix)
-        stored_secret = await get_telegram_webhook_secret()
-        if not stored_secret:
-            logger.error("Telegram webhook secret not configured - failing closed")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Webhook authentication not configured",
-            )
-
-        request_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-        if not request_secret:
-            logger.warning("Telegram webhook authentication failed - missing secret header")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing authentication header",
-            )
-
-        if request_secret != stored_secret:
-            logger.warning("Telegram webhook authentication failed - invalid secret token")
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-
         # Extract message from update
         message = update.get("message")
         if not message:

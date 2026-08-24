@@ -58,9 +58,10 @@ class SimilarityCalculator:
         # Weighted average
         weights = {
             "structural": 0.5,
-            "token": 0.3,
+            # Similarity metric weights dict, 'token' key is code token type not a credential.
+            "token": 0.3,  # nosec B105
             "feature": 0.2,
-        }  # nosec B105 - similarity metric weights dict, 'token' key is code token type not a credential
+        }
         similarity = (
             weights["structural"] * structural_sim + weights["token"] * token_sim + weights["feature"] * feature_sim
         )

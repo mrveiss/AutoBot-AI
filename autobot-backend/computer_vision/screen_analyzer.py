@@ -22,6 +22,7 @@ import numpy as np
 from autobot_shared.logging_manager import get_logger
 from desktop_streaming_manager import get_desktop_streaming
 from memory import TaskPriority
+from memory.storage.general_storage import SYSTEM_OWNER
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
@@ -202,6 +203,10 @@ class ScreenAnalyzer:
             intent=ProcessingIntent.SCREEN_ANALYSIS,
             data=screenshot,
             metadata={"session_id": session_id},
+            # #13688: screen analysis is system-initiated — there is no human
+            # requester to attribute it to. Without an owner the result would be
+            # silently dropped by _store_result rather than persisted.
+            user_id=SYSTEM_OWNER,
         )
 
     def _create_audio_input(self, context_audio: bytes, session_id: str | None) -> MultiModalInput:
@@ -212,6 +217,7 @@ class ScreenAnalyzer:
             intent=ProcessingIntent.VOICE_COMMAND,
             data=context_audio,
             metadata={"session_id": session_id, "context": "screen_analysis"},
+            user_id=SYSTEM_OWNER,
         )
 
     async def _combine_multimodal_results(self, processing_results: List[Any], session_id: str | None) -> Any | None:
@@ -221,6 +227,7 @@ class ScreenAnalyzer:
             modality_type=ModalityType.COMBINED,
             intent=ProcessingIntent.SCREEN_ANALYSIS,
             data="",
+            user_id=SYSTEM_OWNER,
             metadata={
                 "image_result": processing_results[0].result_data,
                 "audio_result": processing_results[1].result_data,

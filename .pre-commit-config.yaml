@@ -674,6 +674,22 @@ repos:
         stages: [pre-commit]
         description: "Pluggable canonical-pattern checks for shell/YAML files (#7458)"
 
+      - id: lint-conventions
+        name: Repo conventions — third-party names, doc cross-links (#13876)
+        entry: scripts/lint-conventions.sh --staged
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Enforces anonymisation and research-doc cross-linking. The denylist lives outside the repo (CONVENTIONS_DENYLIST) — committing it would violate the rule it enforces (#13876)"
+
+      - id: lint-commit-subject
+        name: Commit subject format — type(scope) + issue ref (#13876)
+        entry: scripts/lint-conventions.sh --commit-msg
+        language: system
+        stages: [commit-msg]
+        description: "Runs at the commit-msg stage against the real message file. At pre-commit time COMMIT_EDITMSG still holds the PREVIOUS subject, and in a linked worktree .git is a file so the path does not resolve at all (#13876)"
+
 # Configuration for specific file types
 default_language_version:
   python: python3

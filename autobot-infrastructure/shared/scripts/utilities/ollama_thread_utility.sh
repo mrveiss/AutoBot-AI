@@ -3,6 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # Fix Ollama thread count to reduce CPU usage and GUI lag
 
+
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
 echo "🔧 Fixing Ollama thread count (11 → 6 threads)"
 echo "================================================"
 echo ""
@@ -14,7 +20,7 @@ echo ""
 
 # Copy new service file
 echo "📝 Updating Ollama systemd service file..."
-sudo cp ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/ollama.service.new /etc/systemd/system/ollama.service
+sudo cp ${PROJECT_ROOT}/ollama.service.new /etc/systemd/system/ollama.service
 
 if [ $? -eq 0 ]; then
     echo "✅ Service file updated"

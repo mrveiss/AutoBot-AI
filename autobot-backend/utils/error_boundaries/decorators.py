@@ -248,20 +248,27 @@ def _create_api_error_response(
     error_code = f"{error_code_prefix}_{abs(hash(type(e).__name__)) % 10000:04d}"
     status_code = APIErrorResponse.get_status_code_for_category(category)
 
-    exc_type = type(e).__name__
-    exc_msg = str(e)
-    message = (
-        f"Operation failed ({func_operation}): {exc_type}: {exc_msg}"
-        if exc_msg
-        else f"Operation failed ({func_operation}): {exc_type}"
+    # #13740: the exception's own type and message used to be interpolated into
+    # `message` and repeated in `details`, so any unhandled failure reflected
+    # internals verbatim to the caller. They are logged here — where the
+    # exception is still in scope — against the same trace_id the client
+    # receives, so a report of "trace_id X" still resolves to the real cause.
+    logger.error(
+        "Error in %s: %s: %s (trace_id: %s, code: %s)",
+        func_operation,
+        type(e).__name__,
+        e,
+        trace_id,
+        error_code,
+        exc_info=True,
     )
 
     return APIErrorResponse(
         category=category,
-        message=message,
+        message=APIErrorResponse.get_client_message_for_category(category),
         code=error_code,
         status_code=status_code,
-        details={"operation": func_operation, "exception_type": exc_type, "exception_message": exc_msg},
+        details={"operation": func_operation},
         trace_id=trace_id,
     )
 
@@ -278,14 +285,13 @@ def _raise_or_return_error(error_response: APIErrorResponse):
 
     Returns:
         Error dictionary if FastAPI not available
+
+    Note:
+        The diagnostic log is emitted by :func:`_create_api_error_response`,
+        which still has the exception in scope (#13740). Logging
+        ``error_response.message`` here would now record only the static,
+        client-safe text and lose the cause.
     """
-    logger.error(
-        "Error in %s: %s (trace_id: %s, code: %s)",
-        error_response.details.get("operation", "unknown"),
-        error_response.message,
-        error_response.trace_id,
-        error_response.code,
-    )
     raise HTTPException(status_code=error_response.status_code, detail=error_response.to_dict())
 
 

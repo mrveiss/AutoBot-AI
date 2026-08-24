@@ -187,7 +187,7 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 | Task | Planned | Actual | Status |
 |------|---------|--------|--------|
 | WSL2/Linux detection | ✓ | Implemented in `setup.sh` | ✅ |
-| Python 3.10+ with pyenv | ✓ | Python 3.14 (conda, backend), 3.10 (dev) | ✅ |
+| Python 3.10+ with pyenv | ✓ | Python 3.14 everywhere (backend, CI, dev) | ✅ |
 | Virtual environment | ✓ | venv configured | ✅ |
 | Core dependencies | ✓ | 90+ packages | ✅ |
 | Project directories | ✓ | All created | ✅ |

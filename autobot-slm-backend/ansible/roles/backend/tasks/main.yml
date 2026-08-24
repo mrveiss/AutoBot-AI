@@ -191,6 +191,22 @@
   no_log: true
   tags: ['backend', 'config']
 
+# #12513: the CLIENT half of chroma's token auth. backend.env.j2 already renders
+# AUTOBOT_CHROMADB_AUTH_TOKEN and its default was "" -- the backend sent no
+# credential, which was only consistent because the server enforced none either.
+# Turning the server on without this would 401 every RAG call, so both sides read
+# the same value from the same file and cannot drift.
+- name: "Backend | Read the shared ChromaDB auth token from slm-secrets.env (#12513)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/read_chromadb_auth_token.yml
+  tags: ['backend', 'config']
+
+- name: "Backend | Align backend_chromadb_auth_token with slm-secrets.env when present (#12513)"
+  ansible.builtin.set_fact:
+    backend_chromadb_auth_token: "{{ _chromadb_auth_token_read }}"
+  when: (_chromadb_auth_token_read | default('') | trim) | length > 0
+  no_log: true
+  tags: ['backend', 'config']
+
 # #9914: Deploy the systemd unit BEFORE any stop/start so a fresh VM provisions
 # out-of-box. Previously the unit was deployed after the MVA-1633 start task, so
 # first-run on a clean node failed: "Could not find the requested service

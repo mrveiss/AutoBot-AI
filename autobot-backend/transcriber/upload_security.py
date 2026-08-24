@@ -13,11 +13,13 @@ import uuid
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import SecurityConstants
 
 logger = get_logger(__name__)
 
-# Allowed audio file extensions
-ALLOWED_EXTENSIONS = {".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"}
+# Allowed audio file extensions — canonical set, shared with the route guard
+# and the ffmpeg processing guard so the three cannot drift (#13512).
+ALLOWED_EXTENSIONS = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
 
 # Maximum file size: 500MB
 MAX_FILE_SIZE = 500 * 1024 * 1024

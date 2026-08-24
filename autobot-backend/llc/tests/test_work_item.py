@@ -198,3 +198,39 @@ class TestListByProject:
         mock_session._db_result.scalars.return_value.all.return_value = items
         result = await service.list_by_project(mock_session, company_id=str(uuid.uuid4()))
         assert len(result) == 2
+
+
+# ------------------------------------------------- get() id handling (#13756)
+
+
+@pytest.mark.asyncio
+async def test_get_accepts_uuid_work_item_id() -> None:
+    """#13704's ``uuid.UUID(work_item_id)`` raised AttributeError on a UUID.
+
+    The heartbeat context path holds an already-parsed ``UUID``, so an
+    unconditional re-parse turned every call into a 500.
+    """
+    item = _make_item()
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = item
+    session.execute.return_value = result
+
+    fetched = await WorkItemService().get(session, item.id)
+
+    assert fetched is item
+
+
+@pytest.mark.asyncio
+async def test_get_scopes_by_company_when_given() -> None:
+    """The company filter reaches the query, not just the signature."""
+    item = _make_item()
+    session = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = item
+    session.execute.return_value = result
+
+    await WorkItemService().get(session, item.id, company_id=str(item.company_id))
+
+    rendered = str(session.execute.await_args.args[0])
+    assert "company_id" in rendered

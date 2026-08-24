@@ -129,7 +129,14 @@ def _group_chunks(chunks: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]
             continue
         # Pick the most frequent keyword as the group label so chunks that
         # share a common topic word land in the same bucket.
-        label = max(kws, key=lambda k: freq.get(k, 0))
+        #
+        # #13682: the keyword itself breaks frequency ties. ``kws`` is a
+        # frozenset, so without a total order ``max`` returned whichever element
+        # set iteration happened to yield first — which varies with
+        # PYTHONHASHSEED. Two chunks tying on frequency could then be labelled
+        # differently, land in different groups, and never be compared, so the
+        # same KB produced a different contradiction report from run to run.
+        label = max(kws, key=lambda k: (freq.get(k, 0), k))
         groups.setdefault(label, []).append(chunk)
     return groups
 

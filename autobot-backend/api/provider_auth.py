@@ -69,6 +69,27 @@ def _validate_outbound_url(url: str) -> None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
+async def _reject_redirect(resp, what: str) -> None:
+    """Turn an un-followed 3xx into a clean 502 (#13311).
+
+    ``allow_redirects=False`` stops a compromised-but-allowlisted provider
+    redirecting us to an internal host, but neither caller handled what comes
+    back: ``device_initiate`` only rejected ``>= 400`` and then indexed the
+    absent ``device_code``, and ``device_poll`` called ``resp.json()`` on an
+    HTML redirect body. Both raised an unhandled 500. A 3xx is never a valid
+    answer here, so say so.
+    """
+    if not 300 <= resp.status < 400:
+        return
+    location = resp.headers.get("Location", "")
+    logger.warning("%s returned HTTP %s; redirects are disabled (SSRF guard)", what, resp.status)
+    target = f" -> {location[:100]}" if location else ""
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"{what} redirected (HTTP {resp.status}){target}; redirects are disabled to prevent SSRF",
+    )
+
+
 async def _pinned_connector(url: str):
     """Resolve *url* once, assert it is public, and return an IP-pinned connector.
 
@@ -284,7 +305,7 @@ async def oauth_initiate(
         authorize_url=req.authorize_url,
         token_url=req.token_url,
         client_id_setting="",
-        client_secret_setting="",  # nosec B106 - setting NAME (empty), not a secret value
+        client_secret_setting="",  # nosec B106  # setting NAME (empty), not a secret value
         default_scopes=scopes or (),
     )
 
@@ -346,7 +367,7 @@ async def oauth_callback(
         authorize_url="",
         token_url=token_url,
         client_id_setting="",
-        client_secret_setting="",  # nosec B106 - setting NAME (empty), not a secret value
+        client_secret_setting="",  # nosec B106  # setting NAME (empty), not a secret value
     )
 
     try:
@@ -357,7 +378,7 @@ async def oauth_callback(
         resp = await exchange_code(
             provider_cfg,
             stored["client_id"],
-            "",  # nosec B106 - PKCE public client: no client_secret
+            "",  # nosec B106  # PKCE public client: no client_secret
             req.code,
             req.redirect_uri,
             stored["verifier"],
@@ -431,6 +452,7 @@ async def device_initiate(
                 headers={"Accept": "application/json"},
                 allow_redirects=False,
             ) as resp:
+                await _reject_redirect(resp, "Device authorization endpoint")
                 if resp.status >= 400:
                     body = await resp.text()
                     raise HTTPException(
@@ -508,6 +530,9 @@ async def device_poll(
                 headers={"Accept": "application/json"},
                 allow_redirects=False,
             ) as resp:
+                # A 400 here is normal (RFC-8628 carries `authorization_pending`
+                # in a 400 body), so only 3xx is rejected outright.
+                await _reject_redirect(resp, "Token endpoint")
                 data = await resp.json(content_type=None)
     except aiohttp.ClientError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc

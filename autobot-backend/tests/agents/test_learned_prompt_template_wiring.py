@@ -22,26 +22,38 @@ import pytest
 
 # ---------------------------------------------------------------------------
 # Hollow stubs so agents/* can be imported without heavy optional deps.
+#
+# ``agents/agent_orchestration/__init__.py`` eagerly imports the coordinator and
+# executor chain, and ``routing.py`` lazily imports ``.rl_router``; the hollow
+# packages below carry the REAL on-disk ``__path__`` so the two modules this
+# file needs load from disk while that chain stays untouched.
+#
+# They live for exactly the import below and are then taken back out (#13450).
+# Registering them permanently shadowed the real ``agents.agent_orchestration``
+# for every node the session collected afterwards — the #13337 shape, where a
+# stub owned by one directory decides what a sibling gets to import.
 # ---------------------------------------------------------------------------
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 _ORCH_DIR = _BACKEND_DIR / "agents" / "agent_orchestration"
 
-if "agents" not in sys.modules:
-    _agents_pkg = types.ModuleType("agents")
-    _agents_pkg.__path__ = [str(_BACKEND_DIR / "agents")]  # type: ignore[assignment]
-    _agents_pkg.__package__ = "agents"
-    sys.modules["agents"] = _agents_pkg
 
-if "agents.agent_orchestration" not in sys.modules:
-    _orch_pkg = types.ModuleType("agents.agent_orchestration")
-    _orch_pkg.__path__ = [str(_ORCH_DIR)]  # type: ignore[assignment]
-    _orch_pkg.__package__ = "agents.agent_orchestration"
-    sys.modules["agents.agent_orchestration"] = _orch_pkg
+def _hollow_package(name: str, path: Path | None = None) -> types.ModuleType:
+    """A package object that resolves real submodules without running __init__.py."""
+    module = types.ModuleType(name)
+    module.__package__ = name
+    if path is not None:
+        module.__path__ = [str(path)]  # type: ignore[attr-defined]
+    return module
 
-if "agents.agent_orchestration.rl_router" not in sys.modules:
-    _rl_stub = types.ModuleType("agents.agent_orchestration.rl_router")
-    _rl_stub.RLRouter = type("RLRouter", (), {})  # type: ignore[attr-defined]
-    sys.modules["agents.agent_orchestration.rl_router"] = _rl_stub
+
+_RL_ROUTER_STUB = _hollow_package("agents.agent_orchestration.rl_router")
+_RL_ROUTER_STUB.RLRouter = type("RLRouter", (), {})  # type: ignore[attr-defined]
+
+_IMPORT_STUBS = {
+    "agents": _hollow_package("agents", _BACKEND_DIR / "agents"),
+    "agents.agent_orchestration": _hollow_package("agents.agent_orchestration", _ORCH_DIR),
+    "agents.agent_orchestration.rl_router": _RL_ROUTER_STUB,
+}
 
 # Add backend to sys.path for autobot_shared imports.
 if str(_BACKEND_DIR) not in sys.path:
@@ -49,8 +61,17 @@ if str(_BACKEND_DIR) not in sys.path:
 if str(_BACKEND_DIR.parent / "autobot_shared") not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR.parent))
 
-from agents.agent_orchestration.routing import AgentRouter  # noqa: E402
-from agents.agent_orchestration.types import AgentCapabilityDescriptor, AgentType  # noqa: E402
+# Only the keys nothing else has already provided are installed, and only those
+# are removed again — a real package that was already loaded always wins.
+_INSTALLED = [_key for _key in _IMPORT_STUBS if _key not in sys.modules]
+for _key in _INSTALLED:
+    sys.modules[_key] = _IMPORT_STUBS[_key]
+try:
+    from agents.agent_orchestration.routing import AgentRouter  # noqa: E402
+    from agents.agent_orchestration.types import AgentCapabilityDescriptor, AgentType  # noqa: E402
+finally:
+    for _key in reversed(_INSTALLED):
+        sys.modules.pop(_key, None)
 
 # ---------------------------------------------------------------------------
 # Fixtures

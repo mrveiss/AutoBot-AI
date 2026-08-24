@@ -25,11 +25,16 @@ class TestSessionTokenTracker:
 
         # Mock Redis client
         mock_redis = AsyncMock()
+        # #13274: the shared client is decode_responses=True, so hgetall returns
+        # str keys AND str values. This mock previously returned bytes for both —
+        # a shape the live client never produces — and passed only because
+        # get_session_usage probed with matching bytes literals. Test and code
+        # agreed with each other and both disagreed with Redis.
         mock_redis.hgetall.return_value = {
-            b"total_tokens": b"300",
-            b"prompt_tokens": b"200",
-            b"completion_tokens": b"100",
-            b"message_count": b"2",
+            "total_tokens": "300",
+            "prompt_tokens": "200",
+            "completion_tokens": "100",
+            "message_count": "2",
         }
 
         with patch.object(tracker, "_ensure_redis", return_value=mock_redis):

@@ -10,9 +10,10 @@ Security: GH#9657 - Added webhook authentication (fail-closed)
 """
 
 import os
+import secrets
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from api.monitoring import ws_manager
 from api.schemas_system import (
@@ -29,47 +30,60 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/webhook", tags=["webhooks"])
 
 
-@router.post("/alertmanager", response_model=AlertManagerWebhookReceiveResponse)
+async def verify_alertmanager_secret(request: Request) -> None:
+    """Authenticate an AlertManager webhook call (GH#9657, fail-closed).
+
+    Declared as a route dependency rather than an in-body check so the secret
+    is verified *before* FastAPI validates the request body: an unauthenticated
+    caller must not be able to probe the payload schema, and a request that
+    arrives while ALERTMANAGER_WEBHOOK_SECRET is unset must fail closed with
+    503 whatever its body looks like.
+    """
+    webhook_secret = os.environ.get("ALERTMANAGER_WEBHOOK_SECRET")
+    if not webhook_secret:
+        logger.error("AlertManager webhook secret not configured - failing closed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Webhook authentication not configured",
+        )
+
+    request_secret = request.headers.get("X-AlertManager-Secret")
+    if not request_secret:
+        logger.warning("AlertManager webhook authentication failed - missing secret header")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication header",
+        )
+
+    if not secrets.compare_digest(request_secret, webhook_secret):
+        logger.warning("AlertManager webhook authentication failed - invalid secret")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid authentication credentials",
+        )
+
+
+@router.post(
+    "/alertmanager",
+    response_model=AlertManagerWebhookReceiveResponse,
+    dependencies=[Depends(verify_alertmanager_secret)],
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="receive_alertmanager_webhook",
     error_code_prefix="ALERTMANAGER_WEBHOOK",
 )
-async def receive_alertmanager_webhook(payload: AlertManagerWebhook, request: Request):
+async def receive_alertmanager_webhook(payload: AlertManagerWebhook):
     """
     Receive alerts from Prometheus AlertManager
 
     Phase 3 (Issue #346): AlertManager → WebSocket integration
     Replaces MonitoringAlertsManager's WebSocket notification channel
 
-    Security (GH#9657): Requires X-AlertManager-Secret header authentication.
-    Fails closed when ALERTMANAGER_WEBHOOK_SECRET is not configured.
+    Security (GH#9657): Requires X-AlertManager-Secret header authentication,
+    enforced by the ``verify_alertmanager_secret`` route dependency.
     """
     try:
-        # Verify webhook secret (GH#9657 fail-closed authentication)
-        webhook_secret = os.environ.get("ALERTMANAGER_WEBHOOK_SECRET")
-        if not webhook_secret:
-            logger.error("AlertManager webhook secret not configured - failing closed")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Webhook authentication not configured",
-            )
-
-        request_secret = request.headers.get("X-AlertManager-Secret")
-        if not request_secret:
-            logger.warning("AlertManager webhook authentication failed - missing secret header")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing authentication header",
-            )
-
-        if request_secret != webhook_secret:
-            logger.warning("AlertManager webhook authentication failed - invalid secret")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid authentication credentials",
-            )
-
         logger.info(
             f"Received AlertManager webhook: {len(payload.alerts)} alerts "
             f"(status: {payload.status}, receiver: {payload.receiver})"
@@ -85,6 +99,8 @@ async def receive_alertmanager_webhook(payload: AlertManagerWebhook, request: Re
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to process AlertManager webhook: %s", e, exc_info=True)
         raise HTTPException(

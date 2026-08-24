@@ -574,20 +574,39 @@ class TestSecurityBoundaryConditions:
         result = await self.security.execute_command("echo 'test'", user="test", user_role="test")
         assert isinstance(result, dict)
 
-    async def test_maximum_command_length(self):
-        """Test handling of extremely long commands"""
-        # Test various command lengths
-        lengths = [1000, 10000, 100000, 1000000]
+    @pytest.mark.parametrize(
+        "length",
+        [1000, 10000, 100000, pytest.param(1000000, marks=pytest.mark.slow)],
+    )
+    async def test_maximum_command_length(self, length):
+        """Test handling of extremely long commands.
 
-        for length in lengths:
-            long_command = "echo '" + "A" * length + "'"
-            try:
-                risk, warnings = self.security.command_executor.assess_command_risk(long_command)
-                # Should handle without crashing
-                assert isinstance(risk, CommandRisk)
-            except Exception as e:
-                # Should be controlled resource limitations
-                assert "too long" in str(e).lower() or "memory" in str(e).lower()
+        #13284: only the 1,000,000-char case is marked ``slow``. The whole test
+        measured 29.39s on CI, but ``assess_command_risk()`` is superlinear
+        (#13285), so the 1M entry is the overwhelming majority of that — even
+        under a purely linear model it is 90% of the 1.111M total characters.
+        The 1K/10K/100K boundaries cost almost nothing and stay on the gate.
+
+        This matters because marking is not relocation: no scheduled workflow
+        selects marker-excluded tests (#13286), so a mark removes a case from CI
+        entirely. Marking the whole test would have dropped three boundaries as
+        collateral for the one that is genuinely expensive.
+
+        Note this asserts no time bound, so it never guarded the superlinearity
+        in #13285 — it would pass just as happily at 29 minutes.
+        """
+        long_command = "echo '" + "A" * length + "'"
+        try:
+            risk, warnings = self.security.command_executor.assess_command_risk(long_command)
+        except Exception as e:
+            # Should be controlled resource limitations
+            assert "too long" in str(e).lower() or "memory" in str(e).lower()
+        else:
+            # #13284: asserted outside the try. Previously this sat inside it, so an
+            # AssertionError was caught by `except Exception` and re-judged against
+            # the "too long"/"memory" message — still failing, but with a thoroughly
+            # misleading reason.
+            assert isinstance(risk, CommandRisk)
 
     async def test_zero_length_inputs(self):
         """Test handling of zero-length and minimal inputs"""

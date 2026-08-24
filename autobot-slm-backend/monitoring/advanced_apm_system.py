@@ -187,7 +187,7 @@ class PerformanceTracker:
 
     def _generate_trace_id(self) -> str:
         """Generate unique trace ID for request correlation."""
-        return hashlib.md5(  # nosec B324 - not used for security
+        return hashlib.md5(  # nosec B324  # not used for security
             f"{time.time()}{threading.current_thread().ident}".encode()
         ).hexdigest()[:16]
 
@@ -410,7 +410,7 @@ class AdvancedAPMSystem:
                 complexity = "complex"
 
             # Generate query hash for tracking
-            query_hash = hashlib.md5(  # nosec B324 - not used for security
+            query_hash = hashlib.md5(  # nosec B324  # not used for security
                 f"{database}:{operation}:{table}".encode()
             ).hexdigest()[:12]
 

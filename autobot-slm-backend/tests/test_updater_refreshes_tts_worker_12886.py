@@ -23,6 +23,7 @@ role's provisioning half would still not land. This closes the code half only.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -148,12 +149,18 @@ def test_tts_include_escalates_privilege() -> None:
     raise AssertionError("no tts-worker include_role task found")
 
 
-def test_playbook_passes_ansible_syntax_check() -> None:
+def test_playbook_passes_ansible_syntax_check(tmp_path) -> None:
     """Validate with ansible itself, not just a YAML parse (#12886).
 
     A YAML-valid playbook can still be semantically invalid — a bare `become:`
     on include_role parses fine and then breaks every self-update at run time.
     Only ansible's own parser catches that class, so gate on it here.
+
+    ``ANSIBLE_LOG_PATH`` is redirected because ansible.cfg logs to
+    ``/var/log/autobot/ansible.log``, a deployed-host path. Anywhere else
+    ansible exits 5 with ``Permission denied`` *before parsing anything*, so
+    the guard reported "ansible rejected the playbook" for every valid playbook
+    on a dev machine — a false failure that hides the real one (#12959).
     """
     ansible = shutil.which("ansible-playbook")
     if ansible is None:
@@ -165,6 +172,7 @@ def test_playbook_passes_ansible_syntax_check() -> None:
         text=True,
         cwd=_ANSIBLE,
         timeout=180,
+        env={**os.environ, "ANSIBLE_LOG_PATH": str(tmp_path / "ansible.log")},
     )
 
     assert result.returncode == 0, f"ansible rejected the playbook:\n{result.stderr[-1200:]}"

@@ -12,11 +12,11 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Dict, List
 
 import requests
 
+from autobot_shared.paths import project_root
 from autobot_shared.ssot_config import config
 
 # Add AutoBot paths
@@ -519,7 +519,7 @@ class MultiAgentWorkflowValidator:
 
     def save_workflow_results(self, report: Dict):
         """Save workflow validation results"""
-        results_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results")
+        results_dir = project_root() / "tests" / "results"
         results_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

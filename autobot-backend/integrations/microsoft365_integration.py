@@ -81,9 +81,14 @@ def _validate_datetime_iso(value: str, name: str = "datetime") -> str:
         ValueError: If datetime format is invalid
     """
     try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        # #13755: no ``Z`` shim — fromisoformat parses the suffix natively on
+        # the 3.14 floor. ``TypeError`` replaces the ``AttributeError`` that a
+        # non-string used to raise from ``.replace()``, so it is caught here:
+        # this validates an OData filter value, and an uncaught exception would
+        # escape as a 500 rather than the intended ValueError.
+        dt = datetime.fromisoformat(value)
         return dt.isoformat()
-    except (ValueError, AttributeError) as exc:
+    except (ValueError, TypeError) as exc:
         raise ValueError(f"{name} must be valid ISO-8601 format") from exc
 
 

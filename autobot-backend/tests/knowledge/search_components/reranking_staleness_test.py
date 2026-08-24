@@ -28,6 +28,23 @@ from knowledge.search_components.reranking import (
 # =============================================================================
 
 
+def _staleness_propagator():
+    """Return the real ``staleness_propagator`` module for ``patch.object``.
+
+    #13361: ``patch("services.mesh_brain.staleness_propagator.get_staleness_score")``
+    is inert here. ``mock._importer`` walks the dotted path with ``getattr``
+    starting from ``sys.modules["services"]``, which the backend conftest
+    registers as a package stub with a catch-all ``__getattr__``; every step
+    therefore hands back a fresh throwaway mock and the patch lands on it
+    instead of on the module the code imports. Importing the leaf directly
+    bypasses the stub's ``__getattr__`` — the same ``_real_load_and_bind``
+    problem written up in ``tests/services/rag_service_events_test.py`` (#11248).
+    """
+    import services.mesh_brain.staleness_propagator as propagator  # noqa: PLC0415
+
+    return propagator
+
+
 def _make_result(chunk_id: str, score: float = 0.5, content: str = "text") -> dict:
     return {"chunk_id": chunk_id, "score": score, "content": content}
 
@@ -180,11 +197,23 @@ class TestFetchStalenessMap:
 
         mock_redis = AsyncMock()
 
-        # Patch at the source modules because _fetch_staleness_map uses lazy imports
+        # Patch at the source modules because _fetch_staleness_map uses lazy imports.
+        # #13361: the target is ``get_async_redis_client`` — the SYNC
+        # ``get_redis_client`` this used to name is not what the method calls, so
+        # the patch was inert and the real async client ran, reaching the
+        # configured Redis host. That only looked fine because two test modules
+        # in the sibling ``tests/knowledge`` directory rebound
+        # ``redis.asyncio.Redis`` to a ``MagicMock`` on the real module and never
+        # put it back; with those stubs gone the client spends its full retry
+        # budget and hands back nothing.
         with (
-            patch("autobot_shared.redis_client.get_redis_client", return_value=mock_redis),
             patch(
-                "services.mesh_brain.staleness_propagator.get_staleness_score",
+                "autobot_shared.redis_client.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
+            patch.object(
+                _staleness_propagator(),
+                "get_staleness_score",
                 new=AsyncMock(side_effect=lambda r, doc_id: 0.7 if doc_id == "doc-A" else 0.0),
             ),
         ):
@@ -202,8 +231,8 @@ class TestFetchStalenessMap:
         weights = RerankWeights(staleness=0.3)
 
         with patch(
-            "autobot_shared.redis_client.get_redis_client",
-            side_effect=RuntimeError("Redis unavailable"),
+            "autobot_shared.redis_client.get_async_redis_client",
+            new=AsyncMock(side_effect=RuntimeError("Redis unavailable")),
         ):
             staleness_map = await reranker._fetch_staleness_map(results, weights)
 
@@ -226,9 +255,13 @@ class TestFetchStalenessMap:
         mock_redis = MagicMock()
 
         with (
-            patch("autobot_shared.redis_client.get_redis_client", return_value=mock_redis),
             patch(
-                "services.mesh_brain.staleness_propagator.get_staleness_score",
+                "autobot_shared.redis_client.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
+            patch.object(
+                _staleness_propagator(),
+                "get_staleness_score",
                 side_effect=_fake_get_staleness,
             ),
         ):

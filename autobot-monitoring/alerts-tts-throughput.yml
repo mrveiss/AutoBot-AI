@@ -1,0 +1,72 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Issue #12460: TTS worker throughput alerts.
+#
+# The real-time factor — audio-seconds of speech produced per wall-second of
+# synthesis — decides whether streamed playback can run without stuttering.
+# Below 1.0x the player drains its buffer faster than the worker refills it, so
+# the listener hears speech in fragments. #13215 fixed time-to-first-audio; this
+# is the separate constraint that first-audio latency cannot compensate for.
+#
+# The client compensates by pre-rolling a lead-in proportional to the measured
+# factor, which trades latency for continuity — so a sustained shortfall shows
+# up to the user as a growing delay before speech, not as an outage. That is
+# exactly why it needs an alert rather than a dashboard nobody opens.
+---
+
+groups:
+  - name: tts_throughput_recording
+    interval: 1m
+    rules:
+      # Share of syntheses that could not keep up with playback, over 15m.
+      - record: autobot_tts_below_realtime_ratio
+        expr: >
+          sum(rate(autobot_tts_synthesis_below_realtime_total[15m]))
+          /
+          clamp_min(sum(rate(autobot_tts_synthesis_total[15m])), 0.001)
+
+      # Median real-time factor across routes — the headline throughput number.
+      - record: autobot_tts_realtime_factor_p50
+        expr: >
+          histogram_quantile(
+            0.5,
+            sum(rate(autobot_tts_realtime_factor_bucket[15m])) by (le)
+          )
+
+  - name: tts_throughput_alerts
+    interval: 1m
+    rules:
+      # Most syntheses failing to reach real time means every reply is either
+      # stuttering or waiting out a long pre-roll.
+      - alert: TTSSynthesisBelowRealTime
+        expr: autobot_tts_below_realtime_ratio > 0.5
+        for: 15m
+        labels:
+          severity: warning
+          component: voice
+        annotations:
+          summary: "TTS worker is producing audio slower than it plays back"
+          description: >
+            {{ $value | humanizePercentage }} of TTS syntheses in the last 15 minutes
+            ran below 1.0x real time. Streamed playback cannot be continuous at this
+            rate. Check host load on the TTS node first — the worker is usually
+            starved rather than saturated — then voice acceleration and model size.
+          runbook_url: "https://github.com/mrveiss/AutoBot-AI/issues/12460"
+
+      # A collapsed factor is a different failure from an occasional slow one:
+      # at 0.25x the pre-roll hits its cap and speech is audibly late regardless.
+      - alert: TTSRealTimeFactorCollapsed
+        expr: autobot_tts_realtime_factor_p50 < 0.5
+        for: 10m
+        labels:
+          severity: critical
+          component: voice
+        annotations:
+          summary: "TTS real-time factor has collapsed below 0.5x"
+          description: >
+            Median real-time factor is {{ $value }}, so a 4-second sentence takes
+            more than 8 seconds to synthesize. The client pre-roll caps out at this
+            point and voice output is effectively unusable.
+          runbook_url: "https://github.com/mrveiss/AutoBot-AI/issues/12460"

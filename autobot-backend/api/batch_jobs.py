@@ -46,6 +46,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
+from autobot_shared.redis_utils import decode_redis_value
 from services.batch_job_store import deserialize_job as _deserialize_job
 from services.batch_job_store import get_job_key as _get_job_key
 from services.batch_job_store import get_logs_key as _get_logs_key
@@ -181,14 +182,14 @@ async def list_batch_jobs(
     status_counts: Dict[str, int] = {}
 
     for job_id_bytes in job_ids:
-        job_id = job_id_bytes.decode("utf-8")
+        job_id = decode_redis_value(job_id_bytes)
         job_key = _get_job_key(job_id)
         job_data = redis_client.get(job_key)
 
         if not job_data:
             continue
 
-        job = _deserialize_job(job_data.decode("utf-8"))
+        job = _deserialize_job(decode_redis_value(job_data))
 
         status_counts[job.status.value] = status_counts.get(job.status.value, 0) + 1
 
@@ -237,7 +238,7 @@ async def get_batch_job(
     if not job_data:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-    return _deserialize_job(job_data.decode("utf-8"))
+    return _deserialize_job(decode_redis_value(job_data))
 
 
 @router.delete("/{job_id}", response_model=BatchJobDeleteResponse)
@@ -271,7 +272,7 @@ async def delete_batch_job(
     if not job_data:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-    job = _deserialize_job(job_data.decode("utf-8"))
+    job = _deserialize_job(decode_redis_value(job_data))
 
     if job.status == BatchJobStatus.running:
         job.status = BatchJobStatus.cancelled
@@ -321,7 +322,7 @@ async def run_batch_job_now(
     if not job_data:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-    job = _deserialize_job(job_data.decode("utf-8"))
+    job = _deserialize_job(decode_redis_value(job_data))
     if job.status == BatchJobStatus.running:
         raise HTTPException(status_code=409, detail=f"Job {job_id} is already running")
 
@@ -370,7 +371,7 @@ async def get_job_logs(
 
     logs = []
     for entry_bytes in log_entries:
-        entry = json.loads(entry_bytes.decode("utf-8"))
+        entry = json.loads(decode_redis_value(entry_bytes))
         logs.append(BatchLogEntry(**entry))
 
     return logs
@@ -403,12 +404,12 @@ async def list_batch_templates(
     templates = []
 
     for template_id_bytes in template_ids:
-        template_id = template_id_bytes.decode("utf-8")
+        template_id = decode_redis_value(template_id_bytes)
         template_key = _get_template_key(template_id)
         template_data = redis_client.get(template_key)
 
         if template_data:
-            template_dict = json.loads(template_data.decode("utf-8"))
+            template_dict = json.loads(decode_redis_value(template_data))
             templates.append(BatchTemplate(**template_dict))
 
     return templates
@@ -477,7 +478,7 @@ async def get_batch_template(
     if not template_data:
         raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
 
-    template_dict = json.loads(template_data.decode("utf-8"))
+    template_dict = json.loads(decode_redis_value(template_data))
     return BatchTemplate(**template_dict)
 
 
@@ -538,12 +539,12 @@ async def list_batch_schedules(
     schedules = []
 
     for schedule_id_bytes in schedule_ids:
-        schedule_id = schedule_id_bytes.decode("utf-8")
+        schedule_id = decode_redis_value(schedule_id_bytes)
         schedule_key = _get_schedule_key(schedule_id)
         schedule_data = redis_client.get(schedule_key)
 
         if schedule_data:
-            schedule_dict = json.loads(schedule_data.decode("utf-8"))
+            schedule_dict = json.loads(decode_redis_value(schedule_data))
             schedules.append(BatchSchedule(**schedule_dict))
 
     return schedules
@@ -631,7 +632,7 @@ async def update_batch_schedule(
     if not schedule_data:
         raise HTTPException(status_code=404, detail=f"Schedule {schedule_id} not found")
 
-    schedule = BatchSchedule(**json.loads(schedule_data.decode("utf-8")))
+    schedule = BatchSchedule(**json.loads(decode_redis_value(schedule_data)))
     updates = update.model_dump(exclude_unset=True)
 
     # Issue #12439: recompute next_run when the cron expression changes or the

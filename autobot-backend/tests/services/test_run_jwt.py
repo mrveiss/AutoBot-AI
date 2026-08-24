@@ -121,10 +121,17 @@ class TestMintRunJwt:
         monkeypatch.setenv("RUN_JWT_TTL_SECONDS", "60")
         from autobot_shared.auth.jwt_core import decode_jwt
 
+        # exp is a whole-second claim, so bounding it by the whole seconds read
+        # either side of the mint is exact -- unlike the previous 55..65 window
+        # on ``exp - time.time()``, which was a wall-clock budget (#13399).
+        ttl_secs = 60
+        before = int(time.time())
         token = mint_run_jwt(_RUN_ID, _TASK_ID, _AGENT_ID, _TENANT_ID, _SCOPE)
+        after = int(time.time())
         claims = decode_jwt(token, _SECRET, audience="autobot:run-validator")
-        remaining = claims["exp"] - time.time()
-        assert 55 <= remaining <= 65, f"expected ~60s TTL, got {remaining:.0f}s"
+        assert (
+            before + ttl_secs <= claims["exp"] <= after + ttl_secs
+        ), f"expected a {ttl_secs}s TTL, got exp={claims['exp']} against mint window {before}..{after}"
 
     def test_secret_key_not_accepted_as_fallback(self, monkeypatch, _no_audit):
         """SECRET_KEY must not be accepted as a signing secret for run JWTs."""

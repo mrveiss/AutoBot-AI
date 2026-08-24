@@ -39,9 +39,9 @@ router = APIRouter(tags=["image-generation", "media"])
 
 class ImageGenerationRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=4000)
-    provider: str = Field("dalle", pattern="^(dalle|flux|stable_diffusion)$")
+    provider: str = Field("dalle", pattern=r"^(dalle|flux|stable_diffusion)\z")
     size: Optional[str] = Field(None)
-    quality: Optional[str] = Field(None, pattern="^(standard|hd)$")
+    quality: Optional[str] = Field(None, pattern=r"^(standard|hd)\z")
     n: Optional[int] = Field(None, ge=1, le=4)
     negative_prompt: Optional[str] = Field(None, max_length=2000)
 

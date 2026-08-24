@@ -127,7 +127,7 @@ TEST_RESPONSES = {
     "yes_no": ["y", "n", "yes", "no"],
     "choices": ["1", "2", "3", "4", "5"],
     "commands": ["help", "status", "exit", "quit"],
-    "files": ["test.txt", "/tmp/test", "example.json"],  # nosec B108 - test/controlled code uses tmpdir intentionally
+    "files": ["test.txt", "/tmp/test", "example.json"],  # nosec B108  # test/controlled code uses tmpdir intentionally
     "names": ["test_user", "admin", "user"],
     "urls": [
         "http://localhost:8080",

@@ -13,8 +13,10 @@ from __future__ import annotations
 
 from pydantic_settings import BaseSettings
 
+from autobot_shared.secret_redaction import RedactedReprMixin
 
-class LangFuseTracingConfig(BaseSettings):
+
+class LangFuseTracingConfig(RedactedReprMixin, BaseSettings):
     host: str = ""
     public_key: str = ""
     secret_key: str = ""
@@ -26,7 +28,7 @@ class LangFuseTracingConfig(BaseSettings):
         return bool(self.host and self.public_key and self.secret_key)
 
 
-class LangSmithTracingConfig(BaseSettings):
+class LangSmithTracingConfig(RedactedReprMixin, BaseSettings):
     api_url: str = "https://api.smith.langchain.com"
     api_key: str = ""
     project: str = "autobot"

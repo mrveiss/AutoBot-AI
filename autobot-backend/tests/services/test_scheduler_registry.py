@@ -17,11 +17,40 @@ from pathlib import Path
 # Import scheduler_registry directly to avoid services/__init__.py pulling in
 # ai_stack_client (which transitively imports autobot_shared modules that require
 # Python 3.11+ when using the | union syntax without 'from __future__ import annotations').
+#
+# #13361: the sys.modules registration below is bracketed by a try/finally so it
+# lasts exactly as long as the module body needs it.
 _REGISTRY_PATH = Path(__file__).parent.parent.parent / "services" / "scheduler_registry.py"
-_spec = importlib.util.spec_from_file_location("services.scheduler_registry", _REGISTRY_PATH)
-_mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
-sys.modules["services.scheduler_registry"] = _mod  # register before exec so @dataclass resolves
-_spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+_REGISTRY_KEY = "services.scheduler_registry"
+
+_MISSING = object()
+
+
+def _load_registry_module():
+    """Execute scheduler_registry.py and leave ``sys.modules`` as it was found.
+
+    The entry has to exist *while* the module executes — ``@dataclass`` resolves
+    ``ScheduledJob``'s annotations through ``sys.modules[__name__]`` — but not one
+    moment longer. Leaving it behind replaced whatever the backend conftest had
+    registered under this name for the rest of the session, which is the escape
+    #13361 is about; the module object this returns keeps working either way,
+    because every name the tests use is read off it directly below.
+    """
+    spec = importlib.util.spec_from_file_location(_REGISTRY_KEY, _REGISTRY_PATH)
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    prior = sys.modules.get(_REGISTRY_KEY, _MISSING)
+    sys.modules[_REGISTRY_KEY] = mod
+    try:
+        spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    finally:
+        if prior is _MISSING:
+            sys.modules.pop(_REGISTRY_KEY, None)
+        else:
+            sys.modules[_REGISTRY_KEY] = prior  # type: ignore[assignment]
+    return mod
+
+
+_mod = _load_registry_module()
 REGISTRY = _mod.REGISTRY
 ScheduledJob = _mod.ScheduledJob
 # GH#12836: pulled from the registry so the valid-runtime set and the

@@ -507,7 +507,7 @@ async def _ensure_internal_api_key() -> None:
     from models.database import SystemSecret
     from services.encryption import encrypt_data
 
-    key_name = "autobot_internal_api_key"  # nosec B105 - secret-store key name, not a credential
+    key_name = "autobot_internal_api_key"  # nosec B105  # secret-store key name, not a credential
     async with db_service.session() as db:
         result = await db.execute(select(SystemSecret).where(SystemSecret.key == key_name))
         if result.scalar_one_or_none() is not None:
@@ -537,7 +537,7 @@ async def _ensure_scim_bearer_token() -> None:
     from models.database import SystemSecret
     from services.encryption import encrypt_data
 
-    key_name = "scim_bearer_token"  # nosec B105 - secret-store key name, not a credential
+    key_name = "scim_bearer_token"  # nosec B105  # secret-store key name, not a credential
     async with db_service.session() as db:
         from sqlalchemy import select
 
