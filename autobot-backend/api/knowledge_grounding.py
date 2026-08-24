@@ -41,7 +41,6 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_utils import decode_redis_value
-from autobot_shared.status_enums import Severity
 from constants.threshold_constants import QueryDefaults
 from services.grounded_agent import (
     Claim,
