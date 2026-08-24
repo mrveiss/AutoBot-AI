@@ -29,7 +29,12 @@ from utils.terminal_input_handler import (
 class TestTerminalInputHandler:
     """Test cases for terminal input handler functionality."""
 
-    def __init__(self):
+    # #14927: this was ``__init__``. pytest refuses to collect a class that has a
+    # constructor -- it emits PytestCollectionWarning and moves on -- so every
+    # ``test_*`` method below was silently uncollected despite the class matching
+    # ``python_classes = Test*``. ``setup_method`` is pytest's own per-test hook and
+    # runs before each test, which is what this body always meant.
+    def setup_method(self):
         self.handler = TerminalInputHandler()
 
     def test_environment_detection(self):
@@ -281,6 +286,35 @@ class TestTerminalInputHandler:
 
         print("✓ Built-in input patching working")  # noqa: print
         return
+
+    def test_choice_keywords_do_not_hijack_file_and_port_prompts(self):
+        """A choice keyword alone must not answer a prompt with a bare digit.
+
+        #14927 widened _CHOICE_KEYWORDS to "select"/"option", and the branch is
+        checked before the file/path and port branches. With "any digit anywhere"
+        as the discriminator, "Select a config file (1 of 3):" answered "1" and
+        "Select the port to use:" answered nothing useful either. Only a real
+        enumerated range -- "(1-5)" -- makes a prompt a numbered menu.
+        """
+        self.handler.is_testing = True
+        self.handler.set_mock_responses([])
+
+        menu = self.handler.get_input("Select option (1-5):")
+        assert menu == "1", f"an enumerated menu still answers with its first entry, got {menu!r}"
+
+        file_prompt = self.handler.get_input("Select a config file (1 of 3):")
+        assert not file_prompt.isdigit(), (
+            f"'(1 of 3)' is not an enumerated range; a file prompt must reach the "
+            f"file/path branch, got {file_prompt!r}"
+        )
+        assert "/" in file_prompt, f"expected a path-shaped default, got {file_prompt!r}"
+
+        port_prompt = self.handler.get_input("Select the port to use:")
+        assert port_prompt == self.handler.get_input("Port number:"), (
+            "a port prompt phrased with 'select' must resolve to the same port "
+            f"default as a plain one, got {port_prompt!r}"
+        )
+        assert port_prompt != "1", "the port default must not be the menu fallback"
 
     def test_intelligent_defaults(self):
         """Test intelligent default response generation."""
