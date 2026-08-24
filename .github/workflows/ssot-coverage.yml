@@ -7,7 +7,9 @@
 #
 # Runs hardcoded value detection with SSOT validation on PRs
 # Reports compliance percentage and highlights violations
-# SSOT violations are blocking — merges require compliance (Issue #2874)
+# Every VIOLATION-severity finding is blocking — both the `ssot` class and the
+# `other` class — and the verdict is the detector's own `status` field, not a
+# count re-interpreted here (Issue #2874, #14914).
 
 name: SSOT Coverage
 
@@ -162,7 +164,12 @@ jobs:
           let body = `## ${emoji} SSOT Configuration Compliance: ${statusText}\n\n`;
 
           if (status === 'pass') {
-            body += '🎉 No hardcoded values detected that have SSOT config equivalents!\n\n';
+            // #14914: state precisely what green means. It used to say "no
+            // hardcoded values that have SSOT config equivalents", which was
+            // true of the `ssot` class only — the other eight rule classes were
+            // reported in this very comment and blocked nothing.
+            body += '🎉 No new hardcoded values of either class — `ssot` and `other` both block.\n\n';
+            body += '_Known backlog in `pipeline-scripts/hardcoded_values_baseline.txt` is suppressed and tracked in #14371._\n\n';
           } else {
             body += `| Metric | Count |\n`;
             body += `|--------|-------|\n`;
@@ -216,12 +223,40 @@ jobs:
           }
 
     - name: Set job status
+      shell: bash
       run: |
+        set -euo pipefail
+        # #14914: this used to re-derive the verdict here, from
+        # `ssot_violations` alone, in a second copy of a policy the detector
+        # already owns. Two consequences, both live on the merged base:
+        #
+        #   * the eight `other`-class rules blocked nothing, so nine hardcoded
+        #     /opt/autobot paths sat on Dev_new_gui under a green check;
+        #   * the parse above falls back to "0" when the JSON is missing, so a
+        #     detector that died (a missing scan directory is FATAL by design)
+        #     reported clean. An absent result read as a clean result.
+        #
+        # Now there is one verdict, computed once, in
+        # pipeline-scripts/detect-hardcoded-values.sh, and this step only
+        # enforces it. `status` has no numeric fallback: an unparseable JSON
+        # yields "unknown", which is not "pass", which fails.
+        STATUS="${{ steps.ssot_check.outputs.status }}"
+        EXIT_CODE="${{ steps.ssot_check.outputs.exit_code }}"
+        TOTAL_VIOLATIONS="${{ steps.ssot_check.outputs.total_violations }}"
         SSOT_VIOLATIONS="${{ steps.ssot_check.outputs.ssot_violations }}"
+        OTHER_VIOLATIONS="${{ steps.ssot_check.outputs.other_violations }}"
 
-        # Fail the job if there are SSOT violations (Issue #2874)
-        if [ "$SSOT_VIOLATIONS" -gt "0" ]; then
-          echo "::error::Found $SSOT_VIOLATIONS hardcoded values that have SSOT config equivalents"
+        if [ "$EXIT_CODE" != "0" ]; then
+          echo "::error::detect-hardcoded-values.sh exited ${EXIT_CODE} — it reports no"
+          echo "::error::verdict on a run it could not complete. Refusing to report clean."
+          exit 1
+        fi
+
+        if [ "$STATUS" != "pass" ]; then
+          echo "::error::SSOT compliance status '${STATUS}': ${TOTAL_VIOLATIONS} new hardcoded value(s)"
+          echo "::error::(ssot=${SSOT_VIOLATIONS}, other=${OTHER_VIOLATIONS}). Both classes block (#14914)."
           echo "::error::Run './pipeline-scripts/detect-hardcoded-values.sh --report' locally for details"
           exit 1
         fi
+
+        echo "SSOT compliance: pass — 0 new violations of either class"

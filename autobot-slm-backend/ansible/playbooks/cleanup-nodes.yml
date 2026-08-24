@@ -50,6 +50,26 @@
 #   - A directory holding data/ is REPORTED and left alone, never removed
 #   - All removals use state: absent (idempotent, no error if already gone)
 #   - Run with --check first to preview changes
+#
+# #14914: the removal paths below resolve their install root from
+# `{{ autobot.base_dir }}` (inventory/group_vars/all.yml), not from a
+# `/opt/autobot` literal. They were the nine hardcoded-value findings sitting
+# unbaselined on Dev_new_gui while the gate that reported them keyed its verdict
+# on a different class.
+#
+# This indirection is load-bearing in BOTH directions, and the second one is
+# easy to miss: tests/test_cleanup_never_destroys_data_14856.py is a static
+# guard that expands these loops and resolves each removal target to a concrete
+# path, so it can assert no component directory is deleted outside the guarded
+# primitive and that /opt/autobot/config is never scheduled at all. It matches
+# on a literal `/opt/` prefix. A first attempt at this change routed the paths
+# through the variable WITHOUT teaching that guard to resolve it, and every
+# target here collapsed to a non-`/opt/` placeholder: the protected-config check
+# kept passing with nothing left to match.
+#
+# So the guard now resolves autobot.base_dir out of group_vars, and both
+# directions are mutation-proved. If this root ever moves again, change it in
+# group_vars — and re-run that guard, do not assume it followed.
 
 # ---------------------------------------------------------------------------
 # Pre-cleanup: snapshot /opt/autobot/ on all nodes
@@ -98,7 +118,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: SLM
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
 # ---------------------------------------------------------------------------
@@ -125,7 +145,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: Backend
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
     - name: "Backend | Find flat Python files at /opt/autobot root"
@@ -175,7 +195,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: Frontend
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
 # ---------------------------------------------------------------------------
@@ -202,7 +222,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: NPU
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
 # ---------------------------------------------------------------------------
@@ -229,7 +249,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: "AI Stack"
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
 # ---------------------------------------------------------------------------
@@ -259,7 +279,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: Databases
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
 # ---------------------------------------------------------------------------
@@ -286,7 +306,7 @@
         label: "{{ _cleanup_target.dir }}"
       vars:
         caller_role: Browser
-        remove_dir_path: "/opt/autobot/{{ _cleanup_target.dir }}"
+        remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
 # ---------------------------------------------------------------------------
