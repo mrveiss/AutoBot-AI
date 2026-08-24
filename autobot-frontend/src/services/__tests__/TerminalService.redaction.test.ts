@@ -17,7 +17,7 @@
  * redactUrlForLogging() directly.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import terminalService from '../TerminalService'
 
 describe('TerminalService invalid-URL error redaction (#14989)', () => {
@@ -36,5 +36,38 @@ describe('TerminalService invalid-URL error redaction (#14989)', () => {
     expect(caught).not.toBeNull()
     expect(caught?.message).toContain('token=REDACTED')
     expect(caught?.message).not.toContain(TOKEN)
+  })
+
+  it('redacts the token in the connection-error log via _handleConnectCatchError (#14989 follow-up)', () => {
+    // _validateWsUrl closes the wrong-scheme case above, but not every
+    // WHATWG URL parse failure -- a native new WebSocket() SyntaxError can
+    // still embed the raw token-bearing URL in .message.
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const svc = terminalService as unknown as {
+      _handleConnectCatchError: (
+        sessionId: string,
+        error: unknown,
+        reject: (reason: Error) => void,
+      ) => void
+    }
+    const TOKEN = 'eyJhbGciOiJSUzI1NiJ9.secret-payload.sig'
+    const syntaxError = new SyntaxError(
+      `Failed to construct 'WebSocket': The URL's scheme must be either 'ws' or 'wss'. ` +
+        `'http://backend.example/api/terminal/ws/session-1?token=${TOKEN}' is not allowed.`,
+    )
+
+    try {
+      svc._handleConnectCatchError('redaction-test-session', syntaxError, () => {})
+
+      const loggedArgs = consoleErrorSpy.mock.calls
+        .flat()
+        .map((a) => (a instanceof Error ? `${a.name}: ${a.message}` : String(a)))
+      const joined = loggedArgs.join(' ')
+
+      expect(joined).toContain('token=REDACTED')
+      expect(joined).not.toContain(TOKEN)
+    } finally {
+      consoleErrorSpy.mockRestore()
+    }
   })
 })

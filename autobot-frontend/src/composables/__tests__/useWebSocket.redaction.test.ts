@@ -66,4 +66,38 @@ describe('useWebSocket URL credential redaction (#14989)', () => {
     expect(loggedArgs.some((a) => a.includes('Invalid URL'))).toBe(true)
     expect(loggedArgs.join(' ')).not.toContain(TOKEN)
   })
+
+  it('redacts the token in the connection-error log when new WebSocket() throws (#14989 follow-up)', () => {
+    // buildAuthenticatedWsUrl does plain string concatenation with no scheme
+    // check -- a misconfigured base URL (http:// where ws:// was meant)
+    // reaches new WebSocket(), which throws a SyntaxError embedding the
+    // full attempted URL verbatim in every major browser.
+    class ThrowingWebSocket {
+      constructor(url: string) {
+        throw new SyntaxError(
+          `Failed to construct 'WebSocket': The URL's scheme must be either 'ws' or 'wss'. '${url}' is not allowed.`,
+        )
+      }
+    }
+    const originalWebSocket = globalThis.WebSocket
+    globalThis.WebSocket = ThrowingWebSocket as unknown as typeof WebSocket
+
+    try {
+      const url = `http://backend.example/api/terminal/ws/session-1?token=${TOKEN}`
+
+      expect(() => {
+        useWebSocket(url, { autoReconnect: false })
+      }).not.toThrow()
+
+      const loggedArgs = consoleErrorSpy.mock.calls
+        .flat()
+        .map((a) => (a instanceof Error ? `${a.name}: ${a.message}` : String(a)))
+      const joined = loggedArgs.join(' ')
+
+      expect(joined).toContain('token=REDACTED')
+      expect(joined).not.toContain(TOKEN)
+    } finally {
+      globalThis.WebSocket = originalWebSocket
+    }
+  })
 })
