@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from secure_command_executor import CommandRisk
+from autobot_shared.status_enums import CommandRisk
 from security_layer import SecurityLayer
 
 

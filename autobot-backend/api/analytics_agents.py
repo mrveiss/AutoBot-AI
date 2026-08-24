@@ -33,6 +33,7 @@ from api.schemas_analytics import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
 
 logger = get_logger(__name__)
@@ -224,7 +225,7 @@ def _check_agent_metrics(metrics) -> list:
         recommendations.append(
             {
                 "type": "high_error_rate",
-                "severity": "high" if metrics.error_rate > 25 else "medium",
+                "severity": Severity.HIGH.value if metrics.error_rate > 25 else "medium",
                 "message": f"Error rate of {metrics.error_rate:.1f}% exceeds threshold",
                 "suggestion": "Review error logs and improve error handling",
             }
@@ -234,7 +235,7 @@ def _check_agent_metrics(metrics) -> list:
         recommendations.append(
             {
                 "type": "slow_performance",
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
                 "message": f"Average duration of {metrics.avg_duration_ms/1000:.1f}s is high",
                 "suggestion": "Consider optimizing task processing or increasing resources",
             }
@@ -246,7 +247,7 @@ def _check_agent_metrics(metrics) -> list:
             recommendations.append(
                 {
                     "type": "timeout_issues",
-                    "severity": "high" if timeout_rate > 15 else "medium",
+                    "severity": Severity.HIGH.value if timeout_rate > 15 else "medium",
                     "message": f"Timeout rate of {timeout_rate:.1f}% indicates issues",
                     "suggestion": "Increase timeout limits or optimize long-running operations",
                 }
@@ -263,7 +264,7 @@ def _check_agent_metrics(metrics) -> list:
                 recommendations.append(
                     {
                         "type": "low_activity",
-                        "severity": "low",
+                        "severity": Severity.LOW.value,
                         "message": "No activity in the last 7 days",
                         "suggestion": "Check if agent is properly configured and active",
                     }

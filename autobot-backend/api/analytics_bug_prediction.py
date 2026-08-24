@@ -798,7 +798,7 @@ async def _run_bug_analysis(path: str, include_pattern: str, limit: int) -> dict
     analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
     high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
 
-    risk_dist = {level.value: 0 for level in RiskLevel}
+    risk_dist = {level.value: 0 for level in RiskLevel.score_ladder()}
     for f in analyzed_files:
         level = get_risk_level(f["risk_score"])
         risk_dist[level.value] += 1
@@ -868,7 +868,7 @@ def _build_analysis_result(
     """Build the final result dict for a completed analysis (#1418)."""
     analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
     high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
-    risk_dist = {level.value: 0 for level in RiskLevel}
+    risk_dist = {level.value: 0 for level in RiskLevel.score_ladder()}
     for f in analyzed_files:
         level = get_risk_level(f["risk_score"])
         risk_dist[level.value] += 1
@@ -1230,7 +1230,7 @@ def _calculate_risk_distribution(analyzed_files: list) -> dict[str, int]:
     Returns:
         Dict mapping risk level names to counts
     """
-    risk_dist = {level.value: 0 for level in RiskLevel}
+    risk_dist = {level.value: 0 for level in RiskLevel.score_ladder()}
     for f in analyzed_files:
         level = get_risk_level(f["risk_score"])
         risk_dist[level.value] += 1

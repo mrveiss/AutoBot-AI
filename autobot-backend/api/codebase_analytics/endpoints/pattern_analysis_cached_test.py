@@ -27,6 +27,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.codebase_analytics.endpoints.pattern_analysis import router
+from autobot_shared.status_enums import Severity
 
 _STORAGE_MODULE_NAME = "code_intelligence.pattern_analysis.storage"
 
@@ -92,7 +93,7 @@ class TestGetCachedPatternSummary:
         mock_collection = AsyncMock()
         mock_collection.get.return_value = {
             "metadatas": [
-                {"pattern_type": "duplicate", "severity": "medium", "file_path": "a.py"},
+                {"pattern_type": "duplicate", "severity": Severity.MEDIUM.value, "file_path": "a.py"},
             ]
         }
         stub_storage.get_pattern_collection_async = AsyncMock(return_value=mock_collection)

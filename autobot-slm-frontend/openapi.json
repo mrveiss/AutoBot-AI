@@ -1542,16 +1542,15 @@
         "type": "object"
       },
       "BackupCreate": {
-        "description": "Backup request.",
+        "description": "Backup request.\n\n#13578: ``service_type`` is the enum, not a bare string, so FastAPI rejects\nan unknown engine with 422 *before* ``_run_backup`` writes a ``Backup`` row\nthat would otherwise sit there as a FAILED record for a typo.",
         "properties": {
           "node_id": {
             "title": "Node Id",
             "type": "string"
           },
           "service_type": {
-            "default": "redis",
-            "title": "Service Type",
-            "type": "string"
+            "$ref": "#/components/schemas/BackupServiceType",
+            "default": "redis"
           }
         },
         "required": [
@@ -1713,6 +1712,15 @@
         ],
         "title": "BackupRestoreResponse",
         "type": "object"
+      },
+      "BackupServiceType": {
+        "description": "Data service a backup, replication or verification targets (#13578).\n\n``service_type`` was the outlier among the eight sibling enums in this\nmodule: a bare ``String(32)`` with no constraint anywhere. The cost landed\nthe moment a second engine arrived — the dispatch table in\n``api/stateful.py`` had to accept two spellings of the same engine, and an\nunknown value was not rejected at the API boundary at all. It reached\n``_run_backup``, wrote a ``Backup`` row, and only then failed, leaving a\n``BackupStatus.FAILED`` row for a typo that is indistinguishable from one\nfor a real failure.\n\nThe column stays a string at rest (#13578: existing rows keep working);\nthis enum is the boundary that decides what may enter.",
+        "enum": [
+          "redis",
+          "postgres"
+        ],
+        "title": "BackupServiceType",
+        "type": "string"
       },
       "BlueGreenActionResponse": {
         "description": "Blue-green action response.",
@@ -3249,16 +3257,15 @@
         "type": "object"
       },
       "DataVerifyRequest": {
-        "description": "Data verification request.",
+        "description": "Data verification request (#13578: enum-constrained service_type).",
         "properties": {
           "node_id": {
             "title": "Node Id",
             "type": "string"
           },
           "service_type": {
-            "default": "redis",
-            "title": "Service Type",
-            "type": "string"
+            "$ref": "#/components/schemas/BackupServiceType",
+            "default": "redis"
           }
         },
         "required": [
@@ -8306,12 +8313,11 @@
         "type": "object"
       },
       "ReplicationCreate": {
-        "description": "Replication request.",
+        "description": "Replication request (#13578: enum-constrained service_type).",
         "properties": {
           "service_type": {
-            "default": "redis",
-            "title": "Service Type",
-            "type": "string"
+            "$ref": "#/components/schemas/BackupServiceType",
+            "default": "redis"
           },
           "source_node_id": {
             "title": "Source Node Id",
@@ -32913,7 +32919,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "$ref": "#/components/schemas/BackupServiceType"
                 },
                 {
                   "type": "null"
