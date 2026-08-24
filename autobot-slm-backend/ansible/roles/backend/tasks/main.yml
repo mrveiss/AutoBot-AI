@@ -241,6 +241,15 @@
 # out-of-box. Previously the unit was deployed after the MVA-1633 start task, so
 # first-run on a clean node failed: "Could not find the requested service
 # autobot-backend". Tagged backend,config so tag-filtered runs register it too.
+# #13765: the unit below derives MemoryHigh/MemoryMax from ansible_memtotal_mb.
+# A full role run normally has facts, but this role is also reached with
+# gather_facts disabled, and an absent fact renders NO limits while looking
+# exactly like a deliberately-unlimited small host. Same include as
+# unit_only.yml so there is one place that guarantees the fact.
+- name: "Backend | Resolve host memory before rendering the unit (#13765)"
+  ansible.builtin.include_tasks: memory_limits.yml
+  tags: ['backend', 'config']
+
 - name: "Backend | Deploy backend systemd service (#9914)"
   ansible.builtin.template:
     src: autobot-backend.service.j2

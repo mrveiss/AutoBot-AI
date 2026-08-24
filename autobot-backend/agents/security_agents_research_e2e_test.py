@@ -84,7 +84,7 @@ async def test_tool_research_workflow():
         else:
             print(f"  Status: {test_result.get('status')}")  # noqa: print
 
-    return True
+    return
 
 
 async def test_workflow_with_research():
@@ -137,7 +137,7 @@ async def test_workflow_with_research():
         print("4. Verify installation")  # noqa: print
         print("5. Re-run security scan")  # noqa: print
 
-    return True
+    return
 
 
 async def main():
