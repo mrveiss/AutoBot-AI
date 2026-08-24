@@ -159,7 +159,16 @@ _KNOWN_OFFENDERS = {
     # verdict back to a caller that discards it. Measured, not estimated — the
     # sweep reports 121 and the population floor below is unmoved, which is what
     # separates a real drain from a sweep that stopped matching.
-    "autobot-backend": (75, 18000),
+    #
+    # 75 -> 73 with #14989: api/simple_terminal_e2e_test.py's own new
+    # early-return offender was converted to an assert in the same commit that
+    # added it, and merging Dev_new_gui landed one further pre-existing fix
+    # elsewhere in the tree.
+    #
+    # Both reductions survive together: the ratchet only turns down, so where
+    # two branches each lowered a budget the merge keeps the lower of the two,
+    # never the more permissive one.
+    "autobot-backend": (73, 18000),
     "autobot-infrastructure": (121, 250),
     "autobot-npu-worker": (7, 150),
 }

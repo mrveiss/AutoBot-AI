@@ -9,6 +9,7 @@ import asyncio
 import json
 import time
 
+import pytest
 import websockets
 
 from autobot_shared.ssot_config import config as ssot_config
@@ -57,6 +58,14 @@ async def _create_session_via_rest() -> str | None:
 
 async def test_simple_terminal():
     """Test the simple terminal WebSocket endpoint"""
+    # This is a live e2e smoke test, not a unit test -- it needs a real
+    # backend to connect to, which CI's python-suite does not start (no
+    # AUTOBOT_TEST_BACKEND_URL is set there). Skip loudly rather than either
+    # silently passing (the pre-existing behaviour this file's other checks
+    # still have) or failing every run with no backend configured (#14920).
+    if not get_test_backend_url():
+        pytest.skip("AUTOBOT_TEST_BACKEND_URL not set -- no live backend to test against")
+
     print("🧪 Testing Simple Terminal WebSocket")  # noqa: print
     print("=" * 40)  # noqa: print
 
@@ -64,9 +73,10 @@ async def test_simple_terminal():
     # session_id is rejected outright, so a locally-fabricated one no
     # longer connects.
     session_id = await _create_session_via_rest()
-    if not session_id:
-        print("❌ Could not create a terminal session -- aborting")  # noqa: print
-        return False
+    # #14920: a bare `return False` here is discarded by pytest -- this
+    # function is collected as test_simple_terminal, so a failure to create
+    # the session must fail the test, not silently report green.
+    assert session_id, "Could not create a terminal session -- aborting"
     print(f"📝 Session ID: {session_id}")  # noqa: print
 
     uri = (
