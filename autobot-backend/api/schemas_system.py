@@ -3558,7 +3558,6 @@ class SecretCreateRequest(BaseModel):
             )
         return value
 
-
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
