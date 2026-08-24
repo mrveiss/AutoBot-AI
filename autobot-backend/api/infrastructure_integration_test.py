@@ -164,26 +164,56 @@ def check_delete_host(host_id):
     return True
 
 
+# What the worker writes to its log when it has come up. Both tokens are
+# required: "ready" alone appears in lines other processes write, and the
+# service name alone appears before the worker has finished starting.
+_WORKER_READY_MARKERS = ("autobot-worker", "ready")
+
+
 def test_celery_worker_status():
-    """Test 9: Celery Worker Status"""
-    # Check if Celery worker is running by checking logs
-    try:
-        with open(
-            str(project_root() / "logs" / "celery-worker.log"),
-            "r",
-            encoding="utf-8",
-        ) as f:
-            logs = f.read()
-            if "ready" in logs and "autobot-worker" in logs:
-                print("✅ Test 9: Celery Worker - PASSED")  # noqa: print
-                print("   Worker is running with queues: celery, deployments")  # noqa: print
-                return True
-            else:
-                print("❌ Test 9: Celery Worker - FAILED")  # noqa: print
-                return False
-    except Exception as e:
-        print(f"❌ Test 9: Celery Worker - ERROR: {e}")  # noqa: print
-        return False
+    """Test 9: Celery Worker Status — the worker's own log is the only evidence.
+
+    #14941: this used to wrap its whole body in ``try/except Exception`` and end
+    every path with ``return True`` or ``return False``. pytest discards a test's
+    return value, so no log content, no service state and no raised exception
+    could make it fail — it reported pass unconditionally, in a marker set that
+    until #14930 ran in no gating workflow at all.
+
+    The only thing that legitimately excuses this check is a checkout that is not
+    a deployment, and that is decided by the ``logs/`` directory rather than by
+    the log file: if ``logs/`` is absent nothing on this host ever ran, so there
+    is nothing to report on. If ``logs/`` exists and the worker's log does not,
+    the worker never started, and that is a failure rather than a non-result.
+
+    ``main()`` calls this bare and discards whatever it returns, so unlike the
+    npu_code_search drivers (#14920) there is no truthiness contract to keep and
+    the function returns nothing at all.
+    """
+    log_directory = project_root() / "logs"
+    log_file = log_directory / "celery-worker.log"
+
+    if not log_directory.is_dir():
+        pytest.skip(
+            f"{log_directory} does not exist — this checkout is not a deployment, "
+            "so no service on this host has written a log to read"
+        )
+
+    assert log_file.is_file(), (
+        f"{log_file} is absent while {log_directory} exists — this host runs services "
+        "but the Celery worker has never written a log, so it never started"
+    )
+
+    logs = log_file.read_text(encoding="utf-8", errors="replace")
+    assert logs.strip(), f"{log_file} is empty — the worker process produced no output at all, " "so it did not come up"
+
+    missing = [marker for marker in _WORKER_READY_MARKERS if marker not in logs]
+    assert not missing, (
+        f"{log_file} never mentions {missing} — the Celery worker did not report "
+        f"itself ready ({len(logs)} bytes of log read)"
+    )
+
+    print("✅ Test 9: Celery Worker - PASSED")  # noqa: print
+    print("   Worker is running with queues: celery, deployments")  # noqa: print
 
 
 def main():
