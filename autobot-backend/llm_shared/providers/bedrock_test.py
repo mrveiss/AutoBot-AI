@@ -25,14 +25,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llm_shared.providers.bedrock import (
+from llm_shared.providers.bedrock import BedrockProvider
+from llm_shared.providers.bedrock_credentials import (
     _AWS_REGION_PATTERN,
     BEDROCK_VAULT_ENTRY_NAME,
     BEDROCK_VAULT_ENTRY_TYPE,
-    BedrockProvider,
 )
 
-_MODULE_GLOBALS = BedrockProvider._load_credentials_from_vault.__globals__
+#: Credential resolution spans two modules since #15023: the vault lookup lives in
+#: ``bedrock_credentials`` and the settings/env fallback in ``bedrock``. Reaching them
+#: through the bound functions keeps the patch targets correct if either moves again.
+_VAULT_GLOBALS = BedrockProvider._load_credentials_from_vault.__globals__
+_PROVIDER_GLOBALS = BedrockProvider._resolve_credentials.__globals__
 
 
 def _vault_returning(value_json: str | None, secret_type: str = BEDROCK_VAULT_ENTRY_TYPE) -> MagicMock:
@@ -53,12 +57,19 @@ def _clear_aws_env(monkeypatch):
 
 
 def _patch_vault(monkeypatch, vault) -> None:
-    monkeypatch.setitem(_MODULE_GLOBALS, "get_secrets_service", lambda: vault)
+    monkeypatch.setitem(_VAULT_GLOBALS, "get_secrets_service", lambda: vault)
 
 
 def _patch_warning(monkeypatch) -> MagicMock:
+    """One mock collecting warnings from BOTH credential modules.
+
+    A single resolve can warn twice from two different modules -- the vault
+    lookup failing and the plain-text fallback being used. Patching only one
+    would silently halve every call_count assertion below.
+    """
     warning_mock = MagicMock()
-    monkeypatch.setitem(_MODULE_GLOBALS, "logger", MagicMock(warning=warning_mock, info=MagicMock()))
+    for module_globals in (_VAULT_GLOBALS, _PROVIDER_GLOBALS):
+        monkeypatch.setitem(module_globals, "logger", MagicMock(warning=warning_mock, info=MagicMock()))
     return warning_mock
 
 
