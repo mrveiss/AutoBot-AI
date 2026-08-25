@@ -5,15 +5,21 @@
 """
 Unit tests for AnthropicProvider extended thinking support (#3258).
 
-These tests are fully offline — the Anthropic SDK is mocked so no real API
-calls are made.
+These tests are fully offline — the Anthropic SDK client itself is mocked so
+no real API calls are made. ``TestKwargsMatchRealSdkSignature`` below is the
+exception: it binds the kwargs the provider builds against the REAL,
+installed ``anthropic`` SDK's ``messages.create()``/``.stream()`` signature
+(#15016) — a mocked client accepts any kwarg, so it cannot catch a keyword
+argument the SDK itself no longer declares.
 """
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import anthropic
 import pytest
 
 from llm_shared.models import LLMRequest
@@ -23,7 +29,9 @@ from llm_shared.providers.anthropic import (
     _extract_content_pair,
     _extract_text_content,
     _extract_think_tag_content,
+    _route_sampling_kwargs,
     _strip_think_blocks,
+    _thinking_budget_to_effort,
 )
 
 # #13361: this module used to install ``sys.modules`` stubs for ``anthropic``
@@ -36,9 +44,12 @@ from llm_shared.providers.anthropic import (
 # input with the same 16 zeros, so any cache test collected afterwards scored
 # a hit on the first key it looked up.
 #
-# Nothing here needs either package at import time either: ``AnthropicProvider``
-# imports ``anthropic`` lazily inside ``_ensure_client()``, and every test below
-# assigns ``provider._client`` directly, so that branch never runs.
+# ``AnthropicProvider`` itself still imports ``anthropic`` lazily inside
+# ``_ensure_client()``, and every ``AnthropicProvider`` test below assigns
+# ``provider._client`` directly, so that branch never runs. This module now
+# imports ``anthropic`` at the top regardless (#15016), to bind built kwargs
+# against its real ``messages.create()``/``.stream()`` signature — see
+# ``TestKwargsMatchRealSdkSignature``.
 
 
 # ---------------------------------------------------------------------------
@@ -203,6 +214,11 @@ class TestBuildRequestKwargs:
         assert kwargs["max_tokens"] == 4096
         assert headers == {}
         assert preserve is False
+        # #15016: LLMRequest.temperature always carries a value (never None),
+        # so it is a genuine dependency and must survive via extra_body — not
+        # as a top-level kwarg, which anthropic>=1.0 no longer accepts.
+        assert "temperature" not in kwargs
+        assert "temperature" in kwargs["extra_body"]
 
     def test_thinking_kwargs_forwarded(self):
         provider = self._provider()
@@ -212,7 +228,6 @@ class TestBuildRequestKwargs:
                 "api_kwargs": {
                     "thinking": thinking,
                     "max_tokens": 64000,
-                    "temperature": 1,
                     "extra_headers": {"anthropic-beta": "output-128k-2025-02-19"},
                 }
             }
@@ -220,7 +235,6 @@ class TestBuildRequestKwargs:
         kwargs, headers, preserve = provider._build_request_kwargs("claude-sonnet-4-6", request)
         assert kwargs["thinking"] == thinking
         assert kwargs["max_tokens"] == 64000
-        assert kwargs["temperature"] == 1
         assert headers == {"anthropic-beta": "output-128k-2025-02-19"}
         assert preserve is False
 
@@ -230,35 +244,28 @@ class TestBuildRequestKwargs:
         _, _, preserve = provider._build_request_kwargs("m", request)
         assert preserve is True
 
-    def test_thinking_enforces_temperature_1(self):
+    def test_explicit_temperature_routed_to_extra_body(self):
+        """#15016: a caller-supplied api_kwargs temperature is never a raw kwarg."""
         provider = self._provider()
-        thinking = {"type": "enabled", "budget_tokens": 8000}
-        request = self._make_request(
-            metadata={
-                "api_kwargs": {
-                    "thinking": thinking,
-                    "max_tokens": 16000,
-                    # Deliberately omit temperature — must be auto-coerced to 1.
-                }
-            }
-        )
+        request = self._make_request(metadata={"api_kwargs": {"temperature": 0}})
         kwargs, _, _ = provider._build_request_kwargs("claude-sonnet-4-6", request)
-        assert kwargs["temperature"] == 1
+        assert "temperature" not in kwargs
+        assert kwargs["extra_body"]["temperature"] == 0
 
-    def test_thinking_overrides_explicit_temperature(self):
+    def test_thinking_budget_kept_for_model_without_adaptive_requirement(self):
         provider = self._provider()
-        thinking = {"type": "enabled", "budget_tokens": 8000}
-        request = self._make_request(
-            metadata={
-                "api_kwargs": {
-                    "thinking": thinking,
-                    "max_tokens": 16000,
-                    "temperature": 0,  # Invalid with thinking — must be coerced to 1.
-                }
-            }
-        )
+        request = self._make_request(metadata={"api_kwargs": {"thinking_tokens": 8000}})
         kwargs, _, _ = provider._build_request_kwargs("claude-sonnet-4-6", request)
-        assert kwargs["temperature"] == 1
+        assert kwargs["thinking"] == {"type": "enabled", "budget_tokens": 8000}
+
+    def test_thinking_budget_expands_to_adaptive_for_flagged_model(self):
+        """#15016: claude-opus-4-6 gets adaptive thinking, not budget_tokens."""
+        provider = self._provider()
+        request = self._make_request(metadata={"api_kwargs": {"thinking_tokens": 8000}})
+        kwargs, _, _ = provider._build_request_kwargs("claude-opus-4-6", request)
+        assert kwargs["thinking"] == {"type": "adaptive"}
+        assert kwargs["output_config"] == {"effort": "high"}
+        assert "budget_tokens" not in kwargs["thinking"]
 
     def test_betas_routed_to_extra_headers_via_build_request_kwargs(self):
         provider = self._provider()
@@ -293,6 +300,86 @@ class TestBuildRequestKwargs:
             }
         ]
         assert all(m["role"] != "system" for m in kwargs["messages"])
+
+
+# ---------------------------------------------------------------------------
+# _route_sampling_kwargs / _thinking_budget_to_effort (#15016)
+# ---------------------------------------------------------------------------
+
+
+class TestRouteSamplingKwargs:
+    def test_none_value_is_dropped_not_routed(self):
+        kwargs = _route_sampling_kwargs({"model": "m", "temperature": None})
+        assert "temperature" not in kwargs
+        assert "extra_body" not in kwargs
+
+    def test_set_value_moved_to_extra_body(self):
+        kwargs = _route_sampling_kwargs({"model": "m", "temperature": 0.4})
+        assert "temperature" not in kwargs
+        assert kwargs["extra_body"] == {"temperature": 0.4}
+
+    def test_top_p_and_top_k_also_routed(self):
+        kwargs = _route_sampling_kwargs({"model": "m", "top_p": 0.9, "top_k": 40})
+        assert "top_p" not in kwargs and "top_k" not in kwargs
+        assert kwargs["extra_body"] == {"top_p": 0.9, "top_k": 40}
+
+    def test_merges_into_existing_extra_body(self):
+        kwargs = _route_sampling_kwargs({"model": "m", "temperature": 1, "extra_body": {"foo": "bar"}})
+        assert kwargs["extra_body"] == {"foo": "bar", "temperature": 1}
+
+    def test_no_sampling_keys_is_a_noop(self):
+        kwargs = _route_sampling_kwargs({"model": "m", "max_tokens": 10})
+        assert kwargs == {"model": "m", "max_tokens": 10}
+
+
+class TestThinkingBudgetToEffort:
+    @pytest.mark.parametrize(
+        "budget_tokens,expected",
+        [(1, "low"), (2000, "low"), (2001, "medium"), (10000, "high"), (10001, "xhigh"), (100000, "max")],
+    )
+    def test_tier_boundaries(self, budget_tokens, expected):
+        assert _thinking_budget_to_effort(budget_tokens) == expected
+
+
+# ---------------------------------------------------------------------------
+# Kwargs bind against the REAL, installed anthropic SDK signature (#15016)
+#
+# A MagicMock/AsyncMock client accepts any keyword argument, so it cannot
+# catch a kwarg the SDK no longer declares (anthropic 1.x removed temperature/
+# top_p/top_k, raising TypeError). inspect.Signature.bind() performs exactly
+# the check the real SDK method does at call time, with no network request.
+# ---------------------------------------------------------------------------
+
+
+class TestKwargsMatchRealSdkSignature:
+    def _call_kwargs(self, request: LLMRequest, model: str = "claude-sonnet-4-6") -> dict:
+        provider = AnthropicProvider(settings={"api_key": "test-key"})
+        kwargs, extra_headers, _ = provider._build_request_kwargs(model, request)
+        call_kwargs = dict(kwargs)
+        if extra_headers:
+            call_kwargs["extra_headers"] = extra_headers
+        return call_kwargs
+
+    def test_default_request_binds_to_real_create_signature(self):
+        request = LLMRequest(messages=[{"role": "user", "content": "hi"}])
+        call_kwargs = self._call_kwargs(request)
+        sig = inspect.signature(anthropic.resources.messages.messages.AsyncMessages.create)
+        sig.bind(self=object(), **call_kwargs)
+
+    def test_streaming_call_binds_to_real_stream_signature(self):
+        request = LLMRequest(messages=[{"role": "user", "content": "hi"}])
+        call_kwargs = self._call_kwargs(request)
+        sig = inspect.signature(anthropic.resources.messages.messages.AsyncMessages.stream)
+        sig.bind(self=object(), **call_kwargs)
+
+    def test_extended_thinking_request_binds_to_real_create_signature(self):
+        request = LLMRequest(
+            messages=[{"role": "user", "content": "hi"}],
+            metadata={"api_kwargs": {"thinking_tokens": 8000}},
+        )
+        call_kwargs = self._call_kwargs(request, model="claude-opus-4-6")
+        sig = inspect.signature(anthropic.resources.messages.messages.AsyncMessages.create)
+        sig.bind(self=object(), **call_kwargs)
 
 
 # ---------------------------------------------------------------------------
