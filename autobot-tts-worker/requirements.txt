@@ -1,6 +1,6 @@
 fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=0.52.1
-uvicorn[standard]>=0.52.3
-transformers>=5.15.0
+uvicorn[standard]>=0.52.4
+transformers>=5.15.1
 torch>=2.13.0
 soundfile>=0.14.0
 -c ../constraints/shared.txt  # single source of truth for shared versions (#10524)

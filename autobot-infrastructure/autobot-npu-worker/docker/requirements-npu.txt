@@ -3,7 +3,7 @@
 
 # Core Framework
 fastapi>=0.141.1
-uvicorn[standard]>=0.52.3
+uvicorn[standard]>=0.52.4
 pydantic>=2.13.4
 
 # Intel OpenVINO for NPU acceleration
@@ -20,7 +20,7 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
                           # ai-stack + npu-worker installs have failed to resolve ever since.
                           # scripts/tokenizers_transformers_range_test.py now fails on a floor
                           # that excludes 0.23.0.
-transformers>=5.15.0
+transformers>=5.15.1
 huggingface-hub>=1.28.0
 
 # Tensor Operations (NPU optimized)
