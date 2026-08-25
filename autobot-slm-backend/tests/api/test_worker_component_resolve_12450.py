@@ -265,7 +265,7 @@ def test_missing_venv_skips_for_workers_but_still_fails_for_backends():
     with patch("pathlib.Path.exists", return_value=True):
         # Worker: requirements present, venv pip absent → skip, resolve survives.
         with patch.dict(cs._WORKER_COMPONENT_PIP, {"worker-comp": ("/req.txt", missing_pip)}):
-            with patch("api.code_sync.Path") as fake_path:
+            with patch("api.venv_reconcile.Path") as fake_path:
                 fake_path.side_effect = lambda p: _StubPath(p, missing_pip)
                 steps: list[str] = []
                 assert _run(cs._install_pip_deps_for_component("worker-comp", steps)) is True
@@ -273,7 +273,7 @@ def test_missing_venv_skips_for_workers_but_still_fails_for_backends():
 
     # Backend with the same absent pip must NOT take the skip path.
     with patch.dict(cs._COMPONENT_PIP_PATHS, {"backend-comp": ("/req.txt", missing_pip)}):
-        with patch("api.code_sync.Path") as fake_path:
+        with patch("api.venv_reconcile.Path") as fake_path:
             fake_path.side_effect = lambda p: _StubPath(p, missing_pip)
             with patch("asyncio.create_subprocess_exec", side_effect=_fake_exec):
                 steps = []
