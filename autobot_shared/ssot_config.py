@@ -64,21 +64,11 @@ PROJECT_ROOT = project_root()
 
 
 def default_audit_log_file() -> str:
-    """The ONE definition of the audit-log default path (#14070).
-
-    The formula ``project_root() / "logs" / "audit.log"`` used to be written out
-    twice — here, in ``MiscConfig.audit_log_file``'s ``default_factory``, and
-    again as ``security_layer._AUDIT_LOG_FILE_DEFAULT``. A test asserted the two
-    were equal, which proves they *agree today*, not that either derives from
-    the other: changing one moves the value and breaks the test without saying
-    why, and updating both to match quietly restores the divergence #14050 fixed.
-
-    Both sites now call this, so the formula exists once and a change to it
-    moves every consumer. Deliberately a module-level function rather than a
-    module-level constant: ``project_root()`` must stay lazy, so that a caller
-    setting ``AUTOBOT_PROJECT_ROOT`` after import still gets the right answer.
-    """
+    """The ONE definition of the audit-log default (#14070): was ALSO spelled out
+    as ``security_layer._AUDIT_LOG_FILE_DEFAULT``, kept in step by an equality
+    test -- agreement today, not derivation. A function, so it stays lazy."""
     return str(project_root() / "logs" / "audit.log")
+
 
 # Default model constants - single source of truth for fallback values (#2553)
 # These are used when .env doesn't specify a value.
@@ -1505,24 +1495,8 @@ class MiscConfig(RedactedSettings):
     api_key: str = Field(default="", alias="API_KEY")
     # #11681: restore pre-#7437 default (1000) — 0 silently disabled the AST cache
     ast_cache_max_size: int = Field(default=1000, alias="AST_CACHE_MAX_SIZE")
-    # #14050: lazily resolved via project_root() rather than a hardcoded
-    # literal. security_layer.py's own module-level fallback (#13149) is
-    # only ever reached when this field is falsy, so a frozen "/opt/autobot"
-    # default here silently overrode that fix — a checkout without
-    # AUTOBOT_AUDIT_LOG_FILE set would still write into the live install.
-    # A real deployment always sets AUTOBOT_AUDIT_LOG_FILE explicitly (see
-    # ansible/roles/backend/templates/backend.env.j2), so only the unset
-    # case changes here.
-    audit_log_file: str = Field(
-        # Called through the module global rather than bound here, so the
-        # formula is resolved at call time. `default_factory=default_audit_log_file`
-        # captures the function object at class-definition time, which makes the
-        # single definition unprovable: redirecting the canonical formula would
-        # move this field's value not at all, and the "derivation" would be the
-        # same coincidental agreement #14070 exists to end.
-        default_factory=lambda: default_audit_log_file(),  # noqa: PLW0108
-        alias="AUTOBOT_AUDIT_LOG_FILE",
-    )
+    # #14050 lazy, not a frozen "/opt/autobot" literal; #14070 via the module global.
+    audit_log_file: str = Field(default_factory=lambda: default_audit_log_file(), alias="AUTOBOT_AUDIT_LOG_FILE")  # noqa: PLW0108,E501
     # #11834: restore pre-#7437 autoresearch defaults — ""/0 defaults made
     # AutoResearchConfig() crash on int("")/float("") and silently zeroed
     # timeouts/thresholds (same class as #11681).

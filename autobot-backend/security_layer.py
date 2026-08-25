@@ -38,16 +38,8 @@ logger = get_logger(__name__)
 def _resolve_audit_log_file() -> str:
     """Return audit log file path from AUTOBOT_AUDIT_LOG_FILE env var with logged fallback.
 
-    #14070: the fallback calls ``ssot_config.default_audit_log_file()`` rather
-    than a module-level copy of the same formula. The copy
-    (``_AUDIT_LOG_FILE_DEFAULT``) is gone: two hand-written spellings of
-    ``project_root() / "logs" / "audit.log"`` could only be kept in step by a
-    test asserting they were equal, which is a check on today's agreement rather
-    than on derivation.
-
-    The branch is still reachable, and is not dead code: the SSOT field's
-    default_factory is never falsy, but ``AUTOBOT_AUDIT_LOG_FILE`` set to the
-    empty string is, and that is the case this warns about.
+    #14070: the fallback calls ``ssot_config.default_audit_log_file()``, not the
+    removed copy ``_AUDIT_LOG_FILE_DEFAULT``. Still reachable via an empty env var.
     """
     value = config.audit_log_file
     if not value:

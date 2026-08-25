@@ -19,8 +19,6 @@ Related: #599 - SSOT Configuration System Epic
 Fix: #9907 - import path updated to canonical autobot_shared.ssot_config
 """
 
-import pytest
-import ast
 import os
 from pathlib import Path
 from unittest.mock import patch
@@ -770,118 +768,15 @@ class TestShellVarFamiliesWithNoPriorSsot14173:
         assert cfg.vnc_server == 5999
 
 
-#: The live-install prefix no ``Field`` default may freeze (#14050).
-LIVE_INSTALL_PREFIX = "/opt/autobot"
-
-#: Floor for the guard's own population. ``ssot_config`` held well over 400
-#: ``Field(...)`` calls when this landed. A sweep that suddenly finds a handful
-#: has broken, and an empty offender list from a broken sweep asserts nothing —
-#: which is precisely how the previous regex passed while missing four forms.
-FIELD_CALL_FLOOR = 200
-
-
-def _string_values_in(node: ast.AST) -> list[str]:
-    """Every string this subtree can produce, including concatenations.
-
-    Plain constants, f-string pieces and ``"a" + "b"`` chains are all reachable
-    ways to spell a path, so all three are reassembled here rather than only the
-    single-constant form the regex could see.
-    """
-    values = [n.value for n in ast.walk(node) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
-    for inner in ast.walk(node):
-        if isinstance(inner, ast.JoinedStr):
-            values.append(ast.unparse(inner))
-        elif isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.Add):
-            parts = [n.value for n in ast.walk(inner) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
-            values.append("".join(parts))
-    return values
-
-
-def live_install_field_defaults(source: str) -> list[str]:
-    r"""Every ``Field(default=/default_factory=)`` in *source* freezing the live install.
-
-    #14070: replaces a regex over raw file text
-    (``default(?:_factory)?\s*=\s*"[^"]*/opt/autobot[^"]*"``), which missed
-    single-quoted literals, f-strings, ``"/opt/" + "autobot"`` concatenation and
-    — the form the #14050 PR itself introduced — a literal inside a
-    ``default_factory=lambda: "..."`` body, because the ``lambda:`` text breaks
-    the ``\s*"`` match. It also false-positived on any comment or docstring that
-    merely mentioned ``default="/opt/autobot"``.
-
-    Parsing rather than pattern-matching fixes both directions at once: comments
-    and docstrings are not ``Field`` keyword arguments, so they cannot be
-    reached, and everything inside the keyword's expression is, however it is
-    spelled.
-    """
-    offenders: list[str] = []
-    for node in ast.walk(ast.parse(source)):
-        if not isinstance(node, ast.Call):
-            continue
-        func = node.func
-        name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
-        if name != "Field":
-            continue
-        for keyword in node.keywords:
-            if keyword.arg not in ("default", "default_factory"):
-                continue
-            for value in _string_values_in(keyword.value):
-                if LIVE_INSTALL_PREFIX in value:
-                    offenders.append(f"line {node.lineno}: {keyword.arg}={value!r}")
-    return offenders
-
-
-def _field_call_count(source: str) -> int:
-    """How many ``Field(...)`` calls the sweep actually reached."""
-    return sum(
-        1
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Call)
-        and (node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", None)) == "Field"
-    )
-
-
 class TestNoHardcodedLiveInstallLiterals:
-    """Sweep guard (#14050 AC, rebuilt on AST per #14070): no ``/opt/autobot``
-    Field default may return to this file, in any spelling."""
+    """Sweep guard (#14050 AC): no ``/opt/autobot`` Field default may return here, in any
+    spelling. Check: ``tools/lint/check_field_defaults.py`` (#14070)."""
 
     def test_no_field_default_hardcodes_the_live_install(self) -> None:
         from autobot_shared import ssot_config
+        from tools.lint.check_field_defaults import FIELD_CALL_FLOOR, field_call_count, live_install_field_defaults
 
         source = Path(ssot_config.__file__).read_text(encoding="utf-8")
-
-        # Population floor FIRST: an offender list that is empty because the
-        # sweep found no fields at all is not a clean result.
-        reached = _field_call_count(source)
+        reached = field_call_count(source)  # population floor FIRST -- see the message below
         assert reached >= FIELD_CALL_FLOOR, f"the Field sweep reached only {reached} call(s) — it broke"
-
         assert live_install_field_defaults(source) == []
-
-    @pytest.mark.parametrize(
-        "spelling",
-        [
-            pytest.param('x: str = Field(default="/opt/autobot/logs/a.log")', id="double-quoted"),
-            pytest.param("x: str = Field(default='/opt/autobot/logs/a.log')", id="single-quoted"),
-            pytest.param('x: str = Field(default_factory=lambda: "/opt/autobot/logs/a.log")', id="lambda-body"),
-            pytest.param("x: str = Field(default_factory=lambda: '/opt/autobot/x')", id="lambda-single-quoted"),
-            pytest.param('x: str = Field(default=f"/opt/autobot/{name}.log")', id="f-string"),
-            pytest.param('x: str = Field(default="/opt/" + "autobot/logs/a.log")', id="concatenation"),
-            pytest.param('x: str = Field(default_factory=lambda: str(Path("/opt/autobot") / "l"))', id="nested-call"),
-        ],
-    )
-    def test_the_guard_catches_every_spelling(self, spelling: str) -> None:
-        """#14070 AC3. The regex this replaced missed every case below the first."""
-        assert live_install_field_defaults(spelling) != [], f"guard blind to: {spelling}"
-
-    @pytest.mark.parametrize(
-        "benign",
-        [
-            pytest.param('# a comment mentioning default="/opt/autobot/logs/a.log"', id="comment"),
-            pytest.param('"""A docstring mentioning default="/opt/autobot/x"."""', id="docstring"),
-            pytest.param('x: str = Field(default="/var/lib/autobot/x")', id="different-prefix"),
-            pytest.param('x: str = Field(description="was /opt/autobot before #14050")', id="non-default-kwarg"),
-            pytest.param('LEGACY = "/opt/autobot/logs/a.log"', id="module-constant-not-a-field"),
-        ],
-    )
-    def test_the_guard_does_not_fire_on_prose_or_other_kwargs(self, benign: str) -> None:
-        """#14070 AC4. The regex false-positived on the first two of these."""
-        assert live_install_field_defaults(benign) == [], f"guard false-positived on: {benign}"
