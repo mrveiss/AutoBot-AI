@@ -44,6 +44,65 @@ BEDROCK_VAULT_ENTRY_TYPE = "aws_bedrock_credentials"
 #: partitions.
 _AWS_REGION_PATTERN = re.compile(r"^[a-z]{2}(-[a-z]+)+-\d{1,2}$")
 
+#: AWS access-key shape: AKIA (long-lived IAM user) or ASIA (temporary STS) followed
+#: by 16 uppercase-alphanumeric characters -- 20 characters total. Restores the check
+#: dropped alongside the vault lookup in d470c47c09 (#15080); see validate_credential_pair.
+_AWS_ACCESS_KEY_PATTERN = re.compile(r"^(AKIA|ASIA)[0-9A-Z]{16}$")
+
+#: AWS secret-access-key shape: exactly 40 base64 characters (A-Za-z0-9+/).
+_AWS_SECRET_KEY_PATTERN = re.compile(r"^[A-Za-z0-9+/]{40}$")
+
+
+def validate_credential_pair(access_key: object, secret_key: object) -> None:
+    """Validate the shape of a resolved AWS access-key/secret-key pair.
+
+    Applies regardless of source (SecretsService vault, settings, or environment) --
+    a vault entry is a trust boundary, not a format guarantee, the same reasoning
+    already applied to the region via ``_AWS_REGION_PATTERN``. Restores the check
+    dropped alongside the vault lookup in the formatting auto-fix ``d470c47c09``,
+    which #15062 never re-added (#15080).
+
+    An empty string is treated the same as ``None`` (no explicit credentials,
+    IAM role authentication applies). A non-string value -- reachable now that
+    a vault entry travels through ``json.loads`` rather than only ``os.getenv``
+    -- is rejected the same as a malformed string, never inspected further.
+
+    Raises:
+        ValueError: Naming the malformed field only -- never any part of its
+            value or its length, which is itself derived from the value.
+            Deliberately louder than a silent pass-through: a malformed vault
+            row means active misconfiguration, and falling through to the
+            boto3 default (IAM role) chain would substitute an unintended
+            identity rather than surface the bad entry.
+    """
+    if not access_key:
+        access_key = None
+    if not secret_key:
+        secret_key = None
+
+    if access_key is None and secret_key is None:
+        logger.info("Using IAM role authentication (no explicit Bedrock credentials)")
+        return
+
+    if (access_key is None) != (secret_key is None):
+        raise ValueError(
+            "Bedrock: resolved AWS credentials are incomplete -- both the access key and "
+            "the secret key must be present, or both absent for IAM role authentication"
+        )
+
+    if not isinstance(access_key, str) or not _AWS_ACCESS_KEY_PATTERN.match(access_key):
+        raise ValueError("Bedrock: resolved AWS access key has an unexpected format, refusing to initialize client")
+    if access_key.startswith("AKIA"):
+        logger.warning(
+            "Bedrock: using long-lived IAM user credentials (AKIA prefix); consider STS "
+            "temporary credentials (ASIA prefix) or IAM role authentication instead"
+        )
+    else:
+        logger.info("Bedrock: using STS temporary credentials (ASIA prefix)")
+
+    if not isinstance(secret_key, str) or not _AWS_SECRET_KEY_PATTERN.match(secret_key):
+        raise ValueError("Bedrock: resolved AWS secret key has an unexpected format, refusing to initialize client")
+
 
 def load_credentials_from_vault() -> tuple[str | None, str | None, str | None]:
     """Look up the Bedrock AWS credential pair in SecretsService.

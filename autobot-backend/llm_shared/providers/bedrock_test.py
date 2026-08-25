@@ -30,6 +30,7 @@ from llm_shared.providers.bedrock_credentials import (
     _AWS_REGION_PATTERN,
     BEDROCK_VAULT_ENTRY_NAME,
     BEDROCK_VAULT_ENTRY_TYPE,
+    validate_credential_pair,
 )
 
 #: Credential resolution spans two modules since #15023: the vault lookup lives in
@@ -37,6 +38,16 @@ from llm_shared.providers.bedrock_credentials import (
 #: through the bound functions keeps the patch targets correct if either moves again.
 _VAULT_GLOBALS = BedrockProvider._load_credentials_from_vault.__globals__
 _PROVIDER_GLOBALS = BedrockProvider._resolve_credentials.__globals__
+
+#: Format-valid stand-ins for the vault/env credential pairs below -- shaped to pass
+#: validate_credential_pair() (AKIA/ASIA + 16 alnum access key, 40-char base64 secret)
+#: so these fixtures exercise credential *resolution* without tripping the *format*
+#: validation restored by #15080. Distinct per source so priority-order assertions
+#: still tell vault and env values apart.
+_WELL_FORMED_VAULT_ACCESS_KEY_ID = "AKIA" + "V" * 16
+_WELL_FORMED_VAULT_SECRET_ACCESS_KEY = "V" * 40
+_WELL_FORMED_ENV_ACCESS_KEY_ID = "ASIA" + "E" * 16  # STS prefix avoids the AKIA warning below
+_WELL_FORMED_ENV_SECRET_ACCESS_KEY = "E" * 40
 
 
 def _vault_returning(value_json: str | None, secret_type: str = BEDROCK_VAULT_ENTRY_TYPE) -> MagicMock:
@@ -76,19 +87,24 @@ def _patch_warning(monkeypatch) -> MagicMock:
 def test_resolve_credentials_consults_secrets_service_first(monkeypatch):
     """SecretsService is consulted, with the exact call the vault reader must make."""
     vault = _vault_returning(
-        '{"aws_access_key_id": "AKIAVAULTVAULTVAULT", '
-        '"aws_secret_access_key": "vault-secret", "region": "eu-west-1"}'
+        '{"aws_access_key_id": "%s", '
+        '"aws_secret_access_key": "%s", "region": "eu-west-1"}'
+        % (_WELL_FORMED_VAULT_ACCESS_KEY_ID, _WELL_FORMED_VAULT_SECRET_ACCESS_KEY)
     )
     _patch_vault(monkeypatch, vault)
     # Set env vars too, to prove the vault wins priority rather than merely
     # being the only source available.
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAENVENVENVENVENV")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "env-secret")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", _WELL_FORMED_ENV_ACCESS_KEY_ID)
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", _WELL_FORMED_ENV_SECRET_ACCESS_KEY)
 
     provider = BedrockProvider(settings={})
     access_key, secret_key, region = provider._resolve_credentials()
 
-    assert (access_key, secret_key, region) == ("AKIAVAULTVAULTVAULT", "vault-secret", "eu-west-1")
+    assert (access_key, secret_key, region) == (
+        _WELL_FORMED_VAULT_ACCESS_KEY_ID,
+        _WELL_FORMED_VAULT_SECRET_ACCESS_KEY,
+        "eu-west-1",
+    )
     vault.get_secret.assert_called_once_with(
         name=BEDROCK_VAULT_ENTRY_NAME,
         scope="general",
@@ -100,14 +116,14 @@ def test_resolve_credentials_consults_secrets_service_first(monkeypatch):
 def test_resolve_credentials_falls_back_to_env_and_logs_warning(monkeypatch):
     """Vault not configured -> env fallback is used AND a warning names the source."""
     _patch_vault(monkeypatch, _vault_returning(None))
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAENVENVENVENVENV")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "env-secret")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", _WELL_FORMED_ENV_ACCESS_KEY_ID)
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", _WELL_FORMED_ENV_SECRET_ACCESS_KEY)
     warning_mock = _patch_warning(monkeypatch)
 
     provider = BedrockProvider(settings={})
     access_key, secret_key, _region = provider._resolve_credentials()
 
-    assert (access_key, secret_key) == ("AKIAENVENVENVENVENV", "env-secret")
+    assert (access_key, secret_key) == (_WELL_FORMED_ENV_ACCESS_KEY_ID, _WELL_FORMED_ENV_SECRET_ACCESS_KEY)
     assert warning_mock.call_count == 1
     logged_message = warning_mock.call_args[0][0]
     assert "SecretsService" in logged_message
@@ -131,14 +147,14 @@ def test_vault_lookup_failure_is_logged_and_falls_back(monkeypatch):
     vault = MagicMock()
     vault.get_secret.side_effect = RuntimeError("db locked")
     _patch_vault(monkeypatch, vault)
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAENVENVENVENVENV")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "env-secret")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", _WELL_FORMED_ENV_ACCESS_KEY_ID)
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", _WELL_FORMED_ENV_SECRET_ACCESS_KEY)
     warning_mock = _patch_warning(monkeypatch)
 
     provider = BedrockProvider(settings={})
     access_key, secret_key, _region = provider._resolve_credentials()
 
-    assert (access_key, secret_key) == ("AKIAENVENVENVENVENV", "env-secret")
+    assert (access_key, secret_key) == (_WELL_FORMED_ENV_ACCESS_KEY_ID, _WELL_FORMED_ENV_SECRET_ACCESS_KEY)
     # Two warnings: the vault-lookup failure, then the plain-text-fallback notice.
     assert warning_mock.call_count == 2
     assert "SecretsService lookup failed" in warning_mock.call_args_list[0][0][0]
@@ -200,3 +216,70 @@ def test_every_real_aws_partition_is_accepted(region):
 )
 def test_non_region_values_are_refused(value):
     assert not _AWS_REGION_PATTERN.match(value), f"{value!r} is not a region and must not reach boto3"
+
+
+# --- validate_credential_pair() (#15080) --------------------------------------------
+#
+# The AWS key pair reaches boto3 through the same vault-is-a-trust-boundary path as
+# the region above, but travelled unvalidated after the formatting auto-fix d470c47c09
+# dropped `_validate_credentials()` and #15062 restored only the vault lookup, not the
+# validator. These tests exercise `validate_credential_pair()` directly (the well-formed
+# and malformed shapes) and `_resolve_credentials()` end-to-end (a malformed vault entry
+# is refused before it can reach `client_kwargs`).
+
+
+@pytest.mark.parametrize(
+    "access_key, secret_key",
+    [
+        ("AKIA" + "A" * 16, "A" * 40),  # long-lived IAM user credentials
+        ("ASIA" + "0" * 16, "B" * 40),  # temporary STS credentials
+        (None, None),  # IAM role authentication -- both absent is well-formed too
+    ],
+)
+def test_well_formed_credential_pair_is_accepted(access_key, secret_key):
+    """Counterweight: a validator that rejected everything would fail this too."""
+    validate_credential_pair(access_key, secret_key)  # must not raise
+
+
+@pytest.mark.parametrize(
+    "access_key, secret_key",
+    [
+        ("AKIA" + "A" * 16, None),  # secret key missing
+        (None, "A" * 40),  # access key missing
+        ("not-shaped-like-an-access-key", "A" * 40),  # wrong prefix/length
+        ("AKIA" + "a" * 16, "A" * 40),  # lowercase suffix, not the AWS charset
+        ("AKIA" + "A" * 15, "A" * 40),  # one character short
+        ("AKIA" + "A" * 16, "A" * 39),  # secret key one character short
+        ("AKIA" + "A" * 16, "A" * 41),  # secret key one character long
+        ("AKIA" + "A" * 16, "not base64 at all!!"),  # secret key outside the charset
+        ("AKIA" + "A" * 16, 12345),  # non-string secret key (malformed vault JSON)
+        (["AKIA" + "A" * 16], "A" * 40),  # non-string access key (malformed vault JSON)
+    ],
+)
+def test_malformed_credential_pair_is_rejected(access_key, secret_key):
+    with pytest.raises(ValueError):
+        validate_credential_pair(access_key, secret_key)
+
+
+def test_rejection_never_echoes_the_credential_value():
+    """The whole point of #15080: a malformed value must never reach the exception text."""
+    telltale = "TELLTALE-MARKER-VALUE-THAT-MUST-NEVER-APPEAR"
+    with pytest.raises(ValueError) as excinfo:
+        validate_credential_pair("AKIA" + telltale[:16], "A" * 40)
+    assert telltale not in str(excinfo.value)
+    assert "TELLTALE" not in str(excinfo.value)
+
+
+def test_resolve_credentials_rejects_a_malformed_vault_pair(monkeypatch):
+    """A malformed vault entry is refused inside `_resolve_credentials()` itself,
+    before it can reach `client_kwargs` -- not left for boto3 to fail on later."""
+    vault = _vault_returning(
+        '{"aws_access_key_id": "not-an-aws-access-key", '
+        '"aws_secret_access_key": "%s", "region": "eu-west-1"}' % _WELL_FORMED_VAULT_SECRET_ACCESS_KEY
+    )
+    _patch_vault(monkeypatch, vault)
+
+    provider = BedrockProvider(settings={})
+    with pytest.raises(ValueError) as excinfo:
+        provider._resolve_credentials()
+    assert "not-an-aws-access-key" not in str(excinfo.value)
