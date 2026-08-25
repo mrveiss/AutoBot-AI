@@ -209,7 +209,10 @@ def main(argv: list[str]) -> int:
     try:
         plural_keys = _load_plural_keys()
     except PluralKeysUnavailable as exc:
-        print(f"i18n-plural-third-arg: {exc}", file=sys.stderr)
+        # noqa: print — this is a CLI checker whose only output channel is the
+        # terminal pre-commit shows the developer; the surrounding file reports the
+        # same way.
+        print(f"i18n-plural-third-arg: {exc}", file=sys.stderr)  # noqa: print
         return 1
 
     all_violations: list[str] = []
