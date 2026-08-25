@@ -15,11 +15,12 @@
 #   | scanner   | backlog measured        | decision                            |
 #   |-----------|-------------------------|-------------------------------------|
 #   | bandit    | 0 findings, all severities, against `.bandit` over the three
-#   |           | scanned trees           | GATES at `any`, allowance 0         |
-#   | pip-audit | measured by the gate on each run; allowance recorded below
-#   |           |                         | GATES at `any`                      |
-#   | npm audit | 0 advisories at every severity across 1191 deps (#13400)
-#   |           |                         | GATES at `high`, allowance 0        |
+#   |           | scanned trees           | GATES at `any`, no allowance        |
+#   | pip-audit | 4 advisories, all in chromadb==1.5.9 (run 32834864623)
+#   |           |                         | GATES at `any`, 4 named allowances  |
+#   | npm audit | 0 advisories at every severity across 1191 deps (#13400),
+#   |           | re-confirmed by the same run
+#   |           |                         | GATES at `high`, no allowance       |
 #   | safety    | not measurable in CI — unauthenticated `safety check` is
 #   |           | deprecated upstream and needs an API key
 #   |           |                         | REPORT ONLY, stated in the summary  |
@@ -33,9 +34,15 @@
 # this issue is about — `pipeline-scripts/security_scan_gate_test.py` fails the
 # build if one is ever added.
 #
+# ALLOWANCES ARE NAMED, NOT COUNTED. `--allow-id` tolerates one specific
+# advisory; there is deliberately no "tolerate N findings" knob, because four
+# fixed advisories replaced by four new ones passes such a gate without a word.
+# An allowance the scanner no longer reports FAILS the step, so the list is
+# forced to shrink as findings are fixed and cannot rot into a blanket.
+#
 # Do NOT relax a gate to clear a red build. A red here means a real finding
-# reached the tree; raise the allowance only with the new count and a reason
-# recorded in this comment, exactly as #13400 established.
+# reached the tree; add an allowance only by naming the advisory and recording
+# why, exactly as #13400 established.
 
 name: Security Scanning
 
@@ -138,6 +145,15 @@ jobs:
     # GATES (#13543). pip-audit reports no severity field at all, so the gate
     # runs at `any` — filtering by a severity the tool never emits would pass
     # everything through while looking like a threshold.
+    #
+    # MEASURED BACKLOG: 4 advisories, every one of them in `chromadb==1.5.9`
+    # (PYSEC-2026-311, CVE-2026-45830, CVE-2026-45831, CVE-2026-45833). They are
+    # named individually below rather than absorbed by a count, so a FIFTH
+    # advisory — or a different advisory in a different package — turns this step
+    # red on the run it appears. An allowance the scanner has stopped reporting
+    # also fails, so this list must shrink as the fix lands. Bumping chromadb is
+    # tracked as #15052: it is a core RAG dependency and the bump needs its own
+    # verification, not a line in a CI-wiring change.
     - name: Python Dependency Audit
       run: |
         set -euo pipefail
@@ -150,7 +166,10 @@ jobs:
           --report python-audit.json \
           --title "Python dependency audit (pip-audit)" \
           --fail-on any \
-          --allowed 0
+          --allow-id PYSEC-2026-311 \
+          --allow-id CVE-2026-45830 \
+          --allow-id CVE-2026-45831 \
+          --allow-id CVE-2026-45833
 
     # REPORT ONLY, and the step name says so (#13543). `safety check` without
     # credentials is deprecated upstream and cannot be relied on to produce a
@@ -221,8 +240,7 @@ jobs:
           --format npm-audit \
           --report autobot-frontend/npm-audit.json \
           --title "Frontend dependency audit (npm audit)" \
-          --fail-on high \
-          --allowed 0
+          --fail-on high
 
     - name: Upload Security Reports
       uses: actions/upload-artifact@v7
@@ -283,8 +301,7 @@ jobs:
           --format bandit \
           --report bandit-report.json \
           --title "Static analysis (bandit)" \
-          --fail-on any \
-          --allowed 0
+          --fail-on any
 
     - name: Semgrep SAST Scan
       # #13543: `!cancelled()` so an earlier scanner's GATE failing does not skip

@@ -13,7 +13,9 @@ This script is the missing half. It reads what a scanner wrote and decides:
 * a report that is absent or unparseable is a HARD FAILURE, never zero findings.
   A scanner that died before writing its output is precisely the case that must
   not read as clean — the same rule `marker_suite_report.py` follows (#14930);
-* findings at or above ``--fail-on`` beyond ``--allowed`` fail the step;
+* findings at or above ``--fail-on`` fail the step, unless the exact finding is named
+  by ``--allow-id`` — and an allowance that names a finding the scanner no longer
+  reports is itself a failure, so the list cannot rot into a blanket;
 * every run writes a severity table to ``$GITHUB_STEP_SUMMARY``, so the counts
   are readable from the checks tab without downloading an artifact.
 
@@ -156,7 +158,23 @@ def at_or_above(findings: list[Finding], threshold: str) -> list[Finding]:
     return [f for f in findings if SEVERITIES.index(f.severity) <= ceiling]
 
 
-def _verdict_line(threshold: str, judged: int, allowed: int) -> str:
+def not_allowed(findings: list[Finding], allowed_ids: set[str]) -> list[Finding]:
+    """The findings the gate still judges after the recorded allowance is applied."""
+    return [finding for finding in findings if finding.identifier not in allowed_ids]
+
+
+def stale_allowances(findings: list[Finding], allowed_ids: set[str]) -> list[str]:
+    """Allowed identifiers the scanner no longer reports.
+
+    A numeric allowance ("tolerate 4") is satisfied by any four findings, so four
+    fixed advisories replaced by four new ones is a silent pass. Naming each one
+    removes that, but only if the list is forced to shrink: an entry the scanner
+    has stopped reporting is a failure here, not a harmless leftover.
+    """
+    return sorted(allowed_ids - {finding.identifier for finding in findings})
+
+
+def _verdict_line(threshold: str, judged: int, allowed_ids: set[str]) -> str:
     """One sentence saying what this step's result does and does not mean."""
     if threshold == "never":
         return (
@@ -164,19 +182,27 @@ def _verdict_line(threshold: str, judged: int, allowed: int) -> str:
             "a statement that the tree is clean. See the decision recorded in `security.yml`."
         )
     scope = "any severity" if threshold == "any" else f"severity {threshold} or worse"
-    if judged > allowed:
-        return f"**FAIL** — {judged} finding(s) at {scope}, above the allowance of {allowed}."
-    return f"**PASS** — {judged} finding(s) at {scope}, within the allowance of {allowed}."
+    suffix = f", with {len(allowed_ids)} recorded allowance(s)" if allowed_ids else ""
+    verdict = "FAIL" if judged else "PASS"
+    return f"**{verdict}** — {judged} unallowed finding(s) at {scope}{suffix}."
 
 
-def render(title: str, findings: list[Finding], threshold: str, allowed: int, sample: int = 10) -> str:
+def render(
+    title: str,
+    findings: list[Finding],
+    threshold: str,
+    allowed_ids: set[str],
+    sample: int = 10,
+) -> str:
     """The markdown block written to the run page and the log."""
     counts = counts_by_severity(findings)
-    judged = at_or_above(findings, threshold)
+    judged = not_allowed(at_or_above(findings, threshold), allowed_ids)
     lines = [f"## {title}", "", "| Severity | Findings |", "| --- | ---: |"]
     lines += [f"| {severity} | {counts[severity]} |" for severity in SEVERITIES]
     lines += [f"| **total** | **{len(findings)}** |", ""]
-    lines.append(_verdict_line(threshold, len(judged), allowed))
+    lines.append(_verdict_line(threshold, len(judged), allowed_ids))
+    if allowed_ids:
+        lines += ["", f"Recorded allowances: {', '.join('`' + i + '`' for i in sorted(allowed_ids))}"]
     if judged:
         lines += ["", f"Findings judged by this gate (first {sample}):", ""]
         lines += [f"- `{f.identifier}` [{f.severity}] {f.location}" for f in judged[:sample]]
@@ -207,18 +233,21 @@ def _parser() -> argparse.ArgumentParser:
         help="fail on findings at this severity or worse; 'any' for every finding; 'never' to report only",
     )
     parser.add_argument(
-        "--allowed",
-        type=int,
-        default=0,
-        help="measured backlog tolerated at that threshold (default: 0). Raise only with a recorded reason.",
+        "--allow-id",
+        action="append",
+        default=[],
+        metavar="ID",
+        help=(
+            "tolerate this specific finding id (advisory, package or rule). Repeatable. An id the "
+            "scanner no longer reports fails the step, so the list has to shrink as findings are fixed."
+        ),
     )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    if args.allowed < 0:
-        _parser().error("--allowed cannot be negative")
+    allowed_ids = set(args.allow_id)
 
     try:
         findings = read_report(args.report, args.format)
@@ -226,13 +255,23 @@ def main(argv: list[str] | None = None) -> int:
         print(f"::error::security scan gate: {exc}", file=sys.stderr)  # noqa: print
         return 1
 
-    emit(render(args.title, findings, args.fail_on, args.allowed))
+    emit(render(args.title, findings, args.fail_on, allowed_ids))
 
-    judged = at_or_above(findings, args.fail_on)
-    if len(judged) > args.allowed:
+    stale = stale_allowances(findings, allowed_ids)
+    if stale:
         print(  # noqa: print
-            f"::error::security scan gate: {args.title} — {len(judged)} finding(s) at or above "
-            f"'{args.fail_on}', allowance {args.allowed}. Fix the finding; do not re-add '|| true'.",
+            f"::error::security scan gate: {args.title} — allowance(s) {stale} name findings the "
+            f"scanner no longer reports. Remove them; an allowance that matches nothing tolerates "
+            f"whatever appears next.",
+            file=sys.stderr,
+        )
+        return 1
+
+    judged = not_allowed(at_or_above(findings, args.fail_on), allowed_ids)
+    if judged:
+        print(  # noqa: print
+            f"::error::security scan gate: {args.title} — {len(judged)} unallowed finding(s) at or "
+            f"above '{args.fail_on}'. Fix the finding; do not re-add '|| true'.",
             file=sys.stderr,
         )
         return 1

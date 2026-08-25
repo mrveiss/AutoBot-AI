@@ -48,6 +48,8 @@ _gate = _load_script()
 Finding = _gate.Finding
 ReportError = _gate.ReportError
 at_or_above = _gate.at_or_above
+not_allowed = _gate.not_allowed
+stale_allowances = _gate.stale_allowances
 counts_by_severity = _gate.counts_by_severity
 main = _gate.main
 read_report = _gate.read_report
@@ -220,29 +222,75 @@ class TestThresholds:
     def test_never_selects_nothing(self, findings):
         assert at_or_above(findings, "never") == []
 
-    def test_an_allowance_absorbs_exactly_that_many(self, tmp_path, monkeypatch):
-        monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
-        report = _write(
-            tmp_path / "pip.json",
-            {"dependencies": [{"name": "x", "version": "1", "vulns": [{"id": "A"}, {"id": "B"}]}]},
-        )
-        argv = ["--format", "pip-audit", "--report", str(report), "--title", "t", "--fail-on", "any"]
-
-        assert main([*argv, "--allowed", "2"]) == 0
-        assert main([*argv, "--allowed", "1"]) == 1
-
     def test_a_non_gating_step_says_so_in_the_summary(self):
         """A report-only step must never read as a verdict."""
-        text = render("t", [Finding("high", "H", "x")], "never", 0)
+        text = render("t", [Finding("high", "H", "x")], "never", set())
 
         assert "does not gate" in text
 
     def test_the_summary_carries_the_counts_and_the_verdict(self):
-        text = render("t", [Finding("high", "H", "pkg.py:1")], "high", 0)
+        text = render("t", [Finding("high", "H", "pkg.py:1")], "high", set())
 
         assert "| high | 1 |" in text
         assert "**FAIL**" in text
         assert "pkg.py:1" in text
+
+
+class TestNamedAllowances:
+    """A numeric allowance is satisfied by any N findings; a named one is not.
+
+    Four fixed advisories replaced by four new ones passes a "tolerate 4" gate
+    without a word. Naming each finding removes that — but only while the list is
+    forced to shrink, which is what the stale check is for.
+    """
+
+    @pytest.fixture
+    def two_advisories(self, tmp_path):
+        return _write(
+            tmp_path / "pip.json",
+            {"dependencies": [{"name": "x", "version": "1", "vulns": [{"id": "A"}, {"id": "B"}]}]},
+        )
+
+    @staticmethod
+    def _argv(report):
+        return ["--format", "pip-audit", "--report", str(report), "--title", "t", "--fail-on", "any"]
+
+    def test_naming_every_finding_passes(self, two_advisories, monkeypatch):
+        monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+
+        assert main([*self._argv(two_advisories), "--allow-id", "A", "--allow-id", "B"]) == 0
+
+    def test_naming_only_some_still_fails(self, two_advisories, monkeypatch):
+        monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+
+        assert main([*self._argv(two_advisories), "--allow-id", "A"]) == 1
+
+    def test_a_different_finding_is_not_absorbed_by_the_allowance(self, tmp_path, monkeypatch):
+        """The whole point: the count matches, the identity does not."""
+        monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+        report = _write(
+            tmp_path / "pip.json",
+            {"dependencies": [{"name": "x", "version": "1", "vulns": [{"id": "C"}, {"id": "D"}]}]},
+        )
+
+        assert main([*self._argv(report), "--allow-id", "A", "--allow-id", "B"]) == 1
+
+    def test_an_allowance_the_scanner_no_longer_reports_fails(self, two_advisories, monkeypatch):
+        monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+
+        exit_code = main([*self._argv(two_advisories), "--allow-id", "A", "--allow-id", "B", "--allow-id", "GONE"])
+
+        assert exit_code == 1, "an allowance matching nothing tolerates whatever appears next"
+
+    def test_stale_allowances_are_named(self):
+        assert stale_allowances([Finding("low", "A", "x")], {"A", "GONE"}) == ["GONE"]
+
+    def test_the_summary_lists_the_recorded_allowances(self):
+        text = render("t", [Finding("high", "H", "x")], "high", {"H"})
+
+        assert "Recorded allowances" in text
+        assert "`H`" in text
+        assert "**PASS**" in text
 
 
 class TestWorkflowWiring:
