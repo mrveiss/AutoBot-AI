@@ -6,10 +6,9 @@
 AWS Bedrock provider for the multi-provider LLM layer (GH#9010).
 
 Supports Claude, Llama, Mistral, Amazon Titan, and Amazon Nova models via
-AWS Bedrock's managed inference. Credentials are read (in priority order) from:
-  1. ``settings["aws_access_key_id"]`` / ``settings["aws_secret_access_key"]``
-  2. Environment variables ``AWS_ACCESS_KEY_ID`` / ``AWS_SECRET_ACCESS_KEY``
-  3. IAM role via instance profile (automatic in EC2/ECS)
+AWS Bedrock's managed inference. Credentials are read (in priority order) from
+``SecretsService`` (encrypted, audited), then ``settings``/environment variables
+(plain-text fallback, logged as a warning), then an IAM role instance profile.
 
 Streaming is supported via ``invoke_model_with_response_stream``. Cross-region
 inference profiles can be used for higher availability.
@@ -27,10 +26,16 @@ from typing import Any, AsyncIterator, Dict, List
 from autobot_shared.logging_manager import get_logger
 from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
+from services.secrets_service import get_secrets_service
 
 from ..base_provider import BaseProvider
 
 logger = get_logger(__name__)
+
+#: Name/type of the Bedrock AWS credential pair in SecretsService (matches
+#: the sole writer, migrate_bedrock_credentials.py).
+BEDROCK_SECRET_NAME = "bedrock_aws_credentials"
+BEDROCK_SECRET_TYPE = "aws_bedrock_credentials"
 
 # Model families supported by Bedrock
 BEDROCK_MODELS = {
@@ -71,10 +76,8 @@ class BedrockProvider(BaseProvider):
     Supports Claude, Llama, Mistral, Amazon Titan, and Amazon Nova models via
     AWS Bedrock's managed inference. Requires ``boto3`` (``pip install boto3``).
 
-    AWS credentials are read from settings, environment, or IAM role. Region
-    can be configured via ``settings["region"]`` or ``AWS_DEFAULT_REGION``.
-
-    Streaming is supported via ``invoke_model_with_response_stream``.
+    AWS credentials are read from SecretsService, settings, environment, or IAM
+    role -- see the module docstring for priority order.
     """
 
     provider_name = ProviderType.BEDROCK.value
@@ -85,17 +88,57 @@ class BedrockProvider(BaseProvider):
         self._runtime_client = None
         self._region: str | None = None
 
+    def _load_credentials_from_vault(self) -> tuple[str | None, str | None, str | None]:
+        """Look up the Bedrock AWS credential pair in SecretsService.
+
+        Returns (access_key, secret_key, region), each None if not configured or
+        unusable -- never raises; any failure is logged (never the credential
+        value). A successful lookup is audited to ``secrets_audit`` by ``get_secret()``.
+        """
+        try:
+            secret = get_secrets_service().get_secret(
+                name=BEDROCK_SECRET_NAME,
+                scope="general",
+                include_value=True,
+                accessed_by="bedrock_provider",
+            )
+        except Exception as exc:  # noqa: BLE001 - vault lookup is best-effort, fallback follows
+            logger.warning("Bedrock SecretsService lookup failed, falling back: %s", type(exc).__name__)
+            return None, None, None
+        if not secret or "value" not in secret:
+            return None, None, None
+        if secret.get("secret_type") != BEDROCK_SECRET_TYPE:
+            logger.warning("Bedrock secret '%s' has an unexpected secret_type, ignoring", BEDROCK_SECRET_NAME)
+            return None, None, None
+        try:
+            creds = json.loads(secret["value"])
+        except (TypeError, ValueError) as exc:
+            logger.warning("Bedrock secret from SecretsService is not valid JSON: %s", type(exc).__name__)
+            return None, None, None
+        logger.info("Loaded Bedrock credentials from SecretsService (encrypted, access audited)")
+        return creds.get("aws_access_key_id"), creds.get("aws_secret_access_key"), creds.get("region")
+
     def _resolve_credentials(self) -> tuple[str | None, str | None, str | None]:
         """
-        Resolve AWS credentials from settings or environment.
+        Resolve AWS credentials: SecretsService, then settings/environment,
+        then the boto3 default chain (IAM role).
 
         Returns:
             Tuple of (access_key_id, secret_access_key, region).
             Any value can be None to use boto3's default credential chain.
         """
-        access_key = self._get_setting("aws_access_key_id") or os.getenv("AWS_ACCESS_KEY_ID")
-        secret_key = self._get_setting("aws_secret_access_key") or os.getenv("AWS_SECRET_ACCESS_KEY")
-        region = self._get_setting("region") or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+        access_key, secret_key, region = self._load_credentials_from_vault()
+
+        if not (access_key and secret_key):
+            access_key = self._get_setting("aws_access_key_id") or os.getenv("AWS_ACCESS_KEY_ID")
+            secret_key = self._get_setting("aws_secret_access_key") or os.getenv("AWS_SECRET_ACCESS_KEY")
+            if access_key and secret_key:
+                logger.warning(
+                    "Bedrock: using plain-text AWS credentials from settings/environment, "
+                    "not SecretsService. Run migrate_bedrock_credentials.py to store them securely."
+                )
+
+        region = region or self._get_setting("region") or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
         return access_key, secret_key, region
 
     def _ensure_runtime_client(self):
@@ -111,10 +154,8 @@ class BedrockProvider(BaseProvider):
         access_key, secret_key, region = self._resolve_credentials()
         self._region = region
 
-        # Build client kwargs
+        # Explicit creds are only added when both are present; otherwise IAM role applies.
         client_kwargs: Dict[str, Any] = {"region_name": region, "service_name": "bedrock-runtime"}
-
-        # Only specify credentials if explicitly provided (otherwise use IAM role)
         if access_key and secret_key:
             client_kwargs["aws_access_key_id"] = access_key
             client_kwargs["aws_secret_access_key"] = secret_key
