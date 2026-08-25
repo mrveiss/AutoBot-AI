@@ -2,7 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Knowledge resource operations."""
+"""Knowledge resource operations.
+
+Paths are written without the ``/api`` root — ``AutoBotClient`` adds it.
+
+``/knowledge_base/search`` is served by POST only; the SDK asked for it with
+GET, which answers 405 even once the prefix is right (#15053). The verb is
+part of the route, so it is corrected here rather than left to 404's quieter
+cousin.
+"""
 
 from __future__ import annotations
 
@@ -31,10 +39,15 @@ class KnowledgeResource:
         raw = await self._c.post("/knowledge_base/add_text", body)
         return DataResponse[KnowledgeAddResult].model_validate(raw)
 
-    async def search(
-        self, query: str, limit: int = 10, category: str | None = None
-    ) -> DataResponse[KnowledgeSearchResult]:
-        raw = await self._c.get("/knowledge_base/search", query=query, limit=limit, category=category)
+    async def search(self, query: str, limit: int = 10) -> DataResponse[KnowledgeSearchResult]:
+        """Search the knowledge base.
+
+        The route takes its arguments in a JSON body, and names the result cap
+        ``max_results``. It has no category filter — use :meth:`get_entries`,
+        whose route does.
+        """
+        body: dict[str, Any] = {"query": query, "max_results": limit}
+        raw = await self._c.post("/knowledge_base/search", body)
         return DataResponse[KnowledgeSearchResult].model_validate(raw)
 
     async def get_entries(

@@ -2,7 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Session resource operations."""
+"""Session resource operations.
+
+Paths are written without the ``/api`` root — ``AutoBotClient`` adds it.
+The chat-sessions router registers with an empty mount prefix, so these
+paths need nothing beyond that root (#15053).
+"""
 
 from __future__ import annotations
 

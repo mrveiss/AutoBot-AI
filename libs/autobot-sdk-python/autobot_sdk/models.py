@@ -86,10 +86,23 @@ class AgentHealth(BaseModel):
 
 
 class AgentConfig(BaseModel):
+    """One agent's configuration, as served flat by /api/agent_config/agents/{id}.
+
+    Not wrapped in a DataResponse envelope — that route returns the document
+    itself (#15053).
+    """
+
+    id: str | None = None
+    name: str | None = None
+    description: str | None = None
     enabled: bool | None = None
-    personality: str | None = None
-    model: str | None = None
-    settings: dict[str, Any] | None = None
+    current_model: str | None = None
+    default_model: str | None = None
+    provider: str | None = None
+    priority: int | None = None
+    status: str | None = None
+    tasks: list[str] | None = None
+    configuration_options: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------
