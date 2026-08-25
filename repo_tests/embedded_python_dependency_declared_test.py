@@ -45,7 +45,7 @@ executing package ``__init__`` side effects.
 from __future__ import annotations
 
 import re
-import subprocess  # nosec B404 — fixed argv, no shell, no caller input
+import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 import sys
 from pathlib import Path
 
@@ -101,7 +101,7 @@ def _tracked_shell_scripts() -> list[Path]:
     under ``.worktrees/``, whose requirements files belong to other branches and
     whose scripts are not this branch's problem.
     """
-    out = subprocess.run(  # nosec B603 — fixed argv
+    out = subprocess.run(  # nosec B603  # fixed argv
         ["git", "-C", str(_REPO_ROOT), "ls-files", "*.sh"],
         capture_output=True,
         text=True,
@@ -247,8 +247,7 @@ def test_the_sweep_reached_the_repository() -> None:
     _, per_tree, seen = _sweep()
 
     assert sum(per_tree.values()) > 150, (
-        f"only walked {sum(per_tree.values())} shell scripts — git ls-files is not "
-        "returning the tree"
+        f"only walked {sum(per_tree.values())} shell scripts — git ls-files is not " "returning the tree"
     )
     assert seen > 10, (
         "no shell script embeds a non-stdlib import any more, or the import "

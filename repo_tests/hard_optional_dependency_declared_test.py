@@ -37,7 +37,7 @@ from __future__ import annotations
 import ast
 import functools
 import re
-import subprocess  # nosec B404 — fixed argv, no shell, no caller input
+import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 import sys
 from pathlib import Path
 
@@ -100,7 +100,7 @@ _STDLIB = set(sys.stdlib_module_names) | {"__future__"}
 
 def _tracked_python() -> list[Path]:
     """Tracked ``*.py``, from git rather than a walk — see the note in the sibling guard."""
-    out = subprocess.run(  # nosec B603 — fixed argv
+    out = subprocess.run(  # nosec B603  # fixed argv
         ["git", "-C", str(_REPO_ROOT), "ls-files", "*.py"],
         capture_output=True,
         text=True,
