@@ -1,16 +1,24 @@
 [tool.black]
 line-length = 120
-# Stays py312 (NOT py314): the backend runs Python 3.14, but the NPU/OpenVINO
-# worker runs Python 3.11 (roles/npu-worker/tasks/main.yml). A py314 target
-# makes black emit PEP 758 unparenthesized `except A, B:`, a SyntaxError on
-# that worker's cross-imported shared code.
+# Stays py312 (NOT py314). A py314 target makes black emit PEP 758
+# unparenthesized `except A, B:`, a SyntaxError on any interpreter below
+# 3.11 that imports the reformatted code.
 #
-# Bump only when the worker itself is on 3.14 — never before, or the reformat
-# lands syntax the running worker cannot parse. As of 2026-08-08 that move is
-# unblocked for the Linux worker: openvino 2026.3.0, torch 2.13.0 and numpy
-# 2.5.1 all ship cp314 wheels, so #10877's "OpenVINO has no 3.14 wheels" no
-# longer holds. The Windows worker still pins onnxruntime-openvino, which has
-# no cp314 — settle whether it shares this code before bumping (#10877).
+# roles/npu-worker/tasks/main.yml (#13747) now targets python3.14, and
+# openvino 2026.3.0, torch 2.13.0 and numpy 2.5.2 all ship cp314 wheels, so
+# #10877's "OpenVINO has no 3.14 wheels" no longer holds. The Windows worker
+# (autobot-npu-worker/resources/windows-npu-worker/) still pins
+# onnxruntime-openvino, which has no cp314 and stays on its current
+# interpreter — but it does not import autobot_shared at runtime (PyInstaller
+# standalone, docs/developer/ARCHITECTURE_EXCEPTIONS.md #5438), so it does not
+# gate this bump.
+#
+# What still gates it: #13747's config change is merged, but its AC requires
+# the worker to be verified running 3.14 on real NPU hardware — a pip install
+# or a syntax-check proves the config, not the runtime, and OpenVINO failures
+# are native-extension failures that surface at import or first inference.
+# Bump only once that host evidence lands on #13747, never on merge evidence
+# alone (#13748).
 # Audit: docs/audit/python_314_consistency.md
 target-version = ["py312"]
 

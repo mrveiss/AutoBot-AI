@@ -5,10 +5,12 @@
 # Author: mrveiss
 """Guard: one venv path is never built by two interpreters (#13746).
 
-Three producers built ``/opt/autobot/venv`` — ``roles/backend_services`` and the
-``aiml`` play with python3.14, the ``npu`` play with python3.11. Co-location is a
-supported layout (the role-facts test inventory covers a single host carrying
-several roles), so those producers can land on one machine. The last one to run
+Three producers built ``/opt/autobot/venv`` — ``roles/backend_services``, the
+``aiml`` play, and (before #13747) the ``npu`` play on a different interpreter.
+All three now target python3.14, but this guard still runs on every change:
+co-location is a supported layout (the role-facts test inventory covers a
+single host carrying several roles), so a future producer landing on a
+different interpreter would reproduce the same hazard. The last one to run
 rewrites ``pyvenv.cfg`` while ``site-packages`` still holds binaries built by the
 other interpreter.
 
