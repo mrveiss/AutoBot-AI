@@ -13,12 +13,13 @@ from typing import Dict, List
 from urllib.parse import urlparse
 
 import aiohttp
-import yaml
 from cachetools import TTLCache
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
+
+from security.enterprise.config_loading import load_security_config
 
 logger = get_logger(__name__)
 
@@ -60,13 +61,16 @@ class DomainReputationService:
         logger.info("Domain Reputation Service initialized")
 
     def _load_config(self) -> Dict:
-        """Load domain security configuration"""
-        try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                return yaml.safe_load(f)
-        except Exception as e:
-            logger.error("Failed to load domain security config: %s", e)
-            return self._get_default_config()
+        """Load domain security configuration, recording whether the file was found.
+
+        #14892: this manager never wrote a decoy config, but a missing file was
+        still only visible as an ERROR line — indistinguishable to any caller
+        from a loaded one. ``self.config_source`` now carries the fact.
+        """
+        loaded = load_security_config(self.config_path, self._get_default_config, "domain security")
+        self.config_source = loaded.source
+        self.config_searched_path = loaded.searched_path
+        return loaded.values
 
     def _get_default_config(self) -> Dict:
         """Return default configuration if config file fails to load"""

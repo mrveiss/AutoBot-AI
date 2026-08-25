@@ -16,11 +16,9 @@ import json
 import threading
 from collections import defaultdict, deque
 from datetime import timedelta
-from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
-import yaml
 from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
@@ -49,6 +47,8 @@ from .models import (
     UserProfile,
 )
 from .types import SEVERITY_PRIORITY
+
+from security.enterprise.config_loading import load_security_config
 
 logger = get_logger(__name__)
 
@@ -149,18 +149,17 @@ class ThreatDetectionEngine:
             self.learner = None
 
     def _load_config(self) -> Dict:
-        """Load threat detection configuration"""
-        try:
-            if Path(self.config_path).exists():
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    return yaml.safe_load(f)
-            else:
-                default_config = self._get_default_config()
-                self._save_config(default_config)
-                return default_config
-        except Exception as e:
-            logger.error("Failed to load threat detection config: %s", e)
-            return self._get_default_config()
+        """Load threat detection configuration, recording whether the file was actually found.
+
+        #14892: the miss branch used to write these defaults back to the path it
+        had just failed to read, so the next boot loaded the decoy and reported
+        success. It now warns and writes nothing; ``self.config_source`` carries
+        the same fact for callers.
+        """
+        loaded = load_security_config(self.config_path, self._get_default_config, "threat detection")
+        self.config_source = loaded.source
+        self.config_searched_path = loaded.searched_path
+        return loaded.values
 
     def _get_default_config(self) -> Dict:
         """Return default threat detection configuration"""
@@ -203,16 +202,6 @@ class ThreatDetectionEngine:
                 "create_incident_tickets": False,
             },
         }
-
-    def _save_config(self, config: Dict):
-        """Save configuration to file (thread-safe, Issue #378)"""
-        with self._file_lock:
-            try:
-                Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
-                with open(self.config_path, "w", encoding="utf-8") as f:
-                    yaml.dump(config, f, default_flow_style=False)
-            except Exception as e:
-                logger.error("Failed to save threat detection config: %s", e)
 
     def _load_injection_patterns(self) -> List[Dict]:
         """Load command injection detection patterns"""

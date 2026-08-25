@@ -66,6 +66,7 @@ ERR_INVALID_TOKEN = "Invalid token"  # nosec B105  # user-facing error message s
 # MODEL CONSTANTS (imported from ssot_config)
 # ============================================================================
 
+from autobot_shared.paths import project_root
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATION_MODEL
 from autobot_shared.ssot_config import (
     DEFAULT_EMBEDDING_MODEL,
@@ -390,8 +391,21 @@ def get_model_endpoint(provider: str) -> str:
 class PathConstants:
     """Centralized path constants"""
 
-    PROJECT_ROOT: Path = Path(__file__).parent.parent
-    CONFIG_DIR: Path = PROJECT_ROOT / "infrastructure" / "shared" / "config"
+    # #14892/#13149: the canonical resolver, not a second open-coded one.
+    # ``Path(__file__).parent.parent`` is right only for a source checkout with
+    # `autobot_shared` sitting directly under the root; it ignores
+    # AUTOBOT_PROJECT_ROOT and AUTOBOT_BASE_DIR entirely, so an operator who
+    # relocated the tree got the package's parent regardless.
+    PROJECT_ROOT: Path = project_root()
+
+    # #14892: was ``PROJECT_ROOT / "infrastructure" / "shared" / "config"``.
+    # There has never been an `infrastructure/` directory at any project root.
+    # The real directory is `autobot-infrastructure/shared/config`, and it is
+    # spelled the same way in a source checkout and in a deployed install, so
+    # one spelling serves both — the "they may not be the same spelling" trap
+    # #14892 warns about does not apply here, and this is verified by test
+    # rather than assumed.
+    CONFIG_DIR: Path = PROJECT_ROOT / "autobot-infrastructure" / "shared" / "config"
     DATA_DIR: Path = PROJECT_ROOT / "data"
     LOGS_DIR: Path = PROJECT_ROOT / "logs"
     DOCS_DIR: Path = PROJECT_ROOT / "docs"

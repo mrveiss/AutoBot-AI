@@ -14,17 +14,17 @@ import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
 from typing import Dict, List
 from uuid import uuid4
 
-import yaml
 
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
+
+from security.enterprise.config_loading import load_security_config
 
 logger = get_logger(__name__)
 
@@ -148,18 +148,17 @@ class SecurityPolicyManager:
         logger.info("Security Policy Manager initialized")
 
     def _load_config(self) -> Dict:
-        """Load security policy configuration"""
-        try:
-            if Path(self.config_path).exists():
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    return yaml.safe_load(f)
-            else:
-                default_config = self._get_default_config()
-                self._save_config(default_config)
-                return default_config
-        except Exception as e:
-            logger.error("Failed to load policy config: %s", e)
-            return self._get_default_config()
+        """Load security policy configuration, recording whether the file was actually found.
+
+        #14892: the miss branch used to write these defaults back to the path it
+        had just failed to read, so the next boot loaded the decoy and reported
+        success. It now warns and writes nothing; ``self.config_source`` carries
+        the same fact for callers.
+        """
+        loaded = load_security_config(self.config_path, self._get_default_config, "security policy")
+        self.config_source = loaded.source
+        self.config_searched_path = loaded.searched_path
+        return loaded.values
 
     def _get_default_config(self) -> Dict:
         """Return default security policy configuration"""
@@ -189,16 +188,6 @@ class SecurityPolicyManager:
                 "violation_thresholds": {"high": 1, "medium": 5, "low": 10},
             },
         }
-
-    def _save_config(self, config: Dict):
-        """Save configuration to file (thread-safe, Issue #378)"""
-        with self._file_lock:
-            try:
-                Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
-                with open(self.config_path, "w", encoding="utf-8") as f:
-                    yaml.dump(config, f, default_flow_style=False)
-            except Exception as e:
-                logger.error("Failed to save policy config: %s", e)
 
     def _load_policies(self):
         """Load all security policies from storage"""
