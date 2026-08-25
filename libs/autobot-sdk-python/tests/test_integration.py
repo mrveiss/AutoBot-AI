@@ -5,7 +5,8 @@
 """
 Integration tests for the AutoBot Python SDK.
 
-These tests run against a live local backend (http://localhost:8000).
+These tests run against a live local backend — AUTOBOT_BASE_URL, else the
+SDK's own default, which is the backend port and not the SLM's (#15053).
 Set AUTOBOT_API_TOKEN in the environment if auth is required.
 Skip with: pytest -m "not integration"
 """
@@ -15,6 +16,7 @@ import os
 import pytest
 import pytest_asyncio
 
+from autobot_sdk import default_base_url
 from autobot_shared.live_service_probe import require_live_endpoint
 
 pytestmark = pytest.mark.integration
@@ -26,10 +28,15 @@ pytestmark = pytest.mark.integration
 # trade, and the one #14930 caught by comparing skip counts against real failures.
 _NEEDS_NO_BACKEND = ("test_auth_token_injection", "test_sdk_package_importable")
 
+# Needs a backend listening, but not a token: it asserts only that the URL the
+# SDK builds names a route, which a 401 proves as well as a 200 does (#15053).
+_NEEDS_A_ROUTE_ONLY = ("test_no_sdk_request_reaches_a_missing_route",)
+
 
 @pytest.fixture(scope="module")
 def base_url() -> str:
-    return os.environ.get("AUTOBOT_BASE_URL", "http://localhost:8000")
+    """The SDK's own resolution, so the tests dial exactly what a caller would."""
+    return default_base_url()
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +45,7 @@ def _require_live_backend(request) -> None:
 
     #13286: this module was selected by no workflow at all until marker-tests.yml
     gained the ``libs`` root, so nothing had ever observed it. Its first run
-    reported connection failures against ``localhost:8000`` as test failures —
+    reported connection failures against the default backend origin as failures —
     a red that says nothing about the SDK and would train the marker-excluded
     suite to be ignored. A skip naming the absent service is the honest report;
     these still run, and still fail for real, wherever a backend is up.
@@ -52,10 +59,19 @@ def _require_live_backend(request) -> None:
     if request.node.name in _NEEDS_NO_BACKEND:
         return
 
-    require_live_endpoint(
-        os.environ.get("AUTOBOT_BASE_URL", "http://localhost:8000"),
-        what="the AutoBot backend API",
-    )
+    require_live_endpoint(default_base_url(), what="the AutoBot backend API")
+
+    if request.node.name in _NEEDS_A_ROUTE_ONLY:
+        return
+
+    # #15053: with the paths corrected these reach real routes and are answered
+    # 401 without a token — a credential the runner does not hold. Skipping on
+    # the absent credential keeps that from reading as a route defect, exactly
+    # as the probe above keeps an absent service from reading as one. The
+    # route itself is still asserted unconditionally, by the test below and by
+    # repo_tests/sdk_request_url_test.py.
+    if not os.environ.get("AUTOBOT_API_TOKEN"):
+        pytest.skip("AUTOBOT_API_TOKEN is not set; the AutoBot backend answers these routes 401 without it")
 
 
 @pytest.mark.asyncio
@@ -114,3 +130,35 @@ async def test_sdk_package_importable() -> None:
     assert hasattr(autobot_sdk, "Session")
     assert hasattr(autobot_sdk, "KnowledgeStats")
     assert hasattr(autobot_sdk, "AnalyticsUsage")
+
+
+@pytest.mark.asyncio
+async def test_no_sdk_request_reaches_a_missing_route(base_url: str) -> None:
+    """No SDK read path answers 404 on a live backend (#15053).
+
+    Every one of these used to: the SDK omitted the ``/api`` root that the
+    application factory puts in front of every registered router, and three
+    paths were wrong beyond that root as well. 401 is a pass here — it means
+    the request arrived at a route that exists and asked for credentials.
+    """
+    import httpx
+
+    from autobot_sdk import AutoBot
+
+    missing: list[str] = []
+    async with AutoBot(base_url=base_url) as bot:
+        for name, call in (
+            ("sessions.list", lambda: bot.sessions.list(limit=1)),
+            ("agents.health", bot.agents.health),
+            ("knowledge.stats", bot.knowledge.stats),
+            ("knowledge.get_entries", lambda: bot.knowledge.get_entries(limit=1)),
+            ("analytics.usage", bot.analytics.usage),
+            ("analytics.performance", bot.analytics.performance),
+        ):
+            try:
+                await call()
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 404:
+                    missing.append(f"{name} -> {exc.request.url.path}")
+
+    assert not missing, f"SDK requests that reached no route: {missing}"

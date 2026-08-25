@@ -2,13 +2,19 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Session resource operations."""
+"""Session resource operations.
+
+Paths are written without the ``/api`` root — ``AutoBotClient`` adds it.
+The chat-sessions router registers with an empty mount prefix, so these
+paths need nothing beyond that root (#15053).
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
 from ..client import AutoBotClient
+from ..defaults import DEFAULT_OFFSET, DEFAULT_PAGE_SIZE
 from ..models import (
     DataResponse,
     SessionCreate,
@@ -23,7 +29,7 @@ class SessionsResource:
     def __init__(self, client: AutoBotClient) -> None:
         self._c = client
 
-    async def list(self, limit: int = 50, offset: int = 0) -> DataResponse[SessionList]:
+    async def list(self, limit: int = DEFAULT_PAGE_SIZE, offset: int = DEFAULT_OFFSET) -> DataResponse[SessionList]:
         raw = await self._c.get("/chat/sessions", limit=limit, offset=offset)
         return DataResponse[SessionList].model_validate(raw)
 
