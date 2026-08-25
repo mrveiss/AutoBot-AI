@@ -1527,12 +1527,12 @@ _COMPONENT_PIP_PATHS: Dict[str, Tuple[str, str]] = {
 }
 
 # Target CPython interpreter per backend component (#11323).
-# NPU worker uses py3.11 (OpenVINO ABI); every other Python service uses py3.14.
-# This is the single authoritative mapping — do not hardcode elsewhere.
+# Every Python service, including the NPU worker, targets py3.14 (#13747) —
+# this is the single authoritative mapping; do not hardcode elsewhere.
 _COMPONENT_PYTHON_TARGET: Dict[str, str] = {
     "autobot-backend": "python3.14",
     "autobot-slm-backend": "python3.14",
-    "autobot-npu-worker": "python3.11",
+    "autobot-npu-worker": "python3.14",
 }
 
 # Ansible assets that provision the target interpreter on THIS host (#11343).
@@ -1598,7 +1598,7 @@ _WORKER_COMPONENTS: frozenset = frozenset(
 # an explicit package LIST rather than a requirements file, so there is nothing
 # a code sync can legitimately re-install:
 #   - autobot-npu-worker: roles/npu-worker/tasks/main.yml:188-218 pip-installs a
-#     named list (FastAPI + OpenVINO) into its py3.11 venv. The repo does ship
+#     named list (FastAPI + OpenVINO) into its py3.14 venv (#13747). The repo does ship
 #     autobot-npu-worker/requirements.txt, but ansible never uses it — installing
 #     from it could pull a different OpenVINO build and brick the NPU worker.
 #   - autobot-browser-worker: roles/browser/tasks/main.yml:132-140 installs

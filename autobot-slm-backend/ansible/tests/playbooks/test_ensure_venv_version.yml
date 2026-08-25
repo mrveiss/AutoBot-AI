@@ -1,0 +1,119 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - Test playbook: ensure_venv_version deliberate-failure guard (#13747 AC4)
+#
+# roles/python314/tasks/ensure_venv_version.yml is the shared env-drift guard
+# every service role calls before creating its venv (backend, backend_services,
+# agent_config, tts-worker, redis/chromadb, npu-worker). #13747 moved the NPU
+# worker's target from 3.11 to 3.14 and requires the guard to be "verified by
+# deliberate failure: the guard rejects a venv left at the old version" — this
+# playbook is that verification, run against a fabricated venv rather than a
+# real interpreter, so it needs no NPU hardware and no python3.14 binary on the
+# runner.
+#
+# Two cases:
+#   1. Stale venv (reports "Python 3.11.9", target is python3.14) -> REMOVED.
+#   2. Current venv (reports "Python 3.14.2", target is python3.14) -> KEPT.
+# Without case 2, a guard that always deletes would pass case 1 for the wrong
+# reason.
+#
+# Usage:
+#   cd autobot-slm-backend/ansible
+#   ansible-playbook --connection=local -i 'localhost,' \
+#                    tests/playbooks/test_ensure_venv_version.yml
+---
+- name: "Test: ensure_venv_version rejects a stale-version venv (#13747 AC4)"
+  hosts: localhost
+  gather_facts: false
+  any_errors_fatal: true
+
+  tasks:
+    - name: "Create a scratch dir for the fabricated venvs"
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: ensure_venv_version_test_
+      register: _scratch_dir
+
+    - name: "Case 1 setup: fabricate a stale (3.11) venv"
+      vars:
+        stale_venv: "{{ _scratch_dir.path }}/stale-venv"
+      block:
+        - name: "Create stale-venv bin/ dir"
+          ansible.builtin.file:
+            path: "{{ stale_venv }}/bin"
+            state: directory
+            mode: "0755"
+
+        - name: "Write a fake python that reports 3.11.9"
+          ansible.builtin.copy:
+            dest: "{{ stale_venv }}/bin/python"
+            mode: "0755"
+            content: |
+              #!/bin/sh
+              echo "Python 3.11.9"
+
+        - name: "Run ensure_venv_version against the stale venv, targeting python3.14"
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/python314/tasks/ensure_venv_version.yml"
+          vars:
+            venv_path: "{{ stale_venv }}"
+            venv_python: python3.14
+
+        - name: "Assert the stale venv was removed (deliberate-failure case)"
+          ansible.builtin.stat:
+            path: "{{ stale_venv }}"
+          register: _stale_venv_after
+
+        - name: "Fail loudly if the stale venv survived"
+          ansible.builtin.assert:
+            that:
+              - not _stale_venv_after.stat.exists
+            fail_msg: >-
+              ensure_venv_version left a venv reporting 'Python 3.11.9' in place
+              while targeting python3.14 — the deliberate-failure guard did not
+              fire. This is the exact hazard #13747 exists to close: 3.11-built
+              OpenVINO binaries surviving into what looks like a 3.14 venv.
+            success_msg: "Stale venv correctly removed."
+
+    - name: "Case 2 setup: fabricate a current (3.14) venv"
+      vars:
+        current_venv: "{{ _scratch_dir.path }}/current-venv"
+      block:
+        - name: "Create current-venv bin/ dir"
+          ansible.builtin.file:
+            path: "{{ current_venv }}/bin"
+            state: directory
+            mode: "0755"
+
+        - name: "Write a fake python that reports 3.14.2"
+          ansible.builtin.copy:
+            dest: "{{ current_venv }}/bin/python"
+            mode: "0755"
+            content: |
+              #!/bin/sh
+              echo "Python 3.14.2"
+
+        - name: "Run ensure_venv_version against the current venv, targeting python3.14"
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../../roles/python314/tasks/ensure_venv_version.yml"
+          vars:
+            venv_path: "{{ current_venv }}"
+            venv_python: python3.14
+
+        - name: "Assert the matching-version venv was kept"
+          ansible.builtin.stat:
+            path: "{{ current_venv }}"
+          register: _current_venv_after
+
+        - name: "Fail loudly if a matching-version venv was deleted"
+          ansible.builtin.assert:
+            that:
+              - _current_venv_after.stat.exists
+            fail_msg: >-
+              ensure_venv_version removed a venv already reporting 'Python
+              3.14.2' while targeting python3.14 — the guard is over-firing,
+              which would delete a correct venv on every single deploy.
+            success_msg: "Matching-version venv correctly kept."
+
+    - name: "Clean up the scratch dir"
+      ansible.builtin.file:
+        path: "{{ _scratch_dir.path }}"
+        state: absent

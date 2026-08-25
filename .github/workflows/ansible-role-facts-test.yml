@@ -146,11 +146,21 @@ jobs:
         run: |
           ansible-playbook --check --connection=local -i 'localhost,' tests/playbooks/test_clean_yml_loops.yml
 
+      # #13747 AC4: "verified by deliberate failure: the guard rejects a venv
+      # left at the old version." Runs for real (not --check) against a
+      # fabricated venv, so it needs no NPU hardware and no python3.14 binary
+      # on the runner — see the playbook header for what it proves.
+      - name: "Run ensure_venv_version deliberate-failure test (#13747)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          ansible-playbook --connection=local -i 'localhost,' tests/playbooks/test_ensure_venv_version.yml
+
       - name: Lint test playbook + inventory YAML
         working-directory: autobot-slm-backend/ansible
         run: |
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts_no_group_vars.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_clean_yml_loops.yml'))"
+          python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_ensure_venv_version.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/inventory/test_role_facts.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/inventory/group_vars/all.yml'))"

@@ -100,10 +100,10 @@ def test_constraints_source_subdir_constant() -> None:
 
 
 def test_component_python_target_has_backends() -> None:
-    """Both pip-backend components have a python target defined."""
+    """Every mapped component targets python3.14 (#13747: NPU worker moved off 3.11)."""
     assert _COMPONENT_PYTHON_TARGET["autobot-backend"] == "python3.14"
     assert _COMPONENT_PYTHON_TARGET["autobot-slm-backend"] == "python3.14"
-    assert _COMPONENT_PYTHON_TARGET["autobot-npu-worker"] == "python3.11"
+    assert _COMPONENT_PYTHON_TARGET["autobot-npu-worker"] == "python3.14"
 
 
 # ---------------------------------------------------------------------------
