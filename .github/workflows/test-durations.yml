@@ -85,8 +85,14 @@ jobs:
           # them to each other, so a fifth invocation is checked on arrival.
           # Until now they had no entries here, so the
           # shard balancer placed them by hash with zero weight.
+          # #14986: `.claude/skills/claims-audit` -- 42 tests of the claims-audit skill
+          # that no workflow collected, because pytest.ini's testpaths is an allowlist
+          # and `.claude` was not on it. Six were red against real defects in the
+          # verifiers; all six are fixed and all 42 pass, so this is a wiring fix, not a
+          # quarantine. Named in all four carriers because they are required to agree
+          # (#14917). Narrow on purpose: `.claude/` as a whole is harness territory.
           python -m pytest \
-            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit \
             -n auto --dist loadscope \
             -m "not integration and not slow and not distributed and not performance" \
             --store-durations \
