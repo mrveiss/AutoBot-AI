@@ -31,6 +31,7 @@ distinguishable from "looks at nothing".
 from __future__ import annotations
 
 import ast
+import configparser
 import subprocess  # nosec B404
 import sys
 from pathlib import Path
@@ -293,6 +294,51 @@ class TestDeclaredEmptyInvocations:
     def test_a_declared_zero_names_a_real_invocation(self, report_tokens, invocations):
         unknown = sorted(self._declared_zero(report_tokens) - set(invocations))
         assert not unknown, f"floor declared for invocation(s) that do not exist: {unknown}"
+
+
+class TestSdkPathDoesNotShadowTheBackend:
+    """`libs/autobot-sdk-python` must stay LAST on `pythonpath` (#13286).
+
+    It was added there so `libs/autobot-sdk-python/tests/test_integration.py`,
+    which the marker suite now runs, can import `autobot_sdk` at all. But that
+    directory also holds a `tests/__init__.py`, so it publishes a top-level
+    `tests` package — and five backend e2e modules do `from tests.test_helpers
+    import get_test_backend_url`, expecting `autobot-backend/tests`.
+
+    pytest inserts `pythonpath` entries in declared order, so today the backend
+    wins and nothing breaks. Reordering the line would silently repoint those
+    imports at a package with no `test_helpers` in it, and the error would name
+    the helper rather than the ini file that caused it. Hence this guard.
+    """
+
+    @staticmethod
+    def _pythonpath() -> list[str]:
+        parser = configparser.ConfigParser()
+        parser.read(REPO_ROOT / "pytest.ini", encoding="utf-8")
+        return parser["pytest"]["pythonpath"].split()
+
+    def test_the_sdk_entry_is_present_and_last(self):
+        entries = self._pythonpath()
+
+        assert "libs/autobot-sdk-python" in entries, (
+            "libs/autobot-sdk-python left pytest.ini's pythonpath — "
+            "libs/autobot-sdk-python/tests/test_integration.py can no longer import autobot_sdk"
+        )
+        assert entries[-1] == "libs/autobot-sdk-python", (
+            f"libs/autobot-sdk-python must stay last on pythonpath, got {entries}. It publishes a "
+            "top-level `tests` package that would otherwise shadow autobot-backend/tests"
+        )
+
+    def test_the_backend_still_owns_the_top_level_tests_package(self):
+        """Re-derived from the trees, so it cannot go stale if either moves."""
+        entries = self._pythonpath()
+        owners = [entry for entry in entries if (REPO_ROOT / entry / "tests" / "__init__.py").exists()]
+
+        assert owners, "no pythonpath entry publishes a top-level `tests` package; this check inspects nothing"
+        assert owners[0] == "autobot-backend", (
+            f"the first pythonpath entry publishing a top-level `tests` package is {owners[0]!r}, "
+            "not autobot-backend — `from tests.test_helpers import ...` now resolves elsewhere"
+        )
 
 
 if __name__ == "__main__":
