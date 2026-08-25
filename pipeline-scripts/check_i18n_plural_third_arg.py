@@ -43,16 +43,37 @@ def _collect_plural_keys(data: dict, prefix: str = "") -> set[str]:
     return keys
 
 
+class PluralKeysUnavailable(RuntimeError):
+    """The plural-key set could not be derived, so the checker inspects nothing."""
+
+
 def _load_plural_keys() -> set[str]:
-    """Load plural keys from en.json.  Returns empty set on any I/O error so
-    the hook degrades gracefully rather than blocking all commits."""
+    """Load plural keys from en.json, raising rather than returning an empty set.
+
+    #13200: this used to swallow both failure modes and return ``set()``, and
+    ``main`` turned that into ``return 0``. An unreadable en.json therefore made
+    the hook pass every file it was handed, silently — the gate stayed wired,
+    reported success, and inspected nothing. "Found no violation" and "has no
+    key set to look for" are different claims and must not share an exit code.
+
+    Blocking commits on an unreadable en.json is the correct direction: the
+    ``check-json`` hook in the same config already blocks on exactly that, so
+    this adds no new class of stoppage, and a locale file that will not parse is
+    a defect in its own right rather than a reason to disarm a gate.
+    """
     try:
         raw = _EN_JSON.read_text(encoding="utf-8")
         data = json.loads(raw)
-        return _collect_plural_keys(data)
     except (OSError, json.JSONDecodeError) as exc:
-        print(f"i18n-plural-third-arg: WARNING — could not load {_EN_JSON}: {exc}", file=sys.stderr)
-        return set()
+        raise PluralKeysUnavailable(f"could not load {_EN_JSON}: {exc}") from exc
+
+    keys = _collect_plural_keys(data)
+    if not keys:
+        raise PluralKeysUnavailable(
+            f"{_EN_JSON} contains no plural key (no string value carrying the vue-i18n `|` "
+            f"separator), so this hook would inspect every file and be unable to report anything"
+        )
+    return keys
 
 
 # ---------------------------------------------------------------------------
@@ -185,10 +206,11 @@ def check_file(path: Path, plural_keys: set[str]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    plural_keys = _load_plural_keys()
-    if not plural_keys:
-        # en.json unreadable — skip silently to avoid blocking unrelated commits
-        return 0
+    try:
+        plural_keys = _load_plural_keys()
+    except PluralKeysUnavailable as exc:
+        print(f"i18n-plural-third-arg: {exc}", file=sys.stderr)
+        return 1
 
     all_violations: list[str] = []
 
