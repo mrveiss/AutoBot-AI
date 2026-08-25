@@ -50,6 +50,12 @@ API_MOUNT_PREFIX = "/api"
 EXECUTE_PATH = "/execute"
 
 
+#: The check that actually exercises the claim this script's success message
+#: makes. The other checks read the registry statically and always pass, so a
+#: run where this one is skipped has verified nothing the message promises.
+ESSENTIAL_CHECK = "route registration"
+
+
 class CheckResults:
     """Tally of check outcomes; a check that could not run is never a pass."""
 
@@ -57,6 +63,7 @@ class CheckResults:
         self.passed = 0
         self.failed = 0
         self.skipped = 0
+        self.skipped_names: list[str] = []
 
     def record_pass(self, name: str, detail: str) -> None:
         self.passed += 1
@@ -68,14 +75,35 @@ class CheckResults:
 
     def record_skip(self, name: str, reason: str) -> None:
         self.skipped += 1
+        self.skipped_names.append(name)
         logger.warning("SKIPPED %s: %s", name, reason)
 
     def summary(self) -> int:
-        """Log the counts and return the process exit code."""
+        """Log the counts and return the process exit code.
+
+        Three outcomes, not two (#14870). A run where every check passed and a
+        run where the only check that exercises route registration was skipped
+        are not the same result, and reporting both as a green tick is how a
+        verifier comes to certify something it never looked at.
+        """
         logger.info("PASSED=%d FAILED=%d SKIPPED=%d", self.passed, self.failed, self.skipped)
         if self.failed or not self.passed:
             logger.error("❌ Workflow router registration NOT verified")
             return 1
+        if ESSENTIAL_CHECK in self.skipped_names:
+            logger.error(
+                "❌ Workflow router registration NOT verified — %r could not run, "
+                "and the remaining checks only read the registry statically",
+                ESSENTIAL_CHECK,
+            )
+            return 1
+        if self.skipped:
+            logger.warning(
+                "⚠️  Workflow router registration verified, but %d other check(s) could not run: %s",
+                self.skipped,
+                ", ".join(self.skipped_names),
+            )
+            return 0
         logger.info("✅ Workflow router registration verified")
         return 0
 
