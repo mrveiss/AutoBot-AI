@@ -393,7 +393,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/workflow_io.py": 693,
     "autobot-backend/slash_command_handler.py": 1663,
     "autobot-backend/takeover_manager.py": 1364,
-    "autobot-backend/takeover_manager_e2e_test.py": 663,
     "autobot-backend/tasks/knowledge_tasks.py": 912,
     "autobot-backend/tests/agents/test_librarian_assistant_extract.py": 635,
     "autobot-backend/tests/api/test_canvas.py": 679,
