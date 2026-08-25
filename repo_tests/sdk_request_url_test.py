@@ -37,8 +37,8 @@ from pathlib import Path
 
 import httpx
 import pytest
-
 from autobot_sdk import API_PREFIX, AutoBot, api_path, default_base_url
+
 from autobot_shared.api_routing import router_prefixes as routing
 from autobot_shared.ssot_config import config
 
@@ -57,13 +57,28 @@ _BACKEND_API_ROOT = "/api"
 
 
 def _route_decorator_re():
-    """The decorator grammar the blocking ``api-wiring`` gate already parses."""
+    """The decorator grammar the blocking ``api-wiring`` gate already parses.
+
+    The ``sys.modules`` entry exists only so ``exec_module`` can resolve the
+    script's own self-references; it is removed again immediately. Leaving it
+    installed trips the session-finish leak guard (#13361) -- which fails the
+    run *after* pytest reports every test passed, so the job log carries no
+    failing test to find. Restore the previous value rather than popping
+    unconditionally: another module may legitimately own the name.
+    """
     script = _REPO / "scripts" / "audit_api_wiring.py"
     spec = importlib.util.spec_from_file_location("audit_api_wiring", script)
     module = importlib.util.module_from_spec(spec)
+    previous = sys.modules.get("audit_api_wiring")
     sys.modules["audit_api_wiring"] = module
-    spec.loader.exec_module(module)
-    return module.ROUTE_DECORATOR_RE
+    try:
+        spec.loader.exec_module(module)
+        return module.ROUTE_DECORATOR_RE
+    finally:
+        if previous is None:
+            sys.modules.pop("audit_api_wiring", None)
+        else:
+            sys.modules["audit_api_wiring"] = previous
 
 
 @pytest.fixture(scope="module")
