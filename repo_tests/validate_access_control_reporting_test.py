@@ -76,7 +76,7 @@ def _run_suite(tmp_path: Path, *, rc: int, stdout: str = "", stderr: str = "") -
     env["STUB_RC"] = str(rc)
     env["STUB_STDOUT"] = stdout
     env["STUB_STDERR"] = stderr
-    result = subprocess.run(  # nosec B603 B607 - fixed path, no shell
+    result = subprocess.run(  # nosec B603 B607  # fixed path, no shell
         ["bash", str(SCRIPT), _MODE],
         capture_output=True,
         text=True,
@@ -170,7 +170,7 @@ def test_an_unknown_option_prints_usage_instead_of_dying_on_a_missing_function(t
     """`log_error` was called here and had never been defined: exit 127, no usage."""
     env = dict(os.environ)
     env["PATH"] = f"{_stub_bin(tmp_path)}{os.pathsep}{env['PATH']}"
-    result = subprocess.run(  # nosec B603 B607 - fixed path, no shell
+    result = subprocess.run(  # nosec B603 B607  # fixed path, no shell
         ["bash", str(SCRIPT), "--not-an-option"],
         capture_output=True,
         text=True,
