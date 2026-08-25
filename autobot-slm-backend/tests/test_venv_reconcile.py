@@ -186,6 +186,38 @@ async def test_reconcile_real_venv_removes_orphan_keeps_declared_and_transitive(
 
 
 @pytest.mark.asyncio
+async def test_reconcile_removes_a_name_an_operator_reinstalled_after_it_was_declared(
+    real_venv: _RealVenv, tmp_path: Path
+) -> None:
+    """KNOWN LIMITATION (module docstring): this is a name diff against the
+    tool's OWN prior-declared history, with no install-provenance marker.
+    A package this venv's history once declared, dropped from requirements,
+    then reinstalled by an operator under that exact name before the next
+    reconcile, is indistinguishable from tool debris and IS removed. Only a
+    name never declared by this tool's history (e.g. `ipdb`) is safe — see
+    test_reconcile_real_venv_removes_orphan_keeps_declared_and_transitive's
+    pkg-root/pkg-trans, which the lock never lets become candidates at all,
+    and the untouched `pip`/`setuptools` in every real-venv test here, which
+    were never in any lock this tool wrote.
+    """
+    site = real_venv.site_packages
+    _write_dist_info(site, "pkg-stale-collide", "pkg_stale_collide_15063", "1.0")
+
+    req = tmp_path / "requirements.txt"
+    req.write_text("\n", encoding="utf-8")  # noqa: async_blocking_io
+
+    lock_path = real_venv.venv_dir / vr._DECLARED_LOCK_FILENAME
+    lock_path.write_text(json.dumps({"declared": ["pkg-stale-collide"]}), encoding="utf-8")  # noqa: async_blocking_io
+
+    steps: list = []
+    report = await vr.reconcile_component("test-comp-collide", str(req), str(real_venv.pip_bin), steps)
+
+    assert report.status == "ok"
+    assert report.removed == ("pkg-stale-collide",)
+    assert "pkg-stale-collide" not in _installed_names(real_venv)
+
+
+@pytest.mark.asyncio
 async def test_reconcile_never_attempts_to_remove_a_package_that_is_not_installed(
     real_venv: _RealVenv, tmp_path: Path
 ) -> None:
@@ -377,6 +409,26 @@ def test_resolve_declared_names_warns_on_missing_include(tmp_path: Path) -> None
 
     assert declared == set()
     assert any("nowhere.txt" in w for w in warnings)
+
+
+# ---------------------------------------------------------------------------
+# load_lock — fails closed (returns None -> refused/baseline), never raises
+# ---------------------------------------------------------------------------
+
+
+def test_load_lock_returns_none_when_declared_entries_are_not_strings(tmp_path: Path) -> None:
+    """A hand-edited lock with non-string entries must refuse (None), never
+    raise inside normalize_name's regex — the same fail-closed contract as
+    a missing/truncated file, just a different malformed shape."""
+    lock_path = tmp_path / vr._DECLARED_LOCK_FILENAME
+    lock_path.write_text(json.dumps({"declared": [1, 2, 3]}), encoding="utf-8")
+    assert vr.load_lock(lock_path) is None
+
+
+def test_load_lock_returns_none_when_top_level_is_not_an_object(tmp_path: Path) -> None:
+    lock_path = tmp_path / vr._DECLARED_LOCK_FILENAME
+    lock_path.write_text(json.dumps([{"name": "x"}]), encoding="utf-8")
+    assert vr.load_lock(lock_path) is None
 
 
 # ---------------------------------------------------------------------------

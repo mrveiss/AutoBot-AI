@@ -18,11 +18,12 @@ This module adds the removal half, scoped and auditable:
 2. Compare that declared set against the one recorded the *previous* time
    reconciliation ran for this venv (a small lock file next to the venv).
    Only a package that WAS declared before and is NOT declared now is even a
-   removal candidate — this is what keeps an operator-installed package, or
-   anything never declared by this tool, off the removal list. There being no
-   history to compare against (first run, or a freshly recreated venv) is
-   treated as "cannot reconcile yet", not "remove nothing is same as
-   everything is fine" — the run records a baseline and removes nothing.
+   removal candidate — a name this tool's own history never declared is
+   never a candidate at all, which is what keeps an unrelated
+   operator-installed package (`ipdb`, say) off the removal list. There
+   being no history to compare against (first run, or a freshly recreated
+   venv) is treated as "cannot reconcile yet", not "remove nothing is same
+   as everything is fine" — the run records a baseline and removes nothing.
 3. Drop from that candidate list anything still reachable, transitively, from
    the CURRENT declared set (walked over each installed distribution's own
    `Requires-Dist`, read locally from the venv — no network, no resolver
@@ -36,6 +37,16 @@ Components whose ansible role installs an explicit package LIST rather than a
 requirements file (`EXPLICIT_LIST_COMPONENTS`) have nothing here to reconcile
 against — `refuse_explicit_list` reports that plainly instead of silently
 skipping them.
+
+KNOWN LIMITATION — a name-collision, not a redesign candidate. Protection in
+step 2 is a name diff against this tool's OWN history, with no
+install-provenance marker to tell "this tool put it here" apart from
+"an operator happens to have installed something with this exact name
+since". A package this venv's history once declared, then dropped from
+requirements, is indistinguishable from operator debris installed under
+that same name in the window before the next reconcile — see
+`test_reconcile_removes_a_name_an_operator_reinstalled_after_it_was_declared`.
+A package this tool's history NEVER declared is unaffected regardless.
 """
 
 from __future__ import annotations
@@ -285,8 +296,12 @@ def load_lock(lock_path: Path) -> Optional[Set[str]]:
     except (OSError, json.JSONDecodeError) as exc:
         logger.warning("venv-reconcile: could not read lock %s: %s", lock_path, exc)
         return None
+    if not isinstance(data, dict):
+        logger.warning("venv-reconcile: malformed lock %s: top level is not an object", lock_path)
+        return None
     names = data.get("declared")
-    if not isinstance(names, list):
+    if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+        logger.warning("venv-reconcile: malformed lock %s: 'declared' is not a list of strings", lock_path)
         return None
     return {normalize_name(n) for n in names}
 
@@ -364,6 +379,10 @@ async def _apply_removals(
     closure = transitive_closure(declared, graph)
     kept = candidates & closure
     installed = set(graph.keys())
+    # `& installed`: pip uninstall -y <not-installed> exits 0 with a warning
+    # rather than failing, so without this filter a candidate that is not
+    # actually there would be reported (falsely) as removed, not merely waste
+    # a subprocess call.
     removable = sorted((candidates - kept) & installed)
     msg = f"venv-reconcile[{component}]: {len(removable)} package(s) to remove: {removable}"
     steps.append(msg)

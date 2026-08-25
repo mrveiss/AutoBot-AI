@@ -144,3 +144,56 @@ def test_ai_stack_reconciles_with_its_own_requirements_ai_paths() -> None:
     called_component, called_req, called_pip, _steps = reconcile_mock.call_args.args
     assert called_component == "autobot-ai-stack"
     assert (called_req, called_pip) == cs._WORKER_COMPONENT_PIP["autobot-ai-stack"]
+
+
+def test_backend_pip_failure_never_calls_reconcile() -> None:
+    """A failed install must short-circuit before reconciliation ever runs —
+    removal candidates from a possibly-unfinished ADD are not safe to act on
+    (#15063)."""
+    import api.code_sync as cs
+
+    reconcile_mock = AsyncMock()
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=True)))
+        stack.enter_context(patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)))
+        stack.enter_context(patch("api.code_sync._deploy_constraints_dir", AsyncMock()))
+        stack.enter_context(patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()))
+        stack.enter_context(patch("api.code_sync._ensure_target_python_installed", AsyncMock()))
+        stack.enter_context(patch("api.code_sync._ensure_venv_python", AsyncMock(return_value=False)))
+        stack.enter_context(patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=False)))
+        stack.enter_context(patch("api.code_sync.reconcile_component", reconcile_mock))
+        stack.enter_context(patch("api.code_sync._rollback_component", AsyncMock()))
+        _, _steps, pip_ok = _run(
+            cs._run_post_sync_steps(
+                "autobot-backend",
+                "/opt/autobot/code_source/autobot-backend",
+                "/opt/autobot/autobot-backend",
+            )
+        )
+
+    assert pip_ok is False
+    reconcile_mock.assert_not_awaited()
+
+
+def test_worker_pip_failure_never_calls_reconcile() -> None:
+    """Same guard on the worker branch (ai-stack's requirements-ai.txt install
+    failing must not be followed by a reconcile against its own venv)."""
+    import api.code_sync as cs
+
+    reconcile_mock = AsyncMock()
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)))
+        stack.enter_context(patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)))
+        stack.enter_context(patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=False)))
+        stack.enter_context(patch("api.code_sync.reconcile_component", reconcile_mock))
+        stack.enter_context(patch("api.code_sync._rollback_component", AsyncMock()))
+        _, _steps, pip_ok = _run(
+            cs._run_post_sync_steps(
+                "autobot-ai-stack",
+                "/opt/autobot/code_source/autobot-ai-stack",
+                "/opt/autobot/autobot-ai-stack",
+            )
+        )
+
+    assert pip_ok is False
+    reconcile_mock.assert_not_awaited()

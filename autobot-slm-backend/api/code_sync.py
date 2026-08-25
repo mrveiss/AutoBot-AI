@@ -1637,6 +1637,15 @@ _WORKER_COMPONENT_PIP: Dict[str, Tuple[str, str]] = {
     ),
 }
 
+# #15063: reconcile_component's lock file is keyed off pip.parents[1] (the
+# venv directory) — if two components ever mapped to the same venv, one's
+# reconcile would compute the other's declared packages as removal
+# candidates. Nothing else enforces that these paths stay distinct; this does.
+_ALL_COMPONENT_PIP_BINS = [pip_bin for _req, pip_bin in {**_COMPONENT_PIP_PATHS, **_WORKER_COMPONENT_PIP}.values()]
+assert len(_ALL_COMPONENT_PIP_BINS) == len(
+    set(_ALL_COMPONENT_PIP_BINS)
+), "_COMPONENT_PIP_PATHS/_WORKER_COMPONENT_PIP map two components to the same venv (#15063)"
+
 # Timeout (seconds) for `npm ci` (dependency install).  Windows-generated
 # package-lock.json on WSL can be slow; 300 s default matches pip (#11351).
 _NPM_INSTALL_TIMEOUT: float = float(os.environ.get("AUTOBOT_NPM_INSTALL_TIMEOUT", "300"))
@@ -3177,13 +3186,19 @@ async def _mark_slm_node_up_to_date(db_service, node_id: str) -> None:
         logger.warning("SLM self-sync: could not update node status: %s", db_err)
 
 
-async def _sync_slm_from_code_source(node_id: str) -> None:
+async def _sync_slm_from_code_source(node_id: str, job_id: str) -> None:
     """Pull SLM components from the code source node and restart services.
 
     Used when the GUI triggers a sync for the SLM server itself (#913).
     The Ansible playbook cannot be used because it runs rsync FROM the
     controller (SLM server) but the source path only exists on the dev machine.
     This function reverses the direction: SLM server PULLS from the code source.
+
+    *job_id* is needed only to persist the dependency-reconciliation steps
+    (#15063) — the fleet-sync job row is already marked complete before this
+    runs (a self-restart may kill this process), so that write is the last
+    reliable place for the removal set to reach the job's own output rather
+    than only a log an operator must go find.
 
     NOTE: Must create its own DB session — the request-scoped session passed
     from sync_node is closed by FastAPI before this background task runs.
@@ -3227,8 +3242,14 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
 
     # --- Phase 2b: install Python dependencies if requirements.txt changed (#1603) ---
     req_path, pip_bin = _COMPONENT_PIP_PATHS["autobot-slm-backend"]
+    reconcile_steps: List[str] = []
     if await _install_slm_pip_dependencies(req_path, pip_bin):
-        await reconcile_component("autobot-slm-backend", req_path, pip_bin, [])
+        await reconcile_component("autobot-slm-backend", req_path, pip_bin, reconcile_steps)
+    if reconcile_steps:
+        # #15063: written now, while a process is still alive to write it —
+        # Phase 4 below may self-restart this service before anything after
+        # it can run.
+        await _update_node_state_db(job_id, node_id, message="; ".join(reconcile_steps))
 
     # --- Phase 2c: rebuild SLM frontend (#1607) ---
     await _build_slm_frontend()
@@ -3530,7 +3551,7 @@ async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSy
             if is_local_source:
                 await _ansible_self_update(slm_self_node.node_id)
             else:
-                await _sync_slm_from_code_source(slm_self_node.node_id)
+                await _sync_slm_from_code_source(slm_self_node.node_id, job.job_id)
         else:
             # No code source — fall back to Ansible
             await _ansible_self_update(slm_self_node.node_id)
