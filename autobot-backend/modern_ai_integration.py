@@ -335,6 +335,15 @@ class AnthropicClaudeProvider(BaseAIProvider):
             logger.warning("Anthropic library not available")
             self.client = None
 
+    def _build_call_kwargs(
+        self, model: str, request: AIRequest, default_max_tokens: int, messages: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Build messages.create() kwargs, routing sampling params via extra_body (#15016)."""
+        kwargs = {"model": model, "max_tokens": request.max_tokens or default_max_tokens, "messages": messages}
+        kwargs["temperature"] = request.temperature or self.config.temperature
+        kwargs["system"] = request.system_message
+        return _route_sampling_kwargs(kwargs)
+
     async def generate_text(self, request: AIRequest) -> AIResponse:
         """Generate text using Claude"""
         await self._check_rate_limit()
@@ -347,18 +356,7 @@ class AnthropicClaudeProvider(BaseAIProvider):
 
             # Prepare messages
             messages = [{"role": "user", "content": request.prompt}]
-
-            # #15016: anthropic>=1.0 dropped temperature from messages.create();
-            # route it through extra_body instead of passing it as a keyword.
-            call_kwargs = _route_sampling_kwargs(
-                {
-                    "model": self.config.model_name,
-                    "max_tokens": request.max_tokens or self.config.max_tokens,
-                    "temperature": request.temperature or self.config.temperature,
-                    "system": request.system_message,
-                    "messages": messages,
-                }
-            )
+            call_kwargs = self._build_call_kwargs(self.config.model_name, request, self.config.max_tokens, messages)
             response = await self.client.messages.create(**call_kwargs)
 
             processing_time = time.time() - start_time
@@ -433,18 +431,7 @@ class AnthropicClaudeProvider(BaseAIProvider):
             start_time = time.time()
             content = self._build_anthropic_image_content(request.prompt, request.images)
             messages = [{"role": "user", "content": content}]
-
-            # #15016: anthropic>=1.0 dropped temperature from messages.create();
-            # route it through extra_body instead of passing it as a keyword.
-            call_kwargs = _route_sampling_kwargs(
-                {
-                    "model": ANTHROPIC_CLAUDE3_OPUS_DATED,
-                    "max_tokens": request.max_tokens or 1000,
-                    "temperature": request.temperature or self.config.temperature,
-                    "system": request.system_message,
-                    "messages": messages,
-                }
-            )
+            call_kwargs = self._build_call_kwargs(ANTHROPIC_CLAUDE3_OPUS_DATED, request, 1000, messages)
             response = await self.client.messages.create(**call_kwargs)
 
             return self._build_anthropic_vision_response(request, response, time.time() - start_time)

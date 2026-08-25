@@ -292,7 +292,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/middleware/audit_middleware.py": 659,
     "autobot-backend/middleware/extension_hooks_test.py": 802,
     "autobot-backend/migrations/versions/20260623_062_rbac_colon_to_dot_reconcile.py": 622,
-    "autobot-backend/modern_ai_integration.py": 1174,
+    "autobot-backend/modern_ai_integration.py": 1172,
     "autobot-backend/monitoring/alertmanager_webhook_test.py": 782,
     "autobot-backend/monitoring/monitoring_and_alerts_test.py": 1192,
     "autobot-backend/multimodal_processor/multimodal_integration_test.py": 633,
