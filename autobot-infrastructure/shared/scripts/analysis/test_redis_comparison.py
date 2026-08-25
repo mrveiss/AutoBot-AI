@@ -16,6 +16,7 @@ import time
 
 from autobot_shared.paths import project_root
 from constants import ServiceURLs
+from langchain_redis_arm import INSTALL_HINT, ModernArmUnavailable, load_redis_vector_store
 
 # DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
 _DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
@@ -116,16 +117,22 @@ def _create_vector_store(modern_langchain: bool, embeddings):
 
     Helper for test_langchain_redis (#825).
 
+    #14871: this used to re-decide which package to use by catching its own
+    ImportError, independently of the caller's ``modern_langchain`` flag. On a
+    machine without langchain-redis that silently handed the LEGACY class the
+    MODERN keyword arguments. The store class is now chosen once, by the
+    caller, and passed down.
+
     Args:
-        modern_langchain: Whether to use modern langchain-redis package
+        modern_langchain: Whether the modern langchain-redis package is in use
         embeddings: Embeddings instance
 
     Returns:
         Vector store instance
     """
-    try:
-        from langchain_redis import RedisVectorStore as LangChainRedisStore
-    except ImportError:
+    if modern_langchain:
+        LangChainRedisStore = load_redis_vector_store()
+    else:
         from langchain_community.vectorstores.redis import Redis as LangChainRedisStore
 
     if modern_langchain:
@@ -158,8 +165,12 @@ async def _test_existing_data_access(embeddings):
         Tuple of (success, count)
     """
     try:
-        from langchain_redis import RedisVectorStore as LangChainRedisStore
+        LangChainRedisStore = load_redis_vector_store()
+    except ModernArmUnavailable as exc:
+        logger.warning("Existing-data access NOT ATTEMPTED: %s", exc)
+        return False, 0
 
+    try:
         existing_store = LangChainRedisStore(
             index_name="llama_index",
             embedding=embeddings,
@@ -179,17 +190,24 @@ async def test_langchain_redis():
     """Test LangChain Redis integration with existing data"""
     logger.info("\n=== Testing LangChain Redis Integration ===")
     try:
-        # Try new langchain-redis package first
+        # #14871: this probe's try body was an empty `pass`, so the import it
+        # was meant to attempt had been stripped and `modern_langchain` was
+        # unconditionally True. The script logged "Using new langchain-redis
+        # package" on every machine, installed or not, and then built the legacy
+        # store with modern keyword arguments. The probe now actually probes.
         try:
-            pass
-
-            logger.info("Using new langchain-redis package")
+            load_redis_vector_store()
             modern_langchain = True
-        except ImportError:
-            pass
-
-            logger.info("Using langchain-community Redis")
+            logger.info("Modern arm: using the langchain-redis package")
+        except ModernArmUnavailable as exc:
             modern_langchain = False
+            logger.warning(
+                "MODERN ARM NOT MEASURED - falling back to the legacy "
+                "langchain_community Redis store. This run compares one "
+                "library, not two (%s). Install it with: %s",
+                exc,
+                INSTALL_HINT,
+            )
 
         try:
             from langchain_ollama import OllamaEmbeddings
