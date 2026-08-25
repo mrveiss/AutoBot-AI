@@ -25,6 +25,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { useChatStore } from '@/stores/useChatStore'
 import { usePermissionStore } from '@/stores/usePermissionStore'
 import { getApiBase } from '@/config/ssot-config'
+import { getRiskSeverity, type RiskSeverity } from '@/utils/riskLevel'
 
 const logger = createLogger('useCommandApproval')
 
@@ -378,13 +379,14 @@ export function useCommandApproval() {
    * Get risk level CSS class
    */
   const getRiskClass = (riskLevel: string): string => {
-    const riskClasses: Record<string, string> = {
-      LOW: 'text-green-600',
-      MODERATE: 'text-yellow-600',
-      HIGH: 'text-orange-600',
-      DANGEROUS: 'text-red-600'
+    const riskClasses: Record<RiskSeverity, string> = {
+      low: 'text-green-600',
+      medium: 'text-yellow-600',
+      high: 'text-orange-600',
+      critical: 'text-red-600'
     }
-    return riskClasses[riskLevel] || 'text-gray-600'
+    const severity = getRiskSeverity(riskLevel)
+    return severity ? riskClasses[severity] : 'text-gray-600'
   }
 
   /**

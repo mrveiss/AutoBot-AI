@@ -27,6 +27,10 @@ The ratchet turns one way only:
 Every lowering is mirrored in ``RATCHET_BASELINE`` in the ratchet test, so the
 shrink is locked in rather than left as headroom to regrow into (#14498).
 
+A file the hook cannot open is a violation too, not a skip (#14975). ``None``
+from ``count_lines`` means "never measured", which is a different thing from
+"within the limit", and only the second one is what exit 0 reports.
+
 ``--audit-ceilings`` applies those rules to every entry regardless of what is
 staged, so an entry cannot sit here exempting nothing after the file it names
 has shrunk, moved, or been deleted. It reports how many entries it reached,
@@ -133,6 +137,22 @@ def verdict(rel: str, line_count: int) -> str | None:
     return None
 
 
+def unmeasured(rel: str) -> str:
+    """Violation message for an argument that could not be read at all.
+
+    ``count_lines`` returns None for "missing", "unreadable" and "not a file"
+    alike, and ``audit_ceilings`` already treats that None as a finding. This is
+    the same verdict on the commit path, which used to skip past it: exit 0 is
+    only entitled to mean *within the limit*, and a file that was never opened
+    has not earned that (#14975).
+    """
+    return (
+        f"{rel}: could not be read, so its size was never measured. This is not "
+        "a size violation — check the path, its permissions, and whether it is a "
+        "broken symlink. An unmeasured file is not a passing one."
+    )
+
+
 def audit_ceilings() -> tuple[int, list[str]]:
     """Check every KNOWN_LARGE entry against the file it names.
 
@@ -197,10 +217,12 @@ def main(argv: list[str]) -> int:
 
     violations = []
     for arg in argv:
+        rel = normalise(arg)
         line_count = count_lines(pathlib.Path(arg))
         if line_count is None:
+            violations.append(unmeasured(rel))
             continue
-        message = verdict(normalise(arg), line_count)
+        message = verdict(rel, line_count)
         if message is not None:
             violations.append(message)
 
