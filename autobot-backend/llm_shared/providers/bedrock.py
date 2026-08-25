@@ -43,7 +43,16 @@ BEDROCK_SECRET_TYPE = "aws_bedrock_credentials"
 #: validate a region resolved from SecretsService before it is used to build
 #: a boto3 endpoint -- a vault entry is a trust boundary, not a guarantee of
 #: well-formed content.
-_AWS_REGION_PATTERN = re.compile(r"^[a-z]{2}(-gov)?-[a-z]+-\d{1,2}$")
+#:
+#: Deliberately matches the general partition grammar rather than an enumerated
+#: list of partitions: AWS adds regions continuously, and a pattern that admits
+#: only ``-gov-`` rejects the ISO partitions (``us-iso-east-1``,
+#: ``us-isob-east-1``) outright. Rejecting a real region here would turn a
+#: working deployment into a hard failure, which is a worse outcome than the
+#: injection this guard exists to stop -- so the pattern is shaped to exclude
+#: hostnames, paths and availability zones ("us-east-1a"), not to enumerate
+#: partitions.
+_AWS_REGION_PATTERN = re.compile(r"^[a-z]{2}(-[a-z]+)+-\d{1,2}$")
 
 # Model families supported by Bedrock
 BEDROCK_MODELS = {

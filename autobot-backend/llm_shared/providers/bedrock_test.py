@@ -25,7 +25,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llm_shared.providers.bedrock import BEDROCK_SECRET_TYPE, BEDROCK_VAULT_ENTRY_NAME, BedrockProvider
+from llm_shared.providers.bedrock import (
+    _AWS_REGION_PATTERN,
+    BEDROCK_SECRET_TYPE,
+    BEDROCK_VAULT_ENTRY_NAME,
+    BedrockProvider,
+)
 
 _MODULE_GLOBALS = BedrockProvider._load_credentials_from_vault.__globals__
 
@@ -143,3 +148,44 @@ def test_vault_secret_type_mismatch_is_rejected(monkeypatch):
     assert access_key is None
     assert secret_key is None
     assert any("unexpected secret_type" in call.args[0] for call in warning_mock.call_args_list)
+
+
+# The region reaches `boto3.client(region_name=...)` from a SecretsService entry,
+# so it is validated before it can shape an endpoint host. Both directions are
+# pinned by name: a pattern that rejects a real region turns a working
+# deployment into a hard failure, which is worse than the injection the guard
+# exists to stop -- so the accepted set is enumerated explicitly rather than
+# trusted to a regex nobody re-reads.
+@pytest.mark.parametrize(
+    "region",
+    [
+        "us-east-1",
+        "eu-west-1",
+        "ap-southeast-4",
+        "il-central-1",
+        "me-central-1",
+        "us-gov-west-1",
+        "cn-northwest-1",
+        "us-iso-east-1",
+        "us-isob-east-1",
+    ],
+)
+def test_every_real_aws_partition_is_accepted(region):
+    assert _AWS_REGION_PATTERN.match(region), f"{region} is a real AWS region and must not be rejected"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "us-east-1a",
+        "evil.example.invalid",
+        "us-east-1;curl http://x",
+        "../../etc/passwd",
+        "http://internal/",
+        "US-EAST-1",
+        "us-east",
+        "",
+    ],
+)
+def test_non_region_values_are_refused(value):
+    assert not _AWS_REGION_PATTERN.match(value), f"{value!r} is not a region and must not reach boto3"
