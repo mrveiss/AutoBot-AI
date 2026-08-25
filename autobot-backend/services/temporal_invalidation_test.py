@@ -142,13 +142,40 @@ class TestTemporalInvalidation:
         # attribute, subject, predicate, object, fact_type, temporal_type, confidence, age_days
         ("old_dynamic_fact", "AutoBot", "version is", "1.0", FactType.FACT, TemporalType.DYNAMIC, 0.8, 45),
         # 15 days: inside the 30-day dynamic rule, so it must NOT match.
-        ("recent_dynamic_fact", "Python", "is popular for", "data science", FactType.FACT, TemporalType.DYNAMIC, 0.9, 15),
+        (
+            "recent_dynamic_fact",
+            "Python",
+            "is popular for",
+            "data science",
+            FactType.FACT,
+            TemporalType.DYNAMIC,
+            0.9,
+            15,
+        ),
         # 120 days: past the 90-day rule for predictions.
-        ("old_prediction", "AI", "will revolutionize", "healthcare by 2023", FactType.PREDICTION, TemporalType.TEMPORAL_BOUND, 0.7, 120),
+        (
+            "old_prediction",
+            "AI",
+            "will revolutionize",
+            "healthcare by 2023",
+            FactType.PREDICTION,
+            TemporalType.TEMPORAL_BOUND,
+            0.7,
+            120,
+        ),
         # A year old and still valid, because STATIC is exempt from age rules.
         ("static_fact", "Python", "was created by", "Guido van Rossum", FactType.FACT, TemporalType.STATIC, 0.95, 365),
         # 0.4 confidence, below the 0.6 threshold.
-        ("low_confidence_fact", "AutoBot", "might support", "new feature", FactType.FACT, TemporalType.DYNAMIC, 0.4, 10),
+        (
+            "low_confidence_fact",
+            "AutoBot",
+            "might support",
+            "new feature",
+            FactType.FACT,
+            TemporalType.DYNAMIC,
+            0.4,
+            10,
+        ),
         # 200 days: past the 180-day rule for opinions.
         ("old_opinion", "I", "think", "AutoBot is great", FactType.OPINION, TemporalType.ATEMPORAL, 0.6, 200),
         # 2 days: past the 1-day rule for test sources.
@@ -157,9 +184,7 @@ class TestTemporalInvalidation:
 
     def _setup_test_facts(self) -> None:
         """Build the fixture facts, one per row of ``_FIXTURE_FACTS``."""
-        for attribute, subject, predicate, obj, fact_type, temporal_type, confidence, age_days in (
-            self._FIXTURE_FACTS
-        ):
+        for attribute, subject, predicate, obj, fact_type, temporal_type, confidence, age_days in self._FIXTURE_FACTS:
             setattr(
                 self,
                 attribute,
