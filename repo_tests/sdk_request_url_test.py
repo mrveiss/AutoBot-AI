@@ -224,17 +224,34 @@ def test_the_api_root_is_applied_once_and_is_idempotent():
 
 
 def test_the_default_base_url_names_the_backend_port_not_the_slm(monkeypatch):
-    """8000 is the Service Lifecycle Manager; the backend answers on config.port.backend."""
+    """8000 is the Service Lifecycle Manager; the backend is ssot_config's backend port.
+
+    Compared against the *declared field default*, not ``config.port.backend``:
+    the live value follows whatever ``AUTOBOT_BACKEND_PORT`` a runner exports,
+    and the two sides would then agree or disagree for reasons that have
+    nothing to do with the SDK.
+    """
     monkeypatch.delenv("AUTOBOT_BASE_URL", raising=False)
     monkeypatch.delenv("AUTOBOT_BACKEND_HOST", raising=False)
     monkeypatch.delenv("AUTOBOT_BACKEND_PORT", raising=False)
+    ports = type(config.port).model_fields
+    backend_port, slm_port = ports["backend"].default, ports["slm"].default
 
-    assert httpx.URL(default_base_url()).port == config.port.backend, (
-        "the SDK's default port drifted from ssot_config's backend port. "
-        "The SDK cannot import ssot_config (it ships as a standalone wheel), "
-        "so this assertion is the only thing holding the two together."
+    assert backend_port != slm_port, "backend and SLM port defaults collapsed; this guard proves nothing"
+    assert httpx.URL(default_base_url()).port == backend_port, (
+        f"the SDK defaults to port {httpx.URL(default_base_url()).port}, ssot_config declares "
+        f"{backend_port} for the backend ({slm_port} is the SLM). The SDK ships as a standalone "
+        "wheel and cannot import ssot_config, so this assertion is the only thing holding them together."
     )
-    assert config.port.backend != config.port.slm, "backend and SLM ports collapsed; this guard proves nothing"
+
+
+def test_the_backend_host_and_port_env_vars_are_honoured(monkeypatch):
+    """The aliases are the SDK's link to a deployment's configuration, not decoration."""
+    monkeypatch.delenv("AUTOBOT_BASE_URL", raising=False)
+    monkeypatch.setenv("AUTOBOT_BACKEND_HOST", "backend.example")
+    monkeypatch.setenv("AUTOBOT_BACKEND_PORT", "9443")
+
+    assert default_base_url() == "http://backend.example:9443"
 
 
 def test_an_explicit_base_url_env_var_still_wins(monkeypatch):
