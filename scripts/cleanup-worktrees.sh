@@ -183,8 +183,18 @@ if $DRY_RUN; then
     echo "  (dry-run mode -- no changes will be made)"
 fi
 
-# Fetch latest remote state
-git -C "$REPO_ROOT" fetch --prune 2>/dev/null || true
+# Fetch latest remote state.
+#
+# A swallowed failure here is not cosmetic: every later "is this branch gone?"
+# question is answered from local refs, so an unreachable or unauthenticated
+# remote makes live branches look deleted. Record the outcome instead of
+# discarding it -- Phase 4 refuses to delete anything on stale refs.
+REMOTE_REFS_FRESH=true
+if ! git -C "$REPO_ROOT" fetch --prune 2>/dev/null; then
+    REMOTE_REFS_FRESH=false
+    echo "  WARNING: 'git fetch --prune' failed -- remote refs may be stale."
+    echo "           Branch-deletion decisions below are based on local refs only."
+fi
 
 # Check local branches with issue numbers for closed issues
 local_branches=$(git -C "$REPO_ROOT" branch | sed 's/^[* +]*//' | grep -v "${BASE_BRANCH}\|main\|master" || true)
@@ -262,7 +272,11 @@ fi
 
 echo ""
 echo "=== Phase 4: Session handoff reaping (#13848) ==="
-if $DRY_RUN; then
+if [ "${REMOTE_REFS_FRESH}" != "true" ]; then
+    echo "  SKIPPED: the remote fetch failed, so 'branch is gone' cannot be trusted."
+    echo "           Reaping on stale refs would delete handoffs for live branches."
+    echo "           Re-run once the remote is reachable."
+elif $DRY_RUN; then
     echo "  (dry-run mode -- no changes will be made)"
     reap_session_handoffs "${REPO_ROOT}/.session" --dry-run
 else

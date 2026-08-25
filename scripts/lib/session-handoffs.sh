@@ -31,37 +31,93 @@ handoff_branch_name() {
 #
 # The schema allows a qualifier after the keyword ("complete (design phase
 # only)"), so only the leading token is significant. Prints nothing when the
-# field is absent -- an unparseable handoff is never reaped.
+# field is absent or ambiguous -- an unparseable handoff is never reaped.
+#
+# Scoped deliberately, because a first-match-anywhere search reaps live work:
+# `.session/README.md` documents the schema as a literal `status: complete |
+# blocked | partial` line, and pasting that template while filling a handoff in
+# is the natural way to write one. A naive `grep -m1 '^status:'` reads the
+# pasted template instead of the real field and reports `complete` for a
+# handoff that actually says `blocked`. So:
+#
+#   * fenced blocks are skipped entirely -- a quoted schema is not a field;
+#   * only the leading `key: value` block is read, never later prose;
+#   * two competing top-level `status:` lines print nothing rather than
+#     guessing, and so does a value still carrying the schema's `|`.
+#
+# Every one of those cases falls through to `keep-unlanded`: a handoff we
+# cannot read with certainty is stranded work, never a delete.
 handoff_status() {
     local path="$1" line
     [ -f "$path" ] || return 0
-    line="$(grep -m1 -i '^status:' "$path" 2>/dev/null || true)"
+    line="$(awk '
+        /^[[:space:]]*```/ { fence = !fence; next }
+        fence               { next }
+        /^[[:space:]]*$/    { if (seen) exit; next }
+        /^[[:space:]]*#/    { if (seen) exit; next }
+        /^[Ss][Tt][Aa][Tt][Uu][Ss][[:space:]]*:/ {
+            seen = 1
+            if (found++) { ambiguous = 1; exit }
+            value = $0
+            next
+        }
+        /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*:/ { seen = 1; next }
+        { if (seen) exit }
+        END { if (!ambiguous && found == 1) print value }
+    ' "$path" 2>/dev/null || true)"
     [ -n "$line" ] || return 0
     line="${line#*:}"
+    case "$line" in
+        *"|"*) return 0 ;;
+    esac
     line="$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]' | awk '{print $1}')"
     printf '%s' "$line"
 }
 
-# Return 0 (true) when the branch still exists locally or on origin.
+# Branch-existence check, with three outcomes rather than two:
+#
+#   0  the branch exists locally or on origin
+#   1  git answered, and the branch is gone
+#   2  git could not answer (not a repository, corrupt refs, ...)
+#
+# The third case is the point. `git show-ref --verify --quiet` exits 1 for "no
+# such ref" and >=2 for a hard failure, and collapsing both into false lets a
+# broken git turn every handoff into "branch gone" -- deleting the whole
+# directory in one sweep. Callers must treat 2 as "cannot determine", not as
+# permission to reap.
 handoff_branch_exists() {
-    local branch="$1"
-    git show-ref --verify --quiet "refs/heads/${branch}" && return 0
-    git show-ref --verify --quiet "refs/remotes/origin/${branch}" && return 0
+    local branch="$1" rc
+    git show-ref --verify --quiet "refs/heads/${branch}"
+    rc=$?
+    [ "$rc" -eq 0 ] && return 0
+    [ "$rc" -gt 1 ] && return 2
+    git show-ref --verify --quiet "refs/remotes/origin/${branch}"
+    rc=$?
+    [ "$rc" -eq 0 ] && return 0
+    [ "$rc" -gt 1 ] && return 2
     return 1
 }
 
 # Disposition for one handoff file. Prints exactly one of:
 #
 #   keep-live      the branch still exists -- the handoff still has a reader
+#   keep-unknown   git could not say whether the branch exists; without that
+#                  answer no delete is justified
 #   keep-unlanded  the branch is gone but the handoff says the work did not
 #                  land (`blocked` / `partial`, or no parseable status): this is
 #                  stranded work and needs an issue, not a delete
 #   reap           the branch is gone and the handoff records completed work
 handoff_disposition() {
-    local path="$1" branch status
+    local path="$1" branch status rc
     branch="$(handoff_branch_name "$path")"
-    if handoff_branch_exists "$branch"; then
+    handoff_branch_exists "$branch"
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
         printf 'keep-live'
+        return 0
+    fi
+    if [ "$rc" -ge 2 ]; then
+        printf 'keep-unknown'
         return 0
     fi
     status="$(handoff_status "$path")"
@@ -80,7 +136,7 @@ handoff_disposition() {
 # kept: keeping is a normal outcome, not a failure.
 reap_session_handoffs() {
     local session_dir="$1" dry_run="${2:-}"
-    local reaped=0 kept_live=0 kept_unlanded=0
+    local reaped=0 kept_live=0 kept_unlanded=0 kept_unknown=0
     local path branch disposition
 
     if [ ! -d "$session_dir" ]; then
@@ -96,6 +152,10 @@ reap_session_handoffs() {
             keep-live)
                 echo "  KEEP     HANDOFF-${branch}.md  (branch ${branch} still exists)"
                 kept_live=$((kept_live + 1))
+                ;;
+            keep-unknown)
+                echo "  KEEP     HANDOFF-${branch}.md  (git could not resolve branch ${branch} -- refusing to reap on an unanswered question)"
+                kept_unknown=$((kept_unknown + 1))
                 ;;
             keep-unlanded)
                 echo "  STRANDED HANDOFF-${branch}.md  (branch ${branch} is gone, status='$(handoff_status "$path")' -- file an issue, do not delete)"
@@ -113,6 +173,6 @@ reap_session_handoffs() {
         esac
     done
 
-    echo "  handoffs: reaped=${reaped} kept-live=${kept_live} stranded=${kept_unlanded}"
+    echo "  handoffs: reaped=${reaped} kept-live=${kept_live} stranded=${kept_unlanded} unresolved=${kept_unknown}"
     return 0
 }

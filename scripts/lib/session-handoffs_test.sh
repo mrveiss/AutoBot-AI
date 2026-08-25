@@ -49,6 +49,27 @@ check "partial status"    "partial"  "$(handoff_status "${TMP_STATUS}/partial.md
 check "missing status"    ""         "$(handoff_status "${TMP_STATUS}/nostatus.md")"
 check "missing file"      ""         "$(handoff_status "${TMP_STATUS}/does-not-exist.md")"
 
+# The template-paste family. `.session/README.md` documents the schema as a
+# literal `status: complete | blocked | partial` line, so a half-written handoff
+# routinely contains that string alongside the real field. A first-match search
+# reads the template and reaps unlanded work; these pin the scoping that stops
+# it. Every ambiguous shape must yield "" -- which routes to keep-unlanded.
+printf '# Handoff: f\n```markdown\n# Handoff: <branch-name>\nstatus: complete | blocked | partial\n```\nstatus: blocked\nblocked_on: review\n' \
+    > "${TMP_STATUS}/fenced-schema-above.md"
+printf '# Handoff: g\nstatus: complete | blocked | partial\nstatus: blocked\n' \
+    > "${TMP_STATUS}/two-status-lines.md"
+printf '# Handoff: h\nstatus: complete | blocked | partial\npr: #1\n' \
+    > "${TMP_STATUS}/schema-only.md"
+printf '# Handoff: i\npr: #1\n\nNotes for the reader:\nstatus: complete\n' \
+    > "${TMP_STATUS}/status-in-prose.md"
+printf '# Handoff: j\nstatus: complete\npr: #1\n\nSchema, for reference:\n```markdown\nstatus: complete | blocked | partial\n```\n' \
+    > "${TMP_STATUS}/fenced-schema-below.md"
+check "fenced schema above the real field" "blocked"  "$(handoff_status "${TMP_STATUS}/fenced-schema-above.md")"
+check "two competing status lines"         ""         "$(handoff_status "${TMP_STATUS}/two-status-lines.md")"
+check "unfilled schema alternation"        ""         "$(handoff_status "${TMP_STATUS}/schema-only.md")"
+check "status only in later prose"         ""         "$(handoff_status "${TMP_STATUS}/status-in-prose.md")"
+check "fenced schema below the real field" "complete" "$(handoff_status "${TMP_STATUS}/fenced-schema-below.md")"
+
 echo "== reaper, against a throwaway repo =="
 # The deliberate-failure check the issue asks for: a handoff for a branch that
 # exists must survive; the same handoff must be reaped once the branch is gone.
@@ -99,6 +120,31 @@ check "handoff reaped once its branch is deleted" "absent" "$r"
 git update-ref refs/remotes/origin/issue-remote "$(git rev-parse HEAD)"
 printf '# Handoff: issue-remote\nstatus: complete\n' > .session/HANDOFF-issue-remote.md
 check "remote-only branch keeps its handoff" "keep-live" "$(handoff_disposition .session/HANDOFF-issue-remote.md)"
+
+# git failing to answer is not the same as "the branch is gone". `git show-ref`
+# exits 1 for a missing ref and >=2 for a hard error, and treating the second as
+# the first lets one broken git call reap the whole directory in a single sweep.
+NON_REPO="$(mktemp -d)"
+cp .session/HANDOFF-issue-remote.md "${NON_REPO}/HANDOFF-issue-remote.md"
+pushd "${NON_REPO}" >/dev/null || exit 1
+handoff_branch_exists issue-remote 2>/dev/null
+check "git error is not a negative answer" "2" "$?"
+check "unresolvable branch is never reaped" "keep-unknown" \
+    "$(handoff_disposition "${NON_REPO}/HANDOFF-issue-remote.md" 2>/dev/null)"
+reap_session_handoffs "${NON_REPO}" >/dev/null 2>&1
+[ -f "${NON_REPO}/HANDOFF-issue-remote.md" ] && r=present || r=absent
+check "handoff survives an unanswerable branch check" "present" "$r"
+popd >/dev/null || exit 1
+rm -rf "${NON_REPO}"
+
+# Control-flow guard (structural, not behavioural): Phase 4 must never run on
+# refs a failed fetch left stale, because "branch is gone" is then a lie.
+CW="${HERE}/../cleanup-worktrees.sh"
+grep -q 'REMOTE_REFS_FRESH=false' "$CW" && r=recorded || r=swallowed
+check "fetch failure is recorded, not swallowed" "recorded" "$r"
+awk '/REMOTE_REFS_FRESH.*!=.*true/ { guard = NR } /reap_session_handoffs/ { if (guard && NR > guard) { print "guarded"; exit } }' \
+    "$CW" > "${TMP_STATUS}/guard.txt"
+check "reaping is gated on fresh refs" "guarded" "$(cat "${TMP_STATUS}/guard.txt")"
 
 # An empty .session/ is not an error.
 reap_session_handoffs "${TMP_REPO}/no-such-dir" >/dev/null && r=ok || r=failed
