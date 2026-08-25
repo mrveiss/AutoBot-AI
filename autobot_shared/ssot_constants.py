@@ -70,10 +70,10 @@ from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATI
 from autobot_shared.ssot_config import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
-    PROJECT_ROOT as CANONICAL_PROJECT_ROOT,
 )
 from autobot_shared.ssot_config import INSTRUCTION_MODEL as SSOT_INSTRUCTION_MODEL
 from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as SSOT_LIGHT_PROCESSING_MODEL
+from autobot_shared.ssot_config import PROJECT_ROOT as CANONICAL_PROJECT_ROOT
 from autobot_shared.ssot_config import QUALITY_MODEL as SSOT_QUALITY_MODEL
 from autobot_shared.ssot_config import ROUTING_MODEL as SSOT_ROUTING_MODEL
 from autobot_shared.ssot_config import SYSTEM_MODEL as SSOT_SYSTEM_MODEL
