@@ -29,24 +29,15 @@
 }
 
 
-/* Accessibility: Reduced Motion Support */
-/* Respects user's OS-level "Reduce Motion" preference */
-/* WCAG 2.1 Success Criterion 2.3.3 Animation from Interactions (AAA) */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    /* Disable all animations */
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-
-    /* Disable all transitions */
-    transition-duration: 0.01ms !important;
-
-    /* Disable scroll behavior smoothing */
-    scroll-behavior: auto !important;
-  }
-}
+/* Accessibility: Reduced Motion Support — WCAG 2.1 SC 2.3.3 (AAA).
+ *
+ * #14770: the rule itself lives in `base.css`, which this file imports at the
+ * top. It was declared in BOTH, and base's copy is a strict superset (it also
+ * neutralises `:root { transition }`), so the copy here was dead weight that
+ * could drift from the one that matters. One canonical definition.
+ *
+ * Note this covers CSS-declared motion only. Motion a script starts is not
+ * reachable by a media query and goes through `useReducedMotion` instead. */
 
 /* ============================================================
  * MOBILE RESPONSIVE UTILITIES (#1804)
