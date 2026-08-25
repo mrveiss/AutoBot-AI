@@ -143,7 +143,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_chat.py": 751,
     "autobot-backend/api/schemas_code.py": 3286,
     "autobot-backend/api/schemas_knowledge.py": 5167,
-    "autobot-backend/api/schemas_system.py": 4326,
+    "autobot-backend/api/schemas_system.py": 4309,
     "autobot-backend/api/schemas_workflows.py": 3011,
     "autobot-backend/api/secrets.py": 1053,
     "autobot-backend/api/security_assessment.py": 913,

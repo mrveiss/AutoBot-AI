@@ -15,8 +15,8 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from api.schemas_common import MAX_THOUGHT_COUNT, SuccessDataResponse, SuccessMessageResponse
+from api.schemas_secrets import StorableSecretType
 from api.system_health import HealthStatus
-from autobot_shared.status_enums import SecretType
 from constants.threshold_constants import RetryConfig
 from services.audit_logger import AuditResult
 from services.feature_flags import EnforcementMode
@@ -3513,7 +3513,7 @@ class SecretModel(BaseModel):
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
-    type: SecretType
+    type: StorableSecretType
     scope: ChatSecretScope
     chat_id: str | None = None
     description: str | None = ""
@@ -3528,7 +3528,7 @@ class SecretCreateRequest(BaseModel):
     """Request model for creating secrets."""
 
     name: str = Field(..., min_length=1, max_length=256)
-    type: SecretType
+    type: StorableSecretType
     scope: ChatSecretScope
     value: str = Field(..., min_length=1, max_length=65536)
     chat_id: str | None = Field(None, max_length=128)
@@ -3540,23 +3540,6 @@ class SecretCreateRequest(BaseModel):
     org_id: str | None = Field(None, max_length=128, description="Organization ID for org-level secrets")
     team_ids: List[str] = Field(default_factory=list, description="Team IDs for group-level secrets")
     shared_with: List[str] = Field(default_factory=list, description="User IDs to share with")
-
-    @field_validator("type")
-    @classmethod
-    def _reject_the_wildcard(cls, value: SecretType) -> SecretType:
-        """``ANY`` is a requirement quantifier, never a stored classification.
-
-        #13846: the canonical ``SecretType`` carries the wildcard so an agent
-        mapping can say "any available secret". Persisting it would put the
-        string "any" in the ``secrets.type`` column, where it matches no kind
-        and every by-type query would step over it.
-        """
-        if value is SecretType.ANY:
-            raise ValueError(
-                f"secret type '{SecretType.ANY.value}' is a requirement wildcard, "
-                "not a storable kind; pick a concrete type"
-            )
-        return value
 
     @field_validator("name")
     @classmethod
