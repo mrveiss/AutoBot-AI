@@ -52,9 +52,20 @@ def _load_module():
     """Import run_code_analysis by path -- its directory is not a package."""
     spec = importlib.util.spec_from_file_location("run_code_analysis", _MODULE_PATH)
     module = importlib.util.module_from_spec(spec)
+    # The ``sys.modules`` entry exists only so ``exec_module`` can resolve the
+    # script's self-references; it is removed again immediately (#15076). Leaving
+    # it installed trips the session-finish leak guard (#13361), which fails the
+    # run *after* every test passes -- a failure with no failing test in the log.
+    previous = sys.modules.get("run_code_analysis")
     sys.modules["run_code_analysis"] = module
-    spec.loader.exec_module(module)
-    return module
+    try:
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        if previous is None:
+            sys.modules.pop("run_code_analysis", None)
+        else:
+            sys.modules["run_code_analysis"] = previous
 
 
 rca = _load_module()
@@ -209,9 +220,7 @@ def test_report_file_with_non_dict_top_level_reports_error(scripts_dir, target_d
 def test_valid_report_file_is_returned_verbatim(scripts_dir, target_dir):
     """#14587: the orchestrator reads the file the analyzer writes, not stdout."""
     payload = {"status": "success", "complexity": 3, "maintainability": "excellent"}
-    _write_report_writing_script(
-        scripts_dir, "analyze_code_quality.py", "comprehensive_quality_report.json", payload
-    )
+    _write_report_writing_script(scripts_dir, "analyze_code_quality.py", "comprehensive_quality_report.json", payload)
 
     result = rca.run_code_quality_analysis(str(target_dir))
 
@@ -264,9 +273,7 @@ def test_main_exits_zero_when_analysis_succeeds(scripts_dir, target_dir, capsys,
     # #14635: shaped like the real code_quality_dashboard.py report -- scores
     # nest under "quality_metrics", not at the top level.
     payload = {"status": "success", "quality_metrics": {"maintainability_index": 82.5, "test_coverage_score": 91.0}}
-    _write_report_writing_script(
-        scripts_dir, "analyze_code_quality.py", "comprehensive_quality_report.json", payload
-    )
+    _write_report_writing_script(scripts_dir, "analyze_code_quality.py", "comprehensive_quality_report.json", payload)
     argv = ["run_code_analysis.py", "--target", str(target_dir), "--analysis-type", "quality"]
     monkeypatch.setattr(sys, "argv", argv)
 
@@ -295,8 +302,7 @@ def test_output_file_map_matches_what_each_real_script_writes():
         match = _REPORT_PATH_RE.search(source)
         assert match is not None, f"{script_name} has no report_path = Path(...) assignment"
         assert match.group(1) == expected_output, (
-            f"{script_name} writes {match.group(1)!r} but the orchestrator reads "
-            f"{expected_output!r} back for it"
+            f"{script_name} writes {match.group(1)!r} but the orchestrator reads " f"{expected_output!r} back for it"
         )
 
 
