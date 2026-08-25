@@ -180,10 +180,11 @@ def test_celery_worker_status():
     until #14930 ran in no gating workflow at all.
 
     The only thing that legitimately excuses this check is a checkout that is not
-    a deployment, and that is decided by the ``logs/`` directory rather than by
-    the log file: if ``logs/`` is absent nothing on this host ever ran, so there
-    is nothing to report on. If ``logs/`` exists and the worker's log does not,
-    the worker never started, and that is a failure rather than a non-result.
+    a deployment, and that is decided by whether any service log exists rather
+    than by the log file itself: if ``logs/`` holds nothing a service wrote,
+    nothing on this host ever ran and there is nothing to report on. If other
+    service logs are there and the worker's is not, the worker never started, and
+    that is a failure rather than a non-result.
 
     ``main()`` calls this bare and discards whatever it returns, so unlike the
     npu_code_search drivers (#14920) there is no truthiness contract to keep and
@@ -192,15 +193,30 @@ def test_celery_worker_status():
     log_directory = project_root() / "logs"
     log_file = log_directory / "celery-worker.log"
 
-    if not log_directory.is_dir():
+    # #13286: the discriminator used to be "does `logs/` exist", which CI
+    # falsifies — `marker-tests.yml` and `ci.yml` both run `mkdir -p logs` and
+    # `touch logs/.gitkeep` before pytest, so the directory is always there and
+    # always empty. The test therefore demanded a worker log on a runner where no
+    # service has ever run, and reported its absence as a failure: an absent
+    # service read as a defect, which is what #14930 removed everywhere else.
+    #
+    # What actually distinguishes a deployment is whether ANY service has written
+    # a log here. `.gitkeep` is not a log, so it does not count.
+    service_logs = (
+        [entry for entry in log_directory.iterdir() if entry.is_file() and entry.name != ".gitkeep"]
+        if log_directory.is_dir()
+        else []
+    )
+    if not service_logs:
         pytest.skip(
-            f"{log_directory} does not exist — this checkout is not a deployment, "
+            f"{log_directory} holds no service log — this checkout is not a deployment, "
             "so no service on this host has written a log to read"
         )
 
     assert log_file.is_file(), (
-        f"{log_file} is absent while {log_directory} exists — this host runs services "
-        "but the Celery worker has never written a log, so it never started"
+        f"{log_file} is absent while {log_directory} holds "
+        f"{sorted(entry.name for entry in service_logs)} — this host runs services but the "
+        "Celery worker has never written a log, so it never started"
     )
 
     logs = log_file.read_text(encoding="utf-8", errors="replace")

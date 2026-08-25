@@ -66,30 +66,34 @@
 name: Marker-excluded Tests
 
 on:
-  # SCHEDULE INTENTIONALLY WITHHELD UNTIL THE SUITE IS GREEN (#13286).
+  # SCHEDULE RESTORED — the closing step of #13286.
   #
-  # GitHub registers `schedule` AND `workflow_dispatch` from the DEFAULT branch
-  # only. This file lives on the integration branch, so while it stayed there
-  # neither trigger could fire: the workflow produced ZERO runs of any kind, and
-  # `gh run list --workflow=marker-tests.yml` answered "could not find any
-  # workflows named marker-tests.yml" because GitHub had never registered it.
+  # It was withheld while the suite was red, because a permanently red scheduled
+  # workflow is not a signal; it is noise that trains everyone to ignore the one
+  # place marker-excluded regressions would show up. GitHub registers `schedule`
+  # from the DEFAULT branch only, so on the integration branch this is inert
+  # until promotion — which is exactly why it must be correct BEFORE promotion
+  # rather than after.
   #
-  # That changes the moment the integration branch is promoted to the default
-  # branch — the cron would start firing immediately. A permanently red
-  # scheduled workflow is not a signal; it is noise that trains everyone to
-  # ignore the one place marker-excluded regressions would show up.
-  #
-  # So the cron is commented rather than deleted — it is correct, and it is what
-  # #13286 exists to deliver. #14930 triaged every failure and error the suite
-  # was carrying (see the block above); restore the cron as the closing step of
-  # #13286, and raise MARKER_MIN_PASSED to the figure the run then reports so a
-  # later collapse cannot pass unnoticed. `workflow_dispatch` below stays live,
-  # so the suite remains runnable on demand to verify exactly that.
-  #
-  # schedule:
-  #   # 03:20 UTC daily — off the */15 dispatch-watchdog and */30 runner-health
-  #   # slots, and well clear of working-hours PR traffic.
-  #   - cron: '20 3 * * *'
+  # It is restored now because every failure the suite carried has been fixed
+  # rather than tolerated:
+  #   * #14930 triaged the 38 non-passes the backend invocation carried (see the
+  #     block above).
+  #   * #13286 added the third invocation, and its first-ever run of
+  #     `autobot-infrastructure/shared/tests` and `libs` produced 5 failures and
+  #     1 collection error — all four of the underlying defects fixed, none of
+  #     them excluded: `autobot_sdk` was importable from nowhere (`pytest.ini`
+  #     `pythonpath`), `utils.redis_client` and `utils.redis_helper` named modules
+  #     that exist in no tree (repointed at their canonical successors), a table
+  #     count asserted 6 where SQLite reports 7, and a `PRAGMA foreign_keys` read
+  #     on the test's own fresh connection could never have returned 1.
+  #   * the SDK's real defect — every request omitting the `/api` prefix — is
+  #     #15053, and reports as a stated skip here rather than a red, because
+  #     nothing is listening on a runner.
+  schedule:
+    # 03:20 UTC daily — off the */15 dispatch-watchdog and */30 runner-health
+    # slots, and well clear of working-hours PR traffic.
+    - cron: '20 3 * * *'
   workflow_dispatch:
     inputs:
       markers:
@@ -151,9 +155,12 @@ jobs:
       # the suite ran 35 passing tests while reading as an undifferentiated red,
       # so nobody would have noticed the number falling to 3.
       #
-      # Kept at the presence floor (1) until the first run under this workflow
-      # reports a real post-fix figure; #13286 raises it to that number as part
-      # of turning the schedule on.
+      # Set to the figure an actual run reports, which is what #13286's closing
+      # step required: run 32834864623's sibling marker run measured `backend`
+      # at 85 collected / 35 passed / 49 skipped, and the `infra` invocation at
+      # 12 collected / 10 passed / 2 skipped once its four defects were fixed.
+      # The floors below are those numbers, not round ones — a floor chosen for
+      # comfort is a floor that catches nothing.
       #
       # #13543: the floors below are applied PER INVOCATION, never to their sum.
       # `marker_suite_report.py` used to compare the total against one floor, so
@@ -164,7 +171,7 @@ jobs:
       # marker-selected test today, and
       # repo_tests/marker_suite_root_coverage_test.py fails the moment it gains
       # one, which is what forces this declaration back up.
-      MARKER_MIN_PASSED: '1'
+      MARKER_MIN_PASSED: '35'
 
     steps:
       - uses: actions/checkout@v7
@@ -308,7 +315,8 @@ jobs:
             --min-collected 1 \
             --min-collected slm=0 \
             --min-passed "$MARKER_MIN_PASSED" \
-            --min-passed slm=0
+            --min-passed slm=0 \
+            --min-passed infra=10
 
       - name: Upload marker reports
         if: ${{ !cancelled() }}
