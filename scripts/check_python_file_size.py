@@ -27,6 +27,10 @@ The ratchet turns one way only:
 Every lowering is mirrored in ``RATCHET_BASELINE`` in the ratchet test, so the
 shrink is locked in rather than left as headroom to regrow into (#14498).
 
+A file the hook cannot open is a violation too, not a skip (#14975). ``None``
+from ``count_lines`` means "never measured", which is a different thing from
+"within the limit", and only the second one is what exit 0 reports.
+
 ``--audit-ceilings`` applies those rules to every ``*.py`` file the tree walk
 below reaches, not just the ones already in KNOWN_LARGE (#14547). Before this,
 ``audit_ceilings`` iterated ``KNOWN_LARGE.items()``, so it could re-verify a
@@ -218,6 +222,25 @@ def _vanished_entry_problem(rel: str, root: pathlib.Path) -> str:
     )
 
 
+def unmeasured(rel: str) -> str:
+    """Violation message for an argument that could not be read at all.
+
+    ``count_lines`` returns None for "missing", "unreadable", "not a file" and
+    "not UTF-8" alike, and ``audit_ceilings`` already treats that None as a
+    finding — the walk (#14547) skips such a file rather than counting it
+    toward its reach floor, for the same reason. This is
+    the same verdict on the commit path, which used to skip past it: exit 0 is
+    only entitled to mean *within the limit*, and a file that was never opened
+    has not earned that (#14975).
+    """
+    return (
+        f"{rel}: could not be read, so its size was never measured. This is not "
+        "a size violation — check the path, its permissions, whether it is a "
+        "broken symlink, and whether it decodes as UTF-8. An unmeasured file "
+        "is not a passing one."
+    )
+
+
 def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> tuple[int, set[str], list[str]]:
     """Rule on every readable file in *tracked*. Returns (reached, seen, problems).
 
@@ -308,10 +331,12 @@ def main(argv: list[str]) -> int:
 
     violations = []
     for arg in argv:
+        rel = normalise(arg)
         line_count = count_lines(pathlib.Path(arg))
         if line_count is None:
+            violations.append(unmeasured(rel))
             continue
-        message = verdict(normalise(arg), line_count)
+        message = verdict(rel, line_count)
         if message is not None:
             violations.append(message)
 

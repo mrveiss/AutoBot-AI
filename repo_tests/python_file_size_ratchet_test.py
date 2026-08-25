@@ -492,6 +492,67 @@ def test_the_hook_has_no_stdout_calls_left(hook):
 
 
 # --------------------------------------------------------------------------
+# A file that was never measured is not a file that passed (#14975)
+#
+# ``count_lines`` returns None for missing, unreadable and not-a-file alike.
+# ``audit_ceilings`` has always called that a finding; ``main`` — the path every
+# commit takes — used to ``continue`` past it and exit 0, so the gate reported
+# "within the limit" about a file it never opened. Same condition, same module,
+# opposite verdicts. These pin the commit path to the audit path's answer.
+# --------------------------------------------------------------------------
+
+
+def test_an_unreadable_argument_is_reported_not_skipped(hook, tmp_path, caplog):
+    """The fail-open itself: a path the hook cannot open must go red."""
+    never_opened = tmp_path / "never_opened.py"
+    assert not never_opened.exists(), "the probe must be unreadable to prove anything"
+    with caplog.at_level(logging.DEBUG, logger=hook.logger.name):
+        assert hook.main([str(never_opened)]) == 1
+    emitted = "\n".join(record.getMessage() for record in caplog.records)
+    assert str(never_opened) in emitted, "the finding never named the file"
+    assert "never measured" in emitted
+
+
+def test_the_unmeasured_finding_is_not_dressed_as_a_size_violation(hook, tmp_path, caplog):
+    """Exit 1 alone cannot tell this defect from an ordinary oversize file.
+
+    Without this, a fix that reported every unreadable path as "601 lines (max
+    600)" would satisfy the exit code and mislead the developer about the cause.
+    """
+    never_opened = tmp_path / "never_opened.py"
+    with caplog.at_level(logging.DEBUG, logger=hook.logger.name):
+        hook.main([str(never_opened)])
+    emitted = "\n".join(record.getMessage() for record in caplog.records)
+    assert f"(max {hook.MAX_LINES})" not in emitted
+    assert min(record.levelno for record in caplog.records) >= logging.WARNING
+
+
+def test_a_compliant_file_still_passes_the_commit_path(hook, tmp_path):
+    """The other direction: the fix must not turn every clean commit red."""
+    target = tmp_path / "small.py"
+    target.write_text("x\n" * (hook.MAX_LINES - 1), encoding="utf-8")
+    assert hook.main([str(target)]) == 0
+
+
+def test_a_non_utf8_file_is_unmeasured_rather_than_measured(hook, tmp_path, caplog):
+    """The fourth cause the finding names, and the one the walk added (#14547).
+
+    ``count_lines`` catches ``UnicodeDecodeError`` as well as ``OSError``, so a
+    ``.py`` that does not decode reaches ``unmeasured`` too. The probe is
+    deliberately longer than MAX_LINES: if anything ever measured it instead,
+    the size verdict would fire and this would catch that rather than agreeing
+    with it.
+    """
+    undecodable = tmp_path / "latin1.py"
+    undecodable.write_bytes(b"# \xff\xfe caf\xe9\n" * (hook.MAX_LINES + 1))
+    with caplog.at_level(logging.DEBUG, logger=hook.logger.name):
+        assert hook.main([str(undecodable)]) == 1
+    emitted = "\n".join(record.getMessage() for record in caplog.records)
+    assert "never measured" in emitted
+    assert f"(max {hook.MAX_LINES})" not in emitted
+
+
+# --------------------------------------------------------------------------
 # Reach — did the matcher actually reach anything?
 # --------------------------------------------------------------------------
 
