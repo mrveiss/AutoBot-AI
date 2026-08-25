@@ -26885,6 +26885,149 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent-terminal/host-selection/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Host Selection
+         * @description Agent requests host selection for SSH action.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     This endpoint creates a pending host selection request that the frontend
+         *     will display to the user. The user selects from available infrastructure
+         *     hosts, and the selection is returned via the /host-selection/{request_id}
+         *     endpoint.
+         *
+         *     Flow:
+         *     1. Agent calls POST /host-selection/request with command/purpose
+         *     2. Backend returns request_id with status="pending_selection"
+         *     3. Frontend shows HostSelectionDialog to user
+         *     4. User selects host and calls POST /host-selection/{request_id}/select
+         *     5. Agent polls GET /host-selection/{request_id} to get selection result
+         */
+        post: operations["request_host_selection_api_agent_terminal_host_selection_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/host-selection/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Host Selection
+         * @description Get the status/result of a host selection request.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     Agent polls this endpoint to check if user has made a selection.
+         *
+         *     Returns:
+         *     - status: "pending_selection", "selected", or "cancelled"
+         *     - If selected: includes host details and connection info
+         */
+        get: operations["get_host_selection_api_agent_terminal_host_selection__request_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/host-selection/{request_id}/select": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Host Selection
+         * @description User submits their host selection.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     Called by frontend when user selects a host from the dialog.
+         *
+         *     Args:
+         *         request_id: The pending selection request ID
+         *         host_id: Selected host ID from secrets
+         *         host_name: Display name of the host
+         *         host: Hostname or IP address
+         *         ssh_port: SSH port number
+         *         username: SSH username
+         *         remember_choice: Whether to use this host for future SSH commands
+         */
+        post: operations["submit_host_selection_api_agent_terminal_host_selection__request_id__select_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/host-selection/{request_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Host Selection
+         * @description User cancels host selection.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     Called by frontend when user closes the dialog without selecting.
+         */
+        post: operations["cancel_host_selection_api_agent_terminal_host_selection__request_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/host-selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Pending Host Selections
+         * @description List all pending host selection requests.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     Frontend uses this to show any pending selection dialogs on page load.
+         */
+        get: operations["list_pending_host_selections_api_agent_terminal_host_selection_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent-terminal/sessions": {
         parameters: {
             query?: never;
@@ -27201,149 +27344,6 @@ export interface paths {
          *     Issue #744: Requires authenticated user.
          */
         get: operations["agent_terminal_info_api_agent_terminal__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection/request": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Request Host Selection
-         * @description Agent requests host selection for SSH action.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     This endpoint creates a pending host selection request that the frontend
-         *     will display to the user. The user selects from available infrastructure
-         *     hosts, and the selection is returned via the /host-selection/{request_id}
-         *     endpoint.
-         *
-         *     Flow:
-         *     1. Agent calls POST /host-selection/request with command/purpose
-         *     2. Backend returns request_id with status="pending_selection"
-         *     3. Frontend shows HostSelectionDialog to user
-         *     4. User selects host and calls POST /host-selection/{request_id}/select
-         *     5. Agent polls GET /host-selection/{request_id} to get selection result
-         */
-        post: operations["request_host_selection_api_agent_terminal_host_selection_request_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection/{request_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Host Selection
-         * @description Get the status/result of a host selection request.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     Agent polls this endpoint to check if user has made a selection.
-         *
-         *     Returns:
-         *     - status: "pending_selection", "selected", or "cancelled"
-         *     - If selected: includes host details and connection info
-         */
-        get: operations["get_host_selection_api_agent_terminal_host_selection__request_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection/{request_id}/select": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Submit Host Selection
-         * @description User submits their host selection.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     Called by frontend when user selects a host from the dialog.
-         *
-         *     Args:
-         *         request_id: The pending selection request ID
-         *         host_id: Selected host ID from secrets
-         *         host_name: Display name of the host
-         *         host: Hostname or IP address
-         *         ssh_port: SSH port number
-         *         username: SSH username
-         *         remember_choice: Whether to use this host for future SSH commands
-         */
-        post: operations["submit_host_selection_api_agent_terminal_host_selection__request_id__select_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection/{request_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Cancel Host Selection
-         * @description User cancels host selection.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     Called by frontend when user closes the dialog without selecting.
-         */
-        post: operations["cancel_host_selection_api_agent_terminal_host_selection__request_id__cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Pending Host Selections
-         * @description List all pending host selection requests.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     Frontend uses this to show any pending selection dialogs on page load.
-         */
-        get: operations["list_pending_host_selections_api_agent_terminal_host_selection_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -137954,6 +137954,159 @@ export interface operations {
             };
         };
     };
+    request_host_selection_api_agent_terminal_host_selection_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TerminalHostSelectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalHostSelectionRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_host_selection_api_agent_terminal_host_selection__request_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalHostSelectionGetResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_host_selection_api_agent_terminal_host_selection__request_id__select_post: {
+        parameters: {
+            query?: {
+                host_id?: string;
+                host_name?: string;
+                host?: string;
+                ssh_port?: number;
+                username?: string;
+                remember_choice?: boolean;
+            };
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalHostSelectionSubmitResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_host_selection_api_agent_terminal_host_selection__request_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalHostSelectionCancelResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_pending_host_selections_api_agent_terminal_host_selection_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalPendingSelectionsResponse"];
+                };
+            };
+        };
+    };
     list_agent_terminal_sessions_api_agent_terminal_sessions_get: {
         parameters: {
             query?: {
@@ -138395,159 +138548,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentTerminalInfoResponse"];
-                };
-            };
-        };
-    };
-    request_host_selection_api_agent_terminal_host_selection_request_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["TerminalHostSelectionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalHostSelectionRequestResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_host_selection_api_agent_terminal_host_selection__request_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                request_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalHostSelectionGetResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    submit_host_selection_api_agent_terminal_host_selection__request_id__select_post: {
-        parameters: {
-            query?: {
-                host_id?: string;
-                host_name?: string;
-                host?: string;
-                ssh_port?: number;
-                username?: string;
-                remember_choice?: boolean;
-            };
-            header?: never;
-            path: {
-                request_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalHostSelectionSubmitResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cancel_host_selection_api_agent_terminal_host_selection__request_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                request_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalHostSelectionCancelResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_pending_host_selections_api_agent_terminal_host_selection_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalPendingSelectionsResponse"];
                 };
             };
         };
