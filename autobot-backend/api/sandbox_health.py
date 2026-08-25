@@ -134,7 +134,12 @@ async def probe_sandbox(request: Request | None = None) -> ComponentHealth:
         )
 
     reachable, reason = await _daemon_reachable()
-    detail = None if reachable else f"docker SDK present but the daemon is unreachable ({reason}) - code execution runs UNSANDBOXED"
+    detail = None
+    if not reachable:
+        detail = (
+            f"docker SDK present but the daemon is unreachable ({reason}) - "
+            "code execution runs UNSANDBOXED"
+        )
     if detail:
         logger.warning("sandbox health: %s", detail)
 
