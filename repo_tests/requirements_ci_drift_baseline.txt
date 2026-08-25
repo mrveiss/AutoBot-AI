@@ -135,7 +135,8 @@ email-validator
 defusedxml
 pywebpush
 tenacity
-anthropic
+# anthropic REMOVED (#15016): it is now mirrored into requirements-ci/ai-ml.txt,
+# so CI installs the real SDK and the entry exempts nothing.
 boto3
 asyncpg
 praw
