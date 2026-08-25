@@ -6,10 +6,9 @@
 AWS Bedrock provider for the multi-provider LLM layer (GH#9010).
 
 Supports Claude, Llama, Mistral, Amazon Titan, and Amazon Nova models via
-AWS Bedrock's managed inference. Credentials are read (in priority order) from:
-  1. ``settings["aws_access_key_id"]`` / ``settings["aws_secret_access_key"]``
-  2. Environment variables ``AWS_ACCESS_KEY_ID`` / ``AWS_SECRET_ACCESS_KEY``
-  3. IAM role via instance profile (automatic in EC2/ECS)
+AWS Bedrock's managed inference. Credentials are read (in priority order) from
+``SecretsService`` (encrypted, audited), then ``settings``/environment variables
+(plain-text fallback, logged as a warning), then an IAM role instance profile.
 
 Streaming is supported via ``invoke_model_with_response_stream``. Cross-region
 inference profiles can be used for higher availability.
@@ -29,8 +28,10 @@ from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
 
 from ..base_provider import BaseProvider
+from .bedrock_credentials import _AWS_REGION_PATTERN, load_credentials_from_vault
 
 logger = get_logger(__name__)
+
 
 # Model families supported by Bedrock
 BEDROCK_MODELS = {
@@ -71,10 +72,8 @@ class BedrockProvider(BaseProvider):
     Supports Claude, Llama, Mistral, Amazon Titan, and Amazon Nova models via
     AWS Bedrock's managed inference. Requires ``boto3`` (``pip install boto3``).
 
-    AWS credentials are read from settings, environment, or IAM role. Region
-    can be configured via ``settings["region"]`` or ``AWS_DEFAULT_REGION``.
-
-    Streaming is supported via ``invoke_model_with_response_stream``.
+    AWS credentials are read from SecretsService, settings, environment, or IAM
+    role -- see the module docstring for priority order.
     """
 
     provider_name = ProviderType.BEDROCK.value
@@ -85,17 +84,32 @@ class BedrockProvider(BaseProvider):
         self._runtime_client = None
         self._region: str | None = None
 
+    #: Kept as an attribute so ``BedrockProvider._load_credentials_from_vault.__globals__``
+    #: still points at the module that actually calls ``get_secrets_service`` -- which is
+    #: how ``bedrock_test.py`` injects its vault stand-in.
+    _load_credentials_from_vault = staticmethod(load_credentials_from_vault)
+
     def _resolve_credentials(self) -> tuple[str | None, str | None, str | None]:
         """
-        Resolve AWS credentials from settings or environment.
+        Resolve AWS credentials: SecretsService, then settings/environment,
+        then the boto3 default chain (IAM role).
 
         Returns:
             Tuple of (access_key_id, secret_access_key, region).
             Any value can be None to use boto3's default credential chain.
         """
-        access_key = self._get_setting("aws_access_key_id") or os.getenv("AWS_ACCESS_KEY_ID")
-        secret_key = self._get_setting("aws_secret_access_key") or os.getenv("AWS_SECRET_ACCESS_KEY")
-        region = self._get_setting("region") or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+        access_key, secret_key, region = self._load_credentials_from_vault()
+
+        if not (access_key and secret_key):
+            access_key = self._get_setting("aws_access_key_id") or os.getenv("AWS_ACCESS_KEY_ID")
+            secret_key = self._get_setting("aws_secret_access_key") or os.getenv("AWS_SECRET_ACCESS_KEY")
+            if access_key and secret_key:
+                logger.warning(
+                    "Bedrock: using plain-text AWS credentials from settings/environment, "
+                    "not SecretsService. Run migrate_bedrock_credentials.py to store them securely."
+                )
+
+        region = region or self._get_setting("region") or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
         return access_key, secret_key, region
 
     def _ensure_runtime_client(self):
@@ -109,18 +123,22 @@ class BedrockProvider(BaseProvider):
             raise ImportError("boto3 not installed. Run: pip install boto3") from exc
 
         access_key, secret_key, region = self._resolve_credentials()
+        if not region or not _AWS_REGION_PATTERN.match(region):
+            # Region can originate from a SecretsService vault entry, which is a
+            # trust boundary, not a format guarantee. Reject anything that isn't
+            # AWS-region-shaped before it is used to build a boto3 endpoint host,
+            # and never echo the malformed value back into a log/exception.
+            raise ValueError("Bedrock: resolved AWS region has an unexpected format, refusing to initialize client")
         self._region = region
 
-        # Build client kwargs
+        # Explicit creds are only added when both are present; otherwise IAM role applies.
         client_kwargs: Dict[str, Any] = {"region_name": region, "service_name": "bedrock-runtime"}
-
-        # Only specify credentials if explicitly provided (otherwise use IAM role)
         if access_key and secret_key:
             client_kwargs["aws_access_key_id"] = access_key
             client_kwargs["aws_secret_access_key"] = secret_key
 
         self._runtime_client = boto3.client(**client_kwargs)
-        logger.info("Initialized Bedrock runtime client in region %s", region)
+        logger.info("Initialized Bedrock runtime client")
         return self._runtime_client
 
     def _resolve_model_id(self, model_name: str) -> str:
