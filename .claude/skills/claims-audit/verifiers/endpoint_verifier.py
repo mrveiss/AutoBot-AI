@@ -18,9 +18,16 @@ from .base import (
 class EndpointVerifier(BaseVerifier):
     """Verifies HTTP endpoint claims."""
 
+    # Letters only truncated every path that carries anything else:
+    # `/api/users/123` came back as `/api/users/`, and _search_endpoint then
+    # grepped for the collection route instead of the one the claim was about,
+    # reporting WIRED against the wrong evidence. Digits, hyphens and `{param}`
+    # placeholders are ordinary path segments and belong in the class (#14986).
+    _PATH_SEGMENT = r"[a-z0-9_/{}-]+"
+
     ENDPOINT_PATTERNS = [
-        r"/api/[a-z_/]+",  # API endpoints
-        r"(GET|POST|PUT|DELETE|PATCH)\s+/[a-z_/]+",  # HTTP methods with paths
+        rf"/api/{_PATH_SEGMENT}",  # API endpoints
+        rf"(GET|POST|PUT|DELETE|PATCH)\s+/{_PATH_SEGMENT}",  # HTTP methods with paths
         r"endpoint:\s*['\"]([^'\"]+)['\"]",  # Quoted endpoint declarations
     ]
 
