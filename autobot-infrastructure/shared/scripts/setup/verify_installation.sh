@@ -73,11 +73,20 @@ check_python_module "llama_index" "LlamaIndex"
 
 # Multi-Agent Architecture modules
 echo -e "\n${BLUE}🤖 Multi-Agent Architecture Modules${NC}"
-check_python_module "src.config" "Configuration manager"
-check_python_module "src.agents.chat_agent" "Chat Agent"
-check_python_module "src.agents.enhanced_system_commands_agent" "System Commands Agent"
-check_python_module "src.agents.rag_agent" "RAG Agent"
-check_python_module "src.agents.agent_orchestrator" "Agent Orchestrator"
+# (#14875) All five named a `src.` package that has never existed in this tree,
+# so all five failed on every run and the 3/4 pass threshold below absorbed
+# them. The real modules, reachable from the PYTHONPATH exported above:
+#   src.config                              -> config
+#   src.agents.chat_agent                   -> agents.chat_agent
+#   src.agents.enhanced_system_commands_agent -> agents.system_command_agent
+#   src.agents.rag_agent                    -> agents.rag_agent
+#   src.agents.agent_orchestrator           -> agents.agent_orchestration
+#                                              (folded into the package by #3393)
+check_python_module "config" "Configuration manager"
+check_python_module "agents.chat_agent" "Chat Agent"
+check_python_module "agents.system_command_agent" "System Commands Agent"
+check_python_module "agents.rag_agent" "RAG Agent"
+check_python_module "agents.agent_orchestration" "Agent Orchestration"
 
 # Ollama models
 echo -e "\n${BLUE}🦙 Ollama Models${NC}"
@@ -116,37 +125,32 @@ if [ -f venv/bin/activate ]; then
 fi
 
 total_checks=$((total_checks + 1))
-# (#14867) There is no src package. config_manager is the canonical config
-# singleton (see autobot-backend/worker_node.py).
-# (#14867) UNRESOLVED: get_agent_orchestrator names nothing in this tree.
-# AgentType lives in agents.agent_orchestration (types.py); the nearest accessor
-# after the #3393 move of agents/agent_orchestrator.py is
-# get_distributed_agent_coordinator, but that is a rename guess rather than a
-# match, so the import below is left naming what it was written against and its
-# failure is now loud instead of discarded.
+# (#14875) This block named three things that do not exist:
+#   src.agents                        - no `src` package in this tree
+#   get_agent_orchestrator            - zero hits repo-wide
+#   get_task_specific_model           - removed; agents/agent_models_e2e_test.py
+#                                       documents config.llm.get_model_for_agent
+#                                       as its replacement
+# The first ImportError fired before the other two were ever reached, so fixing
+# only the import would have swapped one loud failure for the next. All three
+# are repointed at the current API here.
 # NOTE: no backticks inside this double-quoted block - bash would run them.
 if python3 -c "
 try:
-    from config import config_manager as global_config_manager
-    from src.agents import AgentType, get_agent_orchestrator
+    from agents.agent_orchestration import AgentType, get_distributed_agent_coordinator
+    from autobot_shared.ssot_config import config
 
-    # Test model assignments
-    chat_model = global_config_manager.get_task_specific_model('chat')
-    orchestrator_model = global_config_manager.get_task_specific_model('orchestrator')
-    rag_model = global_config_manager.get_task_specific_model('rag')
+    for agent_id in ('chat', 'orchestrator', 'rag'):
+        print(f'{agent_id} model: {config.llm.get_model_for_agent(agent_id)}')
 
-    print(f'Chat Agent Model: {chat_model}')
-    print(f'Orchestrator Model: {orchestrator_model}')
-    print(f'RAG Agent Model: {rag_model}')
+    coordinator = get_distributed_agent_coordinator()
+    print(f'Agent coordinator instantiated: {type(coordinator).__name__}')
+    print(f'Agent types available: {len(list(AgentType))}')
 
-    # Test agent instantiation
-    orchestrator = get_agent_orchestrator()
-    print('✅ Agent orchestrator instantiated successfully')
-
-    print('✅ Agent configuration test passed')
+    print('Agent configuration test passed')
 except Exception as e:
     import sys, traceback
-    print(f'❌ Agent configuration test failed: {e}', file=sys.stderr)
+    print(f'Agent configuration test failed: {e}', file=sys.stderr)
     traceback.print_exc()
     sys.exit(1)
 "; then
@@ -166,9 +170,14 @@ if [ $success_count -eq $total_checks ]; then
     echo -e "${GREEN}You can now start the system with: ./run_agent.sh${NC}"
     exit 0
 elif [ $success_count -gt $((total_checks * 3 / 4)) ]; then
-    echo -e "${YELLOW}⚠️  Most checks passed. You may proceed with caution.${NC}"
-    echo -e "${YELLOW}Some optional features may not be available.${NC}"
-    exit 0
+    # (#14867) This exited 0. A verification that reports "most checks passed"
+    # and then tells its caller everything is fine is not distinguishable from
+    # a clean run by anything a script can read - which is how the five broken
+    # `src.*` module checks above stayed broken. A failed check now reaches the
+    # exit status.
+    echo -e "${YELLOW}⚠️  Most checks passed, but $((total_checks - success_count)) FAILED.${NC}" >&2
+    echo -e "${YELLOW}This is NOT a clean installation - review the failures above.${NC}" >&2
+    exit 1
 else
     echo -e "${RED}❌ Multiple checks failed. Please review the installation.${NC}"
     echo -e "${RED}Run ./setup_agent.sh to fix missing components.${NC}"

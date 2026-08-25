@@ -74,14 +74,19 @@ _IMPORT = re.compile(r"^\s*(?:from\s+([a-zA-Z_][\w.]*)\s+import\s+|import\s+([a-
 # Every entry is a live bug, not an accepted exception — the parametrized test
 # below asserts each is STILL broken, so a fix that leaves its entry behind
 # fails here rather than silently un-guarding that script.
-_KNOWN_BROKEN = {
-    # Seven siblings were retired by #14877, which repaired those imports.
-    # These two name a backup engine and an agent-orchestrator accessor that
-    # were never built — zero hits repo-wide — so the fix is a logic change,
-    # not an import rewrite.
-    ("restore_kb_backup.sh", "backup.engine"): "#14875",
-    ("setup/verify_installation.sh", "src.agents"): "#14875",
-}
+#
+# EMPTY. The seven siblings went with #14877; the last two went here: the KB
+# restore script now drives ``knowledge._composed``, the engine that
+# ``backup/scheduler.py`` and the maintenance UI already use, and
+# ``verify_installation.sh`` now imports ``agents.agent_orchestration`` plus
+# ``autobot_shared.ssot_config`` in place of a ``src.agents`` package that never
+# existed (#14875).
+#
+# An empty allowlist costs this dict its parametrized positive control — see
+# ``test_the_import_pattern_matches_both_spellings`` and
+# ``test_the_resolver_still_reports_a_missing_module`` below, which drive the
+# matcher and the resolver against synthetic samples instead.
+_KNOWN_BROKEN: dict[tuple[str, str], str] = {}
 
 # Third-party names an inline block may legitimately import. The stdlib half of
 # this set used to be hand-listed, which was survivable while only
@@ -103,7 +108,6 @@ _THIRD_PARTY_PREFIXES = {
     "click",
     "llama_index",
     "bcrypt",
-    "websockify",
 }
 _EXTERNAL_PREFIXES = _THIRD_PARTY_PREFIXES | set(sys.stdlib_module_names)
 
@@ -239,6 +243,36 @@ def test_the_access_control_validator_can_reach_what_it_imports(module: str) -> 
     failure says *which* validation stopped working, not just that something did.
     """
     assert _resolves(module), f"{module} is unreachable from the roots validate_access_control.sh exports"
+
+
+@pytest.mark.parametrize(
+    "module",
+    ["backend.services.feature_flags", "src.agents", "backup.engine", "autobot_absent_pkg_14875"],
+)
+def test_the_resolver_still_reports_a_missing_module(module: str) -> None:
+    """Positive control for ``_resolves``, replacing the emptied ``_KNOWN_BROKEN``.
+
+    While that dict held live defects, "these two are still unresolvable" proved
+    the resolver worked. It is empty now, so a ``_resolves`` that started
+    answering True for everything would make the sweep above report clean over
+    a tree full of broken imports, and nothing here would say so.
+
+    The first three are the real historical offenders — the ``backend.*``
+    prefix that has never existed, the ``src.`` layout that is gone, and the
+    backup engine that was never built.
+    """
+    assert not _resolves(module, _SCRIPT_DIR), (
+        f"{module} now resolves — if a package by that name was genuinely added, "
+        "update this control; if not, the resolver has regressed and the sweep "
+        "above is reporting clean over real defects"
+    )
+
+
+@pytest.mark.parametrize("module", ["services.feature_flags", "autobot_shared.redis_client", "knowledge._composed"])
+def test_the_resolver_still_finds_a_real_module(module: str) -> None:
+    """Negative control: a resolver that answered False for everything would also
+    satisfy the control above while flooding the sweep with false findings."""
+    assert _resolves(module, _SCRIPT_DIR), f"{module} exists but the resolver no longer finds it"
 
 
 @pytest.mark.parametrize("entry,issue", sorted(_KNOWN_BROKEN.items()))
