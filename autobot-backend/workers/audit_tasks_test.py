@@ -326,7 +326,7 @@ class TestAuditTestgaps:
             return True
 
         def fake_list_open(label=None):
-            return list(open_issues)
+            return list(open_issues), True
 
         with (
             patch("workers.audit_tasks._get_redis", return_value=MagicMock()),
@@ -353,7 +353,7 @@ class TestAuditTestgaps:
             patch("workers.audit_tasks._redis_set"),
             patch("workers.audit_tasks._changed_python_modules", return_value=[]),
             patch("workers.audit_tasks._repo_root", return_value=tmp_path),
-            patch("workers.audit_tasks._list_open_issues", return_value=[]),
+            patch("workers.audit_tasks._list_open_issues", return_value=([], True)),
             patch("workers.audit_tasks._file_issue") as mock_file,
         ):
             result = audit_testgaps.run()
@@ -386,8 +386,8 @@ class TestAuditDeadCode:
                 side_effect=lambda _, k: inventory.get(k),
             ),
             patch("workers.audit_tasks._redis_set"),
-            patch("workers.audit_tasks._run_vulture", return_value=[finding]),
-            patch("workers.audit_tasks._list_open_issues", return_value=list(open_issues)),
+            patch("workers.audit_tasks._run_vulture", return_value=([finding], True)),
+            patch("workers.audit_tasks._list_open_issues", return_value=(list(open_issues), True)),
             patch("workers.audit_tasks._file_issue", side_effect=fake_file_issue),
         ):
             result = audit_dead_code.run()
@@ -408,8 +408,8 @@ class TestAuditDeadCode:
             patch("workers.audit_tasks._gh_available", return_value=True),
             patch("workers.audit_tasks._redis_get", return_value=[]),  # empty prior inventory
             patch("workers.audit_tasks._redis_set"),
-            patch("workers.audit_tasks._run_vulture", return_value=[finding]),
-            patch("workers.audit_tasks._list_open_issues", return_value=[]),
+            patch("workers.audit_tasks._run_vulture", return_value=([finding], True)),
+            patch("workers.audit_tasks._list_open_issues", return_value=([], True)),
             patch("workers.audit_tasks._file_issue", side_effect=fake_file_issue),
         ):
             result = audit_dead_code.run()
@@ -434,10 +434,10 @@ class TestAuditDeadCode:
                 "workers.audit_tasks._redis_set",
                 side_effect=lambda _, k, v, **kw: stored.update({k: v}),
             ),
-            patch("workers.audit_tasks._run_vulture", return_value=[finding]),
+            patch("workers.audit_tasks._run_vulture", return_value=([finding], True)),
             patch(
                 "workers.audit_tasks._list_open_issues",
-                side_effect=lambda **kw: list(open_issues),
+                side_effect=lambda **kw: (list(open_issues), True),
             ),
             patch("workers.audit_tasks._file_issue", side_effect=fake_file_issue),
         ):
@@ -471,7 +471,7 @@ class TestAuditClaims:
             patch("workers.audit_tasks._redis_set"),
             patch("workers.audit_tasks._repo_root", return_value=tmp_path),
             patch("workers.audit_tasks._verify_claim", return_value=False),
-            patch("workers.audit_tasks._list_open_issues", return_value=list(open_issues)),
+            patch("workers.audit_tasks._list_open_issues", return_value=(list(open_issues), True)),
             patch("workers.audit_tasks._file_issue") as mock_file,
         ):
             result = audit_claims.run()
@@ -491,7 +491,7 @@ class TestAuditClaims:
             patch("workers.audit_tasks._redis_set"),
             patch("workers.audit_tasks._repo_root", return_value=tmp_path),
             patch("workers.audit_tasks._verify_claim", return_value=False),
-            patch("workers.audit_tasks._list_open_issues", return_value=[]),
+            patch("workers.audit_tasks._list_open_issues", return_value=([], True)),
             patch("workers.audit_tasks._file_issue", return_value=True) as mock_file,
         ):
             result = audit_claims.run()
@@ -1146,7 +1146,7 @@ class TestTaskResultsCarryTheStatus:
             patch("workers.audit_tasks._get_redis", return_value=None),
             patch("workers.audit_tasks._redis_get", return_value=None),
             patch("workers.audit_tasks._redis_set", return_value=True),
-            patch("workers.audit_tasks._list_open_issues", return_value=[]),
+            patch("workers.audit_tasks._list_open_issues", return_value=([], True)),
             patch("workers.audit_tasks._changed_python_modules", return_value=[]),
             patch(
                 "workers.audit_tasks._dedupe_and_file",
@@ -1166,7 +1166,7 @@ class TestTaskResultsCarryTheStatus:
             patch("workers.audit_tasks._get_redis", return_value=None),
             patch("workers.audit_tasks._redis_get", return_value=None),
             patch("workers.audit_tasks._redis_set", return_value=True),
-            patch("workers.audit_tasks._list_open_issues", return_value=[]),
+            patch("workers.audit_tasks._list_open_issues", return_value=([], True)),
             patch("workers.audit_tasks._changed_python_modules", return_value=[]),
             patch(
                 "workers.audit_tasks._dedupe_and_file",
@@ -1184,7 +1184,7 @@ class TestTaskResultsCarryTheStatus:
             patch("workers.audit_tasks._get_redis", return_value=None),
             patch("workers.audit_tasks._redis_get", return_value=None),
             patch("workers.audit_tasks._redis_set", return_value=True),
-            patch("workers.audit_tasks._list_open_issues", return_value=[]),
+            patch("workers.audit_tasks._list_open_issues", return_value=([], True)),
             patch("workers.audit_tasks._changed_python_modules", return_value=[]),
             patch(
                 "workers.audit_tasks._dedupe_and_file",
