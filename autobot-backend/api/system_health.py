@@ -196,9 +196,26 @@ def list_registered_probes() -> list[str]:
     return sorted(_PROBES.keys())
 
 
-def _reset_probes_for_testing() -> None:
-    """Clear the registry. Test-only — DO NOT call in production code."""
+def _reset_probes_for_testing() -> dict[str, ProbeFn]:
+    """Clear the registry and return what it held. Test-only — DO NOT call in production code.
+
+    Probes register as an import side effect of their own module, so clearing
+    the registry is irreversible within a process: the decorator has already
+    run and re-importing is a no-op. A test that cleared it and walked away
+    therefore emptied the registry for every test that followed it in the same
+    worker — which is how ``sandbox`` came to read as unregistered in one shard
+    while passing everywhere else (#14518). Hand the previous mapping back so
+    the caller can put it right; see ``_restore_probes_for_testing``.
+    """
+    previous = dict(_PROBES)
     _PROBES.clear()
+    return previous
+
+
+def _restore_probes_for_testing(previous: dict[str, ProbeFn]) -> None:
+    """Put back a registry captured by ``_reset_probes_for_testing``. Test-only."""
+    _PROBES.clear()
+    _PROBES.update(previous)
 
 
 # ----------------------------------------------------------------------------
