@@ -154,6 +154,16 @@ jobs:
       # Kept at the presence floor (1) until the first run under this workflow
       # reports a real post-fix figure; #13286 raises it to that number as part
       # of turning the schedule on.
+      #
+      # #13543: the floors below are applied PER INVOCATION, never to their sum.
+      # `marker_suite_report.py` used to compare the total against one floor, so
+      # `backend` collapsing to zero was invisible for as long as any sibling
+      # still collected — the same union-floor shape that left an earlier sweep
+      # here blind to ~44% of its population. `slm=0` is therefore written down
+      # explicitly rather than absorbed: `autobot-slm-backend` carries no
+      # marker-selected test today, and
+      # repo_tests/marker_suite_root_coverage_test.py fails the moment it gains
+      # one, which is what forces this declaration back up.
       MARKER_MIN_PASSED: '1'
 
     steps:
@@ -234,6 +244,33 @@ jobs:
             --durations=25 \
             -q || [ $? -eq 5 ]
 
+      # #13543: `autobot-infrastructure/shared/tests` and `libs` were named by
+      # NO pytest invocation in any workflow, so the 12 marker-carrying tests
+      # living there — 6 in `tests/distributed/test_db_initialization.py`, 2 in
+      # `tests/integration/test_architecture_compliance.py` and 4 in
+      # `libs/autobot-sdk-python/tests/test_integration.py` — were selected by
+      # nothing at all, exactly as #13286 describes.
+      #
+      # A THIRD invocation rather than extra roots on the first: the four
+      # `repo_tests`-carrying invocations (ci, coverage, test-durations,
+      # marker-tests) must name identical root lists, which
+      # repo_tests/hook_suites_run_in_ci_test.py asserts. Widening only this one
+      # would break that agreement; widening all four would put these trees'
+      # UNMARKED tests into the PR gate, which is a separate decision with its
+      # own blast radius and is filed rather than smuggled in here.
+      - name: Run marked tests — infrastructure and libs
+        if: ${{ !cancelled() }}
+        run: |
+          echo "Selecting: $MARKER_EXPRESSION"
+          python -m pytest \
+            autobot-infrastructure/shared/tests libs \
+            -n auto --dist loadscope \
+            -m "$MARKER_EXPRESSION" \
+            --junitxml=marker-report-infra.xml \
+            --tb=short \
+            --durations=25 \
+            -q || [ $? -eq 5 ]
+
       - name: Run marked tests — slm-backend
         # Same decoupling as ci.yml (#13300): a failure in the tree above must
         # not silently skip this one.
@@ -267,8 +304,11 @@ jobs:
           python pipeline-scripts/marker_suite_report.py \
             backend=marker-report-backend.xml \
             slm=marker-report-slm.xml \
+            infra=marker-report-infra.xml \
             --min-collected 1 \
-            --min-passed "$MARKER_MIN_PASSED"
+            --min-collected slm=0 \
+            --min-passed "$MARKER_MIN_PASSED" \
+            --min-passed slm=0
 
       - name: Upload marker reports
         if: ${{ !cancelled() }}

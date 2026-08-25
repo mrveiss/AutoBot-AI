@@ -17,9 +17,15 @@ So this script asserts PRESENCE rather than absence of failure:
 * Every report file it is told to expect must exist. A missing file is a hard
   failure, never "nothing to check" — a pytest that died before writing its XML
   is precisely the case that must not read as clean.
-* The aggregate collected count must clear ``--min-collected`` (at least 1).
-* The passed count must clear ``--min-passed``, so a collapse from today's
-  baseline is caught rather than merely being visible in a log nobody opens.
+* Each invocation's collected count must clear ``--min-collected`` — judged per
+  invocation, never on the sum. A union floor is satisfied by whichever
+  invocation still works, so a selection that silently stopped matching anything
+  stays invisible for as long as its sibling keeps collecting. That is the exact
+  shape that left an earlier sweep in this repository blind to ~44% of the tests
+  it claimed to cover, and it is why ``--min-collected slm=0`` has to be written
+  down rather than absorbed by the backend count.
+* Each invocation's passed count must clear ``--min-passed``, so a collapse from
+  today's baseline is caught rather than merely being visible in a log nobody opens.
 
 It intentionally does NOT decide whether the run passed — pytest's own exit
 status still governs that. This adds the one verdict pytest cannot give: "the
@@ -118,29 +124,48 @@ def parse_report(path: Path) -> Counts:
     return total
 
 
-def render(per_report: dict[str, Counts], total: Counts, marker_expression: str) -> str:
+def _floor_cell(floors: "Floors", name: str) -> str:
+    """The floor this invocation is judged against, marked when declared for it."""
+    floor = floors.for_report(name)
+    return f"{floor} (declared)" if floors.is_explicit(name) else str(floor)
+
+
+def render(
+    per_report: dict[str, Counts],
+    total: Counts,
+    marker_expression: str,
+    min_collected: "Floors",
+    min_passed: "Floors",
+) -> str:
     """Build the markdown block shown on the run page and in the log."""
     lines = [
         "## Marker-excluded suite coverage",
         "",
         f"Selection: `{marker_expression}`",
         "",
-        "| Invocation | Collected | Executed | Passed | Failed | Errors | Skipped |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Invocation | Collected | Executed | Passed | Failed | Errors | Skipped | Collected floor | Passed floor |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for name, counts in per_report.items():
         lines.append(
             f"| {name} | {counts.collected} | {counts.executed} | {counts.passed} "
-            f"| {counts.failures} | {counts.errors} | {counts.skipped} |"
+            f"| {counts.failures} | {counts.errors} | {counts.skipped} "
+            f"| {_floor_cell(min_collected, name)} | {_floor_cell(min_passed, name)} |"
         )
     lines.append(
         f"| **total** | **{total.collected}** | **{total.executed}** | **{total.passed}** "
-        f"| **{total.failures}** | **{total.errors}** | **{total.skipped}** |"
+        f"| **{total.failures}** | **{total.errors}** | **{total.skipped}** | | |"
     )
     lines.append("")
     lines.append(
         "A skip here means the test was not exercised — usually an absent live service. "
         "It is a real outcome, not a pass: read the count."
+    )
+    lines.append("")
+    lines.append(
+        "Floors are judged per invocation, never on the total: a union floor is satisfied "
+        "by whichever invocation still works, which is how a sweep stays blind to a sibling "
+        "that has silently stopped matching anything."
     )
     return "\n".join(lines)
 
@@ -155,23 +180,70 @@ def _emit_summary(text: str) -> None:
         handle.write(text + "\n")
 
 
-def check(per_report: dict[str, Counts], min_collected: int, min_passed: int) -> list[str]:
-    """Return every floor violation. An empty list means the floors held."""
-    total = Counts()
-    for counts in per_report.values():
-        total = total + counts
+class Floors:
+    """Per-invocation floors, with a default for invocations not named."""
 
+    def __init__(self, default: int, overrides: dict[str, int]):
+        self.default = default
+        self.overrides = overrides
+
+    def for_report(self, name: str) -> int:
+        return self.overrides.get(name, self.default)
+
+    def is_explicit(self, name: str) -> bool:
+        return name in self.overrides
+
+
+def parse_floor(values: list[str], option: str) -> Floors:
+    """Read repeated ``N`` / ``NAME=N`` values into a :class:`Floors`.
+
+    A bare ``N`` is the floor applied to EVERY invocation separately — never to
+    their sum. ``NAME=N`` overrides one invocation, and is the ONLY way to
+    declare a floor of 0, so "this one legitimately collects nothing" has to be
+    written down rather than absorbed by a sibling's count.
+    """
+    default: int | None = None
+    overrides: dict[str, int] = {}
+    for value in values:
+        name, _, raw = value.partition("=")
+        if not raw:
+            default = int(name)
+        else:
+            overrides[name] = int(raw)
+    if default is None:
+        raise ReportError(f"{option} needs a bare default in addition to any NAME=N override")
+    if default < 1:
+        raise ReportError(f"{option} default must be at least 1: a floor of 0 is not a presence assertion")
+    for name, floor in overrides.items():
+        if floor < 0:
+            raise ReportError(f"{option} {name}={floor} is negative")
+    return Floors(default, overrides)
+
+
+def check(per_report: dict[str, Counts], min_collected: Floors, min_passed: Floors) -> list[str]:
+    """Return every floor violation, judged PER INVOCATION.
+
+    Deliberately not judged on the sum. A union floor is satisfied by whichever
+    invocation still works, so an invocation whose selection silently stopped
+    matching anything is invisible for exactly as long as its sibling keeps
+    collecting — the shape that made a sweep in this repository blind to ~44% of
+    the tests it claimed to cover. Each invocation clears its own floor or the
+    run goes red naming that invocation.
+    """
     problems: list[str] = []
-    if total.collected < min_collected:
-        problems.append(
-            f"the marker selection collected {total.collected} test(s), below the floor of {min_collected}. "
-            f"The suite is selecting nothing — that is a broken selection, not a clean run."
-        )
-    if total.passed < min_passed:
-        problems.append(
-            f"{total.passed} test(s) passed, below the floor of {min_passed}. "
-            f"Marker-carrying tests that used to run no longer do; find out which before lowering this floor."
-        )
+    for name, counts in sorted(per_report.items()):
+        floor = min_collected.for_report(name)
+        if counts.collected < floor:
+            problems.append(
+                f"{name}: collected {counts.collected} test(s), below its floor of {floor}. "
+                f"That invocation is selecting nothing — a broken selection, not a clean run."
+            )
+        floor = min_passed.for_report(name)
+        if counts.passed < floor:
+            problems.append(
+                f"{name}: {counts.passed} test(s) passed, below its floor of {floor}. "
+                f"Marker-carrying tests that used to run no longer do; find out which before lowering this floor."
+            )
     return problems
 
 
@@ -180,21 +252,30 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("reports", nargs="+", help="JUnit XML files, as NAME=PATH or PATH")
     parser.add_argument(
         "--min-collected",
-        type=int,
-        default=1,
-        help="fail when fewer than this many tests were collected in total (default: 1)",
+        action="append",
+        default=[],
+        metavar="N|NAME=N",
+        help=(
+            "floor on tests collected, applied to EACH invocation separately. A bare N is "
+            "the default for every invocation; NAME=N overrides one and is the only way to "
+            "declare a floor of 0. Default: 1"
+        ),
     )
     parser.add_argument(
         "--min-passed",
-        type=int,
-        default=1,
-        help="fail when fewer than this many tests passed in total (default: 1)",
+        action="append",
+        default=[],
+        metavar="N|NAME=N",
+        help="floor on tests passed, applied to EACH invocation separately. Same syntax. Default: 1",
     )
     parser.add_argument("--marker-expression", default=os.environ.get("MARKER_EXPRESSION", "(unset)"))
     args = parser.parse_args(argv)
 
-    if args.min_collected < 1:
-        parser.error("--min-collected must be at least 1: a floor of 0 is not a presence assertion")
+    try:
+        min_collected = parse_floor(args.min_collected or ["1"], "--min-collected")
+        min_passed = parse_floor(args.min_passed or ["1"], "--min-passed")
+    except (ReportError, ValueError) as exc:
+        parser.error(str(exc))
 
     per_report: dict[str, Counts] = {}
     for entry in args.reports:
@@ -211,9 +292,19 @@ def main(argv: list[str] | None = None) -> int:
     for counts in per_report.values():
         total = total + counts
 
-    _emit_summary(render(per_report, total, args.marker_expression))
+    _emit_summary(render(per_report, total, args.marker_expression, min_collected, min_passed))
 
-    problems = check(per_report, args.min_collected, args.min_passed)
+    declared = set(min_collected.overrides) | set(min_passed.overrides)
+    unknown = sorted(declared - set(per_report))
+    if unknown:
+        print(  # noqa: print
+            f"::error::marker-suite report: floor declared for unknown invocation(s) {unknown}; "
+            "a floor that names nothing is a floor that checks nothing",
+            file=sys.stderr,
+        )
+        return 1
+
+    problems = check(per_report, min_collected, min_passed)
     for problem in problems:
         print(f"::error::marker-suite report: {problem}", file=sys.stderr)  # noqa: print
     return 1 if problems else 0

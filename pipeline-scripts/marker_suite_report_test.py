@@ -70,6 +70,7 @@ ReportError = _report.ReportError
 check = _report.check
 main = _report.main
 parse_report = _report.parse_report
+parse_floor = _report.parse_floor
 
 
 def write_report(path: Path, tests: int, failures: int = 0, errors: int = 0, skipped: int = 0) -> Path:
@@ -147,29 +148,73 @@ class TestParseReport:
 
 
 class TestFloors:
+    """Floors are judged per invocation. The union form is the bug this class pins."""
+
+    def _floors(self, *values):
+        return parse_floor(list(values) or ["1"], "--min-collected")
+
     def test_zero_collected_is_a_violation(self):
-        problems = check({"backend": Counts(collected=0)}, min_collected=1, min_passed=1)
+        problems = check({"backend": Counts(collected=0)}, self._floors("1"), self._floors("1"))
         assert problems, "collecting nothing must never read as a clean run"
         assert "selecting nothing" in problems[0]
 
     def test_a_healthy_run_reports_no_violation(self):
-        problems = check({"backend": Counts(collected=85, skipped=49)}, min_collected=1, min_passed=1)
+        problems = check(
+            {"backend": Counts(collected=85, skipped=49)}, self._floors("1"), self._floors("1")
+        )
         assert problems == []
 
     def test_a_run_that_only_skips_violates_the_passed_floor(self):
         """All-skipped is the failure mode a naive 'no failures' check would miss."""
-        problems = check({"backend": Counts(collected=85, skipped=85)}, min_collected=1, min_passed=1)
+        problems = check(
+            {"backend": Counts(collected=85, skipped=85)}, self._floors("1"), self._floors("1")
+        )
 
         assert problems
         assert "passed" in problems[0]
 
-    def test_the_floors_are_summed_across_invocations(self):
+    def test_a_collapsed_invocation_is_not_covered_by_its_sibling(self):
+        """The trap: a union floor is satisfied by whichever invocation still works.
+
+        `backend` collecting nothing while `slm` collects four is precisely the
+        shape that left an earlier sweep here blind to ~44% of its population.
+        Judged per invocation, `backend` must be named in the failure.
+        """
         problems = check(
             {"backend": Counts(collected=0), "slm": Counts(collected=4, skipped=3)},
-            min_collected=1,
-            min_passed=1,
+            self._floors("1"),
+            self._floors("1"),
         )
-        assert problems == [], "a legitimately empty second invocation must not fail the run on its own"
+
+        assert [p for p in problems if p.startswith("backend:")], problems
+
+    def test_an_invocation_that_legitimately_collects_nothing_must_declare_it(self):
+        """A floor of 0 is reachable only by naming the invocation, never by default."""
+        floors = self._floors("1", "slm=0")
+
+        assert floors.for_report("slm") == 0
+        assert floors.is_explicit("slm")
+        assert floors.for_report("backend") == 1
+        assert check(
+            {"backend": Counts(collected=4, skipped=3), "slm": Counts(collected=0)},
+            floors,
+            self._floors("1", "slm=0"),
+        ) == []
+
+    def test_each_invocation_is_judged_against_its_own_override(self):
+        floors = self._floors("1", "backend=83")
+        problems = check({"backend": Counts(collected=40)}, floors, self._floors("1"))
+
+        assert problems and "below its floor of 83" in problems[0]
+
+    def test_a_bare_default_below_one_is_rejected(self):
+        with pytest.raises(ReportError):
+            parse_floor(["0"], "--min-collected")
+
+    def test_a_floor_with_no_bare_default_is_rejected(self):
+        """An override-only spec leaves every unnamed invocation unchecked."""
+        with pytest.raises(ReportError):
+            parse_floor(["slm=0"], "--min-collected")
 
 
 class TestMain:
@@ -178,7 +223,23 @@ class TestMain:
         a = write_report(tmp_path / "a.xml", tests=85, skipped=49)
         b = write_report(tmp_path / "b.xml", tests=0)
 
-        assert main([f"backend={a}", f"slm={b}", "--min-collected", "1", "--min-passed", "1"]) == 0
+        assert (
+            main(
+                [
+                    f"backend={a}",
+                    f"slm={b}",
+                    "--min-collected",
+                    "1",
+                    "--min-collected",
+                    "slm=0",
+                    "--min-passed",
+                    "1",
+                    "--min-passed",
+                    "slm=0",
+                ]
+            )
+            == 0
+        )
 
     def test_exit_one_when_nothing_was_collected(self, tmp_path, monkeypatch):
         monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
@@ -198,6 +259,25 @@ class TestMain:
         a = write_report(tmp_path / "a.xml", tests=85, skipped=60)
 
         assert main([f"backend={a}", "--min-passed", "35"]) == 1
+
+    def test_exit_one_when_one_invocation_collapses_and_the_other_does_not(
+        self, tmp_path, monkeypatch
+    ):
+        """End to end, through argv: the sibling's count must not rescue the run."""
+        monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+        collapsed = write_report(tmp_path / "collapsed.xml", tests=0)
+        healthy = write_report(tmp_path / "healthy.xml", tests=40, skipped=5)
+
+        assert main([f"backend={collapsed}", f"slm={healthy}"]) == 1
+
+    def test_exit_one_when_a_floor_names_an_invocation_that_does_not_exist(
+        self, tmp_path, monkeypatch
+    ):
+        """A floor pointing at nothing checks nothing — a renamed report must not disarm it."""
+        monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+        a = write_report(tmp_path / "a.xml", tests=40, skipped=5)
+
+        assert main([f"backend={a}", "--min-collected", "1", "--min-collected", "typo=7"]) == 1
 
     def test_a_zero_min_collected_is_rejected(self, tmp_path):
         """The presence assertion must not be disableable from the call site."""
