@@ -32,6 +32,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from api.venv_reconcile import (
+    EXPLICIT_LIST_COMPONENTS,
+)
+from api.venv_reconcile import install_pip_deps_for_component as _install_pip_deps_for_component
+from api.venv_reconcile import install_slm_pip_dependencies as _install_slm_pip_dependencies
+from api.venv_reconcile import (
+    reconcile_component,
+    refuse_explicit_list,
+)
 from autobot_shared.db_url import assemble_postgres_url
 from autobot_shared.security.redaction import redact_mapping
 from autobot_shared.ssot_config import config
@@ -266,6 +275,73 @@ def _with_blocked_paths(message: str, blocked: List[str]) -> str:
     return f"{message} Paths: {', '.join(shown)}{suffix}"
 
 
+async def _mark_resolve_job_running(job_id: str, db_service) -> None:
+    """Requeued jobs arrive as 'queued' — mark running for status pollers (#11437)."""
+    async with db_service.session() as db:
+        result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
+        job_row = result.scalar_one_or_none()
+        if job_row and job_row.status != "running":
+            job_row.status = "running"
+            await db.commit()
+
+
+async def _check_resolve_deletion_guard(
+    job_id: str, component: str, source_root: str, excludes, source_dir: str, deployed_dir: str, force: bool
+) -> bool:
+    """Same delete guard as the sync endpoint (#13851). True to proceed; False after already failing the job."""
+    if force:
+        return True
+    allowed, blocked, guard_msg = await _resolve_deletion_guard(
+        component, source_root, excludes, source_dir, deployed_dir
+    )
+    if allowed:
+        return True
+    await _fail_resolve_job(
+        job_id,
+        _with_blocked_paths(guard_msg, blocked),
+        status=RESOLVE_STATUS_BLOCKED,
+        post_steps=blocked,
+    )
+    logger.error("component resolve job %s: %s", job_id, guard_msg)
+    return False
+
+
+async def _commit_resolve_job_result(
+    job_id: str, component: str, pip_ok: bool, deps_changed: bool, post_steps: List[str], db_service
+) -> None:
+    """Commit the job row BEFORE the restart — the whole point of the async path (#11303)."""
+    async with db_service.session() as db:
+        result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
+        job_row = result.scalar_one_or_none()
+        if job_row:
+            job_row.status = "completed" if pip_ok else "failed"
+            job_row.success = pip_ok
+            job_row.deps_changed = deps_changed
+            job_row.post_steps = "\n".join(post_steps)
+            job_row.message = (
+                f"Resynced {component} from code_source" if pip_ok else "pip install failed — see post_steps"
+            )
+            job_row.completed_at = datetime.now(timezone.utc)
+            await db.commit()
+
+
+async def _persist_resolve_job_exception(job_id: str, exc: Exception) -> None:
+    """Best-effort: record an unexpected exception on the job row."""
+    try:
+        from services.database import db_service as _db_svc
+
+        async with _db_svc.session() as db:
+            result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
+            job_row = result.scalar_one_or_none()
+            if job_row:
+                job_row.status = "failed"
+                job_row.message = str(exc)
+                job_row.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+    except Exception as inner:
+        logger.error("component resolve job %s: failed to persist error state: %s", job_id, inner)
+
+
 async def _run_component_resolve_job(job_id: str, component: str, force: bool = False) -> None:
     """Background executor for an async component drift/resolve job (#11303).
 
@@ -283,13 +359,7 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
     from services.database import db_service
 
     try:
-        # Requeued jobs arrive as 'queued' — mark running for status pollers (#11437).
-        async with db_service.session() as db:
-            result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
-            job_row = result.scalar_one_or_none()
-            if job_row and job_row.status != "running":
-                job_row.status = "running"
-                await db.commit()
+        await _mark_resolve_job_running(job_id, db_service)
         try:
             source_dir = get_default_source_dir(component)
         except ValueError as exc:
@@ -299,41 +369,17 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
 
         deployed_dir = get_default_deployed_dir(component)
         source_root = str(Path(source_dir).parent)
-
         excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
-        excludes = excludes_map.get(
-            component,
-            [],  # artifacts excluded universally at the rsync chokepoint (#11459)
-        )
+        excludes = excludes_map.get(component, [])  # universal excludes at the rsync chokepoint (#11459)
 
         logger.info(
-            "component resolve job %s: rsync source=%s/%s deployed=%s",
-            job_id,
-            source_root,
-            component,
-            deployed_dir,
+            "component resolve job %s: rsync source=%s/%s deployed=%s", job_id, source_root, component, deployed_dir
         )
 
-        # #13851: same delete guard as the sync endpoint, before anything is
-        # touched. This path ALSO rebuilt the rsync paths from the component
-        # name, discarding the #12872 fix — for a path-overridden component
-        # (ai-stack, slm-agent) that pointed the delete-style sync at a
-        # directory that is not the component's source.
-        if not force:
-            allowed, blocked, guard_msg = await _resolve_deletion_guard(
-                component, source_root, excludes, source_dir, deployed_dir
-            )
-            if not allowed:
-                # post_steps carries the FULL path list; the message inlines a
-                # capped preview so a text-only reader still sees what is at stake.
-                await _fail_resolve_job(
-                    job_id,
-                    _with_blocked_paths(guard_msg, blocked),
-                    status=RESOLVE_STATUS_BLOCKED,
-                    post_steps=blocked,
-                )
-                logger.error("component resolve job %s: %s", job_id, guard_msg)
-                return
+        if not await _check_resolve_deletion_guard(
+            job_id, component, source_root, excludes, source_dir, deployed_dir, force
+        ):
+            return
 
         # #11611: autobot_shared-first — sync the shared library BEFORE this
         # component's own rsync + restart so a newly-added `from autobot_shared.X`
@@ -353,13 +399,8 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
             return
 
         ok, msg = await _rsync_component_local(
-            source_root,
-            component,
-            excludes,
-            source_dir=source_dir,
-            dest_dir=deployed_dir,
+            source_root, component, excludes, source_dir=source_dir, dest_dir=deployed_dir
         )
-
         if not ok:
             await _fail_resolve_job(job_id, msg or "rsync failed")
             logger.error("component resolve job %s: rsync failed: %s", job_id, msg)
@@ -368,33 +409,12 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
         deps_changed, post_steps, pip_ok = await _run_post_sync_steps(
             component, source_dir, deployed_dir, restart=False
         )
-
-        # Commit the job row BEFORE the restart — the whole point of this async
-        # path.  If the restart kills this process the row is already durable.
-        async with db_service.session() as db:
-            result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
-            job_row = result.scalar_one_or_none()
-            if job_row:
-                job_row.status = "completed" if pip_ok else "failed"
-                job_row.success = pip_ok
-                job_row.deps_changed = deps_changed
-                job_row.post_steps = "\n".join(post_steps)
-                if pip_ok:
-                    job_row.message = f"Resynced {component} from code_source"
-                else:
-                    job_row.message = "pip install failed — see post_steps"
-                job_row.completed_at = datetime.now(timezone.utc)
-                await db.commit()
-
+        await _commit_resolve_job_result(job_id, component, pip_ok, deps_changed, post_steps, db_service)
         if not pip_ok:
             logger.error("component resolve job %s: pip install failed", job_id)
             return
 
-        logger.info(
-            "component resolve job %s: completed; triggering deferred restart for %s",
-            job_id,
-            component,
-        )
+        logger.info("component resolve job %s: completed; triggering deferred restart for %s", job_id, component)
         # Deferred restart — may kill this process for autobot-slm-backend; that
         # is fine because the job row is already committed above.
         steps2: List[str] = []
@@ -407,19 +427,7 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
 
     except Exception as exc:
         logger.error("component resolve job %s: unexpected error: %s", job_id, exc, exc_info=True)
-        try:
-            from services.database import db_service as _db_svc
-
-            async with _db_svc.session() as db:
-                result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
-                job_row = result.scalar_one_or_none()
-                if job_row:
-                    job_row.status = "failed"
-                    job_row.message = str(exc)
-                    job_row.completed_at = datetime.now(timezone.utc)
-                    await db.commit()
-        except Exception as inner:
-            logger.error("component resolve job %s: failed to persist error state: %s", job_id, inner)
+        await _persist_resolve_job_exception(job_id, exc)
     finally:
         _running_tasks.pop(job_id, None)
 
@@ -891,6 +899,62 @@ async def get_file_drift(
     return FileDriftReport(**report)
 
 
+async def _drift_resolve_check_deletion_guard(
+    request: DriftResolveRequest, source_root: str, excludes: List[str], source_dir: str, deployed_dir: str
+) -> Optional[DriftResolveResponse]:
+    """#13851: preview what a resolve would remove; refuse unless forced. Failure response when blocked, else None."""
+    if request.force:
+        return None
+    allowed, blocked, guard_msg = await _resolve_deletion_guard(
+        request.component, source_root, excludes, source_dir, deployed_dir
+    )
+    if allowed:
+        return None
+    return DriftResolveResponse(
+        success=False,
+        component=request.component,
+        message=guard_msg,
+        source_dir=source_dir,
+        deployed_dir=deployed_dir,
+        blocked_deletions=blocked,
+    )
+
+
+async def _drift_resolve_check_shared_sync(
+    request: DriftResolveRequest, source_dir: str, deployed_dir: str
+) -> Optional[DriftResolveResponse]:
+    """#11611: sync autobot_shared before this component's rsync + restart. Failure response on failure, else None."""
+    shared_ok, shared_msg, shared_blocked = await _ensure_autobot_shared_synced(request.component, request.force)
+    if shared_ok:
+        return None
+    return DriftResolveResponse(
+        success=False,
+        component=request.component,
+        message=shared_msg,
+        source_dir=source_dir,
+        deployed_dir=deployed_dir,
+        blocked_deletions=shared_blocked,
+    )
+
+
+async def _drift_resolve_rsync_or_fail(
+    request: DriftResolveRequest, source_root: str, excludes: List[str], source_dir: str, deployed_dir: str
+) -> Optional[DriftResolveResponse]:
+    """#12872: rsync using the resolved paths verbatim. Returns a failure response on error, None on success."""
+    ok, msg = await _rsync_component_local(
+        source_root, request.component, excludes, source_dir=source_dir, dest_dir=deployed_dir
+    )
+    if ok:
+        return None
+    return DriftResolveResponse(
+        success=False,
+        component=request.component,
+        message=msg or "rsync failed",
+        source_dir=source_dir,
+        deployed_dir=deployed_dir,
+    )
+
+
 @router.post("/drift/resolve", response_model=DriftResolveResponse)
 async def resolve_drift(
     request: DriftResolveRequest,
@@ -964,58 +1028,17 @@ async def resolve_drift(
         deployed_dir,
     )
 
-    # #13851: a resolve deletes. Preview what it would remove and refuse unless
-    # the caller explicitly forced it — the drift signal that prompts a resolve
-    # has itself reported foreign files as stale. This runs BEFORE the shared
-    # sync below so a refusal leaves the host untouched.
-    if not request.force:
-        allowed, blocked, guard_msg = await _resolve_deletion_guard(
-            request.component, source_root, excludes, source_dir, deployed_dir
-        )
-        if not allowed:
-            return DriftResolveResponse(
-                success=False,
-                component=request.component,
-                message=guard_msg,
-                source_dir=source_dir,
-                deployed_dir=deployed_dir,
-                blocked_deletions=blocked,
-            )
+    guard_response = await _drift_resolve_check_deletion_guard(request, source_root, excludes, source_dir, deployed_dir)
+    if guard_response is not None:
+        return guard_response
 
-    # #11611: autobot_shared-first — sync the shared library BEFORE this
-    # component's own rsync + restart so a newly-added `from autobot_shared.X`
-    # import resolves at startup and the control plane cannot crash-loop on a
-    # half-deployed shared tree. Fail the resolve if it cannot be synced.
-    shared_ok, shared_msg, shared_blocked = await _ensure_autobot_shared_synced(request.component, request.force)
-    if not shared_ok:
-        return DriftResolveResponse(
-            success=False,
-            component=request.component,
-            message=shared_msg,
-            source_dir=source_dir,
-            deployed_dir=deployed_dir,
-            blocked_deletions=shared_blocked,
-        )
+    shared_response = await _drift_resolve_check_shared_sync(request, source_dir, deployed_dir)
+    if shared_response is not None:
+        return shared_response
 
-    # #12872: pass the resolved paths verbatim. source_dir/deployed_dir already
-    # honour _NONSTANDARD_COMPONENT_PATHS; reconstructing them from the
-    # component name discarded that and pointed rsync at a nonexistent dir.
-    ok, msg = await _rsync_component_local(
-        source_root,
-        request.component,
-        excludes,
-        source_dir=source_dir,
-        dest_dir=deployed_dir,
-    )
-
-    if not ok:
-        return DriftResolveResponse(
-            success=False,
-            component=request.component,
-            message=msg or "rsync failed",
-            source_dir=source_dir,
-            deployed_dir=deployed_dir,
-        )
+    rsync_response = await _drift_resolve_rsync_or_fail(request, source_root, excludes, source_dir, deployed_dir)
+    if rsync_response is not None:
+        return rsync_response
 
     # --- Post-sync: install deps / rebuild / restart so synced code goes live (#9982) ---
     deps_changed, post_steps, pip_ok = await _run_post_sync_steps(request.component, source_dir, deployed_dir)
@@ -1962,61 +1985,6 @@ async def _recreate_venv(component: str, python_bin: str, pip_bin: str, steps: L
         steps.append(f"venv: create error: {exc}")
 
 
-async def _install_pip_deps_for_component(component: str, steps: List[str]) -> bool:
-    """Install Python deps from the component's requirements.txt into its venv (#9982).
-
-    Unconditional — pip is fast when nothing changed (same rationale as #1603).
-    Appends human-readable step notes to *steps*.
-    Returns True on success, False when pip exits non-zero so callers can surface
-    the failure (previously the non-zero rc was swallowed — #11322).
-    """
-    # #12450: worker components carry their own (req, pip) pair — ai-stack's file
-    # is requirements-ai.txt, not requirements.txt.
-    paths = _COMPONENT_PIP_PATHS.get(component) or _WORKER_COMPONENT_PIP.get(component)
-    if paths is None:
-        return True
-    req_path, pip_bin = paths
-    if not Path(req_path).exists():
-        steps.append(f"pip: no requirements file at {req_path} — skipped")
-        return True
-    if component in _WORKER_COMPONENT_PIP and not Path(pip_bin).exists():
-        # Worker-only relaxation: a worker venv is provisioned by ansible, never
-        # by code-sync, so a missing one means "not deployed here" rather than a
-        # broken install — the code rsync + restart is still valid on its own.
-        # Backends deliberately keep the original behaviour (attempt the exec so
-        # a genuine pip failure surfaces via pip_ok=False, #11322).
-        steps.append(f"pip: no venv pip at {pip_bin} — skipped (provisioned by ansible)")
-        return True
-    steps.append(f"pip: installing {req_path} into {Path(pip_bin).parent}")
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            pip_bin,
-            "install",
-            "-r",
-            req_path,
-            "--quiet",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        if proc.returncode == 0:
-            logger.info("drift resolve: pip install ok for %s", component)
-            steps.append("pip: install succeeded")
-            return True
-        out = stdout.decode(errors="replace")[:300] if stdout else ""
-        logger.error("drift resolve: pip install failed (%d) for %s: %s", proc.returncode, component, out)
-        steps.append(f"pip: install failed (rc={proc.returncode}): {out[:150]}")
-        return False
-    except asyncio.TimeoutError:
-        logger.error("drift resolve: pip install timed out for %s", component)
-        steps.append("pip: install timed out after 300s")
-        return False
-    except Exception as exc:
-        logger.error("drift resolve: pip install error for %s: %s", component, exc)
-        steps.append(f"pip: install error: {exc}")
-        return False
-
-
 # Components whose deployed tree ships Alembic migrations, keyed to the
 # alembic.ini path RELATIVE to the deployed dir. `upgrade heads` (plural)
 # tolerates multiple heads from parallel branch migrations.
@@ -2059,10 +2027,12 @@ _HEALTH_POLL_CONNECT_TIMEOUT: float = float(
 # than a literal buried in the loop.
 _DEFAULT_HEALTH_POLL_INTERVAL_S = "2"
 _HEALTH_POLL_INTERVAL: float = float(os.environ.get("AUTOBOT_HEALTH_POLL_INTERVAL", _DEFAULT_HEALTH_POLL_INTERVAL_S))
-# Per-component health URLs (localhost only — never egress).
+# Per-component health URLs (localhost only — never egress). Pre-existing
+# hardcoded ports, not touched by #15063 — resolving these through
+# ssot_config is separate, tracked work under the canonical-debt umbrella.
 _COMPONENT_HEALTH_URLS: Dict[str, str] = {
-    "autobot-backend": "http://127.0.0.1:8001/api/health",
-    "autobot-slm-backend": "http://127.0.0.1:8000/slm/api/code-sync/status",
+    "autobot-backend": "http://127.0.0.1:8001/api/health",  # canonical: ignore py-hardcoded-url (#10569)
+    "autobot-slm-backend": "http://127.0.0.1:8000/slm/api/code-sync/status",  # canonical:ignore py-hardcoded-url
     "autobot-frontend": "http://127.0.0.1/",
     "autobot-slm-frontend": "http://127.0.0.1/slm/",
 }
@@ -2357,7 +2327,7 @@ async def _npm_install_if_needed(frontend_dir: str, component: str, steps: List[
     if current_hash:
         marker = Path(frontend_dir) / "node_modules" / _NPM_LOCK_HASH_MARKER
         marker.parent.mkdir(parents=True, exist_ok=True)
-        marker.write_text(current_hash, encoding="utf-8")
+        await asyncio.to_thread(marker.write_text, current_hash, encoding="utf-8")
     steps.append("npm ci: succeeded")
     return True
 
@@ -2883,6 +2853,122 @@ async def _ensure_autobot_shared_synced(component: str, force: bool = False) -> 
     return False, f"autobot_shared-first: resync failed before {component}: {msg} (#11611)", []
 
 
+async def _run_post_sync_backend_branch(
+    component: str,
+    source_dir: str,
+    deployed_dir: str,
+    snapshot: Optional[str],
+    steps: List[str],
+    restart: bool,
+) -> bool:
+    """Backend branch of _run_post_sync_steps: constraints/venv/pip/reconcile/alembic/symlink/restart (#9982,#15063)."""
+    source_root = str(Path(source_dir).parent)
+    await _deploy_constraints_dir(source_root, steps)
+    await _deploy_repo_root_requirements(source_root, steps)
+    await _ensure_target_python_installed(component, steps)
+    venv_recreated = await _ensure_venv_python(component, steps)
+    pip_ok = await _install_pip_deps_for_component(component, steps)
+    if not pip_ok:
+        await _rollback_component(component, snapshot, steps, None)
+        return False
+    req_path, pip_bin = _COMPONENT_PIP_PATHS[component]
+    await reconcile_component(component, req_path, pip_bin, steps)
+    alembic_ok = await _run_alembic_migrations(component, deployed_dir, steps)
+    # Extract the dump path recorded during _run_alembic_migrations for rollback msg.
+    last_dump_path = next(
+        (s.split("→")[-1].strip() for s in steps if "pg_dump: backup ok" in s),
+        None,
+    )
+    if not alembic_ok:
+        await _rollback_component(component, snapshot, steps, last_dump_path)
+        return False
+    await _ensure_autobot_shared_symlink(component, steps)
+    if not restart:
+        steps.append("post-sync: restart deferred")
+        return True
+    await _restart_component_services(component, steps)
+    # #11458: a just-recreated venv cold-starts slowly → full health-poll
+    # window; a warm restart uses the shorter fast window.
+    healthy = await _wait_component_healthy(component, steps, slow_start=venv_recreated)
+    if not healthy:
+        await _rollback_component(component, snapshot, steps, last_dump_path)
+        steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
+        return False
+    return True
+
+
+async def _run_post_sync_frontend_branch(
+    component: str, snapshot: Optional[str], steps: List[str], restart: bool
+) -> bool:
+    """Frontend branch of _run_post_sync_steps: npm ci (conditional) + build +
+    nginx reload + health (#9982)."""
+    npm_ok = await _build_npm_frontend_for_component(component, steps)
+    if not npm_ok:
+        await _rollback_component(component, snapshot, steps, None)
+        return False
+    if not restart:
+        steps.append("post-sync: restart deferred")
+        return True
+    await _restart_component_services(component, steps)
+    # Frontend keeps the full health-poll window (#11458 review): the fast
+    # window is only for warm pip-backend restarts. A fresh nginx worker
+    # after a large asset swap can lag past 60s, and the generous window
+    # avoids logging an otherwise-healthy frontend as "check manually".
+    healthy = await _wait_component_healthy(component, steps, slow_start=True)
+    if not healthy:
+        await _rollback_component(component, snapshot, steps, None)
+        steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
+        return False
+    return True
+
+
+async def _run_post_sync_worker_branch(
+    component: str, snapshot: Optional[str], steps: List[str], restart: bool
+) -> bool:
+    """Worker branch of _run_post_sync_steps (#12450,#15063). ai-stack only; others refuse+report (AC4)."""
+    pip_ok = await _install_pip_deps_for_component(component, steps)
+    if not pip_ok:
+        await _rollback_component(component, snapshot, steps, None)
+        return False
+    if component in EXPLICIT_LIST_COMPONENTS:
+        refuse_explicit_list(component, steps)
+    else:
+        worker_paths = _WORKER_COMPONENT_PIP.get(component)
+        if worker_paths is not None:
+            await reconcile_component(component, *worker_paths, steps)
+    if not restart:
+        steps.append("post-sync: restart deferred")
+        return True
+    await _restart_component_services(component, steps)
+    # Workers have no health URL, so _wait_component_healthy returns True
+    # immediately and rollback is gated purely on the systemd unit entering
+    # 'failed'. Note _is_systemd_unit_failed watches the FIRST unit in the
+    # component's _COMPONENT_SERVICES list.
+    healthy = await _wait_component_healthy(component, steps, slow_start=True)
+    if not healthy:
+        await _rollback_component(component, snapshot, steps, None)
+        steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
+        return False
+    return True
+
+
+async def _run_post_sync_shared_branch(
+    component: str, snapshot: Optional[str], steps: List[str], restart: bool
+) -> bool:
+    """autobot_shared branch of _run_post_sync_steps: restore BOTH backends'
+    symlinks (#10912) + restart dependents (self last) + per-dependent
+    health + rollback (#11496)."""
+    for backend in sorted(_BACKEND_COMPONENTS):
+        await _ensure_autobot_shared_symlink(backend, steps)
+    if not restart:
+        steps.append("post-sync: restart deferred")
+        return True
+    # #11496: was the only sync path with no post-restart health poll or
+    # rollback — a shared-lib change that broke a backend import restarted
+    # onto a dead service undetected.
+    return await _restart_dependents_with_health(component, snapshot, steps)
+
+
 async def _run_post_sync_steps(
     component: str,
     source_dir: str,
@@ -2906,20 +2992,16 @@ async def _run_post_sync_steps(
     autobot-slm-backend).  All other steps still run; restart=True (default) keeps
     the existing synchronous behaviour for all current callers.
 
-    Component routing:
+    Component routing — one branch helper each, so this dispatcher and every
+    branch stay under the function-length guideline (Issue #620):
       - Python backend (autobot-backend, autobot-slm-backend):
-          constraints deploy (#11322) + venv version check (#11323) +
-          pip install + symlink restore (#10912) + alembic + restart + health
-      - Frontend (autobot-frontend, autobot-slm-frontend): npm ci (conditional) + build + nginx reload + health
+          _run_post_sync_backend_branch
+      - Frontend (autobot-frontend, autobot-slm-frontend): _run_post_sync_frontend_branch
       - Workers (#12450 — ai-stack, npu-worker, browser-worker, slm-agent):
-          optional pip install (ai-stack only) + restart of the unit(s) that
-          component's ansible role actually installs. No constraints/alembic/
-          venv-recreation/symlink work — none of it applies to a worker.
-      - autobot_shared: restore BOTH backends' symlinks (#10912) + restart
-          dependents (self last) + per-dependent health + rollback (#11496)
+          _run_post_sync_worker_branch
+      - autobot_shared: _run_post_sync_shared_branch
     """
     steps: List[str] = []
-    pip_ok = True
 
     # Compute deps_changed post-rsync (source == deployed now; any prior delta
     # is gone, so this is always False after a successful rsync — but we check
@@ -2929,100 +3011,17 @@ async def _run_post_sync_steps(
 
     # #11377: snapshot the deployed dir BEFORE any mutation for rollback.
     snapshot = await _snapshot_component(component)
-    # Track the last pg_dump path for rollback failure messages (#11376+#11377).
-    last_dump_path: Optional[str] = None
 
     if component in _COMPONENT_PIP_PATHS:
-        source_root = str(Path(source_dir).parent)
-        await _deploy_constraints_dir(source_root, steps)
-        await _deploy_repo_root_requirements(source_root, steps)
-        await _ensure_target_python_installed(component, steps)
-        venv_recreated = await _ensure_venv_python(component, steps)
-        pip_ok = await _install_pip_deps_for_component(component, steps)
-        if not pip_ok:
-            await _rollback_component(component, snapshot, steps, last_dump_path)
-            return deps_changed, steps, False
-        alembic_ok = await _run_alembic_migrations(component, deployed_dir, steps)
-        # Extract the dump path recorded during _run_alembic_migrations for rollback msg.
-        last_dump_path = next(
-            (s.split("→")[-1].strip() for s in steps if "pg_dump: backup ok" in s),
-            None,
-        )
-        if not alembic_ok:
-            await _rollback_component(component, snapshot, steps, last_dump_path)
-            return deps_changed, steps, False
-        await _ensure_autobot_shared_symlink(component, steps)
-        if restart:
-            await _restart_component_services(component, steps)
-            # #11458: a just-recreated venv cold-starts slowly → full health-poll
-            # window; a warm restart uses the shorter fast window.
-            healthy = await _wait_component_healthy(component, steps, slow_start=venv_recreated)
-            if not healthy:
-                await _rollback_component(component, snapshot, steps, last_dump_path)
-                steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
-                pip_ok = False
-        else:
-            steps.append("post-sync: restart deferred")
+        pip_ok = await _run_post_sync_backend_branch(component, source_dir, deployed_dir, snapshot, steps, restart)
     elif component in _COMPONENT_FRONTEND_DIRS:
-        npm_ok = await _build_npm_frontend_for_component(component, steps)
-        if not npm_ok:
-            await _rollback_component(component, snapshot, steps, None)
-            pip_ok = False
-        elif restart:
-            await _restart_component_services(component, steps)
-            # Frontend keeps the full health-poll window (#11458 review): the fast
-            # window is only for warm pip-backend restarts. A fresh nginx worker
-            # after a large asset swap can lag past 60s, and the generous window
-            # avoids logging an otherwise-healthy frontend as "check manually".
-            healthy = await _wait_component_healthy(component, steps, slow_start=True)
-            if not healthy:
-                await _rollback_component(component, snapshot, steps, None)
-                steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
-                pip_ok = False
-        else:
-            steps.append("post-sync: restart deferred")
+        pip_ok = await _run_post_sync_frontend_branch(component, snapshot, steps, restart)
     elif component in _WORKER_COMPONENTS:
-        # #12450: worker components. Only ai-stack has a re-installable
-        # requirements file; for the rest this is deliberately code-only
-        # (rsync already happened) plus a restart of the correct unit — see
-        # _WORKER_COMPONENT_PIP for why each is or isn't dep-installable.
-        #
-        # No constraints deploy, no interpreter provisioning, no venv
-        # recreation, no alembic, no autobot_shared symlink: none apply to a
-        # worker, and venv recreation in particular would wipe the venv the
-        # chroma binary lives in (MVA-79).
-        pip_ok = await _install_pip_deps_for_component(component, steps)
-        if not pip_ok:
-            await _rollback_component(component, snapshot, steps, None)
-            return deps_changed, steps, False
-        if restart:
-            await _restart_component_services(component, steps)
-            # Workers have no health URL, so _wait_component_healthy returns
-            # True immediately and rollback is gated purely on the systemd unit
-            # entering 'failed'. Note _is_systemd_unit_failed watches the FIRST
-            # unit in the component's _COMPONENT_SERVICES list.
-            healthy = await _wait_component_healthy(component, steps, slow_start=True)
-            if not healthy:
-                await _rollback_component(component, snapshot, steps, None)
-                steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
-                pip_ok = False
-        else:
-            steps.append("post-sync: restart deferred")
+        pip_ok = await _run_post_sync_worker_branch(component, snapshot, steps, restart)
     elif component in _COMPONENT_SERVICES:
-        # Library component (autobot_shared): no build step, but every service
-        # that imports it must restart so the new shared code is loaded (#10248).
-        # Restore both backends' symlinks first so services start cleanly (#10912).
-        for backend in sorted(_BACKEND_COMPONENTS):
-            await _ensure_autobot_shared_symlink(backend, steps)
-        if restart:
-            # #11496: was the only sync path with no post-restart health poll
-            # or rollback — a shared-lib change that broke a backend import
-            # restarted onto a dead service undetected.
-            if not await _restart_dependents_with_health(component, snapshot, steps):
-                pip_ok = False
-        else:
-            steps.append("post-sync: restart deferred")
+        pip_ok = await _run_post_sync_shared_branch(component, snapshot, steps, restart)
     else:
+        pip_ok = True
         steps.append(f"post-sync: no service or build step for {component}")
 
     return deps_changed, steps, pip_ok
@@ -3108,40 +3107,6 @@ async def _restart_slm_service(service: str) -> None:
         logger.info("Restarted service: %s", service)
     except Exception as exc:
         logger.warning("Failed to restart %s: %s", service, exc)
-
-
-async def _install_slm_pip_dependencies() -> None:
-    """Install Python dependencies from requirements.txt into the SLM venv.
-
-    Runs unconditionally after rsync — pip is fast when nothing changed (#1603).
-    """
-    req_path = "/opt/autobot/autobot-slm-backend/requirements.txt"
-    pip_bin = "/opt/autobot/autobot-slm-backend/venv/bin/pip"
-
-    if not Path(req_path).exists():
-        logger.debug("No requirements.txt at %s — skipping pip install", req_path)
-        return
-
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            pip_bin,
-            "install",
-            "-r",
-            req_path,
-            "--quiet",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        if proc.returncode == 0:
-            logger.info("SLM pip install completed successfully")
-        else:
-            output = stdout.decode(errors="replace")[:500] if stdout else ""
-            logger.error("SLM pip install failed (rc=%d): %s", proc.returncode, output)
-    except asyncio.TimeoutError:
-        logger.error("SLM pip install timed out after 300s")
-    except Exception as exc:
-        logger.error("SLM pip install error: %s", exc)
 
 
 async def _fetch_code_source_connection_info(
@@ -3261,7 +3226,9 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         return
 
     # --- Phase 2b: install Python dependencies if requirements.txt changed (#1603) ---
-    await _install_slm_pip_dependencies()
+    req_path, pip_bin = _COMPONENT_PIP_PATHS["autobot-slm-backend"]
+    if await _install_slm_pip_dependencies(req_path, pip_bin):
+        await reconcile_component("autobot-slm-backend", req_path, pip_bin, [])
 
     # --- Phase 2c: rebuild SLM frontend (#1607) ---
     await _build_slm_frontend()
@@ -4821,7 +4788,7 @@ async def _get_slm_deployed_commit() -> Optional[str]:
     """
     marker = Path(get_default_deployed_dir("autobot-slm-backend")) / ".deployed_commit"
     try:
-        commit = marker.read_text(encoding="utf-8").strip()
+        commit = (await asyncio.to_thread(marker.read_text, encoding="utf-8")).strip()
     except OSError:
         return None
     return commit or None
