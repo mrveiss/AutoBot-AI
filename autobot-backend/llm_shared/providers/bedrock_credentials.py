@@ -8,9 +8,16 @@ Split out of ``bedrock.py`` because that module reached its 600-line ceiling,
 and this is the one cohesive piece in it that owes nothing to provider state:
 the credential retrieval touches no ``self``, and the region pattern is data.
 
-``bedrock.py`` re-exports every name defined here, so
-``llm_shared.providers.bedrock.BEDROCK_VAULT_ENTRY_NAME`` and its siblings
-still resolve for existing importers and patch targets.
+These names live here and only here. ``bedrock.py`` imports the two it uses
+and deliberately re-exports nothing: an ``__all__`` whose only purpose is to
+satisfy F401 would be indirection existing to quiet a linter. Import the
+constants from this module, not through ``bedrock`` -- ``llm_shared.providers.
+bedrock.BEDROCK_VAULT_ENTRY_NAME`` raises ``AttributeError`` (#15081).
+
+The test patches ``get_secrets_service`` through
+``BedrockProvider._load_credentials_from_vault.__globals__``, which resolves to
+*this* module's globals -- where the call actually is -- so the patch target
+follows the function rather than a re-export.
 """
 
 from __future__ import annotations
