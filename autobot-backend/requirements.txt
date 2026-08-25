@@ -132,6 +132,13 @@ pypdfium2>=5.13.0
 # media/document/extraction.py guard-imports it and reports tables_attempted:
 # false when absent, so a missing wheel never fails an otherwise-readable PDF.
 pdfplumber>=0.11.10
+# Container runtime SDK for sandboxed code execution (#14872). Guard-imported by
+# secure_sandbox_executor, services/execution/docker_backend, services/execution/
+# container_pool and services/docker_task_workspace, every one of which degrades to
+# a NON-CONTAINERISED path when it is absent. Undeclared, that degradation was
+# indistinguishable from a working sandbox: the feature reads as configured and
+# simply never uses a container. Same shape as the pytesseract incident (#13885).
+docker>=7.1.0
 jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract
 defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
 # Optional (install separately for full media support):
