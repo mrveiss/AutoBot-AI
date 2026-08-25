@@ -37,7 +37,7 @@ reportlab>=5.0.1    # PDF export for transcripts
 
 # AI/ML
 openai>=2.54.0
-anthropic>=1.0.0
+anthropic>=1.0.0,<2.0.0              # Issue #15016: call sites fixed for the 1.x messages.create()/.stream() signature (temperature/top_p/top_k removed, routed via extra_body); capped so the next major requires a deliberate bump, not a silent break
 boto3>=1.43.78                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=7.36.0,<8.0.0           # capped <7.0: opentelemetry-proto (otel 1.42) requires protobuf<7.0; Dependabot's 7.35.1 is unsatisfiable. 6.33.6 = latest installable (#4061)

@@ -1,5 +1,11 @@
 # AI/ML frameworks — heavy native deps, numpy-sensitive
 openai==2.54.0
+# #15016: production dep (autobot-backend/requirements.txt). Was previously
+# absent from CI entirely, so tests/llm_interface_pkg/test_anthropic_provider.py
+# only ever exercised a mocked client that accepts any kwarg — never the real
+# SDK signature, which is exactly how the 1.x temperature/top_p/top_k removal
+# reached CI green. Pinned to the version the unpinned prod floor resolves to.
+anthropic==1.0.0
 tiktoken==0.14.0   # >=0.13 ships cp314 wheels (0.11 builds pyo3-ffi from source, caps at py3.13) — #9825
 transformers==5.15.1
 sentence-transformers==6.0.0
