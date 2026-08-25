@@ -17,6 +17,8 @@ from typing import Dict, List, Optional, Tuple
 import aiohttp
 import pytest
 
+from autobot_shared.paths import project_root
+
 
 @dataclass
 class ServiceResult:
@@ -699,9 +701,15 @@ def main():
 
         # Save results
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        results_file = (
-            f"${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results/distributed_system_test_{timestamp}.json"
-        )
+        # #14892: was a shell placeholder inside an f-string, which is worse than
+        # the plain-literal form this repository swept in #14517 -- the f-string
+        # parses `{AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}` as a
+        # replacement field naming an undefined variable, so this line raised
+        # NameError the moment the run reached it. The guard reported the file
+        # clean because it only walked `ast.Constant`.
+        results_dir = project_root() / "tests" / "results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        results_file = results_dir / f"distributed_system_test_{timestamp}.json"
 
         with open(results_file, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2)

@@ -181,8 +181,40 @@ def _docstring_constant_ids(tree: ast.AST) -> set[int]:
     return ids
 
 
+def _joinedstr_sites(tree: ast.AST) -> list[tuple[int, str]]:
+    """Every f-string in *tree* whose rendered source carries the placeholder (#14892).
+
+    An f-string never holds the placeholder in any single ``ast.Constant``:
+    ``f"${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/x"`` parses as
+    ``Constant("$")`` followed by a ``FormattedValue`` whose ``value`` is
+    ``Name("AUTOBOT_PROJECT_ROOT")`` and whose ``format_spec`` is
+    ``Constant("-/opt/autobot/code_source")``. The text ``${AUTOBOT_PROJECT_ROOT``
+    exists only once the pieces are put back together, so the Constant sweep
+    below walked straight past it and reported the file clean.
+
+    That is not a theoretical gap. The module docstring asserts pyflakes F821
+    covers this form because the replacement field names an undefined variable —
+    but F821 only fires where pyflakes actually runs, and
+    ``autobot-infrastructure/shared/tests/`` is outside its scope, so
+    ``test_distributed_system_integration.py`` carried a live one while this
+    guard reported the file clean.
+
+    ``ast.unparse`` is what reassembles the pieces; nested ``format_spec``
+    JoinedStr nodes are reached by the same walk, so results are de-duplicated
+    by (line, text) via the caller's ``set``.
+    """
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.JoinedStr):
+            continue
+        rendered = ast.unparse(node)
+        if PLACEHOLDER in rendered:
+            found.append((node.lineno, rendered.strip().splitlines()[0][:100]))
+    return found
+
+
 def placeholder_sites(path: pathlib.Path) -> list[tuple[int, str]]:
-    """Every non-docstring string constant in *path* holding the placeholder.
+    """Every non-docstring string constant or f-string in *path* holding the placeholder.
 
     Raises:
         SyntaxError: the file does not parse. Deliberately propagated: a sweep
@@ -190,13 +222,14 @@ def placeholder_sites(path: pathlib.Path) -> list[tuple[int, str]]:
     """
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     docstrings = _docstring_constant_ids(tree)
-    found = []
+    found = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
             continue
         if PLACEHOLDER not in node.value or id(node) in docstrings:
             continue
-        found.append((node.lineno, node.value.strip().splitlines()[0][:100]))
+        found.add((node.lineno, node.value.strip().splitlines()[0][:100]))
+    found.update(_joinedstr_sites(tree))
     return sorted(found)
 
 
