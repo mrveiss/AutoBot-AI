@@ -62,6 +62,14 @@ from autobot_shared.secret_redaction import RedactedReprMixin
 # isolation twice (#4945, #13092) and both times failed to propagate.
 PROJECT_ROOT = project_root()
 
+
+def default_audit_log_file() -> str:
+    """The ONE definition of the audit-log default (#14070): was ALSO spelled out
+    as ``security_layer._AUDIT_LOG_FILE_DEFAULT``, kept in step by an equality
+    test -- agreement today, not derivation. A function, so it stays lazy."""
+    return str(project_root() / "logs" / "audit.log")
+
+
 # Default model constants - single source of truth for fallback values (#2553)
 # These are used when .env doesn't specify a value.
 # All agent/tier model assignments MUST reference these constants — never hardcode
@@ -1487,18 +1495,8 @@ class MiscConfig(RedactedSettings):
     api_key: str = Field(default="", alias="API_KEY")
     # #11681: restore pre-#7437 default (1000) — 0 silently disabled the AST cache
     ast_cache_max_size: int = Field(default=1000, alias="AST_CACHE_MAX_SIZE")
-    # #14050: lazily resolved via project_root() rather than a hardcoded
-    # literal. security_layer.py's own module-level fallback (#13149) is
-    # only ever reached when this field is falsy, so a frozen "/opt/autobot"
-    # default here silently overrode that fix — a checkout without
-    # AUTOBOT_AUDIT_LOG_FILE set would still write into the live install.
-    # A real deployment always sets AUTOBOT_AUDIT_LOG_FILE explicitly (see
-    # ansible/roles/backend/templates/backend.env.j2), so only the unset
-    # case changes here.
-    audit_log_file: str = Field(
-        default_factory=lambda: str(project_root() / "logs" / "audit.log"),
-        alias="AUTOBOT_AUDIT_LOG_FILE",
-    )
+    # #14050 lazy, not a live-install literal frozen at import; #14070 via the module global.
+    audit_log_file: str = Field(default_factory=lambda: default_audit_log_file(), alias="AUTOBOT_AUDIT_LOG_FILE")
     # #11834: restore pre-#7437 autoresearch defaults — ""/0 defaults made
     # AutoResearchConfig() crash on int("")/float("") and silently zeroed
     # timeouts/thresholds (same class as #11681).
