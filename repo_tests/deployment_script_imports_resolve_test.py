@@ -46,6 +46,12 @@ things changed with it:
   no longer stand in for "the detector works". The floor is now a positive
   control driven against synthetic samples of both block shapes, plus a negative
   control asserting that an honest ``unavailable`` fallback is NOT flagged.
+
+#14518 split the third layer out. This module now carries the import layer and
+the call layer; the reporting layer lives in
+``deployment_script_reporting_test``, and the block extractor both read the
+scripts through is ``deployment_script_scan``. Nothing was dropped in the move,
+and the extractor grew two shapes it had been blind to — see that module.
 """
 
 from __future__ import annotations
@@ -56,9 +62,12 @@ import sys
 from pathlib import Path
 
 import pytest
-
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-_SCRIPT_DIR = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts"
+from repo_tests.deployment_script_scan import PY_BLOCK_PATTERNS
+from repo_tests.deployment_script_scan import REPO_ROOT as _REPO_ROOT
+from repo_tests.deployment_script_scan import SCRIPT_DIR as _SCRIPT_DIR
+from repo_tests.deployment_script_scan import count_blocks as _count_blocks
+from repo_tests.deployment_script_scan import embedded_python as _embedded_python
+from repo_tests.deployment_script_scan import shell_scripts as _shell_scripts
 
 # The roots a deployment script puts on PYTHONPATH before running inline Python.
 _IMPORT_ROOTS = [_REPO_ROOT / "autobot-backend", _REPO_ROOT]
@@ -74,14 +83,19 @@ _IMPORT = re.compile(r"^\s*(?:from\s+([a-zA-Z_][\w.]*)\s+import\s+|import\s+([a-
 # Every entry is a live bug, not an accepted exception — the parametrized test
 # below asserts each is STILL broken, so a fix that leaves its entry behind
 # fails here rather than silently un-guarding that script.
-_KNOWN_BROKEN = {
-    # Seven siblings were retired by #14877, which repaired those imports.
-    # These two name a backup engine and an agent-orchestrator accessor that
-    # were never built — zero hits repo-wide — so the fix is a logic change,
-    # not an import rewrite.
-    ("restore_kb_backup.sh", "backup.engine"): "#14875",
-    ("setup/verify_installation.sh", "src.agents"): "#14875",
-}
+#
+# EMPTY. The seven siblings went with #14877; the last two went here: the KB
+# restore script now drives ``knowledge._composed``, the engine that
+# ``backup/scheduler.py`` and the maintenance UI already use, and
+# ``verify_installation.sh`` now imports ``agents.agent_orchestration`` plus
+# ``autobot_shared.ssot_config`` in place of a ``src.agents`` package that never
+# existed (#14875).
+#
+# An empty allowlist costs this dict its parametrized positive control — see
+# ``test_the_import_pattern_matches_both_spellings`` and
+# ``test_the_resolver_still_reports_a_missing_module`` below, which drive the
+# matcher and the resolver against synthetic samples instead.
+_KNOWN_BROKEN: dict[tuple[str, str], str] = {}
 
 # Third-party names an inline block may legitimately import. The stdlib half of
 # this set used to be hand-listed, which was survivable while only
@@ -103,7 +117,6 @@ _THIRD_PARTY_PREFIXES = {
     "click",
     "llama_index",
     "bcrypt",
-    "websockify",
 }
 _EXTERNAL_PREFIXES = _THIRD_PARTY_PREFIXES | set(sys.stdlib_module_names)
 
@@ -122,10 +135,6 @@ def _resolves(module: str, script_dir: Path | None = None) -> bool:
         if base.with_suffix(".py").exists() or (base / "__init__.py").exists():
             return True
     return False
-
-
-def _shell_scripts() -> list[Path]:
-    return sorted(p for p in _SCRIPT_DIR.rglob("*.sh"))
 
 
 def _imported_modules(script: Path) -> list[tuple[str, int, str]]:
@@ -241,6 +250,36 @@ def test_the_access_control_validator_can_reach_what_it_imports(module: str) -> 
     assert _resolves(module), f"{module} is unreachable from the roots validate_access_control.sh exports"
 
 
+@pytest.mark.parametrize(
+    "module",
+    ["backend.services.feature_flags", "src.agents", "backup.engine", "autobot_absent_pkg_14875"],
+)
+def test_the_resolver_still_reports_a_missing_module(module: str) -> None:
+    """Positive control for ``_resolves``, replacing the emptied ``_KNOWN_BROKEN``.
+
+    While that dict held live defects, "these two are still unresolvable" proved
+    the resolver worked. It is empty now, so a ``_resolves`` that started
+    answering True for everything would make the sweep above report clean over
+    a tree full of broken imports, and nothing here would say so.
+
+    The first three are the real historical offenders — the ``backend.*``
+    prefix that has never existed, the ``src.`` layout that is gone, and the
+    backup engine that was never built.
+    """
+    assert not _resolves(module, _SCRIPT_DIR), (
+        f"{module} now resolves — if a package by that name was genuinely added, "
+        "update this control; if not, the resolver has regressed and the sweep "
+        "above is reporting clean over real defects"
+    )
+
+
+@pytest.mark.parametrize("module", ["services.feature_flags", "autobot_shared.redis_client", "knowledge._composed"])
+def test_the_resolver_still_finds_a_real_module(module: str) -> None:
+    """Negative control: a resolver that answered False for everything would also
+    satisfy the control above while flooding the sweep with false findings."""
+    assert _resolves(module, _SCRIPT_DIR), f"{module} exists but the resolver no longer finds it"
+
+
 @pytest.mark.parametrize("entry,issue", sorted(_KNOWN_BROKEN.items()))
 def test_each_exemption_is_still_broken(entry: tuple[str, str], issue: str) -> None:
     """An exemption that no longer applies exempts nothing, silently."""
@@ -263,30 +302,13 @@ def test_each_exemption_is_still_broken(entry: tuple[str, str], issue: str) -> N
 # time is the same defect one step later.
 # --------------------------------------------------------------------------
 
-# Two real shapes, and the delimiter matters more than it looks. A naive
-# `python3 -c "(.*?)"` stops at the first quote *inside* the Python (these blocks
-# contain `database="main"`), and keying on what follows the closing quote —
-# `2>`, `>`, `||` — silently broke the moment output suppression was removed from
-# these very scripts, collapsing seven blocks into one unparseable blob that the
-# SyntaxError branch then skipped. The guard went green while checking nothing.
-#
-# A multi-line block therefore closes on a quote that is alone at the start of a
-# line, which is unambiguous regardless of what follows it.
-_PY_BLOCK_MULTILINE = re.compile(r'python3 -c "\n(.*?)\n"', re.S)
-# ...and a single-line block cannot contain a quote or a newline at all.
-_PY_BLOCK_INLINE = re.compile(r'python3 -c "([^"\n]+)"')
+# The two block shapes and the tree walk live in ``deployment_script_scan`` so
+# the reporting-layer guard reads the scripts through the same extractor.
 
 # The canonical accessor is `get_redis_client(async_client=False, database="main")`,
 # aliased to `get_redis_manager` in the scripts. Awaiting it without
 # `async_client=True` yields a sync client and raises TypeError.
 _ASYNC_REDIS_ACCESSORS = {"get_redis_manager", "get_redis_client"}
-
-
-def _embedded_python(script: Path) -> list[str]:
-    text = script.read_text(encoding="utf-8", errors="replace")
-    blocks = [m.group(1) for m in _PY_BLOCK_MULTILINE.finditer(text)]
-    blocks += [m.group(1) for m in _PY_BLOCK_INLINE.finditer(text)]
-    return blocks
 
 
 def _awaited_sync_redis_calls() -> tuple[list[str], int]:
@@ -361,7 +383,7 @@ _SHELL_SUBSTITUTION = ("`", "$(")
 def _shell_active_in_text(text: str) -> list[tuple[int, str]]:
     """(line, form) for each python block in ``text`` the shell would rewrite."""
     found: list[tuple[int, str]] = []
-    for pattern in (_PY_BLOCK_MULTILINE, _PY_BLOCK_INLINE):
+    for pattern in PY_BLOCK_PATTERNS:
         for match in pattern.finditer(text):
             for form in _SHELL_SUBSTITUTION:
                 if form in match.group(1):
@@ -432,139 +454,4 @@ def test_no_script_awaits_the_sync_redis_client() -> None:
         "these await the canonical Redis accessor without async_client=True, which "
         "returns a SYNC client and raises TypeError at call time — an import-layer "
         "guard cannot see this (#14866):\n  " + "\n  ".join(offenders)
-    )
-
-
-# --------------------------------------------------------------------------
-# The reporting layer (#14867, #14877). Resolving the import and letting the
-# error reach stderr are both necessary and still not sufficient: what a caller
-# downstream READS must also change when the check could not run. #14868 fixed
-# these imports and removed the `2>/dev/null`, but left `|| echo "{}"`, so the
-# monitor still answers a failed check with a value that reads as "no findings".
-# That is the specific thing #14866 cost: `0|0|0` violations reported *because*
-# the imports were broken.
-# --------------------------------------------------------------------------
-
-# A literal that impersonates a successful measurement. Deliberately not every
-# `|| echo` — a fallback that says "unavailable" is fine; one that says "0" or
-# "{}" is a fabricated clean result.
-_SENTINEL = re.compile(r'^(?:[0-9|.]+|UNKNOWN|N/?A|\{\}|\[\]|""|null)$', re.IGNORECASE)
-_FALLBACK_ECHO = re.compile(r'\|\|\s*(?:echo|printf)\s+(["\']?)([^"\'\n;]*)\1')
-
-# Scripts still doing this, each with its tracking issue. Same self-guarding
-# contract as _KNOWN_BROKEN: asserted STILL fabricating, so a fix forces the
-# entry out rather than leaving the guard quietly narrower than it claims.
-#
-# #14880 emptied it: access_control_monitor.sh was the last entry, and its three
-# sentinels are gone. Empty is the goal state, which is why the discovery floor
-# below no longer asserts that the sweep FOUND something — see
-# test_the_fabrication_detector_still_fires.
-_KNOWN_FABRICATING: dict[str, str] = {}
-
-
-def _fabricated_in_text(text: str) -> list[tuple[int, str]]:
-    """(line, sentinel) for each python block in ``text`` answered by a sentinel.
-
-    Split out from the sweep so the detector can be driven directly by the
-    positive control below. With no script fabricating any more, "the sweep
-    found offenders" can no longer serve as proof the matcher still works — and
-    a matcher that quietly stops matching reports every script clean.
-
-    Reuses the two block regexes above rather than scanning a single line. The
-    first draft matched ``python3 -c`` to end-of-line, which finds nothing for a
-    MULTI-LINE block — the fallback sits after the closing quote, several lines
-    down. It reported zero fabricated results on a file that had three, and only
-    a positive control caught it.
-    """
-    found: list[tuple[int, str]] = []
-    for pattern in (_PY_BLOCK_MULTILINE, _PY_BLOCK_INLINE):
-        for match in pattern.finditer(text):
-            newline = text.find("\n", match.end())
-            tail = text[match.end() : newline if newline != -1 else len(text)]
-            echo = _FALLBACK_ECHO.search(tail)
-            if echo and _SENTINEL.match(echo.group(2).strip()):
-                found.append((text[: match.start()].count("\n") + 1, echo.group(2).strip()))
-    return found
-
-
-def _count_blocks(text: str) -> int:
-    return sum(len(pattern.findall(text)) for pattern in (_PY_BLOCK_MULTILINE, _PY_BLOCK_INLINE))
-
-
-def _fabricated_results() -> tuple[list[tuple[str, int, str]], int]:
-    """(sites answering a failed python check with a sentinel, blocks seen)."""
-    sites: list[tuple[str, int, str]] = []
-    blocks = 0
-    for script in _shell_scripts():
-        text = script.read_text(encoding="utf-8", errors="replace")
-        blocks += _count_blocks(text)
-        rel = str(script.relative_to(_SCRIPT_DIR))
-        sites.extend((rel, line, value) for line, value in _fabricated_in_text(text))
-    return sites, blocks
-
-
-# Assembled from fragments so this file never contains the literal shape it
-# bans — a fixture quoting a banned pattern trips the lint that reads it.
-_SAMPLE_SENTINELS = ["{" + "}", "0|0" + "|0", "UNK" + "NOWN"]
-
-
-@pytest.mark.parametrize("sentinel", _SAMPLE_SENTINELS)
-def test_the_fabrication_detector_still_fires(sentinel: str) -> None:
-    """Positive control, replacing 'the sweep found offenders'.
-
-    That floor was only meaningful while a script was still fabricating. Now
-    that none are, an extractor that stopped matching would sail through the
-    check below having read nothing. This drives the detector against both block
-    shapes directly, so it fails when the detector breaks rather than when the
-    codebase regresses.
-    """
-    inline = 'value=$(python3 -c "import sys" || ' + f'echo "{sentinel}")\n'
-    multiline = 'value=$(python3 -c "\nimport sys\nprint(sys.argv)\n" || ' + f'echo "{sentinel}")\n'
-
-    for sample, shape in ((inline, "single-line"), (multiline, "multi-line")):
-        assert _count_blocks(sample) == 1, f"the {shape} block extractor no longer matches its own shape"
-        hits = _fabricated_in_text(sample)
-        assert hits, f"the detector no longer flags {sentinel!r} on a {shape} block"
-        assert hits[0][1] == sentinel
-
-
-def test_a_legitimate_fallback_is_not_flagged() -> None:
-    """Negative control: the rule is 'impersonates a measurement', not 'has a fallback'."""
-    sample = 'value=$(python3 -c "import sys" || echo "unavailable")\n'
-    assert _count_blocks(sample) == 1
-    assert not _fabricated_in_text(sample), "a fallback that says 'unavailable' is the fix, not the bug"
-
-
-def test_the_fabrication_sweep_reached_the_scripts() -> None:
-    """Discovery floor — an extractor that stops matching reports clean."""
-    _, blocks = _fabricated_results()
-    assert blocks >= 20, (
-        f"only extracted {blocks} inline python blocks — the matcher has "
-        "regressed and the check below would pass having read nothing"
-    )
-
-
-def test_no_inline_check_fabricates_its_own_result() -> None:
-    """A check that could not run must not report a reassuring value (#14867)."""
-    sites, _ = _fabricated_results()
-    offenders = [
-        f"{rel}:{line}  answers a failed python block with {value!r}"
-        for rel, line, value in sites
-        if rel not in _KNOWN_FABRICATING
-    ]
-    assert not offenders, (
-        "a failed check must be distinguishable from a clean one by what it "
-        "REPORTS, not only by what reaches stderr. Emit an explicit error and a "
-        "non-zero exit status instead of a sentinel (#14867):\n  " + "\n  ".join(offenders)
-    )
-
-
-@pytest.mark.parametrize("rel,issue", sorted(_KNOWN_FABRICATING.items()))
-def test_each_fabrication_exemption_is_still_broken(rel: str, issue: str) -> None:
-    """An obsolete exemption exempts nothing, and is this check's positive control."""
-    assert (_SCRIPT_DIR / rel).is_file(), f"{rel} moved or was deleted — update this exemption ({issue})"
-    sites, _ = _fabricated_results()
-    assert any(r == rel for r, _, _ in sites), (
-        f"{rel} no longer fabricates a result, so the exemption ({issue}) is "
-        "obsolete — remove it from _KNOWN_FABRICATING so the script is guarded again"
     )

@@ -152,8 +152,15 @@ _KNOWN_OFFENDERS = {
     # 78 -> 75 with #14941 (test_celery_worker_status stopped returning a verdict
     # pytest discards) and #14927 (three classes converted to collect, which moves
     # their methods into this file's population as well).
+    #
+    # 126 -> 121 with #14518: the inline-python and driver scripts under
+    # `shared/scripts` (test_phase5_cleanup, verify_backend_config,
+    # verify_ssh_manager, test_redis_comparison) now assert instead of handing a
+    # verdict back to a caller that discards it. Measured, not estimated — the
+    # sweep reports 121 and the population floor below is unmoved, which is what
+    # separates a real drain from a sweep that stopped matching.
     "autobot-backend": (75, 18000),
-    "autobot-infrastructure": (126, 250),
+    "autobot-infrastructure": (121, 250),
     "autobot-npu-worker": (7, 150),
 }
 

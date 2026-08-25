@@ -88,18 +88,19 @@ _DIST_ALIASES = {
 # exception. The parametrized test below asserts every entry is *still* broken,
 # so a fix forces its exemption out rather than leaving this file quietly
 # guarding one path less than it claims.
-_KNOWN_BROKEN = {
-    # Symbols deleted or never landed — no import spelling reaches them, so the
-    # fix is a logic change, not a rewrite. Split out of #14518.
-    ("test_phase5_cleanup.py", "backend.api"): "#14870",
-    ("utilities/verify_backend_config.py", "backend.app_factory"): "#14870",
-    ("utilities/verify_ssh_manager.py", "backend.services.ssh_manager"): "#14870",
-    # Undeclared optional dependency whose absence silently drops an arm of the
-    # comparison these scripts exist to perform.
-    ("analysis/redis_final_analysis.py", "langchain_redis"): "#14871",
-    ("analysis/redis_vector_analysis.py", "langchain_redis"): "#14871",
-    ("analysis/test_redis_comparison.py", "langchain_redis"): "#14871",
-}
+#
+# EMPTY, which is the goal state #14518 asked for ("add the resolution check
+# with no allowlist, once the count is zero"). The three #14870 entries went
+# when their scripts were repointed at symbols that exist; the three #14871
+# entries went when langchain-redis was declared in
+# ``autobot-infrastructure/shared/scripts/requirements.txt``.
+#
+# An empty allowlist costs this file its positive control: the parametrized
+# test below now collects zero cases, so "the sweep found nothing" can no
+# longer be told apart from "the sweep looks at nothing". That is what
+# ``test_the_detector_still_fires_on_a_synthetic_import`` replaces it with —
+# see its docstring.
+_KNOWN_BROKEN: dict[tuple[str, str], str] = {}
 
 
 def _declared_distributions() -> tuple[set[str], int]:
@@ -176,6 +177,35 @@ def _optional_import_nodes(tree: ast.AST) -> set[int]:
     return guarded
 
 
+def _unresolvable_in_source(source: str, own_dir: Path) -> list[tuple[str, int]]:
+    """((module, lineno)) for every import in one source string that resolves to nothing.
+
+    Split out of the tree walk so the detector can be driven against a
+    synthetic sample. With ``_KNOWN_BROKEN`` empty there is no longer a live
+    defect to prove the matcher still works, and a matcher that quietly stops
+    matching reports the whole tree clean.
+    """
+    tree = ast.parse(source)
+    guarded = _optional_import_nodes(tree)
+    found: list[tuple[str, int]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            if node.level or not node.module:
+                continue
+            module = node.module
+        elif isinstance(node, ast.Import):
+            module = node.names[0].name
+        else:
+            continue
+        top = module.split(".")[0]
+        if top in _STDLIB or id(node) in guarded:
+            continue
+        if _resolves(module, own_dir) or _is_declared(top):
+            continue
+        found.append((module, node.lineno))
+    return found
+
+
 def _unresolvable() -> tuple[list[tuple[str, str, int]], int]:
     """((relative path, module, lineno) list, files scanned)."""
     found: list[tuple[str, str, int]] = []
@@ -185,25 +215,12 @@ def _unresolvable() -> tuple[list[tuple[str, str, int]], int]:
             continue
         scanned += 1
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            source = path.read_text(encoding="utf-8")
+            hits = _unresolvable_in_source(source, path.parent)
         except (SyntaxError, OSError, UnicodeDecodeError):
             continue
-        guarded = _optional_import_nodes(tree)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
-                if node.level or not node.module:
-                    continue
-                module = node.module
-            elif isinstance(node, ast.Import):
-                module = node.names[0].name
-            else:
-                continue
-            top = module.split(".")[0]
-            if top in _STDLIB or id(node) in guarded:
-                continue
-            if _resolves(module, path.parent) or _is_declared(top):
-                continue
-            found.append((str(path.relative_to(_SCRIPTS)), module, node.lineno))
+        rel = str(path.relative_to(_SCRIPTS))
+        found.extend((rel, module, lineno) for module, lineno in hits)
     return found, scanned
 
 
@@ -242,6 +259,56 @@ def test_every_import_under_shared_scripts_resolves() -> None:
         "raises ModuleNotFoundError before reaching its first statement "
         "(#14518):\n  " + "\n  ".join(offenders)
     )
+
+
+# A name no distribution and no first-party module can plausibly carry. Kept as
+# one constant so the positive controls below cannot drift apart from each other.
+_NEVER_EXISTS = "autobot_module_that_does_not_exist_14518"
+
+
+@pytest.mark.parametrize(
+    "source,expected",
+    [
+        (f"from {_NEVER_EXISTS} import thing\n", _NEVER_EXISTS),
+        (f"import {_NEVER_EXISTS}\n", _NEVER_EXISTS),
+        (f"from {_NEVER_EXISTS}.sub.pkg import thing\n", f"{_NEVER_EXISTS}.sub.pkg"),
+    ],
+)
+def test_the_detector_still_fires_on_a_synthetic_import(source: str, expected: str) -> None:
+    """Positive control, replacing the emptied ``_KNOWN_BROKEN`` parametrization.
+
+    While that allowlist held live defects, "the sweep still reports these six"
+    proved the matcher worked. It is empty now — the goal state — so nothing in
+    this file would notice a matcher that stopped matching: the sweep counts
+    findings, and zero findings is exactly what a clean tree looks like too.
+
+    Both import spellings are driven, because the tree contains both and a
+    branch that silently stops matching one of them halves this guard's reach
+    without changing a single assertion's outcome.
+    """
+    hits = _unresolvable_in_source(source, _SCRIPTS)
+    assert hits, f"the detector no longer flags {source.strip()!r}"
+    assert hits[0][0] == expected
+    assert hits[0][1] == 1
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import json\n",
+        "from autobot_shared.logging_manager import get_logger\n",
+        "import redis\n",
+        f"try:\n    import {_NEVER_EXISTS}\nexcept ImportError:\n    pass\n",
+    ],
+)
+def test_the_detector_does_not_fire_on_a_legitimate_import(source: str) -> None:
+    """Negative control: stdlib, first-party, declared third-party, and guarded-optional.
+
+    Without this a detector that flagged *everything* would satisfy the positive
+    control above while making the sweep useless — and the pressure would then
+    be to switch the guard off rather than fix it.
+    """
+    assert not _unresolvable_in_source(source, _SCRIPTS), f"{source.strip()!r} is legitimate and must not be flagged"
 
 
 @pytest.mark.parametrize("entry,issue", sorted(_KNOWN_BROKEN.items()))

@@ -27,6 +27,7 @@ from api.system_health import (
     _PROBE_TIMEOUT_S,
     ComponentHealth,
     _reset_probes_for_testing,
+    _restore_probes_for_testing,
     collect_system_health,
     list_registered_probes,
     probe_app_state,
@@ -41,9 +42,18 @@ from api.system_health import (
 
 @pytest.fixture(autouse=True)
 def _isolate_registry():
-    _reset_probes_for_testing()
+    """Give each test an empty registry, then put the real one BACK.
+
+    Clearing on teardown left the process-wide registry empty for everything
+    that ran afterwards in the same worker. Probes register as an import side
+    effect, so nothing re-registers them — ``api.sandbox_health`` is already in
+    ``sys.modules`` and its decorator will not run again. The sandbox probe read
+    as unregistered in whichever shard happened to schedule this file first
+    (#14518).
+    """
+    saved = _reset_probes_for_testing()
     yield
-    _reset_probes_for_testing()
+    _restore_probes_for_testing(saved)
 
 
 def test_register_and_list_probes_returns_sorted_names():
