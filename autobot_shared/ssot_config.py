@@ -1495,10 +1495,8 @@ class MiscConfig(RedactedSettings):
     api_key: str = Field(default="", alias="API_KEY")
     # #11681: restore pre-#7437 default (1000) — 0 silently disabled the AST cache
     ast_cache_max_size: int = Field(default=1000, alias="AST_CACHE_MAX_SIZE")
-    # #14050 lazy, not a frozen "/opt/autobot" literal; #14070 via the module global.
-    audit_log_file: str = Field(
-        default_factory=lambda: default_audit_log_file(), alias="AUTOBOT_AUDIT_LOG_FILE"
-    )  # noqa: PLW0108,E501
+    # #14050 lazy, not a live-install literal frozen at import; #14070 via the module global.
+    audit_log_file: str = Field(default_factory=lambda: default_audit_log_file(), alias="AUTOBOT_AUDIT_LOG_FILE")
     # #11834: restore pre-#7437 autoresearch defaults — ""/0 defaults made
     # AutoResearchConfig() crash on int("")/float("") and silently zeroed
     # timeouts/thresholds (same class as #11681).

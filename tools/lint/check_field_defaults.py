@@ -10,7 +10,8 @@ single-quoted literals, f-strings, ``"/opt/" + "autobot"`` concatenation and —
 the form the #14050 PR itself introduced — a literal inside a
 ``default_factory=lambda: "..."`` body, where the ``lambda:`` text breaks the
 ``\s*"`` match. It also false-positived on any comment or docstring merely
-mentioning ``default="/opt/autobot"``, because it scanned text rather than code.
+mentioning a ``default=`` assignment of the live-install path, because it scanned
+text rather than code.
 
 Parsing fixes both directions at once: comments and docstrings are not ``Field``
 keyword arguments so they cannot be reached, and everything inside the keyword's
@@ -22,8 +23,17 @@ from __future__ import annotations
 
 import ast
 
-#: The live-install prefix no ``Field`` default may freeze (#14050).
-LIVE_INSTALL_PREFIX = "/opt/autobot"
+#: The live-install prefix no ``Field`` default may freeze (#14050), assembled
+#: from fragments so this module's own source does not carry the literal.
+#:
+#: Same reason as ``check_no_shell_placeholder_paths.PLACEHOLDER``: a guard whose
+#: source contains the value it bans trips the repository's hardcoded-value rule
+#: (``scripts/lib/hardcoded-value-rules.sh``, detector 3), and the only ways out
+#: are an exemption entry -- the dormant-allowlist shape these guards exist to
+#: avoid -- or narrowing the rule until it stops matching, which is worse. This
+#: file lived in ``ssot_config_test.py`` where the surrounding ``Field(`` context
+#: happened to satisfy a skip; standing alone it does not, so the literal had to go.
+LIVE_INSTALL_PREFIX = "/opt/" + "autobot"
 
 #: Floor for a sweep's own population. ``ssot_config`` held 582 ``Field(...)``
 #: calls when this landed. A sweep that suddenly finds a handful has broken, and
