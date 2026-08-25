@@ -52,11 +52,12 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPT = REPO_ROOT / "scripts" / "check_python_file_size.py"
 _BASELINE_SCRIPT = REPO_ROOT / "repo_tests" / "python_file_size_ratchet_baseline.py"
+_KNOWN_LARGE_SCRIPT = REPO_ROOT / "scripts" / "python_file_size_known_large.py"
 _PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
 
 
-def _load_ratchet_baseline() -> dict[str, int]:
-    """Load RATCHET_BASELINE from its sibling data module, by path.
+def _load_baseline_module():
+    """Load the sibling data module holding the baseline, by path.
 
     Split out (#14547) so this test file stays well under MAX_LINES: 512
     entries inline here would put the guard's own test over the limit it
@@ -66,10 +67,12 @@ def _load_ratchet_baseline() -> dict[str, int]:
     spec = importlib.util.spec_from_file_location("python_file_size_ratchet_baseline", _BASELINE_SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.RATCHET_BASELINE
+    return module
 
 
-RATCHET_BASELINE = _load_ratchet_baseline()
+_BASELINE_MODULE = _load_baseline_module()
+RATCHET_BASELINE = _BASELINE_MODULE.RATCHET_BASELINE
+ANNOTATED_AS_LIVE = _BASELINE_MODULE.ANNOTATED_AS_LIVE
 
 # Cardinality ceiling on KNOWN_LARGE itself (#14547 review). The per-file
 # ratchet stops any ONE entry from regrowing, but nothing stopped a NEW entry
@@ -80,14 +83,12 @@ RATCHET_BASELINE = _load_ratchet_baseline()
 # an entry; never raise it to let a new one in without that being the point
 # of the diff.
 #
-# 512 is the size of the population the walk measured on the merge that lands
-# this change, not a number chosen to fit. The snapshot below it is a single
-# initial grant: before this change the repo recorded three ceilings, and the
-# other 509 files were over MAX_LINES with nothing recording them at all. The
-# count therefore starts at whatever the walk finds the day it is switched on
-# — re-measured, never rounded up — and only ever falls afterwards, because
-# from here on an unlisted oversized file fails the audit instead of joining
-# the list.
+# 512 is the population the walk measured on the merge that lands this change,
+# not a number chosen to fit: the repo recorded three ceilings before it, and
+# the other 509 files were over MAX_LINES with nothing recording them at all.
+# The count starts at whatever the walk finds the day it is switched on, and
+# only falls after, because from then an unlisted oversized file fails the
+# audit instead of joining the list.
 MAX_KNOWN_LARGE_ENTRIES = 512
 
 
@@ -276,6 +277,22 @@ def test_known_large_entry_count_may_not_grow(hook):
         f"{MAX_KNOWN_LARGE_ENTRIES} — lower MAX_KNOWN_LARGE_ENTRIES when entries "
         "leave, never raise it to let a new one in."
     )
+
+
+def test_an_entry_singled_out_as_live_keeps_its_note(hook):
+    """Both copies must still say WHY these two are exempt (#14630).
+
+    A re-measure emits `"path": count` and nothing else, erasing every
+    hand-written line in the literal it rewrites -- which lost these once.
+    Unguarded, the entries then read as anonymous legacy debt.
+    """
+    for path in (_KNOWN_LARGE_SCRIPT, _BASELINE_SCRIPT):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for rel, opened_under in ANNOTATED_AS_LIVE.items():
+            assert rel in hook.KNOWN_LARGE, f"{rel} is annotated but no longer grandfathered"
+            at = next(i for i, line in enumerate(lines) if line.strip().startswith(f'"{rel}":'))
+            above = "\n".join(lines[max(0, at - 3):at])
+            assert "#14630" in above and opened_under in above, f"{path.name}: {rel} lost its annotation"
 
 
 def test_no_ceiling_may_be_raised(hook):
