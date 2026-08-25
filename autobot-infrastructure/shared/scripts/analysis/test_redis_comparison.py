@@ -16,7 +16,7 @@ import time
 
 from autobot_shared.paths import project_root
 from constants import ServiceURLs
-from langchain_redis_arm import INSTALL_HINT, ModernArmUnavailable, load_redis_vector_store
+from langchain_redis_arm import INSTALL_HINT, NOT_MEASURED, ModernArmUnavailable, load_redis_vector_store
 
 # DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
 _DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
@@ -187,8 +187,16 @@ async def _test_existing_data_access(embeddings):
 
 
 async def test_langchain_redis():
-    """Test LangChain Redis integration with existing data"""
+    """Test LangChain Redis integration with existing data.
+
+    Returns ``(success, count, arm)``. The third element is #14871: a run on
+    the LEGACY langchain_community store returns ``success=True`` exactly like
+    a run on the modern one, so a caller reading two elements cannot tell
+    which library it just measured — and the recommendation in ``main`` is
+    drawn from that number.
+    """
     logger.info("\n=== Testing LangChain Redis Integration ===")
+    arm = NOT_MEASURED
     try:
         # #14871: this probe's try body was an empty `pass`, so the import it
         # was meant to attempt had been stripped and `modern_langchain` was
@@ -198,6 +206,7 @@ async def test_langchain_redis():
         try:
             load_redis_vector_store()
             modern_langchain = True
+            arm = "langchain-redis"
             logger.info("Modern arm: using the langchain-redis package")
         except ModernArmUnavailable as exc:
             modern_langchain = False
@@ -240,17 +249,17 @@ async def test_langchain_redis():
         if modern_langchain:
             success, count = await _test_existing_data_access(embeddings)
             if success:
-                return True, count
-            return True, len(results)
+                return True, count, arm
+            return True, len(results), arm
 
-        return True, len(results)
+        return True, len(results), arm
 
     except Exception as e:
         logger.error(f"❌ LangChain Redis test failed: {e}")
         import traceback
 
         logger.error(traceback.format_exc())
-        return False, 0
+        return False, 0, arm
 
 
 async def compare_performance():
@@ -272,18 +281,22 @@ async def compare_performance():
     # Test LangChain performance
     langchain_time = 0
     langchain_results = 0
+    langchain_arm = NOT_MEASURED
     try:
         start_time = time.time()
-        success, count = await test_langchain_redis()
+        success, count, langchain_arm = await test_langchain_redis()
         langchain_time = time.time() - start_time
         langchain_results = count if success else 0
-        logger.info(f"LangChain: {langchain_time:.2f}s, {langchain_results} results")
+        logger.info(f"LangChain ({langchain_arm}): {langchain_time:.2f}s, {langchain_results} results")
     except Exception as e:
         logger.error(f"LangChain performance test failed: {e}")
 
     return {
         "llamaindex": {"time": llamaindex_time, "results": llamaindex_results},
-        "langchain": {"time": langchain_time, "results": langchain_results},
+        # #14871: which arm produced this number, threaded end-to-end the way
+        # redis_final_analysis and redis_vector_analysis thread it. Without it
+        # the recommendation below reads a legacy measurement as a modern one.
+        "langchain": {"time": langchain_time, "results": langchain_results, "arm": langchain_arm},
     }
 
 
@@ -353,6 +366,18 @@ async def main():
 
     # Generate recommendation
     logger.info("\n=== RECOMMENDATION ===")
+
+    # #14871: every branch below reasons about how "LangChain" performed. If the
+    # modern arm never ran, the number came from the legacy
+    # langchain_community store and naming LangChain either way describes a
+    # comparison that did not happen.
+    if performance["langchain"]["arm"] == NOT_MEASURED:
+        logger.warning(
+            "The modern langchain-redis arm was NOT MEASURED - any LangChain "
+            "number below came from the legacy langchain_community store. "
+            "Install it and re-run before drawing a conclusion: %s",
+            INSTALL_HINT,
+        )
 
     if performance["llamaindex"]["results"] > 0 and performance["langchain"]["results"] > 0:
         logger.info("Both implementations can access data successfully")

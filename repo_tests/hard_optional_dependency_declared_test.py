@@ -46,6 +46,23 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", ".claude", "venv", ".venv"}
 
+# Top-level trees that must each contribute at least one parsed file. Flooring
+# only the AGGREGATE is what this guard shipped with, and the arithmetic says
+# that floor cannot see a blinded tree: `git ls-files "*.py"` returns 5,140, of
+# which autobot-backend is 3,831. Starve autobot-infrastructure (263) and the
+# count still reads 4,877; starve autobot-slm-backend (401) too and it reads
+# 4,476 — both clear `scanned > 4000`, while `sites` slips 24 -> ~22 and clears
+# `sites > 15`. Both aggregate floors pass over a tree that has gone dark.
+#
+# This is the same lesson as the sibling guard's
+# ``test_each_shell_tree_was_actually_swept``: a floor has to measure the input
+# that can go to zero, and here that is a tree, not the total.
+#
+# autobot_shared is in the list because it is a first-party package that a
+# `roots`-based resolution change could silently drop; the other three are the
+# trees the seven issues in this group actually span.
+_REQUIRED_TREES = ("autobot-backend", "autobot-infrastructure", "autobot-slm-backend", "autobot_shared")
+
 _ROOTS = (
     _REPO_ROOT,
     _REPO_ROOT / "autobot-backend",
@@ -201,15 +218,21 @@ def _hard_dependencies_in_source(source: str, own_dir: Path) -> set[str]:
 
 
 @functools.lru_cache(maxsize=1)
-def _sweep() -> tuple[tuple[tuple[str, str], ...], int, int]:
-    """((relative path, package) tuple, files scanned, hard-dependency sites found).
+def _sweep() -> tuple[tuple[tuple[str, str], ...], int, int, tuple[tuple[str, int], ...]]:
+    """((path, package) tuple, files scanned, sites found, per-tree parsed counts).
 
     Memoised: this is a ~5000-file AST walk and every test below needs it.
-    Returns tuples rather than lists so the cached value cannot be mutated
-    by one test and read short by the next.
+    Returns tuples rather than lists so the cached value cannot be mutated by
+    one test and read short by the next.
+
+    The per-tree counts are the fourth element and not a derived convenience:
+    they count files that PARSED, so a tree whose files all fail to parse — or
+    that stops being listed at all — reads zero here while the aggregate stays
+    comfortably above its floor.
     """
     found: list[tuple[str, str]] = []
     scanned = 0
+    per_tree: dict[str, int] = {}
     for path in _tracked_python():
         rel = path.relative_to(_REPO_ROOT)
         if any(part in _SKIP_PARTS for part in rel.parts):
@@ -219,13 +242,40 @@ def _sweep() -> tuple[tuple[tuple[str, str], ...], int, int]:
         except (SyntaxError, OSError, UnicodeDecodeError):
             continue
         scanned += 1
+        per_tree[rel.parts[0]] = per_tree.get(rel.parts[0], 0) + 1
         found.extend((str(rel), package) for package in sorted(hard))
-    return tuple(found), scanned, len(found)
+    return tuple(found), scanned, len(found), tuple(sorted(per_tree.items()))
+
+
+@pytest.mark.parametrize("tree", _REQUIRED_TREES)
+def test_each_python_tree_was_actually_swept(tree: str) -> None:
+    """Per-tree floor. The aggregate below cannot see one tree go dark.
+
+    Mirrors ``test_each_shell_tree_was_actually_swept`` in the sibling guard,
+    and for the same reason: a guard passed for years while one of its two
+    ``git ls-files`` pathspecs matched zero files, because the union's floor was
+    satisfied by the other. See ``_REQUIRED_TREES`` for the arithmetic that
+    shows the aggregate floor here is equally blind.
+    """
+    _, _, _, per_tree = _sweep()
+    counts = dict(per_tree)
+
+    assert counts.get(tree, 0) > 0, (
+        f"no tracked python file under {tree}/ was parsed. That tree has "
+        "dropped out of this guard's reach — every assertion about it below "
+        f"now passes over nothing, while the aggregate floor still reads "
+        f"{sum(counts.values())} and looks healthy"
+    )
 
 
 def test_the_sweep_reached_the_tree() -> None:
-    """Discovery floors, each guarding a different way to go quietly blind."""
-    found, scanned, sites = _sweep()
+    """The aggregate discovery floors, each guarding a different way to go blind.
+
+    Kept alongside the per-tree floor above rather than replaced by it: this one
+    catches git returning nothing at all, and the declaration-oracle floors have
+    no per-tree analogue.
+    """
+    found, scanned, sites, _ = _sweep()
 
     assert scanned > 4000, f"only parsed {scanned} tracked python files — git ls-files is not returning the tree"
     assert sites > 15, (
@@ -248,7 +298,7 @@ def test_the_sandbox_modules_are_still_discovered() -> None:
     failure says *which* hard dependency stopped being watched, rather than
     that the count moved.
     """
-    found, _, _ = _sweep()
+    found, _, _, _ = _sweep()
     docker_sites = {rel for rel, package in found if package == "docker"}
 
     for expected in (
@@ -265,7 +315,7 @@ def test_the_sandbox_modules_are_still_discovered() -> None:
 
 def test_every_hard_dependency_is_declared() -> None:
     """The #14872 defect: a dependency a module refuses to run without, declared nowhere."""
-    found, _, _ = _sweep()
+    found, _, _, _ = _sweep()
     offenders = [
         f"{rel}  ->  {package}"
         for rel, package in found
