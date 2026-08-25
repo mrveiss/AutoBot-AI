@@ -24,11 +24,12 @@ Resource paths are written without the ``/api`` root; the client adds it.
 
 from .autobot import AutoBot
 from .client import API_PREFIX, AutoBotClient, api_path, default_base_url
+from .defaults import DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, DEFAULT_SEARCH_LIMIT
 from .models import (
-    AnalyticsPerformance,
-    AnalyticsUsage,
     AgentConfig,
     AgentHealth,
+    AnalyticsPerformance,
+    AnalyticsUsage,
     ChatMessage,
     DataResponse,
     KnowledgeAddResult,
@@ -49,6 +50,9 @@ __all__ = [
     "AutoBotClient",
     "api_path",
     "default_base_url",
+    "DEFAULT_OFFSET",
+    "DEFAULT_PAGE_SIZE",
+    "DEFAULT_SEARCH_LIMIT",
     "AnalyticsPerformance",
     "AnalyticsUsage",
     "AgentConfig",

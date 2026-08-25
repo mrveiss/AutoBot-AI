@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..client import AutoBotClient
+from ..defaults import DEFAULT_OFFSET, DEFAULT_PAGE_SIZE
 from ..models import (
     DataResponse,
     SessionCreate,
@@ -28,7 +29,7 @@ class SessionsResource:
     def __init__(self, client: AutoBotClient) -> None:
         self._c = client
 
-    async def list(self, limit: int = 50, offset: int = 0) -> DataResponse[SessionList]:
+    async def list(self, limit: int = DEFAULT_PAGE_SIZE, offset: int = DEFAULT_OFFSET) -> DataResponse[SessionList]:
         raw = await self._c.get("/chat/sessions", limit=limit, offset=offset)
         return DataResponse[SessionList].model_validate(raw)
 
