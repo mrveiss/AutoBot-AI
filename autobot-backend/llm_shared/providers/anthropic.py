@@ -18,12 +18,20 @@ Extended thinking (#3258):
       api_kwargs = {
           "thinking": {"type": "enabled", "budget_tokens": 63000},
           "max_tokens": 64000,
-          "temperature": 1,
           "extra_headers": {"anthropic-beta": "output-128k-2025-02-19"},
       }
 
   Thinking blocks are stripped from the returned ``content`` unless
   ``preserve_reasoning=True`` is present in ``api_kwargs``.
+
+Sampling parameters (#15016):
+  ``anthropic>=1.0`` dropped ``temperature``/``top_p``/``top_k`` from the
+  ``messages.create()``/``.stream()`` signature (passing one is now a
+  client-side ``TypeError``). ``_route_sampling_kwargs`` moves a genuinely
+  set value into ``extra_body``, which the API still honours for every
+  model this codebase targets, instead of passing it as a keyword; the old
+  "thinking implies temperature=1" compensation is gone outright since
+  current models reject a ``temperature`` kwarg regardless of its value.
 
 Moved from llm_providers/ as part of Phase 2 consolidation (MVA-178 / GH#7637).
 """
@@ -100,8 +108,74 @@ _ANTHROPIC_MODELS = [
     ANTHROPIC_CLAUDE3_OPUS_DATED,
 ]
 
+# #15016: anthropic>=1.0 removed these three from messages.create()/.stream();
+# passing one as a keyword now raises TypeError. The API still honours them
+# via extra_body for every model above, so a genuinely-set value is routed
+# there instead of being dropped.
+_REMOVED_SAMPLING_KWARGS = ("temperature", "top_p", "top_k")
+
+# Models the SDK itself flags as deprecated for thinking.type="enabled" in
+# favour of "adaptive" (mirrors anthropic's own
+# MODELS_TO_WARN_WITH_THINKING_ENABLED, restricted to models this repo uses).
+_MODELS_REQUIRING_ADAPTIVE_THINKING = frozenset({ANTHROPIC_CLAUDE_OPUS4_6})
+
+# budget_tokens -> output_config.effort tiers for models that require adaptive
+# thinking; mirrors the low/medium/high buckets reasoning_effort.py already
+# maps reasoning_effort levels to, extended with xhigh/max for larger budgets.
+_THINKING_EFFORT_TIERS = (
+    (2000, "low"),
+    (5000, "medium"),
+    (10000, "high"),
+    (32000, "xhigh"),
+)
+
 # Regex that matches <think>…</think> blocks (case-insensitive, dotall).
 _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+
+
+def _route_sampling_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """Move a set temperature/top_p/top_k out of top-level kwargs, in place.
+
+    Returns *kwargs* for convenient chaining. Dropped outright (#15042) when
+    extended thinking is active -- current models reject a sampling kwarg
+    regardless of its value once thinking is enabled, so extra_body would
+    just move the 400 server-side. An explicit ``None`` is also dropped (no
+    genuine dependency to preserve); any other value is merged into
+    ``extra_body`` so the SDK still forwards it to the API.
+    """
+    thinking_active = "thinking" in kwargs
+    sampling = {}
+    for key in _REMOVED_SAMPLING_KWARGS:
+        value = kwargs.pop(key, None)
+        if value is not None and not thinking_active:
+            sampling[key] = value
+    if sampling:
+        kwargs.setdefault("extra_body", {}).update(sampling)
+    return kwargs
+
+
+def _thinking_budget_to_effort(budget_tokens: int) -> str:
+    """Map a legacy ``budget_tokens`` value to an adaptive-thinking effort tier."""
+    for ceiling, effort in _THINKING_EFFORT_TIERS:
+        if budget_tokens <= ceiling:
+            return effort
+    return "max"
+
+
+def _apply_thinking_budget(api_kwargs: Dict[str, Any], model: str, thinking_tokens: int) -> None:
+    """Expand a thinking-token budget into the SDK's ``thinking`` kwarg, in place.
+
+    Models in ``_MODELS_REQUIRING_ADAPTIVE_THINKING`` (#15016) get adaptive
+    thinking plus an ``output_config`` effort tier instead of ``budget_tokens``;
+    every other model keeps the fixed-budget form it still accepts.
+    """
+    if model in _MODELS_REQUIRING_ADAPTIVE_THINKING:
+        api_kwargs["thinking"] = {"type": "adaptive"}
+        api_kwargs["output_config"] = {"effort": _thinking_budget_to_effort(thinking_tokens)}
+    else:
+        api_kwargs["thinking"] = {"type": "enabled", "budget_tokens": thinking_tokens}
+        api_kwargs.setdefault("betas", ["interleaved-thinking-2025-05-14"])
+    api_kwargs.setdefault("max_tokens", max(thinking_tokens + 1000, 8192))
 
 
 def _strip_think_blocks(text: str) -> str:
@@ -265,6 +339,32 @@ class AnthropicProvider(BaseProvider):
                 chat_messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
         return system_content, chat_messages
 
+    def _apply_system_content(self, kwargs: Dict[str, Any], request: LLMRequest, system_content: str) -> None:
+        """Set ``kwargs["system"]``, in place. Prompt caching (#8171, #10597):
+
+        the system message is sent as a content-block list so Anthropic can
+        cache it across repeated requests. Defaults on via
+        config.llm_prompt_cache_default (pure cost win on the large static
+        system prompt); a caller may opt out per-request with
+        enable_prompt_cache=False.
+        """
+        if not system_content:
+            return
+        if request.metadata.get("enable_prompt_cache", config.llm_prompt_cache_default):
+            kwargs["system"] = [{"type": "text", "text": system_content, "cache_control": {"type": "ephemeral"}}]
+        else:
+            kwargs["system"] = system_content
+
+    def _apply_tools(self, kwargs: Dict[str, Any], request: LLMRequest) -> None:
+        """Set ``kwargs["tools"]``/``["tool_choice"]`` from *request*, in place."""
+        if not request.tools:
+            return
+        kwargs["tools"] = [
+            {"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in request.tools
+        ]
+        if request.tool_choice:
+            kwargs["tool_choice"] = {"type": request.tool_choice}
+
     def _build_request_kwargs(self, model: str, request: LLMRequest) -> tuple[Dict[str, Any], Dict[str, Any], bool]:
         """Build kwargs and extra_headers for an Anthropic SDK call."""
         system_content, chat_messages = self._split_messages(request.messages)
@@ -274,38 +374,18 @@ class AnthropicProvider(BaseProvider):
             "messages": chat_messages,
             "temperature": request.temperature,
         }
-        if system_content:
-            # Prompt caching (#8171, #10597): the system message is sent as a
-            # content-block list so Anthropic can cache it across repeated
-            # requests.  Defaults on via config.llm_prompt_cache_default (pure
-            # cost win on the large static system prompt); a caller may still
-            # opt out per-request with enable_prompt_cache=False.
-            if request.metadata.get("enable_prompt_cache", config.llm_prompt_cache_default):
-                kwargs["system"] = [{"type": "text", "text": system_content, "cache_control": {"type": "ephemeral"}}]
-            else:
-                kwargs["system"] = system_content
-
-        if request.tools:
-            kwargs["tools"] = [
-                {"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in request.tools
-            ]
-            if request.tool_choice:
-                kwargs["tool_choice"] = {"type": request.tool_choice}
+        self._apply_system_content(kwargs, request, system_content)
+        self._apply_tools(kwargs, request)
 
         api_kwargs: Dict[str, Any] = dict(request.metadata.get("api_kwargs") or {})
         # #9017: expand thinking_tokens (from reasoning_effort mapping) into the
         # Anthropic extended-thinking dict if not already fully specified.
         thinking_tokens: int | None = api_kwargs.pop("thinking_tokens", None)
         if thinking_tokens and "thinking" not in api_kwargs:
-            api_kwargs["thinking"] = {"type": "enabled", "budget_tokens": thinking_tokens}
-            api_kwargs.setdefault("max_tokens", max(thinking_tokens + 1000, 8192))
-            api_kwargs.setdefault("betas", ["interleaved-thinking-2025-05-14"])
+            _apply_thinking_budget(api_kwargs, model, thinking_tokens)
         preserve_reasoning: bool = bool(api_kwargs.get("preserve_reasoning", False))
         kwargs, extra_headers = _build_api_kwargs(kwargs, api_kwargs)
-
-        # The Anthropic API requires temperature=1 when extended thinking is enabled.
-        if "thinking" in api_kwargs:
-            kwargs["temperature"] = 1
+        kwargs = _route_sampling_kwargs(kwargs)
 
         return kwargs, extra_headers, preserve_reasoning
 
@@ -499,9 +579,12 @@ class AnthropicProvider(BaseProvider):
 __all__ = [
     "AnthropicProvider",
     "_ANTHROPIC_MODELS",
+    "_REMOVED_SAMPLING_KWARGS",
     "_build_api_kwargs",
     "_extract_content_pair",
     "_extract_text_content",
     "_extract_think_tag_content",
+    "_route_sampling_kwargs",
     "_strip_think_blocks",
+    "_thinking_budget_to_effort",
 ]
