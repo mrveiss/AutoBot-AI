@@ -513,13 +513,18 @@ jobs:
         # as clean having asserted nothing.
         python3 tools/lint/check_mcp_tool_permission_coverage.py --audit
 
-    - name: Audit the python-file-size ceilings for drift (#14236)
+    - name: Audit the python-file-size ceilings for drift (#14236, #14547)
       run: |
         # The pre-commit hook only sees staged files, so a grandfathered entry
         # whose file shrank, moved, or was deleted would sit there exempting
         # nothing until somebody happened to touch it. This applies the ratchet
         # to every entry: over its ceiling, under it, or already compliant all
-        # fail, and the run reports how many entries it reached.
+        # fail. #14547: the audit used to iterate KNOWN_LARGE's own keys, so it
+        # could only re-check a file someone had already added — it had no way
+        # to discover one that crossed 600 lines and was never added at all
+        # (autobot-slm-backend/services/reconciler.py reached 2000+ lines this
+        # way). It now walks every in-scope tracked *.py file instead, and the
+        # run reports how many files that walk reached.
         python3 scripts/check_python_file_size.py --audit-ceilings
 
     - name: Audit requirements-ci for silent drift from production (#14551)
