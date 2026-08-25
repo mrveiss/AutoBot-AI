@@ -1109,6 +1109,47 @@
   --kanban-wip-exceeded-text: #991b1b;  /* WIP-limit exceeded column-header text */
 
   /* ============================================
+   * SYNTAX HIGHLIGHTING TOKENS (#14770, umbrella #11515)
+   * Scoped to canvas/CodeCell.vue's highlight.js theme.
+   *
+   * The comment on the Kanban block above records the earlier call that this
+   * palette is "DATA, preserved literal in the component" (#12048). That held
+   * only while the file went untouched: `color-no-hex` lints CHANGED files, so
+   * the first edit to it — a one-line composable migration here — surfaced all
+   * fourteen. The decision and the linter disagreed, and the disagreement was
+   * invisible rather than resolved.
+   *
+   * Tokenised rather than suppressed: this repo has no `stylelint-disable`
+   * anywhere, and adding the first one to get a gate green is not a fix.
+   *
+   * Deliberately NOT themeable, despite living here. These are the One Dark /
+   * One Light code palettes and both sets must be available at once — the
+   * component picks between them by class, not by theme — so they carry no
+   * OKLCH override and must not be folded into the semantic --color-* scale.
+   * ============================================ */
+  --codecell-syntax-attr-dark: #88bbff;      /* attr / attribute */
+  --codecell-syntax-number-dark: #d19a66;    /* literal / number */
+  --codecell-syntax-string-dark: #98c379;    /* string */
+  --codecell-syntax-callable-dark: #61afef;  /* built_in / title / function */
+  --codecell-syntax-keyword-dark: #c678dd;   /* keyword */
+  --codecell-syntax-comment-dark: #5c6370;   /* comment */
+  --codecell-syntax-attr-light: #0184bc;
+  --codecell-syntax-number-light: #986801;
+  --codecell-syntax-string-light: #50a14f;
+  --codecell-syntax-callable-light: #4078f2;
+  --codecell-syntax-keyword-light: #a626a4;
+  --codecell-syntax-comment-light: #a0a1a7;
+
+  /* ============================================
+   * KB SEARCH HIGHLIGHT TOKENS (#14770, umbrella #11515)
+   * Scoped to knowledge/KBSearchResultPanel.vue's `.kb-highlight` mark, which
+   * lives in an UNSCOPED style block because it decorates `v-html` content.
+   * Surfaced by the same changed-file rule as the block above.
+   * ============================================ */
+  --kbsearch-highlight-bg: #fef08a;    /* search-term mark fill */
+  --kbsearch-highlight-text: #713f12;  /* search-term mark text */
+
+  /* ============================================
    * OPERATION DETAIL TOKENS (#12052, umbrella #11515)
    * Scoped to operations/OperationDetail.vue. Hex-only (deliberately NO
    * OKLCH override) so the error section and the cancel and resume action

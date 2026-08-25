@@ -70,6 +70,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useReducedMotion } from '@/composables/useReducedMotion'
 
 const { t } = useI18n()
 
@@ -115,9 +116,9 @@ const chartAriaLabel = computed(() => {
   return props.title ? t('charts.ariaLabel', { title: props.title }) : t('charts.defaultAriaLabel', 'Data visualization chart')
 })
 
-const prefersReducedMotion = computed(() => {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-})
+// #14770: was its own inline `matchMedia` read. It also threw outright where
+// `matchMedia` is absent; the composable treats absence as "no preference".
+const { prefersReducedMotion } = useReducedMotion()
 
 // Methods
 const loadVegaEmbed = async () => {
