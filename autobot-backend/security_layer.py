@@ -24,8 +24,7 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role, role_value
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
-from autobot_shared.paths import project_root
-from autobot_shared.ssot_config import config
+from autobot_shared.ssot_config import config, default_audit_log_file
 from autobot_shared.status_enums import CommandRisk
 from config import get_config_manager
 from secure_command_executor import SecureCommandExecutor, SecurityPolicy
@@ -34,21 +33,30 @@ logger = get_logger(__name__)
 
 # Audit log file path resolved from AUTOBOT_AUDIT_LOG_FILE env var at import time.
 # Set AUTOBOT_AUDIT_LOG_FILE to override the default path.
-# #13149: derived from the canonical project root rather than a hardcoded
-# `/opt/autobot` literal, so a dev checkout writes its audit log under the
-# checkout instead of (attempting to write into) the live install.
-_AUDIT_LOG_FILE_DEFAULT = str(project_root() / "logs" / "audit.log")
 
 
 def _resolve_audit_log_file() -> str:
-    """Return audit log file path from AUTOBOT_AUDIT_LOG_FILE env var with logged fallback."""
+    """Return audit log file path from AUTOBOT_AUDIT_LOG_FILE env var with logged fallback.
+
+    #14070: the fallback calls ``ssot_config.default_audit_log_file()`` rather
+    than a module-level copy of the same formula. The copy
+    (``_AUDIT_LOG_FILE_DEFAULT``) is gone: two hand-written spellings of
+    ``project_root() / "logs" / "audit.log"`` could only be kept in step by a
+    test asserting they were equal, which is a check on today's agreement rather
+    than on derivation.
+
+    The branch is still reachable, and is not dead code: the SSOT field's
+    default_factory is never falsy, but ``AUTOBOT_AUDIT_LOG_FILE`` set to the
+    empty string is, and that is the case this warns about.
+    """
     value = config.audit_log_file
     if not value:
+        fallback = default_audit_log_file()
         logger.warning(
-            "AUTOBOT_AUDIT_LOG_FILE is not set or empty; falling back to %s",
-            _AUDIT_LOG_FILE_DEFAULT,
+            "AUTOBOT_AUDIT_LOG_FILE is set but empty; falling back to %s",
+            fallback,
         )
-        return _AUDIT_LOG_FILE_DEFAULT
+        return fallback
     return value
 
 

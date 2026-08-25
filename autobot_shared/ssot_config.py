@@ -62,6 +62,24 @@ from autobot_shared.secret_redaction import RedactedReprMixin
 # isolation twice (#4945, #13092) and both times failed to propagate.
 PROJECT_ROOT = project_root()
 
+
+def default_audit_log_file() -> str:
+    """The ONE definition of the audit-log default path (#14070).
+
+    The formula ``project_root() / "logs" / "audit.log"`` used to be written out
+    twice — here, in ``MiscConfig.audit_log_file``'s ``default_factory``, and
+    again as ``security_layer._AUDIT_LOG_FILE_DEFAULT``. A test asserted the two
+    were equal, which proves they *agree today*, not that either derives from
+    the other: changing one moves the value and breaks the test without saying
+    why, and updating both to match quietly restores the divergence #14050 fixed.
+
+    Both sites now call this, so the formula exists once and a change to it
+    moves every consumer. Deliberately a module-level function rather than a
+    module-level constant: ``project_root()`` must stay lazy, so that a caller
+    setting ``AUTOBOT_PROJECT_ROOT`` after import still gets the right answer.
+    """
+    return str(project_root() / "logs" / "audit.log")
+
 # Default model constants - single source of truth for fallback values (#2553)
 # These are used when .env doesn't specify a value.
 # All agent/tier model assignments MUST reference these constants — never hardcode
@@ -1496,7 +1514,13 @@ class MiscConfig(RedactedSettings):
     # ansible/roles/backend/templates/backend.env.j2), so only the unset
     # case changes here.
     audit_log_file: str = Field(
-        default_factory=lambda: str(project_root() / "logs" / "audit.log"),
+        # Called through the module global rather than bound here, so the
+        # formula is resolved at call time. `default_factory=default_audit_log_file`
+        # captures the function object at class-definition time, which makes the
+        # single definition unprovable: redirecting the canonical formula would
+        # move this field's value not at all, and the "derivation" would be the
+        # same coincidental agreement #14070 exists to end.
+        default_factory=lambda: default_audit_log_file(),  # noqa: PLW0108
         alias="AUTOBOT_AUDIT_LOG_FILE",
     )
     # #11834: restore pre-#7437 autoresearch defaults — ""/0 defaults made
