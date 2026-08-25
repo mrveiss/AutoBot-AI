@@ -3,7 +3,7 @@
 fastapi==0.141.1
 starlette==1.6.0
 python-multipart==0.0.32
-uvicorn==0.52.3
+uvicorn==0.52.4
 pydantic[email]==2.13.4
 websockets==15.0.1
 # #14551: same shape as PyJWT[crypto]/bcrypt in requirements-ci/security.txt —
