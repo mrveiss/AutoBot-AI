@@ -115,7 +115,7 @@ never edit.
 
 ## Multi-Agent Safety
 
-- Do NOT create/apply/drop `git stash` unless explicitly requested
+- **Never** `git stash` — the stack is shared repo-wide, see [`CLAUDE_GIT.md`](CLAUDE_GIT.md#never-stash-14078)
 - Do NOT switch branches unless explicitly requested
 - When pushing, use `git pull --rebase`
 - "commit" = YOUR changes only; "commit all" = everything in grouped chunks

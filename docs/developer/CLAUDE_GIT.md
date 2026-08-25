@@ -96,8 +96,9 @@ pushes onto and pops from the same stack, and entries carry no owner, no branch 
   named, pushable, and cannot be consumed by anyone else.
 - **Never `git stash pop`, `drop`, `clear` or `apply`.** The entry you take is very likely another
   session's, and popping it destroys their work with no recovery path.
-- **Never `git restore --staged --worktree`** for the same reason in miniature — it resets from
-  HEAD and discards uncommitted work outright.
+- **Never `git restore --staged --worktree`.** Not a shared-stack hazard — a different one: it
+  resets your own index and worktree from HEAD, discarding uncommitted work with no recovery.
+  Back files up before reverting an experiment.
 
 This is not hypothetical. #14078 found **113 stash entries** spanning three months, unowned and
 unlinked. Rescuing them to branches and triaging them one by one took a full session; 17 of the 18
