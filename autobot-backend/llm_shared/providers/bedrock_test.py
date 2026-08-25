@@ -25,7 +25,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llm_shared.providers.bedrock import BEDROCK_SECRET_NAME, BEDROCK_SECRET_TYPE, BedrockProvider
+from llm_shared.providers.bedrock import BEDROCK_SECRET_TYPE, BEDROCK_VAULT_ENTRY_NAME, BedrockProvider
 
 _MODULE_GLOBALS = BedrockProvider._load_credentials_from_vault.__globals__
 
@@ -74,7 +74,7 @@ def test_resolve_credentials_consults_secrets_service_first(monkeypatch):
 
     assert (access_key, secret_key, region) == ("AKIAVAULTVAULTVAULT", "vault-secret", "eu-west-1")
     vault.get_secret.assert_called_once_with(
-        name=BEDROCK_SECRET_NAME,
+        name=BEDROCK_VAULT_ENTRY_NAME,
         scope="general",
         include_value=True,
         accessed_by="bedrock_provider",

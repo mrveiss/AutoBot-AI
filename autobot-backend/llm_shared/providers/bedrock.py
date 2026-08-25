@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from typing import Any, AsyncIterator, Dict, List
 
@@ -32,10 +33,17 @@ from ..base_provider import BaseProvider
 
 logger = get_logger(__name__)
 
-#: Name/type of the Bedrock AWS credential pair in SecretsService (matches
-#: the sole writer, migrate_bedrock_credentials.py).
-BEDROCK_SECRET_NAME = "bedrock_aws_credentials"
+#: Lookup key (the vault entry's ``name`` column, not a secret value) and
+#: type of the Bedrock AWS credential pair in SecretsService -- matches the
+#: sole writer, migrate_bedrock_credentials.py.
+BEDROCK_VAULT_ENTRY_NAME = "bedrock_aws_credentials"
 BEDROCK_SECRET_TYPE = "aws_bedrock_credentials"
+
+#: AWS region shape, e.g. "us-east-1", "eu-west-1", "us-gov-west-1". Used to
+#: validate a region resolved from SecretsService before it is used to build
+#: a boto3 endpoint -- a vault entry is a trust boundary, not a guarantee of
+#: well-formed content.
+_AWS_REGION_PATTERN = re.compile(r"^[a-z]{2}(-gov)?-[a-z]+-\d{1,2}$")
 
 # Model families supported by Bedrock
 BEDROCK_MODELS = {
@@ -97,7 +105,7 @@ class BedrockProvider(BaseProvider):
         """
         try:
             secret = get_secrets_service().get_secret(
-                name=BEDROCK_SECRET_NAME,
+                name=BEDROCK_VAULT_ENTRY_NAME,
                 scope="general",
                 include_value=True,
                 accessed_by="bedrock_provider",
@@ -108,7 +116,7 @@ class BedrockProvider(BaseProvider):
         if not secret or "value" not in secret:
             return None, None, None
         if secret.get("secret_type") != BEDROCK_SECRET_TYPE:
-            logger.warning("Bedrock secret '%s' has an unexpected secret_type, ignoring", BEDROCK_SECRET_NAME)
+            logger.warning("Bedrock secret '%s' has an unexpected secret_type, ignoring", BEDROCK_VAULT_ENTRY_NAME)
             return None, None, None
         try:
             creds = json.loads(secret["value"])
@@ -152,6 +160,12 @@ class BedrockProvider(BaseProvider):
             raise ImportError("boto3 not installed. Run: pip install boto3") from exc
 
         access_key, secret_key, region = self._resolve_credentials()
+        if not region or not _AWS_REGION_PATTERN.match(region):
+            # Region can originate from a SecretsService vault entry, which is a
+            # trust boundary, not a format guarantee. Reject anything that isn't
+            # AWS-region-shaped before it is used to build a boto3 endpoint host,
+            # and never echo the malformed value back into a log/exception.
+            raise ValueError("Bedrock: resolved AWS region has an unexpected format, refusing to initialize client")
         self._region = region
 
         # Explicit creds are only added when both are present; otherwise IAM role applies.
@@ -161,7 +175,7 @@ class BedrockProvider(BaseProvider):
             client_kwargs["aws_secret_access_key"] = secret_key
 
         self._runtime_client = boto3.client(**client_kwargs)
-        logger.info("Initialized Bedrock runtime client in region %s", region)
+        logger.info("Initialized Bedrock runtime client")
         return self._runtime_client
 
     def _resolve_model_id(self, model_name: str) -> str:
