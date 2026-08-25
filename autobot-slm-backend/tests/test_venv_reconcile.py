@@ -189,16 +189,19 @@ async def test_reconcile_real_venv_removes_orphan_keeps_declared_and_transitive(
 async def test_reconcile_removes_a_name_an_operator_reinstalled_after_it_was_declared(
     real_venv: _RealVenv, tmp_path: Path
 ) -> None:
-    """KNOWN LIMITATION (module docstring): this is a name diff against the
-    tool's OWN prior-declared history, with no install-provenance marker.
-    A package this venv's history once declared, dropped from requirements,
-    then reinstalled by an operator under that exact name before the next
-    reconcile, is indistinguishable from tool debris and IS removed. Only a
-    name never declared by this tool's history (e.g. `ipdb`) is safe — see
-    test_reconcile_real_venv_removes_orphan_keeps_declared_and_transitive's
+    """KNOWN LIMITATION (module docstring), tracked as #15067: this is a
+    name diff against the tool's OWN prior-declared history, with no
+    install-provenance marker. A package this venv's history once declared,
+    dropped from requirements, then reinstalled by an operator under that
+    exact name before the next reconcile, is indistinguishable from tool
+    debris and IS removed — this test documents that, it does not endorse
+    it. Only a name never declared by this tool's history (e.g. `ipdb`) is
+    safe — see test_reconcile_real_venv_removes_orphan_keeps_declared_and_transitive's
     pkg-root/pkg-trans, which the lock never lets become candidates at all,
     and the untouched `pip`/`setuptools` in every real-venv test here, which
-    were never in any lock this tool wrote.
+    were never in any lock this tool wrote. #15067 is the follow-up to close
+    this gap with real install provenance — when it lands, this test's
+    assertion should flip to prove SURVIVAL, per its own acceptance criteria.
     """
     site = real_venv.site_packages
     _write_dist_info(site, "pkg-stale-collide", "pkg_stale_collide_15063", "1.0")

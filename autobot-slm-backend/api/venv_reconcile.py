@@ -38,15 +38,16 @@ requirements file (`EXPLICIT_LIST_COMPONENTS`) have nothing here to reconcile
 against — `refuse_explicit_list` reports that plainly instead of silently
 skipping them.
 
-KNOWN LIMITATION — a name-collision, not a redesign candidate. Protection in
-step 2 is a name diff against this tool's OWN history, with no
-install-provenance marker to tell "this tool put it here" apart from
-"an operator happens to have installed something with this exact name
-since". A package this venv's history once declared, then dropped from
+KNOWN LIMITATION — a name-collision, not a redesign candidate here. Tracked
+as #15067. Protection in step 2 is a name diff against this tool's OWN
+history, with no install-provenance marker to tell "this tool put it here"
+apart from "an operator happens to have installed something with this exact
+name since". A package this venv's history once declared, then dropped from
 requirements, is indistinguishable from operator debris installed under
 that same name in the window before the next reconcile — see
 `test_reconcile_removes_a_name_an_operator_reinstalled_after_it_was_declared`.
 A package this tool's history NEVER declared is unaffected regardless.
+#15067 is the follow-up to close this with real install provenance.
 """
 
 from __future__ import annotations
