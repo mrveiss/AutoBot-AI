@@ -136,14 +136,18 @@ _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 def _route_sampling_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     """Move a set temperature/top_p/top_k out of top-level kwargs, in place.
 
-    Returns *kwargs* for convenient chaining. An explicit ``None`` is dropped
-    (no genuine dependency to preserve); any other value is merged into
+    Returns *kwargs* for convenient chaining. Dropped outright (#15042) when
+    extended thinking is active -- current models reject a sampling kwarg
+    regardless of its value once thinking is enabled, so extra_body would
+    just move the 400 server-side. An explicit ``None`` is also dropped (no
+    genuine dependency to preserve); any other value is merged into
     ``extra_body`` so the SDK still forwards it to the API.
     """
+    thinking_active = "thinking" in kwargs
     sampling = {}
     for key in _REMOVED_SAMPLING_KWARGS:
         value = kwargs.pop(key, None)
-        if value is not None:
+        if value is not None and not thinking_active:
             sampling[key] = value
     if sampling:
         kwargs.setdefault("extra_body", {}).update(sampling)
