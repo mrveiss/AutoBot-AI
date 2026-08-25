@@ -72,8 +72,28 @@ export function useCytoscapeLibrary(
   const cytoscapeModule = shallowRef<typeof cytoscape | null>(null)
   const fcoseModule = shallowRef<unknown>(null)
 
-  async function load(): Promise<void> {
-    if (cytoscapeModule.value) return // already loaded
+  /**
+   * In-flight import, shared by every concurrent `ensureReady()`.
+   *
+   * #14770: `if (cytoscapeModule.value) return` is a check-then-act test, and
+   * consumers really do call `ensureReady()` twice in the same tick — a chart
+   * with an `{ immediate: true }` data watcher fires one from the watcher and
+   * one from `onMounted` before either import has resolved. Both then passed
+   * the null check and started their own `import()`, so the library was
+   * fetched twice and the slower resolution overwrote `cytoscapeModule` and
+   * re-ran `onReady()` long after the first had finished — re-initialising a
+   * chart that had already moved on. Memoising the promise makes the second
+   * caller await the first import instead of starting a rival one.
+   *
+   * Guarded by `FunctionCallGraph.reducedMotion.test.ts`, which mounts the
+   * real component and so produces the double call for real. A unit test
+   * cannot stand in for it here: the mocked `import()` settles in the same
+   * microtask batch for both callers, which collapses the race window the
+   * memoisation exists to close.
+   */
+  let inFlight: Promise<void> | null = null
+
+  async function importLibrary(): Promise<void> {
     try {
       loading.value = true
       error.value = ''
@@ -95,6 +115,17 @@ export function useCytoscapeLibrary(
     } finally {
       loading.value = false
     }
+  }
+
+  function load(): Promise<void> {
+    if (cytoscapeModule.value && !error.value) return Promise.resolve() // already loaded
+    if (inFlight) return inFlight
+    // Cleared in the same turn the import settles, so a failed load can be
+    // retried rather than being permanently pinned to the rejected attempt.
+    inFlight = importLibrary().finally(() => {
+      inFlight = null
+    })
+    return inFlight
   }
 
   async function ensureReady(): Promise<void> {
