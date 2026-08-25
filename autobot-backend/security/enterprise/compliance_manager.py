@@ -20,13 +20,13 @@ from typing import Dict, List
 from uuid import uuid4
 
 import aiofiles
-import yaml
 from cryptography.fernet import Fernet
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
+from security.enterprise.config_loading import load_security_config
 
 logger = get_logger(__name__)
 
@@ -183,19 +183,17 @@ class ComplianceManager:
         logger.info("Compliance Manager initialized")
 
     def _load_config(self) -> Dict:
-        """Load compliance configuration"""
-        try:
-            if os.path.exists(self.config_path):
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    return yaml.safe_load(f)
-            else:
-                # Create default config
-                default_config = self._get_default_config()
-                self._save_config(default_config)
-                return default_config
-        except Exception as e:
-            logger.error("Failed to load compliance config: %s", e)
-            return self._get_default_config()
+        """Load compliance configuration, recording whether the file was actually found.
+
+        #14892: the miss branch used to write these defaults back to the path it
+        had just failed to read, so the next boot loaded the decoy and reported
+        success. It now warns and writes nothing; ``self.config_source`` carries
+        the same fact for callers.
+        """
+        loaded = load_security_config(self.config_path, self._get_default_config, "compliance")
+        self.config_source = loaded.source
+        self.config_searched_path = loaded.searched_path
+        return loaded.values
 
     def _get_default_config(self) -> Dict:
         """Return default compliance configuration"""
@@ -232,16 +230,6 @@ class ComplianceManager:
                 "pii_access_unusual": 50,  # per hour
             },
         }
-
-    def _save_config(self, config: Dict):
-        """Save configuration to file (thread-safe, Issue #378)"""
-        with self._file_lock:
-            try:
-                os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
-                with open(self.config_path, "w", encoding="utf-8") as f:
-                    yaml.dump(config, f, default_flow_style=False)
-            except Exception as e:
-                logger.error("Failed to save compliance config: %s", e)
 
     def _get_encryption_key(self) -> bytes | None:
         """Get or generate encryption key for sensitive audit data (thread-safe, Issue #378)"""
