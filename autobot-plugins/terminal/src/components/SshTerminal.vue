@@ -35,6 +35,13 @@ const props = defineProps<{
   chatSessionId?: string | null
   /** WebSocket base path for SSH connections. Defaults to /api/terminal/ws/ssh/ */
   wsBasePath?: string
+  /**
+   * Auth token for the WebSocket handshake (#14991). The backend now
+   * authenticates this connection; this shared package has no store of its
+   * own to pull a token from, so the host application must resolve and pass
+   * one. Connection is refused client-side when this is absent.
+   */
+  authToken?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -53,12 +60,14 @@ let fitAddon: FitAddon | null = null
 
 const wsUrl = ref('')
 
-const buildWsUrl = () => {
+const buildWsUrl = (): string | null => {
+  if (!props.authToken) return null
   const params = props.chatSessionId ? `?conversation_id=${props.chatSessionId}` : ''
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.host
   const basePath = props.wsBasePath ?? '/api/terminal/ws/ssh/'
-  return `${protocol}//${host}${basePath}${props.hostId}${params}`
+  const sep = params ? '&' : '?'
+  return `${protocol}//${host}${basePath}${props.hostId}${params}${sep}token=${encodeURIComponent(props.authToken)}`
 }
 
 const { send: wsSend, connect: wsConnect, disconnect: wsDisconnect, isConnected: wsIsConnected } = useWebSocket(wsUrl, {
@@ -148,8 +157,16 @@ const connect = () => {
   if (wsIsConnected.value) return
   connectionState.value = 'connecting'
   errorMessage.value = ''
-  wsUrl.value = buildWsUrl()
-  logger.info(`Connecting to SSH WebSocket: ${wsUrl.value}`)
+  const url = buildWsUrl()
+  if (url === null) {
+    logger.warn('No auth token available, cannot connect to SSH WebSocket')
+    connectionState.value = 'error'
+    errorMessage.value = 'Not authenticated'
+    emit('error', 'Not authenticated')
+    return
+  }
+  wsUrl.value = url
+  logger.info('Connecting to SSH WebSocket')
   wsConnect()
 }
 

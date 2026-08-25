@@ -215,7 +215,9 @@ AutoBot has **7 terminal implementations** with significant overlap. Analysis sh
 - **Backend API**:
   - Session: `autobot-backend/api/agent_terminal.py` - Lines 122-296
     - REST: `POST /api/agent-terminal/sessions` - Create with approval workflow
-  - I/O: `autobot-backend/api/terminal.py` WebSocket (shared with Tools Terminal)
+  - I/O: `autobot-backend/api/terminal.py` WebSocket (shared with Tools Terminal;
+    authenticated before accept() and ownership-checked against whichever REST
+    endpoint created the session -- #14960/#14961/#14989)
 - **Service Layer**: `backend/services/agent_terminal_service.py`
   - Command approval workflow
   - Agent/user control state management

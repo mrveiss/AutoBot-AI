@@ -72,6 +72,58 @@ async def enforce_ws_origin(websocket: WebSocket) -> bool:
         return False
 
 
+async def _resolve_ws_user(websocket: WebSocket) -> "dict | None":
+    """Try every credential source a caller might legitimately present.
+
+    A browser JS client can only put a JWT in the query string -- it cannot
+    set custom headers on a WebSocket handshake -- so the query-param check
+    (:func:`auth_middleware.authenticate_websocket`) goes first. A
+    non-browser or service caller may instead send an ``Authorization``
+    header, an ``X-Session-ID`` session header, a dev-mode header, or the
+    internal-service key; ``get_user_from_request`` and
+    ``verify_internal_api_key`` already resolve those for HTTP requests, and
+    a WebSocket exposes the same ``headers``/``cookies`` interface
+    (``authenticate_ws_admin`` relies on the same fact). Trying each in turn
+    is a union of the accepted checks -- more ways to prove identity, not a
+    looser standard for any one of them (#11016 documents the identical
+    query-only lockout for the admin workspace shell).
+    """
+    from auth_middleware import (  # noqa: PLC0415
+        authenticate_websocket,
+        get_auth_middleware,
+        verify_internal_api_key,
+    )
+
+    user = await authenticate_websocket(websocket)
+    if user is not None:
+        return user
+    if verify_internal_api_key(websocket.headers.get("X-Internal-API-Key")):
+        return {"username": "service:slm", "role": "admin", "service": True}
+    return get_auth_middleware().get_user_from_request(websocket)  # type: ignore[arg-type]
+
+
+async def enforce_ws_authentication(websocket: WebSocket) -> "dict | None":
+    """Authenticate a WebSocket handshake and, on failure, close with ``1008``.
+
+    Convenience wrapper mirroring :func:`enforce_ws_origin`: call before
+    ``websocket.accept()`` and ``return`` when this yields ``None``. Closing
+    before ``accept()`` rejects the handshake itself rather than the socket
+    accepting then tearing down mid-stream (#14959, #14960, #14991).
+
+    Returns the authenticated user dict, or ``None`` after having closed the
+    socket for a missing or invalid credential.
+    """
+    user = await _resolve_ws_user(websocket)
+    if user is None:
+        logger.warning("Rejected unauthenticated WebSocket handshake")
+        try:
+            await websocket.close(code=1008, reason="Authentication required")
+        except Exception:  # already closed / handshake not completed
+            pass
+        return None
+    return user
+
+
 def authenticate_ws_admin(websocket: WebSocket) -> bool:
     """Fail-closed auth+authz for admin WS endpoints: a valid user (JWT/session/
     cookie) or the internal-service key, AND admin role — matching the REST

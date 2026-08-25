@@ -23,7 +23,7 @@ from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
 from .models import AgentSessionState, AgentTerminalSession
 from .session_manager import SessionManager
-from .utils import create_command_execution, is_interactive_command
+from .utils import create_command_execution, is_interactive_command, log_command_approval, log_command_result
 
 logger = get_logger(__name__)
 
@@ -91,14 +91,21 @@ class AgentTerminalService:
         conversation_id: str | None = None,
         host: str = "main",
         metadata: Metadata | None = None,
+        owner: str | None = None,
     ) -> AgentTerminalSession:
-        """Create a new agent terminal session with PTY integration."""
+        """Create a new agent terminal session with PTY integration.
+
+        Issue #14989: `owner` is the authenticated creator's username, stamped
+        onto the shared terminal session_configs entry so the WebSocket
+        ownership gate in api.terminal can recognise them (#14960).
+        """
         return await self.session_manager.create_session(
             agent_id=agent_id,
             agent_role=agent_role,
             conversation_id=conversation_id,
             host=host,
             metadata=metadata,
+            owner=owner,
         )
 
     async def get_session(self, session_id: str) -> AgentTerminalSession | None:
@@ -381,59 +388,6 @@ class AgentTerminalService:
     # Helper Methods for _approve_command_internal (Issue #281)
     # ============================================================================
 
-    async def _log_command_approval(
-        self,
-        session: AgentTerminalSession,
-        command: str,
-        user_id: str | None,
-    ) -> None:
-        """
-        Log command approval to terminal logger.
-
-        Issue #665: Extracted from _execute_approved_command.
-
-        Args:
-            session: Terminal session
-            command: Command being approved
-            user_id: User who approved the command
-        """
-        if session.has_conversation():
-            await self.terminal_logger.log_command(
-                session_id=session.conversation_id,
-                command=command,
-                run_type="manual",
-                status="approved",
-                user_id=user_id,
-            )
-
-    async def _log_command_result(
-        self,
-        session: AgentTerminalSession,
-        command: str,
-        result: Metadata,
-        user_id: str | None,
-    ) -> None:
-        """
-        Log command execution result to terminal logger.
-
-        Issue #665: Extracted from _execute_approved_command.
-
-        Args:
-            session: Terminal session
-            command: Executed command
-            result: Execution result
-            user_id: User who approved the command
-        """
-        if session.has_conversation():
-            await self.terminal_logger.log_command(
-                session_id=session.conversation_id,
-                command=command,
-                run_type="manual",
-                status="success" if result.get("status") == "success" else "error",
-                result=result,
-                user_id=user_id,
-            )
-
     async def _post_execution_updates(
         self,
         session: AgentTerminalSession,
@@ -498,7 +452,7 @@ class AgentTerminalService:
         auto_approve_future: bool,
     ) -> Metadata:
         """Helper for _execute_approved_command. Ref: #1088."""
-        await self._log_command_approval(session, command, user_id)
+        await log_command_approval(self.terminal_logger, session, command, user_id)
 
         result = await self.command_executor.execute_in_pty(session, command)
 
@@ -510,7 +464,7 @@ class AgentTerminalService:
             return_code=result.get("return_code", 0),
         )
 
-        await self._log_command_result(session, command, result, user_id)
+        await log_command_result(self.terminal_logger, session, command, result, user_id)
         await self._post_execution_updates(
             session,
             command,

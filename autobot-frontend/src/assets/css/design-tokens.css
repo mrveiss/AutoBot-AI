@@ -591,6 +591,17 @@
   --terminal-text-dim-strong: #dddddd;    /* emphasis body text */
   --terminal-text-output: #d4d4d4;        /* default (non-ANSI) command-output text */
 
+  /* Connection status bar (SSHTerminal.vue) — same literal-hex rationale as
+   * the rest of this block: a status bar showing the state of a live remote
+   * shell connection, not a generic UI alert, so it stays out of the
+   * semantic --color-success/warning/error palette on purpose (#14989). */
+  --terminal-status-bg-connecting: #3d3d00;
+  --terminal-status-text-connecting: #ffc107;
+  --terminal-status-bg-connected: #1e3d1e;
+  --terminal-status-text-connected: #4caf50;
+  --terminal-status-bg-error: #3d1e1e;
+  --terminal-status-text-error: #f44336;
+
   /* ANSI content palette — literal, do NOT remap to semantic tokens */
   --terminal-ansi-green: #00ff00;         /* prompt + cursor */
   --terminal-ansi-red: #ff6b6b;           /* error output */

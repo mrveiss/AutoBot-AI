@@ -31,7 +31,7 @@ from api.schemas_system import (
     DesktopControlReleaseRequest,
     VncProxyStatusResponse,
 )
-from api.ws_security import enforce_ws_origin
+from api.ws_security import enforce_ws_authentication, enforce_ws_origin
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
@@ -397,6 +397,14 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     """
     if not await enforce_ws_origin(websocket):
         return
+
+    # Issue #14959: this is full keyboard/mouse/framebuffer access to the
+    # canonical desktop -- authenticate before accept() so a rejection is a
+    # handshake failure, never a mid-stream close after RFB frames flowed.
+    user = await enforce_ws_authentication(websocket)
+    if user is None:
+        return
+
     if vnc_type not in VNC_ENDPOINTS:
         await websocket.close(code=1003, reason=f"Unknown VNC type: {vnc_type}")
         return
@@ -405,10 +413,19 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     ws_url = endpoint.replace("http://", "wss://") + "/websockify"
 
     await websocket.accept()
-    logger.info("VNC WebSocket proxy connected: %s → %s", vnc_type, ws_url)
+    logger.info(
+        "VNC WebSocket proxy connected: %s → %s (user=%s)",
+        vnc_type,
+        ws_url,
+        user.get("username"),
+    )
 
-    # Record connection event for MCP
-    await record_observation(vnc_type, "connection", {"endpoint": ws_url, "status": "connected"})
+    # Record connection event for MCP -- names the authenticated caller (#14959)
+    await record_observation(
+        vnc_type,
+        "connection",
+        {"endpoint": ws_url, "status": "connected", "user": user.get("username")},
+    )
 
     try:
         http_client = get_http_client()

@@ -15,6 +15,9 @@ from autobot_shared.status_enums import CommandRisk
 from models.command_execution import CommandExecution, CommandState, RiskLevel
 
 if TYPE_CHECKING:
+    from autobot_logging.terminal_logger import TerminalLogger
+    from type_defs.common import Metadata
+
     from .models import AgentTerminalSession
 
 
@@ -203,3 +206,50 @@ def is_interactive_command(command: str) -> tuple[bool, list[str]]:
             matched_patterns.append(description)
 
     return (len(matched_patterns) > 0, matched_patterns)
+
+
+async def log_command_approval(
+    terminal_logger: "TerminalLogger",
+    session: "AgentTerminalSession",
+    command: str,
+    user_id: str | None,
+) -> None:
+    """Record an approved command against the session's conversation transcript.
+
+    Issue #665 extracted this from ``_execute_approved_command``; #14959 moved it
+    off ``AgentTerminalService`` — it reads no service state beyond the logger it
+    is handed, and the service had reached its recorded size ceiling.
+
+    A session with no conversation has nowhere to write, and logs nothing.
+    """
+    if session.has_conversation():
+        await terminal_logger.log_command(
+            session_id=session.conversation_id,
+            command=command,
+            run_type="manual",
+            status="approved",
+            user_id=user_id,
+        )
+
+
+async def log_command_result(
+    terminal_logger: "TerminalLogger",
+    session: "AgentTerminalSession",
+    command: str,
+    result: "Metadata",
+    user_id: str | None,
+) -> None:
+    """Record the outcome of an approved command (#665, moved in #14959).
+
+    Anything other than a ``success`` status is written as ``error`` — the
+    transcript records what happened, not what was attempted.
+    """
+    if session.has_conversation():
+        await terminal_logger.log_command(
+            session_id=session.conversation_id,
+            command=command,
+            run_type="manual",
+            status="success" if result.get("status") == "success" else "error",
+            result=result,
+            user_id=user_id,
+        )

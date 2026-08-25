@@ -116,7 +116,6 @@ import signal
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
@@ -152,14 +151,16 @@ from api.system_health import ComponentHealth, register_health_probe
 
 # Import models from dedicated module (Issue #185 - split oversized files)
 # Response schemas for OpenAPI documentation and response validation
-from api.ws_security import enforce_ws_origin
+from api.ws_security import enforce_ws_authentication, enforce_ws_origin
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import CommandRisk
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
+from security.session_ownership import build_owner_metadata
 from services.simple_pty import simple_pty_manager
 
 # Import terminal secrets service for SSH key integration (Issue #211)
@@ -174,137 +175,20 @@ router = APIRouter(
 )
 
 
-# SSH terminal stub classes — previously in api/ssh_terminal_handlers.py.
-# Issue #729: SSH operations to infrastructure hosts are now handled by slm-server.
-# Issue #3383: Inlined here to eliminate the competing module.
-
-
-class SSHTerminalWebSocket:
-    """
-    Stub SSH terminal handler — redirects to SLM for infrastructure connections.
-
-    Issue #729: SSH connections to infrastructure hosts are now managed by slm-server.
-    This class provides a backward-compatible interface that returns a deprecation message.
-    """
-
-    def __init__(
-        self,
-        websocket: WebSocket,
-        session_id: str,
-        host_id: str,
-        conversation_id: str | None = None,
-        redis_client=None,
-    ):
-        """Initialize SSH terminal handler stub."""
-        self.websocket = websocket
-        self.session_id = session_id
-        self.host_id = host_id
-        self.conversation_id = conversation_id
-        self.active = False
-        self.command_history: list = []
-        self.session_start_time = datetime.now(tz=timezone.utc)
-
-    async def start(self) -> bool:
-        """Start SSH terminal session — returns deprecation message."""
-        self.active = False
-        await self._send_error(
-            "SSH terminal connections to infrastructure hosts have been moved to SLM.\n"
-            "Please use slm-admin \u2192 Tools \u2192 Terminal to connect to infrastructure hosts,\n"
-            "or call the SLM API directly at: /api/terminal/ssh/{host_id}\n\n"
-            "This is part of the layer separation (#729) — infrastructure operations\n"
-            "are now managed exclusively by slm-server."
-        )
-        return False
-
-    async def cleanup(self) -> None:
-        """Clean up resources."""
-        self.active = False
-        logger.info("SSH terminal stub session cleaned up: %s", self.session_id)
-
-    async def send_message(self, message: dict) -> None:
-        """Send message to WebSocket client."""
-        try:
-            await self.websocket.send_text(json.dumps(message))
-        except Exception as e:
-            logger.error("Error sending message: %s", e)
-
-    async def _send_error(self, content: str) -> None:
-        """Send error message to client."""
-        await self.send_message(
-            {
-                "type": "error",
-                "content": content,
-                "timestamp": time.time(),
-                "redirect": {
-                    "type": "slm",
-                    "message": "Use SLM for infrastructure SSH connections",
-                    "url": "/api/terminal/ssh/{host_id}",
-                },
-            }
-        )
-
-    async def send_to_terminal(self, text: str) -> None:
-        """Send text input — not supported, redirects to SLM."""
-        await self._send_error("SSH terminal not available. Use SLM for infrastructure connections.")
-
-    async def send_output(self, content: str) -> None:
-        """Send terminal output — stub."""
-
-    async def handle_message(self, message: dict) -> None:
-        """Handle incoming WebSocket message — returns deprecation notice."""
-        await self._send_error("SSH terminal moved to SLM server (#729)")
-
-
-class _SSHTerminalManager:
-    """Manager for SSH terminal sessions — stub implementation."""
-
-    def __init__(self) -> None:
-        """Initialize SSH terminal manager."""
-        self.active_sessions: Dict[str, SSHTerminalWebSocket] = {}
-        self._lock = asyncio.Lock()
-
-    async def add_session(self, session_id: str, terminal: SSHTerminalWebSocket) -> None:
-        """Add an SSH terminal session."""
-        async with self._lock:
-            self.active_sessions[session_id] = terminal
-
-    async def remove_session(self, session_id: str) -> None:
-        """Remove an SSH terminal session."""
-        async with self._lock:
-            self.active_sessions.pop(session_id, None)
-
-    async def get_session(self, session_id: str) -> SSHTerminalWebSocket | None:
-        """Get an SSH terminal session."""
-        async with self._lock:
-            return self.active_sessions.get(session_id)
-
-    async def close_session(self, session_id: str) -> None:
-        """Close and clean up an SSH terminal session."""
-        terminal: SSHTerminalWebSocket | None = None
-        async with self._lock:
-            terminal = self.active_sessions.get(session_id)
-        if terminal:
-            await terminal.cleanup()
-            await self.remove_session(session_id)
-
-    def list_sessions(self) -> Dict[str, Dict[str, Any]]:
-        """List all active SSH terminal sessions."""
-        return {
-            sid: {
-                "host_id": t.host_id,
-                "conversation_id": t.conversation_id,
-                "start_time": t.session_start_time.isoformat(),
-                "active": t.active,
-            }
-            for sid, t in self.active_sessions.items()
-        }
-
-
-ssh_terminal_manager = _SSHTerminalManager()
-
-
 # Import handler classes (extracted from this file - Issue #210)
 from api.terminal_handlers import TerminalWebSocket, session_manager
+
+# SSH terminal support lives in api/terminal_ssh.py (#14959). The stub handler,
+# its session manager and the three websocket helpers moved together; the
+# /ws/ssh/{host_id} route below stays here with the rest of the router. Imported
+# under this module's own names so `api.terminal.ssh_terminal_manager` keeps
+# resolving for every existing caller and patch target.
+from api.terminal_ssh import (  # noqa: E402
+    _init_ssh_redis_client,
+    _run_ssh_message_loop,
+    _setup_ssh_terminal,
+    ssh_terminal_manager,
+)
 
 # Import tool management router (extracted from this file - Issue #185)
 from api.terminal_tools import router as tools_router
@@ -334,9 +218,15 @@ async def create_terminal_session(
     session_id = str(uuid.uuid4())
 
     # Store session configuration for WebSocket connection
+    # Issue #14960/#14961: the authenticated creator is the session's owner --
+    # never the client-supplied, unauthenticated request.user_id field below,
+    # which is display metadata only. build_owner_metadata is the one builder
+    # every ownership-stamping path uses (security/session_ownership.py).
+    owner = build_owner_metadata(current_user).get("owner")
     session_config = {
         "session_id": session_id,
         "user_id": request.user_id,
+        "owner": owner,
         "conversation_id": (request.conversation_id),  # For linking chat to terminal logging
         "chat_id": request.chat_id,  # For chat-scoped SSH keys (Issue #211)
         "security_level": request.security_level,
@@ -818,23 +708,56 @@ async def get_session_audit_log(
 # WebSocket Endpoints
 
 
+def _lookup_terminal_session(session_id: str, user: dict) -> "dict | None":
+    """Resolve an existing, owned terminal session config; deny by default.
+
+    Issue #14961: an unknown session_id must never resolve to a live
+    terminal -- absence is a terminal condition, not a signal to fall back
+    to defaults, so this never applies a default config for a missing
+    session_id.
+    Issue #14960: the authenticated caller must own the session; ownership
+    is stamped at creation time by create_terminal_session (#14960) via
+    security.session_ownership.build_owner_metadata.
+
+    Returns the session config only when the session exists AND the
+    authenticated user owns it; otherwise None.
+    """
+    config = session_manager.session_configs.get(session_id)
+    if config is None:
+        logger.warning("Terminal WebSocket rejected: unknown session_id %s", session_id)
+        return None
+    owner = config.get("owner")
+    if not owner or owner != user.get("username"):
+        logger.warning(
+            "Terminal WebSocket rejected: %s is not the owner of session %s",
+            user.get("username"),
+            session_id,
+        )
+        return None
+    return config
+
+
 async def _init_terminal_handler(
     websocket: WebSocket,
     session_id: str,
+    config: dict,
 ) -> "TerminalWebSocket":
-    """Helper for terminal_websocket. Ref: #1088.
+    """Helper for terminal_websocket. Ref: #1088, #14961.
 
-    Resolves session config, acquires Redis client, constructs and starts
-    the terminal handler, and registers it with the session manager.
+    Acquires a Redis client, constructs and starts the terminal handler from
+    an already-validated session config, and registers it with the session
+    manager. Callers must resolve `config` via _lookup_terminal_session first
+    -- this never defaults a security level for a session that does not
+    exist, only for a known field missing on a real config.
 
     Args:
         websocket: Active WebSocket connection
         session_id: Session identifier
+        config: Validated session config (existence + ownership already checked)
 
     Returns:
         Started TerminalWebSocket instance
     """
-    config = session_manager.session_configs.get(session_id, {})
     security_level = SecurityLevel(config.get("security_level", SecurityLevel.STANDARD.value))
     conversation_id = config.get("conversation_id")
 
@@ -907,14 +830,30 @@ async def terminal_websocket(websocket: WebSocket, session_id: str):
     Replaces both /ws/simple and /ws/secure endpoints.
     Issue #1088: Extracted _init_terminal_handler and _run_terminal_message_loop
     helpers to reduce to <=65 lines.
+    Issue #14960/#14961: authenticates and validates session ownership before
+    accept() -- see _lookup_terminal_session and enforce_ws_authentication.
     """
     if not await enforce_ws_origin(websocket):
         return
+
+    user = await enforce_ws_authentication(websocket)
+    if user is None:
+        return
+
+    config = _lookup_terminal_session(session_id, user)
+    if config is None:
+        await websocket.close(code=1008, reason="Unknown or unauthorized terminal session")
+        return
+
     await websocket.accept()
 
     try:
-        terminal = await _init_terminal_handler(websocket, session_id)
-        logger.info("WebSocket connection established for session %s", session_id)
+        terminal = await _init_terminal_handler(websocket, session_id, config)
+        logger.info(
+            "WebSocket connection established for session %s (user=%s)",
+            session_id,
+            user.get("username"),
+        )
         await _run_terminal_message_loop(websocket, terminal, session_id)
 
     except Exception as e:
@@ -923,93 +862,6 @@ async def terminal_websocket(websocket: WebSocket, session_id: str):
         session_manager.remove_connection(session_id)
         if "terminal" in locals():
             await terminal.cleanup()
-
-
-# SSH Terminal WebSocket (Issue #715 - Infrastructure host connections)
-# Issue #729: DEPRECATED - SSH connections to infrastructure hosts moved to slm-server
-# This endpoint now returns a deprecation message and redirects to SLM
-
-
-async def _init_ssh_redis_client():
-    """
-    Initialize Redis client for SSH terminal logging.
-
-    Issue #620: Extracted from ssh_terminal_websocket to reduce function length.
-
-    Returns:
-        Redis client or None if unavailable
-    """
-    try:
-        from dependencies import get_async_redis_client
-
-        return await get_async_redis_client(database="main")
-    except Exception as e:
-        logger.warning("Could not get Redis client for SSH terminal logging: %s", e)
-        return None
-
-
-async def _setup_ssh_terminal(
-    websocket: WebSocket,
-    session_id: str,
-    host_id: str,
-    conversation_id: str,
-    redis_client,
-) -> "SSHTerminalWebSocket":
-    """
-    Create and register SSH terminal handler.
-
-    Issue #620: Extracted from ssh_terminal_websocket to reduce function length.
-
-    Args:
-        websocket: WebSocket connection
-        session_id: Unique session identifier
-        host_id: Target host ID
-        conversation_id: Optional conversation ID
-        redis_client: Redis client for logging
-
-    Returns:
-        SSHTerminalWebSocket instance
-    """
-    terminal = SSHTerminalWebSocket(
-        websocket=websocket,
-        session_id=session_id,
-        host_id=host_id,
-        conversation_id=conversation_id,
-        redis_client=redis_client,
-    )
-    await ssh_terminal_manager.add_session(session_id, terminal)
-    return terminal
-
-
-async def _run_ssh_message_loop(websocket: WebSocket, terminal: "SSHTerminalWebSocket", session_id: str) -> None:
-    """
-    Run SSH WebSocket message handling loop.
-
-    Issue #620: Extracted from ssh_terminal_websocket to reduce function length.
-
-    Args:
-        websocket: WebSocket connection
-        terminal: SSH terminal handler
-        session_id: Session identifier for logging
-    """
-    try:
-        while terminal.active:
-            data = await websocket.receive_text()
-            message = json.loads(data)
-            await terminal.handle_message(message)
-    except WebSocketDisconnect:
-        logger.info("SSH WebSocket disconnected: %s", session_id)
-    except Exception as e:
-        logger.error("Error in SSH WebSocket handling: %s", e)
-        await websocket.send_text(
-            json.dumps(
-                {
-                    "type": "error",
-                    "content": "SSH terminal error",
-                    "timestamp": time.time(),
-                }
-            )
-        )
 
 
 @router.websocket("/ws/ssh/{host_id}")
@@ -1037,9 +889,36 @@ async def ssh_terminal_websocket(
 
     This endpoint remains for backward compatibility but returns a deprecation
     message directing clients to use SLM for infrastructure connections.
+
+    Issue #14991: this had no authentication at all -- any caller who knew or
+    guessed a host_id reached SSHTerminalWebSocket (today an inert stub, but
+    the live shape of an interactive infrastructure shell). There is no
+    per-host permission model anywhere in this codebase to scope host_id
+    against a caller's permitted set, and #14958 explicitly rules out
+    inventing one here. The strictest reading available without inventing a
+    new capability model is the one this router already declares its intent
+    with (`Depends(check_admin_permission)` at router level, which does not
+    actually run for WebSocket routes -- FastAPI does not resolve an
+    HTTP-`Request`-typed router dependency against a WebSocket scope): admin
+    role, checked explicitly here, for every host_id. A finer-grained,
+    per-host model is out of scope (belongs with #14964).
     """
     if not await enforce_ws_origin(websocket):
         return
+
+    user = await enforce_ws_authentication(websocket)
+    if user is None:
+        return
+
+    if not is_admin_role(user.get("role")):
+        logger.warning(
+            "SSH terminal WebSocket rejected: %s is not an admin (host %s)",
+            user.get("username"),
+            host_id,
+        )
+        await websocket.close(code=1008, reason="Admin role required for infrastructure SSH access")
+        return
+
     await websocket.accept()
     session_id = f"ssh-{host_id}-{uuid.uuid4().hex[:8]}"
 
