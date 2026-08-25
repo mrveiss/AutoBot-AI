@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 #: type of the Bedrock AWS credential pair in SecretsService -- matches the
 #: sole writer, migrate_bedrock_credentials.py.
 BEDROCK_VAULT_ENTRY_NAME = "bedrock_aws_credentials"
-BEDROCK_SECRET_TYPE = "aws_bedrock_credentials"
+BEDROCK_VAULT_ENTRY_TYPE = "aws_bedrock_credentials"
 
 #: AWS region shape, e.g. "us-east-1", "eu-west-1", "us-gov-west-1". Used to
 #: validate a region resolved from SecretsService before it is used to build
@@ -124,7 +124,7 @@ class BedrockProvider(BaseProvider):
             return None, None, None
         if not secret or "value" not in secret:
             return None, None, None
-        if secret.get("secret_type") != BEDROCK_SECRET_TYPE:
+        if secret.get("secret_type") != BEDROCK_VAULT_ENTRY_TYPE:
             logger.warning("Bedrock secret '%s' has an unexpected secret_type, ignoring", BEDROCK_VAULT_ENTRY_NAME)
             return None, None, None
         try:

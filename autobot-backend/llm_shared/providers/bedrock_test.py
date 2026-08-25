@@ -27,15 +27,15 @@ import pytest
 
 from llm_shared.providers.bedrock import (
     _AWS_REGION_PATTERN,
-    BEDROCK_SECRET_TYPE,
     BEDROCK_VAULT_ENTRY_NAME,
+    BEDROCK_VAULT_ENTRY_TYPE,
     BedrockProvider,
 )
 
 _MODULE_GLOBALS = BedrockProvider._load_credentials_from_vault.__globals__
 
 
-def _vault_returning(value_json: str | None, secret_type: str = BEDROCK_SECRET_TYPE) -> MagicMock:
+def _vault_returning(value_json: str | None, secret_type: str = BEDROCK_VAULT_ENTRY_TYPE) -> MagicMock:
     """A ``get_secrets_service()`` stand-in whose ``get_secret`` returns *value_json*."""
     service = MagicMock()
     if value_json is None:
