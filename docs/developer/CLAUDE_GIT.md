@@ -69,6 +69,8 @@ merge.
    (#4969).
 2. `git stash list` — if it is non-empty, **ask before proceeding**. The stash stack is shared
    across every worktree in the clone, so an entry may belong to another session.
+   See [Never Stash](#never-stash-14078) below — reading the stack is safe, writing to it
+   is not.
 3. `git fetch origin Dev_new_gui` — do this *before* step 4, or the check below reads a stale
    ref and reports work as unlanded when it already merged.
 4. Verify the issue isn't already resolved:
@@ -82,6 +84,30 @@ merge.
 6. Confirm Bash is approved in the main session — sub-agents inherit from the parent.
 7. No stale worktree already claims the target path (see the preflight above).
 8. For architectural decisions, state them in 1–2 sentences and wait for confirmation.
+
+---
+
+## Never Stash (#14078)
+
+**`git stash` is a shared, repo-wide stack — not a per-worktree one.** Every worktree in the clone
+pushes onto and pops from the same stack, and entries carry no owner, no branch and no issue link.
+
+- **Never `git stash`.** Park work as a `wip:` commit on your own branch instead. It is owned,
+  named, pushable, and cannot be consumed by anyone else.
+- **Never `git stash pop`, `drop`, `clear` or `apply`.** The entry you take is very likely another
+  session's, and popping it destroys their work with no recovery path.
+- **Never `git restore --staged --worktree`** for the same reason in miniature — it resets from
+  HEAD and discards uncommitted work outright.
+
+This is not hypothetical. #14078 found **113 stash entries** spanning three months, unowned and
+unlinked. Rescuing them to branches and triaging them one by one took a full session; 17 of the 18
+that looked stranded turned out to be work that had already landed, and the eighteenth was a
+security fix nobody knew was sitting there (#15023).
+
+**If you find a non-empty stack:** inventory it, never sweep it. Rescue an entry to a branch
+(`git branch rescued/stash-<date>-<sha> <stash-sha>`) and open an issue naming the branch. Dropping
+an entry is only correct once its content is demonstrably present in `Dev_new_gui`, and that is a
+deliberate, evidenced act — not cleanup.
 
 ---
 
