@@ -7,9 +7,11 @@ import tempfile
 from pathlib import Path
 import pytest
 
-# Import functions from generate-report
-import sys
-sys.path.insert(0, str(Path(__file__).parent))
+# Import functions from generate-report. `generate_report` resolves through
+# pytest.ini's `pythonpath`, which puts this directory on sys.path before
+# collection starts. It used to be a sys.path.insert right here, which worked
+# only for whichever sibling happened to be imported first -- collection order
+# is not a contract (#14986).
 from generate_report import (
     calculate_percentages,
     format_status_emoji,
