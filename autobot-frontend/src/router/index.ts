@@ -1238,19 +1238,15 @@ export const routes: RouteRecordRaw[] = [
   }
 ]
 
+import { routeScrollBehavior } from './scrollBehavior'
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-  scrollBehavior(to, from, savedPosition) {
-    // Restore scroll position when navigating back
-    if (savedPosition) {
-      return savedPosition
-    }
-    // Scroll to top for new pages
-    if (to.hash) {
-      return { el: to.hash, behavior: 'smooth' }
-    }
-    return { top: 0, behavior: 'smooth' }
+  // #14770: policy lives in `./scrollBehavior` so it is reachable by a test
+  // without importing the whole route table — same split as `redirectTarget`.
+  scrollBehavior(to, _from, savedPosition) {
+    return routeScrollBehavior(to, savedPosition)
   }
 })
 

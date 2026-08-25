@@ -39,6 +39,29 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+# The tables ConversationFileManager's schema creates. One definition, used by
+# every check below (#13286).
+#
+# A second check used to assert `COUNT(*) FROM sqlite_master == 6` instead of
+# naming them, and that count was wrong: SQLite adds its own `sqlite_sequence`
+# table for any AUTOINCREMENT column, so the real count is 7 and the assertion
+# had been false since that column was introduced. Nothing noticed, because this
+# module carries a marker `ci.yml` deselects and, until #13286, was named by no
+# workflow at all — it had never been executed anywhere.
+#
+# Naming the tables is also the stronger assertion: a count passes when a table
+# is dropped and an unrelated one appears, and it fails on an engine-internal
+# table that is not corruption at all.
+EXPECTED_TABLES = {
+    "conversation_files",
+    "file_metadata",
+    "session_file_associations",
+    "file_access_log",
+    "file_cleanup_queue",
+    "schema_migrations",
+}
+
+
 # Issue #618: Helper to run blocking sqlite3 queries in async context
 async def async_sqlite_query(db_path: str, query: str, params: tuple = ()) -> List[Tuple[Any, ...]]:
     """Execute sqlite3 query without blocking the event loop.
@@ -160,21 +183,12 @@ class TestFreshVMDeployment:
         db_path_str = str(shared_db_path["db_path"])
 
         # Check all required tables exist
-        expected_tables = {
-            "conversation_files",
-            "file_metadata",
-            "session_file_associations",
-            "file_access_log",
-            "file_cleanup_queue",
-            "schema_migrations",
-        }
-
         rows = await async_sqlite_query(db_path_str, "SELECT name FROM sqlite_master WHERE type='table'")
         actual_tables = {row[0] for row in rows}
 
-        missing_tables = expected_tables - actual_tables
+        missing_tables = EXPECTED_TABLES - actual_tables
         assert not missing_tables, f"Missing tables: {missing_tables}"
-        logger.info(f"✓ All {len(expected_tables)} tables created")
+        logger.info(f"✓ All {len(EXPECTED_TABLES)} tables created")
 
         # Verify schema version
         rows = await async_sqlite_query(
@@ -560,17 +574,38 @@ class TestConcurrentVMInitialization:
         assert migration_count == 1, f"Schema version should be recorded once, found {migration_count} records"
         logger.info("✓ Schema version recorded exactly once (no race condition)")
 
-        # Verify all tables exist (no corruption)
-        rows = await async_sqlite_query(db_path_str, "SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
-        table_count = rows[0][0]
-        assert table_count == 6, f"Should have 6 tables, found {table_count}"
+        # Verify all tables exist (no corruption). Named, not counted — see
+        # EXPECTED_TABLES: the old `== 6` was false as soon as SQLite added its
+        # own `sqlite_sequence` table, and a count cannot tell a dropped table
+        # from a substituted one.
+        rows = await async_sqlite_query(db_path_str, "SELECT name FROM sqlite_master WHERE type='table'")
+        actual_tables = {row[0] for row in rows}
+        missing_tables = EXPECTED_TABLES - actual_tables
+        assert not missing_tables, f"Missing tables after concurrent init: {missing_tables}"
         logger.info("✓ All tables exist (no corruption during concurrent init)")
 
-        # Verify foreign keys are enabled
-        rows = await async_sqlite_query(db_path_str, "PRAGMA foreign_keys")
-        fk_enabled = rows[0][0]
-        assert fk_enabled == 1, "Foreign keys should be enabled"
-        logger.info("✓ Foreign keys enabled correctly")
+        # Verify the schema declares foreign keys (#13286).
+        #
+        # This used to read `PRAGMA foreign_keys` and assert it was 1. That
+        # pragma is per CONNECTION and defaults to OFF, and `async_sqlite_query`
+        # opens a brand-new connection to run it — so the value read was always
+        # 0 and could say nothing whatever about the connections the managers
+        # used. The check was unfalsifiable in the failing direction and simply
+        # wrong in the passing one.
+        #
+        # What survives concurrent initialization, and is what "no corruption"
+        # actually means here, is the schema's own REFERENCES clauses:
+        # `PRAGMA foreign_key_list(<table>)` reads them back off the file.
+        declaring = [
+            table
+            for table in sorted(EXPECTED_TABLES - {"schema_migrations"})
+            if await async_sqlite_query(db_path_str, f"PRAGMA foreign_key_list({table})")
+        ]
+        assert declaring, (
+            "no table in the schema declares a foreign key after concurrent initialization — "
+            "the REFERENCES clauses did not survive, or were never created"
+        )
+        logger.info(f"✓ Foreign keys declared by {len(declaring)} table(s)")
 
         # Verify all VM managers can query schema version correctly
         for vm_name, manager in managers.items():
