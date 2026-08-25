@@ -133,10 +133,10 @@ class TestParseReport:
     def test_multiple_testsuites_are_summed(self, tmp_path):
         multi = tmp_path / "multi.xml"
         multi.write_text(
-            '<testsuites>'
+            "<testsuites>"
             '<testsuite name="a" tests="4" failures="1" errors="0" skipped="1"/>'
             '<testsuite name="b" tests="6" failures="0" errors="2" skipped="0"/>'
-            '</testsuites>',
+            "</testsuites>",
             encoding="utf-8",
         )
         counts = parse_report(multi)
@@ -159,16 +159,12 @@ class TestFloors:
         assert "selecting nothing" in problems[0]
 
     def test_a_healthy_run_reports_no_violation(self):
-        problems = check(
-            {"backend": Counts(collected=85, skipped=49)}, self._floors("1"), self._floors("1")
-        )
+        problems = check({"backend": Counts(collected=85, skipped=49)}, self._floors("1"), self._floors("1"))
         assert problems == []
 
     def test_a_run_that_only_skips_violates_the_passed_floor(self):
         """All-skipped is the failure mode a naive 'no failures' check would miss."""
-        problems = check(
-            {"backend": Counts(collected=85, skipped=85)}, self._floors("1"), self._floors("1")
-        )
+        problems = check({"backend": Counts(collected=85, skipped=85)}, self._floors("1"), self._floors("1"))
 
         assert problems
         assert "passed" in problems[0]
@@ -195,11 +191,14 @@ class TestFloors:
         assert floors.for_report("slm") == 0
         assert floors.is_explicit("slm")
         assert floors.for_report("backend") == 1
-        assert check(
-            {"backend": Counts(collected=4, skipped=3), "slm": Counts(collected=0)},
-            floors,
-            self._floors("1", "slm=0"),
-        ) == []
+        assert (
+            check(
+                {"backend": Counts(collected=4, skipped=3), "slm": Counts(collected=0)},
+                floors,
+                self._floors("1", "slm=0"),
+            )
+            == []
+        )
 
     def test_each_invocation_is_judged_against_its_own_override(self):
         floors = self._floors("1", "backend=83")
@@ -260,9 +259,7 @@ class TestMain:
 
         assert main([f"backend={a}", "--min-passed", "35"]) == 1
 
-    def test_exit_one_when_one_invocation_collapses_and_the_other_does_not(
-        self, tmp_path, monkeypatch
-    ):
+    def test_exit_one_when_one_invocation_collapses_and_the_other_does_not(self, tmp_path, monkeypatch):
         """End to end, through argv: the sibling's count must not rescue the run."""
         monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
         collapsed = write_report(tmp_path / "collapsed.xml", tests=0)
@@ -270,9 +267,7 @@ class TestMain:
 
         assert main([f"backend={collapsed}", f"slm={healthy}"]) == 1
 
-    def test_exit_one_when_a_floor_names_an_invocation_that_does_not_exist(
-        self, tmp_path, monkeypatch
-    ):
+    def test_exit_one_when_a_floor_names_an_invocation_that_does_not_exist(self, tmp_path, monkeypatch):
         """A floor pointing at nothing checks nothing — a renamed report must not disarm it."""
         monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
         a = write_report(tmp_path / "a.xml", tests=40, skipped=5)
@@ -384,9 +379,9 @@ class TestWorkflowWiring:
         suite that passes because it stopped selecting the failing tests is the
         inert-suite defect wearing a green tick.
         """
-        assert marker in marker_job["env"]["MARKER_EXPRESSION"], (
-            f"the {marker!r} marker is no longer selected by the scheduled run"
-        )
+        assert (
+            marker in marker_job["env"]["MARKER_EXPRESSION"]
+        ), f"the {marker!r} marker is no longer selected by the scheduled run"
 
     @pytest.mark.parametrize("marker", ["integration", "slow", "distributed", "performance"])
     def test_the_dispatch_default_is_not_narrowed(self, marker):

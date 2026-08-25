@@ -119,17 +119,13 @@ class TestTheHookDoesNotBlockOnALookalike:
 
         assert checker.main([str(target)]) == 0
 
-    def test_a_comma_inside_the_second_argument_is_not_a_third_argument(
-        self, checker, plural_key, tmp_path
-    ):
+    def test_a_comma_inside_the_second_argument_is_not_a_third_argument(self, checker, plural_key, tmp_path):
         """`{ count: n, total: m }` has a comma, but not a top-level one."""
         target = _write(tmp_path, "Nested.vue", f"t('{plural_key}', {{ count: n, total: m }})\n")
 
         assert checker.main([str(target)]) == 1
 
-    def test_a_nested_call_in_the_second_argument_still_needs_a_count(
-        self, checker, plural_key, tmp_path
-    ):
+    def test_a_nested_call_in_the_second_argument_still_needs_a_count(self, checker, plural_key, tmp_path):
         target = _write(tmp_path, "Call.vue", f"t('{plural_key}', {{ count: fmt(a, b) }})\n")
 
         assert checker.main([str(target)]) == 1
@@ -139,9 +135,7 @@ class TestTheHookDoesNotBlockOnALookalike:
 
         assert checker.main([str(target)]) == 0
 
-    def test_a_bracket_inside_a_string_argument_does_not_confuse_the_scan(
-        self, checker, plural_key, tmp_path
-    ):
+    def test_a_bracket_inside_a_string_argument_does_not_confuse_the_scan(self, checker, plural_key, tmp_path):
         target = _write(tmp_path, "Str.vue", f"t('{plural_key}', {{ label: ')' }}, n)\n")
 
         assert checker.main([str(target)]) == 0
@@ -157,7 +151,7 @@ class TestTheHookDoesNotBlockOnALookalike:
 
 
 class TestTheKeySetIsNotSilentlyEmpty:
-    """"No violation found" must stay distinguishable from "nothing to look for".
+    """ "No violation found" must stay distinguishable from "nothing to look for".
 
     The checker used to return an empty key set on any error and ``main`` turned
     that straight into exit 0, so an unreadable en.json made the hook pass every
@@ -182,9 +176,7 @@ class TestTheKeySetIsNotSilentlyEmpty:
 
         assert checker.main([]) == 1
 
-    def test_a_locale_file_with_no_plural_key_blocks_rather_than_passing(
-        self, checker, tmp_path, monkeypatch
-    ):
+    def test_a_locale_file_with_no_plural_key_blocks_rather_than_passing(self, checker, tmp_path, monkeypatch):
         empty = _write(tmp_path, "en.json", json.dumps({"a": {"b": "no separator here"}}))
         monkeypatch.setattr(checker, "_EN_JSON", empty)
 
@@ -202,9 +194,9 @@ class TestHookWiring:
     def test_the_pre_commit_config_still_wires_this_checker(self):
         config = (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
 
-        assert SCRIPT.name in config, (
-            f"{SCRIPT.name} is no longer referenced by .pre-commit-config.yaml — it blocks nothing"
-        )
+        assert (
+            SCRIPT.name in config
+        ), f"{SCRIPT.name} is no longer referenced by .pre-commit-config.yaml — it blocks nothing"
 
     def test_the_locale_file_the_checker_reads_exists(self):
         assert EN_JSON.exists(), f"{EN_JSON} is missing; the checker would block every commit"

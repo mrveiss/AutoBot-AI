@@ -183,9 +183,7 @@ def invocations(run_steps, report_tokens) -> dict[str, list[str]]:
     failure here rather than a silently unchecked invocation.
     """
     labels = {
-        value: name
-        for name, _, value in (token.partition("=") for token in report_tokens)
-        if value.endswith(".xml")
+        value: name for name, _, value in (token.partition("=") for token in report_tokens) if value.endswith(".xml")
     }
     mapped: dict[str, list[str]] = {}
     for run in run_steps:
@@ -253,14 +251,11 @@ class TestRootCoverage:
     def test_every_marked_module_is_under_a_root(self, invocations, population):
         covered = [root for roots in invocations.values() for root in roots]
         orphans = sorted(
-            path
-            for path in population
-            if not any(path == root or path.startswith(f"{root}/") for root in covered)
+            path for path in population if not any(path == root or path.startswith(f"{root}/") for root in covered)
         )
         assert not orphans, (
             "these tracked test modules carry a marker ci.yml deselects and live under no "
-            "marker-tests.yml root, so they run in NO workflow at all (#13286):\n  "
-            + "\n  ".join(orphans)
+            "marker-tests.yml root, so they run in NO workflow at all (#13286):\n  " + "\n  ".join(orphans)
         )
 
     def test_every_invocation_names_at_least_one_root(self, invocations):
@@ -280,24 +275,14 @@ class TestDeclaredEmptyInvocations:
 
     @staticmethod
     def _declared_zero(report_tokens: list[str]) -> set[str]:
-        return {
-            name
-            for name, _, value in (token.partition("=") for token in report_tokens)
-            if value == "0"
-        }
+        return {name for name, _, value in (token.partition("=") for token in report_tokens) if value == "0"}
 
     def _marked_under(self, roots: list[str], population: dict[str, set[str]]) -> list[str]:
-        return sorted(
-            path
-            for path in population
-            if any(path == root or path.startswith(f"{root}/") for root in roots)
-        )
+        return sorted(path for path in population if any(path == root or path.startswith(f"{root}/") for root in roots))
 
     def test_the_declared_zeros_match_the_tree(self, report_tokens, invocations, population):
         declared = self._declared_zero(report_tokens)
-        actually_empty = {
-            name for name, roots in invocations.items() if not self._marked_under(roots, population)
-        }
+        actually_empty = {name for name, roots in invocations.items() if not self._marked_under(roots, population)}
         assert declared == actually_empty, (
             "the per-invocation floors in marker-tests.yml disagree with the tree. "
             f"declared empty: {sorted(declared)}; actually empty: {sorted(actually_empty)}. "

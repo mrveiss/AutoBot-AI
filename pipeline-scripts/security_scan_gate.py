@@ -114,9 +114,7 @@ def parse_flake8(payload: str) -> list[Finding]:
     for line in payload.splitlines():
         match = _FLAKE8_LINE.match(line.strip())
         if match:
-            findings.append(
-                Finding(severity="unknown", identifier=match["code"], location=match["location"])
-            )
+            findings.append(Finding(severity="unknown", identifier=match["code"], location=match["location"]))
     return findings
 
 

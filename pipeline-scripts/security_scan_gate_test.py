@@ -149,9 +149,10 @@ class TestReportsThatMustNotReadAsClean:
     def test_main_exits_non_zero_when_the_scanner_wrote_nothing(self, tmp_path, monkeypatch):
         monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
 
-        assert main(
-            ["--format", "pip-audit", "--report", str(tmp_path / "gone.json"), "--title", "x", "--fail-on", "any"]
-        ) == 1
+        assert (
+            main(["--format", "pip-audit", "--report", str(tmp_path / "gone.json"), "--title", "x", "--fail-on", "any"])
+            == 1
+        )
 
 
 def _write(path: Path, payload) -> Path:
@@ -276,11 +277,7 @@ class TestWorkflowWiring:
         gated = set()
         for _, step in gate_steps:
             tokens = step["run"].replace("\\\n", " ").split()
-            gated |= {
-                Path(value).name
-                for flag, value in zip(tokens, tokens[1:])
-                if flag == "--report"
-            }
+            gated |= {Path(value).name for flag, value in zip(tokens, tokens[1:]) if flag == "--report"}
         return gated
 
     @staticmethod
@@ -319,11 +316,7 @@ class TestWorkflowWiring:
 
     def test_the_recorded_exceptions_are_still_named_honestly(self, workflow):
         """A report-only scanner must say so in its step name, or the name overclaims."""
-        names = [
-            step.get("name", "")
-            for job in workflow["jobs"].values()
-            for step in job.get("steps", [])
-        ]
+        names = [step.get("name", "") for job in workflow["jobs"].values() for step in job.get("steps", [])]
         for scanner in ("Safety Check", "Python Lint Report"):
             matching = [name for name in names if name.startswith(scanner)]
             assert matching, f"the {scanner!r} step has been renamed; re-check whether it gates"
@@ -347,10 +340,7 @@ class TestWorkflowWiring:
 
     def test_the_gate_script_referenced_by_the_workflow_exists(self, gate_steps):
         referenced = {
-            token
-            for _, step in gate_steps
-            for token in step["run"].split()
-            if token.endswith(".py") and "/" in token
+            token for _, step in gate_steps for token in step["run"].split() if token.endswith(".py") and "/" in token
         }
         assert referenced, "no gate step names a script path"
         missing = sorted(token for token in referenced if not (REPO_ROOT / token).exists())
