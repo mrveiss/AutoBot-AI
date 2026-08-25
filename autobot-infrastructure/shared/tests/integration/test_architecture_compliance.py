@@ -21,9 +21,18 @@ import redis
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+# #13286: was `from utils.redis_client import ...`, a module that exists in no tree —
+# not under `autobot-infrastructure/shared/`, not under `autobot-backend/`. The import
+# died at collection, so this whole module errored out and its 15 checks ran nowhere.
+# It went unnoticed because the module carries a marker `ci.yml` deselects and was named
+# by no pytest invocation in any workflow until #13286.
+#
+# `autobot_shared.redis_client` is the canonical accessor CLAUDE.md mandates, and its
+# signature is the one the call site below already uses — the old path was a stale alias
+# of it, which is why the call needs no change.
+from autobot_shared.redis_client import get_redis_client
 from config import unified_config_manager
 from constants.network_constants import NetworkConstants
-from utils.redis_client import get_redis_client
 
 
 class TestServiceDistribution:
@@ -164,13 +173,24 @@ class TestRedisConnection:
 
     @pytest.mark.integration
     def test_redis_timeout_configuration(self):
-        """Test that Redis connections have proper timeout settings"""
-        from utils.redis_helper import TIMEOUT_CONFIG
+        """Test that Redis connections have proper timeout settings.
 
-        assert TIMEOUT_CONFIG["socket_timeout"] > 0, "socket_timeout must be positive"
-        assert TIMEOUT_CONFIG["socket_connect_timeout"] > 0, "socket_connect_timeout must be positive"
-        assert TIMEOUT_CONFIG["retry_on_timeout"] is True, "retry_on_timeout should be enabled"
-        assert TIMEOUT_CONFIG["max_retries"] > 0, "max_retries must be positive"
+        #13286: this read `utils.redis_helper.TIMEOUT_CONFIG`, a module that
+        exists in no tree — so the check raised `ModuleNotFoundError` rather than
+        asserting anything. It went unnoticed because the module it lives in
+        failed to import at all, and nothing in any workflow collected this tree.
+
+        `PoolConfig` is the canonical successor and carries the same four
+        settings as typed fields, so the assertions transfer unchanged.
+        """
+        from autobot_shared.redis_management.config import PoolConfig
+
+        pool = PoolConfig()
+
+        assert pool.socket_timeout > 0, "socket_timeout must be positive"
+        assert pool.socket_connect_timeout > 0, "socket_connect_timeout must be positive"
+        assert pool.retry_on_timeout is True, "retry_on_timeout should be enabled"
+        assert pool.max_retries > 0, "max_retries must be positive"
 
 
 class TestPortConfiguration:

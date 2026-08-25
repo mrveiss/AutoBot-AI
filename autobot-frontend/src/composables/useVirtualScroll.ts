@@ -22,6 +22,7 @@
  */
 
 import { ref, computed, watch, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, type Ref } from 'vue'
+import { isReducedMotion } from './useReducedMotion'
 
 export interface UseVirtualScrollOptions<T = unknown> {
   /**
@@ -68,8 +69,12 @@ export interface UseVirtualScrollOptions<T = unknown> {
   getKey?: (item: T, index: number) => string | number
 
   /**
-   * Scroll behavior for programmatic scrolling
-   * @default 'smooth'
+   * Scroll behavior for programmatic scrolling.
+   *
+   * @default 'smooth', unless the user has asked for reduced motion (#14770),
+   *   in which case an unset option resolves to `'auto'`. An explicitly passed
+   *   value is always honoured — a caller that has genuinely decided is not
+   *   second-guessed here.
    */
   scrollBehavior?: ScrollBehavior
 
@@ -84,7 +89,10 @@ const DEFAULT_OPTIONS = {
   estimatedItemHeight: 50,
   buffer: 3,
   getKey: (_item: unknown, index: number) => index,
-  scrollBehavior: 'smooth' as ScrollBehavior,
+  // #14770: resolved per call rather than frozen here, so the preference is
+  // read when the scroll happens — a module-level constant would capture
+  // whatever the setting was at import time and never change.
+  scrollBehavior: undefined as ScrollBehavior | undefined,
   horizontal: false
 }
 
@@ -215,8 +223,16 @@ export function useVirtualScroll<T = unknown>(options: UseVirtualScrollOptions<T
     }
   }
 
+  /**
+   * #14770: `scrollTo({ behavior })` is motion the app initiates, so the
+   * stylesheet's global reduced-motion rule cannot reach it. An explicit
+   * option or argument wins; otherwise the preference decides.
+   */
+  const resolveBehavior = (behavior?: ScrollBehavior): ScrollBehavior =>
+    behavior ?? opts.scrollBehavior ?? (isReducedMotion() ? 'auto' : 'smooth')
+
   // Scroll to specific index
-  const scrollToIndex = (index: number, behavior: ScrollBehavior = opts.scrollBehavior!) => {
+  const scrollToIndex = (index: number, behavior?: ScrollBehavior) => {
     if (!containerRef.value || index < 0 || index >= items.value.length) {
       return
     }
@@ -228,17 +244,17 @@ export function useVirtualScroll<T = unknown>(options: UseVirtualScrollOptions<T
 
     containerRef.value.scrollTo({
       [opts.horizontal ? 'left' : 'top']: offset,
-      behavior
+      behavior: resolveBehavior(behavior)
     })
   }
 
   // Scroll to top
-  const scrollToTop = (behavior: ScrollBehavior = opts.scrollBehavior!) => {
+  const scrollToTop = (behavior?: ScrollBehavior) => {
     scrollToIndex(0, behavior)
   }
 
   // Scroll to bottom
-  const scrollToBottom = (behavior: ScrollBehavior = opts.scrollBehavior!) => {
+  const scrollToBottom = (behavior?: ScrollBehavior) => {
     scrollToIndex(items.value.length - 1, behavior)
   }
 

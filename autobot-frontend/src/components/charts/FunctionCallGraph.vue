@@ -361,6 +361,7 @@ import { useCytoscapeLibrary } from '@/composables/charts/useCytoscapeLibrary'
 import { useVirtualScrollSimple } from '@/composables/useVirtualScroll'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebounce } from '@/composables/useTimeout'
+import { isReducedMotion } from '@/composables/useReducedMotion'
 
 // Flexible interface to support multiple data formats
 interface GraphNode {
@@ -838,7 +839,11 @@ function runLayout() {
   const layoutOptions = layoutMode.value === 'force'
     ? {
         name: 'fcose',
-        animate: true,
+        // #14770: a force layout animating to equilibrium on every load is the
+        // largest piece of motion this view produces. Skipped outright — not
+        // shortened — when the user has asked for reduced motion; the layout
+        // still runs, it just arrives at its final positions immediately.
+        animate: !isReducedMotion(),
         animationDuration: 400,
         fit: true,
         padding: 30,
@@ -849,7 +854,7 @@ function runLayout() {
       }
     : {
         name: 'grid',
-        animate: true,
+        animate: !isReducedMotion(),
         animationDuration: 300,
         fit: true,
         padding: 30,
@@ -1139,7 +1144,11 @@ function runClusterLayout() {
   const layoutOptions = clusterLayoutMode.value === 'force'
     ? {
         name: 'fcose',
-        animate: true,
+        // #14806: the cluster/Stats view is a sibling of `runLayout` and was
+        // left animating when that one was fixed. Same reasoning: the layout
+        // still runs and reaches the same positions, it just does not animate
+        // its way there.
+        animate: !isReducedMotion(),
         animationDuration: 500,
         fit: true,
         padding: 40,
@@ -1151,7 +1160,7 @@ function runClusterLayout() {
       }
     : {
         name: 'grid',
-        animate: true,
+        animate: !isReducedMotion(),
         animationDuration: 300,
         fit: true,
         padding: 40,
