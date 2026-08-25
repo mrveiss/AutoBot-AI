@@ -30,6 +30,7 @@ SHELL_SUITES = [
     "scripts/lib/branch-guards_test.sh",
     "scripts/lib/git-scope_test.sh",
     "scripts/lib/project_root_test.sh",
+    "scripts/lib/session-handoffs_test.sh",
 ]
 
 

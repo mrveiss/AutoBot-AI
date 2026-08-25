@@ -92,7 +92,10 @@ protocol lives in the `session-lifecycle` skill; the handoff schema is in
    `git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/Dev_new_gui`.
 3. Read predecessor handoffs in [`.session/`](../../.session/): if a branch is
    unmerged, decide to continue it (rebase onto base first) or start fresh —
-   never duplicate its work blind.
+   never duplicate its work blind. Step 1's sweep reaps handoffs whose branch is
+   gone (#13848), so every file still there names a live branch. A handoff the
+   sweep reports as `STRANDED` is unlanded work with no branch left: file an
+   issue for it before disposing of the file.
 
 **End of session** (mandatory — also when blocked):
 1. Leave nothing uncommitted; WIP gets a `wip:` commit and a handoff note.
