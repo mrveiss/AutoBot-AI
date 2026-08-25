@@ -28,6 +28,7 @@ from constants.model_constants import (
     OPENAI_GPT4_TURBO_PREVIEW,
     OPENAI_GPT4_VISION_PREVIEW,
 )
+from llm_shared.providers.anthropic import _route_sampling_kwargs
 from memory import MemoryManager, TaskPriority
 from task_execution_tracker import get_task_tracker as _get_task_tracker
 
@@ -347,13 +348,18 @@ class AnthropicClaudeProvider(BaseAIProvider):
             # Prepare messages
             messages = [{"role": "user", "content": request.prompt}]
 
-            response = await self.client.messages.create(
-                model=self.config.model_name,
-                max_tokens=request.max_tokens or self.config.max_tokens,
-                temperature=request.temperature or self.config.temperature,
-                system=request.system_message,
-                messages=messages,
+            # #15016: anthropic>=1.0 dropped temperature from messages.create();
+            # route it through extra_body instead of passing it as a keyword.
+            call_kwargs = _route_sampling_kwargs(
+                {
+                    "model": self.config.model_name,
+                    "max_tokens": request.max_tokens or self.config.max_tokens,
+                    "temperature": request.temperature or self.config.temperature,
+                    "system": request.system_message,
+                    "messages": messages,
+                }
             )
+            response = await self.client.messages.create(**call_kwargs)
 
             processing_time = time.time() - start_time
 
@@ -428,13 +434,18 @@ class AnthropicClaudeProvider(BaseAIProvider):
             content = self._build_anthropic_image_content(request.prompt, request.images)
             messages = [{"role": "user", "content": content}]
 
-            response = await self.client.messages.create(
-                model=ANTHROPIC_CLAUDE3_OPUS_DATED,
-                max_tokens=request.max_tokens or 1000,
-                temperature=request.temperature or self.config.temperature,
-                system=request.system_message,
-                messages=messages,
+            # #15016: anthropic>=1.0 dropped temperature from messages.create();
+            # route it through extra_body instead of passing it as a keyword.
+            call_kwargs = _route_sampling_kwargs(
+                {
+                    "model": ANTHROPIC_CLAUDE3_OPUS_DATED,
+                    "max_tokens": request.max_tokens or 1000,
+                    "temperature": request.temperature or self.config.temperature,
+                    "system": request.system_message,
+                    "messages": messages,
+                }
             )
+            response = await self.client.messages.create(**call_kwargs)
 
             return self._build_anthropic_vision_response(request, response, time.time() - start_time)
 
