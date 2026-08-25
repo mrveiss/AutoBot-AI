@@ -121,6 +121,19 @@ git update-ref refs/remotes/origin/issue-remote "$(git rev-parse HEAD)"
 printf '# Handoff: issue-remote\nstatus: complete\n' > .session/HANDOFF-issue-remote.md
 check "remote-only branch keeps its handoff" "keep-live" "$(handoff_disposition .session/HANDOFF-issue-remote.md)"
 
+# The branch name comes from the filename, so a case mismatch between the two
+# must not read as "branch gone" -- git refs are case-sensitive, the filesystem
+# convention is not.
+git checkout -q -b Issue-MixedCase
+git checkout -q Dev_new_gui
+printf '# Handoff: x\nstatus: complete\n' > .session/HANDOFF-issue-mixedcase.md
+check "case-mismatched filename still sees a live branch" "keep-live" \
+    "$(handoff_disposition .session/HANDOFF-issue-mixedcase.md)"
+git branch -D Issue-MixedCase -q
+check "genuinely gone after the case-insensitive pass too" "reap" \
+    "$(handoff_disposition .session/HANDOFF-issue-mixedcase.md)"
+rm -f .session/HANDOFF-issue-mixedcase.md
+
 # git failing to answer is not the same as "the branch is gone". `git show-ref`
 # exits 1 for a missing ref and >=2 for a hard error, and treating the second as
 # the first lets one broken git call reap the whole directory in a single sweep.

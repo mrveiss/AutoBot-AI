@@ -95,6 +95,21 @@ handoff_branch_exists() {
     rc=$?
     [ "$rc" -eq 0 ] && return 0
     [ "$rc" -gt 1 ] && return 2
+
+    # Case-insensitive fallback. The branch name is recovered from the handoff's
+    # *filename*, and a filename that differs only in case from the real branch
+    # would otherwise read as "branch gone" and reap a handoff whose branch is
+    # very much alive. Git refs are case-sensitive, so this cannot be folded
+    # into the lookups above -- it is a separate, deliberately loose second pass.
+    local lower refs
+    lower="$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]')"
+    refs="$(git for-each-ref --format='%(refname:short)' refs/heads refs/remotes/origin 2>/dev/null)"
+    rc=$?
+    [ "$rc" -ne 0 ] && return 2
+    if printf '%s\n' "$refs" | sed 's|^origin/||' | tr '[:upper:]' '[:lower:]' \
+        | grep -Fxq "$lower"; then
+        return 0
+    fi
     return 1
 }
 
