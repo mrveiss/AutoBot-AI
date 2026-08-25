@@ -134,85 +134,71 @@ class TestTemporalInvalidation:
         # Create test facts with various temporal characteristics
         self._setup_test_facts()
 
+    # One row per fixture fact, so the table is readable as a table and the
+    # thresholds each row is chosen to sit either side of stay next to the value
+    # that decides it. The attribute name is first because the tests below reach
+    # for these by name.
+    _FIXTURE_FACTS = (
+        # attribute, subject, predicate, object, fact_type, temporal_type, confidence, age_days
+        ("old_dynamic_fact", "AutoBot", "version is", "1.0", FactType.FACT, TemporalType.DYNAMIC, 0.8, 45),
+        # 15 days: inside the 30-day dynamic rule, so it must NOT match.
+        ("recent_dynamic_fact", "Python", "is popular for", "data science", FactType.FACT, TemporalType.DYNAMIC, 0.9, 15),
+        # 120 days: past the 90-day rule for predictions.
+        ("old_prediction", "AI", "will revolutionize", "healthcare by 2023", FactType.PREDICTION, TemporalType.TEMPORAL_BOUND, 0.7, 120),
+        # A year old and still valid, because STATIC is exempt from age rules.
+        ("static_fact", "Python", "was created by", "Guido van Rossum", FactType.FACT, TemporalType.STATIC, 0.95, 365),
+        # 0.4 confidence, below the 0.6 threshold.
+        ("low_confidence_fact", "AutoBot", "might support", "new feature", FactType.FACT, TemporalType.DYNAMIC, 0.4, 10),
+        # 200 days: past the 180-day rule for opinions.
+        ("old_opinion", "I", "think", "AutoBot is great", FactType.OPINION, TemporalType.ATEMPORAL, 0.6, 200),
+        # 2 days: past the 1-day rule for test sources.
+        ("test_source_fact", "TestEntity", "has property", "test value", FactType.FACT, TemporalType.DYNAMIC, 0.8, 2),
+    )
+
     def _setup_test_facts(self) -> None:
-        """Set up test facts with different temporal characteristics."""
-        # Old dynamic facts (should be invalidated)
-        self.old_dynamic_fact = self.mock_fact_service.add_test_fact(
-            subject="AutoBot",
-            predicate="version is",
-            object="1.0",
-            fact_type=FactType.FACT,
+        """Build the fixture facts, one per row of ``_FIXTURE_FACTS``."""
+        for attribute, subject, predicate, obj, fact_type, temporal_type, confidence, age_days in (
+            self._FIXTURE_FACTS
+        ):
+            setattr(
+                self,
+                attribute,
+                self.mock_fact_service.add_test_fact(
+                    subject=subject,
+                    predicate=predicate,
+                    object=obj,
+                    fact_type=fact_type,
+                    temporal_type=temporal_type,
+                    confidence=confidence,
+                    age_days=age_days,
+                ),
+            )
+        # `add_test_fact` hard-codes source="test"; the test-source rule matches
+        # on the pattern "test", so this is set explicitly to say so out loud.
+        self.test_source_fact.source = "test_data"
+
+    def _assert_rule_matches(self, rule, fact, expected_reason) -> None:
+        """The rule matches this fact, and cites the reason it is meant to cite.
+
+        Asserting the reason and not merely the match is what separates the
+        rules: three of the fixtures are old enough to trip an age limit before
+        the rule's own condition is ever consulted, so a bare `assert matches`
+        stays green with `min_confidence` and `source_patterns` disabled.
+        """
+        matches, reason = rule.matches_fact(fact)
+        assert matches, f"{rule.name} should match {fact.subject} {fact.predicate} {fact.object}"
+        assert reason is expected_reason, f"{rule.name}: expected {expected_reason}, got {reason}"
+
+    def _fresh_fact(self, subject: str, predicate: str, obj: str, confidence: float = 0.8) -> AtomicFact:
+        """A same-day fact, too young for any age rule to claim it."""
+        return self.mock_fact_service.add_test_fact(
+            subject=subject,
+            predicate=predicate,
+            object=obj,
             temporal_type=TemporalType.DYNAMIC,
-            confidence=0.8,
-            age_days=45,  # Older than 30-day rule
+            confidence=confidence,
+            age_days=0,
         )
-
-        # Recent dynamic facts (should NOT be invalidated)
-        self.recent_dynamic_fact = self.mock_fact_service.add_test_fact(
-            subject="Python",
-            predicate="is popular for",
-            object="data science",
-            fact_type=FactType.FACT,
-            temporal_type=TemporalType.DYNAMIC,
-            confidence=0.9,
-            age_days=15,  # Newer than 30-day rule
-        )
-
-        # Old prediction (should be invalidated)
-        self.old_prediction = self.mock_fact_service.add_test_fact(
-            subject="AI",
-            predicate="will revolutionize",
-            object="healthcare by 2023",
-            fact_type=FactType.PREDICTION,
-            temporal_type=TemporalType.TEMPORAL_BOUND,
-            confidence=0.7,
-            age_days=120,  # Older than 90-day rule for predictions
-        )
-
-        # Static fact (should NOT be invalidated by age)
-        self.static_fact = self.mock_fact_service.add_test_fact(
-            subject="Python",
-            predicate="was created by",
-            object="Guido van Rossum",
-            fact_type=FactType.FACT,
-            temporal_type=TemporalType.STATIC,
-            confidence=0.95,
-            age_days=365,  # Very old but static
-        )
-
-        # Low confidence fact (should be invalidated)
-        self.low_confidence_fact = self.mock_fact_service.add_test_fact(
-            subject="AutoBot",
-            predicate="might support",
-            object="new feature",
-            fact_type=FactType.FACT,
-            temporal_type=TemporalType.DYNAMIC,
-            confidence=0.4,  # Below 0.6 threshold
-            age_days=10,
-        )
-
-        # Opinion fact (should be invalidated by age)
-        self.old_opinion = self.mock_fact_service.add_test_fact(
-            subject="I",
-            predicate="think",
-            object="AutoBot is great",
-            fact_type=FactType.OPINION,
-            temporal_type=TemporalType.ATEMPORAL,
-            confidence=0.6,
-            age_days=200,  # Older than 180-day rule for opinions
-        )
-
-        # Test source fact (should be invalidated)
-        self.test_source_fact = self.mock_fact_service.add_test_fact(
-            subject="TestEntity",
-            predicate="has property",
-            object="test value",
-            fact_type=FactType.FACT,
-            temporal_type=TemporalType.DYNAMIC,
-            confidence=0.8,
-            age_days=2,  # Older than 1-day rule for test sources
-        )
-        self.test_source_fact.source = "test_data"  # Update source to match rule
 
     async def test_invalidation_rules_initialization(self):
         """Test initialization of invalidation rules."""
@@ -223,79 +209,33 @@ class TestTemporalInvalidation:
         assert result["total_rules"] >= 5, "Should have at least 5 default rules"
 
     async def test_invalidation_rule_matching(self):
-        """Test invalidation rule matching logic."""
-
-        # Test each default rule against appropriate facts
-        rules = self.invalidation_service.default_rules
-
-        matches_found = 0
-        for rule in rules:
-
-            # Each branch asserts its match rather than counting it. The
-            # original only incremented a counter when a rule matched, so a
-            # rule that had stopped matching altogether was invisible as long
-            # as three others still did.
+        """Each default rule matches the fixture written for it, for the stated reason."""
+        checked = 0
+        for rule in self.invalidation_service.default_rules:
             if "Dynamic Facts" in rule.name:
-                matches, reason = rule.matches_fact(self.old_dynamic_fact)
-                assert matches, f"{rule.name} should match a 45-day-old dynamic fact"
-                assert reason is not None, f"{rule.name} must say why it matched"
-                matches_found += 1
-
+                self._assert_rule_matches(rule, self.old_dynamic_fact, InvalidationReason.TEMPORAL_EXPIRY)
                 matches_recent, _ = rule.matches_fact(self.recent_dynamic_fact)
-                assert not matches_recent, "Should not match recent dynamic fact"
+                assert not matches_recent, f"{rule.name} should not match a 15-day-old dynamic fact"
 
             elif "Predictions" in rule.name:
-                matches, reason = rule.matches_fact(self.old_prediction)
-                assert matches, f"{rule.name} should match a 120-day-old prediction"
-                matches_found += 1
+                self._assert_rule_matches(rule, self.old_prediction, InvalidationReason.TEMPORAL_EXPIRY)
 
             elif "Low Confidence" in rule.name:
-                # The 10-day-old fixture trips this rule on age before its
-                # confidence is ever consulted, so the confidence path needs a
-                # fact too young to expire. Asserting only the older one left
-                # `min_confidence` entirely unexercised.
-                matches, reason = rule.matches_fact(self.low_confidence_fact)
-                assert matches, f"{rule.name} should match a 0.4-confidence fact"
-                assert reason is InvalidationReason.TEMPORAL_EXPIRY, f"{rule.name} matched a 10-day-old fact on age"
-
-                fresh_low_confidence = self.mock_fact_service.add_test_fact(
-                    subject="AutoBot",
-                    predicate="might support",
-                    object="another new feature",
-                    temporal_type=TemporalType.DYNAMIC,
-                    confidence=0.4,
-                    age_days=0,
-                )
-                fresh_matches, fresh_reason = rule.matches_fact(fresh_low_confidence)
-                assert fresh_matches, f"{rule.name} should match on confidence alone"
-                assert (
-                    fresh_reason is InvalidationReason.CONFIDENCE_THRESHOLD
-                ), f"{rule.name} must cite the confidence threshold, not age"
-                matches_found += 1
+                self._assert_rule_matches(rule, self.low_confidence_fact, InvalidationReason.TEMPORAL_EXPIRY)
+                fresh = self._fresh_fact("AutoBot", "might support", "another new feature", confidence=0.4)
+                self._assert_rule_matches(rule, fresh, InvalidationReason.CONFIDENCE_THRESHOLD)
 
             elif "Test Sources" in rule.name:
-                # Same trap as the confidence rule above: the 2-day-old fixture
-                # trips the 1-day age limit before the source pattern is read,
-                # so the pattern needs a fact that is too young to expire.
-                matches, reason = rule.matches_fact(self.test_source_fact)
-                assert matches, f"{rule.name} should match a fact sourced from test data"
+                self._assert_rule_matches(rule, self.test_source_fact, InvalidationReason.TEMPORAL_EXPIRY)
+                fresh = self._fresh_fact("TestEntity", "has property", "fresh test value")
+                fresh.source = "test_data"
+                self._assert_rule_matches(rule, fresh, InvalidationReason.SOURCE_OUTDATED)
 
-                fresh_test_source = self.mock_fact_service.add_test_fact(
-                    subject="TestEntity",
-                    predicate="has property",
-                    object="fresh test value",
-                    temporal_type=TemporalType.DYNAMIC,
-                    age_days=0,
-                )
-                fresh_test_source.source = "test_data"
-                fresh_matches, fresh_reason = rule.matches_fact(fresh_test_source)
-                assert fresh_matches, f"{rule.name} should match on the source pattern alone"
-                assert (
-                    fresh_reason is InvalidationReason.SOURCE_OUTDATED
-                ), f"{rule.name} must cite the source pattern, not age"
-                matches_found += 1
+            else:
+                continue
+            checked += 1
 
-        assert matches_found >= 3, "Should find at least 3 rule matches"
+        assert checked >= 4, f"only {checked} of the default rules were exercised"
 
     async def test_dry_run_invalidation_sweep(self):
         """Test invalidation sweep in dry run mode."""

@@ -110,20 +110,15 @@ _SKIP = {
 # nothing looks identical to a tree somebody finished draining, and this file
 # would record the collapse as a triumph and lock it in.
 #
-# Every one of the remaining offenders is a live-service validation driver: a
-# class with `__init__`, a `run_all_*` loop and a `main()`, whose methods dial a
-# running backend and return bool. Converting one is a rewrite, not a rename --
-# and a bare rename is actively harmful, because a `Test*` class that keeps its
-# `__init__` collects zero while looking fixed. They are filed with per-file
-# counts rather than swept, and this ceiling is what stops the population
-# growing back while that work is queued.
+# Nearly every remaining offender is a live-service validation driver: a class
+# with `__init__`, a `run_all_*` loop and a `main()`, whose methods dial a
+# running backend and return bool. A bare rename is actively harmful -- a
+# `Test*` class keeping its `__init__` collects zero while looking fixed -- so
+# they are filed with per-file counts, and this ceiling stops the population
+# growing back. "Nearly": #14979 found two that dialled nothing at all.
 _KNOWN_OFFENDERS = {
     # 59, not 61: the two interface stubs below are exempt and counted separately.
-    # 77 -> 59 (#14979): `takeover_manager_e2e_test.py` (10) and
-    # `services/temporal_invalidation_test.py` (8) were converted. Neither
-    # needed a live service -- the first drives the workflow manager in-process
-    # against an `AsyncMock` socket, the second against an in-process
-    # `fakeredis` -- so both now collect and assert rather than skip.
+    # 77 -> 59 (#14979): takeover_manager_e2e_test.py, temporal_invalidation_test.py
     "autobot-backend": (59, 18000),
     # The floor equals the ceiling here, and legitimately so: this tree holds one
     # test module whose single class is uncollected, so every test-shaped thing in
