@@ -31,6 +31,7 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from celery_app import celery_app
+from workers.audit_queries import MAX_LOG_CHARS, list_open_issue_titles, vulture_scan
 
 logger = get_logger(__name__)
 
@@ -67,9 +68,6 @@ _FILING_CREDENTIAL_VAULT_KEY = "github_issue_filing_token"
 
 # Labels applied to all discovery issues filed by this daemon
 _AUDIT_LABELS = "enhancement,observability,priority: medium"
-
-# Max characters of gh output kept in logs on failure
-_MAX_LOG_CHARS = 500
 
 # Cap on the full-findings dump written when the dead-letter queue itself cannot
 # be persisted (#13570). Generous: at that point the log IS the queue, and a
@@ -352,30 +350,14 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
-def _list_open_issues(label: str | None = None) -> list[str]:
-    """Return titles of open GitHub issues (optionally filtered by label)."""
-    cmd = [
-        "gh",
-        "issue",
-        "list",
-        "--repo",
-        _GH_REPO,
-        "--state",
-        "open",
-        "--json",
-        "title",
-        "--limit",
-        "500",
-    ]
-    if label:
-        cmd += ["--label", label]
-    code, out, _ = _run(cmd, env=_gh_env()[0])
-    if code != 0:
-        return []
-    try:
-        return [item["title"] for item in json.loads(out)]
-    except Exception:
-        return []
+def _list_open_issues(label: str | None = None) -> tuple[list[str], bool]:
+    """Titles of open issues, and whether the listing was actually observed.
+
+    #13570: this returned a bare `[]` on failure, which is what a repo with no
+    open issues returns. "I could not look" and "there is nothing there" were
+    one answer, and the caller acted on the second.
+    """
+    return list_open_issue_titles(_GH_REPO, label, _gh_env()[0], _run)
 
 
 def _gh_available() -> bool:
@@ -416,7 +398,7 @@ def _gh_available() -> bool:
             _FILING_CREDENTIAL_VAULT_KEY,
             # stdout as well as stderr: gh routes this message to stderr today,
             # but a build that changed that would gut the diagnostic silently.
-            ((err or "").strip() or (out or "").strip())[:_MAX_LOG_CHARS] or "no output",
+            ((err or "").strip() or (out or "").strip())[:MAX_LOG_CHARS] or "no output",
         )
     return code == 0
 
@@ -440,7 +422,7 @@ def _file_issue(title: str, body: str, labels: str = _AUDIT_LABELS) -> bool:
         env=_gh_env()[0],
     )
     if code != 0:
-        logger.error("gh issue create failed (%s): %s", title, err[:_MAX_LOG_CHARS])
+        logger.error("gh issue create failed (%s): %s", title, err[:MAX_LOG_CHARS])
         return False
     return True
 
@@ -549,6 +531,7 @@ def _dedupe_and_file(
     existing_titles: set[str],
     label: str,
     redis=None,
+    dedupe_ok: bool = True,
 ) -> FilingOutcome:
     """File GitHub issues for new findings; persist any that cannot be filed.
 
@@ -564,7 +547,12 @@ def _dedupe_and_file(
     a queue that could not be written reported ``deferred == 0``, exactly like a
     clean run (#13570).
     """
-    gh_ok = _gh_available()
+    # `dedupe_ok` False means the open-issue listing never happened, so
+    # `existing_titles` is empty for want of an answer rather than because the
+    # repo is clean. Filing on that would re-file everything already open.
+    # Deferring instead is the only outcome that does not act on an
+    # unobserved fact -- the queue is retried once the query works (#13570).
+    gh_ok = _gh_available() and dedupe_ok
     pending, queue_readable = _load_deferred(redis)
 
     filed = 0
@@ -817,8 +805,8 @@ def audit_testgaps(self) -> dict:
     modules = _changed_python_modules(last_run, repo_root)
 
     findings = _testgap_findings(modules, repo_root)
-    existing_titles = set(_list_open_issues(label="observability"))
-    outcome = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS, redis)
+    existing_titles, dedupe_ok = _list_open_issues(label="observability")
+    outcome = _dedupe_and_file(findings, set(existing_titles), _AUDIT_LABELS, redis, dedupe_ok=dedupe_ok)
 
     _redis_set(redis, _TESTGAPS_LAST_RUN_KEY, run_at)
 
@@ -850,23 +838,9 @@ def audit_testgaps(self) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _run_vulture(repo_root: Path) -> list[str]:
-    """Run vulture on the backend and return lines identifying dead code."""
-    cmd = [
-        sys.executable,
-        "-m",
-        "vulture",
-        "autobot-backend",
-        "--min-confidence",
-        "80",
-        "--exclude",
-        "*/migrations/*,*/__pycache__/*,*/tests/*",
-    ]
-    code, out, err = _run(cmd, cwd=str(repo_root))
-    if code not in (0, 1):  # vulture exits 1 when dead code found
-        logger.warning("vulture exited %d: %s", code, err[:_MAX_LOG_CHARS])
-        return []
-    return [line.strip() for line in out.splitlines() if line.strip()]
+def _run_vulture(repo_root: Path) -> tuple[list[str], bool]:
+    """Dead-code lines from vulture, and whether the scan actually ran (#13570)."""
+    return vulture_scan(repo_root, _run, sys.executable)
 
 
 def _dead_code_fingerprint(line: str) -> str:
@@ -890,7 +864,7 @@ def audit_dead_code(self) -> dict:
     last_set = set(last_inventory)
 
     repo_root = _repo_root()
-    current_lines = _run_vulture(repo_root)
+    current_lines, scan_ran = _run_vulture(repo_root)
     current_fps = {_dead_code_fingerprint(ln): ln for ln in current_lines}
 
     new_findings_raw = [v for k, v in current_fps.items() if k not in last_set]
@@ -907,15 +881,19 @@ def audit_dead_code(self) -> dict:
         )
         findings.append({"title": title, "body": body})
 
-    existing_titles = set(_list_open_issues(label="observability"))
-    outcome = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS, redis)
+    existing_titles, dedupe_ok = _list_open_issues(label="observability")
+    outcome = _dedupe_and_file(findings, set(existing_titles), _AUDIT_LABELS, redis, dedupe_ok=dedupe_ok)
 
-    # Persist current full inventory for next run's diff
-    _redis_set(redis, _DEAD_CODE_INVENTORY_KEY, list(current_fps.keys()))
+    # Persist current full inventory for next run's diff -- but ONLY when there
+    # was a scan. Writing an empty inventory from a scan that never ran wipes the
+    # baseline, so the next successful run sees every finding as new (#13570).
+    if scan_ran:
+        _redis_set(redis, _DEAD_CODE_INVENTORY_KEY, list(current_fps.keys()))
 
     result = {
-        "status": _run_status(outcome),
+        "status": _run_status(outcome) if scan_ran else _STATUS_DEGRADED,
         "run_at": utc_timestamp(),
+        "scan_ran": scan_ran,
         "total_findings": len(current_lines),
         "new_findings": len(new_findings_raw),
         "issues_filed": outcome.filed,
@@ -1071,8 +1049,8 @@ def audit_claims(self) -> dict:
         )
         findings.append({"title": title, "body": body})
 
-    existing_titles = set(_list_open_issues(label="observability"))
-    outcome = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS, redis)
+    existing_titles, dedupe_ok = _list_open_issues(label="observability")
+    outcome = _dedupe_and_file(findings, set(existing_titles), _AUDIT_LABELS, redis, dedupe_ok=dedupe_ok)
 
     _redis_set(redis, _CLAIMS_LAST_RUN_KEY, run_at)
     _redis_set(

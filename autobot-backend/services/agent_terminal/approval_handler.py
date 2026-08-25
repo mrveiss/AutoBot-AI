@@ -12,13 +12,37 @@ import asyncio
 import time
 from typing import Dict
 
+from redis.exceptions import RedisError
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.retry_mechanism import RETRYABLE_EXCEPTIONS
 from autobot_shared.status_enums import CommandRisk
 from services.command_approval_manager import CommandApprovalManager
 
 from .models import AgentTerminalSession
 
 logger = get_logger(__name__)
+
+# The only failures this file degrades over: a Redis blip, a socket timeout, a
+# disk error (#13281).
+#
+# Every handler below used to be `except Exception`, logged "non-fatal", and
+# continued. That is why the wrong-keyword defect survived: `add_message` was
+# called with `role=` and `metadata=`, keywords its signature does not accept,
+# so it raised `TypeError` on EVERY invocation and approval status was never
+# written to chat history — not once, for as long as the call existed. The turn
+# carried on and the log said non-fatal, so nothing surfaced it.
+#
+# A TypeError or an AttributeError from a signature mismatch is a programming
+# error, not a transient failure. It has to reach the caller, CI and the error
+# tracker rather than being folded into a generic degraded path that a caller
+# cannot tell from success.
+#
+# Built from the canonical retryable set (ConnectionError, TimeoutError, OSError)
+# rather than a second hand-written list, so the two cannot drift. `RedisError`
+# is added because redis-py's ConnectionError/TimeoutError descend from it, not
+# from the builtins.
+TRANSIENT_PERSISTENCE_ERRORS: tuple[type[BaseException], ...] = RETRYABLE_EXCEPTIONS + (RedisError,)
 
 
 class ApprovalHandler:
@@ -189,13 +213,24 @@ class ApprovalHandler:
                     f"command={command}, "
                     f"comment={comment}"
                 )
-            except Exception as broadcast_error:
-                logger.warning(f"Failed to broadcast approval status (non-fatal): {broadcast_error}")
-                # Continue - don't fail the approval process if broadcast fails
+            except TRANSIENT_PERSISTENCE_ERRORS as broadcast_error:
+                # A dropped connection to the event bus is genuinely transient and
+                # must not fail the approval. A TypeError in the payload is not,
+                # and now surfaces instead of being logged as "non-fatal" (#13281).
+                logger.warning(
+                    "Approval status broadcast for %s dropped — transport error %s: %s",
+                    session.conversation_id,
+                    type(broadcast_error).__name__,
+                    broadcast_error,
+                )
 
-        except Exception as e:
-            logger.error("Error in approval status update: %s", e, exc_info=True)
-            # Don't fail the approval process if broadcast fails
+        except TRANSIENT_PERSISTENCE_ERRORS as exc:
+            logger.error(
+                "Approval status update failed — transport error %s: %s",
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
 
     async def _persist_chat_approval_update(
         self,
@@ -261,8 +296,17 @@ class ApprovalHandler:
             return
         try:
             await self._persist_chat_approval_update(session, command, approved, user_id, comment)
-        except Exception as e:
-            logger.error(f"Failed to update chat approval status (non-fatal): {e}", exc_info=True)
+        except TRANSIENT_PERSISTENCE_ERRORS as exc:
+            # Degrade only on storage that might work next time, and name the
+            # exception TYPE — "non-fatal: <message>" told a log reader nothing
+            # about whether this was a blip or a permanent code defect (#13281).
+            logger.error(
+                "Approval status for %s was NOT persisted to chat history — storage error %s: %s",
+                session.conversation_id,
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
 
     async def update_command_queue_status(
         self,
@@ -314,5 +358,11 @@ class ApprovalHandler:
                 )
                 logger.info(f"✅ [QUEUE] Command {command_id} denied in queue by {user_id or 'web_user'}")
 
-        except Exception as e:
-            logger.error("Failed to update command queue status: %s", e, exc_info=True)
+        except TRANSIENT_PERSISTENCE_ERRORS as exc:
+            logger.error(
+                "Command queue status for %s was NOT updated — storage error %s: %s",
+                command_id,
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )

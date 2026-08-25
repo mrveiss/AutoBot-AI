@@ -22,7 +22,27 @@
 #   ./validate_access_control.sh --full
 ################################################################################
 
+# `set -e` stays (#14869): removing it would trade one silent failure for
+# another -- an unexpected abort would then continue on a broken interpreter and
+# report verdicts it never measured. What changes is that no check reaches the
+# shell as a bare failing command any more:
+#
+#   * every python probe runs through `run_python_check`, whose invocation sits
+#     in an `if` condition, so a crash is a captured return code rather than an
+#     abort;
+#   * the counters use arithmetic ASSIGNMENT. `((TESTS_PASSED++))` is a
+#     post-increment: with the counter at 0 the expression evaluates to 0, which
+#     `((...))` reports as exit status 1. Under `set -e` that aborted the run on
+#     the FIRST PASS -- the suite printed one verdict, never printed a summary,
+#     and exited 1, which reads as "some tests failed";
+#   * `pipefail` so a failing producer in a pipeline cannot be masked by a
+#     succeeding consumer.
+#
+# `set -u` is deliberately NOT set: several lookups here are legitimately
+# optional and use `${VAR:-default}`, and adding -u now would convert those into
+# the same class of mid-run abort this file exists to remove.
 set -e
+set -o pipefail
 
 # Colors
 RED='\033[0;31m'
@@ -31,6 +51,13 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
+
+# Exit code a python probe uses to say "I ran, and the thing I check is broken".
+# Any OTHER non-zero code means the probe could not run at all -- a missing
+# import, an unreachable service, a syntax error. The two must not collapse into
+# one verdict: an uncaught exception also exits 1, so before this the shell read
+# "the check failed" and "the check never happened" as the same answer (#14869).
+CHECK_FAILED_RC=20
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -65,6 +92,15 @@ PERFORMANCE_ONLY=false
 TESTS_PASSED=0
 TESTS_FAILED=0
 TESTS_WARNED=0
+# Checks that could not run. Counted separately from FAIL because they are a
+# different fact: FAIL is a measurement, ERROR is the absence of one. Both make
+# the run exit non-zero, so neither can be mistaken for a clean suite.
+TESTS_ERRORED=0
+
+# Set by print_summary. The EXIT trap uses it to tell "the suite finished and
+# reported" apart from "the suite died partway and the last thing on screen was
+# an unrelated PASS" -- the exact reading that hid #14869.
+VALIDATION_COMPLETED=false
 
 # Logging functions
 log_header() {
@@ -83,28 +119,85 @@ log_test() {
 
 log_pass() {
     echo -e "${GREEN}PASS${NC}"
-    ((TESTS_PASSED++))
+    TESTS_PASSED=$((TESTS_PASSED + 1))
 }
 
 log_fail() {
     echo -e "${RED}FAIL${NC} - $1"
-    ((TESTS_FAILED++))
+    TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 
 log_warn() {
     echo -e "${YELLOW}WARN${NC} - $1"
-    ((TESTS_WARNED++))
+    TESTS_WARNED=$((TESTS_WARNED + 1))
+}
+
+# A check that could not run. Never PASS, and never a bare FAIL: the operator
+# has to know the difference between "access control is broken" and "this suite
+# could not tell you anything about access control".
+log_error() {
+    echo -e "${RED}ERROR${NC} - could not run: $1"
+    if [ -n "${2:-}" ]; then
+        echo "$2" | tail -n 5 | sed 's/^/      | /'
+    fi
+    TESTS_ERRORED=$((TESTS_ERRORED + 1))
+}
+
+# Usage/config errors, which are not a test verdict and must not move a counter.
+log_fatal() {
+    echo -e "${RED}FATAL${NC} - $1" >&2
 }
 
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }
 
+# Run a python3 probe without ever aborting the suite (#14869).
+#
+# Publishes PY_RC / PY_OUT / PY_ERR. The invocation lives in an `if` condition,
+# which is the one context `set -e` exempts, so a traceback becomes a return
+# code the caller can classify instead of killing the run before the caller's
+# own `if [ $? -eq 0 ]` is ever reached.
+run_python_check() {
+    local err_file
+    PY_OUT=""
+    PY_ERR=""
+    PY_RC=0
+    err_file="$(mktemp)"
+    if PY_OUT="$(python3 -c "$1" 2>"${err_file}")"; then
+        PY_RC=0
+    else
+        PY_RC=$?
+    fi
+    PY_ERR="$(cat "${err_file}")"
+    rm -f "${err_file}"
+    return 0
+}
+
+# Numeric less-than without bc. `bc` is absent from most base images, and the
+# old `(( $(echo "$x < 10" | bc -l) ))` form evaluated an EMPTY string there,
+# which is 0, which reported the target as missed -- a fabricated WARN about a
+# measurement that was never compared (#14869).
+num_lt() {
+    awk -v a="$1" -v b="$2" 'BEGIN { exit !(a + 0 < b + 0) }'
+}
+
+# Report an ERROR when a probe could not run, or a FAIL when it ran and failed.
+classify_probe() {
+    local what="$1"
+    if [ "${PY_RC}" -eq "${CHECK_FAILED_RC}" ]; then
+        log_fail "${what}"
+    else
+        log_error "${what} (probe exited ${PY_RC})" "${PY_ERR}"
+    fi
+}
+
 # Test: Feature flags system exists
 test_feature_flags_exists() {
     log_test "Feature flags system exists"
 
-    if python3 -c "from services.feature_flags import get_feature_flags"; then
+    run_python_check "from services.feature_flags import get_feature_flags"
+    if [ "${PY_RC}" -eq 0 ]; then
         log_pass
     else
         log_fail "Cannot import feature_flags module"
@@ -115,23 +208,30 @@ test_feature_flags_exists() {
 test_get_enforcement_mode() {
     log_test "Get current enforcement mode"
 
-    local mode=$(python3 -c "
+    local program
+    program="$(cat <<'PY'
 import asyncio
 from services.feature_flags import get_feature_flags
+
 
 async def main():
     flags = await get_feature_flags()
     mode = await flags.get_enforcement_mode()
     print(mode.value)
 
-asyncio.run(main())
-")
 
-    if [ -n "$mode" ]; then
+asyncio.run(main())
+PY
+)"
+    run_python_check "${program}"
+
+    if [ "${PY_RC}" -ne 0 ]; then
+        log_error "enforcement-mode probe" "${PY_ERR}"
+    elif [ -n "${PY_OUT}" ]; then
         log_pass
-        log_info "Current mode: $mode"
+        log_info "Current mode: ${PY_OUT}"
     else
-        log_fail "Cannot get enforcement mode"
+        log_fail "Enforcement mode resolved to an empty value"
     fi
 }
 
@@ -139,54 +239,62 @@ asyncio.run(main())
 test_ownership_coverage() {
     log_test "Session ownership coverage"
 
-    local result=$(python3 -c "
+    local program total owned coverage
+    program="$(cat <<'PY'
 import asyncio
+
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from security.session_ownership import SessionOwnershipValidator
+
+
+async def _count(redis, pattern):
+    cursor = 0
+    seen = 0
+    while True:
+        cursor, keys = await redis.scan(cursor, match=pattern, count=100)
+        seen += len(keys)
+        if cursor == 0:
+            return seen
+
 
 async def main():
     # Exactly what security/session_ownership.py:836 does. Calling it bare
     # returns the SYNC client (async_client defaults to False), so awaiting it
     # raises TypeError, and a .main() attribute exists on neither client. That
     # turned an import-time failure into a call-time one, which is the same
-    # defect a step later (#14866). Written without backticks on purpose: this
-    # block is a DOUBLE-QUOTED shell argument, so a backtick is command
-    # substitution -- bash ran the words inside it and handed python a mangled
-    # program, which no amount of import fixing could have made work (#14880).
+    # defect a step later (#14866). This program is now fed to python through a
+    # SINGLE-QUOTED heredoc, so the shell no longer touches its contents at all
+    # -- previously it was a double-quoted argument, where a backtick was
+    # command substitution and bash handed python a mangled program (#14880).
     redis = await get_redis_manager(async_client=True, database="main")
-
-    # Count total sessions
-    cursor = 0
-    total = 0
-    while True:
-        cursor, keys = await redis.scan(cursor, match='chat_session:*', count=100)
-        total += len(keys)
-        if cursor == 0:
-            break
-
-    # Count owned sessions
-    validator = SessionOwnershipValidator(redis)
-    cursor = 0
-    owned = 0
-    while True:
-        cursor, keys = await redis.scan(cursor, match='chat_session_owner:*', count=100)
-        owned += len(keys)
-        if cursor == 0:
-            break
-
+    SessionOwnershipValidator(redis)
+    total = await _count(redis, 'chat_session:*')
+    owned = await _count(redis, 'chat_session_owner:*')
     coverage = (owned / total * 100) if total > 0 else 100
     print(f'{total}|{owned}|{coverage:.1f}')
 
+
 asyncio.run(main())
-")
+PY
+)"
+    run_python_check "${program}"
 
-    IFS='|' read -r total owned coverage <<< "$result"
+    if [ "${PY_RC}" -ne 0 ]; then
+        log_error "ownership-coverage probe" "${PY_ERR}"
+        return 0
+    fi
 
-    if [ "$coverage" = "100.0" ] || [ "$total" = "0" ]; then
+    IFS='|' read -r total owned coverage <<< "${PY_OUT}"
+    if [ -z "${coverage}" ]; then
+        # The probe exited 0 without producing the triple it promises. That is a
+        # broken probe, not incomplete coverage -- reporting "Incomplete
+        # coverage: % (/ sessions)" here is what the old code did.
+        log_error "ownership-coverage probe returned no measurement" "${PY_OUT}"
+    elif [ "${coverage}" = "100.0" ] || [ "${total}" = "0" ]; then
         log_pass
-        log_info "Coverage: $coverage% ($owned/$total sessions)"
+        log_info "Coverage: ${coverage}% (${owned}/${total} sessions)"
     else
-        log_fail "Incomplete coverage: $coverage% ($owned/$total sessions)"
+        log_fail "Incomplete coverage: ${coverage}% (${owned}/${total} sessions)"
     fi
 }
 
@@ -194,39 +302,41 @@ asyncio.run(main())
 test_audit_logging() {
     log_test "Audit logging system"
 
-    python3 -c "
+    local program
+    program="$(cat <<'PY'
 import asyncio
+import sys
+
 from services.audit_logger import get_audit_logger
+
+CHECK_FAILED_RC = 20
+
 
 async def main():
     logger = await get_audit_logger()
-
-    # Test log write
     await logger.log(
         operation='validation.test',
         result='success',
         user_id='validator',
-        details={'test': True}
+        details={'test': True},
     )
     await logger.flush()
-
-    # Get statistics
     stats = await logger.get_statistics()
-    if stats.get('redis_available'):
-        print('OK')
-        return 0
-    else:
-        print('FAIL')
-        return 1
+    # Exit 0 or CHECK_FAILED_RC only. An uncaught exception exits 1, which is
+    # how "audit logging is broken" and "this probe never ran" used to be the
+    # same answer to the shell (#14869).
+    return 0 if stats.get('redis_available') else CHECK_FAILED_RC
 
-import sys
+
 sys.exit(asyncio.run(main()))
-"
+PY
+)"
+    run_python_check "${program}"
 
-    if [ $? -eq 0 ]; then
+    if [ "${PY_RC}" -eq 0 ]; then
         log_pass
     else
-        log_fail "Audit logging not working"
+        classify_probe "Audit logging not working"
     fi
 }
 
@@ -234,6 +344,10 @@ sys.exit(asyncio.run(main()))
 test_redis_connectivity() {
     log_test "Redis connectivity"
 
+    if ! command -v redis-cli > /dev/null 2>&1; then
+        log_error "redis-cli is not installed, so connectivity was never tested"
+        return 0
+    fi
     if redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping > /dev/null 2>&1; then
         log_pass
     else
@@ -245,6 +359,10 @@ test_redis_connectivity() {
 test_backend_health() {
     log_test "Backend API health"
 
+    if ! command -v curl > /dev/null 2>&1; then
+        log_error "curl is not installed, so backend health was never tested"
+        return 0
+    fi
     if curl -s -f -o /dev/null "http://$BACKEND_HOST:$BACKEND_PORT/api/health"; then
         log_pass
     else
@@ -252,108 +370,90 @@ test_backend_health() {
     fi
 }
 
+# Report a latency probe: ERROR when it produced no number, PASS/WARN otherwise.
+report_latency() {
+    local what="$1" target_ms="$2"
+    if [ "${PY_RC}" -ne 0 ]; then
+        log_error "${what} probe" "${PY_ERR}"
+    elif [ -z "${PY_OUT}" ]; then
+        log_error "${what} probe returned no measurement"
+    elif num_lt "${PY_OUT}" "${target_ms}"; then
+        log_pass
+        log_info "Average: ${PY_OUT}ms"
+    else
+        log_warn "Slower than target: ${PY_OUT}ms (target: <${target_ms}ms)"
+    fi
+}
+
 # Test: Ownership validation performance
 test_ownership_performance() {
     log_test "Ownership validation performance (<10ms)"
 
-    local result=$(python3 -c "
+    local program
+    program="$(cat <<'PY'
 import asyncio
 import time
+
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from security.session_ownership import SessionOwnershipValidator
 
+
 async def main():
-    # Exactly what security/session_ownership.py:836 does. Calling it bare
-    # returns the SYNC client (async_client defaults to False), so awaiting it
-    # raises TypeError, and a .main() attribute exists on neither client. That
-    # turned an import-time failure into a call-time one, which is the same
-    # defect a step later (#14866). Written without backticks on purpose: this
-    # block is a DOUBLE-QUOTED shell argument, so a backtick is command
-    # substitution -- bash ran the words inside it and handed python a mangled
-    # program, which no amount of import fixing could have made work (#14880).
     redis = await get_redis_manager(async_client=True, database="main")
-
     validator = SessionOwnershipValidator(redis)
-
-    # Create test session
     test_session = 'test_perf_session_123'
     await validator.set_session_owner(test_session, 'testuser')
 
-    # Measure performance
     iterations = 100
     start = time.time()
-
     for _ in range(iterations):
         await validator.get_session_owner(test_session)
+    avg_ms = (time.time() - start) * 1000 / iterations
 
-    elapsed = (time.time() - start) * 1000  # ms
-    avg_ms = elapsed / iterations
-
-    # Cleanup
-    ownership_key = validator._get_ownership_key(test_session)
-    await redis.delete(ownership_key)
-
+    await redis.delete(validator._get_ownership_key(test_session))
     print(f'{avg_ms:.2f}')
 
-asyncio.run(main())
-")
 
-    if [ -n "$result" ]; then
-        if (( $(echo "$result < 10" | bc -l) )); then
-            log_pass
-            log_info "Average: ${result}ms"
-        else
-            log_warn "Slower than target: ${result}ms (target: <10ms)"
-        fi
-    else
-        log_fail "Performance test failed"
-    fi
+asyncio.run(main())
+PY
+)"
+    run_python_check "${program}"
+    report_latency "ownership-validation performance" 10
 }
 
 # Test: Audit logging performance
 test_audit_performance() {
     log_test "Audit logging performance (<5ms)"
 
-    local result=$(python3 -c "
+    local program
+    program="$(cat <<'PY'
 import asyncio
 import time
+
 from services.audit_logger import get_audit_logger
+
 
 async def main():
     logger = await get_audit_logger()
-
-    # Measure performance
     iterations = 100
     start = time.time()
-
     for i in range(iterations):
         await logger.log(
             operation='performance.test',
             result='success',
             user_id='perftest',
-            details={'iteration': i}
+            details={'iteration': i},
         )
-
-    elapsed = (time.time() - start) * 1000  # ms
-    avg_ms = elapsed / iterations
-
+    avg_ms = (time.time() - start) * 1000 / iterations
     await logger.flush()
-
     print(f'{avg_ms:.2f}')
 
-asyncio.run(main())
-")
 
-    if [ -n "$result" ]; then
-        if (( $(echo "$result < 5" | bc -l) )); then
-            log_pass
-            log_info "Average: ${result}ms"
-        else
-            log_warn "Slower than target: ${result}ms (target: <5ms)"
-        fi
-    else
-        log_fail "Audit performance test failed"
-    fi
+asyncio.run(main())
+PY
+)"
+    run_python_check "${program}"
+    report_latency "audit-logging performance" 5
 }
 
 # Test: Security - unauthorized access blocked
@@ -362,31 +462,34 @@ test_security_enforcement() {
 
     # This test would require actual HTTP requests to protected endpoints
     # Simplified version checks if enforcement mode can be set
-
-    python3 -c "
+    local program
+    program="$(cat <<'PY'
 import asyncio
-from services.feature_flags import get_feature_flags, EnforcementMode
+import sys
+
+from services.feature_flags import EnforcementMode, get_feature_flags
+
+CHECK_FAILED_RC = 20
+
 
 async def main():
     flags = await get_feature_flags()
-
-    # Test setting each mode
-    for mode in [EnforcementMode.DISABLED, EnforcementMode.LOG_ONLY, EnforcementMode.ENFORCED]:
+    for mode in (EnforcementMode.DISABLED, EnforcementMode.LOG_ONLY, EnforcementMode.ENFORCED):
         await flags.set_enforcement_mode(mode)
-        current = await flags.get_enforcement_mode()
-        if current != mode:
-            return 1
-
+        if await flags.get_enforcement_mode() != mode:
+            return CHECK_FAILED_RC
     return 0
 
-import sys
-sys.exit(asyncio.run(main()))
-"
 
-    if [ $? -eq 0 ]; then
+sys.exit(asyncio.run(main()))
+PY
+)"
+    run_python_check "${program}"
+
+    if [ "${PY_RC}" -eq 0 ]; then
         log_pass
     else
-        log_fail "Cannot set enforcement modes"
+        classify_probe "Cannot set enforcement modes"
     fi
 }
 
@@ -430,22 +533,44 @@ print_summary() {
     echo
     log_header "Validation Summary"
 
-    local total=$((TESTS_PASSED + TESTS_FAILED + TESTS_WARNED))
+    local total=$((TESTS_PASSED + TESTS_FAILED + TESTS_WARNED + TESTS_ERRORED))
 
     echo "  Total Tests:     $total"
     echo -e "  ${GREEN}Passed:${NC}          $TESTS_PASSED"
     echo -e "  ${RED}Failed:${NC}          $TESTS_FAILED"
+    echo -e "  ${RED}Errored:${NC}         $TESTS_ERRORED (could not run)"
     echo -e "  ${YELLOW}Warnings:${NC}        $TESTS_WARNED"
     echo
 
-    if [ $TESTS_FAILED -eq 0 ]; then
-        echo -e "${GREEN}✓ All tests passed successfully${NC}"
-        return 0
-    else
-        echo -e "${RED}✗ Some tests failed - review errors above${NC}"
+    VALIDATION_COMPLETED=true
+
+    if [ "$TESTS_ERRORED" -gt 0 ]; then
+        echo -e "${RED}✗ ${TESTS_ERRORED} check(s) could not run - this suite cannot vouch for access control${NC}"
         return 1
     fi
+    if [ "$TESTS_FAILED" -eq 0 ]; then
+        echo -e "${GREEN}✓ All tests passed successfully${NC}"
+        return 0
+    fi
+    echo -e "${RED}✗ Some tests failed - review errors above${NC}"
+    return 1
 }
+
+# Say so when the suite dies before it reports (#14869).
+#
+# A run that aborts partway looks exactly like a run that finished: the last
+# line on screen is a passing check and the shell exits non-zero. Without this
+# there is nothing on screen that distinguishes the two.
+report_incomplete_run() {
+    local rc=$?
+    if [ "$VALIDATION_COMPLETED" != true ]; then
+        echo -e "${RED}✗ VALIDATION ABORTED before its summary (exit ${rc}).${NC}" >&2
+        echo "  Checks that had reported by then: ${TESTS_PASSED} passed, ${TESTS_FAILED} failed, ${TESTS_ERRORED} errored, ${TESTS_WARNED} warned." >&2
+        echo "  Every check after the abort point NEVER RAN. Do not read this run as a result." >&2
+    fi
+    return 0
+}
+trap report_incomplete_run EXIT
 
 # Show usage
 show_usage() {
@@ -489,11 +614,16 @@ main() {
                 ;;
             -h|--help)
                 show_usage
+                VALIDATION_COMPLETED=true
                 exit 0
                 ;;
             *)
-                log_error "Unknown option: $1"
+                # `log_error` was called here and had never been defined, so
+                # under `set -e` this exited 127 from a "command not found"
+                # instead of printing the usage it goes on to print (#14869).
+                log_fatal "Unknown option: $1"
                 show_usage
+                VALIDATION_COMPLETED=true
                 exit 1
                 ;;
         esac

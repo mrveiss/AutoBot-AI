@@ -445,7 +445,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/utils/tool_pattern_analyzer.py": 918,
     "autobot-backend/utils/validators.py": 696,
     "autobot-backend/voice_interface.py": 910,
-    "autobot-backend/workers/audit_tasks.py": 1107,
+    "autobot-backend/workers/audit_tasks.py": 1085,
     "autobot-backend/workers/audit_tasks_test.py": 1197,
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-frontend/tests/frontend_comprehensive_corrected_test.py": 1009,
