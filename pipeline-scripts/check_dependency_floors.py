@@ -224,10 +224,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         found, examined = audit(root)
     except EmptyEnumerationError as exc:
-        print(f"FATAL: {exc}", file=sys.stderr)
+        print(f"FATAL: {exc}", file=sys.stderr)  # noqa: print
         return 2
     for line in render(found, examined, len(found) if args.all else MAX_REPORTED):
-        print(line)
+        print(line)  # noqa: print
     return 1 if found and args.strict else 0
 
 
