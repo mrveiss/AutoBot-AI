@@ -121,20 +121,6 @@ def terminal_client(terminal_app):
 
 _ADMIN_DEP = "auth_middleware.check_admin_permission"
 
-#: Matched by suffix, not by full path. Under fastapi 0.141.1 the prefix passed
-#: to ``include_router`` is applied at request-routing time and is on neither the
-#: deferred wrapper's ``.prefix`` nor the original router's -- three CI runs
-#: (98110125325, 98112466169) confirmed it is not recoverable by introspection.
-#: The prefix is incidental to what this guard exists to prove: that the four
-#: routes which install packages and run system commands carry the admin check.
-#: Each suffix must match exactly one route, so the looser match cannot become a
-#: loophole.
-_TOOL_SUFFIXES = (
-    "/install-tool",
-    "/check-tool",
-    "/validate-command",
-    "/package-managers",
-)
 
 
 class _TerminalRouteDumpError(RuntimeError):
@@ -550,8 +536,6 @@ def _dump_routes_main() -> None:
             if getattr(dep, "dependency", None) is not None
         )
 
-    wrapper_attrs: list = []
-
     def _walk(container, prefix: str) -> list:
         """Flatten deferred ``_IncludedRouter`` wrappers into real routes.
 
@@ -568,20 +552,7 @@ def _dump_routes_main() -> None:
         for route in getattr(container, "routes", []) or []:
             original = getattr(route, "original_router", None)
             if original is not None:
-                # The prefix passed to ``include_router`` is not on the wrapper's
-                # ``.prefix`` -- CI job 98110125325 found ``/install-tool`` where
-                # ``/terminal/install-tool`` was expected. Take whichever of the
-                # two carries it, and report the wrapper's attributes so the next
-                # run names the right one instead of costing another round-trip.
                 sub_prefix = getattr(route, "prefix", "") or getattr(original, "prefix", "") or ""
-                wrapper_attrs.append(
-                    {
-                        "type": type(route).__name__,
-                        "wrapper_prefix": getattr(route, "prefix", None),
-                        "original_prefix": getattr(original, "prefix", None),
-                        "attrs": sorted(a for a in dir(route) if not a.startswith("_")),
-                    }
-                )
                 found.extend(_walk(original, prefix + sub_prefix))
                 continue
             path = getattr(route, "path", None)
@@ -602,7 +573,6 @@ def _dump_routes_main() -> None:
         json.dumps(
             {
                 "routes": routes,
-                "wrappers": wrapper_attrs,
                 "python": _sys.version,
                 "fastapi": getattr(_fastapi, "__version__", "unknown"),
                 "starlette": getattr(_starlette, "__version__", "unknown"),
