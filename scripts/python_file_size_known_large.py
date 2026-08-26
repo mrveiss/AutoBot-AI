@@ -323,7 +323,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/security/input_validator.py": 607,
     "autobot-backend/security/prompt_injection_detector.py": 747,
     "autobot-backend/security/security_edge_cases_test.py": 638,
-    "autobot-backend/security/session_ownership.py": 859,
+    "autobot-backend/security/session_ownership.py": 858,
     "autobot-backend/security/threat_detection_refactor_test.py": 880,
     "autobot-backend/security/threat_intelligence.py": 771,
     "autobot-backend/security_layer.py": 767,
