@@ -40,8 +40,8 @@ Covers:
 """
 
 import json
-import os
 import logging
+import os
 import subprocess
 import sys
 from contextlib import contextmanager
