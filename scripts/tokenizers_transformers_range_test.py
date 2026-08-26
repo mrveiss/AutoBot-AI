@@ -50,6 +50,19 @@ _REQUIREMENT_FILES = (
     "autobot-infrastructure/autobot-npu-worker/docker/requirements-npu.txt",
 )
 
+_SKIP_PARTS = {"venv", ".venv", "node_modules", ".worktrees", ".claude", "__pycache__"}
+
+
+def _outside_excluded_dirs(path: Path, root: Path = _REPO_ROOT) -> bool:
+    """True when no part of `path` RELATIVE to `root` is an excluded directory.
+
+    Relative, never a substring of the absolute path (#15121): this repo runs
+    from `.worktrees/<branch>/` checkouts, where an absolute match hits the repo
+    root itself, skips every requirements file, and leaves the assertion below
+    comparing an empty set against the expected one.
+    """
+    return not any(part in _SKIP_PARTS for part in path.relative_to(root).parts)
+
 _TOKENIZERS_LINE = re.compile(r"^tokenizers\s*(?P<spec>[^#\n]*)", re.M)
 _SPEC = re.compile(r"(?P<op>>=|<=|==|<|>)\s*(?P<version>\d+(?:\.\d+)*)")
 
@@ -144,7 +157,7 @@ def test_every_file_declaring_tokenizers_is_covered():
     declaring = {
         str(p.relative_to(_REPO_ROOT))
         for p in _REPO_ROOT.rglob("requirements*.txt")
-        if not any(skip in str(p) for skip in ("venv/", "node_modules/", ".worktrees/", ".claude/"))
+        if _outside_excluded_dirs(p)
         and _TOKENIZERS_LINE.search(p.read_text(encoding="utf-8", errors="replace"))
     }
     # The windows npu-worker resource file pins an old, independent stack
@@ -184,3 +197,12 @@ def test_version_comparison_is_length_normalised(spec, version, expected):
     specs = [(m.group("op"), _version(m.group("version"))) for m in _SPEC.finditer(spec)]
 
     assert _admits(specs, version) is expected
+
+
+def test_a_checkout_under_worktrees_is_still_scanned(tmp_path):
+    """#15121: the sweep must see a tree rooted inside `.worktrees/`."""
+    root = tmp_path / ".worktrees" / "issue-9999"
+    (root / "venv").mkdir(parents=True)
+
+    assert _outside_excluded_dirs(root / "requirements.txt", root)
+    assert not _outside_excluded_dirs(root / "venv" / "requirements.txt", root)

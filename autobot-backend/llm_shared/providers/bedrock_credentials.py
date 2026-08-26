@@ -26,6 +26,7 @@ import json
 import re
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import redact_text
 from services.secrets_audit_store import (
     REASON_LOOKUP_ERROR,
     REASON_MALFORMED_VALUE,
@@ -68,6 +69,67 @@ _AWS_ACCESS_KEY_PATTERN = re.compile(r"^(AKIA|ASIA)[0-9A-Z]{16}$")
 
 #: AWS secret-access-key shape: exactly 40 base64 characters (A-Za-z0-9+/).
 _AWS_SECRET_KEY_PATTERN = re.compile(r"^[A-Za-z0-9+/]{40}$")
+
+
+#: Replacement for any credential value removed from text on its way to a log.
+_CREDENTIAL_MASK = "***"
+
+
+def scrub_credentials(text: str, credentials: tuple[str | None, str | None, str | None]) -> str:
+    """Return *text* with the canonical redactions applied and *credentials* masked out.
+
+    The AWS SDK names the key it rejected in some of its error messages, and an
+    availability probe logs whatever it caught. Masking by *value* on top of the
+    shared pattern redactor is what makes the result provable rather than
+    probable: the resolved values are in hand here, so nothing is left to a
+    pattern's coverage (#15071).
+
+    Only the access key and the secret key are masked; the region is not a
+    secret and removing it would cost the log line its only useful detail.
+    """
+    scrubbed = redact_text(text)
+    for value in credentials[:2]:
+        if isinstance(value, str) and value:
+            scrubbed = scrubbed.replace(value, _CREDENTIAL_MASK)
+    return scrubbed
+
+
+def build_boto3_client(service_name: str, credentials: tuple[str | None, str | None, str | None]):
+    """Build a boto3 client for *service_name* from one already-resolved credential tuple.
+
+    Takes the resolved tuple rather than resolving its own, so every client built
+    during a single operation is provably built from the *same* pair. Two
+    resolutions can disagree -- a settings reload, an environment mutation, or a
+    vault rotation landing between them -- and a mismatched access-key/secret-key
+    pair does not raise: it fails opaquely at call time, which the caller then
+    sees only as an unexplained ``is_available() -> False`` (#15071).
+
+    Explicit credentials are added only when both are present, so an unset pair
+    falls through to boto3's own chain (IAM role / instance profile) instead of
+    being handed ``None`` for each.
+
+    Raises:
+        ImportError: If boto3 is not installed.
+        ValueError: If the region is absent or not AWS-region-shaped. A region
+            can originate from a vault entry, which is a trust boundary and not
+            a format guarantee, so it is checked before it is used to build a
+            boto3 endpoint host -- and never echoed back, per
+            validate_credential_pair.
+    """
+    try:
+        import boto3
+    except ImportError as exc:
+        raise ImportError("boto3 not installed. Run: pip install boto3") from exc
+
+    access_key, secret_key, region = credentials
+    if not region or not _AWS_REGION_PATTERN.match(region):
+        raise ValueError("Bedrock: resolved AWS region has an unexpected format, refusing to initialize client")
+
+    client_kwargs: dict[str, object] = {"region_name": region, "service_name": service_name}
+    if access_key and secret_key:
+        client_kwargs["aws_access_key_id"] = access_key
+        client_kwargs["aws_secret_access_key"] = secret_key
+    return boto3.client(**client_kwargs)
 
 
 def validate_credential_pair(access_key: object, secret_key: object) -> None:
