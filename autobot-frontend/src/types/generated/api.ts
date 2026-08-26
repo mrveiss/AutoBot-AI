@@ -57111,9 +57111,44 @@ export interface components {
         };
         /**
          * AnalyticsPerformanceMetricsResponse
-         * @description Response for GET /analytics/performance/metrics — opaque collector result.
+         * @description Response for GET /analytics/performance/metrics.
+         *
+         *     Every block is written by ``AnalyticsController.collect_performance_metrics``
+         *     except ``historical_context``, which the route appends, and ``error``, which
+         *     replaces the rest when collection raises.
          */
         AnalyticsPerformanceMetricsResponse: {
+            /** System Performance */
+            system_performance?: {
+                [key: string]: unknown;
+            } | null;
+            /** Api Performance */
+            api_performance?: {
+                [key: string]: unknown;
+            } | null;
+            /** Advanced Metrics */
+            advanced_metrics?: {
+                [key: string]: unknown;
+            } | null;
+            /** Detailed Metrics */
+            detailed_metrics?: {
+                [key: string]: unknown;
+            } | null;
+            /** Hardware Performance */
+            hardware_performance?: {
+                [key: string]: unknown;
+            } | null;
+            /** Network Io */
+            network_io?: {
+                [key: string]: unknown;
+            } | null;
+            /** Historical Context */
+            historical_context?: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error?: string | null;
+        } & {
             [key: string]: unknown;
         };
         /**
@@ -57262,9 +57297,36 @@ export interface components {
         };
         /**
          * AnalyticsUsageStatisticsResponse
-         * @description Response for GET /analytics/usage/statistics — opaque controller result.
+         * @description Response for GET /analytics/usage/statistics.
+         *
+         *     Blocks come from ``AnalyticsController.get_usage_statistics``;
+         *     ``analysis_period`` is appended by the route and ``error`` replaces the rest
+         *     when collection raises.
          */
         AnalyticsUsageStatisticsResponse: {
+            /** Api Usage */
+            api_usage?: {
+                [key: string]: unknown;
+            } | null;
+            /** Websocket Usage */
+            websocket_usage?: {
+                [key: string]: unknown;
+            } | null;
+            /** System Usage */
+            system_usage?: {
+                [key: string]: unknown;
+            } | null;
+            /** Knowledge Base Usage */
+            knowledge_base_usage?: {
+                [key: string]: unknown;
+            } | null;
+            /** Analysis Period */
+            analysis_period?: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error?: string | null;
+        } & {
             [key: string]: unknown;
         };
         /** AnthropicContentBlock */
