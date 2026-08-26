@@ -26,11 +26,31 @@ from repo_tests.unreferenced_shell_script_baseline import KNOWN_UNREFERENCED
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_DIR = "autobot-infrastructure/shared/scripts"
+RUNBOOK = "docs/runbooks/ROTATE_SSH_KEYS.md"
 
 #: The tree held 118 tracked scripts when this guard landed. The floor is well
 #: below that: it exists to catch the enumeration collapsing (a moved directory,
 #: a broken glob), not to freeze the count.
 MINIMUM_EXPECTED_SCRIPTS = 90
+
+#: This guard's own bookkeeping, as repo-relative paths.
+#:
+#: Naming a script here is NOT a reference to it. The baseline lists every known
+#: orphan by path and this module names the scripts #15079 resolved, so counting
+#: them would make each entry "referenced" the instant it was written down --
+#: the guard would then pass forever while reporting the opposite of the truth.
+#:
+#: Matched against ``git grep -l`` output, which is repo-relative by
+#: construction, so this comparison is unaffected by where the checkout lives.
+#: Deliberately NOT an absolute-path substring: that is the bug class behind
+#: #15121 / #15140, where a filter matching on the absolute path answered
+#: differently under ``.worktrees/`` than in an ordinary CI checkout.
+NOT_A_REFERENCE = frozenset(
+    {
+        "repo_tests/unreferenced_shell_script_baseline.py",
+        "repo_tests/unreferenced_shell_script_test.py",
+    }
+)
 
 
 def _git(*args: str) -> list[str]:
@@ -71,7 +91,7 @@ def unreferenced(scripts: list[str]) -> list[str]:
         for name in names:
             if name in text:
                 mentions[name].add(candidate)
-    return [path for path in scripts if not (mentions[Path(path).name] - {path})]
+    return [path for path in scripts if not (mentions[Path(path).name] - {path} - NOT_A_REFERENCE)]
 
 
 @pytest.fixture(scope="module")
@@ -98,6 +118,49 @@ class TestEnumeration:
         """A grep that returns nothing would mark every script unreferenced."""
         names = sorted({Path(path).name for path in scripts})
         assert _files_mentioning(names), "the reference search matched no file at all"
+
+
+class TestOwnBookkeepingIsNotAReference:
+    """The guard must not count its own records as references (#15079 review).
+
+    Without this the guard is self-defeating: writing a script into the baseline
+    makes it "referenced", so the ratchet passes while asserting the opposite of
+    the truth. It failed in CI exactly that way and passed locally only because
+    both files were still untracked -- ``git grep`` reads tracked content, so an
+    uncommitted baseline is invisible to the scan. A local pass carried no
+    information, which is #15091 in miniature.
+    """
+
+    def test_bookkeeping_files_are_tracked(self):
+        """Untracked bookkeeping is invisible to git grep and the scan changes answer."""
+        tracked = set(_git("ls-files"))
+        missing = sorted(NOT_A_REFERENCE - tracked)
+        assert not missing, (
+            "these are not tracked, so git grep cannot see them and this guard would "
+            f"silently give a different verdict here than in CI: {missing}"
+        )
+
+    def test_bookkeeping_paths_still_exist(self):
+        """A rename would silently stop the exclusion applying."""
+        for relative in sorted(NOT_A_REFERENCE):
+            assert (REPO_ROOT / relative).is_file(), f"{relative} no longer exists"
+
+    def test_bookkeeping_paths_are_repo_relative(self):
+        """#15121 / #15140: an absolute-path filter answers differently under .worktrees/."""
+        for relative in sorted(NOT_A_REFERENCE):
+            assert not relative.startswith("/"), f"{relative} must be repo-relative"
+
+    def test_a_baselined_script_is_named_only_by_the_bookkeeping(self, scripts):
+        """Proves the exclusion is doing the work, not an accident of the tree."""
+        sample = sorted(KNOWN_UNREFERENCED & set(scripts))
+        assert sample, "baseline holds no script that exists; nothing to prove against"
+        name = Path(sample[0]).name
+        mentioning = set(_files_mentioning([name])) - {sample[0]}
+        assert mentioning, f"expected {name} to be named by the bookkeeping at least"
+        assert mentioning <= NOT_A_REFERENCE, (
+            f"{name} is named outside this guard's bookkeeping by {sorted(mentioning - NOT_A_REFERENCE)}"
+            " -- it is genuinely referenced and must leave KNOWN_UNREFERENCED"
+        )
 
 
 class TestNoNewUnreferencedScript:
@@ -142,9 +205,19 @@ class TestTheTwoScriptsThisIssueResolved:
         assert retired not in scripts
         assert retired not in KNOWN_UNREFERENCED
 
-    def test_the_wired_in_script_is_referenced(self, scripts):
-        """It is documented in docs/runbooks/ROTATE_SSH_KEYS.md, so it must not be unreferenced."""
+    def test_the_wired_in_script_is_referenced_by_the_runbook(self, scripts):
+        """The runbook entry is the wire-in. Name it, or this passes on its own mention.
+
+        Before #15129's review this asserted only "not unreferenced", which this
+        module satisfied by naming the script in the line above -- green while the
+        runbook entry it protects could have been deleted outright.
+        """
         wired = f"{SCRIPT_DIR}/test-service-auth-deployment.sh"
         assert wired in scripts, "the service-auth pre-deployment check was removed"
+        mentioning = set(_files_mentioning([Path(wired).name])) - {wired} - NOT_A_REFERENCE
+        assert RUNBOOK in mentioning, (
+            f"{RUNBOOK} no longer names the pre-deployment check; the wire-in is gone. "
+            f"Named instead by: {sorted(mentioning) or 'nothing'}"
+        )
         assert wired not in unreferenced(scripts)
         assert wired not in KNOWN_UNREFERENCED
