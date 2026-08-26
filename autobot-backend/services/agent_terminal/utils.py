@@ -253,3 +253,31 @@ async def log_command_result(
             result=result,
             user_id=user_id,
         )
+
+
+async def log_autobot_command(
+    terminal_logger: "TerminalLogger",
+    session: "AgentTerminalSession",
+    command: str,
+    status: str,
+    result: "Metadata | None" = None,
+) -> None:
+    """Record an auto-approved (``autobot`` run type) command against the transcript.
+
+    The same six-argument call was spelled out twice in
+    ``_execute_auto_approved_command`` — once before the command ran, once with
+    its result — inside a service already at its recorded size ceiling. Same
+    reason ``log_command_approval`` moved here in #14959; kept together with it
+    so the two run types stay one edit apart (#15073).
+
+    A session with no conversation has nowhere to write, and logs nothing.
+    """
+    if session.has_conversation():
+        await terminal_logger.log_command(
+            session_id=session.conversation_id,
+            command=command,
+            run_type="autobot",
+            status=status,
+            result=result,
+            user_id=None,
+        )

@@ -5618,7 +5618,8 @@
       "executing": "Executing...",
       "securityNote": "Commands are executed in a sandboxed environment with limited permissions.",
       "missingSessionId": "Missing session ID for command execution",
-      "executionFailed": "Command execution failed",
+      "executionFailed": "Échec de l'exécution de la commande",
+      "postExecutionFailed": "La commande s'est exécutée, mais une étape ultérieure a échoué. Sa sortie est affichée ; certaines mises à jour peuvent manquer.",
       "enterComment": "Please enter a comment before submitting"
     },
     "darkModeToggle": {

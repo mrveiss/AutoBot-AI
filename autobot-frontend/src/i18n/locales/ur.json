@@ -4753,7 +4753,8 @@
       "theme": "Theme"
     },
     "commandPermission": {
-      "executionFailed": "Command execution failed",
+      "executionFailed": "کمانڈ کا نفاذ ناکام ہو گیا",
+      "postExecutionFailed": "کمانڈ چل گئی، لیکن اس کے بعد کا ایک مرحلہ ناکام ہو گیا۔ اس کا آؤٹ پٹ دکھایا جا رہا ہے؛ کچھ اپ ڈیٹس غائب ہو سکتی ہیں۔",
       "allow": "Allow",
       "purposeLabel": "Purpose",
       "defaultPurpose": "System operation requested",
