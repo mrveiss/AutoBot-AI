@@ -477,22 +477,59 @@ def _dump_routes_main() -> None:
 
     import api.terminal as terminal_module
 
+    def _dep_names(route) -> list:
+        """Every dependency callable on a leaf route, fully merged.
+
+        ``route.dependant.dependencies`` is the set FastAPI actually resolves,
+        already including anything inherited from the routers the route was
+        included through -- which is exactly the question a gate check asks.
+        ``route.dependencies`` is the un-merged declaration and is the fallback.
+        """
+        dependant = getattr(route, "dependant", None)
+        if dependant is not None:
+            return sorted(
+                f"{dep.call.__module__}.{dep.call.__qualname__}"
+                for dep in getattr(dependant, "dependencies", [])
+                if getattr(dep, "call", None) is not None
+            )
+        return sorted(
+            f"{dep.dependency.__module__}.{dep.dependency.__qualname__}"
+            for dep in getattr(route, "dependencies", [])
+            if getattr(dep, "dependency", None) is not None
+        )
+
+    def _walk(container, prefix: str) -> list:
+        """Flatten deferred ``_IncludedRouter`` wrappers into real routes.
+
+        Under fastapi 0.141.1 neither ``include_router`` nor mounting an app
+        flattens eagerly: both leave a wrapper whose ``.original_router`` holds
+        the real routes, and whose own path is ``None``. Same idiom the repo
+        already uses in ``llc/tests/test_roles_routes_registered.py``,
+        ``api/codebase_analytics/endpoints/impact_endpoint_test.py`` and
+        ``api/self_capabilities_integration_test.py`` -- copied here rather than
+        invented, though the fact that four files now carry it by hand is its
+        own problem.
+        """
+        found = []
+        for route in getattr(container, "routes", []) or []:
+            original = getattr(route, "original_router", None)
+            if original is not None:
+                found.extend(_walk(original, prefix + (getattr(route, "prefix", "") or "")))
+                continue
+            path = getattr(route, "path", None)
+            found.append(
+                {
+                    "path": None if path is None else prefix + path,
+                    "type": type(route).__name__,
+                    "dependencies": _dep_names(route),
+                }
+            )
+        return found
+
     app = _fastapi.FastAPI()
     app.include_router(terminal_module.router)
 
-    routes = [
-        {
-            "path": getattr(route, "path", None),
-            "type": type(route).__name__,
-            "dependencies": sorted(
-                f"{dep.dependency.__module__}.{dep.dependency.__qualname__}"
-                for dep in getattr(route, "dependencies", [])
-                if getattr(dep, "dependency", None) is not None
-            ),
-        }
-        for route in app.routes
-        if not getattr(route, "path", "").startswith(("/openapi.json", "/docs", "/redoc"))
-    ]
+    routes = [r for r in _walk(app, "") if not (r["path"] or "").startswith(("/openapi.json", "/docs", "/redoc"))]
     print(
         json.dumps(
             {
