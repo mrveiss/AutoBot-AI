@@ -535,6 +535,7 @@ To add a new variable:
 | `AUTOBOT_PROMETHEUS_URL` | monitoring | str | `'http://10.0.0.4:9090'` | Base URL of the Prometheus metrics server. |
 | `AUTOBOT_PROVIDER_DEGRADATION_TTL_SECONDS` | ai | int | `300` | Seconds a provider stays marked degraded after a failure before traffic is offered to it again. |
 | `AUTOBOT_PROVIDER_OAUTH_STATE_TTL_SECONDS` | auth | int | `600` | Lifetime of a pending OAuth `state` value. A provider authorisation that is not completed within this window is rejected as expired (api/provider_auth.py). |
+| `AUTOBOT_PROVISION_STALE_SECONDS` | provisioning | int | `1800` | How long a provision run may report no progress before the setup wizard treats it as abandoned and lets a new run supersede it (#14856). Keyed on observed progress, not on time since start, so a slow-but-live run is never superseded; the floor keeps a value too small to distinguish the two from wedging the wizard the other way. Range: 60–86400. |
 | `AUTOBOT_REDIS_DB_ANALYTICS` | redis | int | `11` | Redis logical database number for analytics data. Range: 0–15. |
 | `AUTOBOT_REDIS_DB_KNOWLEDGE` | redis | int | `1` | Redis logical database number for knowledge-base vectors. Range: 0–15. |
 | `AUTOBOT_REDIS_DB_MAIN` | redis | int | `0` | Redis logical database number for primary application data. Range: 0–15. |
@@ -586,5 +587,5 @@ To add a new variable:
 | `AUTOBOT_USERS_DATABASE_URL` | postgres | str | *(none)* | Full SQLAlchemy connection URL for the users database. Overrides AUTOBOT_POSTGRES_* individual vars when set. |
 | `AUTOBOT_VOICE_TOOLSETS` | voice | str | `'voice_safe'` | Comma-separated toolset bundles a voice session may call. Defaults to the restricted `voice_safe` bundle — voice input is harder to confirm than typed input, so the surface is narrowed by default. |
 
-*148 variables registered as of last generation.*
+*149 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->
