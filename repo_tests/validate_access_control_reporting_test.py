@@ -27,6 +27,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -200,3 +201,154 @@ def test_the_script_carries_neither_abort_shape(shape, why):
         if re.search(shape, line) and not line.lstrip().startswith("#")
     ]
     assert not offenders, f"{why}:\n" + "\n".join(offenders)
+
+
+# ---------------------------------------------------------------------------
+# One definition of the FAIL exit code (#15074)
+# ---------------------------------------------------------------------------
+#
+# `CHECK_FAILED_RC` was written out three times: once in the shell, once inside
+# each of the two quoted python heredocs. The heredocs are `<<'PY'`, so the
+# shell deliberately cannot interpolate into them and each copy was typed by
+# hand. Nothing kept them in agreement, and disagreement is not a broken script
+# — it is a silently wrong verdict: a probe exiting a code `classify_probe` no
+# longer recognises is reported as ERROR ("this check could not run") when it
+# means FAIL ("access control is broken"), and `print_summary` then declares the
+# whole suite unable to vouch for access control. That is #14869's FAIL/ERROR
+# confusion, back via a one-character edit.
+#
+# The shell now exports the value and the probes read it. These tests hold that
+# shape from both ends: statically (no copy may reappear) and by running the
+# real probe programs and watching them exit whatever the environment said.
+
+_ASSIGNMENT = re.compile(r"^[ \t]*(export[ \t]+)?CHECK_FAILED_RC[ \t]*=[ \t]*(?P<rhs>.+?)[ \t]*$", re.MULTILINE)
+_ENV_READ = 'int(os.environ["CHECK_FAILED_RC"])'
+_PROBE = re.compile(r"<<'PY'\n(?P<program>.*?)\nPY\n", re.DOTALL)
+
+
+def _assignments() -> list[str]:
+    """Every place the script assigns the FAIL code, in any language."""
+    return [m.group("rhs") for m in _ASSIGNMENT.finditer(SCRIPT.read_text(encoding="utf-8"))]
+
+
+def _probe_programs() -> list[str]:
+    """The python programs the script feeds to `python3 -c`."""
+    return [m.group("program") for m in _PROBE.finditer(SCRIPT.read_text(encoding="utf-8"))]
+
+
+def test_the_fail_code_has_exactly_one_definition():
+    """One literal, exported; every other assignment derives from it.
+
+    The enumeration is asserted non-empty first: a regex that matched nothing —
+    because the constant was renamed, or the probes restructured — would
+    otherwise sail through every assertion below having checked nothing.
+    """
+    assignments = _assignments()
+    assert len(assignments) >= 3, (
+        "expected the shell definition and one derivation per python probe; " f"found {len(assignments)}: {assignments}"
+    )
+
+    literals = [rhs for rhs in assignments if rhs.isdigit()]
+    derived = [rhs for rhs in assignments if rhs == _ENV_READ]
+
+    assert literals == ["20"], f"the FAIL code must be defined once, as a literal, in the shell; found {literals}"
+    assert len(derived) == len(assignments) - 1, (
+        "every assignment other than the definition must read the exported value, " f"not restate it; got {assignments}"
+    )
+
+
+def test_the_definition_is_exported_so_the_probes_can_read_it():
+    """A definition the subprocesses cannot see would make every probe exit 1."""
+    source = SCRIPT.read_text(encoding="utf-8")
+    assert re.search(r"^export[ \t]+CHECK_FAILED_RC=20$", source, re.MULTILINE), (
+        "CHECK_FAILED_RC is defined but not exported: `python3 -c` runs in a child "
+        "process, so the probes would raise KeyError and every real failure would "
+        "be reported as a check that could not run"
+    )
+
+
+def test_every_probe_that_reports_a_failure_reads_the_exported_code():
+    """No probe may reintroduce a literal — the whole class, not one instance."""
+    programs = _probe_programs()
+    assert len(programs) >= 2, f"no probe programs found in the script — the extraction broke: {len(programs)}"
+
+    users = [program for program in programs if "CHECK_FAILED_RC" in program]
+    assert len(users) >= 2, "expected both the audit-logging and enforcement probes to signal FAIL by exit code"
+
+    for program in users:
+        assert _ENV_READ in program, f"a probe restates the FAIL code instead of reading it:\n{program}"
+        assert not re.search(
+            r"CHECK_FAILED_RC[ \t]*=[ \t]*\d", program
+        ), f"a probe assigns the FAIL code a literal — the fourth copy this guard exists to catch:\n{program}"
+
+
+def _stub_services(tmp_path: Path) -> Path:
+    """A `services` package satisfying both probes, with each check reporting broken."""
+    package = tmp_path / "stub-modules" / "services"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "audit_logger.py").write_text(
+        "class _Logger:\n"
+        "    async def log(self, **kwargs):\n"
+        "        return None\n"
+        "    async def flush(self):\n"
+        "        return None\n"
+        "    async def get_statistics(self):\n"
+        "        return {'redis_available': False}\n"
+        "\n"
+        "async def get_audit_logger():\n"
+        "    return _Logger()\n",
+        encoding="utf-8",
+    )
+    (package / "feature_flags.py").write_text(
+        "from enum import Enum\n"
+        "\n"
+        "class EnforcementMode(Enum):\n"
+        "    DISABLED = 'disabled'\n"
+        "    LOG_ONLY = 'log_only'\n"
+        "    ENFORCED = 'enforced'\n"
+        "\n"
+        "class _Flags:\n"
+        "    async def set_enforcement_mode(self, mode):\n"
+        "        return None\n"
+        "    async def get_enforcement_mode(self):\n"
+        "        return EnforcementMode.DISABLED\n"
+        "\n"
+        "async def get_feature_flags():\n"
+        "    return _Flags()\n",
+        encoding="utf-8",
+    )
+    return package.parent
+
+
+@pytest.mark.parametrize("fail_code", ["20", "37"])
+def test_a_probe_exits_the_code_the_shell_exported(tmp_path, fail_code):
+    """The linkage itself, executed: the probes agree with the shell BY CONSTRUCTION.
+
+    `37` is the whole point. A probe carrying its own literal exits 20 whatever
+    the shell says, so the shell would read 20 as "the check failed" while the
+    probe that actually ran meant something else — or, after a drift in the
+    other direction, read a real FAIL as a probe that never ran. Parametrising
+    the exported value is the only assertion here that a third hand-written copy
+    could not satisfy.
+    """
+    programs = [p for p in _probe_programs() if "CHECK_FAILED_RC" in p]
+    assert len(programs) >= 2, "the probe programs could not be extracted — this test would prove nothing"
+
+    env = dict(os.environ)
+    env["CHECK_FAILED_RC"] = fail_code
+    env["PYTHONPATH"] = str(_stub_services(tmp_path))
+
+    for program in programs:
+        result = subprocess.run(  # nosec B603  # fixed interpreter, no shell
+            [sys.executable, "-c", program],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=60,
+            check=False,
+        )
+        assert result.returncode == int(fail_code), (
+            f"probe exited {result.returncode}, but the shell told it {fail_code} means FAIL:\n"
+            f"{result.stderr}\n{program}"
+        )
