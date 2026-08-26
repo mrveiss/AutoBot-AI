@@ -286,3 +286,45 @@ class TestRouterLevelDependsBreaksWebSocketScope:
 
         with client.websocket_connect("/ws/fixed"):
             pass
+
+
+# --- the tool-execution routes must not lose their gate to the router split ---
+#
+# `api/terminal_tools.py` declares no dependency of its own (#15084): those four
+# routes install packages and run system commands, and have only ever been
+# protected by inheriting the parent router's admin check. Splitting that parent
+# for the WebSocket fix moved every HTTP route onto `admin_router` -- and would
+# have handed these to anonymous callers had the include site not moved with
+# them. Asserted here by identity against the live merged router, so a future
+# refactor that reparents them fails instead of quietly opening them.
+
+_TOOL_PATHS = {
+    "/terminal/install-tool",
+    "/terminal/check-tool",
+    "/terminal/validate-command",
+    "/terminal/package-managers",
+}
+
+
+def _tool_routes():
+    from api.terminal import router as merged_router
+
+    return [r for r in merged_router.routes if getattr(r, "path", "") in _TOOL_PATHS]
+
+
+def test_every_tool_route_is_present():
+    """Non-vacuity: if the paths move, the gate assertion below guards nothing."""
+    found = {r.path for r in _tool_routes()}
+    assert found == _TOOL_PATHS, f"expected {sorted(_TOOL_PATHS)}, found {sorted(found)}"
+
+
+@pytest.mark.parametrize("path", sorted(_TOOL_PATHS))
+def test_tool_route_keeps_the_admin_dependency(path):
+    from auth_middleware import check_admin_permission
+
+    route = next(r for r in _tool_routes() if r.path == path)
+    gates = [getattr(d, "dependency", None) for d in getattr(route, "dependencies", [])]
+    assert check_admin_permission in gates, (
+        f"{path} runs system commands and has no dependency of its own -- "
+        "it must stay on a router that carries the admin check"
+    )

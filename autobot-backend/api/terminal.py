@@ -190,11 +190,11 @@ from api.terminal_ssh import (  # noqa: E402
     ssh_terminal_manager,
 )
 
-# Import tool management router (extracted from this file - Issue #185)
+# Tool management router, extracted from this file (#185).
 from api.terminal_tools import router as tools_router
 
-# Include tool management router
-router.include_router(tools_router, prefix="/terminal")
+# On `admin_router` (#15084): they run system commands and carry no gate of their own.
+admin_router.include_router(tools_router, prefix="/terminal")
 
 
 # REST API Endpoints
