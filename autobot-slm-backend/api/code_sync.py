@@ -1549,13 +1549,13 @@ _COMPONENT_PIP_PATHS: Dict[str, Tuple[str, str]] = {
     ),
 }
 
-# Target CPython interpreter per backend component (#11323).
-# Every Python service, including the NPU worker, targets py3.14 (#13747) —
-# this is the single authoritative mapping; do not hardcode elsewhere.
+# Target CPython interpreter for the components code-sync provisions (#11323).
+# Authoritative for _COMPONENT_PIP_PATHS keys ONLY — both readers are reached
+# from that branch alone, so any other key would be unread (#15075). The NPU
+# worker targets 3.14 too (#13747), decided in roles/npu-worker/tasks/main.yml.
 _COMPONENT_PYTHON_TARGET: Dict[str, str] = {
     "autobot-backend": "python3.14",
     "autobot-slm-backend": "python3.14",
-    "autobot-npu-worker": "python3.14",
 }
 
 # Ansible assets that provision the target interpreter on THIS host (#11343).
