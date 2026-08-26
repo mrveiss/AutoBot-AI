@@ -49,6 +49,7 @@ having checked nothing, which is the same shape of bug as the one under guard.
 from __future__ import annotations
 
 import re
+import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 from pathlib import Path
 
 import pytest
@@ -123,13 +124,9 @@ def _resolve(script: Path, raw: str) -> Path | None:
     """Filesystem path a source expression names, or None if not resolvable here."""
     expanded = raw
     for name in _SCRIPT_DIR_NAMES:
-        expanded = expanded.replace("${%s}" % name, str(script.parent)).replace(
-            "$%s" % name, str(script.parent)
-        )
+        expanded = expanded.replace("${%s}" % name, str(script.parent)).replace("$%s" % name, str(script.parent))
     for name in _ROOT_NAMES:
-        expanded = expanded.replace("${%s}" % name, str(_REPO_ROOT)).replace(
-            "$%s" % name, str(_REPO_ROOT)
-        )
+        expanded = expanded.replace("${%s}" % name, str(_REPO_ROOT)).replace("$%s" % name, str(_REPO_ROOT))
     if "$" in expanded:
         return None
     return Path(expanded)
@@ -166,10 +163,14 @@ def _is_shell_script(path: Path) -> bool:
         return False
 
 
-def _collect() -> tuple[list[_Site], int]:
-    """Every lib source site under autobot-infrastructure/, plus files walked."""
+def _collect() -> tuple[list[_Site], set[Path]]:
+    """Every lib source site under autobot-infrastructure/, plus the files walked.
+
+    Returns the walked paths rather than a count so the reach check can name
+    exactly which scripts the walk failed to see (#15079).
+    """
     sites: list[_Site] = []
-    scanned = 0
+    walked: set[Path] = set()
     for script in sorted(_INFRA.rglob("*")):
         if not script.is_file():
             continue
@@ -181,32 +182,70 @@ def _collect() -> tuple[list[_Site], int]:
             continue
         if not _is_shell_script(script):
             continue
-        scanned += 1
+        walked.add(script)
         try:
             text = script.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
         for lineno, line in enumerate(text.splitlines(), 1):
             code = _strip_comment(line)
-            matches = [
-                m
-                for m in _SOURCE.finditer(code)
-                if not _is_nested_shell_string(code, m.start())
-            ]
-            lib_matches = [
-                m
-                for m in matches
-                if "/lib/" in (m.group(1) or m.group(2) or m.group(3) or "")
-            ]
+            matches = [m for m in _SOURCE.finditer(code) if not _is_nested_shell_string(code, m.start())]
+            lib_matches = [m for m in matches if "/lib/" in (m.group(1) or m.group(2) or m.group(3) or "")]
             for match in lib_matches:
                 raw = match.group(1) or match.group(2) or match.group(3)
-                sites.append(
-                    _Site(script, lineno, raw, code, match is lib_matches[-1])
-                )
-    return sites, scanned
+                sites.append(_Site(script, lineno, raw, code, match is lib_matches[-1]))
+    return sites, walked
 
 
-_SITES, _SCANNED = _collect()
+def _looks_like_shell(path: Path) -> bool:
+    """Second opinion on "is this a shell script", for the reach check only.
+
+    Deliberately not ``_is_shell_script``: see ``_tracked_shell_scripts``. Kept
+    plainer than the walk's own detector — a literal ``#!`` prefix and a shell
+    word — so the two can disagree, which is the entire point of comparing them.
+    """
+    if path.suffix == ".sh":
+        return True
+    try:
+        with path.open("rb") as handle:
+            head = handle.readline(256)
+    except OSError:  # pragma: no cover - unreadable file
+        return False
+    return head.startswith(b"#!") and re.search(rb"\b(ba|da|k|z)?sh\b", head) is not None
+
+
+def _tracked_shell_scripts() -> set[Path]:
+    """Shell scripts under autobot-infrastructure/ that git knows about.
+
+    Independent of the walk in BOTH dimensions that break, which is why it does
+    not call ``_is_shell_script``. Sharing that classifier would make the
+    comparison self-confirming: a shebang detector that stopped seeing
+    extensionless hooks would shrink the walk and the expectation by the same
+    files, and the check would stay green over its own blind spot — the exact
+    defect #14891 fixed one level up. The second opinion below is deliberate
+    duplication: git supplies the paths, and a plainer predicate classifies them.
+    """
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "ls-files", "--", "autobot-infrastructure"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=_REPO_ROOT,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"git ls-files failed: {result.stderr.strip()}")
+    found: set[Path] = set()
+    for relative in result.stdout.split():
+        if any(part in _SKIP_PARTS for part in Path(relative).parts):
+            continue
+        path = _REPO_ROOT / relative
+        if path.is_file() and _looks_like_shell(path):
+            found.add(path)
+    return found
+
+
+_SITES, _WALKED = _collect()
+_SCANNED = len(_WALKED)
 
 
 def test_the_sweep_actually_reached_the_tree() -> None:
@@ -217,13 +256,27 @@ def test_the_sweep_actually_reached_the_tree() -> None:
     the site count catches a regex that stopped matching, and the named script
     catches a walk that reaches files but not the ones this guard is about.
     """
-    # 180, not 179: fixing slm-post-commit's shebang (#14909 — it sat on line 4,
-    # under the copyright header, where it is a comment) also made that file
-    # visible to this walk. It carries no lib source, so the site counts below
-    # are unchanged.
-    assert _SCANNED >= 180, (
-        f"only walked {_SCANNED} shell scripts — the skip list is eating the tree, "
-        "or the shebang detector stopped recognising extensionless scripts (#14891)"
+    # Derived from the tree, not a magic minimum (#15079). This was `>= 180`,
+    # a number bumped by hand in #14909 and sitting at exactly the tree's size
+    # with zero headroom — so the first legitimate retirement of a script took
+    # it under the floor and turned a correct deletion into a red build. A floor
+    # that has to be re-tuned after every deletion gets tuned to whatever the
+    # tree holds, and stops being a guard.
+    #
+    # The exact comparison is strictly stronger than the count it replaces: it
+    # still catches both failure modes the old message named, and it names the
+    # scripts that went missing instead of a bare number. Extra files are not an
+    # error — an untracked script exists in the walk and not in git.
+    expected = _tracked_shell_scripts()
+    assert expected, (
+        "git listed no shell script under autobot-infrastructure/ — the enumeration "
+        "is broken, and an empty expectation would make the reach check below vacuous"
+    )
+    missed = sorted(path.relative_to(_REPO_ROOT).as_posix() for path in expected - _WALKED)
+    assert not missed, (
+        f"the walk reached {_SCANNED} of {len(expected)} tracked shell scripts and missed "
+        f"{len(missed)} — the skip list is eating the tree, or the shebang detector "
+        f"stopped recognising extensionless scripts (#14891):\n  " + "\n  ".join(missed[:20])
     )
     assert len(_SITES) >= 78, (
         f"only found {len(_SITES)} lib source sites — expected >= 78 "
@@ -297,9 +350,7 @@ def test_every_lib_source_resolves_to_a_real_file() -> None:
             continue  # path built from a variable this guard cannot resolve
         checked += 1
         if not any(t.is_file() for t in known):
-            unresolvable.append(
-                f"{rel}:{lineno} -> " + " | ".join(str(t) for t in known)
-            )
+            unresolvable.append(f"{rel}:{lineno} -> " + " | ".join(str(t) for t in known))
 
     assert checked >= 73, (
         f"only resolved {checked} source sites — the expander has regressed and "
@@ -330,9 +381,7 @@ def _shape_offenders() -> tuple[list[str], int]:
         elif re.search(r"\|\|\s*(true|:)\s*$", site.line):
             offenders.append(f"{site.rel}:{site.lineno} ends in `|| true`")
         elif not site.line.rstrip().endswith("|| {"):
-            offenders.append(
-                f"{site.rel}:{site.lineno} does not end in an explicit `|| {{` failure block"
-            )
+            offenders.append(f"{site.rel}:{site.lineno} does not end in an explicit `|| {{` failure block")
     return offenders, checked
 
 
@@ -377,9 +426,7 @@ def _classify(site: _Site) -> str:
     return "silent"
 
 
-@pytest.mark.parametrize(
-    "site", [s for s in _SITES if s.is_last], ids=lambda s: f"{s.rel}:{s.lineno}"
-)
+@pytest.mark.parametrize("site", [s for s in _SITES if s.is_last], ids=lambda s: f"{s.rel}:{s.lineno}")
 def test_each_failure_block_actually_stops_or_says_why_it_does_not(site: _Site) -> None:
     """`|| {` is only loud if the block inside it either stops or announces.
 
@@ -425,9 +472,9 @@ def test_the_non_blocking_category_is_earned_and_bounded() -> None:
         body = _failure_block(site)
         assert ">&2" in body, f"{site!r} exits 0 without saying so on stderr"
         assert re.search(r"\b(echo|printf)\b", body), f"{site!r} announces nothing"
-        assert re.search(r"\b(exit|return)\s+0\b", body), (
-            f"{site!r} carries the marker but falls through instead of exiting 0"
-        )
+        assert re.search(
+            r"\b(exit|return)\s+0\b", body
+        ), f"{site!r} carries the marker but falls through instead of exiting 0"
 
 
 def test_the_two_offenders_are_fixed() -> None:
@@ -445,6 +492,4 @@ def test_the_two_offenders_are_fixed() -> None:
         ),
     ):
         assert rel in by_rel, f"{rel} is no longer reached by the walk (#14891)"
-        assert _classify(by_rel[rel]) == expected, (
-            f"{rel} is {_classify(by_rel[rel])}, expected {expected}"
-        )
+        assert _classify(by_rel[rel]) == expected, f"{rel} is {_classify(by_rel[rel])}, expected {expected}"

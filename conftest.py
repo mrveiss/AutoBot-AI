@@ -21,4 +21,11 @@ if _REPO_ROOT not in sys.path:
 # pytest >= 9 — and loaded after the sys.path insert above, so ``repo_tests``
 # resolves. The plugin registers before any other conftest, which is what lets
 # it attribute each one's sys.modules delta.
-pytest_plugins = ["repo_tests.sys_modules_leak_guard"]
+# Dependency-floor banner (#15091). Same placement rationale as the leak guard:
+# declared here because the rootdir conftest is the only legal home, and it is
+# the one file that runs before every local pytest invocation, including the
+# bare `pytest` runs that never touch scripts/pr-preflight.sh.
+pytest_plugins = [
+    "repo_tests.sys_modules_leak_guard",
+    "repo_tests.dependency_floor_banner",
+]
