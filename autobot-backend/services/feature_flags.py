@@ -68,6 +68,12 @@ class EnforcementModeUnavailable(RuntimeError):
 # the same key, and a fourth copy of a string is how the fourth copy drifts.
 ENFORCEMENT_MODE_KEY = "feature_flag:access_control:enforcement_mode"
 
+# The audit list recording who moved the posture and when. Named here for the
+# same reason as the key above: the writer and the statistics reader both have
+# to mean the same list.
+ENFORCEMENT_HISTORY_KEY = "feature_flag:access_control:history"
+ENFORCEMENT_HISTORY_LENGTH = 100
+
 # Posture provisioning writes when an install has no value of its own (#14866).
 # ``log_only`` is the value both issues record: #14010's acceptance criterion 4
 # asks for "the ``log_only`` measurement before any flip to ``enforced``", and
@@ -193,38 +199,80 @@ class FeatureFlags(AsyncRedisClientMixin):
         logger.info("Access control enforcement mode already set to %s; left unchanged", existing.value)
         return False, existing
 
-    async def set_enforcement_mode(self, mode: EnforcementMode) -> bool:
-        """
-        Set access control enforcement mode
+    @staticmethod
+    def _enforcement_history_entry(mode: EnforcementMode) -> str:
+        """Serialise one posture change for the audit list."""
+        return json.dumps(
+            {
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                "mode": mode.value,
+                "changed_by": "system",
+            }
+        )
 
-        Args:
-            mode: Enforcement mode to set
+    @staticmethod
+    def _report_enforcement_write(mode: EnforcementMode, results: list) -> bool:
+        """Say whether the posture changed, and name the half that did not.
+
+        ``True`` means one thing only: :data:`ENFORCEMENT_MODE_KEY` now holds
+        *mode*. Reporting a write that landed as a failure is the defect this
+        replaces (#15089), so a lost audit entry is logged loudly and does not
+        turn a change that happened into a reported failure.
+        """
+        if not results or isinstance(results[0], Exception):
+            reason = results[0] if results else "Redis returned no result for the mode write"
+            logger.error("Failed to set enforcement mode: %s", reason)
+            return False
+
+        history_errors = [result for result in results[1:] if isinstance(result, Exception)]
+        if history_errors:
+            # Redis applies the remainder of a MULTI when one command errors,
+            # so the posture did move even though its record did not.
+            logger.error(
+                "Enforcement mode set to %s, but its change history was not recorded: %s",
+                mode.value,
+                history_errors[0],
+            )
+            return True
+
+        logger.info("Enforcement mode set to: %s", mode.value)
+        return True
+
+    async def set_enforcement_mode(self, mode: EnforcementMode) -> bool:
+        """Set the access control enforcement mode, with its audit entry.
+
+        The posture and the record of who moved it are issued as one
+        ``MULTI``/``EXEC``. Before #15089 they were three awaits in a row and
+        the second reached for a ``_redis`` attribute the async client does not
+        have, so every call wrote the key, raised, and returned ``False`` -- the
+        admin API answered 500 for a change that had in fact happened, and the
+        audit trail was never written at all.
+
+        One dispatched operation is what removes that shape structurally: an
+        exception while the commands are being queued now happens before ``EXEC``
+        and therefore before anything is written, so ``False`` genuinely means
+        the posture is unchanged. It cannot be reintroduced by a later edit
+        moving a line between two writes, because there are no longer two.
 
         Returns:
-            True if successful
+            ``True`` when :data:`ENFORCEMENT_MODE_KEY` holds *mode* afterwards.
         """
         try:
             redis = await self._get_redis()
+            if redis is None:
+                logger.error("Failed to set enforcement mode: no Redis client available")
+                return False
 
-            # Set the mode
-            await redis.set(ENFORCEMENT_MODE_KEY, mode.value)
+            pipe = redis.pipeline(transaction=True)
+            pipe.set(ENFORCEMENT_MODE_KEY, mode.value)
+            pipe.lpush(ENFORCEMENT_HISTORY_KEY, self._enforcement_history_entry(mode))
+            pipe.ltrim(ENFORCEMENT_HISTORY_KEY, 0, ENFORCEMENT_HISTORY_LENGTH - 1)
+            results = await pipe.execute(raise_on_error=False)
 
-            # Record change in history
-            history_key = "feature_flag:access_control:history"
-            history_entry = json.dumps(
-                {
-                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                    "mode": mode.value,
-                    "changed_by": "system",
-                }
-            )
-            await redis._redis.lpush(history_key, history_entry)
-            await redis._redis.ltrim(history_key, 0, 99)  # Keep last 100 changes
-
-            logger.info("Enforcement mode set to: %s", mode.value)
-            return True
+            return self._report_enforcement_write(mode, results)
 
         except Exception as e:
+            # Nothing reached EXEC, so nothing was written: False is the truth.
             logger.error("Failed to set enforcement mode: %s", e)
             return False
 
@@ -430,16 +478,14 @@ class FeatureFlags(AsyncRedisClientMixin):
             mode = await self.get_enforcement_mode()
 
             # Get and parse change history (Issue #315 - uses helper)
-            history_raw = await redis._redis.lrange("feature_flag:access_control:history", 0, 9)
+            history_raw = await redis.lrange(ENFORCEMENT_HISTORY_KEY, 0, 9)
             history = self._parse_history_entries(history_raw)
 
             # Get endpoint overrides
             endpoint_keys = []
             cursor = 0
             while True:
-                cursor, keys = await redis._redis.scan(
-                    cursor, match="feature_flag:access_control:endpoint:*", count=100
-                )
+                cursor, keys = await redis.scan(cursor, match="feature_flag:access_control:endpoint:*", count=100)
                 endpoint_keys.extend(keys)
                 if cursor == 0:
                     break
@@ -482,7 +528,7 @@ class FeatureFlags(AsyncRedisClientMixin):
             cursor = 0
             deleted = 0
             while True:
-                cursor, keys = await redis._redis.scan(cursor, match="feature_flag:*", count=100)
+                cursor, keys = await redis.scan(cursor, match="feature_flag:*", count=100)
                 if keys:
                     deleted += await redis.delete(*keys)
                 if cursor == 0:
