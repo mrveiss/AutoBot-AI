@@ -16,19 +16,35 @@ actual ASGI app including route matching and dependency resolution.
 
 Covers:
 - Structural proof the merged router puts ``check_admin_permission`` on the
-  HTTP routes and NOT on either ``@router.websocket`` route (the fix itself).
+  HTTP routes (including the tool-execution routes, #15084) and NOT on either
+  ``@router.websocket`` route (the fix itself). Sourced from a clean
+  subprocess import (see ``_dump_routes_main`` below) rather than an
+  in-process one: under ``python-suite`` shard 12/12, an in-process
+  ``api.terminal.router`` was observed with zero routes (CI job 98074498060),
+  something earlier in the same pytest-xdist worker having left ``sys.modules``
+  in a state this module's own collection-time import inherited. A fresh
+  interpreter is immune to that regardless of its cause (mirrors the
+  subprocess-per-class pattern in
+  ``autobot_shared/user_management/models/core_test.py``).
 - A real handshake on ``/ws/{session_id}``: authenticated owner connects,
   unauthenticated caller is refused before ``accept()``.
 - A real handshake on ``/ws/ssh/{host_id}``: authenticated admin connects,
   unauthenticated caller is refused before ``accept()``.
-- The HTTP routes on the same router still reject a non-admin caller.
+- The HTTP routes on the same router still reject a non-admin caller
+  (dependency_overrides, in-process -- this needs object identity with the
+  live app/router, so it cannot move to a subprocess).
 - Contrast mutation: an isolated router shaped exactly like the reported bug
   (router-level ``Depends`` of a ``Request``-typed callable, owning a
   ``@router.websocket`` route) fails the handshake with the same ``TypeError``
   ``solve_dependencies`` raises; the split-router shape this fix uses does not.
 """
 
+import json
+import os
+import subprocess
+import sys
 from contextlib import contextmanager
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -92,30 +108,117 @@ def terminal_client(terminal_app):
     return TestClient(terminal_app, raise_server_exceptions=False)
 
 
-def _ws_route(path: str):
-    matches = [r for r in terminal_router.routes if getattr(r, "path", None) == path]
-    assert len(matches) == 1, f"expected exactly one route for {path}, found {len(matches)}"
-    return matches[0]
+# --- clean-interpreter route/dependency enumeration (#14998, shard-12 pollution) ---
+#
+# Every structural gate assertion below reads from this, never from the
+# in-process ``terminal_router`` bound at collection time: that name observed
+# zero routes under python-suite shard 12/12 (CI job 98074498060) even though
+# this file passes in isolation -- some earlier-collected test in the same
+# xdist worker leaves shared state (import machinery or the router object
+# itself) in a way this file's own module-level import inherits. Filed as
+# #15087, unidentified polluter. A subprocess that imports ``api.terminal``
+# fresh sidesteps the mechanism entirely rather than needing to name it.
+
+_ADMIN_DEP = "auth_middleware.check_admin_permission"
+
+_TOOL_PATHS = {
+    "/terminal/install-tool",
+    "/terminal/check-tool",
+    "/terminal/validate-command",
+    "/terminal/package-managers",
+}
+
+
+def _run_terminal_route_dump() -> dict:
+    """Import api.terminal in a fresh subprocess and return its route spec.
+
+    Bootstraps via ``-c`` and a dotted import (``api.terminal_websocket_route_test``)
+    rather than executing this file's own path directly: running a script
+    prepends *its own directory* (``api/``) to ``sys.path[0]``, and that
+    directory holds ``api/secrets.py`` -- which then shadows the stdlib
+    ``secrets`` module the very first thing FastAPI imports needs, crashing
+    with a circular-import ``ImportError`` before ``api.terminal`` is ever
+    reached. ``-c`` sets ``sys.path[0]`` to ``""`` (cwd) instead, which does
+    not collide.
+    """
+    backend_root = Path(__file__).resolve().parents[1]
+    repo_root = backend_root.parent
+    # autobot_shared/ is a sibling of autobot-backend/, not nested under it
+    # (mirrors pytest.ini's `pythonpath = . autobot-backend autobot_shared ...`).
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(repo_root), str(backend_root)]))
+    bootstrap = "import api.terminal_websocket_route_test as m; m._dump_routes_main()"
+    result = subprocess.run(
+        [sys.executable, "-c", bootstrap],
+        capture_output=True,
+        text=True,
+        cwd=str(backend_root),
+        env=env,
+        check=True,
+        timeout=60,
+    )
+    # get_logger's default handler writes startup noise (e.g. the error-catalog
+    # load line) to stdout ahead of the JSON -- take the last line so that
+    # incidental logging can't break the parse.
+    return json.loads(result.stdout.strip().splitlines()[-1])
+
+
+@pytest.fixture(scope="session")
+def terminal_route_spec() -> dict:
+    """path -> sorted list of fully-qualified dependency names, from a clean
+    subprocess import. Non-vacuity is enforced here: every test consuming this
+    fixture fails loudly (never skips, never silently passes) if the
+    enumeration itself came back empty -- that is the exact failure shape
+    that let the earlier in-process version of these tests pass while
+    guarding nothing.
+    """
+    spec = _run_terminal_route_dump()
+    routes = spec.get("routes") or []
+    assert routes, (
+        "api.terminal reported zero routes from a clean subprocess import -- "
+        "the enumeration every gate assertion in this file depends on is "
+        "empty. Something in api/terminal.py failed to build the router at "
+        "all; this must fail, not be treated as an empty pass."
+    )
+    return {r["path"]: r["dependencies"] for r in routes}
 
 
 class TestTerminalRouterDependencyWiring:
     """Structural proof of the fix: the admin dependency moved off the WS
     routes and stayed on the HTTP ones. This is the assertion #14998 itself
-    is about -- independent of any test-harness auth stub, since it compares
-    against ``api.terminal.check_admin_permission`` by identity rather than
-    exercising its behaviour.
+    is about.
     """
 
-    def test_websocket_routes_carry_no_admin_dependency(self):
+    def test_websocket_routes_carry_no_admin_dependency(self, terminal_route_spec):
         for path in ("/ws/{session_id}", "/ws/ssh/{host_id}"):
-            route = _ws_route(path)
-            deps = [d.dependency for d in route.dependencies]
-            assert check_admin_permission not in deps, f"{path} must not carry the router-level admin Depends"
+            assert path in terminal_route_spec, f"route {path} missing from a clean import"
+            assert _ADMIN_DEP not in terminal_route_spec[path], f"{path} must not carry the router-level admin Depends"
 
-    def test_http_routes_keep_the_admin_dependency(self):
-        route = _ws_route("/")
-        deps = [d.dependency for d in route.dependencies]
-        assert check_admin_permission in deps, "HTTP routes must keep check_admin_permission"
+    def test_http_routes_keep_the_admin_dependency(self, terminal_route_spec):
+        assert "/" in terminal_route_spec, "route / missing from a clean import"
+        assert _ADMIN_DEP in terminal_route_spec["/"], "HTTP routes must keep check_admin_permission"
+
+
+class TestTerminalToolRoutesKeepTheirGate:
+    """`api/terminal_tools.py` declares no dependency of its own (#15084):
+    those four routes install packages and run system commands, and have only
+    ever been protected by inheriting the parent router's admin check.
+    Splitting that parent for the WebSocket fix moved every HTTP route onto
+    `admin_router` -- and would have handed these to anonymous callers had the
+    include site not moved with them.
+    """
+
+    def test_every_tool_route_is_present(self, terminal_route_spec):
+        """Non-vacuity: if the paths move, the gate assertion below guards nothing."""
+        found = set(terminal_route_spec) & _TOOL_PATHS
+        assert found == _TOOL_PATHS, f"expected {sorted(_TOOL_PATHS)}, found {sorted(found)}"
+
+    @pytest.mark.parametrize("path", sorted(_TOOL_PATHS))
+    def test_tool_route_keeps_the_admin_dependency(self, terminal_route_spec, path):
+        assert path in terminal_route_spec, f"{path} missing from a clean import"
+        assert _ADMIN_DEP in terminal_route_spec[path], (
+            f"{path} runs system commands and has no dependency of its own -- "
+            "it must stay on a router that carries the admin check"
+        )
 
 
 class TestTerminalWebsocketRouteHandshake:
@@ -203,7 +306,9 @@ class TestTerminalHttpRouteAdminGate:
     """The HTTP routes on this router keep check_admin_permission, exercised
     through the real ASGI request path via FastAPI's dependency_overrides --
     the standard way to prove a specific dependency actually gates a route
-    without depending on this test harness's always-pass auth stub.
+    without depending on this test harness's always-pass auth stub. Stays
+    in-process (unlike the structural checks above): dependency_overrides
+    needs object identity with the live app/router under test.
     """
 
     def test_non_admin_is_rejected(self, terminal_app, terminal_client):
@@ -288,43 +393,28 @@ class TestRouterLevelDependsBreaksWebSocketScope:
             pass
 
 
-# --- the tool-execution routes must not lose their gate to the router split ---
-#
-# `api/terminal_tools.py` declares no dependency of its own (#15084): those four
-# routes install packages and run system commands, and have only ever been
-# protected by inheriting the parent router's admin check. Splitting that parent
-# for the WebSocket fix moved every HTTP route onto `admin_router` -- and would
-# have handed these to anonymous callers had the include site not moved with
-# them. Asserted here by identity against the live merged router, so a future
-# refactor that reparents them fails instead of quietly opening them.
+def _dump_routes_main() -> None:
+    """Subprocess entrypoint (see ``_run_terminal_route_dump`` above): import
+    ``api.terminal`` in a fresh interpreter and print its routes as JSON.
 
-_TOOL_PATHS = {
-    "/terminal/install-tool",
-    "/terminal/check-tool",
-    "/terminal/validate-command",
-    "/terminal/package-managers",
-}
+    Kept in this module, like ``core_test.py``'s ``_main``, so the isolation
+    the tests need travels with them rather than living in a separate script.
+    """
+    import api.terminal as terminal_module
 
-
-def _tool_routes():
-    from api.terminal import router as merged_router
-
-    return [r for r in merged_router.routes if getattr(r, "path", "") in _TOOL_PATHS]
-
-
-def test_every_tool_route_is_present():
-    """Non-vacuity: if the paths move, the gate assertion below guards nothing."""
-    found = {r.path for r in _tool_routes()}
-    assert found == _TOOL_PATHS, f"expected {sorted(_TOOL_PATHS)}, found {sorted(found)}"
+    routes = [
+        {
+            "path": getattr(route, "path", None),
+            "dependencies": sorted(
+                f"{dep.dependency.__module__}.{dep.dependency.__qualname__}"
+                for dep in getattr(route, "dependencies", [])
+                if getattr(dep, "dependency", None) is not None
+            ),
+        }
+        for route in terminal_module.router.routes
+    ]
+    print(json.dumps({"routes": routes}))
 
 
-@pytest.mark.parametrize("path", sorted(_TOOL_PATHS))
-def test_tool_route_keeps_the_admin_dependency(path):
-    from auth_middleware import check_admin_permission
-
-    route = next(r for r in _tool_routes() if r.path == path)
-    gates = [getattr(d, "dependency", None) for d in getattr(route, "dependencies", [])]
-    assert check_admin_permission in gates, (
-        f"{path} runs system commands and has no dependency of its own -- "
-        "it must stay on a router that carries the admin check"
-    )
+if __name__ == "__main__":
+    _dump_routes_main()
