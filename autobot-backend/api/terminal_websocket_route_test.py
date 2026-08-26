@@ -129,8 +129,20 @@ _TOOL_PATHS = {
 }
 
 
-def _run_terminal_route_dump() -> dict:
-    """Import api.terminal in a fresh subprocess and return its route spec.
+class _TerminalRouteDumpError(RuntimeError):
+    """The subprocess dump did not return a trustworthy answer.
+
+    Carries every diagnostic available -- interpreter/framework versions and
+    the subprocess's full stdout/stderr -- so a CI failure names the cause
+    instead of a downstream assertion naming only its symptom (#14998 job
+    98083466678: the terse "'/terminal/check-tool' missing" message hid that
+    the dump had only returned 3 of 26 routes, one with no identifiable path,
+    with nothing said about why).
+    """
+
+
+def _run_terminal_route_dump() -> list:
+    """Import api.terminal in a fresh subprocess and return its route list.
 
     Bootstraps via ``-c`` and a dotted import (``api.terminal_websocket_route_test``)
     rather than executing this file's own path directly: running a script
@@ -140,6 +152,12 @@ def _run_terminal_route_dump() -> dict:
     with a circular-import ``ImportError`` before ``api.terminal`` is ever
     reached. ``-c`` sets ``sys.path[0]`` to ``""`` (cwd) instead, which does
     not collide.
+
+    Never returns a partial answer quietly: a non-zero exit, unparsable
+    stdout, a missing/malformed ``routes`` list, an empty result, or any
+    route entry the dump could not attach a path to, all raise
+    ``_TerminalRouteDumpError`` with the interpreter/framework versions and
+    the subprocess's raw stdout/stderr attached.
     """
     backend_root = Path(__file__).resolve().parents[1]
     repo_root = backend_root.parent
@@ -153,32 +171,69 @@ def _run_terminal_route_dump() -> dict:
         text=True,
         cwd=str(backend_root),
         env=env,
-        check=True,
         timeout=60,
     )
+
+    def _fail(reason: str, spec_repr: str = "") -> None:
+        raise _TerminalRouteDumpError(
+            f"{reason}\n"
+            f"subprocess exit code: {result.returncode}\n"
+            f"{spec_repr}"
+            f"--- subprocess stdout ---\n{result.stdout}\n"
+            f"--- subprocess stderr ---\n{result.stderr}"
+        )
+
+    if result.returncode != 0:
+        _fail("terminal route dump subprocess exited non-zero")
+
     # get_logger's default handler writes startup noise (e.g. the error-catalog
     # load line) to stdout ahead of the JSON -- take the last line so that
     # incidental logging can't break the parse.
-    return json.loads(result.stdout.strip().splitlines()[-1])
+    stdout_lines = [ln for ln in result.stdout.strip().splitlines() if ln.strip()]
+    if not stdout_lines:
+        _fail("terminal route dump subprocess produced no stdout at all")
+
+    try:
+        spec = json.loads(stdout_lines[-1])
+    except json.JSONDecodeError as exc:
+        _fail(f"terminal route dump subprocess stdout was not parseable JSON: {exc}")
+
+    routes = spec.get("routes") if isinstance(spec, dict) else None
+    versions = (
+        f"python: {spec.get('python', '<unreported>')!r}\n"
+        f"fastapi: {spec.get('fastapi', '<unreported>')!r}\n"
+        f"starlette: {spec.get('starlette', '<unreported>')!r}\n"
+        if isinstance(spec, dict)
+        else ""
+    )
+    if not isinstance(routes, list):
+        _fail(f"terminal route dump returned no usable 'routes' list: {spec!r}", versions)
+
+    unidentified = [r for r in routes if not isinstance(r, dict) or r.get("path") is None]
+    if unidentified:
+        _fail(
+            f"terminal route dump returned {len(routes)} route(s), of which "
+            f"{len(unidentified)} had no identifiable path -- a route the dump "
+            "cannot name is a parse failure, not a route, and is never folded "
+            "into the path->dependencies mapping.\n"
+            f"raw routes: {json.dumps(routes, indent=2)}\n" + versions,
+        )
+
+    if not routes:
+        _fail("terminal route dump subprocess returned zero routes", versions)
+
+    return routes
 
 
 @pytest.fixture(scope="session")
 def terminal_route_spec() -> dict:
     """path -> sorted list of fully-qualified dependency names, from a clean
-    subprocess import. Non-vacuity is enforced here: every test consuming this
-    fixture fails loudly (never skips, never silently passes) if the
-    enumeration itself came back empty -- that is the exact failure shape
-    that let the earlier in-process version of these tests pass while
-    guarding nothing.
+    subprocess import. Non-vacuity (and every other partial-answer shape) is
+    enforced inside ``_run_terminal_route_dump`` -- every test consuming this
+    fixture fails loudly, with the raw dump attached, never silently passing
+    on a truncated or unparsable result.
     """
-    spec = _run_terminal_route_dump()
-    routes = spec.get("routes") or []
-    assert routes, (
-        "api.terminal reported zero routes from a clean subprocess import -- "
-        "the enumeration every gate assertion in this file depends on is "
-        "empty. Something in api/terminal.py failed to build the router at "
-        "all; this must fail, not be treated as an empty pass."
-    )
+    routes = _run_terminal_route_dump()
     return {r["path"]: r["dependencies"] for r in routes}
 
 
@@ -399,12 +454,24 @@ def _dump_routes_main() -> None:
 
     Kept in this module, like ``core_test.py``'s ``_main``, so the isolation
     the tests need travels with them rather than living in a separate script.
+
+    Reports each route's concrete type name alongside its path/dependencies,
+    and the resolved fastapi/starlette/python versions, so a future truncated
+    result (#14998 job 98083466678 saw 3 routes back instead of 26, one with
+    no identifiable path) carries enough evidence in one subprocess call to
+    diagnose without a second round-trip.
     """
+    import sys as _sys
+
+    import fastapi as _fastapi
+    import starlette as _starlette
+
     import api.terminal as terminal_module
 
     routes = [
         {
             "path": getattr(route, "path", None),
+            "type": type(route).__name__,
             "dependencies": sorted(
                 f"{dep.dependency.__module__}.{dep.dependency.__qualname__}"
                 for dep in getattr(route, "dependencies", [])
@@ -413,7 +480,16 @@ def _dump_routes_main() -> None:
         }
         for route in terminal_module.router.routes
     ]
-    print(json.dumps({"routes": routes}))
+    print(
+        json.dumps(
+            {
+                "routes": routes,
+                "python": _sys.version,
+                "fastapi": getattr(_fastapi, "__version__", "unknown"),
+                "starlette": getattr(_starlette, "__version__", "unknown"),
+            }
+        )
+    )
 
 
 if __name__ == "__main__":
