@@ -194,6 +194,26 @@ def test_approval_must_be_the_boolean_true_not_merely_truthy(truthy_but_not_true
     )
 
 
+def test_a_grant_set_naming_an_unknown_capability_grants_it_nothing():
+    """The stored row is not trusted to define the vocabulary.
+
+    A grant set written by a typo, by a newer release, or by anything other
+    than this code can name a capability this platform does not define. Asking
+    for that exact name must still be refused — otherwise the "unknown denies"
+    property holds only for names the caller invents, not for names the
+    *database* invents, which is the direction that actually grants access.
+    """
+    assert (
+        capability_granted(
+            capability="clipboard:read",
+            permissions_raw='["clipboard:read"]',
+            is_approved=True,
+            revoked_at=None,
+        )
+        is False
+    )
+
+
 def test_parse_drops_names_the_platform_does_not_define():
     assert parse_device_permissions('["terminal", "clipboard:read"]') == frozenset({"terminal"})
 
