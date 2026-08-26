@@ -27,6 +27,8 @@ from .client import API_PREFIX, AutoBotClient, api_path, default_base_url
 from .defaults import DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, DEFAULT_SEARCH_LIMIT
 from .models import (
     AgentConfig,
+    AgentConfigHealthCheck,
+    AgentConfigOptions,
     AgentHealth,
     AnalyticsPerformance,
     AnalyticsUsage,
@@ -56,6 +58,8 @@ __all__ = [
     "AnalyticsPerformance",
     "AnalyticsUsage",
     "AgentConfig",
+    "AgentConfigHealthCheck",
+    "AgentConfigOptions",
     "AgentHealth",
     "ChatMessage",
     "DataResponse",

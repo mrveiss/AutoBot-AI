@@ -62,15 +62,25 @@ _WIRING_INSTRUCTIONS = (
 )
 
 
-def _production_sources() -> List[Path]:
-    """Backend .py files excluding tests and the deprecated module itself."""
+_SKIP_PARTS = {"tests", "node_modules", ".worktrees", "__pycache__", "venv", ".venv"}
+
+
+def _production_sources(root: Path = _BACKEND) -> List[Path]:
+    """Backend .py files excluding tests and the deprecated module itself.
+
+    `root` is a parameter so the exclusion can be exercised against a fixture
+    tree that itself lives under `.worktrees/` (#15121).
+    """
     skip_names = {_MODULE.name}
     out: List[Path] = []
-    for path in _BACKEND.rglob("*.py"):
+    for path in root.rglob("*.py"):
         name = path.name
         if name in skip_names or name.endswith("_test.py") or name.startswith("test_"):
             continue
-        if "/tests/" in path.as_posix() or "/node_modules/" in path.as_posix():
+        # Relative parts, not an absolute substring (#15121): a checkout under a
+        # directory named `tests` or `.worktrees` -- the mandated layout here --
+        # would otherwise match on the repo root and skip the whole tree.
+        if any(part in _SKIP_PARTS for part in path.relative_to(root).parts):
             continue
         out.append(path)
     return out
@@ -164,3 +174,26 @@ def test_deprecated_code_is_retained_in_full():
     defined = {n.name for n in planner.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
     missing = [m for m in _REQUIRED_METHODS if m not in defined]
     assert not missing, f"Deprecated-in-place module lost methods {missing}; code is retained, never deleted (#13751)"
+
+
+def test_a_checkout_under_worktrees_is_still_scanned(tmp_path):
+    """#15121: the exclusion keys on parts relative to the scan root.
+
+    An absolute-substring check matches the repo root itself in the mandated
+    `.worktrees/<branch>/` layout and skips every file, leaving the assertions
+    above iterating an empty list — a guard that passes because it looked at
+    nothing.
+    """
+    root = tmp_path / ".worktrees" / "issue-9999" / "tests" / "autobot-backend"
+    (root / "orchestration").mkdir(parents=True)
+    live = root / "orchestration" / "caller.py"
+    live.write_text("x = 1\n", encoding="utf-8")
+    (root / "node_modules").mkdir()
+    (root / "node_modules" / "vendored.py").write_text("y = 1\n", encoding="utf-8")
+
+    scanned = _production_sources(root)
+
+    assert scanned == [live], (
+        "a scan rooted under .worktrees/ and tests/ skipped its own tree — the "
+        "exclusion is matching the absolute path instead of relative parts"
+    )

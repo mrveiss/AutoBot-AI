@@ -420,3 +420,34 @@ async def test_async_wrapper_forwards_the_opt_in_when_requested(monkeypatch):
     monkeypatch.setattr(url_safety, "is_public_url", _accepts_kwarg)
     await url_safety.is_public_url_async("https://example.com/x", allow_private=True)
     assert seen["allow_private"] is True
+
+
+# ---------------------------------------------------------------------------
+# sockaddr[0] is narrowed, not assumed (#15134)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_resolve_safe_ip_skips_a_non_string_sockaddr_and_keeps_going() -> None:
+    """A sockaddr whose first element is not a string is skipped, not parsed.
+
+    typeshed types ``sockaddr[0]`` as ``str | int`` because it covers address
+    families this call cannot return. The loop narrows instead of assuming, and
+    the narrowing must fall through to the next candidate rather than abandoning
+    resolution — otherwise a single odd entry would hide a perfectly good IP.
+    """
+    fake_infos = [
+        (17, 3, 0, "", (1, 0)),  # not an address family this call asked for
+        (2, 1, 6, "", ("93.184.216.34", 0)),
+    ]
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
+        assert await resolve_safe_ip_async("mixed.example") == "93.184.216.34"
+
+
+@pytest.mark.asyncio
+async def test_resolve_safe_ip_raises_when_every_sockaddr_is_non_string() -> None:
+    """Skipping is never silent: with nothing usable left the call still raises."""
+    fake_infos = [(17, 3, 0, "", (1, 0)), (17, 3, 0, "", (2, 0))]
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
+        with pytest.raises(ValueError, match="no usable public IP"):
+            await resolve_safe_ip_async("nothing-usable.example")
