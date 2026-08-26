@@ -129,7 +129,21 @@ jobs:
         python -m pip install --upgrade pip
         # Pin versions to match .pre-commit-config.yaml (Issue #2128)
         python -m pip install black==26.3.1 isort==8.0.1 flake8==7.3.0 autoflake==2.3.3 'bandit[toml]==1.9.4'
-        # mypy and stubs (GH#7105)
+        # mypy and stubs (GH#7105).
+        #
+        # This version is pinned in two places -- here and as the mirrors-mypy
+        # rev in .pre-commit-config.yaml. repo_tests/mypy_pin_parity_test.py
+        # fails if they diverge, so a bump either moves both or is rejected by
+        # name; the same test pins the stub list below (#15134).
+        #
+        # What the version is NOT is load-bearing. Measured on python 3.14.6
+        # against autobot_shared/: mypy 1.16.0, 2.1.0 and 2.3.0 report the same
+        # findings for the same installed packages. What changes the result is
+        # the dependency set -- this step installs stubs only, so every type
+        # flowing from redis or sqlalchemy is Any here and errors that a local
+        # CI-parity venv sees are invisible to this gate. #15134 fixed the
+        # seven that were hiding behind that; read it before widening the
+        # install list, which would surface more of them at once.
         python -m pip install \
           mypy==1.16.0 \
           pydantic-settings \

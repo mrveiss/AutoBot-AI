@@ -19,6 +19,7 @@ properties that makes safe:
 
 import ast
 import pathlib
+import types
 
 import pytest
 
@@ -150,3 +151,57 @@ def test_backend_subclass_reexports_the_error_classes(backend):
 
     for error in _ERRORS:
         assert error.__name__ in source, f"{backend} drops {error.__name__}"
+
+
+# ---------------------------------------------------------------------------
+# The tracked-change payload is heterogeneous by construction (#15134)
+# ---------------------------------------------------------------------------
+
+
+def _stub_org(**attrs):
+    """A bare stand-in for the concrete Organization model.
+
+    `_apply_organization_updates` reads and writes attributes and touches
+    nothing on `self`, so it can be exercised without either backend's model
+    or a session.
+    """
+    return types.SimpleNamespace(
+        name="acme",
+        description=None,
+        settings={},
+        subscription_tier="free",
+        max_users=10,
+        updated_at=None,
+        **attrs,
+    )
+
+
+def test_tracked_changes_carry_none_and_int_values_unconverted():
+    """The audit payload keeps the real values, so its type cannot be dict[str, str].
+
+    `description` is nullable and `max_users` is an int. A checker that sees the
+    concrete model infers the whole dict from whichever branch is written first
+    and rejects the rest, which is why the declaration is explicit rather than
+    inferred. This asserts the runtime fact that declaration encodes: nothing
+    here is stringified on the way into the audit log.
+    """
+    org = _stub_org()
+    changes = OrganizationService._apply_organization_updates(
+        None, org, name=None, description="now set", settings=None, subscription_tier=None, max_users=25
+    )
+
+    assert changes["description"] == {"old": None, "new": "now set"}
+    assert changes["description"]["old"] is None
+    assert changes["max_users"] == {"old": 10, "new": 25}
+    assert isinstance(changes["max_users"]["old"], int)
+    assert isinstance(changes["max_users"]["new"], int)
+
+
+def test_untouched_fields_are_absent_from_the_tracked_changes():
+    """Only fields actually supplied are recorded — the caller keys audit on it."""
+    org = _stub_org()
+    changes = OrganizationService._apply_organization_updates(
+        None, org, name=None, description=None, settings=None, subscription_tier=None, max_users=None
+    )
+
+    assert changes == {}
