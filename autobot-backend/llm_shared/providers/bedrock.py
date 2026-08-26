@@ -28,7 +28,7 @@ from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
 
 from ..base_provider import BaseProvider
-from .bedrock_credentials import _AWS_REGION_PATTERN, load_credentials_from_vault
+from .bedrock_credentials import _AWS_REGION_PATTERN, load_credentials_from_vault, validate_credential_pair
 
 logger = get_logger(__name__)
 
@@ -97,6 +97,12 @@ class BedrockProvider(BaseProvider):
         Returns:
             Tuple of (access_key_id, secret_access_key, region).
             Any value can be None to use boto3's default credential chain.
+
+        Raises:
+            ValueError: If the resolved access-key/secret-key pair is malformed --
+                see validate_credential_pair(). Raised here rather than only at
+                client construction so every caller of this method gets the same
+                guarantee: a returned pair is either well-formed or both-absent.
         """
         access_key, secret_key, region = self._load_credentials_from_vault()
 
@@ -110,6 +116,7 @@ class BedrockProvider(BaseProvider):
                 )
 
         region = region or self._get_setting("region") or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+        validate_credential_pair(access_key, secret_key)
         return access_key, secret_key, region
 
     def _ensure_runtime_client(self):
