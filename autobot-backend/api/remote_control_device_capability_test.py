@@ -27,6 +27,7 @@ staged.
 import logging
 import uuid
 from contextlib import contextmanager, suppress
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import fakeredis
@@ -93,7 +94,7 @@ def _backfilled_row() -> MobileDevice:
 
 
 @contextmanager
-def _device_credential(device: "MobileDevice | None"):
+def _device_credential(device: "MobileDevice | None", *, readable: bool = True):
     """Present a paired-device credential and no user credential.
 
     ``_resolve_ws_user`` is forced to ``None`` because every user/session/
@@ -112,7 +113,7 @@ def _device_credential(device: "MobileDevice | None"):
     with (
         patch("api.ws_security._resolve_ws_user", new=AsyncMock(return_value=None)),
         patch("api.ws_security._resolve_ws_device_credential", new=AsyncMock(return_value=device_user)),
-        patch("services.device_capabilities._load_device", new=AsyncMock(return_value=device)),
+        patch("services.device_capabilities._load_device", new=AsyncMock(return_value=(device, readable))),
     ):
         yield
 
@@ -210,7 +211,7 @@ class TestTerminalWebsocketCapabilityGate:
         """AC: revocation takes effect on a new handshake, without deleting the row."""
         revoked = _device_row(
             permissions=serialise_device_permissions([DeviceCapability.TERMINAL]),
-            revoked_at="2026-08-24T00:00:00+00:00",
+            revoked_at=datetime(2026, 8, 24, tzinfo=timezone.utc),
         )
         with (
             _device_credential(revoked),
@@ -406,3 +407,41 @@ class TestGateWiringMistakesDeny:
         websocket.close.assert_awaited_once()
         assert websocket.close.await_args.kwargs.get("code") == 1008
         assert any("no required capability" in r.getMessage() for r in caplog.records)
+
+
+class TestUnreadableStateIsItsOwnRefusal:
+    """A database that will not answer is not a credential nobody paired.
+
+    Both deny, both close 1008. Reporting the first as ``unknown_device`` would
+    send an operator looking for a deleted pairing while the real cause is an
+    unreachable database or a schema predating migration 20260824_084. Same
+    rule, and same reason for asserting it, as the missing-vs-denied pair above.
+    """
+
+    def test_an_unreadable_row_refuses_distinguishably_from_an_unknown_one(
+        self, terminal_client, device_owned_session, caplog
+    ):
+        with (
+            _device_credential(None, readable=False),
+            caplog.at_level(logging.WARNING, logger=_WS_LOGGER),
+        ):
+            with pytest.raises(WebSocketDisconnect) as unreadable:
+                with terminal_client.websocket_connect(f"/ws/{device_owned_session}"):
+                    pass
+            unreadable_logs = [r.getMessage() for r in caplog.records]
+
+        caplog.clear()
+        with (
+            _device_credential(None, readable=True),
+            caplog.at_level(logging.WARNING, logger=_WS_LOGGER),
+        ):
+            with pytest.raises(WebSocketDisconnect) as unknown:
+                with terminal_client.websocket_connect(f"/ws/{device_owned_session}"):
+                    pass
+            unknown_logs = [r.getMessage() for r in caplog.records]
+
+        assert unreadable.value.code == unknown.value.code == 1008
+        assert any("reason=state_unreadable" in m for m in unreadable_logs)
+        assert not any("reason=unknown_device" in m for m in unreadable_logs)
+        assert any("reason=unknown_device" in m for m in unknown_logs)
+        assert not any("reason=state_unreadable" in m for m in unknown_logs)

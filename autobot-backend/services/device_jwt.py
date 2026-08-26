@@ -80,7 +80,11 @@ VALID_SCOPES: frozenset[str] = frozenset({"read", "write"})
 STATE_ACTIVE = "active"
 STATE_REVOKED = "revoked"
 STATE_ABSENT = "absent"
-_DEVICE_STATES: frozenset[str] = frozenset({STATE_ACTIVE, STATE_REVOKED, STATE_ABSENT})
+#: The state could not be read at all (schema predating 20260824_084, or an
+#: unreachable database). Denies, but is never cached and never reported as
+#: "unpaired" -- a missing migration is not a fleet of unpaired devices.
+STATE_UNREADABLE = "unreadable"
+_DEVICE_STATES: frozenset[str] = frozenset({STATE_ACTIVE, STATE_REVOKED, STATE_ABSENT, STATE_UNREADABLE})
 
 
 def _secret() -> str:
@@ -169,19 +173,45 @@ def mint_device_jwt(device_id: str, user_id: str, scope: str = "read") -> str:
 
 
 async def _read_device_state(device_id: str) -> str:
-    """Read the credential's state straight from the database (no cache)."""
+    """Read the credential's state straight from the database (no cache).
+
+    **Existence is decided before revocation, and that order is the contract.**
+    A device with no row at all has been unpaired; only a row that exists *and*
+    carries ``revoked_at`` has been revoked. Testing revocation first would let
+    the newer refusal swallow the older one, and an operator would read
+    "revoked" for a device that was simply deleted -- two different operational
+    events reported as one. ``id`` is selected alongside ``revoked_at`` so
+    "there is a row" is something this function reads, rather than infers from
+    the shape of a one-column result.
+
+    A read that fails outright -- most plausibly a database whose schema
+    predates migration ``20260824_084``, where ``revoked_at`` does not exist --
+    is reported as :data:`STATE_UNREADABLE`. It denies, like every other
+    non-active state, but it is not conflated with "unpaired": a fleet-wide
+    device-auth outage caused by a missing migration must not read as every
+    device having been individually unpaired.
+    """
     from sqlalchemy import select  # noqa: PLC0415
 
     from models.mobile_device import MobileDevice  # noqa: PLC0415
     from user_management.database import get_async_session  # noqa: PLC0415
 
-    async for session in get_async_session():
-        result = await session.execute(select(MobileDevice.revoked_at).where(MobileDevice.id == device_id).limit(1))
-        row = result.first()
-        break  # Only need one iteration
+    try:
+        async for session in get_async_session():
+            result = await session.execute(
+                select(MobileDevice.id, MobileDevice.revoked_at).where(MobileDevice.id == device_id).limit(1)
+            )
+            row = result.first()
+            break  # Only need one iteration
+    except Exception:
+        # No credential material is in scope here and none is logged: the
+        # message carries the device id and the failure, never the token.
+        logger.warning("device_jwt: state read failed for device_id=%s — denying", device_id, exc_info=True)
+        return STATE_UNREADABLE
+
     if row is None:
         return STATE_ABSENT
-    return STATE_ACTIVE if row[0] is None else STATE_REVOKED
+    return STATE_REVOKED if row.revoked_at is not None else STATE_ACTIVE
 
 
 def _decode_cached_state(cached: object) -> str:
@@ -212,7 +242,10 @@ async def _device_state_cached(device_id: str) -> str:
 
     state = await _read_device_state(device_id)
 
-    if redis is not None:
+    # An unreadable state is a transient condition of the database, not a fact
+    # about the credential. Caching it would extend a momentary outage into a
+    # 60-second one for every device that asked during it.
+    if redis is not None and state != STATE_UNREADABLE:
         await redis.setex(cache_key, _cache_ttl(), state)
         logger.debug("device_jwt: cache miss device_id=%s state=%s (cached)", device_id, state)
 
@@ -272,6 +305,9 @@ async def validate_device_jwt(token: str) -> Dict[str, object]:
     # the caller but never conflated in the log: a deleted pairing and an
     # explicitly revoked credential are different operational events.
     state = await _device_state_cached(str(device_id))
+    if state == STATE_UNREADABLE:
+        logger.warning("device_jwt: refused device_id=%s reason=state_unreadable", device_id)
+        raise JWTDecodeError(f"device_jwt: device {device_id} state could not be read")
     if state == STATE_REVOKED:
         logger.warning("device_jwt: refused device_id=%s reason=revoked", device_id)
         raise JWTDecodeError(f"device_jwt: device {device_id} has been revoked")

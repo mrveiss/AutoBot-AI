@@ -9,6 +9,8 @@ point: ``capability_granted`` has exactly one path to ``True`` and this module
 enumerates the ways a caller might hope to reach it without taking that path.
 """
 
+from datetime import datetime, timezone
+
 import pytest
 
 from autobot_shared.auth.device_capabilities import (
@@ -157,7 +159,7 @@ def test_revocation_denies_a_capability_the_credential_still_holds():
             capability=DeviceCapability.TERMINAL,
             permissions_raw=granted,
             is_approved=True,
-            revoked_at="2026-08-24T00:00:00+00:00",
+            revoked_at=datetime(2026, 8, 24, tzinfo=timezone.utc),
         )
         is False
     )
