@@ -4,11 +4,24 @@
 
 Split out of ``env_registry.py`` to keep that file under its grandfathered
 file-size ceiling (#14236) — the module was already at its ceiling, and this
-is the "ai" component's registrations: model selection, provider back-off
-and degradation, delegation, plan generation, and trajectory
-capture/retrieval/pruning. All genuinely one cohesive area (LLM-facing
-behaviour), so it moves as a unit rather than being split arbitrarily
-(#14856).
+is the "ai" component's registrations: provider back-off and degradation,
+delegation, plan generation, and trajectory capture/retrieval/pruning. All
+genuinely one cohesive area (LLM-facing behaviour), so it moves as a unit
+rather than being split arbitrarily (#14856).
+
+Three "ai" vars — ``AUTOBOT_CLASSIFICATION_MODEL``, ``AUTOBOT_OLLAMA_BASE_URL``,
+``AUTOBOT_ORCHESTRATOR_MODEL`` — stay behind in ``env_registry.py`` rather than
+moving here, deliberately: each carries a hardcoded default or description
+value already recorded in ``pipeline-scripts/hardcoded_values_baseline.txt``
+keyed to ``autobot_shared/env_registry.py``, and ``check_baseline_no_growth.sh``
+has no route to repoint a baseline entry onto a file that did not exist at the
+PR's base ref — by its own documented design, a moved file's new path is
+always "this change created it, so the value in it is new, not pre-existing"
+(#14856). Moving those three would either strand the old baseline entries
+(failing ``--audit-baseline``) or add new ones the growth guard refuses
+outright. Leaving them in place sidesteps a real gap in that guard rather than
+working around it. See #13131 for the same shape in a different tool
+(Semgrep).
 
 Importing this module registers every variable below into
 ``autobot_shared.env_registry.REGISTRY`` as a side effect, exactly like the
@@ -22,36 +35,6 @@ Closes GH#7081.
 from __future__ import annotations
 
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_CLASSIFICATION_MODEL",
-        type=str,
-        default="gemma2:2b",
-        description="Ollama model name used for intent classification.",
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_OLLAMA_BASE_URL",
-        type=str,
-        default=None,
-        description="Base URL of the local Ollama API (e.g. http://localhost:11434).",
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_ORCHESTRATOR_MODEL",
-        type=str,
-        default="llama3.2:1b",
-        description="Ollama model name used for the main orchestrator/routing loop.",
-        component="ai",
-    )
-)
 
 register_env_var(
     EnvVarSpec(

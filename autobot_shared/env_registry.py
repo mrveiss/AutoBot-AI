@@ -162,6 +162,44 @@ register_env_var(
     )
 )
 
+# --- ai ---------------------------------------------------------------------
+#
+# Kept here rather than moved to env_registry_ai.py (#14856): these three
+# carry hardcoded-value baseline entries keyed to this file's path in
+# pipeline-scripts/hardcoded_values_baseline.txt, and check_baseline_no_growth.sh
+# has no route to repoint an entry onto a file that did not exist at the base
+# ref. See env_registry_ai.py's module docstring and #13131.
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CLASSIFICATION_MODEL",
+        type=str,
+        default="gemma2:2b",
+        description="Ollama model name used for intent classification.",
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_OLLAMA_BASE_URL",
+        type=str,
+        default=None,
+        description="Base URL of the local Ollama API (e.g. http://localhost:11434).",
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ORCHESTRATOR_MODEL",
+        type=str,
+        default="llama3.2:1b",
+        description="Ollama model name used for the main orchestrator/routing loop.",
+        component="ai",
+    )
+)
+
 # --- system -----------------------------------------------------------------
 
 register_env_var(
