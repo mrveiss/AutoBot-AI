@@ -539,6 +539,18 @@ jobs:
         # that no longer describes a real one, both fail.
         python3 tools/lint/check_requirements_ci_drift.py --audit
 
+    - name: Audit protobuf-style pins declared in both requirements files (#15070)
+      run: |
+        # autobot-backend/requirements.txt `-r`-includes requirements.txt and
+        # still re-declares four packages. pip resolves a doubly-declared
+        # package against the INTERSECTION of the two specifiers, so a diverged
+        # pair either silently tightens the constraint or fails the install with
+        # a traceback naming neither file. #15070: the protobuf note said the
+        # cap was <7.0 while the line said <8.0.0, so the obvious "fix" was to
+        # revert one file into exactly that state. Fails on any shared package
+        # whose specifiers differ -- and on an empty comparison (#15087).
+        python3 tools/lint/check_requirements_pin_parity.py --audit
+
     - name: Audit CI system-package provisioning against ansible (#14550)
       run: |
         # ansible installs apt packages on every backend host (GUI/VNC, audio,
