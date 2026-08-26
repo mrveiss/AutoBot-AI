@@ -155,13 +155,13 @@ def test_max_depth_override_reaches_the_engine(depth):
 def test_the_endpoint_is_registered_on_the_router():
     """#13506 is a wiring defect — an endpoint nothing includes repeats it."""
     from api.codebase_analytics.router import router
+    from autobot_shared.api_routing.router_routes import effective_routes
 
-    # This app wraps includes in `_IncludedRouter`, so the mounted paths live on
-    # `.original_router.routes`, not on the top-level route objects.
-    paths = {
-        p
-        for included in router.routes
-        for sub in getattr(included, "original_router", None).routes
-        if (p := getattr(sub, "path", None))
-    }
+    # The traversal handles both FastAPI shapes (#15093). What it replaces read
+    # `.original_router.routes` with no `None` fallback, so it was correct only
+    # on the deferred shape and raised `AttributeError: 'NoneType' object has no
+    # attribute 'routes'` on any checkout resolving a FastAPI below 0.139.
+    mounted = effective_routes(router)
+    assert mounted, "non-vacuity: the analytics router enumerated no routes at all"
+    paths = {m.path for m in mounted}
     assert "/impact" in paths, f"/impact not mounted; got {sorted(paths)[:8]}…"
