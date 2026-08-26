@@ -28,9 +28,15 @@ import pytest
 from llm_shared.providers.bedrock import BedrockProvider
 from llm_shared.providers.bedrock_credentials import (
     _AWS_REGION_PATTERN,
+    BEDROCK_ACCESSED_BY,
     BEDROCK_VAULT_ENTRY_NAME,
     BEDROCK_VAULT_ENTRY_TYPE,
     validate_credential_pair,
+)
+from services.secrets_audit_store import (
+    REASON_LOOKUP_ERROR,
+    REASON_MALFORMED_VALUE,
+    REASON_TYPE_MISMATCH,
 )
 
 #: Credential resolution spans two modules since #15023: the vault lookup lives in
@@ -109,7 +115,7 @@ def test_resolve_credentials_consults_secrets_service_first(monkeypatch):
         name=BEDROCK_VAULT_ENTRY_NAME,
         scope="general",
         include_value=True,
-        accessed_by="bedrock_provider",
+        accessed_by=BEDROCK_ACCESSED_BY,
     )
 
 
@@ -283,3 +289,84 @@ def test_resolve_credentials_rejects_a_malformed_vault_pair(monkeypatch):
     with pytest.raises(ValueError) as excinfo:
         provider._resolve_credentials()
     assert "not-an-aws-access-key" not in str(excinfo.value)
+
+
+# --- failed-access auditing (#15023 AC3, failure limb) --------------------------------
+#
+# get_secret() audits the two failures it can see itself -- no such entry, and an
+# expired one. The three below are verdicts this module reaches *after* get_secret()
+# has returned, so nothing but the caller can record them; before #15023 they were a
+# logger.warning and a silent (None, None, None). The real row-writing is covered
+# against a real database in services/secrets_audit_store_test.py; what is pinned here
+# is that the provider reports each rejection, with the right reason, to the right
+# principal -- and that it does NOT report the two get_secret() already owns.
+
+
+def test_vault_lookup_exception_is_audited(monkeypatch):
+    vault = MagicMock()
+    vault.get_secret.side_effect = RuntimeError("db locked")
+    _patch_vault(monkeypatch, vault)
+    _patch_warning(monkeypatch)
+
+    BedrockProvider(settings={})._resolve_credentials()
+
+    vault.record_access_failure.assert_called_once_with(
+        REASON_LOOKUP_ERROR,
+        name=BEDROCK_VAULT_ENTRY_NAME,
+        accessed_by=BEDROCK_ACCESSED_BY,
+        secret_id=None,
+    )
+
+
+def test_secret_type_mismatch_is_audited_against_the_rejected_row(monkeypatch):
+    vault = _vault_returning('{"aws_access_key_id": "x"}', secret_type="some_other_secret_type")
+    _patch_vault(monkeypatch, vault)
+    _patch_warning(monkeypatch)
+
+    BedrockProvider(settings={})._resolve_credentials()
+
+    vault.record_access_failure.assert_called_once_with(
+        REASON_TYPE_MISMATCH,
+        name=BEDROCK_VAULT_ENTRY_NAME,
+        accessed_by=BEDROCK_ACCESSED_BY,
+        secret_id="sec-1",
+    )
+
+
+def test_unparseable_vault_value_is_audited(monkeypatch):
+    vault = _vault_returning("{not json at all")
+    _patch_vault(monkeypatch, vault)
+    _patch_warning(monkeypatch)
+
+    BedrockProvider(settings={})._resolve_credentials()
+
+    reason, kwargs = vault.record_access_failure.call_args[0][0], vault.record_access_failure.call_args[1]
+    assert reason == REASON_MALFORMED_VALUE
+    assert kwargs["secret_id"] == "sec-1"
+    # The malformed value must not travel to the audit sink in any argument.
+    assert "not json at all" not in str(vault.record_access_failure.call_args)
+
+
+def test_absent_vault_entry_is_not_double_audited(monkeypatch):
+    """get_secret() already wrote the not-found row; a second one here would double-count."""
+    vault = _vault_returning(None)
+    _patch_vault(monkeypatch, vault)
+
+    BedrockProvider(settings={})._resolve_credentials()
+
+    vault.record_access_failure.assert_not_called()
+
+
+def test_a_failing_audit_sink_never_breaks_credential_resolution(monkeypatch):
+    """Auditing is best-effort: a broken sink must not take the credential path down."""
+    vault = MagicMock()
+    vault.get_secret.side_effect = RuntimeError("db locked")
+    vault.record_access_failure.side_effect = RuntimeError("audit sink down")
+    _patch_vault(monkeypatch, vault)
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", _WELL_FORMED_ENV_ACCESS_KEY_ID)
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", _WELL_FORMED_ENV_SECRET_ACCESS_KEY)
+    _patch_warning(monkeypatch)
+
+    access_key, secret_key, _region = BedrockProvider(settings={})._resolve_credentials()
+
+    assert (access_key, secret_key) == (_WELL_FORMED_ENV_ACCESS_KEY_ID, _WELL_FORMED_ENV_SECRET_ACCESS_KEY)
