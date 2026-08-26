@@ -291,6 +291,27 @@ This builds the same environment `.github/actions/setup-python-suite/action.yml`
 
 Running the gates on an older interpreter is not merely a version difference. **`black` skips its AST safety check** — the pass that verifies a reformat did not change the code — for any file using syntax newer than the running interpreter. It warns and passes anyway, so the weaker check is the silent one. Version-dependent tests are also unreproducible: `\z` in a regex is a `re.error` on 3.10 and valid from 3.12, so a red CI test can be green locally and diagnosable only from shard logs.
 
+**The packages matter as much as the interpreter (#15091).** Local verification *is* expected to
+match the declared dependency set — `setup-ci-parity-env.sh` is how, and it installs nothing outside
+its own venv. Where it cannot be met, the mismatch is **reported, never gated**: a box below floor
+stays usable for ordinary work, and a gate that blocked every local run on it would simply be removed.
+
+Two places now say so, using the same reporter
+(`pipeline-scripts/check_dependency_floors.py`, which reads the `-r` closure of `requirements-ci.txt`,
+`requirements-ci-test.txt` and the two backend requirement files):
+
+- `pr-preflight.sh` prints it in its `interpreter` section.
+- every `pytest` run prints it directly beneath the pass/fail counts, so a bare `pytest` that never
+  touches preflight still says it.
+
+If your box is below floor and you cannot build the parity venv, **push and read CI** — a green local
+run is not evidence for anything version-dependent. The concrete precedent: under the declared
+fastapi 0.141.1 / starlette 1.6.0, `APIRouter.include_router()` **defers**, appending an
+`_IncludedRouter` wrapper with `path=None` instead of copying routes onto the parent; below that
+floor it copies eagerly. A guard enumerating a router's routes therefore read 26 locally and 3 in CI
+(#14998), and an `hasattr`-guarded walk finds nothing at all rather than raising. #15093 records the
+behaviour and the sweep that bounds its blast radius; do not re-derive it.
+
 ### Gate 0: Squash-Duplicate Detection
 
 Before running any other validation, check whether the branch contains commits that are already squash-merged to `Dev_new_gui`. A squash merge collapses N commits into one, so the individual commit SHAs differ even though the diff is identical. `git log --cherry-pick` detects this by comparing patch IDs rather than SHAs.
