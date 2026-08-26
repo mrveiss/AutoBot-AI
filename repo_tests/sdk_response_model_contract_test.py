@@ -25,12 +25,19 @@ This is a *test-time* coupling only. The SDK still ships to PyPI depending on
 ``httpx`` and ``pydantic`` alone -- nothing imported here is imported by the SDK at
 runtime (cf. #15053's note on ``sdk_defaults_match_ssot_test.py``).
 
-Pairs that do not agree today are listed with an explicit waiver naming the issue
-that tracks them, rather than omitted -- an omitted pair is exactly the silence this
-file exists to end. Those issues are #15114 (SDK models requiring a field the route
-never emits, which raises), #15116 (SDK parsing a ``DataResponse`` envelope out of a
-flat route, so ``data`` is always ``None``) and #15118 (SDK naming fields the route
-never emits, so the attribute is permanently ``None``).
+The waiver mechanism stays, and the waiver *table* is now empty: #15114, #15116 and
+#15118 closed every divergence this file was opened carrying. A pair that regresses
+therefore fails outright rather than being annotated, and a future divergence that
+genuinely cannot be fixed at once has a documented way to be recorded instead of
+dropped.
+
+Two SDK models are deliberately unpaired rather than silently absent, listed in
+:data:`UNPAIRED` with the reason: ``SessionListData.sessions`` and
+``SessionMessagesData.messages`` are both declared ``List[Any]`` by the backend, so
+there is no server-side model of a row to compare against.
+``test_every_sdk_response_model_is_paired_or_explicitly_unpaired`` fails when a new
+SDK model appears in neither list, which is the omission this table would otherwise
+be open to.
 """
 
 from __future__ import annotations
@@ -48,13 +55,17 @@ from api.schemas_agent import (
     AgentConfigDetailResponse,
     AgentHealthResponse,
 )
-from api.schemas_analytics import AnalyticsPerformanceMetricsResponse, AnalyticsUsageStatisticsResponse
+from api.schemas_analytics_collector import AnalyticsPerformanceMetricsResponse, AnalyticsUsageStatisticsResponse
 from api.schemas_chat import (
+    FileHandlingResult,
+    KbCleanupResult,
     SessionCreateData,
     SessionDeleteData,
     SessionListData,
     SessionMessagesData,
     SessionUpdateData,
+    TerminalCleanupResult,
+    TranscriptCleanupResult,
 )
 from knowledge.schemas.entries import KnowledgeEntriesResponse
 from knowledge.schemas.entries import KnowledgeEntry as BackendKnowledgeEntry
@@ -82,30 +93,48 @@ class Pair:
 #: ``libs/autobot-sdk-python/autobot_sdk/resources/`` to the route it requests and
 #: that route's ``response_model=``.
 CONTRACT: tuple[Pair, ...] = (
-    # --- agreed: guarded in both directions -----------------------------------
     Pair(sdk.AgentConfig, AgentConfigDetailResponse, "GET /agent_config/agents/{id}"),
     Pair(sdk.AgentConfigOptions, AgentConfigDetailOptions, "GET /agent_config/agents/{id}.configuration_options"),
     Pair(sdk.AgentConfigHealthCheck, AgentConfigDetailHealthCheck, "GET /agent_config/agents/{id}.health_check"),
-    # --- known divergences, each tracked ---------------------------------------
-    Pair(sdk.AgentHealth, AgentHealthResponse, "GET /agent/health/detailed", waiver="#15118"),
-    Pair(sdk.SessionList, SessionListData, "GET /chat/sessions", waiver="#15118"),
-    Pair(sdk.SessionMessages, SessionMessagesData, "GET /chat/sessions/{id}", waiver="#15118"),
-    Pair(sdk.SessionCreate, SessionCreateData, "POST /chat/sessions", waiver="#15114"),
-    Pair(sdk.SessionUpdate, SessionUpdateData, "PUT /chat/sessions/{id}", waiver="#15114"),
-    Pair(sdk.SessionDelete, SessionDeleteData, "DELETE /chat/sessions/{id}", waiver="#15118"),
-    Pair(sdk.KnowledgeStats, KnowledgeStatsResponse, "GET /knowledge_base/stats", waiver="#15116"),
-    Pair(sdk.KnowledgeAddResult, AddTextResponse, "POST /knowledge_base/add_text", waiver="#15116"),
-    Pair(sdk.KnowledgeSearchResult, KnowledgeSearchResponse, "POST /knowledge_base/search", waiver="#15116"),
-    Pair(sdk.KnowledgeSearchResult, KnowledgeEntriesResponse, "GET /knowledge_base/entries", waiver="#15116"),
-    Pair(sdk.KnowledgeEntry, BackendKnowledgeEntry, "GET /knowledge_base/entries[].entry", waiver="#15118"),
-    Pair(sdk.AnalyticsUsage, AnalyticsUsageStatisticsResponse, "GET /analytics/usage/statistics", waiver="#15116"),
+    Pair(sdk.AgentHealth, AgentHealthResponse, "GET /agent/health/detailed"),
+    Pair(sdk.SessionList, SessionListData, "GET /chat/sessions"),
+    Pair(sdk.SessionMessages, SessionMessagesData, "GET /chat/sessions/{id}"),
+    Pair(sdk.SessionCreate, SessionCreateData, "POST /chat/sessions"),
+    Pair(sdk.SessionUpdate, SessionUpdateData, "PUT /chat/sessions/{id}"),
+    Pair(sdk.SessionDelete, SessionDeleteData, "DELETE /chat/sessions/{id}"),
+    Pair(sdk.SessionDeleteFileHandling, FileHandlingResult, "DELETE /chat/sessions/{id}.file_handling"),
+    Pair(sdk.SessionDeleteTerminalCleanup, TerminalCleanupResult, "DELETE /chat/sessions/{id}.terminal_cleanup"),
+    Pair(sdk.SessionDeleteKbCleanup, KbCleanupResult, "DELETE /chat/sessions/{id}.kb_cleanup"),
     Pair(
-        sdk.AnalyticsPerformance,
-        AnalyticsPerformanceMetricsResponse,
-        "GET /analytics/performance/metrics",
-        waiver="#15116",
+        sdk.SessionDeleteTranscriptCleanup,
+        TranscriptCleanupResult,
+        "DELETE /chat/sessions/{id}.transcript_cleanup",
     ),
+    Pair(sdk.KnowledgeStats, KnowledgeStatsResponse, "GET /knowledge_base/stats"),
+    Pair(sdk.KnowledgeAddResult, AddTextResponse, "POST /knowledge_base/add_text"),
+    Pair(sdk.KnowledgeSearchResult, KnowledgeSearchResponse, "POST /knowledge_base/search"),
+    Pair(sdk.KnowledgeEntries, KnowledgeEntriesResponse, "GET /knowledge_base/entries"),
+    Pair(sdk.KnowledgeEntry, BackendKnowledgeEntry, "GET /knowledge_base/entries[].entry"),
+    Pair(sdk.AnalyticsUsage, AnalyticsUsageStatisticsResponse, "GET /analytics/usage/statistics"),
+    Pair(sdk.AnalyticsPerformance, AnalyticsPerformanceMetricsResponse, "GET /analytics/performance/metrics"),
 )
+
+#: SDK models with no backend counterpart to compare against, and why. Listed
+#: rather than omitted: an omitted model is indistinguishable from a forgotten
+#: one, which is the silence this file exists to end.
+UNPAIRED: dict[type[BaseModel], str] = {
+    sdk.Session: (
+        "SessionListData.sessions is declared List[Any] in api/schemas_chat.py, so the backend "
+        "describes a row nowhere. These names are the literal keys "
+        "chat_history/session_listing.py writes; repo_tests/sdk_response_parsing_test.py pins them against that literal."
+    ),
+    sdk.ChatMessage: (
+        "SessionMessagesData.messages is declared List[Any] for the same reason. These names are "
+        "the literal keys chat_history/messages.py writes; repo_tests/sdk_response_parsing_test.py pins them against that literal."
+    ),
+    sdk.DataResponse: "The envelope itself; it mirrors schemas_common.DataResponse, not one route.",
+}
+
 
 GUARDED: tuple[Pair, ...] = tuple(pair for pair in CONTRACT if pair.waiver is None)
 WAIVED: tuple[Pair, ...] = tuple(pair for pair in CONTRACT if pair.waiver is not None)
@@ -162,22 +191,63 @@ def test_the_sdk_declares_no_field_the_route_never_sends(pair: Pair):
     )
 
 
-@pytest.mark.parametrize("pair", WAIVED, ids=_pair_id)
-def test_every_waiver_names_the_issue_that_tracks_it(pair: Pair):
-    """A waiver without a tracked issue is a silently-accepted defect wearing a comment."""
-    assert pair.waiver is not None and re.fullmatch(
-        r"#\d+", pair.waiver
-    ), f"{_pair_id(pair)} is waived as {pair.waiver!r}, which is not an issue reference"
+def test_every_waiver_names_the_issue_that_tracks_it():
+    """A waiver without a tracked issue is a silently-accepted defect wearing a comment.
+
+    Looped rather than parametrized: ``WAIVED`` is empty today and an empty
+    parametrize would report as a skip, which reads like a broken test rather
+    than like the goal state. An empty loop here asserts nothing *and asserts
+    nothing is owed* -- unlike the enumerations in ``field_names`` and
+    ``test_the_contract_table_enumerates_pairs_to_check``, where empty means the
+    guard stopped guarding and must fail.
+    """
+    for pair in WAIVED:
+        assert pair.waiver is not None and re.fullmatch(
+            r"#\d+", pair.waiver
+        ), f"{_pair_id(pair)} is waived as {pair.waiver!r}, which is not an issue reference"
 
 
-@pytest.mark.parametrize("pair", WAIVED, ids=_pair_id)
-def test_a_waived_pair_still_diverges(pair: Pair):
+def test_a_waived_pair_still_diverges():
     """A waiver that no longer applies must be dropped, not left to rot into noise."""
-    sdk_fields = frozenset(pair.sdk_model.model_fields)
-    backend_fields = frozenset(pair.backend_model.model_fields)
-    assert sdk_fields != backend_fields, (
-        f"{_pair_id(pair)} now agrees exactly; remove the {pair.waiver} waiver " "so the pair is guarded from here on"
+    for pair in WAIVED:
+        sdk_fields = frozenset(pair.sdk_model.model_fields)
+        backend_fields = frozenset(pair.backend_model.model_fields)
+        assert sdk_fields != backend_fields, (
+            f"{_pair_id(pair)} now agrees exactly; remove the {pair.waiver} waiver "
+            "so the pair is guarded from here on"
+        )
+
+
+def test_every_sdk_response_model_is_paired_or_explicitly_unpaired():
+    """A model in neither table is the omission the pair table is otherwise open to.
+
+    ``AgentConfigOptions`` reached the SDK carried inside ``AgentConfig`` and no
+    route of its own; a new model can arrive the same way and be compared with
+    nothing. Either it names the backend model it is fed from, or it says in
+    ``UNPAIRED`` why no such model exists.
+    """
+    declared = {
+        obj
+        for obj in vars(sdk).values()
+        if isinstance(obj, type) and issubclass(obj, BaseModel) and obj.__module__ == sdk.__name__
+    }
+    assert declared, "no SDK models found -- the introspection broke, not the SDK"
+
+    accounted = {pair.sdk_model for pair in CONTRACT} | set(UNPAIRED)
+    orphans = declared - accounted
+    assert not orphans, (
+        f"SDK models compared against nothing: {sorted(m.__name__ for m in orphans)}. "
+        "Add a Pair naming the backend response model each is built from, or an UNPAIRED "
+        "entry saying why the backend describes no such model."
     )
+
+
+def test_no_unpaired_entry_is_stale():
+    """An UNPAIRED entry for a model that no longer exists is a comment about nothing."""
+    assert UNPAIRED, "the unpaired table is empty -- delete it rather than leaving a table nothing reads"
+    for model, reason in UNPAIRED.items():
+        assert getattr(sdk, model.__name__, None) is model, f"{model.__name__} is no longer an autobot_sdk model"
+        assert reason.strip(), f"{model.__name__} is unpaired for no recorded reason"
 
 
 def test_an_empty_field_enumeration_fails_instead_of_passing_vacuously():

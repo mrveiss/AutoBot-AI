@@ -43,14 +43,13 @@ from api.schemas_analytics import (
     AnalyticsDetailedHealthResponse,
     AnalyticsHistoricalTrendsResponse,
     AnalyticsOverview,
-    AnalyticsPerformanceMetricsResponse,
     AnalyticsRealtimeMetricsResponse,
     AnalyticsRootCauseResponse,
     AnalyticsStatusResponse,
     AnalyticsTrackEventResponse,
-    AnalyticsUsageStatisticsResponse,
     RealTimeEvent,
 )
+from api.schemas_analytics_collector import AnalyticsPerformanceMetricsResponse, AnalyticsUsageStatisticsResponse
 
 # Import controller class (extracted from this file - Issue #212)
 from api.ws_security import enforce_ws_origin
