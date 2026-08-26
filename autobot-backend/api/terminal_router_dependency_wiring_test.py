@@ -216,26 +216,86 @@ class TestTerminalRouteDumpIsComplete:
     ``api.terminal`` nests three deep, which makes it a usable canary: a route
     declared on ``router``, a route declared on ``admin_router`` (included into
     ``router``), and a route from ``api.terminal_tools``' router (included into
-    ``admin_router`` under a prefix). Naming one path per level means a walk
-    that stops early fails saying *which* level it lost, instead of a
-    downstream gate assertion naming only its own symptom.
+    ``admin_router``). Naming one route per level means a walk that stops early
+    fails saying *which* level it lost, instead of a downstream gate assertion
+    naming only its own symptom.
     """
 
-    #: One path per nesting level, with the include that puts it there.
+    #: One route per nesting level: ``(needle, match_by_suffix, owner)``.
+    #:
+    #: The third is matched by **suffix**, for the reason
+    #: ``test_a_dumped_path_only_ever_loses_its_include_prefix`` below states
+    #: and pins: the dump cannot recover an include-time ``prefix=`` under a
+    #: deferring fastapi, so this route is ``/terminal/package-managers`` on
+    #: the eager local version (#15091) and ``/package-managers`` in CI (job
+    #: 98211256874). The suffix is unique within the dump and identical on
+    #: both, so the level stays pinned without this guard depending on the one
+    #: part of the dump that is version-sensitive.
     _LEVELS = (
-        ("/ws/{session_id}", "router -- declared directly, present even without flattening"),
-        ("/", "admin_router -- included into router at the end of api/terminal.py"),
-        ("/terminal/package-managers", "api.terminal_tools' router -- included into admin_router under /terminal"),
+        ("/ws/{session_id}", False, "router -- declared directly, present even without flattening"),
+        ("/", False, "admin_router -- included into router at the end of api/terminal.py"),
+        ("/package-managers", True, "api.terminal_tools' router -- included into admin_router"),
     )
 
-    @pytest.mark.parametrize("path,owner", _LEVELS)
-    def test_the_dump_reaches_every_nesting_level(self, terminal_route_spec, path, owner):
-        assert path in terminal_route_spec, (
-            f"{path} is absent from the clean-import dump -- it is owned by {owner}, "
-            "so the enumeration stopped before flattening that inclusion. Every "
-            "dependency assertion in this module sweeps that truncated surface.\n"
+    @pytest.mark.parametrize("needle,by_suffix,owner", _LEVELS)
+    def test_the_dump_reaches_every_nesting_level(self, terminal_route_spec, needle, by_suffix, owner):
+        found = [p for p in terminal_route_spec if (p.endswith(needle) if by_suffix else p == needle)]
+        assert found, (
+            f"the dump holds no route {'ending in' if by_suffix else 'at'} {needle}. "
+            f"That route is owned by {owner}, so the walk never reached that "
+            "inclusion at all -- a dropped include prefix would still leave the "
+            "suffix, so this is absence, not truncation. Every dependency "
+            "assertion in this module sweeps that shortened surface.\n"
             f"dump held {len(terminal_route_spec)} route(s): {sorted(terminal_route_spec)}"
         )
+
+
+class TestTerminalRouteDumpPathFidelity:
+    """What the dump's paths do and do not mean (#15126).
+
+    ``api/terminal.py:198`` is ``admin_router.include_router(tools_router,
+    prefix="/terminal")``, and ``api.terminal_tools``' router carries no
+    ``prefix`` of its own -- so that ``/terminal`` is purely the **include-time
+    ``prefix=`` argument**. #15112 established that this term is consumed at
+    include time and left nowhere on the deferred wrapper: it is not
+    recoverable by runtime introspection, and three attempts to recover it are
+    the evidence. (The *including router's own* ``.prefix`` is a different term
+    and is recoverable -- it simply is not the one in play here.)
+
+    So this dump reports those four routes unprefixed in CI and prefixed on the
+    eager fastapi this repo resolves locally. Rather than let that trip a test
+    up again, it is asserted: a dumped path is never *wrong*, only ever missing
+    a leading include prefix. That holds on both versions, fails if the walk
+    ever starts inventing paths, and is the honest statement of the limit.
+
+    The stronger test -- build the expected full paths from a static mount
+    graph, which *can* see the include site, and compare -- is gated on #15112
+    (`autobot_shared/api_routing/`, open at the time of writing). When it lands,
+    this class and the suffix match above are what it replaces; do not write a
+    private copy of that graph in the meantime (#15093).
+    """
+
+    #: The paths the application actually serves for the tool routes. Not an
+    #: assumption: ``terminal_websocket_route_test.py``'s
+    #: ``TestTerminalToolRoutesKeepTheirGate`` drives each of these through a
+    #: real ``TestClient`` request and asserts a non-404 on both versions.
+    _SERVED_TOOL_PATHS = (
+        "/terminal/package-managers",
+        "/terminal/install-tool",
+        "/terminal/check-tool",
+        "/terminal/validate-command",
+    )
+
+    @pytest.mark.parametrize("served", _SERVED_TOOL_PATHS)
+    def test_a_dumped_path_only_ever_loses_its_include_prefix(self, terminal_route_spec, served):
+        matches = [p for p in terminal_route_spec if served.endswith(p) and p != "/"]
+        assert matches, (
+            f"{served} is served by the application but nothing in the dump is "
+            "even a trailing part of it. The walk is not merely dropping the "
+            f"include prefix from api/terminal.py:198 -- it has lost the route.\n"
+            f"dump held {len(terminal_route_spec)} route(s): {sorted(terminal_route_spec)}"
+        )
+        assert len(matches) == 1, f"{served} matched more than one dumped path, so neither identifies it: {matches}"
 
 
 def _dump_routes_main() -> None:
@@ -299,6 +359,25 @@ def _dump_routes_main() -> None:
         ``api/self_capabilities_integration_test.py`` -- copied here rather than
         invented, though the fact that four files now carry it by hand is its
         own problem.
+
+        **The reconstructed prefix is not trustworthy, and a caller must not
+        key an assertion on one.** Two different terms both read as "prefix"
+        and only one of them survives deferral (#15112): the *including
+        router's own* ``.prefix`` stays on the parent object and is
+        recoverable, while an include-time ``prefix=`` **argument** is consumed
+        at include time and left nowhere -- ``sub_prefix`` then resolves empty
+        and the path comes back short. ``api/terminal.py:198`` uses the second
+        kind, so CI job 98211256874 dumped ``/package-managers`` for a route
+        the application serves at ``/terminal/package-managers``, while the
+        eager fastapi this repo resolves locally (#15091) dumps it prefixed.
+
+        Nothing in this module reads a prefixed path -- the routes it asserts
+        on are all included without one -- and
+        ``TestTerminalRouteDumpPathFidelity`` pins the limit rather than
+        leaving the next reader to trip over it. Filed as #15126; the static
+        mount graph that *can* see the include site is #15112. Do not patch
+        this by guessing at a wrapper attribute, and do not fork a private
+        copy of that graph (#15093). Match by a unique suffix until it lands.
         """
         found = []
         for route in getattr(container, "routes", []) or []:
