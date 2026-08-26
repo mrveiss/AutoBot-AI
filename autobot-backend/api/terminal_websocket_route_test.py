@@ -498,6 +498,8 @@ def _dump_routes_main() -> None:
             if getattr(dep, "dependency", None) is not None
         )
 
+    wrapper_attrs: list = []
+
     def _walk(container, prefix: str) -> list:
         """Flatten deferred ``_IncludedRouter`` wrappers into real routes.
 
@@ -514,7 +516,21 @@ def _dump_routes_main() -> None:
         for route in getattr(container, "routes", []) or []:
             original = getattr(route, "original_router", None)
             if original is not None:
-                found.extend(_walk(original, prefix + (getattr(route, "prefix", "") or "")))
+                # The prefix passed to ``include_router`` is not on the wrapper's
+                # ``.prefix`` -- CI job 98110125325 found ``/install-tool`` where
+                # ``/terminal/install-tool`` was expected. Take whichever of the
+                # two carries it, and report the wrapper's attributes so the next
+                # run names the right one instead of costing another round-trip.
+                sub_prefix = getattr(route, "prefix", "") or getattr(original, "prefix", "") or ""
+                wrapper_attrs.append(
+                    {
+                        "type": type(route).__name__,
+                        "wrapper_prefix": getattr(route, "prefix", None),
+                        "original_prefix": getattr(original, "prefix", None),
+                        "attrs": sorted(a for a in dir(route) if not a.startswith("_")),
+                    }
+                )
+                found.extend(_walk(original, prefix + sub_prefix))
                 continue
             path = getattr(route, "path", None)
             found.append(
@@ -534,6 +550,7 @@ def _dump_routes_main() -> None:
         json.dumps(
             {
                 "routes": routes,
+                "wrappers": wrapper_attrs,
                 "python": _sys.version,
                 "fastapi": getattr(_fastapi, "__version__", "unknown"),
                 "starlette": getattr(_starlette, "__version__", "unknown"),
