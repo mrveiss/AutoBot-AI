@@ -1,0 +1,195 @@
+# The down-only file-size ratchet, asserted on the INTEGRATION BRANCH ITSELF (#15102).
+#
+# Why this exists when `code-quality` already runs the same audit
+# ---------------------------------------------------------------
+# It does — and on 2026-08-26 it ran on `Dev_new_gui` and went RED (run
+# 32962821850, step "Audit the python-file-size ceilings for drift"), because
+# merging #15100 took `autobot-backend/api/terminal_websocket_route_test.py`
+# to 613 lines. Nobody was told. The violation was found days later by someone
+# running the audit by hand. A guard whose red result reaches no one is a guard
+# only in the sense that it produced a log line.
+#
+# So this workflow adds the two things the existing invocation does not have:
+#
+# 1. It CANNOT be skipped. `code-quality` filters both its `on.push.paths` and
+#    its `changes` job on the backend-Python set, so a push to `Dev_new_gui`
+#    that touches no Python leaves the base invariant unexamined that day. The
+#    ratchet is a property of the whole tree, not of one diff — a tree-wide
+#    invariant must not be gated on the diff that happened to arrive. There is
+#    deliberately no `paths:` filter here.
+# 2. A failure becomes a tracked ISSUE, opened or updated by title, and closed
+#    again by the first clean run. That is the artifact a human actually reads.
+#
+# The audit itself is NOT reimplemented here: this shells out to the same
+# `scripts/check_python_file_size.py --audit-ceilings` the pre-commit hook and
+# `code-quality` call, so there is one ratchet, invoked from three places.
+#
+# What this workflow is NOT
+# -------------------------
+# It is not a required status check and it cannot block a merge. Required
+# contexts are configured in branch protection and are evaluated on a pull
+# request's head; this runs on `push`, after the merge has already landed. It
+# shortens the time a red base goes unnoticed from "until someone runs the
+# audit locally" to "one workflow run" — it does not prevent the merge. The
+# pre-merge half is a branch-protection question, tracked separately in #15107:
+# #15100 merged with ZERO required contexts on the head it merged, which only
+# `enforce_admins: false` explains, and only the repo owner can change that.
+
+name: Ratchet Base Guard
+
+on:
+  push:
+    # No `paths:` filter, deliberately — see the header. `git ls-files` is what
+    # scopes this run, not the diff.
+    branches: [ Dev_new_gui, main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never cancel: a cancelled base guard reports nothing, and "nothing" is what
+  # this workflow exists to stop the base being verified with (#13432).
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  audit-base:
+    name: base ratchet audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout the branch as it now stands
+        uses: actions/checkout@v7
+        # depth 1 is enough: the audit reads the working tree via
+        # `git ls-files`, it never diffs against a base.
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Audit the python-file-size ceilings on this branch
+        id: audit
+        run: |
+          set -uo pipefail
+          # The script's own reach floor (MIN_TRACKED_PY_FILES) already fails a
+          # run whose tree walk came back empty, so an unreadable checkout
+          # cannot report clean here. rc is captured rather than allowed to
+          # abort the job, because the reporting steps below need to run on
+          # exactly the failing path.
+          python3 scripts/check_python_file_size.py --audit-ceilings >audit.log 2>&1
+          rc=$?
+          cat audit.log
+          echo "rc=${rc}" >>"$GITHUB_OUTPUT"
+          {
+            echo 'report<<RATCHET_EOF'
+            head -c 60000 audit.log
+            echo
+            echo RATCHET_EOF
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Open or update the base-violation issue
+        # `success() &&` is load-bearing: a custom `if:` REPLACES the implicit
+        # success() check, so without it a failed checkout would leave `rc`
+        # unset, compare unequal to '0', and file an issue about a violation
+        # that was never measured.
+        if: success() && steps.audit.outputs.rc != '0'
+        uses: actions/github-script@v9
+        env:
+          # Passed through the environment, never interpolated into the script
+          # body: the audit's own output would otherwise be parsed as
+          # JavaScript, and a filename containing a backtick or `${` would
+          # break the step that exists to report the failure.
+          RATCHET_REPORT: ${{ steps.audit.outputs.report }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = 'ci: the file-size ratchet is violated on ' + context.ref.replace('refs/heads/', '');
+            const body = [
+              '`scripts/check_python_file_size.py --audit-ceilings` fails on this branch as it now stands.',
+              '',
+              'Commit: `' + context.sha + '`',
+              'Run: ' + context.serverUrl + '/' + context.repo.owner + '/' + context.repo.repo +
+                '/actions/runs/' + context.runId,
+              '',
+              '```',
+              process.env.RATCHET_REPORT || '(the audit produced no output)',
+              '```',
+              '',
+              'The ratchet only turns down. A file over 600 lines with no `KNOWN_LARGE`',
+              'entry must be split; an entry whose file shrank must have its ceiling',
+              'lowered in **both** `scripts/python_file_size_known_large.py` and',
+              '`repo_tests/python_file_size_ratchet_baseline.py`; an entry that fell',
+              'under 600 must be removed, not lowered to 599.',
+              '',
+              'Filed automatically by `.github/workflows/ratchet-base-guard.yml` (#15102).',
+            ].join('\n');
+
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'automation',
+              per_page: 100,
+            });
+            const open = existing.find((issue) => issue.title === title && !issue.pull_request);
+
+            if (open) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: open.number,
+                body,
+              });
+              core.notice('Updated ratchet-violation issue #' + open.number);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['bug', 'infrastructure', 'automation'],
+              });
+              core.notice('Opened ratchet-violation issue #' + created.data.number);
+            }
+
+      - name: Close the base-violation issue once the branch is clean again
+        if: success() && steps.audit.outputs.rc == '0'
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = 'ci: the file-size ratchet is violated on ' + context.ref.replace('refs/heads/', '');
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'automation',
+              per_page: 100,
+            });
+            const open = existing.find((issue) => issue.title === title && !issue.pull_request);
+            if (!open) {
+              return;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: open.number,
+              body: 'The ceiling audit is clean again as of `' + context.sha + '`. Closing.',
+            });
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: open.number,
+              state: 'closed',
+            });
+
+      - name: Fail the run when the branch violates the ratchet
+        if: success() && steps.audit.outputs.rc != '0'
+        run: |
+          echo "::error::the file-size ratchet is violated on this branch — see the issue this run just filed"
+          exit 1
