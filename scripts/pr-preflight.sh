@@ -88,6 +88,21 @@ else
   note "    scripts/setup-ci-parity-env.sh"
 fi
 
+# The interpreter is only half of it. An environment whose PACKAGES are older
+# than the repo declares passes every gate below and still disagrees with CI,
+# because CI installs the declared set. #14998 spent a diagnosis cycle on a
+# guard that read 26 routes here and 3 there, purely from a fastapi delta.
+# Reported, never fatal (#15091) -- exit 2 means the check itself broke.
+if ! FLOOR_REPORT=$("$PY" pipeline-scripts/check_dependency_floors.py 2>&1); then
+  fail "dependency floor check did not run: $FLOOR_REPORT"
+elif printf '%s' "$FLOOR_REPORT" | grep -q 'all satisfied'; then
+  pass "$(printf '%s' "$FLOOR_REPORT" | head -1)"
+else
+  while IFS= read -r line; do note "$line"; done <<EOF_FLOORS
+$FLOOR_REPORT
+EOF_FLOORS
+fi
+
 # ---------------------------------------------------------------- branch
 section "branch"
 

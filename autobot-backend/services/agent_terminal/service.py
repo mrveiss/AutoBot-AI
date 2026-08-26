@@ -21,9 +21,16 @@ from type_defs.common import Metadata
 
 from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
+from .errors import PostExecutionError, execution_failed_response, post_execution_failed_response, post_execution_guard
 from .models import AgentSessionState, AgentTerminalSession
 from .session_manager import SessionManager
-from .utils import create_command_execution, is_interactive_command, log_command_approval, log_command_result
+from .utils import (
+    create_command_execution,
+    is_interactive_command,
+    log_autobot_command,
+    log_command_approval,
+    log_command_result,
+)
 
 logger = get_logger(__name__)
 
@@ -267,46 +274,30 @@ class AgentTerminalService:
         command: str,
         risk,
     ) -> Metadata:
-        """Execute an auto-approved command (Issue #281: extracted)."""
-        task_start_time = time.time()
+        """Execute an auto-approved command (Issue #281: extracted).
 
-        if session.has_conversation():
-            await self.terminal_logger.log_command(
-                session_id=session.conversation_id,
-                command=command,
-                run_type="autobot",
-                status="executing",
-                user_id=None,
-            )
+        #15073: the guard opens the moment the executor has returned. Metrics,
+        transcript, chat, interpretation and broadcast are all post-processing
+        — a defect in any of them is reported as such, never as a command that
+        failed to run, and never at the cost of the result already in hand.
+        """
+        task_start_time = time.time()
+        await log_autobot_command(self.terminal_logger, session, command, "executing")
 
         result = await self.command_executor.execute_in_pty(session, command)
 
-        task_duration = time.time() - task_start_time
-        status = "success" if result.get("status") == "success" else "error"
-        self.prometheus_metrics.record_task_execution(
-            task_type="command_execution",
-            agent_type=session.agent_role.value,
-            status=status,
-            duration=task_duration,
-        )
-
-        if session.has_conversation():
-            await self.terminal_logger.log_command(
-                session_id=session.conversation_id,
-                command=command,
-                run_type="autobot",
+        with post_execution_guard(result):
+            status = "success" if result.get("status") == "success" else "error"
+            self.prometheus_metrics.record_task_execution(
+                task_type="command_execution",
+                agent_type=session.agent_role.value,
                 status=status,
-                result=result,
-                user_id=None,
+                duration=time.time() - task_start_time,
             )
-
-        await self._save_command_to_chat(session.conversation_id, command, result, command_type="agent")
-
-        # Interpret result if chat workflow manager available
-        await self._interpret_command_result(session, command, result)
-
-        # Update session history and broadcast status (Issue #665: extracted helper)
-        await self._finalize_auto_approved_execution(session, command, risk, result)
+            await log_autobot_command(self.terminal_logger, session, command, status, result)
+            await self._save_command_to_chat(session.conversation_id, command, result, command_type="agent")
+            await self._interpret_command_result(session, command, result)
+            await self._finalize_auto_approved_execution(session, command, risk, result)
 
         return result
 
@@ -456,24 +447,24 @@ class AgentTerminalService:
 
         result = await self.command_executor.execute_in_pty(session, command)
 
-        await self.approval_handler.update_command_queue_status(
-            command_id=command_id,
-            approved=True,
-            output=result.get("stdout", ""),
-            stderr=result.get("stderr", ""),
-            return_code=result.get("return_code", 0),
-        )
-
-        await log_command_result(self.terminal_logger, session, command, result, user_id)
-        await self._post_execution_updates(
-            session,
-            command,
-            result,
-            risk_level,
-            user_id,
-            comment,
-            auto_approve_future,
-        )
+        with post_execution_guard(result):
+            await self.approval_handler.update_command_queue_status(
+                command_id=command_id,
+                approved=True,
+                output=result.get("stdout", ""),
+                stderr=result.get("stderr", ""),
+                return_code=result.get("return_code", 0),
+            )
+            await log_command_result(self.terminal_logger, session, command, result, user_id)
+            await self._post_execution_updates(
+                session,
+                command,
+                result,
+                risk_level,
+                user_id,
+                comment,
+                auto_approve_future,
+            )
 
         return {
             "status": "approved",
@@ -529,13 +520,14 @@ class AgentTerminalService:
                 comment=comment,
                 auto_approve_future=auto_approve_future,
             )
-        except Exception as e:
-            logger.error("Approved command execution error: %s", e)
-            return {
-                "status": "error",
-                "error": "Command execution failed",
-                "command": command,
-            }
+        except PostExecutionError as exc:
+            logger.error("Approved command post-execution failure: %s", exc, exc_info=True)
+            return post_execution_failed_response(command, exc)
+        except (TypeError, AttributeError):
+            raise
+        except Exception:
+            logger.error("Approved command execution error", exc_info=True)
+            return execution_failed_response(command)
 
     async def _handle_denied_command(
         self,
@@ -769,13 +761,14 @@ class AgentTerminalService:
         # Execute auto-approved command
         try:
             return await self._execute_auto_approved_command(session, command, risk)
-        except Exception as e:
-            logger.error("Command execution error: %s", e)
-            return {
-                "status": "error",
-                "error": "Command execution failed",
-                "command": command,
-            }
+        except PostExecutionError as exc:
+            logger.error("Auto-approved command post-execution failure: %s", exc, exc_info=True)
+            return post_execution_failed_response(command, exc)
+        except (TypeError, AttributeError):
+            raise
+        except Exception:
+            logger.error("Command execution error", exc_info=True)
+            return execution_failed_response(command)
 
     async def _save_command_to_chat(
         self,

@@ -31,19 +31,34 @@ _BACKEND = _REPO / "autobot-backend"
 
 _TARGET_NAME = "with_error_handling"
 
+# Directory names skipped, matched against parts of the path RELATIVE to the
+# scan root -- never a substring of the absolute path (#15121). This repo's
+# whole workflow runs from `<main-tree>/.worktrees/<branch>/` checkouts, so
+# `"/.worktrees/" in path.as_posix()` is true of the repo root itself and skips
+# every file in the tree; the guard then inspects nothing and fails its own
+# non-vacuity assertion. `tests` has the identical failure mode for a checkout
+# under any directory of that name. Same form as
+# `first_party_imports_resolve_test.py:33` and
+# `shell_lib_sources_resolve_test.py:58`.
+_SKIP_PARTS = {"node_modules", ".worktrees", "tests", "__pycache__", "venv", ".venv"}
+
 # The one file allowed to define it. Anything else defining a function or
 # async function with this exact name is the fork this test exists to catch.
 _CANONICAL_DEFINER = (_BACKEND / "utils" / "error_boundaries" / "decorators.py").resolve()
 
 
-def _production_sources() -> List[Path]:
-    """Backend .py files, excluding tests, node_modules and worktree copies."""
+def _production_sources(root: Path = _BACKEND) -> List[Path]:
+    """Backend .py files, excluding tests, node_modules and worktree copies.
+
+    `root` is a parameter so the exclusion logic can be exercised against a
+    fixture tree that itself lives under `.worktrees/` -- the arrangement this
+    scan silently erased before #15121.
+    """
     out: List[Path] = []
-    for path in _BACKEND.rglob("*.py"):
-        posix = path.as_posix()
+    for path in root.rglob("*.py"):
         if path.name.endswith("_test.py") or path.name.startswith("test_"):
             continue
-        if "/node_modules/" in posix or "/.worktrees/" in posix or "/tests/" in posix:
+        if any(part in _SKIP_PARTS for part in path.relative_to(root).parts):
             continue
         out.append(path)
     return out
@@ -61,6 +76,53 @@ def _defines_target(path: Path) -> List[int]:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == _TARGET_NAME:
             lines.append(node.lineno)
     return lines
+
+
+def test_the_scan_sees_the_tree_it_is_pointed_at():
+    """A guard that skipped every file would report clean, not report a skip.
+
+    Split out from the assertion below so the two failures read differently:
+    "the scan found nothing to inspect" is a defect in this file, while
+    "with_error_handling vanished" is a defect in the code under guard. Before
+    #15121 the first masqueraded as the second in every worktree checkout.
+    """
+    sources = _production_sources()
+
+    assert len(sources) > 100, (
+        f"only {len(sources)} backend sources survived the exclusion filter — "
+        "the filter is eating the tree, so every assertion below is vacuous"
+    )
+    assert _CANONICAL_DEFINER in {path.resolve() for path in sources}
+
+
+def test_a_checkout_under_worktrees_is_still_scanned(tmp_path):
+    """#15121: the filter must key on parts relative to the scan root.
+
+    The fixture reproduces the mandated layout exactly — the scan root itself
+    sits under `.worktrees/<branch>/`. Matching a substring of the absolute path
+    skips every file here; matching relative parts finds the definer. Same
+    fixture shape as `scripts/check_ansible_file_references_test.py:40-45` and
+    `repo_tests/lint/canonical/test_context.py:76-78`.
+    """
+    root = tmp_path / ".worktrees" / "issue-9999" / "autobot-backend"
+    (root / "utils" / "error_boundaries").mkdir(parents=True)
+    definer = root / "utils" / "error_boundaries" / "decorators.py"
+    definer.write_text(f"def {_TARGET_NAME}():\n    pass\n", encoding="utf-8")
+
+    # Genuinely excluded content, to prove the filter still filters.
+    (root / "node_modules").mkdir()
+    (root / "node_modules" / "vendored.py").write_text("x = 1\n", encoding="utf-8")
+    (root / "tests").mkdir()
+    (root / "tests" / "helper.py").write_text("y = 1\n", encoding="utf-8")
+
+    scanned = _production_sources(root)
+
+    assert definer in scanned, (
+        "a scan rooted under .worktrees/ skipped its own tree — the exclusion "
+        "is matching the absolute path instead of parts relative to the root"
+    )
+    assert {path.name for path in scanned} == {"decorators.py"}
+    assert _defines_target(definer) == [1]
 
 
 def test_exactly_one_definition_exists_in_the_tracked_tree():

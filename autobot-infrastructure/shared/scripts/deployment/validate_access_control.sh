@@ -57,7 +57,15 @@ NC='\033[0m'
 # import, an unreachable service, a syntax error. The two must not collapse into
 # one verdict: an uncaught exception also exits 1, so before this the shell read
 # "the check failed" and "the check never happened" as the same answer (#14869).
-CHECK_FAILED_RC=20
+#
+# THE definition. Exported, not restated: every python probe below reads it from
+# the environment via os.environ["CHECK_FAILED_RC"]. The heredocs stay quoted
+# (<<'PY'), so the shell cannot substitute it in for them, and three hand-written
+# copies of one protocol value meant two of them were free to drift -- a probe
+# exiting a code classify_probe no longer recognises is reported as ERROR ("this
+# check could not run") when it means FAIL ("access control is broken"), which is
+# the exact confusion #14869 removed (#15074).
+export CHECK_FAILED_RC=20
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -305,11 +313,17 @@ test_audit_logging() {
     local program
     program="$(cat <<'PY'
 import asyncio
+import os
 import sys
 
 from services.audit_logger import get_audit_logger
 
-CHECK_FAILED_RC = 20
+# Read, never restated: the single definition is the shell's exported
+# CHECK_FAILED_RC. A literal here could drift from the value classify_probe
+# compares against, silently swapping FAIL for ERROR (#15074). If the variable
+# is missing this raises, the probe exits non-zero, and the shell reports it as
+# a check that could not run -- which is exactly what it would be.
+CHECK_FAILED_RC = int(os.environ["CHECK_FAILED_RC"])
 
 
 async def main():
@@ -465,11 +479,17 @@ test_security_enforcement() {
     local program
     program="$(cat <<'PY'
 import asyncio
+import os
 import sys
 
 from services.feature_flags import EnforcementMode, get_feature_flags
 
-CHECK_FAILED_RC = 20
+# Read, never restated: the single definition is the shell's exported
+# CHECK_FAILED_RC. A literal here could drift from the value classify_probe
+# compares against, silently swapping FAIL for ERROR (#15074). If the variable
+# is missing this raises, the probe exits non-zero, and the shell reports it as
+# a check that could not run -- which is exactly what it would be.
+CHECK_FAILED_RC = int(os.environ["CHECK_FAILED_RC"])
 
 
 async def main():
