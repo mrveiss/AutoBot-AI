@@ -21,6 +21,7 @@ dotted path -- patching the wrong one would silently no-op.
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import MagicMock
 
 import pytest
@@ -28,9 +29,15 @@ import pytest
 from llm_shared.providers.bedrock import BedrockProvider
 from llm_shared.providers.bedrock_credentials import (
     _AWS_REGION_PATTERN,
+    BEDROCK_ACCESSED_BY,
     BEDROCK_VAULT_ENTRY_NAME,
     BEDROCK_VAULT_ENTRY_TYPE,
     validate_credential_pair,
+)
+from services.secrets_audit_store import (
+    REASON_LOOKUP_ERROR,
+    REASON_MALFORMED_VALUE,
+    REASON_TYPE_MISMATCH,
 )
 
 #: Credential resolution spans two modules since #15023: the vault lookup lives in
@@ -109,7 +116,7 @@ def test_resolve_credentials_consults_secrets_service_first(monkeypatch):
         name=BEDROCK_VAULT_ENTRY_NAME,
         scope="general",
         include_value=True,
-        accessed_by="bedrock_provider",
+        accessed_by=BEDROCK_ACCESSED_BY,
     )
 
 
@@ -218,6 +225,163 @@ def test_non_region_values_are_refused(value):
     assert not _AWS_REGION_PATTERN.match(value), f"{value!r} is not a region and must not reach boto3"
 
 
+# --- is_available(): one resolution, threaded through (#15071) -----------------------
+#
+# is_available() used to call _resolve_credentials() once per keyword argument, taking
+# the access key from one resolution and the secret key from the next. Both re-read
+# mutable state -- provider settings, the process environment, and since #15023 the
+# secrets vault -- so a change landing between the two produced a client built from a
+# mismatched pair. boto3 does not reject that at construction; it fails opaquely at
+# call time, and the blanket `except Exception` below turned it into a bare False.
+#
+# boto3 is an optional dependency and is not installed in CI, so every test here
+# installs a stand-in module: `build_boto3_client` imports it inside the call, which
+# resolves through sys.modules.
+
+
+class _RotatingCredentials:
+    """A ``_resolve_credentials`` stand-in returning a *different* pair on each call.
+
+    Stands in for the source changing underneath the provider -- a settings reload,
+    an environment mutation, a vault rotation. Each pair is stamped with its own
+    generation marker, so a client built from two different resolutions is visible
+    in the kwargs rather than merely possible in principle.
+    """
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __call__(self) -> tuple[str, str, str]:
+        self.calls += 1
+        marker = str(self.calls)
+        return ("AKIA" + marker * 16, marker * 40, "us-east-1")
+
+
+def _fake_boto3(monkeypatch) -> MagicMock:
+    """Install a stand-in ``boto3`` module and return it."""
+    module = MagicMock()
+    monkeypatch.setitem(sys.modules, "boto3", module)
+    return module
+
+
+def _patch_debug(monkeypatch) -> MagicMock:
+    """Collect ``logger.debug`` calls from the provider module."""
+    debug_mock = MagicMock()
+    monkeypatch.setitem(_PROVIDER_GLOBALS, "logger", MagicMock(debug=debug_mock, info=MagicMock(), warning=MagicMock()))
+    return debug_mock
+
+
+async def test_is_available_resolves_credentials_exactly_once(monkeypatch):
+    """The single-resolution property, asserted directly so a reintroduced second call fails CI."""
+    rotating = _RotatingCredentials()
+    _fake_boto3(monkeypatch)
+    provider = BedrockProvider(settings={})
+    monkeypatch.setattr(provider, "_resolve_credentials", rotating)
+
+    assert await provider.is_available() is True
+    assert rotating.calls == 1
+
+
+async def test_a_source_changing_mid_check_cannot_produce_a_mismatched_client(monkeypatch):
+    """Every client built during one check carries an access key and secret from the SAME pair."""
+    rotating = _RotatingCredentials()
+    boto3_module = _fake_boto3(monkeypatch)
+    provider = BedrockProvider(settings={})
+    monkeypatch.setattr(provider, "_resolve_credentials", rotating)
+
+    assert await provider.is_available() is True
+
+    calls = boto3_module.client.call_args_list
+    assert calls, "no boto3 client was built, so this test asserted nothing"
+    for call in calls:
+        access_key, secret_key = call.kwargs["aws_access_key_id"], call.kwargs["aws_secret_access_key"]
+        generation = access_key[4]
+        assert set(access_key[4:]) == {generation}, f"access key is not one generation: {access_key!r}"
+        assert set(secret_key) == {generation}, "secret key came from a different resolution than the access key"
+
+
+async def test_both_clients_of_one_check_are_built_from_the_same_credentials(monkeypatch):
+    """The runtime client and the health-check client are the two clients in question."""
+    rotating = _RotatingCredentials()
+    boto3_module = _fake_boto3(monkeypatch)
+    provider = BedrockProvider(settings={})
+    monkeypatch.setattr(provider, "_resolve_credentials", rotating)
+
+    await provider.is_available()
+
+    built = [(c.kwargs["service_name"], c.kwargs["aws_access_key_id"]) for c in boto3_module.client.call_args_list]
+    assert [service for service, _ in built] == ["bedrock-runtime", "bedrock"]
+    assert len({access_key for _, access_key in built}) == 1, f"clients disagree on credentials: {built!r}"
+
+
+async def test_is_available_omits_absent_credentials_so_the_iam_chain_applies(monkeypatch):
+    """With nothing configured, boto3 must be left to its own chain rather than handed None."""
+    _patch_vault(monkeypatch, _vault_returning(None))
+    boto3_module = _fake_boto3(monkeypatch)
+
+    assert await BedrockProvider(settings={}).is_available() is True
+
+    calls = boto3_module.client.call_args_list
+    assert calls, "no boto3 client was built, so this test asserted nothing"
+    for call in calls:
+        assert "aws_access_key_id" not in call.kwargs
+        assert "aws_secret_access_key" not in call.kwargs
+        assert call.kwargs["region_name"] == "us-east-1"
+
+
+async def test_is_available_is_true_on_a_successful_list_foundation_models(monkeypatch):
+    """Unchanged behaviour: a successful probe with configured credentials still returns True."""
+    _patch_vault(
+        monkeypatch,
+        _vault_returning(
+            '{"aws_access_key_id": "%s", "aws_secret_access_key": "%s", "region": "us-east-1"}'
+            % (_WELL_FORMED_VAULT_ACCESS_KEY_ID, _WELL_FORMED_VAULT_SECRET_ACCESS_KEY)
+        ),
+    )
+    boto3_module = _fake_boto3(monkeypatch)
+
+    assert await BedrockProvider(settings={}).is_available() is True
+    boto3_module.client.return_value.list_foundation_models.assert_called_with(maxResults=1)
+
+
+async def test_is_available_is_false_when_the_probe_call_fails(monkeypatch):
+    """Unchanged behaviour: any failure is still swallowed into False."""
+    _patch_vault(monkeypatch, _vault_returning(None))
+    boto3_module = _fake_boto3(monkeypatch)
+    boto3_module.client.return_value.list_foundation_models.side_effect = RuntimeError("service unreachable")
+
+    assert await BedrockProvider(settings={}).is_available() is False
+
+
+async def test_a_failed_probe_never_logs_the_credential_or_a_fragment_of_one(monkeypatch):
+    """AWS names the key it rejected; that message must not reach the log intact (#15080 precedent)."""
+    _patch_vault(
+        monkeypatch,
+        _vault_returning(
+            '{"aws_access_key_id": "%s", "aws_secret_access_key": "%s", "region": "us-east-1"}'
+            % (_WELL_FORMED_VAULT_ACCESS_KEY_ID, _WELL_FORMED_VAULT_SECRET_ACCESS_KEY)
+        ),
+    )
+    boto3_module = _fake_boto3(monkeypatch)
+    boto3_module.client.return_value.list_foundation_models.side_effect = RuntimeError(
+        f"UnrecognizedClientException: key {_WELL_FORMED_VAULT_ACCESS_KEY_ID} "
+        f"with secret {_WELL_FORMED_VAULT_SECRET_ACCESS_KEY} was rejected"
+    )
+    debug = _patch_debug(monkeypatch)
+
+    assert await BedrockProvider(settings={}).is_available() is False
+
+    logged = " ".join(str(arg) for call in debug.call_args_list for arg in call.args)
+    assert logged, "nothing was logged, so this test asserted nothing"
+    assert _WELL_FORMED_VAULT_ACCESS_KEY_ID not in logged
+    assert _WELL_FORMED_VAULT_SECRET_ACCESS_KEY not in logged
+    # Not a fragment either: the 16 characters after the AKIA prefix are the secret part.
+    assert _WELL_FORMED_VAULT_ACCESS_KEY_ID[4:] not in logged
+    assert _WELL_FORMED_VAULT_SECRET_ACCESS_KEY[:16] not in logged
+    # The diagnostic value of the line survives the scrubbing.
+    assert "UnrecognizedClientException" in logged
+
+
 # --- validate_credential_pair() (#15080) --------------------------------------------
 #
 # The AWS key pair reaches boto3 through the same vault-is-a-trust-boundary path as
@@ -283,3 +447,84 @@ def test_resolve_credentials_rejects_a_malformed_vault_pair(monkeypatch):
     with pytest.raises(ValueError) as excinfo:
         provider._resolve_credentials()
     assert "not-an-aws-access-key" not in str(excinfo.value)
+
+
+# --- failed-access auditing (#15023 AC3, failure limb) --------------------------------
+#
+# get_secret() audits the two failures it can see itself -- no such entry, and an
+# expired one. The three below are verdicts this module reaches *after* get_secret()
+# has returned, so nothing but the caller can record them; before #15023 they were a
+# logger.warning and a silent (None, None, None). The real row-writing is covered
+# against a real database in services/secrets_audit_store_test.py; what is pinned here
+# is that the provider reports each rejection, with the right reason, to the right
+# principal -- and that it does NOT report the two get_secret() already owns.
+
+
+def test_vault_lookup_exception_is_audited(monkeypatch):
+    vault = MagicMock()
+    vault.get_secret.side_effect = RuntimeError("db locked")
+    _patch_vault(monkeypatch, vault)
+    _patch_warning(monkeypatch)
+
+    BedrockProvider(settings={})._resolve_credentials()
+
+    vault.record_access_failure.assert_called_once_with(
+        REASON_LOOKUP_ERROR,
+        name=BEDROCK_VAULT_ENTRY_NAME,
+        accessed_by=BEDROCK_ACCESSED_BY,
+        secret_id=None,
+    )
+
+
+def test_secret_type_mismatch_is_audited_against_the_rejected_row(monkeypatch):
+    vault = _vault_returning('{"aws_access_key_id": "x"}', secret_type="some_other_secret_type")
+    _patch_vault(monkeypatch, vault)
+    _patch_warning(monkeypatch)
+
+    BedrockProvider(settings={})._resolve_credentials()
+
+    vault.record_access_failure.assert_called_once_with(
+        REASON_TYPE_MISMATCH,
+        name=BEDROCK_VAULT_ENTRY_NAME,
+        accessed_by=BEDROCK_ACCESSED_BY,
+        secret_id="sec-1",
+    )
+
+
+def test_unparseable_vault_value_is_audited(monkeypatch):
+    vault = _vault_returning("{not json at all")
+    _patch_vault(monkeypatch, vault)
+    _patch_warning(monkeypatch)
+
+    BedrockProvider(settings={})._resolve_credentials()
+
+    reason, kwargs = vault.record_access_failure.call_args[0][0], vault.record_access_failure.call_args[1]
+    assert reason == REASON_MALFORMED_VALUE
+    assert kwargs["secret_id"] == "sec-1"
+    # The malformed value must not travel to the audit sink in any argument.
+    assert "not json at all" not in str(vault.record_access_failure.call_args)
+
+
+def test_absent_vault_entry_is_not_double_audited(monkeypatch):
+    """get_secret() already wrote the not-found row; a second one here would double-count."""
+    vault = _vault_returning(None)
+    _patch_vault(monkeypatch, vault)
+
+    BedrockProvider(settings={})._resolve_credentials()
+
+    vault.record_access_failure.assert_not_called()
+
+
+def test_a_failing_audit_sink_never_breaks_credential_resolution(monkeypatch):
+    """Auditing is best-effort: a broken sink must not take the credential path down."""
+    vault = MagicMock()
+    vault.get_secret.side_effect = RuntimeError("db locked")
+    vault.record_access_failure.side_effect = RuntimeError("audit sink down")
+    _patch_vault(monkeypatch, vault)
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", _WELL_FORMED_ENV_ACCESS_KEY_ID)
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", _WELL_FORMED_ENV_SECRET_ACCESS_KEY)
+    _patch_warning(monkeypatch)
+
+    access_key, secret_key, _region = BedrockProvider(settings={})._resolve_credentials()
+
+    assert (access_key, secret_key) == (_WELL_FORMED_ENV_ACCESS_KEY_ID, _WELL_FORMED_ENV_SECRET_ACCESS_KEY)
