@@ -925,6 +925,23 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_PROVISION_STALE_SECONDS",
+        type=int,
+        default=1800,
+        description=(
+            "How long a provision run may report no progress before the setup "
+            "wizard treats it as abandoned and lets a new run supersede it "
+            "(#14856). Keyed on observed progress, not on time since start, so "
+            "a slow-but-live run is never superseded; the floor keeps a value "
+            "too small to distinguish the two from wedging the wizard the other way."
+        ),
+        component="provisioning",
+        range=(60, 86400),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CONFIG_REGISTRY_REDIS_RETRY_SECONDS",
         type=float,
         default=30.0,
