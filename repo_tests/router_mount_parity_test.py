@@ -65,16 +65,14 @@ APP_ROOT = "<app>"
 # Routers that legitimately reach the app through a mount carrying less than
 # another mount of theirs. Each needs a reason; a bare count is not evidence
 # and would hide the next `terminal_tools`.
-EXEMPT_ROUTERS: Dict[str, str] = {
-    # Self-retiring. #15084 is the instance this guard was written for and is
-    # still open on the base branch; #15096 removes the ungated registry entry.
-    # `test_exemptions_are_named_and_still_real` FAILS the moment that lands,
-    # forcing this line out — an exemption here cannot outlive its reason.
-    "api.terminal_tools:router": (
-        "#15084: gated via api/terminal.py's admin_router, ungated via the terminal "
-        "registry entry. Fix in flight as #15096; this entry expires when it merges."
-    ),
-}
+# Empty, and it retired itself. The one entry here named `api.terminal_tools:router`
+# for #15084 -- gated through `api/terminal.py`'s `admin_router`, ungated through the
+# terminal registry entry. #15096 (`6cc5505ef`) moved the gate onto that router's own
+# constructor, so both mounts now carry it, and
+# `test_exemptions_are_named_and_still_real` failed on the next run demanding the line
+# be removed. That is the intended lifecycle: an exemption here cannot outlive its
+# reason, because a stale one is a hole nothing reports.
+EXEMPT_ROUTERS: Dict[str, str] = {}
 
 # Names that read as a gate when they appear in a `dependencies=` list. Used
 # only for the non-vacuity check below — the parity comparison itself is
@@ -112,9 +110,19 @@ class MountGraph:
 
         A guard set is the union of the dependencies named at each hop: the
         ``dependencies=`` of the ``include_router`` call plus those declared on
-        the parent's own ``APIRouter(...)`` constructor, all the way up.
+        the parent's own ``APIRouter(...)`` constructor, all the way up --
+        **and the router's own constructor dependencies**, which apply at every
+        mount by construction.
+
+        That last term is the one that matters. A router protected on its own
+        constructor is protected everywhere, which is exactly how #15084 was
+        fixed and how every other gated router in this repo is written. Omitting
+        it made such a router read as ungated on every path, so the comparison
+        was empty-set against empty-set: agreement reached by seeing nothing
+        rather than by seeing a gate.
         """
-        return self._paths(key, frozenset())
+        own = self._own_guards(key)
+        return {path | own for path in self._paths(key, frozenset())}
 
     def _paths(self, key: str, seen: FrozenSet[str]) -> Set[FrozenSet[str]]:
         if key in seen:  # a cycle contributes nothing new
