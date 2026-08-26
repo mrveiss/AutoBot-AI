@@ -82,8 +82,8 @@ def _returned_dict_keys(source_file: Path, function: str) -> frozenset[str]:
     """String keys of the dict literal *function* returns, read from source.
 
     The backend types ``SessionListData.sessions`` and
-    ``SessionMessagesData.messages`` as ``List[Any]``, so no server-side model
-    describes a row and the fixtures below have to name the keys themselves.
+    ``SessionMessagesData.messages`` as ``List[Any]`` (#15138), so no server-side
+    model describes a row and the fixtures below have to name the keys themselves.
     Reading them back out of the function that writes them keeps those fixtures
     from becoming a private opinion about the wire.
 

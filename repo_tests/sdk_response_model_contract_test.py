@@ -34,7 +34,9 @@ dropped.
 Two SDK models are deliberately unpaired rather than silently absent, listed in
 :data:`UNPAIRED` with the reason: ``SessionListData.sessions`` and
 ``SessionMessagesData.messages`` are both declared ``List[Any]`` by the backend, so
-there is no server-side model of a row to compare against.
+there is no server-side model of a row to compare against. That is tracked in
+#15138 -- declaring those two row shapes changes what the chat routes serialise,
+which is a different risk class from an SDK-only fix.
 ``test_every_sdk_response_model_is_paired_or_explicitly_unpaired`` fails when a new
 SDK model appears in neither list, which is the omission this table would otherwise
 be open to.
@@ -125,11 +127,11 @@ CONTRACT: tuple[Pair, ...] = (
 UNPAIRED: dict[type[BaseModel], str] = {
     sdk.Session: (
         "SessionListData.sessions is declared List[Any] in api/schemas_chat.py, so the backend "
-        "describes a row nowhere. These names are the literal keys "
+        "describes a row nowhere (#15138). These names are the literal keys "
         "chat_history/session_listing.py writes; repo_tests/sdk_response_parsing_test.py pins them against that literal."
     ),
     sdk.ChatMessage: (
-        "SessionMessagesData.messages is declared List[Any] for the same reason. These names are "
+        "SessionMessagesData.messages is declared List[Any] for the same reason (#15138). These names are "
         "the literal keys chat_history/messages.py writes; repo_tests/sdk_response_parsing_test.py pins them against that literal."
     ),
     sdk.DataResponse: "The envelope itself; it mirrors schemas_common.DataResponse, not one route.",
