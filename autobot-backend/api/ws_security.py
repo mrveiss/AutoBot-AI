@@ -19,9 +19,15 @@ from __future__ import annotations
 import logging
 import os
 
+from typing import TYPE_CHECKING
+
 from fastapi import WebSocket
 
+from autobot_shared.auth.device_capabilities import DeviceCapability
 from autobot_shared.auth.permissions import is_admin_role
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from services.device_capabilities import DeviceCapabilityDecision
 
 logger = logging.getLogger(__name__)
 
@@ -177,3 +183,133 @@ async def enforce_ws_admin(websocket: WebSocket) -> bool:
     except Exception:  # already closed / handshake not completed
         pass
     return False
+
+
+async def _resolve_ws_device_credential(websocket: WebSocket) -> "dict | None":
+    """Resolve a paired-device credential from the handshake, or ``None`` (#14964).
+
+    A device JWT travels in the ``Authorization`` header, which a browser
+    cannot set on a WebSocket handshake but a native paired app can. Validation
+    is the canonical one (``auth_middleware._extract_user_from_device_jwt`` →
+    ``services.device_jwt.validate_device_jwt``): signature, audience, expiry,
+    device still paired and not revoked. This adds no new way to prove
+    identity — it only lets the capability gate below see a credential that
+    would otherwise have been refused as merely "unauthenticated".
+    """
+    from auth_middleware import get_auth_middleware  # noqa: PLC0415
+
+    try:
+        credential = await get_auth_middleware()._extract_user_from_device_jwt(websocket)  # type: ignore[arg-type]
+    except Exception:
+        # A resolution failure is a handshake with no device credential, never
+        # an exception escaping into the endpoint's error boundary -- there it
+        # would become a 500 and leave the socket hanging instead of refused.
+        logger.warning("Device credential resolution failed — treating handshake as credential-less", exc_info=True)
+        return None
+    return credential if isinstance(credential, dict) else None
+
+
+async def enforce_ws_remote_control_auth(
+    websocket: WebSocket,
+    *required: "DeviceCapability",
+) -> "dict | None":
+    """Authenticate a remote-control handshake, capability-scoping device credentials (#14964).
+
+A handshake carrying no device credential is delegated verbatim to
+    :func:`enforce_ws_authentication` — nothing changes for a user, session or
+    service caller. A *paired-device* credential must additionally hold every
+    capability in ``required``, asserted positively against its own grant set.
+    It is never granted by fall-through: an empty ``required``, an unreadable
+    grant set, an unapproved or revoked credential, and a capability the
+    platform does not define all refuse.
+
+    The device credential is examined first on purpose. A caller presenting
+    both a device JWT and a user credential is held to the stricter of the two
+    standards, the same way ``services/feature_flags.combine_enforcement_modes``
+    resolves a global mode against a per-endpoint override.
+
+    Revocation and grant changes take effect on the **next** handshake: this
+    runs once, before ``accept()``. A socket already open is not
+    re-authenticated and stays up until it closes or the process ends.
+
+    Returns the authenticated credential's user dict, or ``None`` after having
+    closed the socket with ``1008``.
+    """
+    device_user = await _resolve_ws_device_credential(websocket)
+    if device_user is None:
+        # No device credential presented — the ordinary path, unchanged.
+        return await enforce_ws_authentication(websocket)
+
+    from services.device_capabilities import evaluate_device_capabilities  # noqa: PLC0415
+
+    device_id = str(device_user.get("device_id", ""))
+    decision = (
+        await evaluate_device_capabilities(device_id, required)
+        if required
+        else _no_capability_requested(device_id)
+    )
+    if decision.granted:
+        logger.info(
+            "Device credential admitted to remote-control surface: device=%s capabilities=%s",
+            device_id,
+            ",".join(sorted(c.value for c in required)),
+        )
+        return device_user
+
+    logger.warning(
+        "Rejected device credential on remote-control surface: device=%s reason=%s",
+        device_id,
+        decision.describe(),
+    )
+    await _close_policy(websocket, f"Device capability denied ({decision.describe()})")
+    return None
+
+
+def _no_capability_requested(device_id: str) -> "DeviceCapabilityDecision":
+    """An enforcement point that names no capability gets a refusal, not a pass.
+
+    Calling the gate with an empty requirement set is a wiring mistake, and the
+    only safe reading of "this credential must hold nothing in particular" on a
+    full-control surface is that it holds nothing.
+    """
+    from services.device_capabilities import (  # noqa: PLC0415
+        REASON_MISSING_CAPABILITY,
+        DeviceCapabilityDecision,
+    )
+
+    logger.error("Remote-control capability gate invoked with no required capability (device=%s)", device_id)
+    return DeviceCapabilityDecision(granted=False, reason=REASON_MISSING_CAPABILITY)
+
+
+async def _close_policy(websocket: WebSocket, reason: str) -> None:
+    """Close a handshake with policy-violation ``1008``, tolerating an already-closed socket."""
+    try:
+        await websocket.close(code=1008, reason=reason)
+    except Exception:  # already closed / handshake not completed
+        pass
+
+
+async def enforce_ws_terminal_auth(websocket: WebSocket) -> "dict | None":
+    """The terminal surface's guard: a device credential must hold ``terminal``."""
+    return await enforce_ws_remote_control_auth(websocket, DeviceCapability.TERMINAL)
+
+
+async def enforce_ws_desktop_auth(websocket: WebSocket) -> "dict | None":
+    """The desktop surface's guard: a device credential must hold BOTH desktop capabilities.
+
+    The RFB proxy carries framebuffer and input on one stream —
+    ``api.vnc_proxy._forward_client_to_vnc`` forwards the client's KeyEvent and
+    PointerEvent frames verbatim — so opening that socket grants input as
+    inseparably as it grants view. Requiring view alone would be a view-only
+    grant that is not view-only. Separating the two needs RFB message-level
+    filtering on the client->server direction, which this does not attempt.
+
+    Named per surface rather than per capability so the surface->capability
+    mapping lives in one readable place: an endpoint asks for "the desktop
+    guard" and cannot understate what its own socket hands out.
+    """
+    return await enforce_ws_remote_control_auth(
+        websocket,
+        DeviceCapability.DESKTOP_VIEW,
+        DeviceCapability.DESKTOP_INPUT,
+    )

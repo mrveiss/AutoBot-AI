@@ -151,7 +151,7 @@ from api.system_health import ComponentHealth, register_health_probe
 
 # Import models from dedicated module (Issue #185 - split oversized files)
 # Response schemas for OpenAPI documentation and response validation
-from api.ws_security import enforce_ws_authentication, enforce_ws_origin
+from api.ws_security import enforce_ws_origin, enforce_ws_terminal_auth
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -831,13 +831,13 @@ async def terminal_websocket(websocket: WebSocket, session_id: str):
     Replaces both /ws/simple and /ws/secure endpoints.
     Issue #1088: Extracted _init_terminal_handler and _run_terminal_message_loop
     helpers to reduce to <=65 lines.
-    Issue #14960/#14961: authenticates and validates session ownership before
-    accept() -- see _lookup_terminal_session and enforce_ws_authentication.
+    Issue #14960/#14961/#14964: authenticates (capability-scoping a paired-device
+    credential) and validates ownership before accept() -- see enforce_ws_terminal_auth.
     """
     if not await enforce_ws_origin(websocket):
         return
 
-    user = await enforce_ws_authentication(websocket)
+    user = await enforce_ws_terminal_auth(websocket)
     if user is None:
         return
 
@@ -884,16 +884,16 @@ async def ssh_terminal_websocket(
 
     Issue #14991: any caller who knew or guessed a host_id reached the inert
     SSH stub with zero authentication. Fixed with two gates before accept():
-    admin role (#14958 rules out inventing a finer capability model; per-host
-    ownership is deferred to #14964, open and unimplemented) and host_id
-    resolved against the infrastructure-host registry (resolve_ssh_host_id,
-    api/terminal_ssh.py) -- an unknown host_id is refused and logged
-    distinctly from an admin-role refusal.
+    admin role (#14958 rules out a finer capability model; per-admin per-host
+    ownership is still unmodelled -- #14964 scopes *paired-device* credentials,
+    a different subject, and does not supply it) and host_id resolved against
+    the infrastructure-host registry (resolve_ssh_host_id, api/terminal_ssh.py)
+    -- an unknown host_id is refused, logged distinctly from an admin refusal.
     """
     if not await enforce_ws_origin(websocket):
         return
 
-    user = await enforce_ws_authentication(websocket)
+    user = await enforce_ws_terminal_auth(websocket)
     if user is None:
         return
 
