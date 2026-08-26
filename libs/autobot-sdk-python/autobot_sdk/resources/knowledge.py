@@ -25,7 +25,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..client import AutoBotClient
-from ..defaults import DEFAULT_OFFSET, DEFAULT_PAGE_SIZE, DEFAULT_SEARCH_LIMIT
+from ..defaults import DEFAULT_PAGE_SIZE, DEFAULT_SEARCH_LIMIT
 from ..models import KnowledgeAddResult, KnowledgeEntries, KnowledgeSearchResult, KnowledgeStats
 
 
@@ -58,13 +58,19 @@ class KnowledgeResource:
         return KnowledgeSearchResult.model_validate(raw)
 
     async def get_entries(
-        self, limit: int = DEFAULT_PAGE_SIZE, offset: int = DEFAULT_OFFSET, category: str | None = None
+        self, limit: int = DEFAULT_PAGE_SIZE, cursor: str | None = None, category: str | None = None
     ) -> KnowledgeEntries:
-        """Stored entries, newest first.
+        """One page of stored entries, newest first.
 
         The response has its own shape -- ``entries``/``next_cursor``/``count``/
         ``has_more`` -- sharing no field with the search route, which the SDK
         modelled it with (#15118).
+
+        The route is **cursor**-paginated. The SDK sent ``offset``, which it does
+        not declare, so FastAPI dropped it and every call returned the first page
+        however the caller paged (#15119). Pass the previous response's
+        ``next_cursor`` to advance; omitting it starts at the beginning, leaving
+        the route's own default in force rather than restating it here.
         """
-        raw = await self._c.get("/knowledge_base/entries", limit=limit, offset=offset, category=category)
+        raw = await self._c.get("/knowledge_base/entries", limit=limit, cursor=cursor, category=category)
         return KnowledgeEntries.model_validate(raw)
