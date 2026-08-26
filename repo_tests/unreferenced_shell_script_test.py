@@ -150,16 +150,26 @@ class TestOwnBookkeepingIsNotAReference:
         for relative in sorted(NOT_A_REFERENCE):
             assert not relative.startswith("/"), f"{relative} must be repo-relative"
 
-    def test_a_baselined_script_is_named_only_by_the_bookkeeping(self, scripts):
-        """Proves the exclusion is doing the work, not an accident of the tree."""
-        sample = sorted(KNOWN_UNREFERENCED & set(scripts))
-        assert sample, "baseline holds no script that exists; nothing to prove against"
-        name = Path(sample[0]).name
-        mentioning = set(_files_mentioning([name])) - {sample[0]}
-        assert mentioning, f"expected {name} to be named by the bookkeeping at least"
-        assert mentioning <= NOT_A_REFERENCE, (
-            f"{name} is named outside this guard's bookkeeping by {sorted(mentioning - NOT_A_REFERENCE)}"
-            " -- it is genuinely referenced and must leave KNOWN_UNREFERENCED"
+    def test_every_baselined_script_is_named_only_by_the_bookkeeping(self, scripts):
+        """Proves the exclusion is doing the work, for every entry.
+
+        Sampling one entry proved it for a script chosen by alphabetical
+        accident, and the subject would drift silently the moment a batch
+        removed that name (#15144 review). Iterating costs one grep per entry.
+        """
+        baselined = sorted(KNOWN_UNREFERENCED & set(scripts))
+        assert baselined, "baseline holds no script that exists; nothing to prove against"
+        offenders: dict[str, list[str]] = {}
+        for path in baselined:
+            mentioning = set(_files_mentioning([Path(path).name])) - {path}
+            assert mentioning, f"expected {path} to be named by the bookkeeping at least"
+            outside = sorted(mentioning - NOT_A_REFERENCE)
+            if outside:
+                offenders[path] = outside
+        assert not offenders, (
+            "these are named outside this guard's bookkeeping, so they are genuinely "
+            "referenced and must leave KNOWN_UNREFERENCED:\n  "
+            + "\n  ".join(f"{k} <- {v}" for k, v in sorted(offenders.items()))
         )
 
 
