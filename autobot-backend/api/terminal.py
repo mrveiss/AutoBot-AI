@@ -187,6 +187,7 @@ from api.terminal_ssh import (  # noqa: E402
     _init_ssh_redis_client,
     _run_ssh_message_loop,
     _setup_ssh_terminal,
+    resolve_ssh_host_id,
     ssh_terminal_manager,
 )
 
@@ -878,26 +879,16 @@ async def ssh_terminal_websocket(
     """
     DEPRECATED: SSH terminal connections to infrastructure hosts.
 
-    Issue #729: This endpoint has been deprecated as part of layer separation.
-    Issue #620: Refactored to use helper functions.
+    Issue #729/#620: infra SSH now lives in slm-server; backward-compat
+    stub -- use slm-admin -> Tools -> Terminal, or /api/terminal/ssh/{host_id}.
 
-    SSH connections to infrastructure hosts are now handled by slm-server.
-
-    Use slm-admin → Tools → Terminal or the SLM API directly:
-        - SLM Terminal API: /api/terminal/ssh/{host_id}
-        - SLM Admin UI: slm-admin → Tools → Terminal
-
-    This endpoint remains for backward compatibility but returns a deprecation
-    message directing clients to use SLM for infrastructure connections.
-
-    Issue #14991: this had no authentication at all -- any caller who knew or
-    guessed a host_id reached SSHTerminalWebSocket (today an inert stub, but
-    the live shape of an interactive infrastructure shell). No per-host
-    permission model exists to scope host_id against a caller's permitted
-    set, and #14958 rules out inventing one here. The strictest reading
-    without a new capability model is admin role, checked explicitly here (a
-    router-level `Depends` cannot gate a WS route -- #14998), for every
-    host_id. Per-host granularity is out of scope (#14964).
+    Issue #14991: any caller who knew or guessed a host_id reached the inert
+    SSH stub with zero authentication. Fixed with two gates before accept():
+    admin role (#14958 rules out inventing a finer capability model; per-host
+    ownership is deferred to #14964, open and unimplemented) and host_id
+    resolved against the infrastructure-host registry (resolve_ssh_host_id,
+    api/terminal_ssh.py) -- an unknown host_id is refused and logged
+    distinctly from an admin-role refusal.
     """
     if not await enforce_ws_origin(websocket):
         return
@@ -913,6 +904,15 @@ async def ssh_terminal_websocket(
             host_id,
         )
         await websocket.close(code=1008, reason="Admin role required for infrastructure SSH access")
+        return
+
+    if not await resolve_ssh_host_id(host_id):
+        logger.warning(
+            "SSH terminal WebSocket rejected: unknown host_id %s (user %s)",
+            host_id,
+            user.get("username"),
+        )
+        await websocket.close(code=1008, reason="Unknown host_id")
         return
 
     await websocket.accept()

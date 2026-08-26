@@ -291,7 +291,20 @@ class TestTerminalWebsocketRouteHandshake:
 
 
 class TestSshTerminalWebsocketRouteHandshake:
-    """Real handshake on /ws/ssh/{host_id} via TestClient -- not a handler call."""
+    """Real handshake on /ws/ssh/{host_id} via TestClient -- not a handler call.
+
+    #14991 AC2: host_id is resolved against the real infrastructure-host
+    registry (``resolve_ssh_host_id``, api/terminal_ssh.py -- patched at its
+    source, ``api.infrastructure._load_secrets_hosts``, not mocked away, so
+    the route-level resolution path itself is exercised). Per-admin host
+    scoping is NOT covered here: no ownership model ties an admin to a
+    subset of hosts anywhere in the codebase (#14964, open, unimplemented),
+    and inventing one is out of scope for this route (#14958's audit).
+    """
+
+    @staticmethod
+    def _known_hosts():
+        return [{"id": "prod-host-1", "name": "prod-host-1"}]
 
     def test_authenticated_admin_connects(self, terminal_client):
         fake_terminal = MagicMock()
@@ -302,6 +315,7 @@ class TestSshTerminalWebsocketRouteHandshake:
                 "auth_middleware.authenticate_websocket",
                 new=AsyncMock(return_value={"username": "admin-bob", "role": "admin"}),
             ),
+            patch("api.infrastructure._load_secrets_hosts", return_value=self._known_hosts()),
             patch("api.terminal._setup_ssh_terminal", new=AsyncMock(return_value=fake_terminal)),
             patch.object(ssh_terminal_manager, "close_session", new=AsyncMock()),
             _accept_spy() as calls,
@@ -319,6 +333,62 @@ class TestSshTerminalWebsocketRouteHandshake:
 
         assert exc_info.value.code == 1008
         assert len(calls) == 0
+
+    def test_admin_with_unknown_host_id_is_refused(self, terminal_client, caplog):
+        """#14991 AC2: registry is live (positive witness on prod-host-1)
+        and admin is genuine -- only the host_id is unresolvable, and that
+        alone must refuse before accept(), logged distinctly from the
+        admin-role refusal exercised by the non-admin case below.
+        """
+        assert any(h["id"] == "prod-host-1" for h in self._known_hosts()), (
+            "the registry fixture itself must contain a resolvable host, or the "
+            "refusal below would pass vacuously with an always-empty registry"
+        )
+
+        with (
+            patch(
+                "auth_middleware.authenticate_websocket",
+                new=AsyncMock(return_value={"username": "admin-bob", "role": "admin"}),
+            ),
+            patch("api.infrastructure._load_secrets_hosts", return_value=self._known_hosts()),
+            patch("api.terminal._setup_ssh_terminal", new=AsyncMock()) as mock_setup,
+            caplog.at_level(logging.WARNING, logger="api.terminal"),
+            _accept_spy() as calls,
+        ):
+            with pytest.raises(WebSocketDisconnect) as exc_info:
+                with terminal_client.websocket_connect("/ws/ssh/no-such-host"):
+                    pass
+
+        assert exc_info.value.code == 1008
+        assert len(calls) == 0
+        mock_setup.assert_not_awaited()
+        assert any("unknown host_id" in r.message for r in caplog.records)
+        assert not any("is not an admin" in r.message for r in caplog.records)
+
+    def test_non_admin_with_known_host_id_is_refused(self, terminal_client, caplog):
+        """Mirror of the unknown-host case above: a genuine, registry-known
+        host_id but a non-admin caller -- refused for role, not host, and the
+        two log lines must stay distinguishable in both directions.
+        """
+        with (
+            patch(
+                "auth_middleware.authenticate_websocket",
+                new=AsyncMock(return_value={"username": "alice", "role": "user"}),
+            ),
+            patch("api.infrastructure._load_secrets_hosts", return_value=self._known_hosts()),
+            patch("api.terminal._setup_ssh_terminal", new=AsyncMock()) as mock_setup,
+            caplog.at_level(logging.WARNING, logger="api.terminal"),
+            _accept_spy() as calls,
+        ):
+            with pytest.raises(WebSocketDisconnect) as exc_info:
+                with terminal_client.websocket_connect("/ws/ssh/prod-host-1"):
+                    pass
+
+        assert exc_info.value.code == 1008
+        assert len(calls) == 0
+        mock_setup.assert_not_awaited()
+        assert any("is not an admin" in r.message for r in caplog.records)
+        assert not any("unknown host_id" in r.message for r in caplog.records)
 
 
 class TestTerminalHttpRouteAdminGate:
