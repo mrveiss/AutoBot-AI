@@ -18,6 +18,7 @@ nothing would report a clean tree forever, which is exactly how #15087 shipped.
 
 from __future__ import annotations
 
+import re
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 from pathlib import Path
 
@@ -207,6 +208,66 @@ class TestBaselineRatchetsDownOnly:
         that is the success condition, and it should be a deliberate change.
         """
         assert KNOWN_UNREFERENCED, "baseline emptied; remove the file and this test together"
+
+
+class TestTheBatchThisIssueResolved:
+    """#15127 batch one: five retired, two wired in, three recorded.
+
+    Each kept script is pinned to the document that references it, not merely to
+    "is referenced" -- that weaker form is what #15079 review found passing on
+    this module's own mention of the filename.
+    """
+
+    RETIRED = (
+        "git-askpass.sh",
+        "start_vnc.sh",
+        "utilities/create_github_issues.sh",
+        "utilities/load-env.sh",
+        "utilities/sync-grafana-dashboards.sh",
+    )
+
+    #: kept script -> the file whose reference is the reason it is not debris.
+    KEPT = {
+        "cleanup-disk-space.sh": f"{SCRIPT_DIR}/README.md",
+        "install-doc-sync-hook.sh": f"{SCRIPT_DIR}/README.md",
+        "monitor_testing.sh": f"{SCRIPT_DIR}/README.md",
+        "utilities/start-seq-forwarder.sh": f"{SCRIPT_DIR}/README.md",
+        "network/fix-wsl-networking.sh": "docs/developer/WSL2_NETWORKING.md",
+    }
+
+    @pytest.mark.parametrize("name", RETIRED)
+    def test_retired_script_is_gone_from_tree_and_baseline(self, scripts, name):
+        path = f"{SCRIPT_DIR}/{name}"
+        assert path not in scripts, f"{name} was retired but is tracked again"
+        assert path not in KNOWN_UNREFERENCED, f"{name} was retired but still sits in the baseline"
+
+    @pytest.mark.parametrize("name,document", sorted(KEPT.items()))
+    def test_kept_script_is_referenced_by_its_document(self, scripts, name, document):
+        path = f"{SCRIPT_DIR}/{name}"
+        assert path in scripts, f"{name} was kept and documented but is no longer tracked"
+        assert path not in KNOWN_UNREFERENCED
+        text = (REPO_ROOT / document).read_text(encoding="utf-8")
+        assert name in text, (
+            f"{document} no longer names {name}. That entry is the whole reason the script is "
+            "not debris -- restore it or retire the script (#15127)."
+        )
+
+    def test_the_wired_in_scripts_point_at_files_that_exist(self):
+        """Both were unrunnable from any directory: each named a path #781 removed."""
+        installer = (REPO_ROOT / SCRIPT_DIR / "install-doc-sync-hook.sh").read_text(encoding="utf-8")
+        assert (
+            'HOOK_SOURCE="$PROJECT_ROOT/autobot-infrastructure/shared/scripts/hooks/post-commit-doc-sync"' in installer
+        )
+        assert (REPO_ROOT / SCRIPT_DIR / "hooks/post-commit-doc-sync").is_file()
+
+        forwarder = (REPO_ROOT / SCRIPT_DIR / "utilities/start-seq-forwarder.sh").read_text(encoding="utf-8")
+        assert 'FORWARDER="${SCRIPT_DIR}/../seq_log_forwarder.py"' in forwarder
+        assert (REPO_ROOT / SCRIPT_DIR / "seq_log_forwarder.py").is_file()
+        runs_pip = re.compile(r"^\s*(sudo\s+)?(pip3?|python3?\s+-m\s+pip)\s+install\b", re.MULTILINE)
+        assert not runs_pip.search(forwarder), (
+            "a helper script must not install into the caller's interpreter; naming the command in "
+            "an error message is fine, running it is not"
+        )
 
 
 class TestTheTwoScriptsThisIssueResolved:

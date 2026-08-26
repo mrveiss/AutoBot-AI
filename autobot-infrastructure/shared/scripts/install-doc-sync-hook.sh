@@ -33,8 +33,11 @@ if [ ! -d "$PROJECT_ROOT/.git" ]; then
     exit 1
 fi
 
-# Source hook location
-HOOK_SOURCE="$PROJECT_ROOT/scripts/hooks/post-commit-doc-sync"
+# Source hook location. (#15127) This pointed at `$PROJECT_ROOT/scripts/hooks/`,
+# a directory the #781 restructure removed, so the installer could only ever
+# print "Hook source not found" and exit 1 -- from any directory, on any
+# checkout. The hook it installs still exists, one tree over.
+HOOK_SOURCE="$PROJECT_ROOT/autobot-infrastructure/shared/scripts/hooks/post-commit-doc-sync"
 HOOK_DEST="$PROJECT_ROOT/.git/hooks/post-commit"
 
 # Check if source hook exists
