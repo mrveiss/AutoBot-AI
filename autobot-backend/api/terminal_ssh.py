@@ -164,6 +164,27 @@ ssh_terminal_manager = _SSHTerminalManager()
 # This endpoint now returns a deprecation message and redirects to SLM
 
 
+async def resolve_ssh_host_id(host_id: str) -> bool:
+    """Resolve host_id against the infrastructure host registry (#14991 AC2).
+
+    This is the decidable slice of AC2: whether host_id names a host that
+    exists at all. It is deliberately NOT the per-admin host-permission
+    question -- no ownership/RBAC model tying an admin to a subset of hosts
+    exists anywhere in the codebase (#14964 is open and unimplemented, and
+    is scoped to paired-device capabilities, not admin-host association;
+    #14958's audit explicitly rules out inventing a capability model here).
+    Inventing that policy is not this function's job.
+
+    Fails closed: ``_load_secrets_hosts`` already swallows its own read
+    failures into ``[]`` (api/infrastructure.py), so an unreachable registry
+    and a genuinely empty one both deny here -- never a pass.
+    """
+    from api.infrastructure import _load_secrets_hosts
+
+    known_hosts = _load_secrets_hosts()
+    return any(host.get("id") == host_id for host in known_hosts)
+
+
 async def _init_ssh_redis_client():
     """
     Initialize Redis client for SSH terminal logging.
