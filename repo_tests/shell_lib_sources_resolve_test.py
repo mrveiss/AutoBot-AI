@@ -278,10 +278,19 @@ def test_the_sweep_actually_reached_the_tree() -> None:
         f"{len(missed)} — the skip list is eating the tree, or the shebang detector "
         f"stopped recognising extensionless scripts (#14891):\n  " + "\n  ".join(missed[:20])
     )
-    assert len(_SITES) >= 78, (
-        f"only found {len(_SITES)} lib source sites — expected >= 78 "
+    # 77, not 78: #15127 retired
+    # autobot-infrastructure/shared/scripts/utilities/sync-grafana-dashboards.sh,
+    # whose dashboard copy is already performed by the monitoring Ansible role and
+    # whose own source path had not existed since #781. It carried exactly one lib
+    # source site — measured, the only one of that batch's five retirements to
+    # carry any. Decremented by that measured delta and no more, per the note on
+    # the distinct-script floor below: this stays AT the current count so it still
+    # catches a regressed matcher, and each legitimate retirement comes here and
+    # says which script it removed.
+    assert len(_SITES) >= 77, (
+        f"only found {len(_SITES)} lib source sites — expected >= 77 "
         "(#14041 enumerated 56 scripts; #14891 added 17 sites in 16 extensionless "
-        "hooks); the matcher has regressed"
+        "hooks; #15127 retired one); the matcher has regressed"
     )
     rels = {site.rel for site in _SITES}
     # 55, not 56: #14371 retired
@@ -290,7 +299,13 @@ def test_the_sweep_actually_reached_the_tree() -> None:
     # The floor is left AT the current count rather than lowered for headroom, so
     # it still catches a regressed matcher; a future legitimate retirement has to
     # come here and say so, which is the point.
-    assert len(rels) >= 71, f"only {len(rels)} distinct scripts"
+    #
+    # 70, not 71: #15127 retired sync-grafana-dashboards.sh (see above). This
+    # assertion did not surface in that PR's first run because the site-count
+    # assertion above it fails first and ends the function — a reminder that a
+    # single red line in a multi-assert test is a floor, not a census of what
+    # broke.
+    assert len(rels) >= 70, f"only {len(rels)} distinct scripts"
     assert (
         "autobot-infrastructure/shared/scripts/vm-management/status-all-vms.sh" in rels
     ), "the walk no longer reaches a known call site"
@@ -352,7 +367,9 @@ def test_every_lib_source_resolves_to_a_real_file() -> None:
         if not any(t.is_file() for t in known):
             unresolvable.append(f"{rel}:{lineno} -> " + " | ".join(str(t) for t in known))
 
-    assert checked >= 73, (
+    # 72, not 73: the one lib source site #15127 retired with
+    # sync-grafana-dashboards.sh. Non-vacuity floor, not a census.
+    assert checked >= 72, (
         f"only resolved {checked} source sites — the expander has regressed and "
         "this test would pass having checked almost nothing"
     )
@@ -388,7 +405,8 @@ def _shape_offenders() -> tuple[list[str], int]:
 def test_a_missing_lib_is_never_swallowed() -> None:
     """The `|| true` shape that made #14041 invisible may not come back (#14172)."""
     offenders, checked = _shape_offenders()
-    assert checked >= 73, f"only checked {checked} sites — this would pass vacuously"
+    # 72, not 73: see the site-count note in test_the_sweep_actually_reached_the_tree (#15127).
+    assert checked >= 72, f"only checked {checked} sites — this would pass vacuously"
     assert not offenders, (
         "a lib bootstrap whose failure is discarded turns a deployment error "
         "into a wrong-value-at-runtime. The final attempt in the chain must keep "
@@ -455,7 +473,8 @@ def test_the_non_blocking_category_is_earned_and_bounded() -> None:
     otherwise turn the whole guard green while deleting it.
     """
     decisive = [s for s in _SITES if s.is_last]
-    assert len(decisive) >= 73, f"only {len(decisive)} decisive sites — vacuous"
+    # 72, not 73: see the site-count note in test_the_sweep_actually_reached_the_tree (#15127).
+    assert len(decisive) >= 72, f"only {len(decisive)} decisive sites — vacuous"
 
     non_blocking = [s for s in decisive if _classify(s) == "non-blocking"]
     assert non_blocking, (
