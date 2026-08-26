@@ -40,6 +40,7 @@ Covers:
 """
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -51,6 +52,7 @@ import fakeredis
 import pytest
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, WebSocket
 from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from api.terminal import check_admin_permission
 from api.terminal import router as terminal_router
@@ -364,8 +366,6 @@ class TestTerminalWebsocketRouteHandshake:
         for EVERY caller, admin or not. After the fix, an unauthenticated
         caller reaches the explicit per-route guard and is refused cleanly.
         """
-        from starlette.websockets import WebSocketDisconnect
-
         with _no_ws_credentials(), _accept_spy() as calls:
             with pytest.raises(WebSocketDisconnect) as exc_info:
                 with terminal_client.websocket_connect(f"/ws/{owned_session_id}"):
@@ -373,6 +373,23 @@ class TestTerminalWebsocketRouteHandshake:
 
         assert exc_info.value.code == 1008
         assert len(calls) == 0
+
+    def test_authenticated_non_owner_is_refused(self, terminal_client, owned_session_id, caplog):
+        """#14960 AC2 at route level: a non-owner is refused 1008 before accept().
+        caplog pins the ownership branch; #14961's unknown-session branch also closes 1008."""
+        with (
+            patch("auth_middleware.authenticate_websocket", new=AsyncMock(return_value={"username": "mallory"})),
+            caplog.at_level(logging.WARNING, logger="api.terminal"),
+            _accept_spy() as calls,
+        ):
+            with pytest.raises(WebSocketDisconnect) as exc_info:
+                with terminal_client.websocket_connect(f"/ws/{owned_session_id}"):
+                    pass
+
+        assert exc_info.value.code == 1008
+        assert len(calls) == 0
+        assert any("is not the owner" in r.message for r in caplog.records)
+        assert not any("unknown session_id" in r.message for r in caplog.records)
 
 
 class TestSshTerminalWebsocketRouteHandshake:
@@ -397,8 +414,6 @@ class TestSshTerminalWebsocketRouteHandshake:
         assert len(calls) == 1
 
     def test_unauthenticated_caller_is_refused_not_500(self, terminal_client):
-        from starlette.websockets import WebSocketDisconnect
-
         with _no_ws_credentials(), _accept_spy() as calls:
             with pytest.raises(WebSocketDisconnect) as exc_info:
                 with terminal_client.websocket_connect("/ws/ssh/prod-host-1"):
