@@ -15,6 +15,7 @@ import pytest
 from fastapi import FastAPI
 
 from api.presence_ws import router
+from autobot_shared.api_routing.router_routes import effective_routes
 
 
 class TestPresenceWSRouter:
@@ -61,8 +62,12 @@ class TestPresenceWSRouter:
         except Exception as e:
             pytest.fail(f"Failed to mount router: {e}")
 
-        # Verify the router was mounted
-        assert len(app.routes) > 0
+        # A real mounted path, not `len(app.routes) > 0` (#15093): under
+        # fastapi>=0.139 a single deferred wrapper satisfies that count, so it
+        # was already true before `include_router` was called and asserted
+        # nothing about this router reaching the app.
+        mounted = {m.path for m in effective_routes(app)}
+        assert "/ws/sessions/{session_id}/presence" in mounted, f"router not mounted; app serves {sorted(mounted)}"
 
 
 class TestPresenceWSConfiguration:

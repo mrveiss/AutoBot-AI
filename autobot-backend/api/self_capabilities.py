@@ -23,6 +23,7 @@ from fastapi import APIRouter, Request
 from fastapi.openapi.utils import get_openapi
 
 from api.schemas_agent import SelfCapabilitiesResponse
+from autobot_shared.api_routing.router_routes import effective_route_count
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_5_MINUTES
@@ -42,10 +43,20 @@ _cache_schema_hash: str = ""
 _cache_lock = asyncio.Lock()
 
 
-def _schema_hash(app_routes_count: int) -> str:
-    """Cheap fingerprint: route count is enough to detect new registrations."""
+def _schema_hash(app: Any) -> str:
+    """Cheap fingerprint of the served route table.
+
+    Counted through ``effective_route_count`` rather than ``len(app.routes)``
+    (#15093). Under ``fastapi>=0.139`` — the declared floor — ``app.routes``
+    holds one deferred entry per ``include_router`` **call**, so its length moves
+    when a router is mounted and not when an endpoint is added inside one that
+    is already mounted. That is the common case, and it left the cache serving a
+    stale table for a full TTL while the docstring promised the opposite. The
+    traversal is a walk over route objects, not schema generation, so this stays
+    cheap enough to run on the fast path.
+    """
     # usedforsecurity=False: fingerprint only, not a security hash  # noqa: S324
-    return hashlib.md5(str(app_routes_count).encode(), usedforsecurity=False).hexdigest()  # noqa: S324
+    return hashlib.md5(str(effective_route_count(app)).encode(), usedforsecurity=False).hexdigest()  # noqa: S324
 
 
 def _cache_is_valid(current_hash: str) -> bool:
@@ -164,8 +175,10 @@ async def discover_endpoints(app: Any) -> Dict[str, Any]:
     """
     Return live endpoint discovery data for the given FastAPI app.
 
-    Results are cached for TTL_5_MINUTES and invalidated automatically when
-    the number of registered routes changes (e.g., after optional routers load).
+    Results are cached for TTL_5_MINUTES and invalidated automatically when the
+    number of served routes changes — counted through the mount-aware traversal,
+    so an endpoint added inside an already-mounted router busts the cache too
+    (#15093).
 
     Args:
         app: The FastAPI application instance.
@@ -175,7 +188,7 @@ async def discover_endpoints(app: Any) -> Dict[str, Any]:
     """
     global _cache, _cache_ts, _cache_schema_hash
 
-    current_hash = _schema_hash(len(app.routes))
+    current_hash = _schema_hash(app)
 
     # Fast path — no lock needed for read
     if _cache_is_valid(current_hash):
@@ -186,7 +199,7 @@ async def discover_endpoints(app: Any) -> Dict[str, Any]:
         if _cache_is_valid(current_hash):
             return _cache  # type: ignore[return-value]
 
-        logger.info("endpoint-discovery: refreshing cache (routes=%d)", len(app.routes))
+        logger.info("endpoint-discovery: refreshing cache (routes=%d)", effective_route_count(app))
         paths = await asyncio.to_thread(_openapi_paths, app)
         endpoints = _collect_endpoints(paths)
         payload = _build_payload(endpoints)
@@ -215,7 +228,7 @@ async def discover_endpoints(app: Any) -> Dict[str, Any]:
         "Returns a dynamically derived list of all registered API endpoints, "
         "grouped by OpenAPI tag and operation type.  The result is derived from "
         "the live FastAPI OpenAPI schema (not hardcoded) and is cached with a "
-        f"{TTL_5_MINUTES // 60}-minute TTL that resets on route changes."
+        f"{TTL_5_MINUTES // 60}-minute TTL that resets when the served route table changes."
     ),
     tags=["self", "capabilities"],
     response_model=SelfCapabilitiesResponse,
