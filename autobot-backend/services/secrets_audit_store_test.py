@@ -30,6 +30,7 @@ import pytest
 from cryptography.fernet import Fernet
 
 from autobot_shared.time_utils import now_utc
+from services import secrets_audit_store
 from services.secrets_audit_store import (
     ACTION_ACCESS_FAILED,
     ACTION_ACCESSED,
@@ -327,3 +328,27 @@ def test_migration_is_idempotent(tmp_path):
     assert _PARKED_TABLE not in _table_names(str(db_path))
     reopened.record_access_failure(REASON_LOOKUP_ERROR, name=_ENTRY_NAME, accessed_by=_CALLER)
     assert len(_failed_rows(reopened)) == 1
+
+
+def test_a_lossy_rebuild_aborts_and_leaves_the_history_intact(tmp_path, monkeypatch):
+    """The transaction and the row-count compare exist so an interrupted or
+    incomplete rebuild cannot cost audit history -- it must abort and roll back,
+    not complete with fewer rows than it started with."""
+    db_path = tmp_path / "legacy.db"
+    _build_pre_15023_database(db_path)
+    # A copy step that carries nothing: the shape of any rebuild that silently
+    # loses rows, without needing to interrupt one mid-flight.
+    monkeypatch.setattr(secrets_audit_store, "_MIGRATION_COPY_ROWS_SQL", "SELECT 1")
+
+    with pytest.raises(sqlite3.IntegrityError):
+        SecretsService(db_path=str(db_path), encryption_key=Fernet.generate_key().decode())
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM secrets_audit")
+        assert {row[0] for row in cursor.fetchall()} == {"audit-1", "audit-2"}
+        assert _secret_id_is_not_null(conn.cursor()), "the aborted rebuild must leave the old schema in place"
+    finally:
+        conn.close()
+    assert _PARKED_TABLE not in _table_names(str(db_path)), "the rollback left the parked table behind"

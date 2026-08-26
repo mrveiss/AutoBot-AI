@@ -66,8 +66,6 @@ FAILURE_REASONS = (
     REASON_LOOKUP_ERROR,
 )
 
-_AUDIT_COLUMNS = "id, secret_id, action, performed_by, performed_at, details"
-
 _CREATE_AUDIT_TABLE_SQL = """
     CREATE TABLE IF NOT EXISTS secrets_audit (
         id TEXT PRIMARY KEY,
@@ -95,8 +93,32 @@ _SELECT_AUDIT_FOR_ID_SQL = (
     "FROM secrets_audit WHERE secret_id = ? ORDER BY performed_at DESC LIMIT ?"
 )
 
-#: Name the pre-#15023 table is parked under for the duration of the rebuild.
-_LEGACY_AUDIT_TABLE = "secrets_audit_pre_nullable_secret_id"
+#: The four statements of the rebuild in ``_relax_secret_id_not_null``, which
+#: parks the pre-#15023 table under ``secrets_audit_pre_nullable_secret_id``,
+#: recreates it widened, copies every row back, and discards the parked copy.
+#:
+#: Each is a complete literal, not composed from a table-name variable or a
+#: shared column list. SQLite cannot bind an *identifier* -- a table or column
+#: name is never a ``?`` parameter -- so "use a parameterised query" has no
+#: form to take for these four, and interpolating instead would leave SQL built
+#: by string formatting for a scanner to flag and a reader to have to prove
+#: safe. The table and its six columns are fixed and known at author time, so
+#: the honest shape is a literal with nothing to inject into. It also leaves the
+#: migration auditable by reading it, which matters more for a rebuild of the
+#: table holding audit history than for any other statement in this module.
+_MIGRATION_PARK_TABLE_SQL = "ALTER TABLE secrets_audit RENAME TO secrets_audit_pre_nullable_secret_id"
+
+_MIGRATION_COPY_ROWS_SQL = (
+    "INSERT INTO secrets_audit (id, secret_id, action, performed_by, performed_at, details) "
+    "SELECT id, secret_id, action, performed_by, performed_at, details "
+    "FROM secrets_audit_pre_nullable_secret_id"
+)
+
+_MIGRATION_COUNT_PARKED_SQL = "SELECT COUNT(*) FROM secrets_audit_pre_nullable_secret_id"
+
+_MIGRATION_COUNT_REBUILT_SQL = "SELECT COUNT(*) FROM secrets_audit"
+
+_MIGRATION_DISCARD_PARKED_SQL = "DROP TABLE secrets_audit_pre_nullable_secret_id"
 
 
 @dataclass(frozen=True)
@@ -138,18 +160,15 @@ def _relax_secret_id_not_null(cursor: sqlite3.Cursor) -> None:
     if own_transaction:
         cursor.execute("BEGIN IMMEDIATE")
     try:
-        cursor.execute(f"ALTER TABLE secrets_audit RENAME TO {_LEGACY_AUDIT_TABLE}")
+        cursor.execute(_MIGRATION_PARK_TABLE_SQL)
         cursor.execute(_CREATE_AUDIT_TABLE_SQL)
-        # Both interpolations below are module constants -- no caller input reaches them.
-        cursor.execute(
-            f"INSERT INTO secrets_audit ({_AUDIT_COLUMNS}) SELECT {_AUDIT_COLUMNS} FROM {_LEGACY_AUDIT_TABLE}"  # nosec B608
-        )
-        cursor.execute(f"SELECT COUNT(*) FROM {_LEGACY_AUDIT_TABLE}")  # nosec B608
+        cursor.execute(_MIGRATION_COPY_ROWS_SQL)
+        cursor.execute(_MIGRATION_COUNT_PARKED_SQL)
         carried = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM secrets_audit")
+        cursor.execute(_MIGRATION_COUNT_REBUILT_SQL)
         if cursor.fetchone()[0] != carried:
             raise sqlite3.IntegrityError("secrets_audit rebuild would lose audit rows; refusing to complete")
-        cursor.execute(f"DROP TABLE {_LEGACY_AUDIT_TABLE}")
+        cursor.execute(_MIGRATION_DISCARD_PARKED_SQL)
     except Exception:
         if own_transaction:
             conn.rollback()
