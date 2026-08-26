@@ -456,10 +456,19 @@ def _dump_routes_main() -> None:
     the tests need travels with them rather than living in a separate script.
 
     Reports each route's concrete type name alongside its path/dependencies,
-    and the resolved fastapi/starlette/python versions, so a future truncated
-    result (#14998 job 98083466678 saw 3 routes back instead of 26, one with
-    no identifiable path) carries enough evidence in one subprocess call to
-    diagnose without a second round-trip.
+    and the resolved fastapi/starlette/python versions, so a truncated result
+    carries enough evidence in one subprocess call to diagnose without a
+    second round-trip. That is how the defect below was found.
+
+    Enumerates a **mounted app**, not the bare ``APIRouter``. Under fastapi
+    0.141.1 / starlette 1.6.0 (what CI resolves), ``include_router`` no longer
+    flattens the child's routes into ``parent.routes`` eagerly -- it appends a
+    single deferred ``_IncludedRouter`` entry with no ``path``, and the child's
+    routes materialise only when an app mounts it. Reading ``router.routes``
+    there returned 3 entries instead of 26 (job 98088603289) while every route
+    was perfectly fine at runtime. Mounting first is correct on both versions,
+    and asks the question the guard actually cares about: what does the
+    application serve, and with which dependencies.
     """
     import sys as _sys
 
@@ -467,6 +476,9 @@ def _dump_routes_main() -> None:
     import starlette as _starlette
 
     import api.terminal as terminal_module
+
+    app = _fastapi.FastAPI()
+    app.include_router(terminal_module.router)
 
     routes = [
         {
@@ -478,7 +490,8 @@ def _dump_routes_main() -> None:
                 if getattr(dep, "dependency", None) is not None
             ),
         }
-        for route in terminal_module.router.routes
+        for route in app.routes
+        if not getattr(route, "path", "").startswith(("/openapi.json", "/docs", "/redoc"))
     ]
     print(
         json.dumps(
