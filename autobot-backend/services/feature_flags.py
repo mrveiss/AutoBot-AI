@@ -29,6 +29,7 @@ Usage:
 
 import asyncio
 import json
+import os
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -62,6 +63,46 @@ class EnforcementModeUnavailable(RuntimeError):
     """
 
 
+# The single Redis key the platform's whole access-control posture is read from.
+# It was a literal repeated at each reader and writer; provisioning has to name
+# the same key, and a fourth copy of a string is how the fourth copy drifts.
+ENFORCEMENT_MODE_KEY = "feature_flag:access_control:enforcement_mode"
+
+# Posture provisioning writes when an install has no value of its own (#14866).
+# ``log_only`` is the value both issues record: #14010's acceptance criterion 4
+# asks for "the ``log_only`` measurement before any flip to ``enforced``", and
+# #14866 calls it "the safe first value" because every ownership check runs and
+# every violation is audited while nothing that succeeds today starts being
+# refused. Flipping to ``enforced`` is a separate, measured step and is
+# deliberately NOT made here. Neither is the meaning of an unset key or of
+# ``log_only`` changed: this makes *unset* stop being the production state, it
+# does not redefine it.
+PROVISIONED_ENFORCEMENT_MODE_ENV = "ACCESS_CONTROL_ENFORCEMENT_MODE"
+PROVISIONED_ENFORCEMENT_MODE_DEFAULT = EnforcementMode.LOG_ONLY
+
+
+def resolve_provisioned_enforcement_mode(raw: str | None = None) -> EnforcementMode:
+    """Resolve the posture provisioning should write.
+
+    Precedence: an explicit *raw* value (the provisioning entry point's
+    ``--mode``), then the ``ACCESS_CONTROL_ENFORCEMENT_MODE`` environment value,
+    then :data:`PROVISIONED_ENFORCEMENT_MODE_DEFAULT`.
+
+    An unrecognised value raises instead of falling back. Quietly defaulting a
+    misconfigured authorization posture is precisely the defect #14866 exists
+    for, and a provisioning run that cannot honour what it was asked for must
+    say so rather than write something else.
+    """
+    value = raw if raw is not None else os.environ.get(PROVISIONED_ENFORCEMENT_MODE_ENV, "")
+    if not value or not value.strip():
+        return PROVISIONED_ENFORCEMENT_MODE_DEFAULT
+    try:
+        return EnforcementMode(value.strip().lower())
+    except ValueError as exc:
+        valid = ", ".join(mode.value for mode in EnforcementMode)
+        raise ValueError(f"Unrecognised enforcement mode {value!r}; expected one of: {valid}") from exc
+
+
 class FeatureFlags(AsyncRedisClientMixin):
     """
     Redis-backed feature flags for access control rollout
@@ -88,7 +129,7 @@ class FeatureFlags(AsyncRedisClientMixin):
         """
         try:
             redis = await self._get_redis()
-            mode_str = await redis.get("feature_flag:access_control:enforcement_mode")
+            mode_str = await redis.get(ENFORCEMENT_MODE_KEY)
 
             if mode_str:
                 # Handle bytes response
@@ -112,6 +153,46 @@ class FeatureFlags(AsyncRedisClientMixin):
             logger.error("Could not read enforcement mode: %s", e)
             raise EnforcementModeUnavailable(str(e)) from e
 
+    @staticmethod
+    async def _read_enforcement_mode(redis) -> EnforcementMode | None:
+        """Return the mode currently stored, or ``None`` when the key is absent."""
+        raw = await redis.get(ENFORCEMENT_MODE_KEY)
+        if isinstance(raw, bytes):
+            raw = raw.decode()
+        return EnforcementMode(raw) if raw else None
+
+    async def seed_enforcement_mode(
+        self, mode: EnforcementMode | None = None, dry_run: bool = False
+    ) -> tuple[bool, EnforcementMode]:
+        """Give an install a deliberate enforcement posture without clobbering one.
+
+        Writes *mode* only when the key is absent, with ``SET NX`` so the check
+        and the write are one atomic Redis operation: two provisioning runs
+        racing cannot both write, and re-provisioning never overwrites a value an
+        operator set on purpose (#14866). That is the whole of the idempotency
+        guarantee -- it is Redis's, not a read-then-write of ours.
+
+        Returns ``(written, effective_mode)``.
+        """
+        target = mode or resolve_provisioned_enforcement_mode()
+        redis = await self._get_redis()
+        if redis is None:
+            raise EnforcementModeUnavailable("no Redis client available to provision the enforcement mode")
+
+        if dry_run:
+            existing = await self._read_enforcement_mode(redis)
+            return existing is None, existing or target
+
+        if await redis.set(ENFORCEMENT_MODE_KEY, target.value, nx=True):
+            logger.info("Provisioned access control enforcement mode: %s", target.value)
+            return True, target
+
+        existing = await self._read_enforcement_mode(redis)
+        if existing is None:
+            raise EnforcementModeUnavailable("enforcement mode was neither written nor readable")
+        logger.info("Access control enforcement mode already set to %s; left unchanged", existing.value)
+        return False, existing
+
     async def set_enforcement_mode(self, mode: EnforcementMode) -> bool:
         """
         Set access control enforcement mode
@@ -126,7 +207,7 @@ class FeatureFlags(AsyncRedisClientMixin):
             redis = await self._get_redis()
 
             # Set the mode
-            await redis.set("feature_flag:access_control:enforcement_mode", mode.value)
+            await redis.set(ENFORCEMENT_MODE_KEY, mode.value)
 
             # Record change in history
             history_key = "feature_flag:access_control:history"

@@ -1,0 +1,45 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# Provision the access control enforcement mode (#14866)
+#
+# Until this ran, no install-time path wrote
+# feature_flag:access_control:enforcement_mode, so every install resolved the
+# unset key to "disabled" and skipped every gated ownership check. The seeder
+# writes with SET NX, so re-provisioning never overwrites a value an operator
+# set deliberately.
+
+- name: Verify the enforcement mode provisioner exists
+  ansible.builtin.stat:
+    path: "{{ access_control_enforcement_seeder }}"
+  register: enforcement_seeder_stat
+
+- name: Fail if the enforcement mode provisioner is missing
+  ansible.builtin.fail:
+    msg: >-
+      Enforcement mode provisioner not found at
+      {{ access_control_enforcement_seeder }}. Without it the install has no
+      access control posture of its own and falls back to disabled.
+  when: not enforcement_seeder_stat.stat.exists
+
+- name: Provision access control enforcement mode
+  ansible.builtin.command:
+    argv:
+      - "{{ project_root }}/venv/bin/python"
+      - "{{ access_control_enforcement_seeder }}"
+      - "--mode"
+      - "{{ access_control_enforcement_mode }}"
+  register: enforcement_mode_result
+  # 2 = the key was absent and this run seeded it; 0 = already provisioned,
+  # left untouched. Any other code is a real failure and must stop the run --
+  # an install silently continuing without a posture is the defect itself.
+  changed_when: enforcement_mode_result.rc == 2
+  failed_when: enforcement_mode_result.rc not in [0, 2]
+
+- name: Display the provisioned enforcement mode
+  ansible.builtin.debug:
+    msg: >-
+      Access control enforcement mode: {{ access_control_enforcement_mode }}
+      ({{ 'seeded by this run' if enforcement_mode_result.rc == 2 else 'already set, left unchanged' }})
