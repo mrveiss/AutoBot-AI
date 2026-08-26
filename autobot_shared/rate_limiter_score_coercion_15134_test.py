@@ -67,9 +67,11 @@ async def test_retry_after_is_computed_whatever_spelling_the_score_arrives_in(sc
 async def test_retry_after_string_score_does_not_fall_into_the_error_path():
     """A string score must produce the real answer, not the swallowed-exception default.
 
-    ``get_retry_after_seconds`` catches broadly and returns 1 on failure, so a
-    ``TypeError`` from the subtraction would look like a plausible answer rather
-    than a fault. Pinning the exact value is what tells the two apart.
+    ``get_retry_after_seconds`` catches broadly and returns 0 on failure -- "no
+    wait" -- so a ``TypeError`` from the subtraction does not surface as an
+    error, it surfaces as a client being told to retry immediately while the
+    limiter is still refusing it. Pinning the exact value is what tells the two
+    apart.
     """
     limiter = RateLimiter("t15134", requests_per_minute=1, requests_per_hour=1000)
     redis = _redis_reporting(oldest_offset=45.0, score_spelling="str")
