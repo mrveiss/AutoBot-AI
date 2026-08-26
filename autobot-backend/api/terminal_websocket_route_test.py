@@ -122,7 +122,6 @@ def terminal_client(terminal_app):
 _ADMIN_DEP = "auth_middleware.check_admin_permission"
 
 
-
 class _TerminalRouteDumpError(RuntimeError):
     """The subprocess dump did not return a trustworthy answer.
 
