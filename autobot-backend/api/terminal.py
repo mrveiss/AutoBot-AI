@@ -168,11 +168,11 @@ from services.terminal_secrets_service import get_terminal_secrets_service
 
 logger = get_logger(__name__)
 
-# Create router for consolidated terminal API
-router = APIRouter(
-    tags=["terminal"],
-    dependencies=[Depends(check_admin_permission)],
-)
+# Issue #14998: a router-level admin `Depends` 500s every `@router.websocket`
+# handshake below (Request-typed, unresolvable in a WS scope). HTTP routes keep
+# the gate via `admin_router`; WS routes stay on `router` and self-authenticate.
+router = APIRouter(tags=["terminal"])
+admin_router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
 
 # Import handler classes (extracted from this file - Issue #210)
@@ -200,7 +200,7 @@ router.include_router(tools_router, prefix="/terminal")
 # REST API Endpoints
 
 
-@router.post("/sessions", response_model=TerminalSessionCreateResponse)
+@admin_router.post("/sessions", response_model=TerminalSessionCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_terminal_session",
@@ -275,7 +275,7 @@ async def create_terminal_session(
     return response
 
 
-@router.get("/sessions", response_model=TerminalSessionListResponse)
+@admin_router.get("/sessions", response_model=TerminalSessionListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_terminal_sessions",
@@ -307,7 +307,7 @@ async def list_terminal_sessions(
     }
 
 
-@router.get("/sessions/{session_id}", response_model=TerminalSessionDetailResponse)
+@admin_router.get("/sessions/{session_id}", response_model=TerminalSessionDetailResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_session",
@@ -339,7 +339,7 @@ async def get_terminal_session(
     }
 
 
-@router.delete("/sessions/{session_id}", response_model=TerminalSessionDeleteResponse)
+@admin_router.delete("/sessions/{session_id}", response_model=TerminalSessionDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_terminal_session",
@@ -380,7 +380,7 @@ async def delete_terminal_session(
 # SSH Key Management Endpoints (Issue #211)
 
 
-@router.post("/sessions/{session_id}/ssh-keys", response_model=SSHKeyListResponse)
+@admin_router.post("/sessions/{session_id}/ssh-keys", response_model=SSHKeyListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="setup_ssh_keys",
@@ -423,7 +423,7 @@ async def setup_ssh_keys(
         raise HTTPException(status_code=500, detail="SSH key setup failed")
 
 
-@router.get("/sessions/{session_id}/ssh-keys", response_model=SSHKeyListResponse)
+@admin_router.get("/sessions/{session_id}/ssh-keys", response_model=SSHKeyListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_session_ssh_keys",
@@ -453,7 +453,7 @@ async def list_session_ssh_keys(
     }
 
 
-@router.post("/sessions/{session_id}/ssh-keys/{key_name}/agent", response_model=SSHKeyAgentResponse)
+@admin_router.post("/sessions/{session_id}/ssh-keys/{key_name}/agent", response_model=SSHKeyAgentResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_key_to_ssh_agent",
@@ -493,7 +493,7 @@ async def add_key_to_ssh_agent(
         raise HTTPException(status_code=400, detail=f"Failed to add key '{key_name}' to ssh-agent")
 
 
-@router.get("/sessions/{session_id}/ssh-keys/{key_name}/path", response_model=SSHKeyPathResponse)
+@admin_router.get("/sessions/{session_id}/ssh-keys/{key_name}/path", response_model=SSHKeyPathResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_ssh_key_path",
@@ -528,7 +528,7 @@ async def get_ssh_key_path(
         raise HTTPException(status_code=404, detail=f"Key '{key_name}' not found")
 
 
-@router.post("/command", response_model=CommandAssessResponse)
+@admin_router.post("/command", response_model=CommandAssessResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="execute_single_command",
@@ -570,7 +570,7 @@ async def execute_single_command(
     }
 
 
-@router.post("/sessions/{session_id}/input", response_model=TerminalInputResponse)
+@admin_router.post("/sessions/{session_id}/input", response_model=TerminalInputResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_terminal_input",
@@ -601,7 +601,7 @@ async def send_terminal_input(
         raise HTTPException(status_code=500, detail="Failed to send input")
 
 
-@router.post("/sessions/{session_id}/signal/{signal_name}", response_model=TerminalSignalResponse)
+@admin_router.post("/sessions/{session_id}/signal/{signal_name}", response_model=TerminalSignalResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="send_terminal_signal",
@@ -638,7 +638,7 @@ async def send_terminal_signal(
         raise HTTPException(status_code=500, detail="Failed to send signal")
 
 
-@router.get("/sessions/{session_id}/history", response_model=TerminalCommandHistoryResponse)
+@admin_router.get("/sessions/{session_id}/history", response_model=TerminalCommandHistoryResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_command_history",
@@ -677,7 +677,7 @@ async def get_terminal_command_history(
     }
 
 
-@router.get("/audit/{session_id}", response_model=TerminalAuditLogResponse)
+@admin_router.get("/audit/{session_id}", response_model=TerminalAuditLogResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_audit_log",
@@ -892,16 +892,12 @@ async def ssh_terminal_websocket(
 
     Issue #14991: this had no authentication at all -- any caller who knew or
     guessed a host_id reached SSHTerminalWebSocket (today an inert stub, but
-    the live shape of an interactive infrastructure shell). There is no
-    per-host permission model anywhere in this codebase to scope host_id
-    against a caller's permitted set, and #14958 explicitly rules out
-    inventing one here. The strictest reading available without inventing a
-    new capability model is the one this router already declares its intent
-    with (`Depends(check_admin_permission)` at router level, which does not
-    actually run for WebSocket routes -- FastAPI does not resolve an
-    HTTP-`Request`-typed router dependency against a WebSocket scope): admin
-    role, checked explicitly here, for every host_id. A finer-grained,
-    per-host model is out of scope (belongs with #14964).
+    the live shape of an interactive infrastructure shell). No per-host
+    permission model exists to scope host_id against a caller's permitted
+    set, and #14958 rules out inventing one here. The strictest reading
+    without a new capability model is admin role, checked explicitly here (a
+    router-level `Depends` cannot gate a WS route -- #14998), for every
+    host_id. Per-host granularity is out of scope (#14964).
     """
     if not await enforce_ws_origin(websocket):
         return
@@ -948,7 +944,7 @@ async def ssh_terminal_websocket(
 # Information endpoints
 
 
-@router.get("/", response_model=TerminalInfoResponse)
+@admin_router.get("/", response_model=TerminalInfoResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="terminal_info",
@@ -1011,7 +1007,7 @@ async def probe_terminal(
         )
 
 
-@router.get("/status", response_model=TerminalSystemStatusResponse)
+@admin_router.get("/status", response_model=TerminalSystemStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_system_status",
@@ -1055,7 +1051,7 @@ async def get_terminal_system_status(
         }
 
 
-@router.get("/capabilities", response_model=TerminalCapabilitiesResponse)
+@admin_router.get("/capabilities", response_model=TerminalCapabilitiesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_capabilities",
@@ -1109,7 +1105,7 @@ async def get_terminal_capabilities(
     }
 
 
-@router.get("/security", response_model=TerminalSecurityPoliciesResponse)
+@admin_router.get("/security", response_model=TerminalSecurityPoliciesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_security_policies",
@@ -1151,7 +1147,7 @@ async def get_security_policies(
     }
 
 
-@router.get("/features", response_model=TerminalFeaturesResponse)
+@admin_router.get("/features", response_model=TerminalFeaturesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_features",
@@ -1208,7 +1204,7 @@ async def get_terminal_features(
     }
 
 
-@router.get("/stats", response_model=TerminalStatsResponse)
+@admin_router.get("/stats", response_model=TerminalStatsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_terminal_statistics",
@@ -1242,7 +1238,7 @@ async def get_terminal_statistics(
 # SLM Admin Terminal (Issue #983) ================================================
 
 
-@router.post("/execute", summary="Execute command (SLM admin terminal)", response_model=AdminExecuteResponse)
+@admin_router.post("/execute", summary="Execute command (SLM admin terminal)", response_model=AdminExecuteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="admin_execute_command",
@@ -1297,3 +1293,7 @@ async def admin_execute_command(body: AdminExecuteRequest) -> AdminExecuteRespon
             "stderr": "Internal error executing command",
             "exit_code": 1,
         }
+
+
+# Issue #14998: merge admin_router's HTTP routes into router now that all exist.
+router.include_router(admin_router)
