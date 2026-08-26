@@ -256,11 +256,10 @@ class TestTerminalRouteDumpPathFidelity:
     ``api/terminal.py:198`` is ``admin_router.include_router(tools_router,
     prefix="/terminal")``, and ``api.terminal_tools``' router carries no
     ``prefix`` of its own -- so that ``/terminal`` is purely the **include-time
-    ``prefix=`` argument**. #15112 established that this term is consumed at
-    include time and left nowhere on the deferred wrapper: it is not
-    recoverable by runtime introspection, and three attempts to recover it are
-    the evidence. (The *including router's own* ``.prefix`` is a different term
-    and is recoverable -- it simply is not the one in play here.)
+    ``prefix=`` argument**. #15112 separates that term from the one it was
+    being conflated with and states of it: "nothing recovers these from the
+    deferred shape". The *including router's own* ``.prefix`` is the other
+    term, and it is recoverable -- it simply is not the one in play here.
 
     So this dump reports those four routes unprefixed in CI and prefixed on the
     eager fastapi this repo resolves locally. Rather than let that trip a test
@@ -270,9 +269,12 @@ class TestTerminalRouteDumpPathFidelity:
 
     The stronger test -- build the expected full paths from a static mount
     graph, which *can* see the include site, and compare -- is gated on #15112
-    (`autobot_shared/api_routing/`, open at the time of writing). When it lands,
-    this class and the suffix match above are what it replaces; do not write a
-    private copy of that graph in the meantime (#15093).
+    (`autobot_shared/api_routing/`, open at the time of writing). It already
+    carries the piece needed: ``router_prefixes.include_router_prefixes()``
+    returns ``(router_name, prefix)`` from source, and that PR proposes
+    surfacing it as a ``prefix`` field on ``Mount``. Consume that when it
+    lands; do not write a private copy of it in the meantime (#15093). This
+    class and the suffix match above are what it replaces (#15126).
     """
 
     #: The paths the application actually serves for the tool routes. Not an
