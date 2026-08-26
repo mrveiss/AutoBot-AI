@@ -46,21 +46,21 @@ reason each — never counted.
 
 from __future__ import annotations
 
-import ast
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, FrozenSet, Iterable, List, Set, Tuple
+from typing import Dict, List
 
 import pytest
 
+from autobot_shared.api_routing.mount_graph import APP_ROOT, MountGraph, build_graph, registry_dirname
+
 _REPO = Path(__file__).resolve().parents[1]
 _BACKEND = _REPO / "autobot-backend"
-_REGISTRY_DIRNAME = "router_registry"
+_REGISTRY_DIRNAME = registry_dirname()
 
-# The synthetic parent for a mount performed by the application factory: every
-# registry entry is included by `app_factory` with `prefix=f"/api{prefix}"` and
-# no `dependencies=`, so the app root contributes no guard.
-APP_ROOT = "<app>"
+# The mount graph itself lives in `autobot_shared/api_routing/mount_graph.py`
+# (#15093): `repo_tests/router_routes_traversal_test.py` needs the same three
+# facts, and a second AST resolver would drift from this one exactly as the two
+# `include_router` regexes drifted before #12985 consolidated them.
 
 # Routers that legitimately reach the app through a mount carrying less than
 # another mount of theirs. Each needs a reason; a bare count is not evidence
@@ -80,344 +80,9 @@ EXEMPT_ROUTERS: Dict[str, str] = {}
 _GATE_HINTS = ("permission", "auth", "admin", "rbac", "require", "verify", "current_user")
 
 
-@dataclass(frozen=True)
-class RouterDef:
-    """A module-level ``X = APIRouter(...)`` binding."""
-
-    key: str
-    own_guards: FrozenSet[str]
-
-
-@dataclass(frozen=True)
-class Mount:
-    """One ``include_router`` (or registry entry) edge in the mount graph."""
-
-    parent: str
-    child: str
-    guards: FrozenSet[str]
-    site: str
-
-
-@dataclass
-class MountGraph:
-    routers: Dict[str, RouterDef] = field(default_factory=dict)
-    edges: List[Mount] = field(default_factory=list)
-    unresolved: List[str] = field(default_factory=list)
-    dynamic: List[str] = field(default_factory=list)
-
-    def paths_to(self, key: str) -> Set[FrozenSet[str]]:
-        """Every distinct guard set that reaches *key* from the app root.
-
-        A guard set is the union of the dependencies named at each hop: the
-        ``dependencies=`` of the ``include_router`` call plus those declared on
-        the parent's own ``APIRouter(...)`` constructor, all the way up --
-        **and the router's own constructor dependencies**, which apply at every
-        mount by construction.
-
-        That last term is the one that matters. A router protected on its own
-        constructor is protected everywhere, which is exactly how #15084 was
-        fixed and how every other gated router in this repo is written. Omitting
-        it made such a router read as ungated on every path, so the comparison
-        was empty-set against empty-set: agreement reached by seeing nothing
-        rather than by seeing a gate.
-        """
-        own = self._own_guards(key)
-        return {path | own for path in self._paths(key, frozenset())}
-
-    def _paths(self, key: str, seen: FrozenSet[str]) -> Set[FrozenSet[str]]:
-        if key in seen:  # a cycle contributes nothing new
-            return set()
-        seen = seen | {key}
-        incoming = [e for e in self.edges if e.child == key]
-        if not incoming:
-            return set()
-        out: Set[FrozenSet[str]] = set()
-        for edge in incoming:
-            hop = edge.guards | self._own_guards(edge.parent)
-            if edge.parent == APP_ROOT:
-                out.add(hop)
-                continue
-            for upstream in self._paths(edge.parent, seen):
-                out.add(hop | upstream)
-        return out
-
-    def _own_guards(self, key: str) -> FrozenSet[str]:
-        found = self.routers.get(key)
-        return found.own_guards if found else frozenset()
-
-    def mounted_keys(self) -> List[str]:
-        return sorted({e.child for e in self.edges})
-
-    def inconsistent(self) -> Dict[str, Set[FrozenSet[str]]]:
-        """Routers whose reachable paths do not all carry the same guards.
-
-        A router mounted once, or mounted many times with identical guards, is
-        consistent. One reachable both behind ``check_admin_permission`` and
-        without it is the defect.
-        """
-        bad: Dict[str, Set[FrozenSet[str]]] = {}
-        for key in self.mounted_keys():
-            if key in EXEMPT_ROUTERS:
-                continue
-            paths = self.paths_to(key)
-            if len(paths) < 2:
-                continue
-            weakest = frozenset.intersection(*paths)
-            strongest = frozenset.union(*paths)
-            if weakest != strongest:
-                bad[key] = paths
-        return bad
-
-
-# --- source parsing ---------------------------------------------------------
-
-
-def _module_name(path: Path, backend: Path) -> str:
-    return path.relative_to(backend).with_suffix("").as_posix().replace("/", ".")
-
-
-def _guards_from_keyword(node: ast.AST) -> FrozenSet[str]:
-    """Dependency names inside a ``dependencies=[Depends(x), ...]`` argument."""
-    names: Set[str] = set()
-    if not isinstance(node, (ast.List, ast.Tuple)):
-        return frozenset()
-    for element in node.elts:
-        target = element
-        if isinstance(element, ast.Call):
-            args = element.args
-            target = args[0] if args else element.func
-        rendered = _dotted(target)
-        if rendered:
-            names.add(rendered)
-    return frozenset(names)
-
-
-def _dotted(node: ast.AST) -> str | None:
-    """Render ``a.b.c`` / ``a`` from an expression; None for anything else."""
-    parts: List[str] = []
-    while isinstance(node, ast.Attribute):
-        parts.append(node.attr)
-        node = node.value
-    if not isinstance(node, ast.Name):
-        return None
-    parts.append(node.id)
-    return ".".join(reversed(parts))
-
-
-def _call_kwarg(call: ast.Call, name: str) -> ast.AST | None:
-    for keyword in call.keywords:
-        if keyword.arg == name:
-            return keyword.value
-    return None
-
-
-def _is_apirouter(call: ast.Call) -> bool:
-    rendered = _dotted(call.func)
-    return bool(rendered) and rendered.split(".")[-1] == "APIRouter"
-
-
-class _ModuleScan:
-    """Local-name -> router-key bindings and mounts within one module."""
-
-    def __init__(self, module: str, tree: ast.AST, backend: Path):
-        self.module = module
-        self.tree = tree
-        self.backend = backend
-        self.local: Dict[str, str] = {}
-        self.defs: List[RouterDef] = []
-        self.edges: List[Mount] = []
-        self.unresolved: List[str] = []
-        self.dynamic: List[str] = []
-        self.loop_targets: Set[str] = set()
-
-    def run(self) -> None:
-        self._collect_loop_targets()
-        self._collect_imports()
-        self._collect_definitions()
-        self._collect_include_calls()
-
-    def _collect_loop_targets(self) -> None:
-        """Names bound by a ``for`` statement.
-
-        ``app_factory`` iterates the loaded registry tuples and calls
-        ``include_router`` on the loop variable. That mount is real but its
-        target is only known at runtime — it is modelled from the registry
-        entries instead, so it must be recorded as *dynamic*, not as an
-        unresolvable reference.
-        """
-        for node in ast.walk(self.tree):
-            if not isinstance(node, ast.For):
-                continue
-            targets = node.target.elts if isinstance(node.target, ast.Tuple) else [node.target]
-            for target in targets:
-                if isinstance(target, ast.Name):
-                    self.loop_targets.add(target.id)
-
-    # imports first: `from api.x import router as y` binds y -> api.x:router.
-    def _collect_imports(self) -> None:
-        for node in ast.walk(self.tree):
-            if not isinstance(node, ast.ImportFrom) or node.module is None:
-                continue
-            source = node.module
-            if node.level:  # relative import, resolve against this package
-                package = self.module.rsplit(".", node.level)[0]
-                source = f"{package}.{node.module}" if package else node.module
-            for alias in node.names:
-                if "router" not in alias.name.lower():
-                    continue
-                self.local[alias.asname or alias.name] = f"{source}:{alias.name}"
-
-    # definitions second, so a module-local `router = APIRouter()` wins over an
-    # imported name of the same spelling.
-    def _collect_definitions(self) -> None:
-        for node in ast.walk(self.tree):
-            if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
-                continue
-            if not _is_apirouter(node.value):
-                continue
-            guards = _guards_from_keyword(_call_kwarg(node.value, "dependencies") or ast.List(elts=[]))
-            for target in node.targets:
-                if not isinstance(target, ast.Name):
-                    continue
-                key = f"{self.module}:{target.id}"
-                self.local[target.id] = key
-                self.defs.append(RouterDef(key=key, own_guards=guards))
-
-    def _resolve(self, node: ast.AST) -> str | None:
-        rendered = _dotted(node)
-        if rendered is None:
-            return None
-        if rendered in self.local:
-            return self.local[rendered]
-        if "." in rendered:  # `api.terminal.router` style reference
-            module, _, attr = rendered.rpartition(".")
-            return f"{module}:{attr}"
-        return None
-
-    def _collect_include_calls(self) -> None:
-        for node in ast.walk(self.tree):
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
-                continue
-            if node.func.attr != "include_router" or not node.args:
-                continue
-            site = f"{self.module}:{node.lineno}"
-            child_expr = _dotted(node.args[0])
-            if child_expr in self.loop_targets:
-                self.dynamic.append(site)
-                continue
-            child = self._resolve(node.args[0])
-            if child is None:
-                self.unresolved.append(f"{site} child={ast.dump(node.args[0])[:60]}")
-                continue
-            parent_expr = _dotted(node.func.value) or ""
-            parent = self._resolve(node.func.value)
-            if parent is None:
-                # `app.include_router(...)` and friends: an application object,
-                # not a router. Treat as an app-root mount.
-                parent = APP_ROOT
-                if parent_expr not in {"app", "application", "self.app"}:
-                    self.unresolved.append(f"{site} parent={parent_expr or '<expr>'}")
-            guards = _guards_from_keyword(_call_kwarg(node, "dependencies") or ast.List(elts=[]))
-            self.edges.append(Mount(parent=parent, child=child, guards=guards, site=site))
-
-
-# --- registry entries -------------------------------------------------------
-
-
-def _registry_entry(element: ast.AST, module: str, local: Dict[str, str]) -> str | None:
-    """Router key named by one ``(module, [attr,] prefix, tags, name)`` tuple.
-
-    Both registry shapes are handled: a 4-tuple whose first element is a module
-    path string (``("api.terminal_tools", "", [...], "terminal_tools")``), the
-    5-tuple monitoring form that names the attribute second, and the
-    ``core_routers`` form whose first element is an already-imported router.
-    """
-    if not isinstance(element, (ast.Tuple, ast.List)) or len(element.elts) < 4:
-        return None
-    head = element.elts[0]
-    if isinstance(head, ast.Constant) and isinstance(head.value, str):
-        attr = "router"
-        second = element.elts[1]
-        if len(element.elts) >= 5 and isinstance(second, ast.Constant) and isinstance(second.value, str):
-            # 5-tuple: (module, router_attr, prefix, tags, name)
-            attr = second.value or "router"
-        return f"{head.value}:{attr}"
-    rendered = _dotted(head)
-    if rendered and rendered in local:
-        return local[rendered]
-    if rendered:
-        return f"{module}:{rendered}"
-    return None
-
-
-def _scan_registry(path: Path, backend: Path, local: Dict[str, str]) -> List[Mount]:
-    """Registry entries become app-root mounts carrying no guards.
-
-    ``app_factory.register_routers`` includes each loaded tuple with
-    ``prefix=f"/api{prefix}"`` and no ``dependencies=`` argument, so nothing a
-    registry entry can express adds a gate.
-    """
-    module = _module_name(path, backend)
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    mounts: List[Mount] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.List, ast.Tuple)):
-            continue
-        for element in node.elts:
-            key = _registry_entry(element, module, local)
-            if key is None:
-                continue
-            mounts.append(
-                Mount(
-                    parent=APP_ROOT,
-                    child=key,
-                    guards=frozenset(),
-                    site=f"{module}:{getattr(element, 'lineno', 0)}",
-                )
-            )
-    return mounts
-
-
-def _python_files(backend: Path) -> Iterable[Path]:
-    for path in sorted(backend.rglob("*.py")):
-        parts = set(path.parts)
-        if parts & {"__pycache__", "tests", "node_modules", ".venv", "venv"}:
-            continue
-        yield path
-
-
-def build_graph(backend: Path = _BACKEND) -> MountGraph:
-    """Derive the whole mount graph from source — nothing is handed in.
-
-    Three discovery sources, matching the three ways a router reaches the app:
-    ``APIRouter`` definitions, ``include_router`` call sites, and
-    ``initialization/router_registry/`` entries loaded by the app factory.
-    """
-    graph = MountGraph()
-    registry_files: List[Tuple[Path, Dict[str, str]]] = []
-    for path in _python_files(backend):
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (SyntaxError, UnicodeDecodeError) as exc:  # pragma: no cover
-            graph.unresolved.append(f"{path}: {exc}")
-            continue
-        scan = _ModuleScan(_module_name(path, backend), tree, backend)
-        scan.run()
-        for definition in scan.defs:
-            graph.routers[definition.key] = definition
-        graph.edges.extend(scan.edges)
-        graph.unresolved.extend(scan.unresolved)
-        graph.dynamic.extend(scan.dynamic)
-        if _REGISTRY_DIRNAME in path.parts:
-            registry_files.append((path, dict(scan.local)))
-    for path, local in registry_files:
-        graph.edges.extend(_scan_registry(path, backend, local))
-    return graph
-
-
 @pytest.fixture(scope="module")
 def graph() -> MountGraph:
-    return build_graph()
+    return build_graph(_BACKEND)
 
 
 # --- non-vacuity ------------------------------------------------------------
@@ -503,7 +168,7 @@ def test_no_router_is_mounted_past_a_gate_its_siblings_carry(graph: MountGraph):
     any other router by name: it compares, for every mounted router, the guard
     sets on every path that reaches it from the app root.
     """
-    bad = graph.inconsistent()
+    bad = graph.inconsistent(EXEMPT_ROUTERS)
     if not bad:
         return
     report: List[str] = []
