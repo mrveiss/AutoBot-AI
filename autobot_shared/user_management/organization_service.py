@@ -521,7 +521,7 @@ class OrganizationService(BaseService):
         settings: dict | None,
         subscription_tier: str | None,
         max_users: int | None,
-    ) -> dict:
+    ) -> dict[str, dict[str, str | int | None]]:
         """
         Apply field updates to organization and track changes.
 
@@ -538,7 +538,7 @@ class OrganizationService(BaseService):
 
         Issue #620.
         """
-        changes = {}
+        changes: dict[str, dict[str, str | int | None]] = {}  # heterogeneous; inference locks it wrong (#15134)
 
         if name and name != org.name:
             changes["name"] = {"old": org.name, "new": name}
