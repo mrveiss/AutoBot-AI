@@ -26,6 +26,11 @@ import json
 import re
 
 from autobot_shared.logging_manager import get_logger
+from services.secrets_audit_store import (
+    REASON_LOOKUP_ERROR,
+    REASON_MALFORMED_VALUE,
+    REASON_TYPE_MISMATCH,
+)
 from services.secrets_service import get_secrets_service
 
 logger = get_logger(__name__)
@@ -35,6 +40,11 @@ logger = get_logger(__name__)
 #: sole writer, migrate_bedrock_credentials.py.
 BEDROCK_VAULT_ENTRY_NAME = "bedrock_aws_credentials"
 BEDROCK_VAULT_ENTRY_TYPE = "aws_bedrock_credentials"
+
+#: Identity stamped on every audit row this provider causes -- the successful
+#: access and the failed ones alike, so both limbs of #15023 AC3 attribute to
+#: the same principal and a query for one finds the other.
+BEDROCK_ACCESSED_BY = "bedrock_provider"
 
 #: AWS region shape, e.g. "us-east-1", "eu-west-1", "us-gov-west-1". Used to
 #: validate a region resolved from SecretsService before it is used to build
@@ -111,32 +121,59 @@ def validate_credential_pair(access_key: object, secret_key: object) -> None:
         raise ValueError("Bedrock: resolved AWS secret key has an unexpected format, refusing to initialize client")
 
 
+def _audit_vault_rejection(reason: str, secret_id: str | None = None) -> None:
+    """Record a vault row *this module* rejected, after ``get_secret()`` returned it.
+
+    ``get_secret()`` audits the failures it can see itself -- no such entry, and
+    an expired one. The three below are only visible here, so without this they
+    would be a log line and nothing else, which is exactly the hole #15023's AC3
+    failure limb names. Auditing is best-effort by construction: a credential
+    path must not start failing because its audit sink did.
+    """
+    try:
+        get_secrets_service().record_access_failure(
+            reason,
+            name=BEDROCK_VAULT_ENTRY_NAME,
+            accessed_by=BEDROCK_ACCESSED_BY,
+            secret_id=secret_id,
+        )
+    except Exception as exc:  # noqa: BLE001 - audit write must never break credential resolution
+        logger.warning("Bedrock: could not record the failed credential access: %s", type(exc).__name__)
+
+
 def load_credentials_from_vault() -> tuple[str | None, str | None, str | None]:
     """Look up the Bedrock AWS credential pair in SecretsService.
 
     Returns (access_key, secret_key, region), each None if not configured or
-    unusable -- never raises; any failure is logged (never the credential
-    value). A successful lookup is audited to ``secrets_audit`` by ``get_secret()``.
+    unusable -- never raises; any failure is logged (never the credential value)
+    and recorded in ``secrets_audit``. A successful lookup is audited by
+    ``get_secret()``; so are its own two failure modes, so the rejections
+    audited here are only the ones it cannot see (#15023 AC3).
     """
     try:
         secret = get_secrets_service().get_secret(
             name=BEDROCK_VAULT_ENTRY_NAME,
             scope="general",
             include_value=True,
-            accessed_by="bedrock_provider",
+            accessed_by=BEDROCK_ACCESSED_BY,
         )
     except Exception as exc:  # noqa: BLE001 - vault lookup is best-effort, fallback follows
         logger.warning("Bedrock SecretsService lookup failed, falling back: %s", type(exc).__name__)
+        _audit_vault_rejection(REASON_LOOKUP_ERROR)
         return None, None, None
+    # No row, or an expired one: get_secret() has already written the row that
+    # distinguishes those two, so auditing again here would double-count them.
     if not secret or "value" not in secret:
         return None, None, None
     if secret.get("secret_type") != BEDROCK_VAULT_ENTRY_TYPE:
         logger.warning("Bedrock secret '%s' has an unexpected secret_type, ignoring", BEDROCK_VAULT_ENTRY_NAME)
+        _audit_vault_rejection(REASON_TYPE_MISMATCH, secret.get("id"))
         return None, None, None
     try:
         creds = json.loads(secret["value"])
     except (TypeError, ValueError) as exc:
         logger.warning("Bedrock secret from SecretsService is not valid JSON: %s", type(exc).__name__)
+        _audit_vault_rejection(REASON_MALFORMED_VALUE, secret.get("id"))
         return None, None, None
     logger.info("Loaded Bedrock credentials from SecretsService (encrypted, access audited)")
     return creds.get("aws_access_key_id"), creds.get("aws_secret_access_key"), creds.get("region")

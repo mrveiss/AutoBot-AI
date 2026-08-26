@@ -4753,7 +4753,8 @@
       "theme": "Theme"
     },
     "commandPermission": {
-      "executionFailed": "Command execution failed",
+      "executionFailed": "اجرای دستور ناموفق بود",
+      "postExecutionFailed": "دستور اجرا شد، اما یک مرحله پس از آن ناموفق بود. خروجی آن نمایش داده می‌شود؛ ممکن است برخی به‌روزرسانی‌ها انجام نشده باشند.",
       "allow": "Allow",
       "purposeLabel": "Purpose",
       "defaultPurpose": "System operation requested",
