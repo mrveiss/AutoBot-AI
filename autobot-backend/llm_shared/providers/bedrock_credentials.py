@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Vault lookup and region validation for the Bedrock provider (#15023).
+"""Vault lookup and credential validation for the Bedrock provider (#15023).
 
 Split out of ``bedrock.py`` because that module reached its 600-line ceiling,
 and this is the one cohesive piece in it that owes nothing to provider state:
 the credential retrieval touches no ``self``, and the region pattern is data.
 
-These names live here and only here. ``bedrock.py`` imports the two it uses
-and deliberately re-exports nothing: an ``__all__`` whose only purpose is to
+These names live here and only here. ``bedrock.py`` imports only what it
+calls and deliberately re-exports nothing: an ``__all__`` whose only purpose is to
 satisfy F401 would be indirection existing to quiet a linter. Import the
 constants from this module, not through ``bedrock`` -- ``llm_shared.providers.
 bedrock.BEDROCK_VAULT_ENTRY_NAME`` raises ``AttributeError`` (#15081).
