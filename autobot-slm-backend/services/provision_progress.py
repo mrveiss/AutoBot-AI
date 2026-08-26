@@ -22,12 +22,25 @@ import asyncio
 import logging
 import re
 import time
+from pathlib import Path
 from typing import Callable
+
+from autobot_shared.env_utils import env_int_clamped
+from services.ansible_utils import _extract_failure_summary
 
 logger = logging.getLogger(__name__)
 
 # How often (in seconds) to emit a heartbeat for a silent task.
 HEARTBEAT_INTERVAL_SECONDS: int = 5
+
+# Persistent log of fleet provisioning runs (#1455).
+PROVISION_LOG_PATH = Path("/var/log/autobot/provision-wizard.log")
+
+# #14856: how long a provision run may show no progress before a caller may
+# treat its "running" status as abandoned and start a new one. Generous on
+# purpose -- every log line from the playbook stamps progress, so this bounds
+# the gap between two signs of life, not the run's total duration.
+PROVISION_STALE_SECONDS = env_int_clamped("AUTOBOT_PROVISION_STALE_SECONDS", 1800, min_v=60)
 
 # Known slow task patterns mapped to human-readable duration estimates.
 # Patterns are matched (case-insensitively) against the Ansible task name.
@@ -187,3 +200,55 @@ class TaskProgressTracker:
                     logger.debug("TaskProgressTracker: progress_callback error: %s", exc)
         except asyncio.CancelledError:
             pass
+
+
+def write_provision_log(line: str) -> None:
+    """Append a line to the persistent provision log (#1455)."""
+    try:
+        PROVISION_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(PROVISION_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
+
+
+def mark_progress(state: dict) -> None:
+    """Stamp that *state* is still doing something (#14856)."""
+    state["last_progress_at"] = time.time()
+
+
+def is_stale(state: dict) -> bool:
+    """True when *state* claims ``"running"`` but has shown no sign of life.
+
+    Judged on progress, not age: a legitimate fleet provision across many
+    slow nodes can run far longer than any fixed bound, and reaping one that
+    is still working would be worse than the lockout this override exists to
+    cure. Falls back to ``started_at`` for a run that never stamped progress.
+    A state with neither marker is NOT treated as stale -- a genuinely
+    running provision must never be reaped on missing data.
+    """
+    marker = state.get("last_progress_at") or state.get("started_at")
+    if not marker:
+        return False
+    return (time.time() - marker) > PROVISION_STALE_SECONDS
+
+
+def handle_provision_result(state: dict, result: dict) -> None:
+    """Record a finished provisioning run's outcome into *state* and the log (#1455)."""
+    raw_output = result.get("output", "")
+    if raw_output:
+        for line in raw_output.splitlines():
+            state["output_lines"].append(line)
+            write_provision_log(line)
+
+    if result.get("success"):
+        state["status"] = "completed"
+        write_provision_log("SUCCESS: Fleet provisioning completed")
+        logger.info("Fleet provisioning completed successfully")
+    else:
+        rc = result.get("returncode", -1)
+        state["status"] = "failed"
+        summary = _extract_failure_summary(raw_output)
+        state["error"] = summary or f"Ansible exited with code {rc}"
+        write_provision_log(f"FAILED: {state['error']}")
+        logger.error("Fleet provisioning failed (rc=%s): %s", rc, state["error"])
