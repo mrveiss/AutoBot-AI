@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import logging
 import os
-
 from typing import TYPE_CHECKING
 
 from fastapi import WebSocket
@@ -215,7 +214,7 @@ async def enforce_ws_remote_control_auth(
 ) -> "dict | None":
     """Authenticate a remote-control handshake, capability-scoping device credentials (#14964).
 
-A handshake carrying no device credential is delegated verbatim to
+    A handshake carrying no device credential is delegated verbatim to
     :func:`enforce_ws_authentication` — nothing changes for a user, session or
     service caller. A *paired-device* credential must additionally hold every
     capability in ``required``, asserted positively against its own grant set.
