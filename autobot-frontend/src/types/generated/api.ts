@@ -1590,7 +1590,7 @@ export interface paths {
         };
         /**
          * Dynamic endpoint capability discovery
-         * @description Returns a dynamically derived list of all registered API endpoints, grouped by OpenAPI tag and operation type.  The result is derived from the live FastAPI OpenAPI schema (not hardcoded) and is cached with a 5-minute TTL that resets on route changes.
+         * @description Returns a dynamically derived list of all registered API endpoints, grouped by OpenAPI tag and operation type.  The result is derived from the live FastAPI OpenAPI schema (not hardcoded) and is cached with a 5-minute TTL that resets when the served route table changes.
          */
         get: operations["get_capabilities_api_capabilities_get"];
         put?: never;
