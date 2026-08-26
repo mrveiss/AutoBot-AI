@@ -67,7 +67,14 @@ def env(name: str, default: Any = None) -> Any:
 # (#14236, #14856). Importing it here — after EnvVarSpec/register_env_var/REGISTRY
 # are defined above, and before anything below can observe the registry — is a
 # side effect that fully populates the "ai" entries. See env_registry_ai.py.
+#
+# Same reason, same mechanism (#14961): this file was still at its ceiling
+# with no slack to add the new "terminal" component var inline, so the one
+# "testing" entry that lived at the tail moved out to make room, and the new
+# entry lives in its own sibling module rather than inline here.
 from autobot_shared import env_registry_ai  # noqa: E402,F401
+from autobot_shared import env_registry_terminal  # noqa: E402,F401
+from autobot_shared import env_registry_testing  # noqa: E402,F401
 
 # --- events (#14817, #14818) -------------------------------------------------
 
@@ -1732,23 +1739,5 @@ register_env_var(
             "(services/sync_orchestrator.py, #14275)."
         ),
         component="backend",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_LIVE_PROBE_TIMEOUT_SECONDS",
-        type=float,
-        default=1.0,
-        description=(
-            "Seconds a test's live-service precondition probe waits for a TCP connect "
-            "before reporting the service as absent and skipping "
-            "(autobot_shared/live_service_probe.py, #14930). Short by default: a "
-            "refused loopback connect returns immediately, and this runs once per "
-            "endpoint per process. Raise it when probing a fleet host across a link "
-            "slow enough that a live service could be mistaken for a missing one."
-        ),
-        component="testing",
-        range=(0.1, 60.0),
     )
 )

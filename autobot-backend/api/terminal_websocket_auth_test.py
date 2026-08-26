@@ -23,9 +23,29 @@ import uuid
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import fakeredis
 import pytest
 
 from api.terminal import session_manager, terminal_websocket
+from services.terminal_session_store import SessionConfigStore
+
+
+@pytest.fixture(autouse=True)
+def _fake_session_store(monkeypatch):
+    """Back the module-global `session_manager` with an isolated fakeredis (#14961).
+
+    `session_manager.session_configs` is Redis-backed now (shared across
+    uvicorn workers, not a process-local dict), and this directory's
+    conftest stubs `get_redis_client()` to always return None so unit tests
+    never open a live socket. Left alone, every write in this file would hit
+    that stub and the fail-closed path would refuse every fixture-created
+    session. Swapping in a fakeredis client -- never the live Redis -- keeps
+    this file's tests exercising the real dict-like protocol end to end
+    without either hazard.
+    """
+    fake_client = fakeredis.FakeRedis(server=fakeredis.FakeServer())
+    monkeypatch.setattr(session_manager, "session_configs", SessionConfigStore(redis_client=fake_client))
+    yield
 
 
 @contextmanager

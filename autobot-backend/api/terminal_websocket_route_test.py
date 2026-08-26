@@ -47,6 +47,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import fakeredis
 import pytest
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, WebSocket
 from starlette.testclient import TestClient
@@ -54,6 +55,7 @@ from starlette.testclient import TestClient
 from api.terminal import check_admin_permission
 from api.terminal import router as terminal_router
 from api.terminal import session_manager, ssh_terminal_manager
+from services.terminal_session_store import SessionConfigStore
 
 _original_accept = WebSocket.accept
 
@@ -315,6 +317,18 @@ class TestTerminalToolRoutesKeepTheirGate:
 
 class TestTerminalWebsocketRouteHandshake:
     """Real handshake on /ws/{session_id} via TestClient -- not a handler call."""
+
+    @pytest.fixture(autouse=True)
+    def _fake_session_store(self, monkeypatch):
+        """Back `session_manager` with fakeredis (#14961), never the live Redis.
+
+        `session_configs` is Redis-backed now; this directory's conftest
+        stubs `get_redis_client()` to None so unit tests never open a real
+        socket, and the store fails closed on that -- so without this, the
+        `owned_session_id` fixture below could never write a session.
+        """
+        fake_client = fakeredis.FakeRedis(server=fakeredis.FakeServer())
+        monkeypatch.setattr(session_manager, "session_configs", SessionConfigStore(redis_client=fake_client))
 
     @pytest.fixture
     def owned_session_id(self):

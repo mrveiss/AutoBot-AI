@@ -16,7 +16,27 @@ in isolation reimplementing it) and asserts the shared dict entry it
 produces.
 """
 
+import fakeredis
+import pytest
+
 from services.agent_terminal.session_manager import SessionManager
+from services.terminal_session_store import SessionConfigStore
+
+
+@pytest.fixture(autouse=True)
+def _fake_session_store(monkeypatch):
+    """Back the shared `session_manager` with fakeredis, never the live Redis (#14961).
+
+    `session_configs` is Redis-backed now; this directory's conftest stubs
+    `get_redis_client()` to None so unit tests never open a real socket, and
+    the store fails closed on that -- without this, the writer under test
+    here would silently fail (caught internally, logged, never raised) and
+    every assertion below would find nothing.
+    """
+    from api.terminal import session_manager as terminal_session_manager
+
+    fake_client = fakeredis.FakeRedis(server=fakeredis.FakeServer())
+    monkeypatch.setattr(terminal_session_manager, "session_configs", SessionConfigStore(redis_client=fake_client))
 
 
 class TestRegisterPtyWithTerminalManagerStampsOwner:
