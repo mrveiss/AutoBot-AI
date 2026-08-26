@@ -376,7 +376,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/redis_service_management_e2e_test.py": 613,
     "autobot-backend/services/redis_service_manager.py": 623,
     "autobot-backend/services/redis_service_manager_test.py": 839,
-    "autobot-backend/services/secrets_service.py": 705,
+    "autobot-backend/services/secrets_service.py": 688,
     "autobot-backend/services/security_memory_integration.py": 1033,
     "autobot-backend/services/security_tool_parsers.py": 865,
     "autobot-backend/services/security_workflow_manager.py": 1306,
