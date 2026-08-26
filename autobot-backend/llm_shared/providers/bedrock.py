@@ -28,7 +28,12 @@ from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
 
 from ..base_provider import BaseProvider
-from .bedrock_credentials import _AWS_REGION_PATTERN, load_credentials_from_vault, validate_credential_pair
+from .bedrock_credentials import (
+    build_boto3_client,
+    load_credentials_from_vault,
+    scrub_credentials,
+    validate_credential_pair,
+)
 
 logger = get_logger(__name__)
 
@@ -119,32 +124,21 @@ class BedrockProvider(BaseProvider):
         validate_credential_pair(access_key, secret_key)
         return access_key, secret_key, region
 
-    def _ensure_runtime_client(self):
-        """Lazily initialize the bedrock-runtime client."""
+    def _ensure_runtime_client(self, credentials: tuple[str | None, str | None, str | None] | None = None):
+        """Lazily initialize the bedrock-runtime client.
+
+        *credentials* lets a caller that has already resolved a pair thread it
+        through, so a single operation never resolves twice and therefore cannot
+        straddle a change of credential source between the two reads (#15071).
+        Omitted, the pair is resolved here as before.
+        """
         if self._runtime_client is not None:
             return self._runtime_client
 
-        try:
-            import boto3
-        except ImportError as exc:
-            raise ImportError("boto3 not installed. Run: pip install boto3") from exc
-
-        access_key, secret_key, region = self._resolve_credentials()
-        if not region or not _AWS_REGION_PATTERN.match(region):
-            # Region can originate from a SecretsService vault entry, which is a
-            # trust boundary, not a format guarantee. Reject anything that isn't
-            # AWS-region-shaped before it is used to build a boto3 endpoint host,
-            # and never echo the malformed value back into a log/exception.
-            raise ValueError("Bedrock: resolved AWS region has an unexpected format, refusing to initialize client")
-        self._region = region
-
-        # Explicit creds are only added when both are present; otherwise IAM role applies.
-        client_kwargs: Dict[str, Any] = {"region_name": region, "service_name": "bedrock-runtime"}
-        if access_key and secret_key:
-            client_kwargs["aws_access_key_id"] = access_key
-            client_kwargs["aws_secret_access_key"] = secret_key
-
-        self._runtime_client = boto3.client(**client_kwargs)
+        if credentials is None:
+            credentials = self._resolve_credentials()
+        self._runtime_client = build_boto3_client("bedrock-runtime", credentials)
+        self._region = credentials[2]
         logger.info("Initialized Bedrock runtime client")
         return self._runtime_client
 
@@ -558,21 +552,20 @@ class BedrockProvider(BaseProvider):
 
     async def is_available(self) -> bool:
         """Return True if Bedrock credentials are configured and the service is reachable."""
+        credentials: tuple[str | None, str | None, str | None] = (None, None, None)
         try:
-            self._ensure_runtime_client()
+            # Resolved once and threaded through both clients. Resolving per
+            # client re-reads mutable state, so the two reads can straddle a
+            # settings reload or a vault rotation and build a client from a
+            # mismatched key pair -- which does not raise, it fails opaquely at
+            # call time and surfaces here only as False (#15071).
+            credentials = self._resolve_credentials()
+            self._ensure_runtime_client(credentials)
             # Simple health check - list foundation models (no cost)
-            import boto3
-
-            bedrock_client = boto3.client(
-                "bedrock",
-                region_name=self._region,
-                aws_access_key_id=self._resolve_credentials()[0],
-                aws_secret_access_key=self._resolve_credentials()[1],
-            )
-            bedrock_client.list_foundation_models(maxResults=1)
+            build_boto3_client("bedrock", credentials).list_foundation_models(maxResults=1)
             return True
         except Exception as exc:
-            logger.debug("Bedrock availability check failed: %s", exc)
+            logger.debug("Bedrock availability check failed: %s", scrub_credentials(str(exc), credentials))
             return False
 
     async def list_models(self) -> List[str]:
