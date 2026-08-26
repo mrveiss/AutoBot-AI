@@ -11,6 +11,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 export PYTHONPATH="${REPO_ROOT}/autobot-backend:${REPO_ROOT}:${PYTHONPATH:-}"
 
+# (#15079) The three paths below used to be relative to the caller's working
+# directory, and they live under two different roots -- so no directory
+# existed from which all of them resolved, and running from the repo root
+# failed all three. Anchor them the way PYTHONPATH above is anchored.
+ANSIBLE_DIR="${REPO_ROOT}/autobot-slm-backend/ansible"
+INVENTORY="${ANSIBLE_DIR}/inventory/production.yml"
+SERVICE_KEYS_DIR="${SCRIPT_DIR}/../config/service-keys"
+
 # Every failed check increments this; the closing banner refuses to claim the
 # pre-deployment checks are complete while it is non-zero (#14867).
 FAILURES=0
@@ -22,7 +30,7 @@ echo "============================================"
 echo "1. Testing Ansible connectivity..."
 # (#14867) A failed ping used to leave the script running straight into the
 # "checks complete" banner.
-if ! ansible all -i ansible/inventory/production.yml -m ping; then
+if ! ansible all -i "${INVENTORY}" -m ping; then
     echo "❌ Ansible connectivity check failed - see the error above" >&2
     FAILURES=$((FAILURES + 1))
 fi
@@ -65,7 +73,19 @@ fi
 # 3. Check latest keys backup
 echo ""
 echo "3. Latest service keys backup:"
-ls -lh config/service-keys/ | tail -n 1
+# (#15079) This was the one check #14867 left without failure accounting: `ls`
+# on a missing directory wrote to stderr, left FAILURES untouched, and the
+# script still printed "Pre-deployment checks complete". A pre-deployment gate
+# that cannot see the keys must not clear the deployment.
+if [ ! -d "${SERVICE_KEYS_DIR}" ]; then
+    echo "❌ service key backup directory not found: ${SERVICE_KEYS_DIR}" >&2
+    FAILURES=$((FAILURES + 1))
+elif [ -z "$(ls -A "${SERVICE_KEYS_DIR}" 2>/dev/null)" ]; then
+    echo "❌ no service key backup present in ${SERVICE_KEYS_DIR}" >&2
+    FAILURES=$((FAILURES + 1))
+else
+    ls -lh "${SERVICE_KEYS_DIR}" | tail -n 1
+fi
 
 echo ""
 # (#14867) This banner used to print with exit 0 even when the checks above
@@ -77,4 +97,4 @@ fi
 echo "✅ Pre-deployment checks complete"
 echo ""
 echo "To deploy:"
-echo "  ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-service-auth.yml"
+echo "  ansible-playbook -i ${INVENTORY} ${ANSIBLE_DIR}/playbooks/deploy-service-auth.yml"
