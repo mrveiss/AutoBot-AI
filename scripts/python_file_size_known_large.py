@@ -465,7 +465,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/api/roles.py": 691,
     "autobot-slm-backend/api/security.py": 962,
     "autobot-slm-backend/api/services.py": 1398,
-    "autobot-slm-backend/api/setup_wizard.py": 1358,
+    "autobot-slm-backend/api/setup_wizard.py": 1354,
     "autobot-slm-backend/api/stateful.py": 693,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1129,

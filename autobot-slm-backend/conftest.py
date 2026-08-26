@@ -236,8 +236,15 @@ for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_M
 #   hf_token_validator #14307 — ditto.
 #   service_extra_data #14307 — ditto; pure data, so the emptiness failure mode
 #                      is deploy_artifacts' verbatim.
+#   provision_progress #14856 — ``is_stale()`` is a guard, and a MagicMock is
+#                      truthy: under a stub, every "running" provision state
+#                      would look stale, silently turning "override an
+#                      abandoned run" into "always override", which is
+#                      exactly the regression the counterweight test exists
+#                      to catch. Needs ``ansible_utils`` (also real-loaded,
+#                      above) for ``_extract_failure_summary``.
 #
-# All six are dependency-light (stdlib plus at most yaml/httpx/autobot_shared),
+# All seven are dependency-light (stdlib plus at most yaml/httpx/autobot_shared),
 # which is the bar for being loadable here at all.
 import importlib.util as _importlib_util  # noqa: E402
 
@@ -249,6 +256,7 @@ _REAL_SERVICE_MODULES = (
     "hf_token_validator",
     "service_extra_data",
     "ansible_utils",
+    "provision_progress",
 )
 
 for _name in _REAL_SERVICE_MODULES:
