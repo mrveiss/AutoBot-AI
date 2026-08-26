@@ -5626,6 +5626,7 @@
       "securityNote": "Commands are executed in a sandboxed environment with limited permissions.",
       "missingSessionId": "Missing session ID for command execution",
       "executionFailed": "Command execution failed",
+      "postExecutionFailed": "The command ran, but a follow-up step failed. Its output is shown; some updates may be missing.",
       "enterComment": "Please enter a comment before submitting"
     },
     "darkModeToggle": {

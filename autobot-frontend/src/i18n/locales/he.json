@@ -4753,7 +4753,8 @@
       "theme": "Theme"
     },
     "commandPermission": {
-      "executionFailed": "Command execution failed",
+      "executionFailed": "הרצת הפקודה נכשלה",
+      "postExecutionFailed": "הפקודה רצה, אך שלב המשך נכשל. הפלט שלה מוצג; ייתכן שחלק מהעדכונים חסרים.",
       "allow": "Allow",
       "purposeLabel": "Purpose",
       "defaultPurpose": "System operation requested",
