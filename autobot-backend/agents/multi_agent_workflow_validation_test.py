@@ -36,14 +36,28 @@ class WorkflowTestResult:
     details: Dict = None
 
 
+#: Paths probed to decide whether each agent is reachable. Every entry is a GET
+#: the backend actually serves, enforced against the router registry by
+#: ``multi_agent_workflow_probe_endpoints_test.py``. The first two entries used
+#: to be ``/api/intelligent-agent/deploy`` and ``/api/research/deploy``: no
+#: router has served a ``/deploy`` path under either prefix at any commit, under
+#: any spelling -- the capability does not exist and never did (#15133).
+AGENT_ENDPOINTS: tuple[tuple[str, str], ...] = (
+    ("/api/intelligent_agent/system-info", "Intelligent Agent"),
+    ("/api/research-browser/sessions", "Research Agent"),
+    ("/api/knowledge_base/health/status", "Knowledge Agent"),
+    ("/api/llm/status", "LLM Agent"),
+)
+
+
 class MultiAgentWorkflowValidator:
     """Validates multi-agent coordination and workflow execution"""
 
     def __init__(self):
         self.results = []
-        self.backend_host = "10.0.0.20"
-        self.backend_port = 8001
-        self.base_url = f"http://{self.backend_host}:{self.backend_port}"
+        # #15133: the host and port were hard-coded here, so the script probed
+        # one fixed node regardless of where the backend actually runs.
+        self.base_url = config.backend_url
 
     def log_result(
         self,
@@ -116,17 +130,9 @@ class MultiAgentWorkflowValidator:
             )
             return
 
-        # Test agent deployment endpoints
-        agent_endpoints = [
-            ("/api/intelligent-agent/deploy", "Intelligent Agent"),
-            ("/api/research/deploy", "Research Agent"),
-            ("/api/knowledge_base/search", "Knowledge Agent"),
-            ("/api/llm/status", "LLM Agent"),
-        ]
-
         active_agents = []
 
-        for endpoint, agent_name in agent_endpoints:
+        for endpoint, agent_name in AGENT_ENDPOINTS:
             try:
                 response = requests.get(f"{self.base_url}{endpoint}", timeout=10)
                 if response.status_code == 200:
@@ -138,10 +144,21 @@ class MultiAgentWorkflowValidator:
                         agents_involved=[agent_name],
                         performance_metrics={"response_time": f"{response.elapsed.total_seconds():.3f}s"},
                     )
+                elif response.status_code == 404:
+                    # The backend answered, so it is up; it does not serve this
+                    # path. That is a defect in this list, never a sleeping
+                    # agent, and it must not read as one (#15133).
+                    self.log_result(
+                        f"Agent Availability - {agent_name}",
+                        "fail",
+                        f"no router serves {endpoint} - probed path is not exposed by the backend",
+                        agents_involved=[agent_name],
+                        details={"status_code": 404, "unserved_path": endpoint},
+                    )
                 else:
                     self.log_result(
                         f"Agent Availability - {agent_name}",
-                        "warning" if response.status_code == 404 else "fail",
+                        "fail",
                         f"{agent_name} returned HTTP {response.status_code}",
                         agents_involved=[agent_name],
                         details={"status_code": response.status_code},
