@@ -261,6 +261,17 @@ class TestTerminalRouterDependencyWiring:
         assert _ADMIN_DEP in terminal_route_spec["/"], "HTTP routes must keep check_admin_permission"
 
 
+def _request(client, method: str, path: str):
+    """Issue *method* at *path*, sending a body only where one is accepted.
+
+    ``TestClient.get()`` takes no ``json=`` -- passing one raises ``TypeError``
+    rather than returning a status, which would have read as a routing failure.
+    """
+    if method == "get":
+        return client.get(path)
+    return getattr(client, method)(path, json={})
+
+
 class TestTerminalToolRoutesKeepTheirGate:
     """`api/terminal_tools.py` declares no dependency of its own (#15084):
     those four routes install packages and run system commands, and have only
@@ -268,32 +279,53 @@ class TestTerminalToolRoutesKeepTheirGate:
     Splitting that parent for the WebSocket fix moved every HTTP route onto
     `admin_router` -- and would have handed these to anonymous callers had the
     include site not moved with them.
+
+    Proved through the real ASGI request path, not by introspection. Under
+    fastapi 0.141.1 a dependency inherited via ``include_router(dependencies=)``
+    is **not** visible on the route object: CI job 98114928835 read an empty
+    dependency list for routes that are in fact gated, because the merge happens
+    at request-routing time. The prefix is invisible the same way. Asking the
+    application what it *serves* is the only question that survives the version
+    difference -- and it is the better question anyway.
     """
 
-    @staticmethod
-    def _match(spec, suffix):
-        """The single route whose path ends with *suffix*, or an explicit failure.
+    #: Full paths as the mounted app serves them. Introspection cannot supply
+    #: these under 0.141.1, but a request can, and a wrong path fails loudly as
+    #: a 404 rather than silently matching nothing.
+    _TOOL_ROUTES = (
+        ("post", "/terminal/install-tool"),
+        ("post", "/terminal/check-tool"),
+        ("post", "/terminal/validate-command"),
+        ("get", "/terminal/package-managers"),
+    )
 
-        Asserting uniqueness is what keeps a suffix match honest: two routes
-        ending the same way would let a gated one vouch for an ungated one.
-        """
-        hits = [p for p in spec if p and p.endswith(suffix)]
-        assert len(hits) == 1, f"expected exactly one route ending {suffix}, found {sorted(hits)} in {sorted(spec)}"
-        return hits[0]
+    @pytest.mark.parametrize("method,path", _TOOL_ROUTES)
+    def test_tool_route_refuses_a_non_admin(self, terminal_app, terminal_client, method, path):
+        def _deny():
+            raise HTTPException(status_code=403, detail="Admin permission required for this operation")
 
-    def test_every_tool_route_is_present(self, terminal_route_spec):
-        """Non-vacuity: if the routes move, the gate assertions below guard nothing."""
-        assert terminal_route_spec, "the route dump was empty -- every assertion below would pass vacuously"
-        for suffix in _TOOL_SUFFIXES:
-            self._match(terminal_route_spec, suffix)
+        terminal_app.dependency_overrides[check_admin_permission] = _deny
+        try:
+            response = _request(terminal_client, method, path)
+        finally:
+            terminal_app.dependency_overrides.pop(check_admin_permission, None)
 
-    @pytest.mark.parametrize("suffix", _TOOL_SUFFIXES)
-    def test_tool_route_keeps_the_admin_dependency(self, terminal_route_spec, suffix):
-        path = self._match(terminal_route_spec, suffix)
-        assert _ADMIN_DEP in terminal_route_spec[path], (
+        assert response.status_code == 403, (
             f"{path} runs system commands and has no dependency of its own -- "
-            "it must stay on a router that carries the admin check"
+            f"it must stay on a router that carries the admin check, got {response.status_code}"
         )
+
+    @pytest.mark.parametrize("method,path", _TOOL_ROUTES)
+    def test_tool_route_is_actually_served(self, terminal_app, terminal_client, method, path):
+        """Non-vacuity: a 404 would make the refusal test above pass for the
+        wrong reason, since an unrouted path never reaches a dependency."""
+        terminal_app.dependency_overrides[check_admin_permission] = lambda: True
+        try:
+            response = _request(terminal_client, method, path)
+        finally:
+            terminal_app.dependency_overrides.pop(check_admin_permission, None)
+
+        assert response.status_code != 404, f"{path} is not served at all -- the gate test above proves nothing"
 
 
 class TestTerminalWebsocketRouteHandshake:
