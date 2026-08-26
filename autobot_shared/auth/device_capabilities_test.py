@@ -134,7 +134,7 @@ def test_a_capability_added_later_is_denied_for_a_credential_issued_before_it():
     ],
 )
 def test_an_unreadable_grant_set_grants_nothing(permissions_raw):
-    """"I cannot tell what this credential was granted" reads as "nothing"."""
+    """ "I cannot tell what this credential was granted" reads as "nothing"."""
     assert (
         capability_granted(
             capability=DeviceCapability.DESKTOP_VIEW,

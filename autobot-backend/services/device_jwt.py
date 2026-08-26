@@ -176,9 +176,7 @@ async def _read_device_state(device_id: str) -> str:
     from user_management.database import get_async_session  # noqa: PLC0415
 
     async for session in get_async_session():
-        result = await session.execute(
-            select(MobileDevice.revoked_at).where(MobileDevice.id == device_id).limit(1)
-        )
+        result = await session.execute(select(MobileDevice.revoked_at).where(MobileDevice.id == device_id).limit(1))
         row = result.first()
         break  # Only need one iteration
     if row is None:

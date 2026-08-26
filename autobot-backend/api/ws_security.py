@@ -243,9 +243,7 @@ async def enforce_ws_remote_control_auth(
 
     device_id = str(device_user.get("device_id", ""))
     decision = (
-        await evaluate_device_capabilities(device_id, required)
-        if required
-        else _no_capability_requested(device_id)
+        await evaluate_device_capabilities(device_id, required) if required else _no_capability_requested(device_id)
     )
     if decision.granted:
         logger.info(

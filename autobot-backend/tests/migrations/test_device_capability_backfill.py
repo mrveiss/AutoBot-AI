@@ -77,10 +77,7 @@ async def test_a_device_paired_before_the_column_existed_is_denied_everything(fr
         async with engine.connect() as conn:
             row = (
                 await conn.execute(
-                    text(
-                        "SELECT permissions, is_approved, revoked_at "
-                        "FROM desktop_mobile_devices WHERE id = :id"
-                    ),
+                    text("SELECT permissions, is_approved, revoked_at " "FROM desktop_mobile_devices WHERE id = :id"),
                     {"id": device_id},
                 )
             ).one()

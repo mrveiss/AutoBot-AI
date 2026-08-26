@@ -206,9 +206,7 @@ class TestTerminalWebsocketCapabilityGate:
         assert len(calls) == 0
         assert any("reason=missing_capability:terminal" in r.getMessage() for r in caplog.records)
 
-    def test_a_revoked_credential_is_refused_a_capability_it_holds(
-        self, terminal_client, device_owned_session, caplog
-    ):
+    def test_a_revoked_credential_is_refused_a_capability_it_holds(self, terminal_client, device_owned_session, caplog):
         """AC: revocation takes effect on a new handshake, without deleting the row."""
         revoked = _device_row(
             permissions=serialise_device_permissions([DeviceCapability.TERMINAL]),
@@ -278,9 +276,7 @@ class TestTerminalWebsocketCapabilityGate:
         assert any("Rejected device credential" in m for m in device_messages)
         assert not any("Rejected unauthenticated WebSocket handshake" in m for m in device_messages)
 
-    def test_no_refusal_message_carries_credential_material(
-        self, terminal_client, device_owned_session, caplog
-    ):
+    def test_no_refusal_message_carries_credential_material(self, terminal_client, device_owned_session, caplog):
         """A refusal names the device, never the secret that identified it.
 
         The telltale is planted in the encrypted-token column, which is the
@@ -367,9 +363,7 @@ class TestVncWebsocketCapabilityGate:
     def test_both_desktop_capabilities_reach_accept(self, vnc_client):
         """Non-vacuity witness: the route is live and the gate is the only thing refusing."""
         granted = _device_row(
-            permissions=serialise_device_permissions(
-                [DeviceCapability.DESKTOP_VIEW, DeviceCapability.DESKTOP_INPUT]
-            )
+            permissions=serialise_device_permissions([DeviceCapability.DESKTOP_VIEW, DeviceCapability.DESKTOP_INPUT])
         )
         with (
             _device_credential(granted),
@@ -403,9 +397,7 @@ class TestGateWiringMistakesDeny:
         websocket.close = AsyncMock()
 
         with (
-            _device_credential(
-                _device_row(permissions=serialise_device_permissions(list(DeviceCapability)))
-            ),
+            _device_credential(_device_row(permissions=serialise_device_permissions(list(DeviceCapability)))),
             caplog.at_level(logging.ERROR, logger=_WS_LOGGER),
         ):
             user = await enforce_ws_remote_control_auth(websocket)

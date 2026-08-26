@@ -145,9 +145,9 @@ async def test_revoking_one_device_leaves_the_users_other_device_untouched(db_se
     assert revoked_row.revoked_at is not None
     assert revoked_row.has_capability(DeviceCapability.TERMINAL) is False
     assert kept_row.revoked_at is None
-    assert kept_row.has_capability(DeviceCapability.TERMINAL) is True, (
-        "revoking one device disabled another -- revocation must be scoped to one credential"
-    )
+    assert (
+        kept_row.has_capability(DeviceCapability.TERMINAL) is True
+    ), "revoking one device disabled another -- revocation must be scoped to one credential"
 
 
 @pytest.mark.asyncio
