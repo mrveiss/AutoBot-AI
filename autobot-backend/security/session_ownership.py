@@ -22,6 +22,7 @@ from fastapi import HTTPException, Request
 from auth_middleware import get_auth_middleware
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_30_DAYS
+from security.endpoint_enforcement import effective_enforcement_mode
 from services.feature_flags import EnforcementModeUnavailable
 
 logger = get_logger(__name__)
@@ -282,6 +283,10 @@ class SessionOwnershipValidator:
             )
             return DEGRADED_ENFORCEMENT_MODE
 
+    async def _get_enforcement_mode_for_request(self, request: Request) -> str:
+        """Global mode, tightened by any stricter per-endpoint override (#15086)."""
+        return await effective_enforcement_mode(self.feature_flags, await self._get_enforcement_mode(), request)
+
     def _audit_log_violation(
         self,
         username: str,
@@ -498,16 +503,12 @@ class SessionOwnershipValidator:
                 detail="You do not have permission to access this conversation",
             )
 
-    async def _resolve_fast_paths(
-        self,
-        session_id: str,
-        user_data: Dict,
-    ) -> Dict | None:
+    async def _resolve_fast_paths(self, session_id: str, user_data: Dict, enforcement_mode: str) -> Dict | None:
         """Helper for validate_ownership. Ref: #1088.
 
         Checks the two early-exit conditions that bypass ownership lookup:
         1. Auth is disabled globally (development mode).
-        2. Enforcement mode is "disabled".
+        2. Enforcement mode is "disabled" (resolved by the caller, incl. #15086 overrides).
 
         Returns the result dict when a fast path applies, or None to signal
         that the caller should proceed to the full ownership check.
@@ -519,8 +520,6 @@ class SessionOwnershipValidator:
                 "user_data": user_data,
                 "reason": "auth_disabled",
             }
-
-        enforcement_mode = await self._get_enforcement_mode()
 
         if enforcement_mode == "disabled":
             logger.debug(f"[DISABLED MODE] Skipping ownership validation for session {session_id[:8]}...")
@@ -659,12 +658,12 @@ class SessionOwnershipValidator:
         """
         user_data = self._get_authenticated_user(session_id, request)
         username = user_data["username"]
+        enforcement_mode = await self._get_enforcement_mode_for_request(request)
 
-        fast_path_result = await self._resolve_fast_paths(session_id, user_data)
+        fast_path_result = await self._resolve_fast_paths(session_id, user_data, enforcement_mode)
         if fast_path_result is not None:
             return fast_path_result
 
-        enforcement_mode = await self._get_enforcement_mode()
         return await self._resolve_ownership(session_id, username, user_data, request, enforcement_mode)
 
     async def get_user_sessions(self, username: str) -> list[str]:

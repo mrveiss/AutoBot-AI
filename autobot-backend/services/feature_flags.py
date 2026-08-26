@@ -63,6 +63,40 @@ class EnforcementModeUnavailable(RuntimeError):
     """
 
 
+# How strictly each mode gates access, from most to least permissive. Used only
+# to compare a global mode against a per-endpoint override (#15086) -- never to
+# order modes for any other purpose.
+_ENFORCEMENT_STRICTNESS: dict[EnforcementMode, int] = {
+    EnforcementMode.DISABLED: 0,
+    EnforcementMode.LOG_ONLY: 1,
+    EnforcementMode.ENFORCED: 2,
+}
+
+
+def combine_enforcement_modes(global_mode: EnforcementMode, override: EnforcementMode | None) -> EnforcementMode:
+    """Combine the global enforcement mode with a per-endpoint override (#15086).
+
+    Precedence: the **stricter** of the two wins. An override can tighten
+    enforcement above the global mode -- an operator turning ``enforced`` on for
+    one endpoint while the fleet is still ``log_only`` -- but it can never
+    loosen enforcement below the global mode. Letting an override relax below
+    the platform-wide posture would make it a per-endpoint fail-open: the same
+    class of defect as #14010 and #14866, a control that reads as protection
+    while doing the opposite.
+
+    ``override=None`` means no override is stored, or reading one failed and
+    degraded to "no opinion" rather than to a value (see
+    :meth:`FeatureFlags.get_endpoint_enforcement`) -- either way the global mode
+    applies unchanged. This is also why a failed override read cannot yield a
+    weaker mode than the global one: it never contributes a mode at all.
+    """
+    if override is None:
+        return global_mode
+    if _ENFORCEMENT_STRICTNESS[override] > _ENFORCEMENT_STRICTNESS[global_mode]:
+        return override
+    return global_mode
+
+
 # The single Redis key the platform's whole access-control posture is read from.
 # It was a literal repeated at each reader and writer; provisioning has to name
 # the same key, and a fourth copy of a string is how the fourth copy drifts.
