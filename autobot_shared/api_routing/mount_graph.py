@@ -264,8 +264,43 @@ def _routes_subject(node: ast.AST) -> Optional[ast.AST]:
 
 
 def _is_apirouter(call: ast.Call) -> bool:
+    """Whether *call* constructs an ``APIRouter``, plain or dotted.
+
+    The ``None`` branch is explicit rather than folded into ``bool(rendered) and
+    rendered.split(...)``. That spelling never reached ``.split`` with ``None`` —
+    ``and`` short-circuits — so this is a narrowing the checker can follow, not a
+    bug fix, and the two forms select exactly the same calls. ``_dotted`` cannot
+    return ``""`` either: it always joins at least one identifier.
+    """
     rendered = _dotted(call.func)
-    return bool(rendered) and rendered.split(".")[-1] == "APIRouter"
+    if rendered is None:
+        return False
+    return rendered.split(".")[-1] == "APIRouter"
+
+
+@dataclass
+class _Buckets:
+    """The node kinds one ``ast.walk`` collects, each keeping its own type.
+
+    A ``Dict[type, List[ast.AST]]`` would be shorter and is what this was first
+    written as, but it erases the element type: every later pass then reads
+    ``.func`` / ``.module`` / ``.targets`` off a bare ``ast.AST``, which the type
+    checker cannot verify and a future edit could get wrong with nothing saying
+    so. Five named lists cost five lines and make each pass's assumption explicit.
+
+    ``isinstance`` rather than ``type(node) is ...`` when filling these: it is
+    what the passes used before they were merged into one walk, and it stays
+    correct if a node kind ever gains a subclass. None of these five has one
+    today — ``AsyncFor`` is a sibling of ``For``, not a subclass, and
+    ``AnnAssign``/``AugAssign`` are siblings of ``Assign`` — so the two spellings
+    select the same nodes now, and ``isinstance`` is the one that keeps doing so.
+    """
+
+    fors: List[ast.For] = field(default_factory=list)
+    imports: List[ast.ImportFrom] = field(default_factory=list)
+    assigns: List[ast.Assign] = field(default_factory=list)
+    calls: List[ast.Call] = field(default_factory=list)
+    attributes: List[ast.Attribute] = field(default_factory=list)
 
 
 class ModuleScan:
@@ -282,7 +317,7 @@ class ModuleScan:
         self.dynamic: List[str] = []
         self.loop_targets: Set[str] = set()
         self.routes_reads: List[RoutesRead] = []
-        self._nodes: Dict[type, List[ast.AST]] = {}
+        self._nodes = _Buckets()
 
     def run(self) -> None:
         """One ``ast.walk``, then five passes over what it bucketed.
@@ -293,17 +328,18 @@ class ModuleScan:
         module-local definitions then override an imported name of the same
         spelling, and only after both can a mount or a ``.routes`` read resolve.
         """
-        buckets: Dict[type, List[ast.AST]] = {
-            ast.For: [],
-            ast.ImportFrom: [],
-            ast.Assign: [],
-            ast.Call: [],
-            ast.Attribute: [],
-        }
+        buckets = _Buckets()
         for node in ast.walk(self.tree):
-            found = buckets.get(type(node))
-            if found is not None:
-                found.append(node)
+            if isinstance(node, ast.For):
+                buckets.fors.append(node)
+            elif isinstance(node, ast.ImportFrom):
+                buckets.imports.append(node)
+            elif isinstance(node, ast.Assign):
+                buckets.assigns.append(node)
+            elif isinstance(node, ast.Call):
+                buckets.calls.append(node)
+            elif isinstance(node, ast.Attribute):
+                buckets.attributes.append(node)
         self._nodes = buckets
         self._collect_loop_targets()
         self._collect_imports()
@@ -324,7 +360,8 @@ class ModuleScan:
         counted and reported; a dropped one cannot be told apart from a scan
         that matched nothing.
         """
-        for node in self._nodes[ast.Attribute] + self._nodes[ast.Call]:
+        reads: List[ast.expr] = [*self._nodes.attributes, *self._nodes.calls]
+        for node in reads:
             subject = _routes_subject(node)
             if subject is None:
                 continue
@@ -342,7 +379,7 @@ class ModuleScan:
         entries instead, so it must be recorded as *dynamic*, not as an
         unresolvable reference.
         """
-        for node in self._nodes[ast.For]:
+        for node in self._nodes.fors:
             targets = node.target.elts if isinstance(node.target, ast.Tuple) else [node.target]
             for target in targets:
                 if isinstance(target, ast.Name):
@@ -350,7 +387,7 @@ class ModuleScan:
 
     # imports first: `from api.x import router as y` binds y -> api.x:router.
     def _collect_imports(self) -> None:
-        for node in self._nodes[ast.ImportFrom]:
+        for node in self._nodes.imports:
             if node.module is None:
                 continue
             source = node.module
@@ -365,7 +402,7 @@ class ModuleScan:
     # definitions second, so a module-local `router = APIRouter()` wins over an
     # imported name of the same spelling.
     def _collect_definitions(self) -> None:
-        for node in self._nodes[ast.Assign]:
+        for node in self._nodes.assigns:
             if not isinstance(node.value, ast.Call):
                 continue
             if not _is_apirouter(node.value):
@@ -390,7 +427,7 @@ class ModuleScan:
         return None
 
     def _collect_include_calls(self) -> None:
-        for node in self._nodes[ast.Call]:
+        for node in self._nodes.calls:
             if not isinstance(node.func, ast.Attribute):
                 continue
             if node.func.attr != "include_router" or not node.args:
