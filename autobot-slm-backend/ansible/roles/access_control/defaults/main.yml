@@ -37,6 +37,16 @@ audit_backends:
   - file
   - redis
 
+# Enforcement posture written into the flag store at provisioning time (#14866).
+# Valid values: disabled, log_only, enforced. Must stay in step with
+# services.feature_flags.PROVISIONED_ENFORCEMENT_MODE_DEFAULT -- an install
+# provisioned by Ansible and one provisioned by running the seeder directly must
+# not end up with different postures. Pinned by
+# repo_tests/access_control_enforcement_provisioning_test.py.
+access_control_enforcement_mode: log_only
+access_control_enforcement_seeder: >-
+  {{ project_root }}/autobot-infrastructure/shared/scripts/security/seed_enforcement_mode.py
+
 # Session ownership
 session_ownership_backfill: true
 session_ownership_strict_mode: false  # Reject if owner missing
