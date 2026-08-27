@@ -30,7 +30,8 @@ def main() -> int:
         p = pathlib.Path(arg)
         # Normalise to forward-slash relative path for set lookup
         rel = str(p).replace("\\", "/")
-        if any(rel.endswith(known.replace("\\", "/")) for known in KNOWN_LARGE):
+        norm_known = {k.replace("\\", "/") for k in KNOWN_LARGE}
+        if rel in norm_known:
             continue
         try:
             line_count = sum(1 for _ in p.open(encoding="utf-8"))
