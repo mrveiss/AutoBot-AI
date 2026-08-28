@@ -181,11 +181,12 @@ jobs:
       # `backend` measured 35 passed on run 32837489748 and 34 on 32839088246 —
       # the difference was #15055's wall-clock assertion flipping on runner load,
       # not a change in coverage. The floor is therefore 34, the lower of the two
-      # OBSERVED figures. #15055 has since landed and also added six harness
-      # guards to that module, so the backend figure should now be 41 and should
-      # stop moving; the floor is raised to the number a green run actually
-      # reports, not to that prediction. `infra` measured 12 collected / 10
-      # passed on both.
+      # OBSERVED figures. #15055 has since landed, so the backend figure should
+      # settle at 35 and stop moving — its harness guards live unmarked in
+      # `autobot_shared/perf_work_budget_test.py`, in the normal gate, and are
+      # deliberately NOT in this selection. The floor is raised to the number a
+      # green run actually reports, not to that prediction. `infra` measured 12
+      # collected / 10 passed on both.
       #
       # #13543: the floors below are applied PER INVOCATION, never to their sum.
       # `marker_suite_report.py` used to compare the total against one floor, so

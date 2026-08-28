@@ -8,14 +8,13 @@ Tests performance characteristics, resource usage, and scalability
 import asyncio
 import os
 import time
-from contextvars import ContextVar
-from typing import Callable
 from unittest.mock import AsyncMock, Mock, patch
 
 import psutil
 import pytest
 
 from autobot_shared.env_utils import env_flag, env_float, env_int, env_str
+from autobot_shared.perf_work_budget import assert_within_work_budget, recording_work_units
 from config.manager import ConfigManager as ConfigManager
 from memory import MemoryManager, TaskPriority
 from multimodal_processor import (
@@ -35,167 +34,32 @@ from services.config_service import ConfigService
 pytestmark = pytest.mark.performance
 
 
-# #15055: every budget in this module is expressed in RUNNER-CALIBRATED WORK
-# UNITS. None of them compares milliseconds against a hardcoded constant, and
-# none of them may be "raised" because a run came close.
-#
-# A millisecond ceiling measures the runner, not the code. `assert
-# processor_startup_time < 500.0` passed on run 32837489748 and failed on
-# 32839088246 (547.2ms) and 33154304714 (538.9ms) — the last of those on the
-# commit immediately after a green one, whose entire diff was a file that run
-# deselects, with this module untouched on that branch. Both overshoots sit
-# within 10% of the budget, which is the signature of a constant set near the
-# runner's median rather than above its worst case. This selection runs on a
-# shared, multi-tenant runner under pytest-xdist, so contention from a
-# noisy neighbour and from sibling workers is the normal condition here, not an
-# anomaly — and a constant at the median will keep meeting it.
-#
-# One WORK UNIT is the wall-clock cost of `_reference_workload()` — a fixed,
-# deterministic slice of pure-Python work — measured in THIS process, in the
-# same moment as the operation under test. Both sides of the comparison see the
-# same contention, so a runner that is uniformly 3x slow inflates numerator and
-# denominator alike and the ratio holds. This is the move #14930 made for RSS
-# (measure the delta the assertion always meant, not the absolute figure the
-# process happened to sit at) and the move #13162 made for the cache and
-# concurrency checks below (assert the property, not the clock).
-#
-# What a unit budget still catches: an eager model load, a network call or a
-# file read added to a constructor, an O(n^2) traversal, a lock introduced on a
-# hot path. Those are order-of-magnitude changes, which is what this module can
-# actually detect. A 10% wall-clock regression was never detectable here — the
-# noise band was already wider than that, which is exactly why the constants
-# fired on runner weather instead.
-#
-# HOW TO CHANGE A BUDGET. Every site records its measurement on every run, pass
-# or fail, by two routes: a `[perf #15055] ...` line on stdout, which pytest
-# shows for a FAILING test (and locally under `-s`), and a `perf_work_units`
-# property in the junit XML, which is written for PASSING tests too and is
-# uploaded by marker-tests.yml as `marker-suite-reports`. The junit route exists
-# because this selection runs under `-n auto`, where xdist captures worker
-# stdout and a green run would otherwise report nothing — which is how the old
-# constants went years without ever being re-derived.
-#
-# Read the number off a run, then move the budget to sit above the highest
-# OBSERVED value with the headroom stated below — never to a round figure chosen
-# for comfort, and never upwards because a run came close. A budget that has to
-# be relaxed to stay green is reporting a real change in the code's work, and
-# that is the finding, not the obstacle.
-#
-# HOW THESE BUDGETS WERE DERIVED. Five local runs gave a highest-observed value
-# per site. Run 33156790797 then measured `Config manager startup` at 1.474
-# units on CI against a local high of 0.459 — so ordinary Python work costs
-# about 3.2x more units on the CI runner than here, and every local figure is
-# converted by that factor before headroom is applied. Headroom on top: 3x for
-# sites whose measurement is large and steady (cv of units under ~12% across the
-# five runs), 8x for sites measuring single-digit microseconds, where timer
-# granularity rather than load sets the spread, with a 0.20-unit floor below
-# which the ratio is granularity and nothing else.
-#
-# THREE SITES ARE FIRST-OBSERVATION CEILINGS, NOT MEASUREMENTS, and are labelled
-# as such at the call site: the local interpreter has no torch, so it does not
-# execute what CI executes in `Multimodal processor startup` and `Single
-# multimodal processing`, and `Memory manager startup` opens SQLite against a
-# different filesystem. Read their reported units off a run and ratchet them
-# DOWN. That direction is the only permitted one.
-
-_REFERENCE_WORKLOAD_ITERATIONS = 20_000
-_REFERENCE_WORKLOAD_SAMPLES = 9
-
-# #15055: the junit sink for the reported measurements. Set per test by the
-# autouse fixture below, so `assert_within_work_budget` can record without every
-# call site having to thread a fixture through.
-_WORK_UNIT_RECORDER: ContextVar[Callable[[str, object], None] | None] = ContextVar(
-    "autobot_work_unit_recorder", default=None
-)
+# #15055: the budgets below are RUNNER-CALIBRATED WORK UNITS, not milliseconds
+# against a hardcoded constant. The doctrine, the unit and the assertion live in
+# `autobot_shared.perf_work_budget` — read its module docstring before changing
+# any number here. In one line: a millisecond ceiling measures the runner, so
+# each budget is a ratio against a fixed slice of pure-Python work timed in the
+# same process, and a uniformly slow runner scales both sides.
+# DERIVATION. Five local runs gave a highest-observed value per site. Run
+# 33156790797 then measured `Config manager startup` at 1.474 units on CI against
+# a local high of 0.459, so ordinary Python work costs ~3.2x more units on that
+# runner; every local figure is converted by that factor before headroom. Headroom
+# on top: 3x where the measurement is large and steady (cv of units under ~12%
+# across the five runs), 8x where it is single-digit microseconds and timer
+# granularity rather than load sets the spread, floored at 0.20 units.
+# THREE SITES ARE FIRST-OBSERVATION CEILINGS, NOT MEASUREMENTS, labelled as such
+# at the call site: the local interpreter has no torch, so it does not execute
+# what CI executes in `Multimodal processor startup` and `Single multimodal
+# processing`, and `Memory manager startup` opens SQLite against a different
+# filesystem. Read their reported units off a run and ratchet them DOWN — the
+# only permitted direction.
 
 
 @pytest.fixture(autouse=True)
 def _record_work_units(record_property):
-    """#15055: send every measurement to the junit XML, green runs included.
-
-    marker-tests.yml runs this selection with `-n auto`, and xdist captures
-    worker stdout, so the printed line below survives only on a FAILING test.
-    A budget that can only be re-derived from a red run is a budget nobody
-    re-derives -- which is how the millisecond constants stayed at the runner's
-    median. `--junitxml` is already passed by that workflow and the file is
-    uploaded as `marker-suite-reports`, so this costs nothing to collect.
-    """
-    token = _WORK_UNIT_RECORDER.set(record_property)
-    try:
+    """#15055: send every measurement to the junit XML, green runs included."""
+    with recording_work_units(record_property):
         yield
-    finally:
-        _WORK_UNIT_RECORDER.reset(token)
-
-
-def _reference_workload() -> int:
-    """One work unit: a fixed, deterministic slice of pure-Python work.
-
-    Deliberately CPU-bound, allocation-light and dependency-free, so its cost is
-    a property of how contended this machine is right now and of nothing else.
-    Never change its shape without re-deriving every budget below — the unit is
-    the yardstick, and silently rescaling it rescales all of them.
-    """
-    total = 0
-    for i in range(_REFERENCE_WORKLOAD_ITERATIONS):
-        total += (i * i) % 7
-    return total
-
-
-def measure_reference_ms() -> float:
-    """Cost in milliseconds of one work unit on this runner, right now.
-
-    The MEDIAN of several samples, not the minimum: the denominator has to
-    describe the contention the numerator was measured under. A best-of-N
-    denominator would describe an idle machine while the numerator described a
-    busy one, which is the failure the millisecond constants already had.
-    """
-    samples = []
-    for _ in range(_REFERENCE_WORKLOAD_SAMPLES):
-        start = time.perf_counter()
-        _reference_workload()
-        samples.append((time.perf_counter() - start) * 1000.0)
-    samples.sort()
-    return samples[len(samples) // 2]
-
-
-def assert_within_work_budget(elapsed_ms: float, budget_units: float, what: str) -> None:
-    """Assert an operation cost fewer than `budget_units` calibrated work units.
-
-    Fails on three distinct conditions, all of them real:
-
-    * the operation exceeded its budget relative to this runner's own speed —
-      the regression this module exists to catch;
-    * nothing was measured (`elapsed_ms` is zero, negative or not a number), so
-      the assertion cannot pass vacuously by timing an operation that never ran
-      or by being handed a stub in place of a measurement;
-    * the calibration itself measured nothing, which would make the ratio
-      meaningless rather than merely generous.
-    """
-    assert isinstance(elapsed_ms, (int, float)), f"{what}: no measurement was taken (got {elapsed_ms!r})"
-    assert elapsed_ms > 0.0, f"{what}: measured {elapsed_ms}ms — the operation under test did not run"
-
-    reference_ms = measure_reference_ms()
-    assert reference_ms > 0.0, f"{what}: work-unit calibration measured {reference_ms}ms and cannot be a divisor"
-
-    units = elapsed_ms / reference_ms
-
-    # #15055: report the fine-grained number on every run, pass or fail. The
-    # budgets below are ratchets and a ratchet needs observations to be set
-    # from -- the millisecond constants were picked once and never re-derived,
-    # which is how they ended up at the runner's median. Same reporting habit
-    # as performance_benchmarks_test.py.
-    report = (
-        f"{what}: {units:.3f} work units (budget {budget_units}) " f"= {elapsed_ms:.3f}ms / {reference_ms:.3f}ms unit"
-    )
-    print(f"[perf #15055] {report}")  # noqa: print
-    recorder = _WORK_UNIT_RECORDER.get()
-    if recorder is not None:
-        recorder("perf_work_units", report)
-    assert units < budget_units, (
-        f"{what}: {units:.3f} work units, budget {budget_units} "
-        f"({elapsed_ms:.3f}ms measured against a {reference_ms:.3f}ms work unit on this runner). "
-        f"This is a load-invariant ratio, not a wall-clock ceiling — investigate the code, do not raise it."
-    )
 
 
 class TestSystemPerformanceBenchmarks:
@@ -480,29 +344,26 @@ class TestSystemPerformanceBenchmarks:
         `MultiModalProcessor.__init__` calls `_get_torch()`, so the first
         construction in a worker also pays a one-time lazy `import torch` that
         belongs to the interpreter, happens once per process, and lands on
-        whichever test happens to construct first — a cost that moves with test
-        ordering rather than with this code. The same holds for `ConfigManager`
-        and `MemoryManager`, whose first construction primes module-level caches
-        and singletons. The second construction is the per-instance cost, which
-        is the quantity a "component startup" budget means and the one a
-        regression moves: an eager model load, a network call or a file read
-        added to `__init__` is paid on EVERY construction, so it lands here.
+        whichever test constructs first — a cost that moves with test ordering
+        rather than with this code. The same holds for `ConfigManager` and
+        `MemoryManager`, whose first construction primes module-level caches and
+        singletons. The second construction is the per-instance cost, which is
+        what a "component startup" budget means and what a regression moves: an
+        eager model load, a network call or a file read added to `__init__` is
+        paid on EVERY construction, so it lands here.
 
-        MEASURED, and it is not what the old constant assumed. Run 33156790797
-        put the WARM construction at 466.351ms — 315.602 work units. So the
-        one-time import was only a small part of the old 538.9ms reading: the
-        constructor genuinely costs most of that on every instantiation, and the
-        500ms constant sat about 7% above the real per-construction cost. A
-        budget with 7% of headroom over the true value does not need runner
-        weather to be a coin toss, it only needs a little. That is the second
-        defect behind the same symptom, and it is why raising the constant would
-        have bought one or two green runs and no more.
-
-        The 466ms is itself suspect rather than accepted: #15054 has
-        `VisionProcessor`'s CLIP load raising `TypeError` on the pinned
-        transformers, so this constructor is timed on an error path. The budget
-        below is a ceiling to ratchet DOWN once that lands, not a blessing of
-        the current figure.
+        MEASURED, and not what the old constant assumed. Run 33156790797 put the
+        WARM construction at 466.351ms — 315.602 work units. The one-time import
+        was therefore only a small part of the old 538.9ms reading: the
+        constructor genuinely costs most of that on EVERY instantiation, so the
+        500ms constant sat ~7% above the real per-construction cost, and a budget
+        with 7% of headroom does not need runner weather to be a coin toss. That
+        is the second defect behind the same symptom, and it is why raising the
+        constant would have bought a green run or two and no more. The 466ms is
+        recorded as suspect rather than blessed: #15054 has `VisionProcessor`'s
+        CLIP load raising `TypeError` on the pinned transformers, so this is
+        timed on an error path, and the budget is a ceiling to ratchet DOWN once
+        that lands.
         """
         # Test config manager startup
         ConfigManager()  # discard: primes module-level caches, not startup cost
@@ -733,45 +594,6 @@ class TestScalabilityBenchmarks:
 
         # Memory growth should be reasonable (less than 100MB)
         assert memory_growth < 100.0, f"Excessive memory growth: {memory_growth}MB"
-
-
-class TestWorkBudgetHarness:
-    """#15055: guards on the budget harness itself.
-
-    A budget that can pass without measuring anything is the failure mode the
-    millisecond constants were replaced to avoid repeating, so the property is
-    asserted here rather than left to review. These are cheap and deterministic:
-    they exercise `assert_within_work_budget` directly and time nothing.
-    """
-
-    def test_zero_elapsed_cannot_pass(self):
-        """A measurement of zero is a measurement that did not happen."""
-        with pytest.raises(AssertionError, match="did not run"):
-            assert_within_work_budget(0.0, 1000.0, "zero measurement")
-
-    def test_negative_elapsed_cannot_pass(self):
-        """A negative duration means the clock, not the code, was measured."""
-        with pytest.raises(AssertionError, match="did not run"):
-            assert_within_work_budget(-1.0, 1000.0, "negative measurement")
-
-    def test_absent_measurement_cannot_pass(self):
-        """A missing measurement fails instead of comparing None to a budget."""
-        with pytest.raises(AssertionError, match="no measurement was taken"):
-            assert_within_work_budget(None, 1000.0, "absent measurement")
-
-    def test_budget_still_fails_when_exceeded(self):
-        """The counterpart guard: the assertion is not unconditionally green."""
-        with pytest.raises(AssertionError, match="work units"):
-            assert_within_work_budget(measure_reference_ms() * 100.0, 1.0, "deliberate overrun")
-
-    def test_work_unit_is_measurable_and_positive(self):
-        """The divisor is a real measurement, so a ratio means something."""
-        reference_ms = measure_reference_ms()
-        assert reference_ms > 0.0, f"work-unit calibration measured {reference_ms}ms"
-
-    def test_reference_workload_is_deterministic(self):
-        """The yardstick does the same work every time it is used."""
-        assert _reference_workload() == _reference_workload()
 
 
 if __name__ == "__main__":
