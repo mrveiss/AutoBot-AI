@@ -13,11 +13,36 @@ from typing import Any, Dict
 
 import pytest
 
-# Add project root and user backend to path
+# `autobot-user-backend/` was renamed to `autobot-backend/` wholesale by
+# 00ae80e10c (role-based repo restructuring, #926) — every path under it moved
+# R100 — but this shim kept pointing at the old name, so it added a directory
+# that does not exist and supplied nothing (#15161).
+#
+# What that cost depended entirely on how pytest was invoked, which is why it
+# survived so long:
+#
+#   * `pytest autobot-infrastructure/shared/tests` — rootdir is THIS directory,
+#     so the repo-root pytest.ini is not read, nothing puts `config` on the path,
+#     and the import below aborted collection of the whole tree with
+#     `ImportError: cannot import name 'unified_config_manager' from 'config'`.
+#   * `pytest autobot-infrastructure/shared/tests libs` — what marker-tests.yml
+#     runs. rootdir is the repository root, whose pytest.ini carries
+#     `pythonpath = . autobot-backend ...`, so `config` resolved anyway and the
+#     shim's failure was invisible.
+#
+# Repointing it makes this tree collect on its own terms instead of borrowing a
+# path entry from whichever rootdir the caller happened to select. Appended, not
+# inserted at position 0, so it cannot shadow a repo-root package for the other
+# roots sharing the same pytest session: `autobot-backend/config` is a regular
+# package and the repository root's `config/` is a namespace package, so the
+# regular one wins regardless of order.
 project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root / "autobot-user-backend"))
+_backend_path = str(project_root / "autobot-backend")
+if _backend_path not in sys.path:
+    sys.path.append(_backend_path)
 
-# Import configuration manager
+# Canonical config manager: autobot-backend/config/__init__.py resolves the
+# `unified_config_manager` attribute lazily onto config.manager.ConfigManager.
 from config import unified_config_manager
 
 
@@ -39,7 +64,9 @@ def config() -> Dict[str, Any]:
         "backend": unified_config_manager.get_backend_config(),
         "redis": unified_config_manager.get_redis_config(),
         "services": unified_config_manager.get_distributed_services_config(),
-        "chroma": unified_config_manager.get_chroma_config(),
+        # ConfigManager exposes no get_chroma_config(); the chroma settings are
+        # a config section like `system` below.
+        "chroma": unified_config_manager.get_config_section("chroma") or {},
         "system": unified_config_manager.get_config_section("system") or {},
     }
 
