@@ -62,15 +62,34 @@ from repo_tests.uncollected_class_model import (
 # they are filed with per-file counts, and this ceiling stops the population
 # growing back. "Nearly": #14979 found two that dialled nothing at all.
 _KNOWN_OFFENDERS = {
-    # 59, not 61: the two interface stubs below are exempt and counted separately.
-    # 77 -> 59 (#14979): takeover_manager_e2e_test.py, temporal_invalidation_test.py
-    "autobot-backend": (59, 18000),
-    # The floor equals the ceiling here, and legitimately so: this tree holds one
-    # test module whose single class is uncollected, so every test-shaped thing in
-    # it is also an offender. Collecting them moves the ceiling to 0 and leaves the
-    # floor at 10, which is exactly the shape a real fix has.
-    "autobot-frontend": (10, 10),
-    "autobot-infrastructure": (19, 250),
+    # 77 -> 59 (#14927): takeover_manager_e2e_test.py, temporal_invalidation_test.py
+    # 59 -> 8  (#14979): the eight backend drivers from that issue's table
+    #   (hardware_metrics, comprehensive_system_validation, chat_knowledge_system_e2e,
+    #   monitoring_and_alerts, multi_agent_workflow_validation, npu_integration_e2e,
+    #   async_baseline_performance, knowledge_performance).
+    # The 8 left are NOT from that table -- they are whatever else in this tree
+    # still puts test_* methods in a class pytest will not collect. Nothing in
+    # #14979 was meant to reach them, and the ceiling now pins them exactly.
+    "autobot-backend": (8, 18000),
+    # 19 -> 11 (#14979): the two files under `shared/tests` were converted, and
+    # that tree IS named by a marker-tests.yml root, so their markers select
+    # somewhere and the conversion is real.
+    #
+    # The remaining 11 sit in `shared/scripts/{analysis,utilities}`, which no
+    # pytest invocation names. They were deliberately left UNCONVERTED: marking
+    # a test with a marker ci.yml deselects, in a tree marker-tests.yml does not
+    # cover, means it runs in no workflow at all -- which
+    # repo_tests/marker_suite_root_coverage_test.py fails on by design (#13286).
+    # Converting them would have turned "a file that ran nowhere" into "a test
+    # that runs nowhere", which is worse because it reads as coverage. Wiring
+    # that tree in means taking on ~35 unvetted ad-hoc scripts under
+    # `analysis/` and double-running the 18 `hooks/` tests the unit gate already
+    # covers -- a separate decision with its own blast radius, tracked by #15178.
+    "autobot-infrastructure": (11, 250),
+    # autobot-frontend is gone from this dict rather than left at 0: it drained
+    # in #14979 and the ratchet requires a drained entry be deleted, so the tree
+    # is pinned at zero by derivation. Its one module is now named by a
+    # marker-tests.yml root, so its markers actually select.
 }
 
 # Floors under the whole population, for the same reason as the per-tree ones.

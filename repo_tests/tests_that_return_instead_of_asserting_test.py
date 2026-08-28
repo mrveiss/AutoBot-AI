@@ -168,7 +168,24 @@ _KNOWN_OFFENDERS = {
     # Both reductions survive together: the ratchet only turns down, so where
     # two branches each lowered a budget the merge keeps the lower of the two,
     # never the more permissive one.
-    "autobot-backend": (73, 18000),
+    #
+    # 73 -> 71 with #14979: cache/cache_consolidation_p4_test.py's ten functions
+    # each wrapped their asserts in `except Exception: return False`, so the bare
+    # except swallowed AssertionError and not one of the ten could fail. All ten
+    # returns are gone and the assertions now propagate.
+    #
+    # Only 2 of the 10 move this number, and the reason is worth recording:
+    # `_offending_returns` skips any test containing an `assert` or `raise`,
+    # because "returning instead of asserting" is the defect and a test that does
+    # both can still fail. Nine of the ten HAD asserts -- inert ones, neutralised
+    # by the bare except, but present -- so this sweep passed over them. Only
+    # `test_migrated_files_import`, whose body was `pass` plus prints with no
+    # assert at all, was ever counted (2 returns, lines 281 and 288).
+    #
+    # So this guard is blind to an assert that cannot fire. That gap is #15195;
+    # it is not fixed here, and this number is the measured population under the
+    # rules as they stand today.
+    "autobot-backend": (71, 18000),
     "autobot-infrastructure": (121, 250),
     "autobot-npu-worker": (7, 150),
 }

@@ -297,12 +297,28 @@ jobs:
       # would break that agreement; widening all four would put these trees'
       # UNMARKED tests into the PR gate, which is a separate decision with its
       # own blast radius and is filed rather than smuggled in here.
-      - name: Run marked tests — infrastructure and libs
+      #
+      # #14979 added `autobot-frontend/tests` to this same invocation rather
+      # than opening a fourth. That directory holds exactly one tracked Python
+      # module — `frontend_comprehensive_corrected_test.py`, with no conftest
+      # and no `__init__.py` — so it brings no collection surface of its own.
+      # It cannot ride the frontend workflow: that suite is npm/vitest and its
+      # path filter never fires on a `.py` file, so a Python invocation has to
+      # name it or its ten `integration`-marked tests are selected by nothing,
+      # which is precisely what repo_tests/marker_suite_root_coverage_test.py
+      # fails on (#13286). A fourth invocation would have needed its own
+      # `--min-passed frontend=0` — those ten tests probe a live frontend and
+      # skip without one — and a `name=0` floor is read by that same guard as
+      # "this tree carries no marked test", which is false here. Sharing this
+      # invocation's floors states the truth instead: the bucket keeps
+      # collecting more than it passes, and `infra=10` still holds because
+      # skips do not reduce passes.
+      - name: Run marked tests — infrastructure, libs and frontend
         if: ${{ !cancelled() }}
         run: |
           echo "Selecting: $MARKER_EXPRESSION"
           python -m pytest \
-            autobot-infrastructure/shared/tests libs \
+            autobot-infrastructure/shared/tests libs autobot-frontend/tests \
             -n auto --dist loadscope \
             -m "$MARKER_EXPRESSION" \
             --junitxml=marker-report-infra.xml \
