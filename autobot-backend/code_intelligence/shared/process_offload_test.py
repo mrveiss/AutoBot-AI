@@ -216,7 +216,11 @@ async def _tick_latency_during_scan(force_thread: bool) -> _TickLatency:
     on the same loop in the same process, taken a fraction of a second either
     side of it, differing only in whether a scan was in flight. Runner load
     raises both terms and the ratio falls back toward 1.0, so a busy machine
-    makes the caller's budget more conservative rather than more likely to fire.
+    makes the caller's budget more conservative rather than more likely to fire —
+    provided the load is comparable across the three windows, which is why the
+    baseline brackets the measurement instead of preceding it. A burst confined
+    to the scan window alone still moves the ratio up; see
+    ``assert_within_baseline_ratio`` for what that premise does and does not buy.
     """
     await shutdown_scan_pool()
     process_offload._pool_unavailable_reason = "forced for measurement" if force_thread else None
@@ -251,6 +255,11 @@ async def _tick_latency_during_scan(force_thread: bool) -> _TickLatency:
     # the comparison would report a regression that is really an environment.
     unavailable = None if force_thread else process_offload._pool_unavailable_reason
 
+    # Resampled with no settling gap, deliberately: this scan leaves nothing
+    # behind that could still be taxing the loop, so the first tick after it is
+    # already an idle one. A workload whose effects outlive it — pool teardown,
+    # a GC pause — would need a gap here, or that tax would land in the BASELINE
+    # and shrink the ratio, weakening the very detection this exists for.
     await asyncio.sleep(_IDLE_BASELINE_WINDOW_SECONDS)
     idle += drain()
 

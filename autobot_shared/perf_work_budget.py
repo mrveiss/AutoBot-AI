@@ -166,10 +166,37 @@ def assert_within_baseline_ratio(
 
     WHAT REPLACES IT. The baseline is the SAME quantity as the numerator, taken
     on the same loop in the same process in an adjacent window, differing only in
-    whether the operation under test was in flight. External load raises both
-    terms, so the ratio falls back toward 1.0 — a busy runner makes this
-    assertion more conservative, never more likely to fire. The regression it
-    guards raises only the numerator.
+    whether the operation under test was in flight. Under an external delay L the
+    baseline reads `b + L` and the measurement `b + L + tax`, so the ratio is
+    `1 + tax/(b + L)` — decreasing in L. Load pushes it toward 1.0 and away from
+    the budget, and the regression it guards raises only the numerator.
+
+    THE PREMISE THAT ALGEBRA RESTS ON, stated because it is not guaranteed: L
+    must be COMPARABLE across the baseline and measurement windows. They are
+    temporally disjoint — a caller typically spans a second or two end to end —
+    so a load burst from a sibling job that lands inside the measurement window
+    and is gone before the baseline is resampled inflates the numerator with no
+    matching rise in the denominator, and pushes the ratio UP. That is a real
+    false-failure path this helper does not exclude. It is much narrower than the
+    absolute wall-clock ceiling it replaces, which tripped on any load bump at
+    all: a spike now has to be timed to miss the baseline windows entirely. But
+    the guarantee is "much less likely", NOT "impossible", and a red here is not
+    on its own proof of a regression. Callers should bracket the measurement with
+    a baseline window either side rather than take one before it, so that a
+    monotone drift in load is shared by both terms.
+
+    TWO MORE THINGS A CALLER OWNS, not this helper:
+
+    * A SETTLING GAP between the operation and a trailing baseline window. If the
+      operation's effects outlive its completion — pool teardown, a GC pause,
+      page-cache pressure — that tax lands in the "idle" baseline, inflating the
+      denominator and SHRINKING the ratio. That weakens detection exactly where
+      it matters, and it fails quietly. #15221's caller samples with no gap
+      because its workload demonstrably leaves nothing behind; a caller whose
+      does should wait it out first.
+    * The STATISTIC over each window. A median answers "did the typical sample
+      move", so a regression that delays only a minority of samples will not move
+      it. Choose a high percentile instead where a tail is the thing at stake.
 
     Fails on four distinct conditions, all of them real: the measurement exceeded
     its budget relative to its own baseline; nothing was measured; no baseline
