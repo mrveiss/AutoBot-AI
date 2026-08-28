@@ -301,8 +301,7 @@ async def test_a_scan_in_a_process_does_not_delay_the_event_loop():
         in_process.busy_ms,
         in_process.idle_ms,
         _TICK_BUDGET_VS_IDLE,
-        f"5ms heartbeat during an offloaded scan ({in_process.busy_ticks} ticks "
-        f"vs {in_process.idle_ticks} idle)",
+        f"5ms heartbeat during an offloaded scan ({in_process.busy_ticks} ticks " f"vs {in_process.idle_ticks} idle)",
     )
 
 
