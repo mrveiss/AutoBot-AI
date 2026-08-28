@@ -22,29 +22,30 @@ couple.
 from __future__ import annotations
 
 import ast
-import subprocess
 from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import GitRepoRootUnavailable, git_repo_root
 from autobot_shared.ssot_constants import QueryDefaults
 
 SDK_DEFAULTS = Path("libs/autobot-sdk-python/autobot_sdk/defaults.py")
 
 
 def project_root() -> Path:
-    """Repository root via git, or a skip when this is not a git checkout."""
+    """Repository root via git, or a skip when this is not a git checkout.
+
+    Asked from this file's own directory, with the ambient git environment
+    scrubbed (#15176). The pre-push hook exports ``GIT_DIR`` and no
+    ``GIT_WORK_TREE``, which makes git call the caller's CWD the work tree.
+    Measured before the scrub: running pytest from ``repo_tests/`` with
+    ``GIT_DIR`` exported failed both tests here with "SDK defaults is missing"
+    — a real failure, but one that blames a moved SDK file.
+    """
     try:
-        out = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            check=True,
-            encoding="utf-8",
-        )
-    except (OSError, subprocess.CalledProcessError):
+        return git_repo_root(Path(__file__).resolve().parent)
+    except GitRepoRootUnavailable:
         pytest.skip("not a git checkout")
-    return Path(out.stdout.strip())
 
 
 def sdk_constants() -> dict[str, int]:
