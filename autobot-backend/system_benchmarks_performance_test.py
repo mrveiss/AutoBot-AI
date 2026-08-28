@@ -47,12 +47,14 @@ pytestmark = pytest.mark.performance
 # on top: 3x where the measurement is large and steady (cv of units under ~12%
 # across the five runs), 8x where it is single-digit microseconds and timer
 # granularity rather than load sets the spread, floored at 0.20 units.
-# THREE SITES ARE FIRST-OBSERVATION CEILINGS, NOT MEASUREMENTS, labelled as such
-# at the call site: the local interpreter has no torch, so it does not execute
-# what CI executes in `Multimodal processor startup` and `Single multimodal
-# processing`, and `Memory manager startup` opens SQLite against a different
-# filesystem. Read their reported units off a run and ratchet them DOWN — the
-# only permitted direction.
+# ONE SITE KEEPS A WIDE BUDGET ON PURPOSE. `Multimodal processor startup` was
+# 315.602 units on run 33156790797 and 177.909 on 33158382218 — a 1.77x swing in
+# the RATIO, not just the milliseconds (466.4ms vs 294.9ms). Calibration cannot
+# normalise that one: the cost is model-file and HF-cache disk I/O, and a
+# CPU-bound yardstick does not track a disk-bound numerator. Its budget is 600,
+# ~1.9x the higher observation. Everything else is CPU-shaped, tracks the unit
+# closely, and is held to 8x its highest observation (3x for the large steady
+# ones). Ratchet DOWN as runs report lower — the only permitted direction.
 
 
 @pytest.fixture(autouse=True)
@@ -114,7 +116,7 @@ class TestSystemPerformanceBenchmarks:
 
         # Test single config access performance
         _, access_time = self.measure_execution_time(config_manager.get, "llm.orchestrator_llm")
-        assert_within_work_budget(access_time, 0.50, "Config access")
+        assert_within_work_budget(access_time, 0.20, "Config access")
 
         # Test bulk config access performance
         def bulk_access():
@@ -124,13 +126,13 @@ class TestSystemPerformanceBenchmarks:
             return results
 
         _, bulk_time = self.measure_execution_time(bulk_access)
-        assert_within_work_budget(bulk_time, 2.2, "Bulk config access (100 keys)")
+        assert_within_work_budget(bulk_time, 1.0, "Bulk config access (100 keys)")
 
         # Test section retrieval performance
         # #13199: the section reader on ConfigManager is get_config_section()
         # (dot-path traversal via get_nested); get_section() belongs to ConfigRegistry.
         _, section_time = self.measure_execution_time(config_manager.get_config_section, "multimodal")
-        assert_within_work_budget(section_time, 1.5, "Config section retrieval")
+        assert_within_work_budget(section_time, 0.60, "Config section retrieval")
 
     def test_config_service_caching_performance(self):
         """Test config service caching performance"""
@@ -187,7 +189,7 @@ class TestSystemPerformanceBenchmarks:
             # processing benchmark that does NOT mock `_store_result`, so it
             # writes to the shared SQLite memory database, and the local
             # interpreter has no torch. Ratchet it DOWN to the reported units.
-            assert_within_work_budget(processing_time, 150.0, "Single multimodal processing")
+            assert_within_work_budget(processing_time, 50.0, "Single multimodal processing")
             assert result.success is True
 
     @pytest.mark.asyncio
@@ -249,7 +251,7 @@ class TestSystemPerformanceBenchmarks:
             total_time = (end_time - start_time) * 1000  # Convert to ms
 
             # Concurrent processing should be faster than sequential
-            assert_within_work_budget(total_time, 30.0, "Concurrent processing (10 inputs)")
+            assert_within_work_budget(total_time, 12.0, "Concurrent processing (10 inputs)")
             assert peak_in_flight == 10, f"Processing serialized: peak concurrency was {peak_in_flight}, expected 10"
             assert len(results) == 10
             assert all(r.success for r in results)
@@ -287,7 +289,7 @@ class TestSystemPerformanceBenchmarks:
         # Test validation performance
         _, validation_time = self.measure_execution_time(config_manager.validate_config)
 
-        assert_within_work_budget(validation_time, 0.70, "Config validation")
+        assert_within_work_budget(validation_time, 0.30, "Config validation")
 
         # Test multiple validations (should be consistent)
         validation_times = []
@@ -296,7 +298,7 @@ class TestSystemPerformanceBenchmarks:
             validation_times.append(time_taken)
 
         avg_validation_time = sum(validation_times) / len(validation_times)
-        assert_within_work_budget(avg_validation_time, 0.50, "Config validation (mean of 5)")
+        assert_within_work_budget(avg_validation_time, 0.20, "Config validation (mean of 5)")
 
     def test_environment_variable_parsing_performance(self):
         """Test environment variable parsing performance"""
@@ -325,10 +327,10 @@ class TestSystemPerformanceBenchmarks:
                 total_parse_time += parse_time
 
                 # Each parse should be very fast
-                assert_within_work_budget(parse_time, 0.70, f"Environment value parsing of {value!r}")
+                assert_within_work_budget(parse_time, 0.25, f"Environment value parsing of {value!r}")
 
             # Total parsing time should be minimal
-            assert_within_work_budget(total_parse_time, 2.2, "Environment value parsing (all cases)")
+            assert_within_work_budget(total_parse_time, 1.2, "Environment value parsing (all cases)")
         finally:
             for name, _value, _parse in parse_cases:
                 os.environ.pop(name, None)
@@ -365,7 +367,6 @@ class TestSystemPerformanceBenchmarks:
         timed on an error path, and the budget is a ceiling to ratchet DOWN once
         that lands.
         """
-        # Test config manager startup
         ConfigManager()  # discard: primes module-level caches, not startup cost
         start_time = time.perf_counter()
         config_manager = ConfigManager()
@@ -374,7 +375,6 @@ class TestSystemPerformanceBenchmarks:
         assert isinstance(config_manager, ConfigManager), "ConfigManager() returned no instance to time"
         assert_within_work_budget(config_startup_time, 8.0, "Config manager startup")
 
-        # Test multimodal processor startup
         MultiModalProcessor()  # discard: pays the one-time lazy `import torch`
         start_time = time.perf_counter()
         processor = MultiModalProcessor()
@@ -395,7 +395,7 @@ class TestSystemPerformanceBenchmarks:
         # at the assertion above before reaching this one. Ratchet DOWN once the
         # junit report carries a number for it.
         assert isinstance(memory_manager, MemoryManager), "MemoryManager() returned no instance to time"
-        assert_within_work_budget(memory_startup_time, 20.0, "Memory manager startup")
+        assert_within_work_budget(memory_startup_time, 1.0, "Memory manager startup")
 
     def test_configuration_file_loading_performance(self):
         """Test configuration file loading performance"""
@@ -423,7 +423,7 @@ class TestSystemPerformanceBenchmarks:
             # Test loading performance
             _, load_time = self.measure_execution_time(ConfigManager, config_dir=config_dir)
 
-            assert_within_work_budget(load_time, 1300.0, "Large config file loading")
+            assert_within_work_budget(load_time, 420.0, "Large config file loading")
 
     def test_statistics_tracking_performance(self):
         """Test performance statistics tracking overhead"""
@@ -446,7 +446,7 @@ class TestSystemPerformanceBenchmarks:
         stats_time = (time.time() - start_time) * 1000
 
         # Stats tracking should have minimal overhead
-        assert_within_work_budget(stats_time, 2.0, "Statistics tracking (100 updates)")
+        assert_within_work_budget(stats_time, 0.80, "Statistics tracking (100 updates)")
 
         # Verify stats are correct
         stats = processor.get_stats()
@@ -477,7 +477,7 @@ class TestSystemPerformanceBenchmarks:
             return results
 
         _, bulk_deep_time = self.measure_execution_time(bulk_deep_access)
-        assert_within_work_budget(bulk_deep_time, 1.6, "Bulk deep config access (50 keys)")
+        assert_within_work_budget(bulk_deep_time, 0.60, "Bulk deep config access (50 keys)")
 
 
 class TestScalabilityBenchmarks:
@@ -497,7 +497,7 @@ class TestScalabilityBenchmarks:
         set_time = (time.time() - start_time) * 1000
 
         # Setting 1000 keys should be reasonable
-        assert_within_work_budget(set_time, 8.0, f"Setting {num_keys} config keys")
+        assert_within_work_budget(set_time, 6.0, f"Setting {num_keys} config keys")
 
         # Test retrieval performance with many keys
         start_time = time.time()
@@ -506,7 +506,7 @@ class TestScalabilityBenchmarks:
             assert value == f"value_{i}"
 
         get_time = (time.time() - start_time) * 1000
-        assert_within_work_budget(get_time, 2.5, "Reading config keys with many configs loaded")
+        assert_within_work_budget(get_time, 1.0, "Reading config keys with many configs loaded")
 
     @pytest.mark.asyncio
     async def test_multimodal_processor_scalability(self):
@@ -551,7 +551,7 @@ class TestScalabilityBenchmarks:
             total_time = (time.time() - start_time) * 1000
 
             # Should handle many concurrent requests efficiently
-            assert_within_work_budget(total_time, 60.0, f"Scaling to {num_inputs} concurrent requests")
+            assert_within_work_budget(total_time, 30.0, f"Scaling to {num_inputs} concurrent requests")
             assert len(results) == num_inputs
             assert all(r.success for r in results)
 
