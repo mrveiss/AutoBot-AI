@@ -285,7 +285,9 @@ def test_the_verbatim_parametrization_covers_every_mode():
     }
 
     assert covered, "the verbatim parametrization is empty"
-    assert covered == set(EnforcementMode), f"EnforcementMode members not covered verbatim: {set(EnforcementMode) - covered}"
+    assert covered == set(
+        EnforcementMode
+    ), f"EnforcementMode members not covered verbatim: {set(EnforcementMode) - covered}"
 
 
 class TestADeliberateDisabledIsDistinguishableFromAFailure:
@@ -315,7 +317,9 @@ class TestADeliberateDisabledIsDistinguishableFromAFailure:
 
         An operator greps for a message, not for a level.
         """
-        deliberate = {r.getMessage() for r in await _records_from(_validator(_flags_returning(EnforcementMode.DISABLED)), caplog)}
+        deliberate = {
+            r.getMessage() for r in await _records_from(_validator(_flags_returning(EnforcementMode.DISABLED)), caplog)
+        }
 
         for route in UNDETERMINED_ROUTES:
             failure = {r.getMessage() for r in await _records_from(_validator_for_route(route), caplog)}
@@ -353,7 +357,8 @@ class TestADeliberateDisabledIsDistinguishableFromAFailure:
             r.getMessage() for r in await _records_from(_validator_for_route("flag store unreachable"), caplog)
         )
         generic = " ".join(
-            r.getMessage() for r in await _records_from(_validator_for_route("unexpected error resolving the mode"), caplog)
+            r.getMessage()
+            for r in await _records_from(_validator_for_route("unexpected error resolving the mode"), caplog)
         )
 
         assert "UNDETERMINED" in unavailable, (
@@ -361,7 +366,9 @@ class TestADeliberateDisabledIsDistinguishableFromAFailure:
             "the specific handler has been shadowed by reordering"
         )
         assert "could not be resolved" not in unavailable, "the flag-store failure fell through to the generic handler"
-        assert "could not be resolved" in generic, "the generic handler no longer reports an unexpected failure distinctly"
+        assert (
+            "could not be resolved" in generic
+        ), "the generic handler no longer reports an unexpected failure distinctly"
 
     @pytest.mark.asyncio
     async def test_the_decision_reason_differs_between_a_deliberate_disabled_and_an_outage(self, caplog):

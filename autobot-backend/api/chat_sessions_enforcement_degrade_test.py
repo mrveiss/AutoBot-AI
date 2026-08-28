@@ -29,13 +29,12 @@ import contextlib
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api import chat_sessions
 from security.session_ownership import SessionOwnershipValidator
-from services.feature_flags import EnforcementMode, EnforcementModeUnavailable
+from services.feature_flags import EnforcementMode
 
 OWNER = "alice"
 INTRUDER = "bob"
@@ -79,12 +78,8 @@ def _real_dependency(flags, spy: _Spy):
 
     with contextlib.ExitStack() as stack:
         stack.enter_context(patch("services.feature_flags.get_feature_flags", _get_flags))
-        stack.enter_context(
-            patch("autobot_shared.redis_client.get_redis_client", AsyncMock(return_value=MagicMock()))
-        )
-        stack.enter_context(
-            patch("services.access_control_metrics.get_metrics_service", AsyncMock(return_value=None))
-        )
+        stack.enter_context(patch("autobot_shared.redis_client.get_redis_client", AsyncMock(return_value=MagicMock())))
+        stack.enter_context(patch("services.access_control_metrics.get_metrics_service", AsyncMock(return_value=None)))
         stack.enter_context(patch("security.session_ownership.get_auth_middleware", return_value=auth))
         stack.enter_context(patch.object(SessionOwnershipValidator, "get_session_owner", _owner))
         stack.enter_context(
