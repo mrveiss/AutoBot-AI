@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Canonical project-root resolution for Python code (#13149).
 
 Every call site used to paste the shell placeholder
@@ -22,6 +24,8 @@ one implementation rather than two that can drift.
 from __future__ import annotations
 
 import os
+import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
+from collections.abc import Mapping
 from pathlib import Path
 
 #: Markers that identify a source checkout root and nothing below it. Both must
@@ -187,3 +191,84 @@ def resolve_project_root(start: Path) -> Path:
             else ""
         )
     )
+
+
+#: Git variables a hook exports into every process it starts. With ``GIT_DIR``
+#: set and ``GIT_WORK_TREE`` unset — exactly what a ``pre-commit``/``pre-push``
+#: hook hands its children — git treats the **current directory** as the work
+#: tree, so ``rev-parse --show-toplevel`` answers with wherever the caller
+#: happens to be rather than the repository root.
+#:
+#: The answer is wrong without being an error, which is the whole reason this
+#: is a named constant rather than a line inside one caller: a guard that
+#: resolves the wrong root reads a different (usually empty) set of files and
+#: reports clean. #15018 hit the raising half of that — ``pytest.ini`` read from
+#: ``repo_tests/`` and ``FileNotFoundError`` — and #15176 measured the silent
+#: half: two pre-commit guards printed their success line having inspected
+#: nothing at all.
+#:
+#: Measured on git 2.34.1 rather than assumed. A hook run in a **git worktree**
+#: -- this repository's entire workflow -- is handed
+#: ``GIT_DIR=<main>/.git/worktrees/<name>`` with no ``GIT_WORK_TREE``, for both
+#: ``pre-commit`` and ``pre-push``; a hook in a plain checkout on that version is
+#: handed neither. Git also chdirs the hook to the worktree top level, even when
+#: the user ran ``git commit`` from a subdirectory, so the *hook itself* still
+#: gets the right answer. What breaks is anything the hook then runs from
+#: somewhere else -- a helper passing ``cwd=``, a test module, a CI step
+#: invoking a guard directly. That is the whole distance between "correct today"
+#: and "correct".
+AMBIENT_GIT_VARS = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE")
+
+
+class GitRepoRootUnavailable(RuntimeError):
+    """``git rev-parse --show-toplevel`` could not name a repository root.
+
+    Raised rather than returning ``None`` so a caller has to decide what an
+    absent root means for it: the tooling scripts exit fatally, the pytest
+    guards skip. Both are correct answers; silently continuing with a
+    plausible-looking wrong path is not (#14544 records what that costs).
+    """
+
+
+def scrubbed_git_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """*env* (default :data:`os.environ`) minus every :data:`AMBIENT_GIT_VARS` entry.
+
+    Use for **any** git subprocess whose answer depends on the work tree, not
+    only ``rev-parse``: ``ls-files`` inherits the same confusion.
+    """
+    source = os.environ if env is None else env
+    return {key: value for key, value in source.items() if key not in AMBIENT_GIT_VARS}
+
+
+def git_repo_root(start: Path | str | None = None) -> Path:
+    """Repository root containing *start*, asked of git with the environment scrubbed.
+
+    *start* is the directory the question is asked from (default: the process
+    working directory). It selects which checkout answers — this repository's
+    workflow runs from worktrees, so "the repository root" is genuinely
+    caller-relative — while :data:`AMBIENT_GIT_VARS` scrubbing is what stops an
+    inherited hook environment from turning that directory into the answer.
+
+    Deliberately git-driven rather than :func:`project_root`: every caller here
+    goes on to run ``git ls-files`` against the result, so the root and the file
+    enumeration must come from the same checkout. Resolving the root by walking
+    for markers and then enumerating with git is two answers that can disagree.
+
+    Raises:
+        GitRepoRootUnavailable: git is absent, failed, or named nothing.
+    """
+    try:
+        result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=None if start is None else str(start),
+            env=scrubbed_git_env(),
+            check=False,
+        )
+    except OSError as exc:  # git not installed, or *start* is not a directory
+        raise GitRepoRootUnavailable(f"could not run git rev-parse: {exc}") from exc
+    if result.returncode != 0 or not result.stdout.strip():
+        raise GitRepoRootUnavailable(f"git rev-parse --show-toplevel exit {result.returncode}: {result.stderr.strip()}")
+    return Path(result.stdout.strip())
