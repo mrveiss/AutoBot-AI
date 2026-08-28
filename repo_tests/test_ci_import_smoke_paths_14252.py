@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ast
 import re
+import sys
 import textwrap
 from pathlib import Path
 
@@ -31,10 +32,28 @@ _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
 # of the same kind, including a backslash-escaped one, so
 # `python -c "import json; print(f\"{x}\")"` was captured truncated. The
 # fragment then failed to parse and its imports were checked against nothing.
-# Three workflows have that shape.
+#
+# That alternation IS present and the capture IS complete -- stated flatly
+# because the previous wording read as a live defect and produced two
+# independent mis-diagnoses (#15152). If a program below looks truncated, check
+# `_unescape_shell` and the `code[:60]` slice in the failure message before
+# suspecting this pattern. `test_no_python_dash_c_invocation_escapes_the_extractor`
+# keeps the alternation honest as more workflows are written.
 _INLINE_PYTHON = re.compile(
-    r"""python3?\s+-c\s+(['"])(?P<code>(?:\\.|(?!\1).)*)\1""", re.DOTALL
+    r"""python3?\s+-c\s+(?P<quote>['"])(?P<code>(?:\\.|(?!(?P=quote)).)*)(?P=quote)""",
+    re.DOTALL,
 )
+
+# Every place a workflow starts an inline program, quoting ignored. Used to prove
+# `_INLINE_PYTHON` captured one program per invocation: a form it cannot close on
+# (an unbalanced quote, a `'"'"'` splice) yields no match at all, and a program
+# the scan never sees is a program whose imports are checked against nothing --
+# silently, which is the one outcome this file exists to make impossible.
+_INLINE_PYTHON_INVOCATION = re.compile(r"python3?\s+-c\s")
+
+# What may legally follow a complete shell argument. A capture that stopped early
+# on an embedded quote ends mid-argument, so the next character is none of these.
+_ARGUMENT_END = re.compile(r"[\s;|&>)]|\Z")
 
 # Heredoc form: `python - <<'PY' ... PY`. A separate shape entirely, and one the
 # quote-matching pattern above cannot see at all.
@@ -73,12 +92,22 @@ def _normalise(code: str) -> str:
     return textwrap.dedent(code.strip("\n") + "\n")
 
 
-def _unescape_shell(code: str) -> str:
-    """Undo the backslash escaping a double-quoted shell argument requires.
+def _unescape_shell(code: str, quote: str) -> str:
+    """Undo the backslash escaping a DOUBLE-quoted shell argument requires.
 
     `\\"` reaches python as `"`. Left in place, every such program is a syntax
     error and its imports go unchecked.
+
+    Single-quoted arguments get none of this. `sh` performs no expansion or
+    escape processing at all inside `'...'`, so a backslash there reaches python
+    as a backslash. Unescaping one anyway rewrites the program into something the
+    step never runs -- and rewrites it in the dangerous direction: on Python 3.12
+    `f"{d.get(\\"k\\")}"` becomes the legal `f"{d.get("k")}"`, so the guard reports a
+    clean parse for a step that dies with SyntaxError on every run. Fidelity to
+    what the shell actually hands the interpreter is the whole basis of the check.
     """
+    if quote != '"':
+        return code
     return code.replace('\\"', '"').replace("\\$", "$").replace("\\`", "`")
 
 
@@ -87,10 +116,31 @@ def _inline_programs() -> list[tuple[str, str]]:
     for workflow in sorted(_WORKFLOWS.glob("*.yml")):
         text = workflow.read_text(encoding="utf-8")
         for match in _INLINE_PYTHON.finditer(text):
-            found.append((workflow.name, _normalise(_unescape_shell(match.group("code")))))
+            code = _unescape_shell(match.group("code"), match.group("quote"))
+            found.append((workflow.name, _normalise(code)))
         for match in _HEREDOC_PYTHON.finditer(text):
             found.append((workflow.name, _normalise(match.group("code"))))
     return found
+
+
+def _uncaptured_invocations() -> list[tuple[str, int, str]]:
+    """Every `python -c` the extractor could not capture as one whole argument.
+
+    Two ways a program goes missing without anyone noticing: `_INLINE_PYTHON`
+    fails to match the invocation at all, or it matches but closes early, leaving
+    the capture ending mid-argument. Both hand back less than the step runs.
+    """
+    escaped = []
+    for workflow in sorted(_WORKFLOWS.glob("*.yml")):
+        text = workflow.read_text(encoding="utf-8")
+        for site in _INLINE_PYTHON_INVOCATION.finditer(text):
+            line = text.count("\n", 0, site.start()) + 1
+            match = _INLINE_PYTHON.match(text, site.start())
+            if match is None:
+                escaped.append((workflow.name, line, "no closing quote the extractor could find"))
+            elif not _ARGUMENT_END.match(text, match.end()):
+                escaped.append((workflow.name, line, f"capture ends mid-argument at {text[match.end()]!r}"))
+    return escaped
 
 
 def _parses(code: str) -> bool:
@@ -102,14 +152,16 @@ def _parses(code: str) -> bool:
 
 
 def _imported_names(code: str) -> list[str]:
-    try:
-        tree = ast.parse(code)
-    except SyntaxError:
-        # Reported by test_every_extracted_program_parses, never swallowed here.
-        # Returning [] quietly is how a guard reports clean on input it could not
-        # read -- the same failure this whole file exists to catch, one layer
-        # earlier, at extraction instead of classification.
-        return []
+    """Imports in `code`. Raises SyntaxError rather than reporting none.
+
+    Returning [] on unparseable input is how a guard reports clean on something
+    it could not read -- the same failure this whole file exists to catch, one
+    layer earlier, at extraction instead of classification. A caller that gets []
+    cannot tell "this program imports nothing" from "I could not read this
+    program", and the import assertion below passes vacuously either way. Letting
+    the SyntaxError out makes the second case fail, loudly, at the call site.
+    """
+    tree = ast.parse(code)
     names = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
@@ -184,20 +236,73 @@ def test_the_corrected_path_resolves():
 def test_every_extracted_program_parses():
     """A program the extractor mangles is checked against nothing.
 
-    `_INLINE_PYTHON` uses a backreference to close on the same quote it opened
-    with, and has no escape-awareness: `python -c "...\\"...\\"..."` closes on the
-    first escaped quote and captures a truncated fragment. `ast.parse` then
-    raises, `_imported_names` returns [], and the step passes without a single
-    import being checked. `coverage.yml` contains exactly that shape.
-
     Failing loudly here is the point: the guard must be able to say "I could not
     read this", which is different from "this is fine".
+
+    Read the version in the message before concluding anything about the base.
+    Whether a program parses is NOT environment-independent: PEP 701 made an
+    f-string reusing its own quote type inside the expression legal from 3.12,
+    so the same extracted text is a SyntaxError on 3.10/3.11 and fine on
+    3.12/3.14. A failure here that reproduces on one checkout and not another is
+    an interpreter difference until proven otherwise (#15152; #15091 records the
+    same trap in the opposite direction).
     """
     unparseable = [
         (workflow, code[:60]) for workflow, code in _inline_programs() if not _parses(code)
     ]
 
     assert unparseable == [], (
-        "inline python that the extractor could not parse — its imports are "
-        f"checked against nothing: {unparseable}"
+        f"inline python that the extractor could not parse under python "
+        f"{sys.version_info.major}.{sys.version_info.minor} — its imports are "
+        f"checked against nothing: {unparseable}. Whether a program parses is "
+        "version-dependent (PEP 701); confirm on the version CI runs before "
+        "calling this a base failure."
     )
+
+
+def test_no_python_dash_c_invocation_escapes_the_extractor():
+    """Every inline program must be captured, whole, or the scan is short a program.
+
+    The parse assertion below only speaks for programs the extractor handed back.
+    A program it never captured, or captured a prefix of, is not in that list at
+    all -- so the parse check reports clean and the import check has nothing to
+    look at. Silence is the failure mode; this is the assertion that ends it.
+    """
+    escaped = _uncaptured_invocations()
+
+    assert escaped == [], (
+        "`python -c` invocations the extractor did not capture as one whole "
+        f"argument -- their imports are checked against nothing: {escaped}"
+    )
+
+
+def test_phase_validation_inline_programs_are_actually_checked():
+    """#15122: the step whose program the guard reported clean while reading none.
+
+    Named rather than generic: the fix must leave this program parseable AND
+    yielding imports, so it cannot be "made green" by rendering it invisible to
+    the extractor.
+    """
+    programs = [code for name, code in _inline_programs() if name == "phase_validation.yml"]
+
+    assert programs, "phase_validation.yml inline programs vanished from the scan"
+    for code in programs:
+        assert _imported_names(code), f"no imports extracted from: {code!r}"
+
+
+def test_a_single_quoted_program_keeps_its_backslashes():
+    """`sh` does no escape processing inside `'...'`, so neither may the extractor.
+
+    Unescaping one anyway is the false-green direction: on Python 3.12 the
+    rewritten form parses while the program the step actually runs does not.
+    """
+    literal = r'print(f"{d.get(\"k\")}")'
+
+    assert _unescape_shell(literal, "'") == literal
+    assert _unescape_shell(literal, '"') == 'print(f"{d.get("k")}")'
+
+
+def test_an_unreadable_program_raises_rather_than_reporting_no_imports():
+    """`_imported_names` must not answer "nothing imported" for "could not read"."""
+    with pytest.raises(SyntaxError):
+        _imported_names("import json; print(f\"{d.get(\\\"k\\\")}\")\n")
