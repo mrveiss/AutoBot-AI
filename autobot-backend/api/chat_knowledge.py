@@ -89,27 +89,57 @@ TROUBLESHOOTING_KEYWORDS = {"error", "bug", "issue", "problem"}
 DOCUMENTATION_KEYWORDS = {"config", "setup", "install", "guide"}
 
 
+# Canonical ``app.state`` keys for the lazily-created manager (#15160). There is
+# deliberately NO module-level ``chat_knowledge_manager`` global: the previous one
+# was never assigned, so six handlers and the health probe all read ``None`` for
+# the lifetime of the process.
+MANAGER_STATE_KEY = "chat_knowledge_manager"
+# Records the reason a construction attempt failed so the health probe can report
+# "down" instead of an indefinite "idle" that hides a real outage (#15160).
+MANAGER_ERROR_STATE_KEY = "chat_knowledge_manager_error"
+
+
+def peek_chat_knowledge_manager(request: Request | None):
+    """Return the cached manager without ever constructing one.
+
+    Side-effect free by design: the health probe must observe the real state,
+    not create it (``ChatKnowledgeManager.__init__`` builds a KnowledgeBase and
+    an LLM service, far beyond the aggregator's per-probe budget).
+    """
+    if request is None:
+        return None
+    return getattr(request.app.state, MANAGER_STATE_KEY, None)
+
+
 async def get_chat_knowledge_manager_instance(request: Request = None):
-    """Get chat knowledge manager (preferring pre-initialized app.state)."""
-    # Try to use pre-initialized manager from app state first
-    if request is not None:
-        app_manager = getattr(request.app.state, "chat_knowledge_manager", None)
-        if app_manager is not None:
-            logger.debug("Using pre-initialized chat knowledge manager from app.state")
-            return app_manager
+    """Resolve the chat knowledge manager, caching it on ``request.app.state``.
 
-    # Try to use global instance
-    if chat_knowledge_manager is not None:
-        logger.debug("Using global chat knowledge manager instance")
-        return chat_knowledge_manager
+    ``request.app.state`` is the single home for this manager — the same place
+    ``ResourceFactory.get_all_cached_resources`` already reports it from — so
+    every handler and the health probe read one source of truth.
 
-    # Create new instance as last resort
+    Raises ``HTTPException(503)`` when the manager cannot be produced: a handler
+    must surface an honest "dependency unavailable" rather than dereference
+    ``None`` and collapse into an opaque 500 (#15160).
+    """
+    cached = peek_chat_knowledge_manager(request)
+    if cached is not None:
+        logger.debug("Using pre-initialized chat knowledge manager from app.state")
+        return cached
+
     logger.info("Creating new ChatKnowledgeManager instance (expensive operation)")
-    new_manager = ChatKnowledgeManager()
+    try:
+        new_manager = ChatKnowledgeManager()
+    except Exception as exc:
+        detail = f"{type(exc).__name__}: {exc}"
+        if request is not None:
+            setattr(request.app.state, MANAGER_ERROR_STATE_KEY, detail)
+        logger.error("ChatKnowledgeManager construction failed: %s", detail)
+        raise HTTPException(status_code=503, detail="Chat knowledge manager unavailable") from exc
 
-    # Cache in app state if request available
     if request is not None:
-        request.app.state.chat_knowledge_manager = new_manager
+        setattr(request.app.state, MANAGER_STATE_KEY, new_manager)
+        setattr(request.app.state, MANAGER_ERROR_STATE_KEY, None)
         logger.info("Cached new chat knowledge manager in app.state for future requests")
 
     return new_manager
@@ -496,10 +526,6 @@ class ChatKnowledgeManager:
         return results[:20]  # Limit to top 20 results
 
 
-# Global manager instance - initialized lazily to avoid expensive startup
-chat_knowledge_manager = None
-
-
 # API Endpoints
 
 
@@ -579,11 +605,14 @@ async def associate_file_with_chat(request_data: AssociateFileRequest, request: 
 )
 async def upload_file_to_chat(
     chat_id: str,
+    request: Request,
     file: UploadFile = File(...),
     association_type: str = Form(default="upload"),
 ):
     """Upload a file and associate it with a chat"""
     try:
+        manager = await get_chat_knowledge_manager_instance(request)
+
         # Save uploaded file (#1721)
         from autobot_shared.security.path_validator import validate_relative_path
 
@@ -591,7 +620,7 @@ async def upload_file_to_chat(
         file_path = str(
             validate_relative_path(
                 safe_name,
-                chat_knowledge_manager.storage_dir,
+                manager.storage_dir,
             )
         )
 
@@ -604,7 +633,7 @@ async def upload_file_to_chat(
             raise HTTPException(status_code=500, detail="Failed to save file")
 
         # Associate with chat
-        association = await chat_knowledge_manager.associate_file(
+        association = await manager.associate_file(
             chat_id=chat_id,
             file_path=file_path,
             association_type=FileAssociationType(association_type),
@@ -613,6 +642,8 @@ async def upload_file_to_chat(
 
         return {"success": True, "data": {"success": True, "file_id": association.file_id, "file_path": file_path}}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to upload file: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -624,15 +655,18 @@ async def upload_file_to_chat(
     operation="add_temporary_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-async def add_temporary_knowledge(request: AddKnowledgeRequest):
+async def add_temporary_knowledge(request_data: AddKnowledgeRequest, request: Request):
     """Add temporary knowledge to chat context"""
     try:
-        knowledge_id = await chat_knowledge_manager.add_temporary_knowledge(
-            chat_id=request.chat_id, content=request.content, metadata=request.metadata
+        manager = await get_chat_knowledge_manager_instance(request)
+        knowledge_id = await manager.add_temporary_knowledge(
+            chat_id=request_data.chat_id, content=request_data.content, metadata=request_data.metadata
         )
 
         return {"success": True, "data": {"success": True, "knowledge_id": knowledge_id}}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to add temporary knowledge: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -644,10 +678,11 @@ async def add_temporary_knowledge(request: AddKnowledgeRequest):
     operation="get_pending_knowledge_decisions",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-async def get_pending_knowledge_decisions(chat_id: str):
+async def get_pending_knowledge_decisions(chat_id: str, request: Request):
     """Get knowledge items pending user decision"""
     try:
-        pending_items = await chat_knowledge_manager.get_knowledge_for_decision(chat_id)
+        manager = await get_chat_knowledge_manager_instance(request)
+        pending_items = await manager.get_knowledge_for_decision(chat_id)
 
         return {
             "success": True,
@@ -658,6 +693,8 @@ async def get_pending_knowledge_decisions(chat_id: str):
             },
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to get pending knowledge: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -669,23 +706,26 @@ async def get_pending_knowledge_decisions(chat_id: str):
     operation="apply_knowledge_decision",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
+async def apply_knowledge_decision(request_data: KnowledgeDecisionRequest, request: Request):
     """Apply user decision for temporary knowledge"""
     try:
-        success = await chat_knowledge_manager.apply_knowledge_decision(
-            chat_id=request.chat_id,
-            knowledge_id=request.knowledge_id,
-            decision=request.decision,
+        manager = await get_chat_knowledge_manager_instance(request)
+        success = await manager.apply_knowledge_decision(
+            chat_id=request_data.chat_id,
+            knowledge_id=request_data.knowledge_id,
+            decision=request_data.decision,
         )
 
         return {
             "success": True,
             "data": {
                 "success": success,
-                "message": f"Knowledge {request.decision.value} applied",
+                "message": f"Knowledge {request_data.decision.value} applied",
             },
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to apply knowledge decision: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -720,17 +760,20 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
     operation="search_chat_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-async def search_chat_knowledge(request: ChatKnowledgeSearchRequest):
+async def search_chat_knowledge(request_data: ChatKnowledgeSearchRequest, request: Request):
     """Search knowledge across chats or within specific chat"""
     try:
-        results = await chat_knowledge_manager.search_chat_knowledge(
-            query=request.query,
-            chat_id=request.chat_id,
-            include_temporary=request.include_temporary,
+        manager = await get_chat_knowledge_manager_instance(request)
+        results = await manager.search_chat_knowledge(
+            query=request_data.query,
+            chat_id=request_data.chat_id,
+            include_temporary=request_data.include_temporary,
         )
 
         return {"success": True, "data": {"success": True, "results": results, "count": len(results)}}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to search knowledge: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -742,15 +785,16 @@ async def search_chat_knowledge(request: ChatKnowledgeSearchRequest):
     operation="get_chat_context",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-async def get_chat_context(chat_id: str):
+async def get_chat_context(chat_id: str, request: Request):
     """Get complete knowledge context for a chat"""
     try:
-        context = chat_knowledge_manager.chat_contexts.get(chat_id)
+        manager = await get_chat_knowledge_manager_instance(request)
+        context = manager.chat_contexts.get(chat_id)
 
         if not context:
             return {"success": False, "message": "No context found for chat", "data": None}
 
-        file_associations = chat_knowledge_manager.file_associations.get(chat_id, [])
+        file_associations = manager.file_associations.get(chat_id, [])
 
         return {
             "success": True,
@@ -776,6 +820,8 @@ async def get_chat_context(chat_id: str):
             },
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to get chat context: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -785,25 +831,56 @@ async def get_chat_context(chat_id: str):
 async def probe_chat_knowledge(
     request: Request | None = None,
 ) -> ComponentHealth:
-    """Issue #3333 / #12459: probe registration for the chat-knowledge manager.
+    """Issue #3333 / #12459 / #15160: probe for the chat-knowledge manager.
 
-    ``chat_knowledge_manager`` is a lazy singleton created on first use
-    (``get_chat_knowledge_manager_instance``) — "not initialized" simply
-    means no chat has touched it yet, not a failure. Report ``idle`` so it
-    does not count toward the down/degraded rollup.
+    The manager is a lazy singleton cached on ``request.app.state``
+    (``get_chat_knowledge_manager_instance``), so "not initialized" is not by
+    itself a failure. It is only ``idle`` when the probe can *see* that state
+    and see no failure, though:
+
+    ``down``     — a previous resolution attempt failed; the recorded reason is
+                   reported. Before #15160 this outage was invisible: the probe
+                   read a module global nothing ever assigned, so it answered
+                   ``idle`` forever while every route under it returned 500.
+    ``degraded`` — the probe was handed no ``Request``, so ``app.state`` is
+                   unobservable. Reporting ``idle`` here would be the same lie:
+                   "working" and "never wired" would look identical.
+    ``ok``       — a live manager is cached and exposes its storage directory.
+    ``idle``     — observable, no failure recorded, not yet used.
     """
     try:
-        app_manager = None
-        if request is not None:
-            app_manager = getattr(request.app.state, "chat_knowledge_manager", None)
-        manager = app_manager or chat_knowledge_manager
+        if request is None:
+            return ComponentHealth(
+                name="chat_knowledge",
+                status="degraded",
+                detail="manager state unobservable: probe received no Request",
+            )
+
+        failure = getattr(request.app.state, MANAGER_ERROR_STATE_KEY, None)
+        if failure:
+            return ComponentHealth(
+                name="chat_knowledge",
+                status="down",
+                detail=f"manager unavailable: {str(failure)[:160]}",
+            )
+
+        manager = peek_chat_knowledge_manager(request)
         if manager is None:
             return ComponentHealth(
                 name="chat_knowledge",
                 status="idle",
-                detail="chat_knowledge_manager not initialized (lazy singleton, not yet used)",
+                detail="chat knowledge manager not initialized (lazy singleton, not yet used)",
             )
-        return ComponentHealth(name="chat_knowledge", status="ok")
+
+        # Touch real state so a stub that merely *exists* cannot read as healthy.
+        return ComponentHealth(
+            name="chat_knowledge",
+            status="ok",
+            data={
+                "storage_dir_configured": bool(getattr(manager, "storage_dir", None)),
+                "chat_contexts": len(getattr(manager, "chat_contexts", {})),
+            },
+        )
     except Exception as exc:
         return ComponentHealth(
             name="chat_knowledge",
