@@ -24,7 +24,9 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from typing import List
+from typing import List, Set
+
+import pytest
 
 _REPO = Path(__file__).resolve().parents[1]
 _BACKEND = _REPO / "autobot-backend"
@@ -95,25 +97,35 @@ def test_the_scan_sees_the_tree_it_is_pointed_at():
     assert _CANONICAL_DEFINER in {path.resolve() for path in sources}
 
 
+def _write_fixture_tree(root: Path) -> Path:
+    """One canonical definer plus genuinely excluded files; returns the definer.
+
+    Same fixture shape as `scripts/check_ansible_file_references_test.py:40-45`
+    and `repo_tests/lint/canonical/test_context.py:76-78`.
+    """
+    (root / "utils" / "error_boundaries").mkdir(parents=True)
+    definer = root / "utils" / "error_boundaries" / "decorators.py"
+    definer.write_text(f"def {_TARGET_NAME}():\n    pass\n", encoding="utf-8")
+    for excluded in ("node_modules", "tests"):
+        (root / excluded).mkdir()
+        (root / excluded / "vendored.py").write_text("x = 1\n", encoding="utf-8")
+    return definer
+
+
+def _relative_scan(root: Path) -> Set[str]:
+    """`_production_sources` as repo-relative posix strings, so two trees compare."""
+    return {path.relative_to(root).as_posix() for path in _production_sources(root)}
+
+
 def test_a_checkout_under_worktrees_is_still_scanned(tmp_path):
     """#15121: the filter must key on parts relative to the scan root.
 
     The fixture reproduces the mandated layout exactly — the scan root itself
     sits under `.worktrees/<branch>/`. Matching a substring of the absolute path
-    skips every file here; matching relative parts finds the definer. Same
-    fixture shape as `scripts/check_ansible_file_references_test.py:40-45` and
-    `repo_tests/lint/canonical/test_context.py:76-78`.
+    skips every file here; matching relative parts finds the definer.
     """
     root = tmp_path / ".worktrees" / "issue-9999" / "autobot-backend"
-    (root / "utils" / "error_boundaries").mkdir(parents=True)
-    definer = root / "utils" / "error_boundaries" / "decorators.py"
-    definer.write_text(f"def {_TARGET_NAME}():\n    pass\n", encoding="utf-8")
-
-    # Genuinely excluded content, to prove the filter still filters.
-    (root / "node_modules").mkdir()
-    (root / "node_modules" / "vendored.py").write_text("x = 1\n", encoding="utf-8")
-    (root / "tests").mkdir()
-    (root / "tests" / "helper.py").write_text("y = 1\n", encoding="utf-8")
+    definer = _write_fixture_tree(root)
 
     scanned = _production_sources(root)
 
@@ -123,6 +135,32 @@ def test_a_checkout_under_worktrees_is_still_scanned(tmp_path):
     )
     assert {path.name for path in scanned} == {"decorators.py"}
     assert _defines_target(definer) == [1]
+
+
+@pytest.mark.parametrize("ancestor", sorted(_SKIP_PARTS))
+def test_an_excluded_name_above_the_scan_root_changes_nothing(tmp_path, ancestor):
+    """#15140: the filter must be prefix-invariant for *every* skipped name.
+
+    The test above pins `.worktrees` alone, so reintroducing the absolute form
+    for just one of the other names — `if "/tests/" in path.as_posix()` — keeps
+    this file green while emptying the tree for any checkout under a directory
+    of that name. Measured: that partial regression left the suite 5-green.
+    Comparing the same tree at two prefixes pins the invariant instead of one
+    case of it.
+    """
+    under = tmp_path / "under" / ancestor / "issue-9999" / "autobot-backend"
+    plain = tmp_path / "plain" / "checkout" / "autobot-backend"
+    _write_fixture_tree(under)
+    _write_fixture_tree(plain)
+
+    # Non-vacuity first: if the neutral tree scanned empty the comparison below
+    # would pass by finding nothing at either prefix.
+    assert _relative_scan(plain) == {"utils/error_boundaries/decorators.py"}
+    assert _relative_scan(under) == _relative_scan(plain), (
+        f"a scan root nested under a directory named {ancestor!r} enumerated a "
+        "different set than the same tree elsewhere — the exclusion is matching "
+        "the absolute path instead of parts relative to the root"
+    )
 
 
 def test_exactly_one_definition_exists_in_the_tracked_tree():
