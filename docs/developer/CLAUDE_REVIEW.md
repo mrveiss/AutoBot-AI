@@ -64,9 +64,31 @@ root causes and both are yours to fix:
    blocked if a required context never reported at all. Count reported contexts
    against `gh api repos/{owner}/{repo}/branches/Dev_new_gui/protection --jq
    '.required_status_checks.contexts[]'`.
-3. **Root-cause and fix it** in the same PR. If the check itself is wrong, fix the
+3. **Name the cause before you debug the diff (#15139).** Five conditions render as
+   the same red tile, and `gh pr checks` buckets every one of them under `fail` —
+   `fail` there is **not** `conclusion: failure` and must be confirmed against the
+   run object. Run `pipeline-scripts/ci_red_cause.py --pr N` (add `--json` to parse
+   it). It reads `GET /actions/jobs/{id}`, the only endpoint carrying a `steps`
+   array — `GET /commits/{sha}/check-runs` has none, so anything classifying from
+   the check-runs listing alone is guessing.
+
+   | cause | what happened | remedy |
+   |---|---|---|
+   | `runner-starvation` | job executed 0 steps — it never got a runner | re-queue |
+   | `provisioning-failure` | first failing step is toolchain setup (`apt` exit 124) | re-queue |
+   | `superseded` | `conclusion: cancelled` — a newer push retired the run | wait for the fresh run |
+   | `test-failure` | first failing step is a work step | **fix the diff; never re-queue** |
+   | `undetermined` | the cause could not be established | **treat as a real failure** |
+
+   Read the **first** failing step, never the last: a setup failure makes later test
+   steps fail downstream, so the last failure lies about the cause.
+
+   **A named cause never makes a red check green.** The tool publishes no status and
+   re-queues nothing; it exits 1 on any red whatever the cause, and exits 2 when
+   nothing could be classified — which is never "clean".
+4. **Root-cause and fix it** in the same PR. If the check itself is wrong, fix the
    check — in the same PR or a fast-follow that lands first.
-4. **If it genuinely cannot be fixed now:** label the PR `blocked`, post a
+5. **If it genuinely cannot be fixed now:** label the PR `blocked`, post a
    one-paragraph root-cause writeup on it, and move to the next issue. Do not merge,
    do not `--admin` past it, and do not interrupt a `/loop` to ask about it.
 
@@ -154,6 +176,23 @@ After merging all PRs in a batch:
 - Only cancel/retrigger when a check has been in a non-running state for >30 minutes with no activity
 
 **Why:** Sessions wasted time canceling/retriggering smoke tests that were running normally.
+
+**A deep queue is the hosted-runner cap, not a dead self-hosted pool (#15139).**
+Measured 2026-08-28: **155** runs queued, **14** jobs executing — **13 of them on
+`ubuntu-latest`, 1 on self-hosted** — with both self-hosted runners `online`. A
+12-run sample of the queued runs found `ubuntu-latest` on every job. So queue depth
+tracks the GitHub-hosted concurrency cap; it is neither a dispatch gate nor a starved
+self-hosted pool, and **idle self-hosted runners next to a long queue is expected**,
+not evidence of a fault. Re-measure before assuming otherwise:
+
+```bash
+gh api 'repos/{owner}/{repo}/actions/runs?status=queued&per_page=1' --jq .total_count
+gh api repos/{owner}/{repo}/actions/runners --jq '[.runners[] | {name, status, busy}]'
+```
+
+A run queued past `WATCHDOG_STALL_MINUTES` (default **45**) is the threshold
+`ci_dispatch_watchdog.py --check runner-starvation` reports on. Below it, waiting is
+normal and your diff is not the reason.
 
 ---
 
