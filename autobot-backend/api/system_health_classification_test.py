@@ -139,7 +139,7 @@ class TestLazySingletonProbesReportIdle:
         cannot observe the state at all, and saying "idle" there is the very
         lie #15160 was about. Hand it an app whose state is genuinely empty.
         """
-        import api.chat_knowledge as mod
+        import api.chat_knowledge_manager as mod
 
         app = FastAPI()
 
@@ -150,7 +150,7 @@ class TestLazySingletonProbesReportIdle:
     @pytest.mark.asyncio
     async def test_chat_knowledge_failed_resolution_is_down(self):
         """#15160: a dependency that could not be built must not read as idle."""
-        import api.chat_knowledge as mod
+        import api.chat_knowledge_manager as mod
 
         app = FastAPI()
         setattr(app.state, mod.MANAGER_ERROR_STATE_KEY, "RuntimeError: boom")

@@ -27,14 +27,15 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-import api.chat_knowledge as chat_knowledge_module
-from api.chat_knowledge import (
+import api.chat_knowledge as routes_module
+import api.chat_knowledge_manager as manager_module
+from api.chat_knowledge import router
+from api.chat_knowledge_manager import (
     MANAGER_ERROR_STATE_KEY,
     MANAGER_STATE_KEY,
     ChatFileAssociation,
     ChatKnowledgeContext,
     probe_chat_knowledge,
-    router,
 )
 from api.schemas_knowledge import FileAssociationType
 
@@ -234,7 +235,7 @@ class TestLazyResolutionWiring:
             created.append(manager)
             return manager
 
-        monkeypatch.setattr(chat_knowledge_module, "ChatKnowledgeManager", _factory)
+        monkeypatch.setattr(manager_module, "ChatKnowledgeManager", _factory)
         app = _make_app()
         with TestClient(app) as test_client:
             first = _call(test_client, "search")
@@ -248,10 +249,12 @@ class TestLazyResolutionWiring:
             assert getattr(app.state, MANAGER_STATE_KEY) is created[0]
             assert len(created[0].calls) == 2
 
-    def test_module_has_no_resurrected_dead_global(self):
-        assert not hasattr(chat_knowledge_module, "chat_knowledge_manager"), (
-            "the module-level chat_knowledge_manager global is back — it is a decoy "
-            "nothing assigns, which is exactly defect #15160"
+    @pytest.mark.parametrize("module", [manager_module, routes_module])
+    def test_module_has_no_resurrected_dead_global(self, module):
+        """Neither the manager module nor the HTTP surface may hold the decoy."""
+        assert not hasattr(module, "chat_knowledge_manager"), (
+            f"{module.__name__} has a module-level chat_knowledge_manager global again — "
+            "it is a decoy nothing assigns, which is exactly defect #15160"
         )
 
 
@@ -263,7 +266,7 @@ class TestUnresolvableManagerIsHonest:
         def _explode():
             raise RuntimeError("ChromaDB unreachable")
 
-        monkeypatch.setattr(chat_knowledge_module, "ChatKnowledgeManager", _explode)
+        monkeypatch.setattr(manager_module, "ChatKnowledgeManager", _explode)
         app = _make_app()
         with TestClient(app) as test_client:
             yield test_client
@@ -281,7 +284,7 @@ class TestUnresolvableManagerIsHonest:
         def _explode():
             raise RuntimeError("ChromaDB unreachable")
 
-        monkeypatch.setattr(chat_knowledge_module, "ChatKnowledgeManager", _explode)
+        monkeypatch.setattr(manager_module, "ChatKnowledgeManager", _explode)
         app = _make_app()
         with TestClient(app) as test_client:
             response = _call(test_client, "search")
@@ -357,7 +360,7 @@ class TestHealthProbeReportsTheRealState:
 
     def test_route_traffic_flips_the_probe_off_idle(self, stub_manager, monkeypatch):
         """End to end: before the fix this transition was impossible."""
-        monkeypatch.setattr(chat_knowledge_module, "ChatKnowledgeManager", lambda: stub_manager)
+        monkeypatch.setattr(manager_module, "ChatKnowledgeManager", lambda: stub_manager)
         app = _make_app()
 
         assert asyncio.run(probe_chat_knowledge(self._FakeRequest(app))).status == "idle"
