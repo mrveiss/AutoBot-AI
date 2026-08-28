@@ -148,7 +148,7 @@ def configure_llm_awareness(app: FastAPI):
     Configure LLM awareness middleware
 
     Injects system awareness context (phase, maturity, capabilities) into LLM
-    prompts for /api/chat, /api/llm, /api/intelligent-agent, and /api/workflow
+    prompts for /api/chat, /api/llm, /api/intelligent_agent, and /api/workflow
     endpoints. If the middleware module is unavailable, logs a warning and
     continues without it.
 
