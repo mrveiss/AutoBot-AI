@@ -6,10 +6,30 @@ tenacity>=9.1.4
 # Async SSH for PKI certificate distribution (Issue #166)
 asyncssh>=2.24.0
 
-# opentelemetry-proto>=1.40.0 requires protobuf>=5.0,<7.0 — relaxed upper bound to <7.0.0 (#3971)
-# TensorFlow is not a project dependency; former <6.0.0 cap caused pip conflicts with protobuf 6.x
-# Bumped to 5.29.6+ for JSON recursion depth bypass fix (#3933)
-protobuf>=7.36.0,<8.0.0  # capped <7.0: opentelemetry-proto (otel 1.42) requires protobuf<7.0; the Dependabot 7.35.1 bump is unsatisfiable. 6.33.6 = latest installable.
+# protobuf — cap and floor, re-derived 2026-08-26 (#15070).
+#
+# CAP <8.0.0. Both direct requirers admit the whole 7.x line: the pinned
+# opentelemetry-proto==1.44.0 declares `protobuf<8.0,>=5.0`, and the transitive
+# googleapis-common-protos 1.75.1 declares `protobuf<8.0.0,>=6.33.5`. 8.0 is
+# therefore the real incompatibility boundary — nothing here needs <7.0.
+#
+# The note this replaces said the opposite (cap <7.0, "7.35.1 unsatisfiable",
+# "6.33.6 = latest installable"), and the CONSTRAINT was the half that was
+# right. That note was accurate when written (#10427) against otel 1.42.x,
+# which did require protobuf<7.0. #10589 moved otel to 1.43.0 and #10678
+# raised protobuf to >=7.35.1,<8.0.0 the next day; neither touched the
+# comment, so it spent two months telling readers to revert a cap that had
+# become correct. Recorded here so the next reader does not have to guess.
+#
+# FLOOR >=7.36.0. Walked up by Dependabot (#14951); it carries forward the
+# JSON recursion-depth bypass fix that first set a floor at 5.29.6 (#3933).
+# TensorFlow is not a project dependency — the historical <6.0.0 cap it
+# justified caused pip conflicts and was removed in #3971.
+#
+# autobot-backend/requirements.txt `-r`-includes this file and ALSO declares
+# protobuf. pip resolves the intersection, so the two lines must stay
+# identical; tools/lint/check_requirements_pin_parity.py enforces that.
+protobuf>=7.36.0,<8.0.0
 
 # vLLM (GPU inference) is an OPTIONAL extra — NOT a default dependency (#10251).
 # It pulls the full CUDA toolkit (cuda-toolkit, nvidia-*, flashinfer, CUDA torch),
