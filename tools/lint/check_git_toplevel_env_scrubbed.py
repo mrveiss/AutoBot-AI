@@ -222,10 +222,10 @@ def main(argv: List[str] | None = None) -> int:
                 rel = path.resolve().relative_to(repo_root).as_posix()
             except ValueError:
                 rel = path.as_posix()
-            print(f"[git-toplevel-env-scrubbed] {rel}:{line_no}: {message}", file=sys.stderr)
+            print(f"[git-toplevel-env-scrubbed] {rel}:{line_no}: {message}", file=sys.stderr)  # noqa: print
             total += 1
     if total:
-        print(
+        print(  # noqa: print
             f"\n[git-toplevel-env-scrubbed] {total} unscrubbed call(s). "
             "Resolve the repository root with autobot_shared.paths.git_repo_root() (#15176).",
             file=sys.stderr,
