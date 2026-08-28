@@ -55,9 +55,9 @@ the one read-side gate · `validate_ownership` (:638).
 - Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent
   Redis record means "not cached", never "unowned" — `_owner_when_cache_is_empty` (:565) asks
   disk first and rehydrates **for the real owner, never for the caller** (#14018).
-- Undetermined enforcement policy degrades to `DEGRADED_ENFORCEMENT_MODE` (:65) — not to `disabled`,
-  not to `disabled`: checks still run and violations are still recorded (#14010). A new
-  `except` that returns `"disabled"` is a fail-open.
+- Undetermined enforcement policy degrades to `DEGRADED_ENFORCEMENT_MODE` (:65), never to
+  `disabled`: checks still run and violations are still recorded (#14010). A new `except`
+  that returns `"disabled"` is a fail-open.
 - Only two legitimate fast-path bypasses exist — `_resolve_fast_paths` (:506): global auth
   disabled, and enforcement explicitly `disabled`. A third one added in a diff is a finding.
 - Creating over an existing session id is a 409, identical for "owned by someone else" and

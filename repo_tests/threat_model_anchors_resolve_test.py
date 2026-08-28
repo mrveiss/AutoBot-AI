@@ -53,10 +53,12 @@ def _anchors() -> list[tuple[str, str, int]]:
     current: str | None = None
     for line in _doc_text().splitlines():
         # A link may share a line with the anchors it introduces, so scan the
-        # link first and let it become current for the rest of the same line.
-        link = _LINK_RE.search(line)
-        if link:
-            current = link.group(1)
+        # links first and let the last one become current for that whole line.
+        # Taking the *first* match would misattribute anchors that follow a
+        # second link on the same line — silently, and in the passing direction.
+        links = _LINK_RE.findall(line)
+        if links:
+            current = links[-1]
         for symbol, lineno in _ANCHOR_RE.findall(line):
             assert current, f"anchor `{symbol}` (:{lineno}) has no preceding file link"
             found.append((current, symbol, int(lineno)))
@@ -88,7 +90,9 @@ def test_anchor_points_at_its_symbol(rel: str, symbol: str, lineno: int):
 
     ident = _IDENT_RE.findall(symbol)[-1]
     actual = lines[lineno - 1]
-    assert ident in actual, (
+    # Word-boundary, not substring: a comment or unrelated string that merely
+    # contains the identifier would otherwise pass for a definition that moved.
+    assert re.search(rf"\b{re.escape(ident)}\b", actual), (
         f"THREAT_MODEL.md cites `{symbol}` at {rel}:{lineno}, "
         f"but that line reads: {actual.strip()!r}"
     )
