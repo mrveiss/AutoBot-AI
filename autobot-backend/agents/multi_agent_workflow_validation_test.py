@@ -81,6 +81,11 @@ REQUEST_TIMEOUT_SECONDS = 30.0
 # failing on load rather than on the behaviour it names. This is an
 # `integration`-marked test that only runs where a stack is up, so a long budget
 # costs nothing and a breach is then a real statement about the endpoint.
+#
+# This number is NOT arbitrary and must not be raised again to make a failure go
+# away: the endpoint's non-response under load is tracked as #15165, and that
+# issue owns lowering this allowance once the endpoint is bounded. Raising it
+# further would only hide #15165 the way the pre-conversion `except` did.
 TASK_TIMEOUT_SECONDS = 180.0
 CHAT_TIMEOUT_SECONDS = 60.0
 
@@ -184,7 +189,7 @@ class TestMultiAgentWorkflow:
             # invisible for the life of the file (#14979).
             raise AssertionError(
                 f"/api/knowledge_base/search accepted the connection but sent no response "
-                f"within {TASK_TIMEOUT_SECONDS}s — the canonical agent task never completes."
+                f"within {TASK_TIMEOUT_SECONDS}s — the canonical agent task never completes (#15165)."
             ) from exc
 
         assert (
