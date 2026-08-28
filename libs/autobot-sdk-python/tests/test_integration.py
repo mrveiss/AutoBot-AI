@@ -76,11 +76,15 @@ def _require_live_backend(request) -> None:
 
 @pytest.mark.asyncio
 async def test_sessions_list(base_url: str) -> None:
-    """SDK can list chat sessions against the running backend."""
+    """SDK can list chat sessions against the running backend.
+
+    No ``limit``: ``GET /chat/sessions`` is not paginated and declares no such
+    parameter, so the SDK stopped offering one (#15119).
+    """
     from autobot_sdk import AutoBot
 
     async with AutoBot(base_url=base_url) as bot:
-        result = await bot.sessions.list(limit=5)
+        result = await bot.sessions.list()
 
     assert result.success is True
     assert result.data is not None
@@ -89,13 +93,19 @@ async def test_sessions_list(base_url: str) -> None:
 
 @pytest.mark.asyncio
 async def test_knowledge_stats(base_url: str) -> None:
-    """SDK can retrieve knowledge base statistics."""
+    """SDK can retrieve knowledge base statistics.
+
+    ``/knowledge_base/stats`` returns its document flat, so there is no envelope
+    and no ``success`` flag to read -- asserting one was how this test passed
+    while the payload it was meant to check was always ``None`` (#15116).
+    """
     from autobot_sdk import AutoBot
 
     async with AutoBot(base_url=base_url) as bot:
         result = await bot.knowledge.stats()
 
-    assert result.success is True
+    assert result.status in {"online", "offline", "error", "unknown"}
+    assert result.total_facts is not None
 
 
 @pytest.mark.asyncio
@@ -108,7 +118,7 @@ async def test_auth_token_injection(base_url: str) -> None:
     captured: list[str] = []
 
     async def _mock_get(*_args, **_kwargs):
-        resp = httpx.Response(200, json={"success": True, "data": {"sessions": [], "total": 0}})
+        resp = httpx.Response(200, json={"success": True, "data": {"sessions": [], "count": 0}})
         return resp
 
     from autobot_sdk import AutoBot
@@ -148,7 +158,7 @@ async def test_no_sdk_request_reaches_a_missing_route(base_url: str) -> None:
     missing: list[str] = []
     async with AutoBot(base_url=base_url) as bot:
         for name, call in (
-            ("sessions.list", lambda: bot.sessions.list(limit=1)),
+            ("sessions.list", bot.sessions.list),
             ("agents.health", bot.agents.health),
             ("knowledge.stats", bot.knowledge.stats),
             ("knowledge.get_entries", lambda: bot.knowledge.get_entries(limit=1)),
