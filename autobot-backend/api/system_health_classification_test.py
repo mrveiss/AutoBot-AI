@@ -16,9 +16,11 @@ representative single-node probe set to prove overall status is ``ok``, and
 with one genuine failure mixed in to prove overall status is still ``down``.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import FastAPI
 
 from api.system_health import (
     _PROBES,
@@ -130,14 +132,32 @@ class TestLazySingletonProbesReportIdle:
     """Issue #12459: not-yet-used lazy singletons are idle, not degraded."""
 
     @pytest.mark.asyncio
-    async def test_chat_knowledge_not_initialized_is_idle(self, monkeypatch: pytest.MonkeyPatch):
-        import api.chat_knowledge as mod
+    async def test_chat_knowledge_not_initialized_is_idle(self):
+        """#15160: the probe reads ``app.state``, never a module global.
 
-        monkeypatch.setattr(mod, "chat_knowledge_manager", None)
+        ``request=None`` is no longer "idle" — with no ``Request`` the probe
+        cannot observe the state at all, and saying "idle" there is the very
+        lie #15160 was about. Hand it an app whose state is genuinely empty.
+        """
+        import api.chat_knowledge_manager as mod
 
-        result = await mod.probe_chat_knowledge(request=None)
+        app = FastAPI()
+
+        result = await mod.probe_chat_knowledge(SimpleNamespace(app=app))
 
         assert result.status == "idle"
+
+    @pytest.mark.asyncio
+    async def test_chat_knowledge_failed_resolution_is_down(self):
+        """#15160: a dependency that could not be built must not read as idle."""
+        import api.chat_knowledge_manager as mod
+
+        app = FastAPI()
+        setattr(app.state, mod.MANAGER_ERROR_STATE_KEY, "RuntimeError: boom")
+
+        result = await mod.probe_chat_knowledge(SimpleNamespace(app=app))
+
+        assert result.status == "down"
 
     @pytest.mark.asyncio
     async def test_intelligent_agent_not_initialized_is_idle(self, monkeypatch: pytest.MonkeyPatch):

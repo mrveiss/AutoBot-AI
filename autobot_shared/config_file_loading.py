@@ -2,22 +2,30 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""One loader for the enterprise-security YAML configs (#14892).
+"""One loader for "read a YAML config, else fall back to built-in defaults" (#14892).
 
-Five managers each open a policy file under ``PATH.get_config_path("security", ...)``.
-Four of them shared a copy of the same ``_load_config`` body, whose miss branch
-wrote its built-in defaults back to the path it had just failed to read. Under
-#14892's broken ``CONFIG_DIR`` that path did not exist, so the write created a
-decoy ``infrastructure/shared/config/security/`` tree — and from then on the
-*next* boot read those defaults back and reported success. A one-time miss
-became a permanent, self-confirming wrong answer, and the security policy
-actually in force was one nobody had written or reviewed.
+#14892 AC3 asks, of every consumer that reaches a file through
+``PATH.CONFIG_DIR``, whether an absent config is distinguishable from a loaded
+one. It usually was not: the miss branch returned the same shape as the hit
+branch, so a config nobody had written read exactly like a config someone had
+reviewed.
 
-So the miss branch here does two things differently: it never writes, and it
-says so at WARNING naming the exact path it looked for. `source` makes the same
-fact available programmatically, which is what `utils/error_catalog.py` — the
-one consumer of `CONFIG_DIR` that was already distinguishable — does with its
-own `source`/`searched_paths` attributes.
+This module is the answer for every such consumer. :class:`LoadedConfig` carries
+``source`` beside ``values``, so the fact is available programmatically rather
+than only in a log line, and the miss branch **never writes**.
+
+That last rule is not decorative. The five ``security/enterprise`` managers each
+carried a copy of this body whose miss branch wrote its built-in defaults back to
+the path it had just failed to read. Under #14892's broken ``CONFIG_DIR`` that
+path did not exist, so the write created a decoy ``infrastructure/shared/config/
+security/`` tree — and the *next* boot read those defaults back and reported
+success. A one-time miss became a permanent, self-confirming wrong answer, and
+the security policy in force was one nobody had written or reviewed.
+
+It lives in ``autobot_shared`` rather than under ``security/enterprise`` because
+``security.enterprise.__init__`` eagerly imports all five managers, one of which
+needs an optional dependency; a core module such as ``event_manager`` cannot take
+that import just to load a YAML file.
 """
 
 from __future__ import annotations
@@ -52,7 +60,7 @@ class LoadedConfig:
         return self.source == SOURCE_FILE
 
 
-def load_security_config(
+def load_config_file(
     config_path: str | Path,
     defaults_factory: Callable[[], Dict[str, Any]],
     description: str,
@@ -63,6 +71,9 @@ def load_security_config(
         config_path: the YAML file to read.
         defaults_factory: builds the built-in defaults, called only on a miss.
         description: what the config governs, for the log line.
+
+    Returns:
+        The values plus the ``source`` they came from and the path searched.
     """
     path = Path(config_path)
     try:
@@ -70,7 +81,8 @@ def load_security_config(
             with open(path, "r", encoding="utf-8") as handle:
                 values = yaml.safe_load(handle)
             # An empty or all-comments YAML file parses to None. Treating that
-            # as a loaded config hands every consumer an empty policy.
+            # as a loaded config hands every consumer an empty policy — and
+            # every consumer that then calls ``.get()`` on it raises instead.
             if isinstance(values, dict):
                 return LoadedConfig(values=values, source=SOURCE_FILE, searched_path=path)
             logger.warning(
@@ -81,8 +93,8 @@ def load_security_config(
             )
         else:
             logger.warning(
-                "%s config not found at %s; using built-in defaults. The policy in force is "
-                "the code default, not a reviewed file — create that file to change it. "
+                "%s config not found at %s; using built-in defaults. The settings in force are "
+                "the code defaults, not a reviewed file — create that file to change them. "
                 "Nothing is written to that path (#14892).",
                 description,
                 path,
