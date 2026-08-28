@@ -24,10 +24,30 @@
       access control posture of its own and falls back to disabled.
   when: not enforcement_seeder_stat.stat.exists
 
+# The interpreter is checked separately from the script. A missing venv and a
+# missing seeder are different faults with different remedies, and an
+# `ansible.builtin.command` whose executable does not exist reports a module
+# failure rather than the seeder's own exit code -- which `failed_when` below
+# reads. Stating it here keeps the reason in the message instead of leaving an
+# operator to decode "Unable to find executable".
+- name: Verify the backend interpreter the provisioner runs under exists
+  ansible.builtin.stat:
+    path: "{{ access_control_enforcement_python }}"
+  register: enforcement_python_stat
+
+- name: Fail if the backend interpreter is missing
+  ansible.builtin.fail:
+    msg: >-
+      Backend interpreter not found at {{ access_control_enforcement_python }}.
+      The enforcement mode seeder imports services.feature_flags and cannot run
+      without it, so the install would keep resolving the unset flag to
+      disabled.
+  when: not enforcement_python_stat.stat.exists
+
 - name: Provision access control enforcement mode
   ansible.builtin.command:
     argv:
-      - "{{ project_root }}/venv/bin/python"
+      - "{{ access_control_enforcement_python }}"
       - "{{ access_control_enforcement_seeder }}"
       - "--mode"
       - "{{ access_control_enforcement_mode }}"
