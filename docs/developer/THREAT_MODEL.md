@@ -43,8 +43,8 @@ not an auth boundary — the caller is logged in — so a missing check reads as
 endpoint.
 
 **Canonical enforcement:** [`autobot-backend/security/session_ownership.py`](../../autobot-backend/security/session_ownership.py)
-— `build_owner_metadata` (:31) the one owner stamper · `validate_session_ownership` (:800)
-the one read-side gate · `validate_ownership` (:638).
+— `build_owner_metadata` (:34) the one owner stamper · `validate_session_ownership` (:775)
+the one read-side gate · `validate_ownership` (:613).
 
 **Invariants**
 
@@ -53,13 +53,20 @@ the one read-side gate · `validate_ownership` (:638).
 - Owner identity is `metadata.owner` = **username**, never a user id. A diff comparing
   against `user_id` is comparing the wrong field.
 - Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent
-  Redis record means "not cached", never "unowned" — `_owner_when_cache_is_empty` (:565) asks
+  Redis record means "not cached", never "unowned" — `_owner_when_cache_is_empty` (:539) asks
   disk first and rehydrates **for the real owner, never for the caller** (#14018).
-- Undetermined enforcement policy degrades to `DEGRADED_ENFORCEMENT_MODE` (:65), never to
-  `disabled`: checks still run and violations are still recorded (#14010). A new `except`
-  that returns `"disabled"` is a fail-open.
-- Only two legitimate fast-path bypasses exist — `_resolve_fast_paths` (:506): global auth
-  disabled, and enforcement explicitly `disabled`. A third one added in a diff is a finding.
+- Undetermined enforcement policy degrades, in
+  [`security/enforcement_mode.py`](../../autobot-backend/security/enforcement_mode.py), to
+  `DEGRADED_ENFORCEMENT_MODE` (:53) and never to `disabled`: checks still run and violations
+  are still recorded (#14010). A new `except` that returns `"disabled"` is a fail-open.
+- A resolution that degraded stays marked `degraded` (:73), so a `log_only` decision record
+  says which of the two `log_only` states produced it (#15159). It marks the record only —
+  `log_only` is allow-and-audit in both, deliberately. A degraded route reporting the chosen
+  `reason` is a finding.
+- Only two legitimate fast-path bypasses exist, in
+  [`security/session_ownership.py`](../../autobot-backend/security/session_ownership.py) —
+  `_resolve_fast_paths` (:480): global auth disabled, and enforcement explicitly `disabled`.
+  A third one added in a diff is a finding.
 - Creating over an existing session id is a 409, identical for "owned by someone else" and
   "no recorded owner" — a 403 on the first would confirm who owns it (#14012).
 
