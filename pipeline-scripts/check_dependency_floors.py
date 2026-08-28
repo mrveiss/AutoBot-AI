@@ -43,6 +43,11 @@ DECLARATION_ROOTS: tuple[str, ...] = (
 
 MAX_REPORTED = 10
 
+#: Stands in for a version in a :class:`Shortfall` raised for a distribution
+#: that is not installed at all. Only reachable when a caller asks for it --
+#: see ``require_present`` on :func:`shortfalls`.
+ABSENT = "(absent)"
+
 _REQUIREMENT = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(==|>=|~=|>)\s*([0-9][A-Za-z0-9.]*)")
 _INCLUDE = re.compile(r"^\s*(?:-r|--requirement)[\s=]+(\S+)")
 _RELEASE = re.compile(r"^(\d+(?:\.\d+)*)(.*)$")
@@ -76,6 +81,8 @@ class Shortfall:
 
     def describe(self) -> str:
         declared = f"{self.declaration.operator}{self.declaration.required}"
+        if self.installed == ABSENT:
+            return f"{self.declaration.name}: NOT INSTALLED, declared {declared} ({self.declaration.source})"
         return (
             f"{self.declaration.name}: installed {self.installed}, " f"declared {declared} ({self.declaration.source})"
         )
@@ -93,8 +100,15 @@ def _ordinal(raw: str) -> tuple[tuple[int, ...], int]:
     release comparison exact. Epochs and post-releases are not modelled -- no
     declaration in this repo uses one -- and an unparsable version sorts
     lowest, so it is reported rather than silently accepted.
+
+    A PEP 440 local segment is dropped first, so ``2.13.0+cpu`` compares as the
+    ``2.13.0`` it is. Without that it read as a pre-release and was reported as
+    below its own pin -- and the CPU torch build it names is one
+    ``scripts/setup-ci-parity-env.sh`` installs on purpose, so the shortfall
+    was both false and permanent (#15130).
     """
-    match = _RELEASE.match(raw.strip())
+    public = raw.strip().partition("+")[0]
+    match = _RELEASE.match(public)
     if not match:
         return (0,), 0
     return tuple(int(part) for part in match.group(1).split(".")), 0 if match.group(2) else 1
@@ -124,10 +138,14 @@ def _includes(path: Path) -> list[Path]:
     return out
 
 
-def declaration_files(root: Path) -> list[Path]:
-    """Every requirements file reachable from :data:`DECLARATION_ROOTS`."""
+def declaration_files(root: Path, roots: Sequence[str] | None = None) -> list[Path]:
+    """Every requirements file reachable from *roots* (default :data:`DECLARATION_ROOTS`).
+
+    Resolved at call time, not bound as a default, so a caller that rebinds
+    :data:`DECLARATION_ROOTS` still steers this.
+    """
     seen: list[Path] = []
-    queue = [(root / name).resolve() for name in DECLARATION_ROOTS]
+    queue = [(root / name).resolve() for name in (DECLARATION_ROOTS if roots is None else roots)]
     while queue:
         current = queue.pop(0)
         if current in seen or not current.is_file():
@@ -163,35 +181,60 @@ def installed_versions(names: Iterable[str]) -> dict[str, str]:
     return found
 
 
-def shortfalls(declarations: Sequence[Declaration], installed: Mapping[str, str]) -> list[Shortfall]:
+def shortfalls(
+    declarations: Sequence[Declaration],
+    installed: Mapping[str, str],
+    require_present: bool = False,
+) -> list[Shortfall]:
     """Declared floors *installed* does not meet.
 
-    An absent distribution is not a shortfall: this environment simply does not
-    have it, which says nothing about the version CI would resolve.
+    By default an absent distribution is not a shortfall: an arbitrary box
+    simply does not have it, which says nothing about the version CI would
+    resolve.
+
+    *require_present* flips that for the one caller where absence IS the
+    defect. ``scripts/setup-ci-parity-env.sh`` installs these very files, so a
+    declaration with nothing installed against it means the install did not
+    take -- and the consequence is silent, because a test module that
+    ``importorskip``s the missing package is never collected at all. Nine such
+    packages were sitting in the parity venv when this was written, one of them
+    the docker SDK whose own requirement comment warns that its absence skips a
+    whole smoke suite without a word (#15130).
     """
     out: list[Shortfall] = []
     for declaration in declarations:
         have = installed.get(declaration.name)
-        if have is not None and not satisfies(have, declaration.operator, declaration.required):
+        if have is None:
+            if require_present:
+                out.append(Shortfall(declaration, ABSENT))
+            continue
+        if not satisfies(have, declaration.operator, declaration.required):
             out.append(Shortfall(declaration, have))
     return out
 
 
-def audit(root: Path) -> tuple[list[Shortfall], int]:
+def audit(root: Path, roots: Sequence[str] | None = None, require_present: bool = False) -> tuple[list[Shortfall], int]:
     """Shortfalls in *root*'s declared set, plus how many declarations were read.
+
+    *roots* narrows the sweep to a subset of the entry points. A caller that
+    installs only part of the graph -- ``scripts/setup-ci-parity-env.sh``
+    installs ``requirements-ci.txt`` and ``requirements-ci-test.txt`` and
+    nothing else -- must be judged against what it installs, or the backend
+    declarations it never had would read as its own drift (#15130).
 
     Raises :class:`EmptyEnumerationError` when the sweep reads nothing, so an
     empty enumeration can never be reported as a clean environment.
     """
-    files = declaration_files(root)
+    swept = DECLARATION_ROOTS if roots is None else roots
+    files = declaration_files(root, swept)
     declarations = parse_declarations(files, root)
     if not declarations:
         raise EmptyEnumerationError(
             f"no version declarations found under {root}: "
-            f"{len(files)} requirement file(s) reachable from {list(DECLARATION_ROOTS)}"
+            f"{len(files)} requirement file(s) reachable from {list(swept)}"
         )
     installed = installed_versions(declaration.name for declaration in declarations)
-    return shortfalls(declarations, installed), len(declarations)
+    return shortfalls(declarations, installed, require_present), len(declarations)
 
 
 def render(found: Sequence[Shortfall], examined: int, limit: int = MAX_REPORTED) -> list[str]:
@@ -219,10 +262,27 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", type=Path, default=None, help="repo root to audit")
     parser.add_argument("--strict", action="store_true", help="exit 1 when any declared floor is unsatisfied")
     parser.add_argument("--all", action="store_true", help="list every shortfall, not just the first few")
+    parser.add_argument(
+        "--require-present",
+        action="store_true",
+        help="also report declarations with nothing installed against them",
+    )
+    parser.add_argument(
+        "--roots",
+        nargs="*",
+        metavar="FILE",
+        default=None,
+        help="repo-relative requirement entry points to sweep (default: every root)",
+    )
     args = parser.parse_args(argv)
     root = (args.root or Path(__file__).resolve().parents[1]).resolve()
+    if args.roots is not None and not args.roots:
+        print("FATAL: --roots was given no files, so there is nothing to check", file=sys.stderr)  # noqa: print
+        return 2
     try:
-        found, examined = audit(root)
+        found, examined = audit(
+            root, None if args.roots is None else tuple(args.roots), require_present=args.require_present
+        )
     except EmptyEnumerationError as exc:
         print(f"FATAL: {exc}", file=sys.stderr)  # noqa: print
         return 2
