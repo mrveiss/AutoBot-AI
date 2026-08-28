@@ -66,6 +66,13 @@ and go straight to the verdict. Do not pad it with speculation.
 
 ## Review checklist
 
+If the diff touches **path validation, session/chat ownership, plugin loading, or
+secrets/credentials**, read the matching section of
+[`docs/developer/THREAT_MODEL.md`](../../../docs/developer/THREAT_MODEL.md) first — it
+carries the trust boundary, the canonical enforcement point, and the invariants for each,
+so the model is loaded instead of re-derived. It is one read, and it counts against the
+3-call ceiling only when a listed subsystem is actually in the diff.
+
 These categories have produced real hits in this repo — cover each one.
 
 **Authz & identity**
