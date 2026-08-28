@@ -4,12 +4,16 @@
 # Author: mrveiss
 """Tests for device JWT service (GH#9493)."""
 
+import logging
 import os
 import time
 import uuid
+from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import OperationalError
 
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, decode_jwt
 from services.device_jwt import (
@@ -33,9 +37,43 @@ def mock_redis():
 
 @pytest.fixture
 def mock_db_session():
-    """Mock database session for device existence checks."""
+    """Mock database session for device state checks.
+
+    ``scalar_one_or_none`` remains how a test says *the row exists* (its value
+    being the device id) or *it does not* (``None``). That is the contract the
+    tests in this file were written against and it is deliberately unchanged.
+
+    #14964 made the state read select ``(id, revoked_at)`` and consume it with
+    ``result.first()``: existence and revocation are two different answers, and
+    one scalar cannot carry both without conflating "deleted" with "revoked".
+    A bare ``MagicMock`` answers ``first()`` with a truthy mock, so a fixture
+    that models only ``scalar_one_or_none`` makes every device look revoked --
+    which is exactly what it did before this was written. ``first()`` is
+    therefore derived here from the same value, leaving every existing
+    assertion untouched.
+
+    ``revoked_at`` defaults to ``None`` (present, not revoked); a test models a
+    revoked row by assigning a real ``datetime``. A string is not accepted by
+    the real column, so it must not be accepted here either.
+    """
     result = MagicMock()
     result.scalar_one_or_none = MagicMock()
+    #: Assigned by a test to model a row that exists AND carries a revocation.
+    result.revoked_at = None
+
+    def _first():
+        # Read the configured value rather than calling scalar_one_or_none, so
+        # `scalar_one_or_none.assert_not_called()` still means what it says.
+        identity = result.scalar_one_or_none.return_value
+        if identity is None or isinstance(identity, MagicMock):
+            # No row was configured -> no row exists -> unpaired, never revoked.
+            return None
+        assert result.revoked_at is None or isinstance(
+            result.revoked_at, datetime
+        ), "revoked_at must be a datetime -- the real column rejects a string"
+        return SimpleNamespace(id=identity, revoked_at=result.revoked_at)
+
+    result.first = MagicMock(side_effect=_first)
 
     async def mock_get_async_session():
         session = AsyncMock()
@@ -289,3 +327,126 @@ class TestConfigurationDefaults:
         )
         claims = decode_jwt(token, os.environ["DEVICE_JWT_SECRET"])
         assert claims["aud"] == "autobot:device"
+
+
+class TestRefusalsStayDistinguishable:
+    """Three ways a credential is refused, and none may swallow another (#14964).
+
+    Revocation was added on top of an existing "unpaired or does not exist"
+    refusal. Both raise ``JWTDecodeError`` and both close the caller's socket
+    the same way, so the *only* thing separating them is the message and the
+    logged reason -- which makes asserting the separation mandatory rather than
+    decorative. The vacuous version of this suite checks that each case raises;
+    this one checks that each case raises **something the other two do not**.
+
+    ``TestValidateDeviceJWT`` already pins the deleted-device message. What was
+    missing, and is added here, is the proof that "revoked" does not report as
+    "unpaired" and that "unpaired" does not report as "revoked".
+    """
+
+    def _token(self, test_device):
+        return mint_device_jwt(
+            device_id=test_device["device_id"],
+            user_id=test_device["user_id"],
+            scope="read",
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_revoked_device_is_refused_as_revoked(self, test_device, mock_redis, mock_db_session):
+        mock_redis.get.return_value = None
+        mock_db_session.scalar_one_or_none.return_value = test_device["device_id"]
+        mock_db_session.revoked_at = datetime(2026, 8, 24, tzinfo=timezone.utc)
+
+        with pytest.raises(JWTDecodeError, match="has been revoked"):
+            await validate_device_jwt(self._token(test_device))
+
+    @pytest.mark.asyncio
+    async def test_a_present_unrevoked_device_still_validates(self, test_device, mock_redis, mock_db_session):
+        """Non-vacuity: the revocation check must not refuse a live device.
+
+        Without this, every assertion above would still pass if the check had
+        simply become "always refuse" -- which is precisely the regression that
+        reached CI (a fixture that never modelled ``revoked_at`` made a bare
+        mock read as revoked for every device).
+        """
+        mock_redis.get.return_value = None
+        mock_db_session.scalar_one_or_none.return_value = test_device["device_id"]
+        mock_db_session.revoked_at = None
+
+        claims = await validate_device_jwt(self._token(test_device))
+        assert claims["device_id"] == test_device["device_id"]
+
+    @pytest.mark.asyncio
+    async def test_deleted_and_revoked_carry_different_messages_and_reasons(
+        self, test_device, mock_redis, mock_db_session, caplog
+    ):
+        """The load-bearing one: a deleted device must never report as revoked.
+
+        Existence is decided before revocation in ``_read_device_state``. If
+        that order is inverted -- or if the absent case stops being reachable,
+        as it did under the unmodelled fixture -- the newer refusal swallows
+        the older one and an operator reads "revoked" for a device somebody
+        simply unpaired.
+        """
+        token = self._token(test_device)
+
+        mock_redis.get.return_value = None
+        mock_db_session.scalar_one_or_none.return_value = None  # no row at all
+        with caplog.at_level(logging.WARNING, logger="services.device_jwt"):
+            with pytest.raises(JWTDecodeError) as deleted:
+                await validate_device_jwt(token)
+            deleted_logs = [r.getMessage() for r in caplog.records]
+
+        caplog.clear()
+        mock_redis.get.return_value = None
+        mock_db_session.scalar_one_or_none.return_value = test_device["device_id"]
+        mock_db_session.revoked_at = datetime(2026, 8, 24, tzinfo=timezone.utc)
+        with caplog.at_level(logging.WARNING, logger="services.device_jwt"):
+            with pytest.raises(JWTDecodeError) as revoked:
+                await validate_device_jwt(token)
+            revoked_logs = [r.getMessage() for r in caplog.records]
+
+        deleted_msg, revoked_msg = str(deleted.value), str(revoked.value)
+
+        assert "has been unpaired or does not exist" in deleted_msg
+        assert "has been revoked" not in deleted_msg, "a deleted device is being reported as revoked"
+
+        assert "has been revoked" in revoked_msg
+        assert "has been unpaired or does not exist" not in revoked_msg
+
+        assert any("reason=unpaired" in m for m in deleted_logs)
+        assert not any("reason=revoked" in m for m in deleted_logs)
+        assert any("reason=revoked" in m for m in revoked_logs)
+        assert not any("reason=unpaired" in m for m in revoked_logs)
+
+    @pytest.mark.asyncio
+    async def test_an_unreadable_state_is_not_reported_as_unpaired(self, test_device, mock_redis, mock_db_session):
+        """A database that cannot answer is not a fleet of unpaired devices.
+
+        The most plausible cause is a deployment whose schema predates
+        migration ``20260824_084``, so ``revoked_at`` does not exist and the
+        state read raises. That must deny -- but reporting it as "unpaired"
+        would tell an operator every device had been individually removed,
+        pointing the investigation away from the missing migration.
+        """
+        mock_redis.get.return_value = None
+        mock_db_session.first.side_effect = OperationalError("SELECT revoked_at", {}, Exception("no such column"))
+
+        with pytest.raises(JWTDecodeError) as exc:
+            await validate_device_jwt(self._token(test_device))
+
+        message = str(exc.value)
+        assert "state could not be read" in message
+        assert "has been unpaired or does not exist" not in message
+        assert "has been revoked" not in message
+
+    @pytest.mark.asyncio
+    async def test_an_unreadable_state_is_never_cached(self, test_device, mock_redis, mock_db_session):
+        """A transient outage must not be frozen into the cache for its whole TTL."""
+        mock_redis.get.return_value = None
+        mock_db_session.first.side_effect = OperationalError("SELECT revoked_at", {}, Exception("no such column"))
+
+        with pytest.raises(JWTDecodeError):
+            await validate_device_jwt(self._token(test_device))
+
+        mock_redis.setex.assert_not_called()

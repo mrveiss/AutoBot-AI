@@ -31,7 +31,7 @@ from api.schemas_system import (
     DesktopControlReleaseRequest,
     VncProxyStatusResponse,
 )
-from api.ws_security import enforce_ws_authentication, enforce_ws_origin
+from api.ws_security import enforce_ws_desktop_auth, enforce_ws_origin
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
@@ -401,7 +401,11 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     # Issue #14959: this is full keyboard/mouse/framebuffer access to the
     # canonical desktop -- authenticate before accept() so a rejection is a
     # handshake failure, never a mid-stream close after RFB frames flowed.
-    user = await enforce_ws_authentication(websocket)
+    #
+    # #14964: a paired-device credential must additionally hold BOTH desktop
+    # capabilities -- this socket grants input as inseparably as it grants
+    # view. See enforce_ws_desktop_auth for why they cannot be split here.
+    user = await enforce_ws_desktop_auth(websocket)
     if user is None:
         return
 
