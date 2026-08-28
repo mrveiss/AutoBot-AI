@@ -88,18 +88,25 @@ on:
   #   * `test_celery_worker_status` demanded a Celery log on a host running no
   #     services; it now shares the module's live-backend probe.
   #
-  # WHAT STILL BLOCKS THE CRON, measured on run 32839088246:
-  #   * #15055 — `system_benchmarks_performance_test.py` asserts absolute
-  #     wall-clock budgets. It PASSED on run 32837489748 and FAILED on 32839088246
-  #     at 547ms against a 500ms constant, minutes apart, with no code change. A
-  #     cron over an assertion that turns on runner weather produces exactly the
-  #     red-and-ignored workflow this comment exists to prevent.
-  #   * #15054 — the multimodal startup it times is taking an error branch anyway:
-  #     `resume_download` was removed in the pinned transformers 5.15.0, so CLIP
-  #     loading raises `TypeError` at all ten call sites.
+  # WHAT STILL BLOCKS THE CRON:
+  #   * #15054 — the multimodal startup this suite exercises is taking an error
+  #     branch: `resume_download` was removed in the pinned transformers 5.15.0,
+  #     so CLIP loading raises `TypeError` at all ten call sites.
+  #   * Ten consecutive green runs, cited by run id. #15055 is fixed but the
+  #     cron is not turned on against an argument — it is turned on against
+  #     observations.
   #
-  # Turn the cron on as the closing step of #13286 once #15054 and #15055 land,
-  # and raise MARKER_MIN_PASSED to the figure the first green run reports.
+  # #15055 IS FIXED. `system_benchmarks_performance_test.py` no longer compares
+  # wall-clock milliseconds against a hardcoded constant anywhere. It had 20 such
+  # assertions; the one that fired here PASSED on run 32837489748 and FAILED on
+  # 32839088246 (547.2ms) and 33154304714 (538.9ms) against the same 500ms
+  # constant, the last of those on the commit after a green one whose entire
+  # diff this run deselects. All 20 are now ratios against a work unit measured
+  # in the same process, so a uniformly slow runner scales both sides. Each site
+  # prints its measured units on every run — read those, do not guess.
+  #
+  # Turn the cron on as the closing step of #13286 once #15054 lands and ten
+  # runs are green, and set MARKER_MIN_PASSED to the figure those runs report.
   # `workflow_dispatch` below stays live so the suite remains runnable on demand,
   # and the `pull_request` trigger means a change to this file is still observed.
   #
@@ -172,10 +179,13 @@ jobs:
       # chosen for comfort is a floor that catches nothing.
       #
       # `backend` measured 35 passed on run 32837489748 and 34 on 32839088246 —
-      # the difference is #15055's wall-clock assertion flipping on runner load,
+      # the difference was #15055's wall-clock assertion flipping on runner load,
       # not a change in coverage. The floor is therefore 34, the lower of the two
-      # OBSERVED figures, and it is raised to 35 the moment #15055 lands and the
-      # number stops moving. `infra` measured 12 collected / 10 passed on both.
+      # OBSERVED figures. #15055 has since landed and also added six harness
+      # guards to that module, so the backend figure should now be 41 and should
+      # stop moving; the floor is raised to the number a green run actually
+      # reports, not to that prediction. `infra` measured 12 collected / 10
+      # passed on both.
       #
       # #13543: the floors below are applied PER INVOCATION, never to their sum.
       # `marker_suite_report.py` used to compare the total against one floor, so
