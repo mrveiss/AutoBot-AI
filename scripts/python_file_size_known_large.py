@@ -77,7 +77,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/api_endpoint_migrations_test.py": 31040,
     "autobot-backend/api/auth.py": 777,
     "autobot-backend/api/batch_jobs.py": 964,
-    "autobot-backend/api/browser_mcp.py": 1415,
+    "autobot-backend/api/browser_mcp.py": 1340,
     "autobot-backend/api/cache_management.py": 779,
     "autobot-backend/api/canvas.py": 637,
     "autobot-backend/api/chat.py": 2778,
