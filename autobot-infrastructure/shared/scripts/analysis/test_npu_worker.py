@@ -9,155 +9,120 @@ Simplified NPU Worker Test for AutoBot Startup
 
 Tests basic NPU Worker functionality without external dependencies.
 Used during AutoBot startup to verify NPU Worker health.
+
+Converted from an operational script to a pytest suite (#14979). The class
+defined ``__init__``, so pytest collected none of its three ``test_*`` methods;
+they returned ``(bool, payload)`` tuples to a ``run_tests`` driver that printed
+an 80%-pass-rate verdict. Every check now asserts, and the ``requests`` /
+``urllib`` availability shims are gone — both are hard dependencies of this
+repository, and a missing one is an installation fault, not a test outcome.
 """
 
 import json
-import sys
+import urllib.request
 
-try:
-    import urllib.error
-    import urllib.request
+import pytest
+import requests
 
-    URLLIB_AVAILABLE = True
-except ImportError:
-    URLLIB_AVAILABLE = False
+from autobot_shared.live_service_probe import require_live_endpoint
+from autobot_shared.ssot_config import config
 
-try:
-    import requests
+# #12510: every check dials the NPU worker over real HTTP.
+pytestmark = pytest.mark.integration
 
-    REQUESTS_AVAILABLE = True
-except ImportError:
-    REQUESTS_AVAILABLE = False
+# #1618: endpoint from the SSOT — no hardcoded host or port.
+NPU_WORKER_URL = config.npu_worker_url
+HTTP_TIMEOUT_SECONDS = 10.0
 
-
-class SimpleNPUTester:
-    """Simplified NPU Worker tester with no external dependencies"""
-
-    def __init__(self, npu_url="http://localhost:8081"):
-        self.npu_url = npu_url
-        self.timeout = 10
-
-    def test_health_urllib(self):
-        """Test health endpoint using urllib (no dependencies)"""
-        try:
-            url = f"{self.npu_url}/health"
-            req = urllib.request.Request(url)
-            with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                if response.status == 200:
-                    data = json.loads(response.read().decode())
-                    print(f"✅ NPU Worker health check passed: {data}")
-                    return True, data
-                else:
-                    print(f"❌ NPU Worker health check failed: HTTP {response.status}")
-                    return False, None
-        except urllib.error.URLError as e:
-            print(f"❌ NPU Worker connection failed: {e}")
-            return False, None
-        except Exception as e:
-            print(f"❌ NPU Worker test error: {e}")
-            return False, None
-
-    def test_health_requests(self):
-        """Test health endpoint using requests library"""
-        try:
-            response = requests.get(f"{self.npu_url}/health", timeout=self.timeout)
-            if response.status_code == 200:
-                data = response.json()
-                print(f"✅ NPU Worker health check passed: {data}")
-                return True, data
-            else:
-                print(f"❌ NPU Worker health check failed: HTTP {response.status_code}")
-                return False, None
-        except requests.exceptions.RequestException as e:
-            print(f"❌ NPU Worker connection failed: {e}")
-            return False, None
-        except Exception as e:
-            print(f"❌ NPU Worker test error: {e}")
-            return False, None
-
-    def test_basic_endpoints(self, health_data):
-        """Test basic endpoints if health check passed"""
-        results = {"health": True}
-
-        # Test models endpoint
-        try:
-            if REQUESTS_AVAILABLE:
-                response = requests.get(f"{self.npu_url}/models", timeout=self.timeout)
-                results["models_endpoint"] = response.status_code == 200
-            elif URLLIB_AVAILABLE:
-                req = urllib.request.Request(f"{self.npu_url}/models")
-                with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                    results["models_endpoint"] = response.status == 200
-            else:
-                results["models_endpoint"] = False
-                print("⚠️  Cannot test models endpoint - no HTTP library available")
-        except Exception:
-            results["models_endpoint"] = False
-
-        # Check if device is available
-        device = health_data.get("device", "unknown") if health_data else "unknown"
-        results["device_available"] = device != "unknown"
-
-        # Check uptime (should be > 0 if running)
-        uptime = health_data.get("uptime_seconds", 0) if health_data else 0
-        results["service_running"] = uptime > 0
-
-        return results
-
-    def run_tests(self):
-        """Run all NPU Worker tests"""
-        print("🧪 AutoBot NPU Worker Quick Test")
-        print("=" * 40)
-
-        # Try health check with available HTTP library
-        health_passed = False
-        health_data = None
-
-        if REQUESTS_AVAILABLE:
-            print("📡 Testing with requests library...")
-            health_passed, health_data = self.test_health_requests()
-        elif URLLIB_AVAILABLE:
-            print("📡 Testing with urllib (built-in)...")
-            health_passed, health_data = self.test_health_urllib()
-        else:
-            print("❌ No HTTP library available for testing")
-            return {"overall": False, "error": "No HTTP library available"}
-
-        if not health_passed:
-            return {"overall": False, "health": False}
-
-        # Test additional endpoints
-        results = self.test_basic_endpoints(health_data)
-
-        # Overall assessment
-        passed_tests = sum(1 for result in results.values() if result)
-        total_tests = len(results)
-        overall_pass = passed_tests >= (total_tests * 0.8)  # 80% pass rate
-
-        print(f"\n📊 Test Results: {passed_tests}/{total_tests} passed")
-        for test_name, passed in results.items():
-            status = "✅" if passed else "❌"
-            print(f"  {status} {test_name}")
-
-        results["overall"] = overall_pass
-        results["pass_rate"] = f"{passed_tests}/{total_tests}"
-
-        return results
+# The service name and the status/capability invariant below are the worker's
+# own published contract — see roles/npu-worker/templates/npu-worker.py.j2,
+# which serves exactly two routes (/health and /) and derives
+# ``status = "healthy" if capabilities["available"] else "degraded"``.
+NPU_WORKER_SERVICE_NAME = "npu-worker"
 
 
-def main():
-    """Main test function for startup integration"""
-    tester = SimpleNPUTester()
-    results = tester.run_tests()
+def _assert_status_matches_capabilities(payload: dict) -> None:
+    """Assert the reported status agrees with the reported accelerator state.
 
-    if results.get("overall", False):
-        print("\n🎉 NPU Worker tests passed!")
-        return 0
-    else:
-        print("\n⚠️  NPU Worker tests failed (continuing anyway)")
-        print("💡 NPU Worker may still function for basic operations")
-        return 1
+    ``degraded`` is a legitimate steady state — it means this host has no usable
+    NPU — so asserting ``healthy`` outright would make the suite a hardware
+    inventory. What must always hold is that the worker's headline status and
+    its own capability report agree; a mismatch is a real defect in the worker.
+    """
+    capabilities = payload.get("capabilities", {})
+    available = bool(capabilities.get("available", False))
+    expected = "healthy" if available else "degraded"
+    assert payload.get("status") == expected, (
+        f"NPU worker reports status {payload.get('status')!r} while its capability report says "
+        f"available={available!r}; the two contradict each other: {payload!r}"
+    )
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+@pytest.fixture(autouse=True)
+def _require_live_npu_worker() -> None:
+    """Skip when the NPU worker is absent (#14930).
+
+    All three checks drive the same one service, so a single module-level guard
+    names the missing half of the stack once instead of reporting three refused
+    connections as failures.
+    """
+    require_live_endpoint(NPU_WORKER_URL, what="the AutoBot NPU worker")
+
+
+class TestNPUWorker:
+    """Health and endpoint checks against a running NPU worker."""
+
+    def setup_method(self) -> None:
+        """Bind the SSOT NPU worker endpoint and the request budget."""
+        self.npu_url = NPU_WORKER_URL
+        self.timeout = HTTP_TIMEOUT_SECONDS
+
+    def test_health_urllib(self) -> None:
+        """The health endpoint answers 200 and identifies itself over stdlib urllib."""
+        request = urllib.request.Request(f"{self.npu_url}/health")
+
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - SSOT http endpoint
+            status = response.status
+            body = response.read().decode("utf-8")
+
+        assert status == 200, f"NPU worker {self.npu_url}/health returned HTTP {status} over urllib, expected 200"
+        payload = json.loads(body)
+        assert payload.get("service") == NPU_WORKER_SERVICE_NAME, (
+            f"{self.npu_url} answers /health but names itself {payload.get('service')!r}, "
+            f"not {NPU_WORKER_SERVICE_NAME!r} — another service holds the NPU worker port"
+        )
+
+    def test_health_requests(self) -> None:
+        """The health endpoint reports a status consistent with its capabilities."""
+        response = requests.get(f"{self.npu_url}/health", timeout=self.timeout)
+
+        assert (
+            response.status_code == 200
+        ), f"NPU worker {self.npu_url}/health returned HTTP {response.status_code} over requests, expected 200"
+        payload = response.json()
+        assert payload.get("version"), f"NPU worker health payload carries no 'version' field: {payload!r}"
+        _assert_status_matches_capabilities(payload)
+
+    def test_basic_endpoints(self) -> None:
+        """The root endpoint advertises the routes the worker actually serves."""
+        response = requests.get(f"{self.npu_url}/", timeout=self.timeout)
+
+        assert (
+            response.status_code == 200
+        ), f"NPU worker {self.npu_url}/ returned HTTP {response.status_code}, expected 200"
+        payload = response.json()
+        endpoints = payload.get("endpoints", [])
+        assert "/health" in endpoints, (
+            f"NPU worker root advertises {endpoints!r}, which omits /health — the route every "
+            f"caller in this repository probes"
+        )
+
+        health = requests.get(f"{self.npu_url}/health", timeout=self.timeout).json()
+        capabilities = health.get("capabilities", {})
+        assert capabilities.get("device"), (
+            f"NPU worker reports no inference device in its capabilities — it cannot serve "
+            f"accelerated work: {capabilities!r}"
+        )
+        assert isinstance(
+            capabilities.get("models_loaded"), list
+        ), f"NPU worker reports models_loaded={capabilities.get('models_loaded')!r}, expected a list"

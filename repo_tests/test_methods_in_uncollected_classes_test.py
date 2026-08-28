@@ -62,15 +62,25 @@ from repo_tests.uncollected_class_model import (
 # they are filed with per-file counts, and this ceiling stops the population
 # growing back. "Nearly": #14979 found two that dialled nothing at all.
 _KNOWN_OFFENDERS = {
-    # 59, not 61: the two interface stubs below are exempt and counted separately.
-    # 77 -> 59 (#14979): takeover_manager_e2e_test.py, temporal_invalidation_test.py
-    "autobot-backend": (59, 18000),
-    # The floor equals the ceiling here, and legitimately so: this tree holds one
-    # test module whose single class is uncollected, so every test-shaped thing in
-    # it is also an offender. Collecting them moves the ceiling to 0 and leaves the
-    # floor at 10, which is exactly the shape a real fix has.
-    "autobot-frontend": (10, 10),
-    "autobot-infrastructure": (19, 250),
+    # 77 -> 59 (#14927): takeover_manager_e2e_test.py, temporal_invalidation_test.py
+    # 59 -> 8  (#14979): the eight remaining backend drivers from the issue's table
+    #   (hardware_metrics, comprehensive_system_validation, chat_knowledge_system_e2e,
+    #   monitoring_and_alerts, multi_agent_workflow_validation, npu_integration_e2e,
+    #   async_baseline_performance, knowledge_performance).
+    # The 8 left are NOT from that table -- they are whatever else in this tree
+    # still puts test_* methods in a class pytest will not collect. Nothing in
+    # #14979 was meant to reach them, and the ceiling now pins them exactly.
+    "autobot-backend": (8, 18000),
+    # autobot-frontend and autobot-infrastructure are gone from this dict rather
+    # than left at 0: both drained to zero in #14979, and the ratchet requires a
+    # drained entry be deleted so the tree is pinned at zero by derivation. A
+    # budget left behind after the work is done is spendable, and it will be spent.
+    #
+    # Deleting them also drops their population floors (10 and 250). That is the
+    # documented trade and it is the smaller loss: with no entry, EVERY uncollected
+    # test method in either tree now fails
+    # `test_no_tree_outside_the_known_set_holds_an_uncollected_test_method`
+    # outright, which is strictly stronger than a floor plus a spendable budget.
 }
 
 # Floors under the whole population, for the same reason as the per-tree ones.
