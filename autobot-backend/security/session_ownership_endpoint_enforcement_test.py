@@ -147,7 +147,8 @@ class TestAnEndpointWithNoOverrideIsUnchanged:
         without_request = await validator._get_enforcement_mode()
         with_request = await validator._get_enforcement_mode_for_request(_request())
 
-        assert without_request == with_request == "log_only"
+        assert without_request.mode == with_request.mode == "log_only"
+        assert without_request.degraded is with_request.degraded is False
 
 
 class TestPrecedenceInTheDisagreementCase:

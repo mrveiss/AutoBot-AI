@@ -24,6 +24,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from security.enforcement_mode import ResolvedEnforcementMode
 from security.session_ownership import SessionOwnershipValidator
 
 _ALICE = "alice"
@@ -51,7 +52,7 @@ async def _resolve(validator, username):
         username=username,
         user_data={"username": username},
         request=MagicMock(),
-        enforcement_mode="enforced",
+        enforcement=ResolvedEnforcementMode("enforced"),
     )
 
 
