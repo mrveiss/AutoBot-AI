@@ -89,13 +89,19 @@ async def test_sessions_list(base_url: str) -> None:
 
 @pytest.mark.asyncio
 async def test_knowledge_stats(base_url: str) -> None:
-    """SDK can retrieve knowledge base statistics."""
+    """SDK can retrieve knowledge base statistics.
+
+    ``/knowledge_base/stats`` returns its document flat, so there is no envelope
+    and no ``success`` flag to read -- asserting one was how this test passed
+    while the payload it was meant to check was always ``None`` (#15116).
+    """
     from autobot_sdk import AutoBot
 
     async with AutoBot(base_url=base_url) as bot:
         result = await bot.knowledge.stats()
 
-    assert result.success is True
+    assert result.status in {"online", "offline", "error", "unknown"}
+    assert result.total_facts is not None
 
 
 @pytest.mark.asyncio
@@ -108,7 +114,7 @@ async def test_auth_token_injection(base_url: str) -> None:
     captured: list[str] = []
 
     async def _mock_get(*_args, **_kwargs):
-        resp = httpx.Response(200, json={"success": True, "data": {"sessions": [], "total": 0}})
+        resp = httpx.Response(200, json={"success": True, "data": {"sessions": [], "count": 0}})
         return resp
 
     from autobot_sdk import AutoBot
