@@ -23,5 +23,12 @@ DEFAULT_SEARCH_LIMIT: int = 10
 #: Rows per page for list endpoints when the caller does not say.
 DEFAULT_PAGE_SIZE: int = 50
 
-#: Where a list starts when the caller does not say.
+#: Where an offset-paginated list starts when the caller does not say.
+#:
+#: No route this SDK targets is offset-paginated: ``/knowledge_base/entries`` is
+#: cursor-paginated and ``/chat/sessions`` is not paginated at all, which is why
+#: the ``offset=`` both used to be called with was dropped by FastAPI and their
+#: paging silently did nothing (#15119). The constant stays because it is part of
+#: the published surface and because ``QueryDefaults`` carries its counterpart --
+#: ``sdk_defaults_match_ssot_test.py`` keeps the two pinned to each other.
 DEFAULT_OFFSET: int = 0
