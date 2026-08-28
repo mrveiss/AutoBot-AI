@@ -97,7 +97,7 @@ def test_zero_executed_steps_is_runner_starvation(rc):
     cause, detail = rc.classify_steps(steps)
     assert cause == rc.CAUSE_STARVATION
     assert "0 of 14" in detail
-    assert cause in rc.REQUEUEABLE_CAUSES
+    assert cause in rc.INFRASTRUCTURE_CAUSES
     assert cause not in rc.REAL_FAILURE_CAUSES
 
 
@@ -113,7 +113,7 @@ def test_setup_action_failure_is_provisioning(rc):
     cause, detail = rc.classify_steps(steps)
     assert cause == rc.CAUSE_PROVISIONING
     assert "setup-python-suite" in detail
-    assert cause in rc.REQUEUEABLE_CAUSES
+    assert cause in rc.INFRASTRUCTURE_CAUSES
     assert cause not in rc.REAL_FAILURE_CAUSES
 
 
@@ -127,7 +127,7 @@ def test_test_step_failure_is_a_real_failure(rc):
     assert cause == rc.CAUSE_TEST
     assert "unit tests" in detail
     assert cause in rc.REAL_FAILURE_CAUSES
-    assert cause not in rc.REQUEUEABLE_CAUSES
+    assert cause not in rc.INFRASTRUCTURE_CAUSES
 
 
 def test_downstream_test_failure_does_not_mask_the_setup_failure(rc):
@@ -150,7 +150,7 @@ def test_cancelled_is_superseded_not_a_failure_and_not_requeueable(rc):
     assert cause == rc.CAUSE_SUPERSEDED
     assert "fresh run" in detail
     assert cause not in rc.REAL_FAILURE_CAUSES
-    assert cause not in rc.REQUEUEABLE_CAUSES
+    assert cause not in rc.INFRASTRUCTURE_CAUSES
     assert (ran, total) == (None, None)
 
 
@@ -169,7 +169,7 @@ def test_absent_steps_array_is_undetermined_never_starvation(rc):
     assert cause == rc.CAUSE_UNDETERMINED
     assert "no 'steps' array" in detail
     assert cause in rc.REAL_FAILURE_CAUSES
-    assert cause not in rc.REQUEUEABLE_CAUSES
+    assert cause not in rc.INFRASTRUCTURE_CAUSES
     assert (ran, total) == (None, None)
 
 
@@ -184,6 +184,7 @@ def test_non_actions_app_is_undetermined(rc):
     red = rc.classify_check_run(api, _check(app={"slug": "some-linter"}))
     assert red.cause == rc.CAUSE_UNDETERMINED
     assert red.real_failure is True
+    assert red.infrastructure is False
     assert api.calls == [], "a non-Actions check has no job to fetch"
 
 
@@ -202,9 +203,40 @@ def test_no_cause_ever_stops_blocking_the_merge(rc, cause):
     assert red.blocks_merge is True
 
 
-def test_undetermined_is_in_neither_the_requeue_nor_the_clean_set(rc):
-    assert rc.CAUSE_UNDETERMINED not in rc.REQUEUEABLE_CAUSES
+def test_undetermined_is_in_neither_the_infrastructure_nor_the_clean_set(rc):
+    assert rc.CAUSE_UNDETERMINED not in rc.INFRASTRUCTURE_CAUSES
     assert rc.CAUSE_UNDETERMINED in rc.REAL_FAILURE_CAUSES
+
+
+def test_every_cause_has_a_remedy_and_none_of_them_says_re_queue(rc):
+    """
+    Measured on run 33149960063: `rerun-failed-jobs` advanced the attempt
+    WITHOUT re-executing the failed matrix leg — same job id, same started_at,
+    only the dependents re-ran. `infrastructure=True` therefore means "the diff
+    is not indicted", never "re-running will fix it", and no remedy string may
+    imply otherwise.
+    """
+    causes = {
+        rc.CAUSE_STARVATION,
+        rc.CAUSE_PROVISIONING,
+        rc.CAUSE_SUPERSEDED,
+        rc.CAUSE_TEST,
+        rc.CAUSE_UNDETERMINED,
+    }
+    assert set(rc.REMEDIES) == causes
+    for cause, remedy in rc.REMEDIES.items():
+        assert remedy.strip(), cause
+        assert "re-queue" not in remedy.lower(), cause
+
+
+def test_infrastructure_is_about_blame_not_about_the_remedy(rc):
+    red = rc.RedCause("c", "failure", rc.CAUSE_PROVISIONING, "d", None, 9, 14, "")
+    assert red.infrastructure is True
+    assert red.real_failure is False
+    assert "rerun-failed-jobs" in red.remedy
+    assert "new head commit" in red.remedy
+    assert red.as_dict()["infrastructure"] is True
+    assert red.as_dict()["remedy"] == red.remedy
 
 
 # --------------------------------------------------------------------------

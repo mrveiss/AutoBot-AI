@@ -72,16 +72,30 @@ root causes and both are yours to fix:
    array — `GET /commits/{sha}/check-runs` has none, so anything classifying from
    the check-runs listing alone is guessing.
 
-   | cause | what happened | remedy |
-   |---|---|---|
-   | `runner-starvation` | job executed 0 steps — it never got a runner | re-queue |
-   | `provisioning-failure` | first failing step is toolchain setup (`apt` exit 124) | re-queue |
-   | `superseded` | `conclusion: cancelled` — a newer push retired the run | wait for the fresh run |
-   | `test-failure` | first failing step is a work step | **fix the diff; never re-queue** |
-   | `undetermined` | the cause could not be established | **treat as a real failure** |
+   | cause | what happened | at fault | remedy |
+   |---|---|---|---|
+   | `runner-starvation` | job executed 0 steps — it never got a runner | environment | nothing ran; push a new head commit |
+   | `provisioning-failure` | first failing step is toolchain setup (`apt` exit 124) | environment | no test result; push a new head commit |
+   | `superseded` | `conclusion: cancelled` — a newer push retired the run | neither | wait for the run already queued on the current head |
+   | `test-failure` | first failing step is a work step | **the diff** | fix the diff |
+   | `undetermined` | the cause could not be established | **assume the diff** | establish the cause before acting |
 
    Read the **first** failing step, never the last: a setup failure makes later test
    steps fail downstream, so the last failure lies about the cause.
+
+   **`infrastructure: true` means the diff is not indicted — it does NOT mean
+   re-running will fix it (#15139).** Measured on run `33149960063`:
+   `POST /actions/runs/{id}/rerun-failed-jobs` reported success and advanced the run
+   to `attempt=2`, but the failed matrix leg `python-suite shard 12/12` was **carried
+   forward, not re-executed** — same job id, same `started_at` — and only its
+   dependents re-ran 18 minutes later, so the `python-suite` rollup failed again on
+   `Fail if any shard failed`. All fourteen already-executed jobs kept their original
+   attempt-1 timestamps. Re-queueing twice and getting the same red does not mean the
+   classifier is wrong; it means the remedy is.
+
+   What is structurally guaranteed instead: **a new head commit starts a new run at
+   `attempt=1`**, and an attempt-1 run has no previous attempt to carry a job forward
+   from, so every job must execute. That guarantees re-execution — not success.
 
    **A named cause never makes a red check green.** The tool publishes no status and
    re-queues nothing; it exits 1 on any red whatever the cause, and exits 2 when

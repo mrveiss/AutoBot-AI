@@ -12,15 +12,16 @@ to guess:
 
 * ``runner-starvation`` — the run never obtained a runner. Its job executed
   **zero** steps, or the run has no job at all (``jobs: []``). Nothing was
-  tested. Re-queueable.
+  tested. Environmental — the diff is not indicted.
 * ``provisioning-failure`` — the job got a runner and ran, but the first step
   that failed is toolchain provisioning (a local composite action, an
   ``actions/setup-*``, a checkout, a cache restore). The observed instance is
   ``apt-get`` returning exit 124 three times inside
   ``.github/actions/setup-python-suite``; a later test step then fails
   downstream, so the *last* failing step lies about the cause and only the
-  *first* one tells the truth. No test result was produced. Re-queueable.
-* ``test-failure`` — the first failing step is real work. **Never re-queue.**
+  *first* one tells the truth. No test result was produced. Environmental —
+  the diff is not indicted.
+* ``test-failure`` — the first failing step is real work. The diff IS indicted.
 * ``superseded`` — ``conclusion: cancelled``, normally a newer push retiring an
   obsolete run. Not a test result; a fresh run must report. ``gh pr checks``
   buckets this under ``fail``, which is why a superseded gate reads as a red
@@ -36,6 +37,17 @@ turns the merge gate into a re-queue loop that retries genuine test failures
 until they merge. Defaulting to "real failure" costs a needless investigation.
 Only the second direction is survivable, so an absent ``steps`` array is
 ``undetermined`` and ``undetermined`` grades as a real failure.
+
+``infrastructure=True`` MEANS "THE DIFF IS NOT INDICTED". It does NOT mean
+"re-running will fix it", and the two are not the same claim. Measured on run
+``33149960063`` (2026-08-28): ``POST /actions/runs/{id}/rerun-failed-jobs``
+reported success and advanced the run to ``attempt=2``, but the failed matrix
+leg ``python-suite shard 12/12`` was **carried forward, not re-executed** — same
+job id, same ``started_at`` (07:54:14Z) — while only its dependents re-ran, 18
+minutes later, and the rollup then failed on ``Fail if any shard failed``. Every
+one of the fourteen jobs that had already executed kept its original timestamp
+in attempt 2. So each cause carries a ``remedy`` string saying what is actually
+known to work, rather than an implied "re-run it".
 
 THIS TOOL NEVER MAKES A RED CHECK GREEN. It publishes no commit status, writes
 no check conclusion, and re-queues nothing. Every classified cause carries
@@ -104,13 +116,30 @@ CAUSE_TEST = "test-failure"
 CAUSE_SUPERSEDED = "superseded"
 CAUSE_UNDETERMINED = "undetermined"
 
-# Causes whose remedy is "run it again". Everything absent from this set must
-# never be re-queued — and `undetermined` is absent on purpose.
-REQUEUEABLE_CAUSES = frozenset({CAUSE_STARVATION, CAUSE_PROVISIONING})
+# Causes that do NOT indict the diff — the environment failed, not the code.
+# This is a statement about BLAME, not about the remedy: see `REMEDIES` for what
+# is actually known to work. `undetermined` is absent on purpose.
+INFRASTRUCTURE_CAUSES = frozenset({CAUSE_STARVATION, CAUSE_PROVISIONING})
 
 # Causes that mean a defect in the diff. `undetermined` is graded here because
 # mislabelling a real failure as a flake is the costly direction (#15139).
 REAL_FAILURE_CAUSES = frozenset({CAUSE_TEST, CAUSE_UNDETERMINED})
+
+# What is known to work, per cause. Deliberately not "re-queue": on run
+# 33149960063 `rerun-failed-jobs` advanced the attempt without re-executing the
+# failed matrix leg at all. A new head commit starts a NEW run at attempt 1,
+# which has no previous attempt to carry a job forward from, so every job must
+# execute — that is a structural guarantee of RE-EXECUTION, not of success.
+REMEDIES: Dict[str, str] = {
+    CAUSE_STARVATION: "nothing ran; a new head commit forces a fresh run at attempt 1",
+    CAUSE_PROVISIONING: (
+        "no test result; rerun-failed-jobs has been observed NOT to re-execute a "
+        "failed matrix leg (run 33149960063) — a new head commit forces a fresh run"
+    ),
+    CAUSE_SUPERSEDED: "wait for the run already queued on the current head",
+    CAUSE_TEST: "fix the diff",
+    CAUSE_UNDETERMINED: "treat as a real failure; establish the cause before acting",
+}
 
 # Substrings identifying a step as toolchain provisioning rather than work.
 # Deliberately NARROW: a provisioning failure misread as a test failure costs a
@@ -145,8 +174,13 @@ class RedCause(NamedTuple):
     url: str
 
     @property
-    def requeueable(self) -> bool:
-        return self.cause in REQUEUEABLE_CAUSES
+    def infrastructure(self) -> bool:
+        """The environment failed, not the diff. Says nothing about the remedy."""
+        return self.cause in INFRASTRUCTURE_CAUSES
+
+    @property
+    def remedy(self) -> str:
+        return REMEDIES.get(self.cause, REMEDIES[CAUSE_UNDETERMINED])
 
     @property
     def real_failure(self) -> bool:
@@ -159,7 +193,8 @@ class RedCause(NamedTuple):
 
     def as_dict(self) -> Dict[str, Any]:
         payload = dict(self._asdict())
-        payload["requeueable"] = self.requeueable
+        payload["infrastructure"] = self.infrastructure
+        payload["remedy"] = self.remedy
         payload["real_failure"] = self.real_failure
         payload["blocks_merge"] = self.blocks_merge
         return payload
@@ -262,7 +297,7 @@ def classify_job_payload(
     the whole point: an unreachable jobs endpoint, a non-Actions app, and a
     payload taken from ``/check-runs`` (which has no ``steps``) all look like
     "zero steps" to a naive reader, and calling any of them starvation is how a
-    real failure gets re-queued.
+    real failure gets re-run until it merges.
     """
     conclusion = check_run.get("conclusion") or ""
     if conclusion == "cancelled":
@@ -401,10 +436,11 @@ def render(report: Report) -> None:
             else "steps unavailable"
         )
         verdict = "REAL FAILURE" if red.real_failure else "not a test result"
-        requeue = "re-queueable" if red.requeueable else "DO NOT RE-QUEUE"
+        blame = "environment, not the diff" if red.infrastructure else "the diff"
         _emit(f"  [{red.cause}] {red.check_name} ({red.conclusion}, {steps})")
         _emit(f"      {red.detail}")
-        _emit(f"      verdict: {verdict} · {requeue} · blocks merge: yes")
+        _emit(f"      verdict: {verdict} · at fault: {blame} · blocks merge: yes")
+        _emit(f"      remedy: {red.remedy}")
         if red.url:
             _emit(f"      {red.url}")
     if report.indeterminate:
