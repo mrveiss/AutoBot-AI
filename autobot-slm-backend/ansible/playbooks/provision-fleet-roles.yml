@@ -346,6 +346,29 @@
       when: role_backend_active | bool
       tags: ['backend', 'provision']
 
+    # #14866: the access control enforcement posture. Until this task existed,
+    # `deploy-access-control.yml` was the only playbook that included the
+    # access_control role and nothing invoked it, so no install-time path ever
+    # wrote feature_flag:access_control:enforcement_mode -- every install
+    # resolved the unset key and skipped every gated ownership check.
+    #
+    # Applied via `tasks_from` rather than as a whole role, matching the
+    # delivery contract #12959 established: the whole role also renders policy
+    # files, runs the ownership backfill and reads `groups['redis'][0]`, which
+    # is fatal on the temp inventories the wizard and node-add paths generate
+    # (they carry no `redis` group). enforcement_mode.yml contains no
+    # provisioning -- it runs one idempotent SET NX -- so it is safe on every
+    # inventory shape. The rest of the role stays reachable only from
+    # deploy-access-control.yml; see the follow-up issue.
+    - name: "App | Provision access control enforcement mode (#14866)"
+      ansible.builtin.include_role:
+        name: access_control
+        tasks_from: enforcement_mode
+        apply:
+          tags: ['access-control', 'enforcement', 'provision']
+      when: role_backend_active | bool
+      tags: ['access-control', 'enforcement', 'provision']
+
     - name: "App | Deploy VNC role"
       ansible.builtin.include_role:
         name: vnc
