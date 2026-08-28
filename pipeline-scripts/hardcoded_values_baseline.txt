@@ -122,9 +122,6 @@
 1|other|autobot-backend/api/chat.py|"user"
 1|other|autobot-backend/api/chat_compare.py|"user"
 2|other|autobot-backend/api/chat_embed.py|"user"
-1|other|autobot-backend/api/chat_knowledge.py|"assistant"
-1|other|autobot-backend/api/chat_knowledge.py|"system"
-2|other|autobot-backend/api/chat_knowledge.py|"user"
 1|other|autobot-backend/api/chat_sessions.py|100
 1|other|autobot-backend/api/code_intelligence.py|100
 1|other|autobot-backend/api/codebase_analytics/analyzers.py|"user"
