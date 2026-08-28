@@ -183,11 +183,11 @@ class TestSystemPerformanceBenchmarks:
 
             result, processing_time = await self.measure_async_execution_time(processor.process(test_input))
 
-            # 20.8 units, down from a 50.0 first-observation ceiling over the disk-bound measurement. DERIVATION in
-            # the header's terms: 17 local runs with storage mocked read 0.596-1.626 units (68.709 unmocked locally,
-            # 164.422 on CI run 33161132835); local high 1.626 x3.2 CI conversion = 5.2, x4 headroom — between the
-            # header's classes: milliseconds, not the 8x class's microseconds, but a load-driven cv ~33%. Ratchet DOWN.
-            assert_within_work_budget(processing_time, 20.8, "Single multimodal processing")
+            # 6.5 units, down from a 50.0 first-observation ceiling over the disk-bound measurement. DERIVATION: with
+            # storage mocked, marker run 33181196014 read 0.250 units on CI and 17 local runs 0.596-1.626 (against
+            # 68.709 unmocked locally, 164.422 on CI run 33161132835). 4x the highest reading anywhere, 1.626; the
+            # header's x3.2 local->CI conversion does not apply, that CI figure sitting below every local one.
+            assert_within_work_budget(processing_time, 6.5, "Single multimodal processing")
             assert result.success is True
             # #15232: storage is off the clock, not out of the contract — dropping the write must not read as faster.
             mock_store.assert_awaited_once()
