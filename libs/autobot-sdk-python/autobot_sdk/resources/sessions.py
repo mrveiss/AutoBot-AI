@@ -7,6 +7,14 @@
 Paths are written without the ``/api`` root — ``AutoBotClient`` adds it.
 The chat-sessions router registers with an empty mount prefix, so these
 paths need nothing beyond that root (#15053).
+
+``list()`` used to send ``limit`` and ``offset``. ``GET /chat/sessions`` accepts
+neither -- it declares ``scope`` and ``team_id`` and returns the caller's whole
+list -- so FastAPI dropped both and the caller's paging silently did not apply
+(#15119, the same shape the issue reported for ``knowledge.get_entries`` and the
+two analytics methods). The two parameters the route does take are offered
+instead. ``get()`` gains the route's real ``page``/``per_page``, which the SDK
+could not reach at all.
 """
 
 from __future__ import annotations
@@ -14,7 +22,6 @@ from __future__ import annotations
 from typing import Any
 
 from ..client import AutoBotClient
-from ..defaults import DEFAULT_OFFSET, DEFAULT_PAGE_SIZE
 from ..models import (
     DataResponse,
     SessionCreate,
@@ -29,12 +36,27 @@ class SessionsResource:
     def __init__(self, client: AutoBotClient) -> None:
         self._c = client
 
-    async def list(self, limit: int = DEFAULT_PAGE_SIZE, offset: int = DEFAULT_OFFSET) -> DataResponse[SessionList]:
-        raw = await self._c.get("/chat/sessions", limit=limit, offset=offset)
+    async def list(self, scope: str | None = None, team_id: str | None = None) -> DataResponse[SessionList]:
+        """Chat sessions visible to the caller.
+
+        ``scope`` is ``"user"`` (the route's default), ``"org"``, ``"team"`` or
+        ``"shared"``; ``team_id`` is required when ``scope="team"``. The route
+        is not paginated, which is why there is no ``limit`` or ``offset`` here
+        (#15119).
+        """
+        raw = await self._c.get("/chat/sessions", scope=scope, team_id=team_id)
         return DataResponse[SessionList].model_validate(raw)
 
-    async def get(self, session_id: str) -> DataResponse[SessionMessages]:
-        raw = await self._c.get(f"/chat/sessions/{session_id}")
+    async def get(
+        self, session_id: str, page: int | None = None, per_page: int | None = None
+    ) -> DataResponse[SessionMessages]:
+        """One session's messages, page by page.
+
+        ``page``/``per_page`` are the route's own parameter names; omitting
+        either leaves the route's default in force rather than restating it
+        here, so the two cannot drift apart.
+        """
+        raw = await self._c.get(f"/chat/sessions/{session_id}", page=page, per_page=per_page)
         return DataResponse[SessionMessages].model_validate(raw)
 
     async def create(
