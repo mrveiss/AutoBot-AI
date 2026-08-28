@@ -196,7 +196,7 @@ def test_update_returns_the_updated_document_instead_of_raising():
     payload = SessionUpdateData(
         id="s1",
         title="Renamed",
-        metadata={},
+        metadata={"source": "test"},
         created_at="2026-01-01T00:00:00",
         last_modified="2026-01-03T00:00:00",
     )
@@ -206,6 +206,8 @@ def test_update_returns_the_updated_document_instead_of_raising():
     assert result.data is not None
     assert result.data.id == "s1"
     assert result.data.title == "Renamed"
+    assert result.data.metadata == {"source": "test"}
+    assert result.data.created_at == "2026-01-01T00:00:00"
     assert result.data.last_modified == "2026-01-03T00:00:00"
     assert not hasattr(result.data, "success"), "SessionUpdate still duplicates the envelope's success flag"
 
