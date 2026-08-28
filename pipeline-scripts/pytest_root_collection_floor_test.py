@@ -196,10 +196,9 @@ class TestTheGuardIsWired:
         return [step["run"] for step in job["steps"] if "run" in step]
 
     def test_the_workflow_runs_the_script(self, run_steps):
-        assert any(SCRIPT.name in run for run in run_steps), (
-            f"marker-tests.yml no longer runs {SCRIPT.name} — the per-root floor is "
-            "correct and guarding nothing"
-        )
+        assert any(
+            SCRIPT.name in run for run in run_steps
+        ), f"marker-tests.yml no longer runs {SCRIPT.name} — the per-root floor is correct and guarding nothing"
 
     def test_the_workflow_passes_it_no_root_list(self, run_steps):
         """Roots must stay derived. A hand-written list there would go stale silently."""
