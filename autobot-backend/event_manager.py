@@ -11,11 +11,11 @@ both fire-and-forget and awaitable delivery patterns.
 """
 
 import asyncio  # Added back asyncio import
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Set
 
-import yaml
-
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.config_file_loading import SOURCE_BUILTIN_DEFAULTS, load_config_file
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.path_constants import PATH
@@ -37,25 +37,49 @@ class EventManager:
         # fires exactly once per publish, whether zero clients or ten are
         # connected.
         self._persistence_hook: Callable[[Dict[str, Any]], Awaitable[None]] | None = None
+        # #14892: set before _load_config so a caller reading them is never
+        # looking at an attribute that does not exist yet.
+        self.config_source: str = SOURCE_BUILTIN_DEFAULTS
+        self.config_path: Path = PATH.CONFIG_DIR / "config.yaml"
         self._config = self._load_config()  # Load config on init
 
-    def _load_config(self):
-        """Load configuration from YAML file or return defaults."""
-        # Use centralized PathConstants (Issue #380)
-        config_path = PATH.CONFIG_DIR / "config.yaml"
-        if not config_path.exists():
-            logger.warning(f"Config file not found at {config_path}. " "Using default debug_mode=False.")
-            return {"agent_behavior": {"debug_mode": False}}
-        try:
-            with open(str(config_path), "r", encoding="utf-8") as f:
-                return yaml.safe_load(f)
-        except Exception as e:
-            logger.error(f"Error loading config file {config_path}: {e}. " "Using default debug_mode=False.")
-            return {"agent_behavior": {"debug_mode": False}}
+    @staticmethod
+    def _default_config() -> Dict[str, Any]:
+        """The settings in force when no config file is readable."""
+        return {"agent_behavior": {"debug_mode": False}}
 
-    def _is_debug_mode(self):
-        """Check if debug mode is enabled in configuration."""
-        return self._config.get("agent_behavior", {}).get("debug_mode", False)
+    def _load_config(self) -> Dict[str, Any]:
+        """Load configuration from YAML file or return defaults.
+
+        #14892 AC3: the old body returned the same dict on a miss, on a parse
+        error and on a file whose ``agent_behavior`` section was absent, so an
+        unread config was indistinguishable from a read one. It also returned
+        ``yaml.safe_load``'s ``None`` verbatim for an empty file, which turned
+        the next :meth:`_is_debug_mode` call into an ``AttributeError``.
+        ``self.config_source`` now carries the fact instead.
+        """
+        loaded = load_config_file(PATH.CONFIG_DIR / "config.yaml", self._default_config, "event manager")
+        self.config_source = loaded.source
+        self.config_path = loaded.searched_path
+        return loaded.values
+
+    def _is_debug_mode(self) -> bool:
+        """Check if debug mode is enabled in configuration.
+
+        A file that loaded but carries no ``agent_behavior`` section is reported
+        rather than silently answering False — that is how this setting stayed
+        unreachable while ``config.yaml`` looked like it configured it.
+        """
+        behaviour = self._config.get("agent_behavior")
+        if behaviour is None:
+            logger.warning(
+                "No 'agent_behavior' section in the event-manager config loaded from %s (source: %s); "
+                "debug events stay off. Add 'agent_behavior.debug_mode' there to enable them.",
+                self.config_path,
+                self.config_source,
+            )
+            return False
+        return bool(behaviour.get("debug_mode", False))
 
     def register_websocket_broadcast(self, callback: Callable[[Dict[str, Any]], Awaitable[None]]) -> None:
         """Register one connection's broadcast callback.
