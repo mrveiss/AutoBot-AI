@@ -455,11 +455,21 @@ fi
 
 _distinct_vars=$(cd "$REPO_ROOT" && git ls-files -- '*.sh' | xargs grep -ohE '\$\{?AUTOBOT_[A-Z0-9_]+' 2>/dev/null | sed -E 's/^\$\{?//' | sort -u)
 _distinct_count=$(echo "$_distinct_vars" | grep -c . || true)
-if [ "$_distinct_count" -lt 61 ]; then
-    echo "FAIL: reach self-check found only $_distinct_count distinct AUTOBOT_ names -- expected >= 61 (#14173 baseline)"
+# 59, not 61: #15127 retired
+# autobot-infrastructure/shared/scripts/utilities/load-env.sh, which was the only
+# tracked .sh file naming AUTOBOT_DEPLOYMENT_MODE, AUTOBOT_PLAYWRIGHT_API_PORT and
+# AUTOBOT_PLAYWRIGHT_HOST -- measured, the only one of that batch's five
+# retirements to carry any AUTOBOT_ name uniquely. The tree held 62 before that
+# retirement, so this floor also absorbs the one name of slack #14173 left; it is
+# now AT the count, which is what makes it catch a regressed regex. Like the
+# site-count floors in repo_tests/shell_lib_sources_resolve_test.py, this is not
+# derivable without counting the very thing under test, so a legitimate
+# retirement comes here and says which names went -- it is not given headroom.
+if [ "$_distinct_count" -lt 59 ]; then
+    echo "FAIL: reach self-check found only $_distinct_count distinct AUTOBOT_ names -- expected >= 59 (#14173 baseline, #15127 retired 3)"
     fail=$((fail + 1))
 else
-    echo "PASS: reach self-check found $_distinct_count distinct AUTOBOT_ names (>= 61 baseline)"
+    echo "PASS: reach self-check found $_distinct_count distinct AUTOBOT_ names (>= 59 baseline)"
     pass=$((pass + 1))
 fi
 
