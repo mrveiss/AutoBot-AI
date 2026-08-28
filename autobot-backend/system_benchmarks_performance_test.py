@@ -25,40 +25,28 @@ from multimodal_processor import (
 )
 from services.config_service import ConfigService
 
-# #13162: every test in this module asserts a wall-clock budget (ms elapsed) or
-# an RSS delta — there is not one functional-only test here, and the filename
-# already declares it (`*_performance_test.py`). That makes the module a
-# benchmark suite, so it belongs to the `performance` selection rather than the
-# unit selection, where a millisecond budget measures the CI runner's
-# contention instead of the code. No budget in this file was changed.
+# #13162: every test in this module asserts a wall-clock budget (ms elapsed) or an RSS delta — there is not one
+# functional-only test here, and the filename already declares it (`*_performance_test.py`). That makes the module a
+# benchmark suite, so it belongs to the `performance` selection rather than the unit selection, where a millisecond
+# budget measures the CI runner's contention instead of the code. No budget in this file was changed.
 pytestmark = pytest.mark.performance
 
 
-# #15055: the budgets below are RUNNER-CALIBRATED WORK UNITS, not milliseconds
-# against a hardcoded constant. The doctrine, the unit and the assertion live in
-# `autobot_shared.perf_work_budget` — read its module docstring before changing
-# any number here. In one line: a millisecond ceiling measures the runner, so
-# each budget is a ratio against a fixed slice of pure-Python work timed in the
-# same process, and a uniformly slow runner scales both sides.
-# DERIVATION. Five local runs gave a highest-observed value per site. Run
-# 33156790797 then measured `Config manager startup` at 1.474 units on CI against
-# a local high of 0.459, so ordinary Python work costs ~3.2x more units on that
-# runner; every local figure is converted by that factor before headroom. Headroom
-# on top: 3x where the measurement is large and steady (cv of units under ~12%
-# across the five runs), 8x where it is single-digit microseconds and timer
+# #15055: the budgets below are RUNNER-CALIBRATED WORK UNITS, not milliseconds against a hardcoded constant. The
+# doctrine, the unit and the assertion live in `autobot_shared.perf_work_budget` — read its module docstring before
+# changing any number here. In one line: a millisecond ceiling measures the runner, so each budget is a ratio against a
+# fixed slice of pure-Python work timed in the same process, and a uniformly slow runner scales both sides.
+# DERIVATION. Five local runs gave a highest-observed value per site. Run 33156790797 then measured `Config manager
+# startup` at 1.474 units on CI against a local high of 0.459, so ordinary Python work costs ~3.2x more units on that
+# runner; every local figure is converted by that factor before headroom. Headroom on top: 3x where the measurement is
+# large and steady (cv of units under ~12% across the five runs), 8x where it is single-digit microseconds and timer
 # granularity rather than load sets the spread, floored at 0.20 units.
-# ONE SITE KEEPS A WIDE BUDGET ON PURPOSE. `Multimodal processor startup` read
-# 315.602, 177.909 and 114.306 units on runs 33156790797, 33158382218 and
-# 33161132835 — a 2.76x spread in the RATIO, not merely in the milliseconds.
-# Calibration cannot normalise it: the cost is model-file and HF-cache disk I/O
-# and a CPU-bound yardstick does not track a disk-bound numerator, so its budget
-# is 600, ~1.9x the worst reading. Every other site is CPU-shaped, tracks the
-# unit closely, and is held to 8x its highest observation (3x for the large
-# steady ones). Ratchet DOWN as runs report lower — the only direction allowed.
-# #15232: `Single multimodal processing` was the same shape and was missed here —
-# it was the one processing benchmark still running `_store_result` live, so it
-# timed SQLite writes. It now mocks storage like its two siblings, which makes it
-# CPU-shaped, and its budget is re-derived at the call site from that measurement.
+# ONE SITE KEEPS A WIDE BUDGET ON PURPOSE. `Multimodal processor startup` read 315.602, 177.909 and 114.306 units on
+# runs 33156790797, 33158382218 and 33161132835 — a 2.76x spread in the RATIO, not merely in the milliseconds.
+# Calibration cannot normalise it: the cost is model-file and HF-cache disk I/O and a CPU-bound yardstick does not track
+# a disk-bound numerator, so its budget is 600, ~1.9x the worst reading. Every other site is CPU-shaped, tracks the unit
+# closely, and is held to 8x its highest observation (3x for the large steady ones). Ratchet DOWN as runs report lower —
+# the only direction allowed.
 
 
 @pytest.fixture(autouse=True)
@@ -175,15 +163,10 @@ class TestSystemPerformanceBenchmarks:
             data="Test processing performance",
         )
 
-        # Mock the context processor for consistent timing. #15232: `_store_result`
-        # is mocked here too, for the reason its two siblings below already record
-        # under #13162 — it writes the result to the shared SQLite memory database,
-        # so leaving it live made this benchmark measure disk contention rather than
-        # the processing path its name refers to. That is not a gap calibration can
-        # close: a work unit is a slice of pure-Python CPU work (#15055), and a
-        # CPU-bound yardstick does not track a disk-bound numerator, which is the
-        # same limitation `Multimodal processor startup` documents at its budget.
-        # The storage call is still asserted below, off the clock.
+        # Mock the context processor for consistent timing. #15232: `_store_result` is mocked here too, for the reason
+        # the two siblings below record under #13162 — it writes to the shared SQLite memory database, so leaving it
+        # live timed disk contention instead of the processing path this test names, and a CPU-bound work unit (#15055)
+        # cannot normalise a disk-bound numerator — the limitation `Multimodal processor startup` records at its budget.
         with (
             patch.object(processor.context_processor, "process", new_callable=AsyncMock) as mock_process,
             patch.object(processor, "_store_result", new_callable=AsyncMock) as mock_store,
@@ -200,20 +183,13 @@ class TestSystemPerformanceBenchmarks:
 
             result, processing_time = await self.measure_async_execution_time(processor.process(test_input))
 
-            # 20.8 units. DERIVATION in the module header's terms: 17 local runs
-            # with storage mocked read 0.596-1.626 units (was 68.709 unmocked, and
-            # 164.422 on CI run 33161132835), so the highest local observation is
-            # 1.626; x3.2 for the CI conversion the header records = 5.2. HEADROOM
-            # 4x, between the header's two classes on purpose: the numerator is
-            # milliseconds, not the single-digit microseconds that put a site in
-            # the 8x class, but its spread is load-driven at cv ~33% rather than
-            # the under-12% that puts a site in the 3x class. Ratchet DOWN as runs
-            # report lower.
+            # 20.8 units, down from a 50.0 first-observation ceiling over the disk-bound measurement. DERIVATION in
+            # the header's terms: 17 local runs with storage mocked read 0.596-1.626 units (68.709 unmocked locally,
+            # 164.422 on CI run 33161132835); local high 1.626 x3.2 CI conversion = 5.2, x4 headroom — between the
+            # header's classes: milliseconds, not the 8x class's microseconds, but a load-driven cv ~33%. Ratchet DOWN.
             assert_within_work_budget(processing_time, 20.8, "Single multimodal processing")
             assert result.success is True
-            # #15232: mocking storage removes it from the clock, not from the
-            # contract. Without this, a change that stopped persisting results
-            # would make the benchmark faster and still pass.
+            # #15232: storage is off the clock, not out of the contract — dropping the write must not read as faster.
             mock_store.assert_awaited_once()
 
     @pytest.mark.asyncio
