@@ -167,7 +167,11 @@ def counts_by_root(collected: Iterable[str], roots: Sequence[str]) -> Dict[str, 
 
 
 def check(result: subprocess.CompletedProcess, roots: Sequence[str]) -> Dict[str, int]:
-    """Raise unless pytest collected cleanly and every root contributed an item."""
+    """Raise unless pytest started, reached tests, and every root contributed an item.
+
+    Deliberately NOT "collected cleanly": a collection error inside a root that still
+    yields tests is owned by the workflow's own pytest steps, per the module docstring.
+    """
     if not roots:
         raise CollectionFloorError(
             "no pytest root was derived from the workflow — this check would inspect "
