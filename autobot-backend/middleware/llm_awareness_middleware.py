@@ -62,7 +62,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
         self.enable_for_paths = enable_for_paths or [
             "/api/chat",
             "/api/llm",
-            "/api/intelligent-agent",
+            "/api/intelligent_agent",
             "/api/workflow",
         ]
         self.context_cache = None

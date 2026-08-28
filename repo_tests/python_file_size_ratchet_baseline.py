@@ -426,7 +426,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/tests/unit/chat_workflow/test_code_exec.py": 1093,
     "autobot-backend/tests/unit/knowledge/connectors/test_web_crawler.py": 655,
     "autobot-backend/tests/utils/gpu_optimization/test_gpu_detection.py": 763,
-    "autobot-backend/tools/terminal_tool.py": 608,
     "autobot-backend/tools/tool_registry.py": 959,
     "autobot-backend/user_management/services/user_service.py": 905,
     "autobot-backend/utils/advanced_cache_manager.py": 1213,
