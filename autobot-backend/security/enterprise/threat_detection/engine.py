@@ -23,12 +23,12 @@ from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
+from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
-from autobot_shared.config_file_loading import load_config_file
 
 from .analyzers import (
     APIAbuseAnalyzer,
