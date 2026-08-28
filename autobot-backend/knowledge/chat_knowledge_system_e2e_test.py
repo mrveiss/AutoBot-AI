@@ -1,435 +1,273 @@
 #!/usr/bin/env python3
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
+"""End-to-end tests for the Chat Knowledge Management System.
+
+Covers chat-context creation, file association, temporary-knowledge capture and
+decisions, in-chat search, compilation and context retrieval against a running
+backend (``/api/chat-knowledge/*``).
+
+#14979: this module used to be an operational driver script wearing test names —
+a class with ``__init__``, a ``run_all_tests`` loop and a ``main()`` that logged
+a summary. pytest never collects a class that defines ``__init__``, so all seven
+``test_*`` methods below collected **zero** items and had never run once. The
+driver is gone (pytest is the driver now) and every method asserts instead of
+returning ``True``/``False``, which the old loop only logged.
 """
-Comprehensive test for the Chat Knowledge Management System
-Tests the complete integration of chat context, file associations, and knowledge compilation
-"""
 
-import asyncio
-import logging
-import os
-import tempfile
-import time
+import uuid
+from typing import Any, Dict, Iterator, List
 
-import aiohttp
+import pytest
+import requests
 
-from autobot_shared.logging_manager import get_logger
-from tests.test_helpers import get_test_backend_url
+from autobot_shared.live_service_probe import require_live_endpoint
+from autobot_shared.ssot_config import config
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = get_logger(__name__)
+# #12510: every test here issues real HTTP against a running backend, so the
+# module must stay out of the unit gate (pytest -m "not integration ...").
+pytestmark = pytest.mark.integration
 
-BASE_URL = get_test_backend_url()
+# SSOT only — no hardcoded host, port or URL (#1618).
+BACKEND_URL = config.backend_url
+CHAT_KNOWLEDGE_API = "/api/chat-knowledge"
+
+# One module constant rather than a literal at each call site, so the whole
+# suite shares a single HTTP budget.
+HTTP_TIMEOUT_SECONDS = 30.0
+
+CHAT_TOPIC = "Python Development Best Practices"
+CHAT_KEYWORDS = ["python", "fastapi", "async", "testing"]
+
+KNOWLEDGE_ITEMS: List[Dict[str, Any]] = [
+    {
+        "content": (
+            "FastAPI is a modern web framework for Python that provides automatic "
+            "API documentation and high performance."
+        ),
+        "metadata": {"category": "framework", "importance": "high"},
+    },
+    {
+        "content": "Use async/await for I/O operations to improve performance in FastAPI applications.",
+        "metadata": {"category": "performance", "importance": "medium"},
+    },
+    {
+        "content": "Pydantic models in FastAPI provide automatic request validation and serialization.",
+        "metadata": {"category": "validation", "importance": "high"},
+    },
+]
+
+# api/schemas_knowledge.py KnowledgeDecision members, one per KNOWLEDGE_ITEMS entry.
+KNOWLEDGE_DECISIONS = ["add_to_kb", "keep_temporary", "add_to_kb"]
+
+SEARCH_QUERIES = ["FastAPI framework", "async performance", "Pydantic validation"]
+
+UPLOAD_FILE_NAME = "test_code.py"
+UPLOAD_FILE_BODY = '''# Sample Python file associated with a chat by the upload test.
 
 
-class ChatKnowledgeSystemTester:
-    """Comprehensive test suite for chat knowledge management system"""
-
-    def __init__(self):
-        self.session = None
-        self.test_chat_id = None
-        self.test_files = []
-
-    async def setup(self):
-        """Initialize test session"""
-        self.session = aiohttp.ClientSession()
-        logger.info("🚀 Starting Chat Knowledge Management System Test")
-
-        # Create a test chat
-        async with self.session.post(f"{BASE_URL}/api/chats/new") as response:
-            if response.status == 200:
-                data = await response.json()
-                self.test_chat_id = data.get("chatId")
-                logger.info(f"✅ Created test chat: {self.test_chat_id}")
-            else:
-                raise Exception(f"Failed to create test chat: {response.status}")
-
-    async def cleanup(self):
-        """Clean up test resources"""
-        # Clean up test files
-        for file_path in self.test_files:
-            try:
-                os.remove(file_path)
-                logger.info(f"🧹 Cleaned up test file: {file_path}")
-            except OSError:
-                pass
-
-        # Close session
-        if self.session:
-            await self.session.close()
-
-        logger.info("🧹 Test cleanup completed")
-
-    async def test_chat_context_creation(self):
-        """Test 1: Chat context creation and topic setting"""
-        logger.info("📋 Test 1: Chat Context Creation")
-
-        context_data = {
-            "chat_id": self.test_chat_id,
-            "topic": "Python Development Best Practices",
-            "keywords": ["python", "fastapi", "async", "testing"],
-        }
-
-        async with self.session.post(f"{BASE_URL}/api/chat-knowledge/context/create", json=context_data) as response:
-            if response.status == 200:
-                data = await response.json()
-                assert data["success"], "Context creation should succeed"
-                logger.info("✅ Chat context created successfully")
-                return True
-            else:
-                logger.error(f"❌ Context creation failed: {response.status}")
-                return False
-
-    async def test_file_association(self):
-        """Test 2: File upload and association with chat"""
-        logger.info("📋 Test 2: File Association")
-
-        # Create a temporary test file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write("""
-# Test Python file for chat knowledge system
-def test_function():
-    '''Example function for testing'''
+def sample_function() -> str:
+    """Example function used as upload content."""
     return "Hello from test file"
+'''
 
-if __name__ == "__main__":
-    print(test_function())  # noqa: print
-""")
-            test_file_path = f.name
 
-        self.test_files.append(test_file_path)
+@pytest.fixture(autouse=True)
+def _require_live_stack() -> None:
+    """Skip when the AutoBot backend is absent (#14930).
 
-        # Upload file to chat
-        try:
-            with open(test_file_path, "rb") as f:
-                data = aiohttp.FormData()
-                data.add_field("file", f, filename="test_code.py", content_type="text/plain")
-                data.add_field("association_type", "upload")
+    All seven tests drive ``/api/chat-knowledge/*`` over real HTTP. On a
+    GitHub-hosted runner no backend exists, so an unguarded run would report a
+    refused connection as a product failure rather than as "not exercised here".
+    """
+    require_live_endpoint(BACKEND_URL, what="the AutoBot backend API")
 
-                async with self.session.post(
-                    f"{BASE_URL}/api/chat-knowledge/files/upload/{self.test_chat_id}",
-                    data=data,
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        assert result["success"], "File upload should succeed"
-                        logger.info("✅ File associated with chat successfully")
-                        return True
-                    else:
-                        logger.error(f"❌ File association failed: {response.status}")
-                        return False
-        except Exception as e:
-            logger.error(f"❌ File association error: {e}")
-            return False
 
-    async def test_temporary_knowledge_addition(self):
-        """Test 3: Add temporary knowledge to chat"""
-        logger.info("📋 Test 3: Temporary Knowledge Addition")
+@pytest.fixture
+def session(_require_live_stack: None) -> Iterator[requests.Session]:
+    """One pooled HTTP session per test, closed on teardown.
 
-        knowledge_items = [
-            {
-                "content": "FastAPI is a modern web framework for Python that provides automatic API documentation and high performance.",
-                "metadata": {"category": "framework", "importance": "high"},
-            },
-            {
-                "content": "Use async/await for I/O operations to improve performance in FastAPI applications.",
-                "metadata": {"category": "performance", "importance": "medium"},
-            },
-            {
-                "content": "Pydantic models in FastAPI provide automatic request validation and serialization.",
-                "metadata": {"category": "validation", "importance": "high"},
-            },
-        ]
+    Replaces the deleted ``__init__``/``setup``/``cleanup`` trio: the session
+    was instance state built in ``__init__``, which is exactly what stopped
+    pytest collecting this class.
+    """
+    with requests.Session() as http:
+        yield http
 
-        success_count = 0
-        for item in knowledge_items:
-            knowledge_data = {
-                "chat_id": self.test_chat_id,
-                "content": item["content"],
-                "metadata": item["metadata"],
-            }
 
-            async with self.session.post(
-                f"{BASE_URL}/api/chat-knowledge/knowledge/add_temporary",
-                json=knowledge_data,
-            ) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    if result["success"]:
-                        success_count += 1
-                        logger.info(f"✅ Knowledge item {success_count} added")
-                    else:
-                        logger.error(f"❌ Knowledge item failed: {result}")
-                else:
-                    logger.error(f"❌ Knowledge addition failed: {response.status}")
+@pytest.fixture
+def chat_context(session: requests.Session) -> str:
+    """Create a knowledge context for a fresh chat id and return that id.
 
-        if success_count == len(knowledge_items):
-            logger.info(f"✅ All {success_count} knowledge items added successfully")
-            return True
-        else:
-            logger.error(f"❌ Only {success_count}/{len(knowledge_items)} items added")
-            return False
+    The id is generated locally because no chat-creation route exists — the old
+    ``setup()`` posted to ``/api/chats/new``, which the backend never served.
+    ``/context/create`` is also what builds the lazily-constructed
+    chat-knowledge manager that ``add_temporary``, ``pending``, ``decide`` and
+    ``search`` read, so every test needs it before touching those routes.
+    """
+    chat_id = f"e2e-chat-{uuid.uuid4().hex[:12]}"
+    payload = {"chat_id": chat_id, "topic": CHAT_TOPIC, "keywords": CHAT_KEYWORDS}
+    data = _envelope(
+        _post(session, f"{CHAT_KNOWLEDGE_API}/context/create", json=payload),
+        f"POST {CHAT_KNOWLEDGE_API}/context/create",
+    )
+    assert (
+        data.get("chat_id") == chat_id
+    ), f"context/create echoed chat_id {data.get('chat_id')!r}, expected {chat_id!r}"
+    return chat_id
 
-    async def test_knowledge_retrieval_and_decisions(self):
-        """Test 4: Retrieve pending knowledge and apply decisions"""
-        logger.info("📋 Test 4: Knowledge Retrieval and Decisions")
 
-        # Get pending knowledge items
-        async with self.session.get(f"{BASE_URL}/api/chat-knowledge/knowledge/pending/{self.test_chat_id}") as response:
-            if response.status == 200:
-                data = await response.json()
-                if data["success"]:
-                    pending_items = data["pending_items"]
-                    logger.info(f"✅ Retrieved {len(pending_items)} pending knowledge items")
+def _post(session: requests.Session, path: str, **kwargs: Any) -> requests.Response:
+    """POST to *path* on the backend with the shared timeout budget."""
+    return session.post(f"{BACKEND_URL}{path}", timeout=HTTP_TIMEOUT_SECONDS, **kwargs)
 
-                    # Apply decisions to knowledge items
-                    decisions = [
-                        ("add_to_kb", "Adding FastAPI framework knowledge"),
-                        ("keep_temporary", "Keeping async/await tip for session"),
-                        ("add_to_kb", "Adding Pydantic validation knowledge"),
-                    ]
 
-                    success_count = 0
-                    for i, (decision, reason) in enumerate(decisions):
-                        if i < len(pending_items):
-                            decision_data = {
-                                "chat_id": self.test_chat_id,
-                                "knowledge_id": pending_items[i]["id"],
-                                "decision": decision,
-                            }
+def _get(session: requests.Session, path: str) -> requests.Response:
+    """GET *path* from the backend with the shared timeout budget."""
+    return session.get(f"{BACKEND_URL}{path}", timeout=HTTP_TIMEOUT_SECONDS)
 
-                            async with self.session.post(
-                                f"{BASE_URL}/api/chat-knowledge/knowledge/decide",
-                                json=decision_data,
-                            ) as decision_response:
-                                if decision_response.status == 200:
-                                    result = await decision_response.json()
-                                    if result["success"]:
-                                        success_count += 1
-                                        logger.info(f"✅ Decision applied: {reason}")
-                                    else:
-                                        logger.error(f"❌ Decision failed: {result}")
-                                else:
-                                    logger.error(f"❌ Decision request failed: {decision_response.status}")
 
-                    if success_count == len(decisions):
-                        logger.info("✅ All knowledge decisions applied successfully")
-                        return True
-                    else:
-                        logger.error(f"❌ Only {success_count}/{len(decisions)} decisions applied")
-                        return False
-                else:
-                    logger.error(f"❌ Failed to get pending knowledge: {data}")
-                    return False
-            else:
-                logger.error(f"❌ Knowledge retrieval failed: {response.status}")
-                return False
+def _envelope(response: requests.Response, description: str) -> Dict[str, Any]:
+    """Assert *response* is a successful ``DataResponse`` envelope; return its ``data``."""
+    assert response.status_code == 200, f"{description} returned HTTP {response.status_code}: {response.text[:200]}"
+    body = response.json()
+    assert body.get("success") is True, f"{description} returned a non-success envelope: {body}"
+    data = body.get("data")
+    assert isinstance(data, dict), f"{description} returned no data object: {body}"
+    return data
 
-    async def test_chat_search(self):
-        """Test 5: Search knowledge within chat context"""
-        logger.info("📋 Test 5: Chat Knowledge Search")
 
-        search_queries = [
-            "FastAPI framework",
-            "async performance",
-            "Pydantic validation",
-        ]
+def _add_temporary_knowledge(session: requests.Session, chat_id: str) -> List[str]:
+    """Add every KNOWLEDGE_ITEMS entry to *chat_id* and return their knowledge ids."""
+    knowledge_ids: List[str] = []
+    path = f"{CHAT_KNOWLEDGE_API}/knowledge/add_temporary"
 
-        success_count = 0
-        for query in search_queries:
-            search_data = {
-                "query": query,
-                "chat_id": self.test_chat_id,
-                "include_temporary": True,
-            }
+    for item in KNOWLEDGE_ITEMS:
+        payload = {"chat_id": chat_id, "content": item["content"], "metadata": item["metadata"]}
+        data = _envelope(_post(session, path, json=payload), f"POST {path}")
+        knowledge_id = data.get("knowledge_id")
+        assert knowledge_id, f"POST {path} returned no knowledge_id for {item['content'][:48]!r}: {data}"
+        knowledge_ids.append(knowledge_id)
 
-            async with self.session.post(f"{BASE_URL}/api/chat-knowledge/search", json=search_data) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if data["success"]:
-                        results = data["results"]
-                        logger.info(f"✅ Search '{query}' returned {len(results)} results")
-                        success_count += 1
+    return knowledge_ids
 
-                        # Log first result for verification
-                        if results:
-                            logger.info(f"   Top result: {results[0]['content'][:100]}...")
-                    else:
-                        logger.error(f"❌ Search failed: {data}")
-                else:
-                    logger.error(f"❌ Search request failed: {response.status}")
 
-        if success_count == len(search_queries):
-            logger.info("✅ All search queries completed successfully")
-            return True
-        else:
-            logger.error(f"❌ Only {success_count}/{len(search_queries)} searches succeeded")
-            return False
+def _read_context(session: requests.Session, chat_id: str) -> Dict[str, Any]:
+    """Return the stored knowledge context for *chat_id*."""
+    path = f"{CHAT_KNOWLEDGE_API}/context/{chat_id}"
+    return _envelope(_get(session, path), f"GET {path}")
 
-    async def test_chat_compilation(self):
-        """Test 6: Compile entire chat to knowledge base"""
-        logger.info("📋 Test 6: Chat Compilation")
 
-        # First, send a few messages to the chat to create conversation history
-        chat_messages = [
-            "What are the best practices for FastAPI development?",
-            "How do I handle async operations efficiently?",
-            "Can you explain Pydantic model validation?",
-        ]
+def _read_pending(session: requests.Session, chat_id: str) -> List[Dict[str, Any]]:
+    """Return the knowledge items awaiting a decision for *chat_id*."""
+    path = f"{CHAT_KNOWLEDGE_API}/knowledge/pending/{chat_id}"
+    data = _envelope(_get(session, path), f"GET {path}")
+    items = data.get("pending_items")
+    assert isinstance(items, list), f"GET {path} returned a non-list pending_items: {data}"
+    return items
 
-        # Add messages to create chat history (simulate conversation)
-        for message in chat_messages:
-            message_data = {"message": message}
-            async with self.session.post(
-                f"{BASE_URL}/api/chats/{self.test_chat_id}/message", json=message_data
-            ) as response:
-                if response.status == 200:
-                    logger.info(f"✅ Message sent: {message[:50]}...")
-                else:
-                    logger.warning(f"⚠️ Message failed: {response.status}")
 
-        # Wait a moment for message processing
-        await asyncio.sleep(2)
+class TestChatKnowledgeSystem:
+    """Chat context, file association, knowledge decisions and search over live HTTP."""
 
-        # Now compile the chat
-        compile_data = {
-            "chat_id": self.test_chat_id,
+    def test_chat_context_creation(self, session: requests.Session, chat_context: str) -> None:
+        """A created context is readable back with the topic and keywords it was given."""
+        context = _read_context(session, chat_context)
+
+        assert context.get("chat_id") == chat_context, f"context is for chat {context.get('chat_id')!r}"
+        assert context.get("topic") == CHAT_TOPIC, f"context topic is {context.get('topic')!r}, expected {CHAT_TOPIC!r}"
+        assert (
+            context.get("keywords") == CHAT_KEYWORDS
+        ), f"context keywords are {context.get('keywords')!r}, expected {CHAT_KEYWORDS!r}"
+
+    def test_file_association(self, session: requests.Session, chat_context: str, tmp_path) -> None:
+        """An uploaded file is stored and counted against the chat's context."""
+        upload = tmp_path / UPLOAD_FILE_NAME
+        upload.write_text(UPLOAD_FILE_BODY, encoding="utf-8")
+        path = f"{CHAT_KNOWLEDGE_API}/files/upload/{chat_context}"
+
+        with upload.open("rb") as handle:
+            response = _post(
+                session,
+                path,
+                files={"file": (UPLOAD_FILE_NAME, handle, "text/plain")},
+                data={"association_type": "upload"},
+            )
+        data = _envelope(response, f"POST {path}")
+
+        assert data.get("file_id"), f"POST {path} returned no file_id: {data}"
+        file_count = _read_context(session, chat_context).get("file_count")
+        assert file_count == 1, f"context reports {file_count} associated files after one upload, expected 1"
+
+    def test_temporary_knowledge_addition(self, session: requests.Session, chat_context: str) -> None:
+        """Every temporary knowledge item is stored under a distinct id and counted."""
+        knowledge_ids = _add_temporary_knowledge(session, chat_context)
+
+        assert len(set(knowledge_ids)) == len(KNOWLEDGE_ITEMS), (
+            f"{len(KNOWLEDGE_ITEMS)} knowledge items produced {len(set(knowledge_ids))} distinct "
+            f"ids: {knowledge_ids}"
+        )
+        count = _read_context(session, chat_context).get("temporary_knowledge_count")
+        assert count == len(
+            KNOWLEDGE_ITEMS
+        ), f"context reports {count} temporary knowledge items, expected {len(KNOWLEDGE_ITEMS)}"
+
+    def test_knowledge_retrieval_and_decisions(self, session: requests.Session, chat_context: str) -> None:
+        """Pending items are returned for decision, and each applied decision retires one."""
+        knowledge_ids = _add_temporary_knowledge(session, chat_context)
+        pending = _read_pending(session, chat_context)
+
+        assert {item.get("id") for item in pending} == set(
+            knowledge_ids
+        ), f"pending ids {[item.get('id') for item in pending]} do not match the added ids {knowledge_ids}"
+
+        for item, decision in zip(pending, KNOWLEDGE_DECISIONS):
+            payload = {"chat_id": chat_context, "knowledge_id": item["id"], "decision": decision}
+            path = f"{CHAT_KNOWLEDGE_API}/knowledge/decide"
+            data = _envelope(_post(session, path, json=payload), f"POST {path}")
+            assert data.get("success") is True, f"decision {decision!r} on {item['id']} was not applied: {data}"
+
+        remaining = _read_pending(session, chat_context)
+        assert not remaining, f"{len(remaining)} items still pending after deciding all {len(pending)}"
+
+    def test_chat_search(self, session: requests.Session, chat_context: str) -> None:
+        """Every search query returns a well-formed, self-consistent result set."""
+        _add_temporary_knowledge(session, chat_context)
+        path = f"{CHAT_KNOWLEDGE_API}/search"
+
+        for query in SEARCH_QUERIES:
+            payload = {"query": query, "chat_id": chat_context, "include_temporary": True}
+            data = _envelope(_post(session, path, json=payload), f"POST {path} ({query!r})")
+            results = data.get("results")
+            assert isinstance(results, list), f"search {query!r} returned a non-list results field: {data}"
+            assert data.get("count") == len(
+                results
+            ), f"search {query!r} reported count {data.get('count')} for {len(results)} results"
+
+    def test_chat_compilation(self, session: requests.Session, chat_context: str) -> None:
+        """Compiling a chat that has no message history is refused, not fabricated."""
+        payload = {
+            "chat_id": chat_context,
             "title": "FastAPI Development Best Practices - Compiled Knowledge",
             "include_system_messages": False,
         }
+        path = f"{CHAT_KNOWLEDGE_API}/compile"
 
-        async with self.session.post(f"{BASE_URL}/api/chat-knowledge/compile", json=compile_data) as response:
-            if response.status == 200:
-                data = await response.json()
-                if data["success"]:
-                    compiled = data["compiled"]
-                    logger.info("✅ Chat compiled successfully to knowledge base")
-                    logger.info(f"   Title: {compiled.get('title', 'N/A')}")
-                    logger.info(f"   KB ID: {compiled.get('kb_id', 'N/A')}")
-                    logger.info(f"   Messages: {compiled.get('message_count', 0)}")
-                    return True
-                else:
-                    logger.error(f"❌ Compilation failed: {data}")
-                    return False
-            else:
-                logger.error(f"❌ Compilation request failed: {response.status}")
-                return False
+        response = _post(session, path, json=payload)
 
-    async def test_context_retrieval(self):
-        """Test 7: Retrieve complete chat context"""
-        logger.info("📋 Test 7: Context Retrieval")
+        assert response.status_code != 200, (
+            f"POST {path} returned HTTP 200 for chat {chat_context}, which has no message history — "
+            f"compilation must not invent a knowledge-base entry: {response.text[:200]}"
+        )
 
-        async with self.session.get(f"{BASE_URL}/api/chat-knowledge/context/{self.test_chat_id}") as response:
-            if response.status == 200:
-                data = await response.json()
-                if data["success"]:
-                    context = data["context"]
-                    logger.info("✅ Chat context retrieved successfully")
-                    logger.info(f"   Topic: {context.get('topic', 'N/A')}")
-                    logger.info(f"   Keywords: {context.get('keywords', [])}")
-                    logger.info(f"   Files: {context.get('file_count', 0)}")
-                    logger.info(f"   Temporary Knowledge: {context.get('temporary_knowledge_count', 0)}")
-                    logger.info(f"   Persistent Knowledge: {context.get('persistent_knowledge_count', 0)}")
-                    return True
-                else:
-                    logger.error(f"❌ Context retrieval failed: {data}")
-                    return False
-            else:
-                logger.error(f"❌ Context request failed: {response.status}")
-                return False
+    def test_context_retrieval(self, session: requests.Session, chat_context: str) -> None:
+        """A retrieved context carries the full counted summary the UI renders."""
+        _add_temporary_knowledge(session, chat_context)
+        context = _read_context(session, chat_context)
 
-    async def run_all_tests(self):
-        """Run complete test suite"""
-        logger.info("🎯 Starting Comprehensive Chat Knowledge Management Test")
-        logger.info("=" * 80)
+        for key in ("topic", "keywords", "created_at", "updated_at", "file_count", "persistent_knowledge_count"):
+            assert key in context, f"context for {chat_context} is missing {key!r}: {sorted(context)}"
 
-        tests = [
-            ("Chat Context Creation", self.test_chat_context_creation),
-            ("File Association", self.test_file_association),
-            ("Temporary Knowledge Addition", self.test_temporary_knowledge_addition),
-            ("Knowledge Decisions", self.test_knowledge_retrieval_and_decisions),
-            ("Knowledge Search", self.test_chat_search),
-            ("Chat Compilation", self.test_chat_compilation),
-            ("Context Retrieval", self.test_context_retrieval),
-        ]
-
-        results = []
-        for test_name, test_func in tests:
-            try:
-                logger.info("-" * 60)
-                start_time = time.time()
-                result = await test_func()
-                duration = time.time() - start_time
-
-                results.append((test_name, result, duration))
-                status = "✅ PASSED" if result else "❌ FAILED"
-                logger.info(f"{status} - {test_name} ({duration:.2f}s)")
-
-                # Short delay between tests
-                await asyncio.sleep(1)
-
-            except Exception as e:
-                logger.error(f"❌ EXCEPTION in {test_name}: {e}")
-                results.append((test_name, False, 0))
-
-        # Print summary
-        logger.info("=" * 80)
-        logger.info("🎯 TEST SUMMARY")
-        logger.info("=" * 80)
-
-        passed = sum(1 for _, result, _ in results if result)
-        total = len(results)
-
-        for test_name, result, duration in results:
-            status = "✅ PASS" if result else "❌ FAIL"
-            logger.info(f"{status} {test_name} ({duration:.2f}s)")
-
-        logger.info("-" * 80)
-        logger.info(f"🎯 OVERALL RESULT: {passed}/{total} tests passed")
-
-        if passed == total:
-            logger.info("🎉 ALL TESTS PASSED - Chat Knowledge Management System is fully functional!")
-        else:
-            logger.warning(f"⚠️ {total - passed} tests failed - System needs attention")
-
-        return passed == total
-
-
-async def main():
-    """Main test execution"""
-    tester = ChatKnowledgeSystemTester()
-
-    try:
-        await tester.setup()
-        success = await tester.run_all_tests()
-        return success
-    except Exception as e:
-        logger.error(f"❌ Test execution failed: {e}")
-        return False
-    finally:
-        await tester.cleanup()
-
-
-if __name__ == "__main__":
-    # Check if backend is running
-    async def check_backend():
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{BASE_URL}/api/system/health") as response:
-                    if response.status == 200:
-                        return True
-        except Exception:
-            pass
-        return False
-
-    # Run test
-    if asyncio.run(check_backend()):
-        logger.info("🚀 Backend is running - Starting tests")
-        success = asyncio.run(main())
-        exit(0 if success else 1)
-    else:
-        logger.error(f"❌ Backend is not running at {get_test_backend_url()}")
-        logger.error("Please start the backend with: ./run_agent.sh")
-        exit(1)
+        assert context["temporary_knowledge_count"] == len(
+            KNOWLEDGE_ITEMS
+        ), f"context reports {context['temporary_knowledge_count']} temporary items, expected {len(KNOWLEDGE_ITEMS)}"
