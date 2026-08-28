@@ -284,7 +284,8 @@ It reuses the *same* logic CI does rather than approximating it: the same `awk` 
 **Match CI's interpreter first (#13573).** CI runs Python **3.14**. A box's default `python3` is often older, and every local gate silently uses it:
 
 ```bash
-scripts/setup-ci-parity-env.sh     # build once; idempotent, no sudo
+scripts/setup-ci-parity-env.sh           # build if missing, reconcile if stale; no sudo
+scripts/setup-ci-parity-env.sh --check   # report only, never installs; exit 1 if stale
 ```
 
 This builds the same environment `.github/actions/setup-python-suite/action.yml` builds — same interpreter, same `requirements-ci.txt` + `requirements-ci-test.txt`, same PyTorch CPU index, same venv path. `pr-preflight.sh` then picks it up automatically and reports which interpreter it used.
@@ -304,11 +305,33 @@ Two places now say so, using the same reporter
 - every `pytest` run prints it directly beneath the pass/fail counts, so a bare `pytest` that never
   touches preflight still says it.
 
+**The venv reconciles on every run, and refreshing is prompted, not automatic (#15130).** It used
+to stop as soon as the directory existed, so it drifted: measured against the two files it installs,
+21 of 86 declared versions were unsatisfied and **9 declared packages were not installed at all**.
+The second number is the one that costs you a diagnosis — a test module that `importorskip`s a
+missing package is never collected, so the run passes by doing less. Both are gone after one
+reconcile; a reconciled venv reports **0 of 86**, absence included.
+
+Which way each caller goes, and why:
+
+| Caller | Behaviour on a stale venv |
+|---|---|
+| `setup-ci-parity-env.sh` | repairs in place — re-runs the same two `pip install -r` commands, then re-checks. Every shortfall seen has been an installed version *older* than a satisfiable declaration, which the reinstall fixes; `rm -rf` would re-download the whole torch stack to reach the same place. `--recreate` stays for what that cannot fix. |
+| `setup-ci-parity-env.sh --check` | reports and exits 1. Installs nothing. |
+| `pr-preflight.sh` | calls `--check` and **says so instead of claiming parity**. It does not install and does not fail the run — reinstalling under someone mid-review would be slow and surprising, and #15091's "reported, never gated" applies here too. |
+
+The check is scoped with `--roots` to the two files the script installs. Judged against the backend
+requirement files as well it would look permanently short, because those describe components neither
+it nor CI's python suite ever installs — a number nobody can act on is noise. It also passes
+`--require-present`, which is the one place absence counts as a shortfall rather than a neutral fact.
+
 If your box is below floor and you cannot build the parity venv, **push and read CI** — a green local
 run is not evidence for anything version-dependent. The concrete precedent: under the declared
-fastapi 0.141.1 / starlette 1.6.0, `APIRouter.include_router()` **defers**, appending an
-`_IncludedRouter` wrapper with `path=None` instead of copying routes onto the parent; below that
-floor it copies eagerly. A guard enumerating a router's routes therefore read 26 locally and 3 in CI
+fastapi 0.141.1, `APIRouter.include_router()` **defers**, appending an `_IncludedRouter` wrapper with
+`path=None` instead of copying routes onto the parent; on fastapi 0.135.2 it copies eagerly. Measured
+three ways (#15130): 0.141.1 with starlette 1.3.1 defers, 0.141.1 with starlette 1.6.0 defers, 0.135.2
+with starlette 1.6.0 does not. **The deferral is fastapi's, not starlette's** — a starlette floor will
+not reproduce or suppress it, so do not reach for one. A guard enumerating a router's routes therefore read 26 locally and 3 in CI
 (#14998), and an `hasattr`-guarded walk finds nothing at all rather than raising. #15093 records the
 behaviour and the sweep that bounds its blast radius; do not re-derive it.
 

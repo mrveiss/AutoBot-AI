@@ -66,6 +66,40 @@ scripts/
 - `start-isolated-vnc.sh` - Start VNC in isolation
 - And more...
 
+### Manual operator tools
+
+Reached for by hand when something has gone wrong. Nothing in CI or the deployment path calls
+these, and that is deliberate — but each is maintained, each runs against the current tree, and
+each is listed here so an operator can find it (#15127).
+
+- `cleanup-disk-space.sh` — reclaim disk: caches, `__pycache__`, old logs and backups.
+  Supports `--dry-run`; resolves the repo root from its own location, so it is safe to run from
+  anywhere.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/cleanup-disk-space.sh --dry-run
+  ```
+- `monitor_testing.sh` — colour-coded live tail of `logs/backend.log` filtered to PTY execution,
+  approval requests, session lifecycle and errors. The manual equivalent
+  (`tail -f logs/backend.log | grep …`) appears throughout the developer docs; this is that, with
+  the markers already selected.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/monitor_testing.sh
+  ```
+- `network/fix-wsl-networking.sh` — diagnose and repair WSL2 port forwarding between frontend and
+  backend. See [`docs/developer/WSL2_NETWORKING.md`](../../../docs/developer/WSL2_NETWORKING.md)
+  for the failure mode it addresses.
+- `install-doc-sync-hook.sh` — install the `post-commit-doc-sync` git hook into this checkout, so
+  documentation edits reindex the knowledge base on commit. Run once per clone.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/install-doc-sync-hook.sh
+  ```
+- `utilities/start-seq-forwarder.sh` — tail local logs into a running Seq instance at
+  `localhost:5341`. Requires `aiohttp` in the interpreter you run it with; it will not install
+  anything for you.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/utilities/start-seq-forwarder.sh
+  ```
+
 ## Usage Examples
 
 ### Starting Services (Recommended)
