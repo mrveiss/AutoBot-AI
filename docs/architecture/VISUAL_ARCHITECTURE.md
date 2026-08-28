@@ -125,15 +125,15 @@ User Request
 │ • UI Analysis  │        │ • Intent Parse │        │ • Entity Ext   │
 │ • OCR Extract  │        │ • Command Map  │        │ • Sentiment    │
 └────────┬───────┘        └───────┬────────┘        └────────┬───────┘
-         │                        │                           │
-         └────────────────────────┼───────────────────────────┘
+         │                        │                          │
+         └────────────────────────┼──────────────────────────┘
                                   │
                         ┌─────────▼─────────┐
                         │ Context Synthesis │
                         │                   │
-                        │ • Cross-Modal    │
-                        │ • Confidence     │
-                        │ • Decision Tree  │
+                        │ • Cross-Modal     │
+                        │ • Confidence      │
+                        │ • Decision Tree   │
                         └─────────┬─────────┘
                                   │
                 ┌─────────────────┼─────────────────┐
