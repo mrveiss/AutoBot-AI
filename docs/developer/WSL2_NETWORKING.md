@@ -124,6 +124,20 @@ networkingMode=nat
 Requires WSL2 restart (`wsl --shutdown`). Changes the entire WSL2 network stack
 and may affect other services.
 
+## Repair script
+
+`autobot-infrastructure/shared/scripts/network/fix-wsl-networking.sh` diagnoses and repairs the
+port forwarding described above: it checks what is listening, reconciles the frontend and backend
+ports against `network/network-config.sh`, and reports what it changed.
+
+```bash
+bash autobot-infrastructure/shared/scripts/network/fix-wsl-networking.sh
+```
+
+It is a manual operator tool — nothing calls it automatically, by design. Recorded here because it
+had no inbound reference of any kind, which is how a maintained tool becomes indistinguishable from
+debris (#15127).
+
 ## Background
 
 Discovered during Issue #910 investigation (2026-02-17). WSL2 mirrored networking was
