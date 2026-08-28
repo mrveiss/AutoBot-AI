@@ -34,7 +34,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from security.session_ownership import DEGRADED_ENFORCEMENT_MODE, SessionOwnershipValidator
+from security.enforcement_mode import DEGRADED_ENFORCEMENT_MODE
+from security.session_ownership import SessionOwnershipValidator
 from services.feature_flags import EnforcementMode, EnforcementModeUnavailable
 
 
@@ -64,14 +65,20 @@ class TestAPolicyDecisionIsUnchanged:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("mode", [EnforcementMode.DISABLED, EnforcementMode.LOG_ONLY, EnforcementMode.ENFORCED])
     async def test_a_resolved_mode_is_returned_verbatim(self, mode):
-        assert await _validator(_flags_returning(mode))._get_enforcement_mode() == mode.value
+        resolved = await _validator(_flags_returning(mode))._get_enforcement_mode()
+
+        assert resolved.mode == mode.value
+        assert resolved.degraded is False, (
+            f"a {mode.value!r} read successfully from the flag store was marked degraded — "
+            "a chosen posture must never be reported as an outage (#15159)"
+        )
 
     @pytest.mark.asyncio
     async def test_a_deliberate_disabled_still_disables(self):
         """The operator's own choice is still honoured — this is not a posture change."""
         validator = _validator(_flags_returning(EnforcementMode.DISABLED))
 
-        assert await validator._get_enforcement_mode() == "disabled"
+        assert (await validator._get_enforcement_mode()).mode == "disabled"
 
 
 class TestAnUndeterminedModeDoesNotDisableEnforcement:
@@ -81,24 +88,29 @@ class TestAnUndeterminedModeDoesNotDisableEnforcement:
     async def test_an_unreadable_mode_degrades_to_log_only(self):
         validator = _validator(_flags_raising(EnforcementModeUnavailable("redis down")))
 
-        mode = await validator._get_enforcement_mode()
+        resolved = await validator._get_enforcement_mode()
 
-        assert mode == DEGRADED_ENFORCEMENT_MODE == "log_only"
-        assert mode != "disabled", "an unreachable flag store was read as 'authorization is off' — the #14010 defect"
+        assert resolved.mode == DEGRADED_ENFORCEMENT_MODE == "log_only"
+        assert (
+            resolved.mode != "disabled"
+        ), "an unreachable flag store was read as 'authorization is off' — the #14010 defect"
+        assert resolved.degraded is True, "the degraded resolution is not marked as one (#15159)"
 
     @pytest.mark.asyncio
     async def test_a_missing_flags_service_degrades_to_log_only(self):
         """`feature_flags=None` means construction failed, not that policy is off."""
-        mode = await _validator(None)._get_enforcement_mode()
+        resolved = await _validator(None)._get_enforcement_mode()
 
-        assert mode == DEGRADED_ENFORCEMENT_MODE
-        assert mode != "disabled"
+        assert resolved.mode == DEGRADED_ENFORCEMENT_MODE
+        assert resolved.mode != "disabled"
+        assert resolved.degraded is True
 
     @pytest.mark.asyncio
     async def test_an_unexpected_error_degrades_rather_than_disabling(self):
-        mode = await _validator(_flags_raising(RuntimeError("boom")))._get_enforcement_mode()
+        resolved = await _validator(_flags_raising(RuntimeError("boom")))._get_enforcement_mode()
 
-        assert mode == DEGRADED_ENFORCEMENT_MODE
+        assert resolved.mode == DEGRADED_ENFORCEMENT_MODE
+        assert resolved.degraded is True
 
     @pytest.mark.asyncio
     async def test_the_degrade_is_audible(self, caplog):
@@ -177,7 +189,10 @@ class TestTheDegradedModeStillRunsAndRecordsTheCheck:
 
         # Allowed — log_only does not block, so no request that works today breaks.
         assert result["authorized"] is True
-        assert result["reason"] == "log_only_mode"
+        # The mode is log_only; #15159 marks *this* log_only as one it degraded
+        # into rather than one anybody chose. What it does is unchanged.
+        assert result["reason"] == "log_only_mode_degraded"
+        assert result["enforcement_degraded"] is True
         assert result["actual_owner"] == "alice"
 
         # ...but the check ran and the violation was recorded. Under the pre-fix
@@ -247,6 +262,12 @@ UNDETERMINED_ROUTE_NAMES = frozenset(
 )
 
 
+#: Where the resolver's own warnings are emitted. It moved out of
+#: ``security.session_ownership`` into its own module with #15159; caplog has to
+#: follow it, or every log assertion below silently captures nothing and passes.
+RESOLVER_LOGGER = "security.enforcement_mode"
+
+
 def _validator_for_route(route: str):
     """A validator wired for one of :data:`UNDETERMINED_ROUTES`."""
     failure = UNDETERMINED_ROUTES[route]
@@ -261,7 +282,7 @@ async def _records_from(validator, caplog) -> list[logging.LogRecord]:
     could not tell "logged nothing" from "logged the same thing one level down".
     """
     caplog.clear()
-    with caplog.at_level(logging.DEBUG, logger="security.session_ownership"):
+    with caplog.at_level(logging.DEBUG, logger=RESOLVER_LOGGER):
         await validator._get_enforcement_mode()
     return list(caplog.records)
 
