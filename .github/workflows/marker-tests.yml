@@ -339,6 +339,23 @@ jobs:
             --min-passed slm=0 \
             --min-passed infra=10
 
+      # The floor above is judged per INVOCATION, and an invocation names
+      # several roots, so it is cleared by whichever root still works. With
+      # `autobot-infrastructure/shared/tests` collecting nothing,
+      # `--min-collected 1` and `--min-passed infra=10` are both satisfied by
+      # `libs` alone and the infra report is green over a root contributing zero
+      # — measured, not assumed (#15161).
+      #
+      # This step asks the one question that floor cannot: does pytest reach ANY
+      # test under each named root? Collection, not selection — `-m "integration
+      # or slow or ..."` legitimately matches nothing under `tools` or
+      # `scripts`, but a root that collects nothing at all is never legitimate.
+      # Roots are derived from this file, so a root added above is checked the
+      # moment it is added and none is listed twice.
+      - name: Every named pytest root must collect something
+        if: ${{ !cancelled() }}
+        run: python pipeline-scripts/pytest_root_collection_floor.py
+
       - name: Upload marker reports
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
