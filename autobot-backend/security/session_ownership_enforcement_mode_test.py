@@ -129,9 +129,16 @@ class TestTheFlagStoreReportsFailureInsteadOfInventingAnAnswer:
             await flags.get_enforcement_mode()
 
     @pytest.mark.asyncio
-    async def test_an_unset_flag_still_means_disabled(self):
-        """The default posture is a separate decision (#14010 step 2) — untouched."""
-        from services.feature_flags import FeatureFlags
+    async def test_an_unset_flag_no_longer_means_disabled(self):
+        """#14866 made the default posture the decision this deferred (#14010 step 2).
+
+        An unset key resolved to `disabled`, so `validate_ownership` took the
+        fast path and returned before the ownership lookup -- on every install,
+        because nothing had ever written the key. It now resolves to the same
+        posture provisioning seeds, which runs every check and audits every
+        violation without refusing a request that succeeds today.
+        """
+        from services.feature_flags import PROVISIONED_ENFORCEMENT_MODE_DEFAULT, FeatureFlags
 
         redis = MagicMock()
         redis.get = AsyncMock(return_value=None)
@@ -139,7 +146,8 @@ class TestTheFlagStoreReportsFailureInsteadOfInventingAnAnswer:
         flags._get_redis = AsyncMock(return_value=redis)
         flags._enforcement_default_logged = False
 
-        assert await flags.get_enforcement_mode() == EnforcementMode.DISABLED
+        assert await flags.get_enforcement_mode() == PROVISIONED_ENFORCEMENT_MODE_DEFAULT
+        assert PROVISIONED_ENFORCEMENT_MODE_DEFAULT != EnforcementMode.DISABLED
 
 
 class TestTheDegradedModeStillRunsAndRecordsTheCheck:
