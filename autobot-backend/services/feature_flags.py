@@ -161,11 +161,10 @@ class FeatureFlags(AsyncRedisClientMixin):
         self._enforcement_default_logged = False
 
     async def get_enforcement_mode(self) -> EnforcementMode:
-        """
-        Get current access control enforcement mode
+        """Current access control enforcement mode.
 
-        Returns:
-            EnforcementMode enum value
+        An absent key resolves to :data:`PROVISIONED_ENFORCEMENT_MODE_DEFAULT`,
+        the same posture the provisioning seeder writes (#14866).
         """
         try:
             redis = await self._get_redis()
@@ -177,13 +176,20 @@ class FeatureFlags(AsyncRedisClientMixin):
                     mode_str = mode_str.decode()
                 return EnforcementMode(mode_str)
 
-            # Default to DISABLED if not set (log once at INFO, then DEBUG)
+            # Two statements of one default that disagree is how this control
+            # came to be off everywhere: the seeder wrote log_only, the reader
+            # read nothing as "off", so an install provisioning never reached
+            # was indistinguishable from one deliberately disabled. log_only
+            # blocks nothing -- it audits.
             if not self._enforcement_default_logged:
-                logger.info("Enforcement mode not set, defaulting to DISABLED")
+                logger.info(
+                    "Enforcement mode not set; using the provisioned default %s",
+                    PROVISIONED_ENFORCEMENT_MODE_DEFAULT.value,
+                )
                 self._enforcement_default_logged = True
             else:
-                logger.debug("Enforcement mode not set, using default DISABLED")
-            return EnforcementMode.DISABLED
+                logger.debug("Enforcement mode not set, using default %s", PROVISIONED_ENFORCEMENT_MODE_DEFAULT.value)
+            return PROVISIONED_ENFORCEMENT_MODE_DEFAULT
 
         except Exception as e:
             # NOT a fail-safe: this is an authorization control, and returning

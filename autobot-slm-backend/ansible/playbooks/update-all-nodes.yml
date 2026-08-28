@@ -911,6 +911,23 @@
       when: "'backend' in group_names"
       tags: [backend, systemd, unit]
 
+    # #14866: seed the access control enforcement posture on every update.
+    # Provisioning alone is not enough: every host in the fleet was provisioned
+    # before the seeder existed and nothing re-provisions a working box, so
+    # without this play they would sit at the unset key -- resolved as
+    # `disabled` -- forever. Runs BEFORE the restart so the backend comes up
+    # with a posture already in the flag store.
+    #
+    # `tasks_from` per the #12959 delivery contract: enforcement_mode.yml does
+    # no provisioning, only one idempotent SET NX that never overwrites a value
+    # an operator set deliberately.
+    - name: "[PLAY 2] Backend | Provision access control enforcement mode (#14866)"
+      ansible.builtin.include_role:
+        name: access_control
+        tasks_from: enforcement_mode
+      when: "'backend' in group_names"
+      tags: [backend, access-control, enforcement]
+
     - name: "[PLAY 2] Backend | Restart service"
       systemd:
         name: autobot-backend

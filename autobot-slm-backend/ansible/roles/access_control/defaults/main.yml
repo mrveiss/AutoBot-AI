@@ -46,6 +46,14 @@ audit_backends:
 access_control_enforcement_mode: log_only
 access_control_enforcement_seeder: >-
   {{ project_root }}/autobot-infrastructure/shared/scripts/security/seed_enforcement_mode.py
+# The seeder imports services.feature_flags and autobot_shared, so it needs the
+# BACKEND venv, not `{{ project_root }}/venv` -- that path does not exist on a
+# provisioned host (roles/backend installs into
+# `backend_install_dir`/venv = /opt/autobot/autobot-backend/venv). Pointing at
+# the missing one made the task fail on every host, which is this issue's own
+# defect a layer down: the writer is wired in and still never writes.
+access_control_backend_dir: "{{ project_root }}/autobot-backend"
+access_control_enforcement_python: "{{ access_control_backend_dir }}/venv/bin/python"
 
 # Session ownership
 session_ownership_backfill: true

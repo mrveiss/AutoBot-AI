@@ -180,17 +180,33 @@ class TestTheResolvedPostureIsNeverInvented:
             await flags.seed_enforcement_mode()
 
 
-class TestTheSemanticsThisChangeDeliberatelyLeavesAlone:
-    """The decision was "write the flag, keep the semantics". These pin the
-    second half, so a later change cannot flip them by accident."""
+class TestTheReaderAndTheSeederStateOneDefault:
+    """Seeding alone left the two halves disagreeing.
+
+    The seeder writes ``log_only``; the reader read an absent key as
+    ``disabled``. That gap is why the control was off everywhere -- an install
+    provisioning had not reached was indistinguishable from one deliberately
+    turned off, and only the second of those is a decision anybody made. The
+    reader now falls back to the same constant the seeder writes, so "never
+    provisioned" cannot mean "enforcement off".
+    """
 
     @pytest.mark.asyncio
-    async def test_an_unset_flag_still_means_disabled(self):
+    async def test_an_unset_flag_resolves_to_the_provisioned_default(self):
         redis = _FakeRedis()
         flags = _flags(redis)
         flags._enforcement_default_logged = False
 
-        assert await flags.get_enforcement_mode() is EnforcementMode.DISABLED
+        assert await flags.get_enforcement_mode() is PROVISIONED_ENFORCEMENT_MODE_DEFAULT
+
+    @pytest.mark.asyncio
+    async def test_an_unset_flag_no_longer_disables_enforcement(self):
+        """The assertion that would have caught the original defect."""
+        redis = _FakeRedis()
+        flags = _flags(redis)
+        flags._enforcement_default_logged = False
+
+        assert await flags.get_enforcement_mode() is not EnforcementMode.DISABLED
 
     @pytest.mark.asyncio
     async def test_a_provisioned_posture_is_what_the_reader_returns(self):
