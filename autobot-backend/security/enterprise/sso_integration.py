@@ -26,11 +26,11 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_public_key,
 )
 
+from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
-from security.enterprise.config_loading import load_security_config
 
 logger = get_logger(__name__)
 
@@ -142,7 +142,7 @@ class SSOIntegrationFramework:
         success. It now warns and writes nothing; ``self.config_source`` carries
         the same fact for callers.
         """
-        loaded = load_security_config(self.config_path, self._get_default_config, "SSO")
+        loaded = load_config_file(self.config_path, self._get_default_config, "SSO")
         self.config_source = loaded.source
         self.config_searched_path = loaded.searched_path
         return loaded.values
