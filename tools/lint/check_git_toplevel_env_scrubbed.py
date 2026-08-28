@@ -40,11 +40,37 @@ SCOPE, AND WHAT IS DELIBERATELY NOT SCOPED
   mean two rules wearing one name. Recorded here rather than silently omitted.
 * **The call, not the string.** Only ``subprocess`` calls are inspected, so
   prose that names the flag — this docstring included — is not a finding and
-  needs no allowlist entry.
+  needs no allowlist entry. The name ``subprocess`` is bound to is resolved
+  from the file's own imports, so ``import subprocess as sp`` and
+  ``from subprocess import run`` are both caught.
 * **``git ls-files`` is not gated**, though the same inherited ``GIT_DIR``
   misleads it. Every current call site passes ``cwd=<root>`` from a root this
   hook already protects, so gating it would flag correct code; the sites fixed
   in #15176 pass ``env=scrubbed_git_env()`` there anyway.
+
+KNOWN GAPS — WHAT THIS DOES **NOT** CATCH
+-----------------------------------------
+Stated because an unstated gap is worse than a stated one: a guard that reads
+as airtight is how the next reader stops checking. Closing these three needs
+dataflow analysis, which is out of proportion to a repository-local lint rule,
+so they are documented and pinned by tests rather than half-implemented.
+
+* **Argv built through a variable.** ``cmd = ["git", "rev-parse",
+  "--show-toplevel"]`` followed by ``subprocess.run(cmd)`` is not reported: the
+  call node's arguments hold a ``Name``, not the string. This is the gap most
+  likely to be reached by accident, since it is an ordinary refactor rather
+  than an evasion.
+* **Wrappers.** A helper that receives the flag from its caller —
+  ``def git(*args): subprocess.run(["git", *args])`` — carries no literal at
+  the call node either.
+* **A shadowed scrub helper.** ``_scrubs`` accepts ``env=`` whose callee is
+  *named* ``scrubbed_git_env``; it does not verify the name resolves to
+  ``autobot_shared.paths``. A locally defined function of that name satisfies
+  it.
+
+The behavioural half of the guard (``repo_tests/git_repo_root_scrub_test.py``)
+covers what static analysis cannot: it runs each real site under an ambient
+``GIT_DIR`` and asserts the answer, whatever shape the call has.
 
 Exit code:
   0 — every ``--show-toplevel`` call scrubs its environment
@@ -56,7 +82,7 @@ from __future__ import annotations
 import ast
 import sys
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Set, Tuple
 
 # tools/lint/ is not a Python package; ensure the sibling helper is importable
 # regardless of invocation mode (script / importlib from tests).
@@ -85,10 +111,39 @@ ALLOWLIST = {
 }
 
 
-def _is_subprocess_call(node: ast.Call) -> bool:
+def subprocess_names(tree: ast.AST) -> Tuple[Set[str], Set[str]]:
+    """``(module aliases, directly imported entry points)`` bound in *tree*.
+
+    Matching the literal ``"subprocess"`` missed two ordinary spellings —
+    ``import subprocess as sp`` and ``from subprocess import run`` — so the
+    binding is read from the file's own imports instead. ``ast.walk`` is used
+    rather than a scan of ``tree.body`` because a ``try:``-guarded or
+    function-local import is still an import.
+
+    ``"subprocess"`` is always in the module set. Seeding it can only produce a
+    finding, never suppress one, and for a guard that is the safe direction to
+    be wrong in.
+    """
+    modules: Set[str] = {"subprocess"}
+    functions: Set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "subprocess":
+                    modules.add(alias.asname or alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module == "subprocess":
+            for alias in node.names:
+                if alias.name in _SUBPROCESS_CALLS:
+                    functions.add(alias.asname or alias.name)
+    return modules, functions
+
+
+def _is_subprocess_call(node: ast.Call, modules: Set[str], functions: Set[str]) -> bool:
     func = node.func
     if isinstance(func, ast.Attribute) and func.attr in _SUBPROCESS_CALLS:
-        return isinstance(func.value, ast.Name) and func.value.id == "subprocess"
+        return isinstance(func.value, ast.Name) and func.value.id in modules
+    if isinstance(func, ast.Name):
+        return func.id in functions
     return False
 
 
@@ -137,9 +192,10 @@ def scan(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
     except SyntaxError:
         # A file that does not parse is another hook's finding, not this one's.
         return []
+    modules, functions = subprocess_names(tree)
     findings: List[Tuple[int, str]] = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or not _is_subprocess_call(node):
+        if not isinstance(node, ast.Call) or not _is_subprocess_call(node, modules, functions):
             continue
         if not _mentions_toplevel(node) or _scrubs(node):
             continue

@@ -12,6 +12,7 @@ judgement: what it flags, what it accepts, and what it deliberately ignores.
 
 from __future__ import annotations
 
+import ast
 import sys
 from pathlib import Path
 
@@ -19,7 +20,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from check_git_toplevel_env_scrubbed import ALLOWLIST, main, scan  # noqa: E402
+from check_git_toplevel_env_scrubbed import (  # noqa: E402
+    ALLOWLIST,
+    main,
+    scan,
+    subprocess_names,
+)
 
 _UNSCRUBBED = """
 import subprocess
@@ -66,6 +72,85 @@ import subprocess
 
 def tracked(root):
     return subprocess.run(["git", "ls-files"], cwd=root).stdout
+"""
+
+
+_ALIASED_MODULE = """
+import subprocess as sp
+
+def root():
+    return sp.run(["git", "rev-parse", "--show-toplevel"]).stdout
+"""
+
+_ALIASED_MODULE_SCRUBBED = """
+import subprocess as sp
+
+from autobot_shared.paths import scrubbed_git_env
+
+def root():
+    return sp.run(["git", "rev-parse", "--show-toplevel"], env=scrubbed_git_env()).stdout
+"""
+
+_FROM_IMPORT = """
+from subprocess import run
+
+def root():
+    return run(["git", "rev-parse", "--show-toplevel"]).stdout
+"""
+
+_FROM_IMPORT_ALIASED = """
+from subprocess import check_output as _co
+
+def root():
+    return _co(["git", "rev-parse", "--show-toplevel"])
+"""
+
+_FROM_IMPORT_SCRUBBED = """
+from subprocess import run
+
+from autobot_shared.paths import scrubbed_git_env
+
+def root():
+    return run(["git", "rev-parse", "--show-toplevel"], env=scrubbed_git_env()).stdout
+"""
+
+_FUNCTION_LOCAL_IMPORT = """
+def root():
+    import subprocess as sp
+
+    return sp.run(["git", "rev-parse", "--show-toplevel"]).stdout
+"""
+
+# --- documented gaps (see the guard's KNOWN GAPS section) --------------------
+
+_VARIABLE_ARGV = """
+import subprocess
+
+CMD = ["git", "rev-parse", "--show-toplevel"]
+
+def root():
+    return subprocess.run(CMD).stdout
+"""
+
+_WRAPPER = """
+import subprocess
+
+def git(*args):
+    return subprocess.run(["git", *args]).stdout
+
+def root():
+    return git("rev-parse", "--show-toplevel")
+"""
+
+_SHADOWED_SCRUB_HELPER = """
+import os
+import subprocess
+
+def scrubbed_git_env():
+    return dict(os.environ)
+
+def root():
+    return subprocess.run(["git", "rev-parse", "--show-toplevel"], env=scrubbed_git_env()).stdout
 """
 
 
@@ -133,3 +218,66 @@ def test_unparseable_neighbours_do_not_crash_the_scan(tmp_path: Path, source: st
     broken = _write(tmp_path, "def (:\n", "broken.py")
     assert scan(broken, tmp_path) == []
     _write(tmp_path, source)
+
+
+@pytest.mark.parametrize(
+    ("label", "source"),
+    [
+        ("import subprocess as sp", _ALIASED_MODULE),
+        ("from subprocess import run", _FROM_IMPORT),
+        ("from subprocess import check_output as _co", _FROM_IMPORT_ALIASED),
+        ("function-local aliased import", _FUNCTION_LOCAL_IMPORT),
+    ],
+)
+def test_the_import_binding_is_resolved_not_matched_literally(tmp_path: Path, label: str, source: str) -> None:
+    """Review finding: matching the literal ``subprocess`` missed these spellings."""
+    assert len(scan(_write(tmp_path, source), tmp_path)) == 1, label
+
+
+@pytest.mark.parametrize("source", [_ALIASED_MODULE_SCRUBBED, _FROM_IMPORT_SCRUBBED])
+def test_the_scrubbed_form_is_accepted_under_every_import_spelling(tmp_path: Path, source: str) -> None:
+    assert scan(_write(tmp_path, source), tmp_path) == []
+
+
+def test_subprocess_names_reads_the_bindings() -> None:
+    modules, functions = subprocess_names(ast.parse(_ALIASED_MODULE))
+    assert modules == {"subprocess", "sp"} and functions == set()
+    modules, functions = subprocess_names(ast.parse(_FROM_IMPORT_ALIASED))
+    assert functions == {"_co"}
+
+
+def test_the_bare_name_stays_covered_when_nothing_imports_it() -> None:
+    """Seeding ``"subprocess"`` can only add a finding, never suppress one."""
+    modules, _ = subprocess_names(ast.parse("x = 1\n"))
+    assert "subprocess" in modules
+
+
+@pytest.mark.parametrize(
+    ("gap", "source"),
+    [
+        ("argv built through a variable", _VARIABLE_ARGV),
+        ("flag supplied to a wrapper by its caller", _WRAPPER),
+        ("a locally shadowed scrubbed_git_env", _SHADOWED_SCRUB_HELPER),
+    ],
+)
+def test_documented_gaps_stay_documented(tmp_path: Path, gap: str, source: str) -> None:
+    """These three are NOT reported, and the guard's docstring says so.
+
+    Pinned rather than left implicit: closing them needs dataflow analysis,
+    which is out of proportion here. If a future change starts catching one,
+    this test fails and the KNOWN GAPS section has to be corrected with it —
+    which is the point. The behavioural suite
+    (``repo_tests/git_repo_root_scrub_test.py``) is what actually covers the
+    real sites, whatever shape their calls take.
+    """
+    assert scan(_write(tmp_path, source), tmp_path) == [], gap
+
+
+def test_the_docstring_lists_every_pinned_gap() -> None:
+    """An unstated gap is the defect class this whole backlog exists to fix."""
+    import check_git_toplevel_env_scrubbed as guard
+
+    doc = guard.__doc__ or ""
+    assert "KNOWN GAPS" in doc
+    for phrase in ("through a variable", "Wrappers", "shadowed scrub helper"):
+        assert phrase in doc, phrase
