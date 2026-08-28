@@ -117,7 +117,6 @@
 2|other|autobot-backend/api/anthropic_compat.py|"system"
 2|other|autobot-backend/api/auth.py|"user"
 1|other|autobot-backend/api/batch_jobs.py|30
-1|other|autobot-backend/api/browser_mcp.py|https://github.com.evil.example/
 10|other|autobot-backend/api/chat.py|"assistant"
 1|other|autobot-backend/api/chat.py|"user"
 1|other|autobot-backend/api/chat_compare.py|"user"
