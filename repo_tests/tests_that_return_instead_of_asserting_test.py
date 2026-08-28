@@ -67,6 +67,42 @@ Measured on this branch, each derived from the code rather than from a list:
 * a bare ``return`` and an explicit ``return None`` — pytest does not warn on
   either, because neither returns a value.
 
+WHEN AN ASSERT DOES NOT COUNT AS PROTECTION (#15195)
+----------------------------------------------------
+A test that asserts as well as returns is exempt, because it can still fail.
+That held only while an ``assert`` which is PRESENT was an ``assert`` which can
+FIRE, and for one very common shape it is not::
+
+    def test_thing():
+        try:
+            assert cache.get("k") == "v"
+            return True
+        except Exception:
+            return False
+
+``except Exception`` catches ``AssertionError``. The assertion is inert, the
+function returns on both branches, and the test cannot fail whichever way it
+goes — while reading as defended to a sweep that only looked for the node. Nine
+of the ten functions in #15189 were exactly this, and this guard passed over
+every one of them for as long as the file existed.
+
+So the exemption is now spent only on assertions that can reach pytest. An
+``assert`` or ``raise`` is discounted when it sits in the ``try`` body of a
+``try`` whose handler catches ``Exception``, ``BaseException`` or
+``AssertionError`` and neither re-raises nor calls a pytest outcome
+(``fail``/``exit``/``skip``/``xfail``). The rule is deliberately narrow in three
+directions, because a guard that over-flags is a guard somebody switches off:
+
+* a handler naming a specific non-assertion exception (``except ValueError``)
+  protects nothing away and is not counted;
+* ``else`` and ``finally`` clauses, and the handler bodies themselves, are not
+  covered by that try's own handlers, so assertions there stay live;
+* the ownership rule is unchanged — a nested helper's swallow is the helper's.
+
+The same machinery drives ``_SWALLOWED_ASSERTIONS``, a second down-only ceiling
+covering the general form: an inert assertion in a test that does NOT return a
+value. The ceiling on returns cannot see those, and there are nine of them.
+
 THE RATCHET
 -----------
 Keyed on the top-level tree, never on a filename: an exemption keyed on a path
@@ -182,12 +218,66 @@ _KNOWN_OFFENDERS = {
     # `test_migrated_files_import`, whose body was `pass` plus prints with no
     # assert at all, was ever counted (2 returns, lines 281 and 288).
     #
-    # So this guard is blind to an assert that cannot fire. That gap is #15195;
-    # it is not fixed here, and this number is the measured population under the
-    # rules as they stand today.
-    "autobot-backend": (71, 18000),
-    "autobot-infrastructure": (121, 250),
+    # So this guard is blind to an assert that cannot fire. That gap is #15195.
+    #
+    # 71 -> 86 and 121 -> 127 with #15195: A DELIBERATE RE-MEASUREMENT, NOT A
+    # RATCHET VIOLATION, AND THE ONLY ONE THIS FILE SANCTIONS.
+    #
+    # The ceilings above are down-only against a FIXED definition of the defect.
+    # #15195 changed the definition: an assertion neutralised by a handler that
+    # catches AssertionError no longer buys the assert/raise exemption, because
+    # such a test cannot fail — which is the whole subject of this sweep. The
+    # population did not grow; the detector stopped missing part of it. Nothing
+    # was written, nothing regressed, and no offending line is new.
+    #
+    # The distinction that keeps this from being a loophole: a re-baseline is
+    # legitimate only when the sweep is made STRICTER and the delta is
+    # enumerated. Both hold here. The 21 newly-counted returns are 8 functions
+    # in 3 files, every one of them pre-existing:
+    #
+    #   autobot-backend/config/config_consolidation_p2_test.py        11 returns
+    #     (test_config_consolidation — ten `try: assert…/except Exception:
+    #      return False` sections in one function)
+    #   autobot-backend/tests/integration/
+    #     test_causal_framework_integration.py                         4 returns
+    #     (four *_full_pipeline methods that catch AssertionError into a
+    #      scenario report and return it)
+    #   autobot-infrastructure/shared/scripts/test_configuration.py    6 returns
+    #     (three driver functions consumed by the module's own main())
+    #
+    # No previously-counted site stopped being counted (the base set is a strict
+    # subset of the new one, verified site-by-site), and no tree outside this
+    # dict gained an offender — the hard zero below is unmoved. Those 8 are
+    # reported, not converted, under #15189: two of the three files are large
+    # live-service drivers where unwrapping the swallow is its own piece of
+    # work, and half-converting a population is how a ratchet gets stuck.
+    #
+    # A number here may be raised again ONLY on the same terms: the detector got
+    # stricter, and the delta is enumerated in this comment. Fixing tests still
+    # requires no permission at all.
+    "autobot-backend": (86, 18000),
+    "autobot-infrastructure": (127, 250),
     "autobot-npu-worker": (7, 150),
+}
+
+# Test functions holding at least one assertion that cannot fire, per top-level
+# tree, paired with the same population floor as above (#15195).
+#
+# The sibling defect, and the one that made this file blind: an `assert` under a
+# handler catching Exception/BaseException/AssertionError. The ceiling above
+# only sees it when the function ALSO returns a value; this one sees it whether
+# or not it returns, which is what closes the general case. Nine functions
+# today, and every tree not named here is pinned at zero by derivation.
+#
+# Down-only, on the same terms as every other ceiling in this file: there is no
+# sanctioned route to raise one. Wrapping a test's own assertions in
+# `except Exception` is never the right thing to write — if the test is meant to
+# tolerate an error, catch the specific exception it tolerates; if it is meant
+# to report one, `pytest.fail(...)` or `raise` in the handler, both of which
+# this guard already recognises as reporting rather than swallowing.
+_SWALLOWED_ASSERTIONS = {
+    "autobot-backend": (6, 18000),
+    "autobot-infrastructure": (3, 250),
 }
 
 # Floors under the whole population. A sweep that has silently stopped matching
@@ -283,6 +373,103 @@ def _own_nodes(function: ast.AST, wanted: tuple[type, ...]) -> list[ast.AST]:
     return found
 
 
+# ---------------------------------------------------------------------------
+# Is an assertion able to fire? (#15195)
+#
+# The exemption below spares a test that asserts AND returns, on the reasoning
+# that such a test can still fail. That reasoning assumes an ``assert`` which is
+# PRESENT is an ``assert`` which can FIRE. Under a handler that catches
+# ``AssertionError``, it cannot: the assertion is inert, the test cannot fail
+# whichever way it goes, and the sweep built to find tests that cannot fail read
+# it as defended. Nine of the ten functions in #15189 had exactly this shape.
+#
+# So an assertion is counted as protective only when nothing lexically between
+# it and the function boundary would catch what it raises.
+# ---------------------------------------------------------------------------
+
+# Handlers that catch an AssertionError: a bare ``except:``, and any handler
+# naming one of these. ``Exception`` is the one that does the damage in
+# practice, because it is the one people write without meaning to catch a
+# failed assertion.
+_ASSERTION_CATCHING = frozenset({"Exception", "BaseException", "AssertionError"})
+
+# A handler that catches the assertion but turns it back into a verdict is NOT
+# swallowing it. ``raise`` re-raises, an ``assert`` in the handler re-checks,
+# and pytest's outcome calls end the test rather than let it report green.
+# ``skip``/``xfail`` are in the set deliberately: a skipped test is not a
+# passing test, and a guard that over-flags is a guard somebody switches off —
+# which would be worse than the blindness this rule removes.
+_OUTCOME_CALLS = frozenset({"fail", "exit", "skip", "xfail"})
+
+_TRY_NODES: tuple[type, ...] = (
+    (ast.Try, ast.TryStar) if hasattr(ast, "TryStar") else (ast.Try,)
+)
+
+
+def _catches_an_assertion(handler: ast.ExceptHandler) -> bool:
+    """Would this handler catch an ``AssertionError`` raised in the try body?"""
+    if handler.type is None:
+        return True
+    named = handler.type.elts if isinstance(handler.type, ast.Tuple) else [handler.type]
+    for node in named:
+        name = node.attr if isinstance(node, ast.Attribute) else getattr(node, "id", "")
+        if name in _ASSERTION_CATCHING:
+            return True
+    return False
+
+
+def _reports_the_failure(handler: ast.ExceptHandler) -> bool:
+    """Does the handler hand the failure back on, rather than absorb it?"""
+    for node in _own_nodes(handler, (ast.Raise, ast.Assert, ast.Call)):
+        if isinstance(node, (ast.Raise, ast.Assert)):
+            return True
+        func = node.func
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        if name in _OUTCOME_CALLS:
+            return True
+    return False
+
+
+def _swallows_assertions(node: ast.AST) -> bool:
+    """True when this ``try`` neutralises assertions made in its own body."""
+    return any(
+        _catches_an_assertion(handler) and not _reports_the_failure(handler)
+        for handler in getattr(node, "handlers", ())
+    )
+
+
+def _collect_guards(node: ast.AST, swallowed: bool, found: list[ast.AST]) -> None:
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        return
+    if isinstance(node, (ast.Assert, ast.Raise)):
+        if not swallowed:
+            found.append(node)
+        return
+    if isinstance(node, _TRY_NODES):
+        inside = swallowed or _swallows_assertions(node)
+        for child in node.body:
+            _collect_guards(child, inside, found)
+        # ``else``, ``finally`` and the handler bodies are NOT covered by this
+        # try's own handlers — anything raised there propagates — so they keep
+        # whatever protection state the enclosing scope had.
+        for child in (*node.handlers, *node.orelse, *node.finalbody):
+            _collect_guards(child, swallowed, found)
+        return
+    for child in ast.iter_child_nodes(node):
+        _collect_guards(child, swallowed, found)
+
+
+def _propagating_guards(function: ast.AST) -> list[ast.AST]:
+    """``assert``/``raise`` owned by ``function`` that can actually reach pytest.
+
+    Same ownership rule as ``_own_nodes``: a nested definition owns its own.
+    """
+    found: list[ast.AST] = []
+    for child in ast.iter_child_nodes(function):
+        _collect_guards(child, False, found)
+    return found
+
+
 def _is_fixture(function: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     for decorator in function.decorator_list:
         node = decorator.func if isinstance(decorator, ast.Call) else decorator
@@ -313,7 +500,12 @@ def _offending_returns(tree: ast.Module) -> list[tuple[str, int]]:
         # separate contract: several drivers in this repo sum truthiness over
         # `result = test_func()`, so a bare assert there leaves a passing test
         # counted as failed. Both are needed, and neither is an offence (#14920).
-        if _own_nodes(function, (ast.Assert, ast.Raise)):
+        #
+        # The exemption is spent only on assertions that can actually FIRE. One
+        # sitting under a handler that catches AssertionError is inert, and a
+        # test whose only assertions are inert cannot fail — which is precisely
+        # the population this sweep exists to count (#15195).
+        if _propagating_guards(function):
             continue
         for node in _own_nodes(function, (ast.Return,)):
             value = node.value
@@ -321,6 +513,42 @@ def _offending_returns(tree: ast.Module) -> list[tuple[str, int]]:
                 continue
             found.append((function.name, node.lineno))
     return found
+
+
+def swallowed_assertions(source: str) -> list[tuple[str, int]]:
+    """``(test name, line)`` for every test holding an assertion that cannot fire.
+
+    The general form of the #15195 defect, independent of whether the function
+    also returns a value. Driven from source text for the same reason
+    ``offending_returns`` is: a detector only ever pointed at the live tree
+    cannot be distinguished from one that has stopped detecting.
+    """
+    return _swallowed_assertions(ast.parse(source))
+
+
+def _swallowed_assertions(tree: ast.Module) -> list[tuple[str, int]]:
+    found: list[tuple[str, int]] = []
+    for function in _collectable_tests(tree):
+        if _is_fixture(function):
+            continue
+        live = {id(node) for node in _propagating_guards(function)}
+        inert = [
+            node
+            for node in _own_nodes(function, (ast.Assert,))
+            if id(node) not in live
+        ]
+        if inert:
+            found.append((function.name, inert[0].lineno))
+    return found
+
+
+def _swallowed_by_tree() -> dict[str, list[str]]:
+    counts: dict[str, list[str]] = {}
+    for module in _test_modules():
+        relative = module.relative_to(_REPO_ROOT)
+        for name, line in _swallowed_assertions(_parse_module(module)):
+            counts.setdefault(relative.parts[0], []).append(f"{relative}:{line} {name}")
+    return counts
 
 
 def _offenders_by_tree() -> dict[str, list[str]]:
@@ -445,6 +673,199 @@ def test_the_known_offender_budgets_only_ever_shrink() -> None:
     )
 
 
+def test_no_test_smothers_its_own_assertions_under_a_swallowing_handler() -> None:
+    """The general case of #15195, whether or not the function also returns.
+
+    A ``try`` whose handler catches ``Exception``/``BaseException``/
+    ``AssertionError`` and neither re-raises nor calls a pytest outcome absorbs
+    the ``AssertionError`` its own body raises. Every assertion in that body is
+    decoration: the test reports green on the failing branch and on the passing
+    one alike. Nine functions carry that shape today; every other tree is pinned
+    at zero by derivation, so the tenth fails on arrival.
+
+    Down-only, and no route up. If the test is meant to tolerate an error, name
+    the exception it tolerates; if it is meant to report one, ``pytest.fail`` or
+    ``raise`` in the handler — both are read as reporting, not swallowing.
+    """
+    swallowed = _swallowed_by_tree()
+    populations = _test_functions_by_tree()
+
+    collapsed = {
+        tree: (populations.get(tree, 0), floor)
+        for tree, (_, floor) in _SWALLOWED_ASSERTIONS.items()
+        if populations.get(tree, 0) < floor
+    }
+    assert not collapsed, (
+        "the sweep no longer finds the tests it is supposed to be scanning "
+        f"(found, floor): {collapsed}. Fix the sweep; do NOT lower these numbers."
+    )
+
+    surprises = {
+        tree: sites
+        for tree, sites in swallowed.items()
+        if tree not in _SWALLOWED_ASSERTIONS
+    }
+    detail = "\n".join(
+        f"  {tree}:\n    " + "\n    ".join(sorted(sites))
+        for tree, sites in sorted(surprises.items())
+    )
+    assert not surprises, (
+        "these tests assert inside a `try` whose handler swallows the "
+        f"AssertionError, in a tree that was clean:\n{detail}\n"
+        "The assertion cannot fire, so the test passes whichever way it goes. "
+        "Catch the specific exception the test tolerates, or re-raise / "
+        "pytest.fail in the handler (#15195)."
+    )
+
+    over = {
+        tree: (len(swallowed.get(tree, [])), budget)
+        for tree, (budget, _) in _SWALLOWED_ASSERTIONS.items()
+        if len(swallowed.get(tree, [])) > budget
+    }
+    assert not over, (
+        "these trees gained a test whose assertions cannot fire "
+        f"(actual, budget): {over}. The budgets are ceilings and there is no "
+        "route to raise one (#15195)."
+    )
+    drained = sorted(tree for tree in _SWALLOWED_ASSERTIONS if not swallowed.get(tree))
+    assert not drained, (
+        f"{drained} no longer smother any assertion — delete the entry from "
+        "_SWALLOWED_ASSERTIONS so the tree is pinned at zero by derivation."
+    )
+    spent = {
+        tree: (len(swallowed.get(tree, [])), budget)
+        for tree, (budget, _) in _SWALLOWED_ASSERTIONS.items()
+        if len(swallowed.get(tree, [])) < budget
+    }
+    assert not spent, (
+        "these trees are now BELOW their recorded budget (actual, budget): "
+        f"{spent}. Lower the number here in the same commit."
+    )
+
+
+def test_an_assertion_under_a_swallowing_handler_does_not_count_as_protection() -> None:
+    """#15195, both directions — it must catch the swallow and spare the rest.
+
+    The second half matters more than the first. A guard that over-flags a
+    legitimate ``try``/``except`` gets switched off, and a switched-off guard is
+    worse than the blind spot this rule closes.
+    """
+    swallowing = (
+        "def test_a():\n"
+        "    try:\n"
+        "        assert 1 == 2, 'nope'\n"
+        "        return True\n"
+        "    except Exception:\n"
+        "        return False\n"
+    )
+    assert sorted(offending_returns(swallowing)) == [("test_a", 4), ("test_a", 6)], (
+        "an assert under `except Exception` is inert — the test cannot fail, "
+        "which is exactly this sweep's subject (#15195)"
+    )
+    assert swallowed_assertions(swallowing) == [("test_a", 3)]
+
+    for name, catcher in (
+        ("BaseException", "except BaseException:"),
+        ("AssertionError", "except AssertionError:"),
+        ("a bare except", "except:"),
+        ("a tuple naming Exception", "except (ValueError, Exception):"),
+        ("an aliased handler", "except Exception as exc:"),
+    ):
+        source = (
+            "def test_a():\n"
+            "    try:\n"
+            "        assert False\n"
+            "        return True\n"
+            f"    {catcher}\n"
+            "        return False\n"
+        )
+        assert offending_returns(source), f"{name} swallows AssertionError too"
+
+    # ---- the counter-cases: these must NOT be flagged --------------------
+    reraises = (
+        "def test_a():\n"
+        "    try:\n"
+        "        assert False\n"
+        "        return True\n"
+        "    except Exception:\n"
+        "        raise\n"
+    )
+    assert not offending_returns(reraises), "a handler that re-raises protects nothing away"
+    assert not swallowed_assertions(reraises)
+
+    specific = (
+        "def test_a():\n"
+        "    try:\n"
+        "        assert False\n"
+        "        return True\n"
+        "    except ValueError:\n"
+        "        return False\n"
+    )
+    assert not offending_returns(specific), (
+        "except ValueError does not catch AssertionError; flagging it would make "
+        "this guard something a reviewer switches off"
+    )
+    assert not swallowed_assertions(specific)
+
+    reports = (
+        "import pytest\n\n\n"
+        "def test_a():\n"
+        "    try:\n"
+        "        assert False\n"
+        "        return True\n"
+        "    except Exception as exc:\n"
+        "        pytest.fail(str(exc))\n"
+    )
+    assert not offending_returns(reports), "pytest.fail ends the test; it does not absorb it"
+    assert not swallowed_assertions(reports)
+
+    # Only the `try` body is covered by its own handlers.
+    for clause, body in (("else", "    else:\n"), ("finally", "    finally:\n")):
+        source = (
+            "def test_a():\n"
+            "    try:\n"
+            "        pass\n"
+            "    except Exception:\n"
+            "        pass\n"
+            f"{body}"
+            "        assert False\n"
+            "        return True\n"
+        )
+        assert not offending_returns(source), (
+            f"an assert in `{clause}` is not caught by that try's own handlers"
+        )
+
+    # Nesting: an inner handler that re-raises does not undo an outer swallow.
+    nested = (
+        "def test_a():\n"
+        "    try:\n"
+        "        try:\n"
+        "            assert False\n"
+        "        except ValueError:\n"
+        "            raise\n"
+        "        return True\n"
+        "    except Exception:\n"
+        "        return False\n"
+    )
+    assert offending_returns(nested), "the outer bare except still eats the AssertionError"
+
+    # Ownership is unchanged: a nested definition owns its own swallow.
+    helper = (
+        "def test_a():\n"
+        "    def helper():\n"
+        "        try:\n"
+        "            assert False\n"
+        "        except Exception:\n"
+        "            pass\n"
+        "\n"
+        "    assert helper() is None\n"
+        "    return True\n"
+    )
+    assert not offending_returns(helper), (
+        "the enclosing test's own assert is live; the helper's is the helper's"
+    )
+
+
 def test_the_detector_finds_a_planted_return_and_spares_the_legitimate_ones() -> None:
     """Self-test. Every exclusion branch is exercised, not merely written down."""
     assert offending_returns("def test_a():\n    return False\n") == [("test_a", 2)]
@@ -482,6 +903,20 @@ def test_the_detector_finds_a_planted_return_and_spares_the_legitimate_ones() ->
     assert offending_returns(
         "def test_c():\n    return True\n"
     ), "a test whose return is its ONLY verdict is still an offence"
+
+    # #15195 narrowed that exemption to assertions which can actually fire. The
+    # driver shape it exists to protect must survive the narrowing, including
+    # when the driver guards itself against a specific error it tolerates —
+    # `except ValueError` does not catch an AssertionError, so the assert below
+    # still propagates and the return is still a separate driver contract.
+    assert not offending_returns(
+        "def test_a():\n"
+        "    try:\n"
+        "        assert True\n"
+        "        return True\n"
+        "    except ValueError:\n"
+        "        return False\n"
+    ), "a handler naming a non-assertion exception leaves the assert able to fire"
 
 
 def test_an_unparseable_swept_file_fails_loudly_instead_of_reading_as_clean() -> None:
