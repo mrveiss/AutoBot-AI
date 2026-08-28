@@ -39,6 +39,7 @@ from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
+from constants.threshold_constants import CategoryDefaults
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
@@ -380,8 +381,8 @@ class ChatKnowledgeManager:
                 "compilation_date": datetime.now(tz=timezone.utc).isoformat(),
                 "message_stats": {
                     "total": len(messages),
-                    "user": len([m for m in messages if m.get("role") == "user"]),
-                    "assistant": len([m for m in messages if m.get("role") == "assistant"]),
+                    "user": len([m for m in messages if m.get("role") == CategoryDefaults.ROLE_USER]),
+                    "assistant": len([m for m in messages if m.get("role") == CategoryDefaults.ROLE_ASSISTANT]),
                 },
             },
         }
@@ -416,7 +417,7 @@ class ChatKnowledgeManager:
 
         messages = chat_history["messages"]
         if not include_system_messages:
-            messages = [m for m in messages if m.get("role") != "system"]
+            messages = [m for m in messages if m.get("role") != CategoryDefaults.ROLE_SYSTEM]
 
         summary_prompt = """
         Summarize this conversation into a comprehensive knowledge base entry.
@@ -428,7 +429,9 @@ class ChatKnowledgeManager:
         Format the summary with clear sections and bullet points.
         """
 
-        summary_response = await self.llm_interface.chat(messages=[{"role": "user", "content": summary_prompt}])
+        summary_response = await self.llm_interface.chat(
+            messages=[{"role": CategoryDefaults.ROLE_USER, "content": summary_prompt}]
+        )
         summary = summary_response.content
 
         context = self.chat_contexts.get(chat_id)
