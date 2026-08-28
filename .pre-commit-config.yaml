@@ -276,6 +276,20 @@ repos:
         stages: [pre-commit]
         description: "A ${AUTOBOT_*_PORT:-N} fallback that disagrees with ssot_config.py points at the wrong service whenever the shell library fails to load"
 
+      # #15176: six guards resolved the repository root with `git rev-parse
+      # --show-toplevel` and no scrub of the git environment. A hook exports
+      # GIT_DIR and no GIT_WORK_TREE, so git calls the caller's CWD the work
+      # tree and the flag answers with the CWD -- silently. Three of the six
+      # were hook entries; two of those printed their success line having
+      # inspected nothing, one of them over a deliberately planted violation.
+      - id: git-toplevel-env-scrubbed
+        name: "Asking git for the repo root must scrub GIT_DIR first (#15176)"
+        entry: tools/lint/check_git_toplevel_env_scrubbed.py
+        language: python
+        files: \.py$
+        stages: [pre-commit]
+        description: "An inherited GIT_DIR makes --show-toplevel answer with the caller's CWD; resolve the root with autobot_shared.paths.git_repo_root()"
+
       # #14228: autobot-backend/requirements.txt ends with `-r ../requirements.txt`,
       # so pip sees both files as one set and aborts when the same distribution
       # arrives with different specifiers. openpyxl and python-pptx did exactly
