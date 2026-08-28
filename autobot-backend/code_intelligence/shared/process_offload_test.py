@@ -22,6 +22,22 @@ just runs late. Latency does discriminate, and reproducibly:
 against a 5 ms request. That per-wakeup tax, compounded across every await in a
 request, is how a 25 ms endpoint became a 12 s one. Everything else here is a
 property of the plumbing — this is the property the issue is about.
+
+HOW THE TAX IS MEASURED (#15221). Both numbers above were once also checked
+against a wall-clock ceiling — ``in_process < 0.005 * 1.5``. A 7.5 ms ceiling on
+a 5 ms heartbeat leaves 1.5x headroom on a machine that is also the CI runner,
+and it failed at 50.6 ms on a PR whose entire diff was two session-ownership test
+files. Its own message read "something is still contending for this process",
+which on a shared runner is both the regression it guards and the ordinary
+weather: the two are indistinguishable through an absolute clock.
+
+The replacement is the heartbeat's delay against ITS OWN idle baseline — the
+same 5 ms sleep, on the same loop, in windows either side of the scan. #15207's
+CPU work unit does not transfer here: timed during the scan it is starved by the
+very contention under test and the signal cancels, and timed outside it swung
+1.43-3.27 ms across six samples on this host, a wider spread than the 2x signal.
+The idle baseline held to within 1.4% over the same samples. See
+``assert_within_baseline_ratio``.
 """
 
 from __future__ import annotations
@@ -29,9 +45,11 @@ from __future__ import annotations
 import asyncio
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
+from autobot_shared.perf_work_budget import assert_within_baseline_ratio, recording_work_units
 from code_intelligence.shared import process_offload
 from code_intelligence.shared.process_offload import (
     run_directory_scan,
@@ -92,6 +110,33 @@ class _Boom:
         raise RuntimeError("scan exploded in the child")
 
 
+#: The heartbeat's requested interval. CPython's default GIL switch interval is
+#: also 5 ms, and that is the tax the in-thread path adds to each wakeup.
+_HEARTBEAT_SECONDS = 0.005
+
+#: Quiet loop either side of the scan, whose ticks form the baseline. Two windows
+#: rather than one because they BRACKET the measurement in time: a slow drift in
+#: runner load then lands on baseline and measurement alike instead of on one.
+_IDLE_BASELINE_WINDOW_SECONDS = 0.3
+
+#: Fewest ticks a window may contribute before its median describes anything.
+_MIN_TICKS_PER_WINDOW = 10
+
+#: How far the heartbeat may drift above its own idle baseline while a scan runs
+#: in another process. Measured over three runs on the #15221 host: 1.009, 1.016
+#: and 1.023 offloaded, against 2.006, 2.015 and 2.024 with the scan forced
+#: in-thread. 1.5 clears the highest offloaded reading by 47% and still fails the
+#: in-thread regression by a third. Ratchet DOWN as runs report lower — never up.
+_TICK_BUDGET_VS_IDLE = 1.5
+
+
+@pytest.fixture(autouse=True)
+def _record_perf(record_property):
+    """#15055: send the measurement to the junit XML, green runs included."""
+    with recording_work_units(record_property):
+        yield
+
+
 @pytest.fixture(autouse=True)
 async def _fresh_pool():
     """Each test gets a pool it can break without affecting the next."""
@@ -149,34 +194,81 @@ async def test_semantic_analysis_is_off_in_the_child():
     assert captured["exclude_patterns"] == ["venv"]
 
 
-async def _median_tick_delay_during_scan(force_thread: bool) -> float:
-    """Median time a 5 ms heartbeat actually takes while a GIL-bound scan runs."""
+class _TickLatency(NamedTuple):
+    """A heartbeat's median wakeup delay, with a scan in flight and without."""
+
+    busy_ms: float
+    idle_ms: float
+    busy_ticks: int
+    idle_ticks: int
+    pool_unavailable: str | None
+
+
+def _median_ms(samples: list[float]) -> float:
+    ordered = sorted(samples)
+    return ordered[len(ordered) // 2] * 1000.0
+
+
+async def _tick_latency_during_scan(force_thread: bool) -> _TickLatency:
+    """Time a 5 ms heartbeat while a GIL-bound scan runs, and on the quiet loop.
+
+    The idle windows are the yardstick: the same quantity as the measurement,
+    on the same loop in the same process, taken a fraction of a second either
+    side of it, differing only in whether a scan was in flight. Runner load
+    raises both terms and the ratio falls back toward 1.0, so a busy machine
+    makes the caller's budget more conservative rather than more likely to fire.
+    """
     await shutdown_scan_pool()
     process_offload._pool_unavailable_reason = "forced for measurement" if force_thread else None
 
     delays: list[float] = []
-    stop = False
+    beating = True
 
     async def heartbeat():
-        while not stop:
+        while beating:
             started = time.monotonic()
-            await asyncio.sleep(0.005)
+            await asyncio.sleep(_HEARTBEAT_SECONDS)
             delays.append(time.monotonic() - started)
+
+    def drain() -> list[float]:
+        taken = list(delays)
+        delays.clear()
+        return taken
 
     beat = asyncio.create_task(heartbeat())
     await asyncio.sleep(0.05)
     await run_directory_scan(_BurnCPU(project_root="/tmp"))  # warm the pool
-    delays.clear()
+
+    drain()
+    await asyncio.sleep(_IDLE_BASELINE_WINDOW_SECONDS)
+    idle = drain()
 
     await run_directory_scan(_BurnCPU(project_root="/tmp"))
+    busy = drain()
 
-    stop = True
+    # Read before the reset below, or the caller's skip guard can never fire: on
+    # a host that forbids process creation the scan quietly runs in-thread and
+    # the comparison would report a regression that is really an environment.
+    unavailable = None if force_thread else process_offload._pool_unavailable_reason
+
+    await asyncio.sleep(_IDLE_BASELINE_WINDOW_SECONDS)
+    idle += drain()
+
+    beating = False
     beat.cancel()
     await shutdown_scan_pool()
     process_offload._pool_unavailable_reason = None
 
-    assert delays, "the heartbeat never ran — measurement is meaningless"
-    return sorted(delays)[len(delays) // 2]
+    assert len(busy) >= _MIN_TICKS_PER_WINDOW, (
+        f"the heartbeat produced {len(busy)} ticks while the scan ran — fewer than "
+        f"{_MIN_TICKS_PER_WINDOW}, so there is no median to compare and the "
+        "measurement is meaningless"
+    )
+    assert len(idle) >= _MIN_TICKS_PER_WINDOW, (
+        f"the heartbeat produced {len(idle)} ticks on the idle loop — fewer than "
+        f"{_MIN_TICKS_PER_WINDOW}, so there is no baseline to compare against"
+    )
+    return _TickLatency(_median_ms(busy), _median_ms(idle), len(busy), len(idle), unavailable)
 
 
 async def test_a_scan_in_a_process_does_not_delay_the_event_loop():
@@ -191,23 +283,50 @@ async def test_a_scan_in_a_process_does_not_delay_the_event_loop():
     Compared within the test rather than against a fixed threshold, so a loaded
     CI runner shifts both numbers together instead of flaking.
     """
-    in_thread = await _median_tick_delay_during_scan(force_thread=True)
-    in_process = await _median_tick_delay_during_scan(force_thread=False)
+    in_thread = await _tick_latency_during_scan(force_thread=True)
+    in_process = await _tick_latency_during_scan(force_thread=False)
 
-    if process_offload._pool_unavailable_reason:
-        pytest.skip(f"process pool unavailable here: {process_offload._pool_unavailable_reason}")
+    if in_process.pool_unavailable:
+        pytest.skip(f"process pool unavailable here: {in_process.pool_unavailable}")
 
     # Measured ratio is ~0.5; 0.75 leaves headroom while still failing outright
     # if the scan ever stops being isolated.
-    assert in_process < in_thread * 0.75, (
-        f"a scan still delays the event loop: {in_process * 1000:.1f}ms median tick "
-        f"in-process vs {in_thread * 1000:.1f}ms in-thread — expected a clear improvement"
+    assert in_process.busy_ms < in_thread.busy_ms * 0.75, (
+        f"a scan still delays the event loop: {in_process.busy_ms:.1f}ms median tick "
+        f"in-process vs {in_thread.busy_ms:.1f}ms in-thread — expected a clear improvement"
     )
-    # And in absolute terms the loop should be barely taxed at all.
-    assert in_process < 0.005 * 1.5, (
-        f"a 5ms heartbeat took {in_process * 1000:.1f}ms median while a scan ran in "
-        "another process — something is still contending for this process"
+    # And the loop should be barely taxed at all — measured against the ticks it
+    # was serving moments earlier with nothing running, not against a clock.
+    assert_within_baseline_ratio(
+        in_process.busy_ms,
+        in_process.idle_ms,
+        _TICK_BUDGET_VS_IDLE,
+        f"5ms heartbeat during an offloaded scan ({in_process.busy_ticks} ticks "
+        f"vs {in_process.idle_ticks} idle)",
     )
+
+
+async def test_the_responsiveness_budget_cannot_pass_without_a_measurement():
+    """A vacuity probe for the budget above (#15221).
+
+    The failure being guarded against is a budget that goes green because the
+    heartbeat never ran, the scan never started, or a refactor handed the
+    assertion a stub — the same way a wall-clock ceiling passes on an idle box
+    whether or not the code under it works. Every degenerate input must raise.
+    """
+    for measured_ms, baseline_ms, why in [
+        (0.0, 5.0, "a heartbeat that never ticked"),
+        (-1.0, 5.0, "a negative measurement"),
+        (None, 5.0, "no measurement at all"),
+        (5.0, 0.0, "a baseline that never ticked"),
+        (None, None, "neither term measured"),
+    ]:
+        with pytest.raises(AssertionError):
+            assert_within_baseline_ratio(measured_ms, baseline_ms, _TICK_BUDGET_VS_IDLE, why)
+
+    # Positive control, so the probe is not merely watching an assertion that
+    # can never pass: a real pair inside budget still goes green.
+    assert_within_baseline_ratio(5.1, 5.0, _TICK_BUDGET_VS_IDLE, "vacuity-probe control")
 
 
 async def test_run_isolated_forwards_args_and_kwargs():
