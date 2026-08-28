@@ -47,14 +47,14 @@ pytestmark = pytest.mark.performance
 # on top: 3x where the measurement is large and steady (cv of units under ~12%
 # across the five runs), 8x where it is single-digit microseconds and timer
 # granularity rather than load sets the spread, floored at 0.20 units.
-# ONE SITE KEEPS A WIDE BUDGET ON PURPOSE. `Multimodal processor startup` was
-# 315.602 units on run 33156790797 and 177.909 on 33158382218 — a 1.77x swing in
-# the RATIO, not just the milliseconds (466.4ms vs 294.9ms). Calibration cannot
-# normalise that one: the cost is model-file and HF-cache disk I/O, and a
-# CPU-bound yardstick does not track a disk-bound numerator. Its budget is 600,
-# ~1.9x the higher observation. Everything else is CPU-shaped, tracks the unit
-# closely, and is held to 8x its highest observation (3x for the large steady
-# ones). Ratchet DOWN as runs report lower — the only permitted direction.
+# ONE SITE KEEPS A WIDE BUDGET ON PURPOSE. `Multimodal processor startup` read
+# 315.602, 177.909 and 114.306 units on runs 33156790797, 33158382218 and
+# 33161132835 — a 2.76x spread in the RATIO, not merely in the milliseconds.
+# Calibration cannot normalise it: the cost is model-file and HF-cache disk I/O
+# and a CPU-bound yardstick does not track a disk-bound numerator, so its budget
+# is 600, ~1.9x the worst reading. Every other site is CPU-shaped, tracks the
+# unit closely, and is held to 8x its highest observation (3x for the large
+# steady ones). Ratchet DOWN as runs report lower — the only direction allowed.
 
 
 @pytest.fixture(autouse=True)
