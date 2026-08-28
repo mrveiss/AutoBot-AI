@@ -55,6 +55,10 @@ pytestmark = pytest.mark.performance
 # is 600, ~1.9x the worst reading. Every other site is CPU-shaped, tracks the
 # unit closely, and is held to 8x its highest observation (3x for the large
 # steady ones). Ratchet DOWN as runs report lower — the only direction allowed.
+# #15232: `Single multimodal processing` was the same shape and was missed here —
+# it was the one processing benchmark still running `_store_result` live, so it
+# timed SQLite writes. It now mocks storage like its two siblings, which makes it
+# CPU-shaped, and its budget is re-derived at the call site from that measurement.
 
 
 @pytest.fixture(autouse=True)
@@ -171,8 +175,19 @@ class TestSystemPerformanceBenchmarks:
             data="Test processing performance",
         )
 
-        # Mock the context processor for consistent timing
-        with patch.object(processor.context_processor, "process", new_callable=AsyncMock) as mock_process:
+        # Mock the context processor for consistent timing. #15232: `_store_result`
+        # is mocked here too, for the reason its two siblings below already record
+        # under #13162 — it writes the result to the shared SQLite memory database,
+        # so leaving it live made this benchmark measure disk contention rather than
+        # the processing path its name refers to. That is not a gap calibration can
+        # close: a work unit is a slice of pure-Python CPU work (#15055), and a
+        # CPU-bound yardstick does not track a disk-bound numerator, which is the
+        # same limitation `Multimodal processor startup` documents at its budget.
+        # The storage call is still asserted below, off the clock.
+        with (
+            patch.object(processor.context_processor, "process", new_callable=AsyncMock) as mock_process,
+            patch.object(processor, "_store_result", new_callable=AsyncMock) as mock_store,
+        ):
             mock_process.return_value = Mock(
                 success=True,
                 confidence=0.8,
@@ -185,12 +200,21 @@ class TestSystemPerformanceBenchmarks:
 
             result, processing_time = await self.measure_async_execution_time(processor.process(test_input))
 
-            # First-observation ceiling, not a measurement: this is the one
-            # processing benchmark that does NOT mock `_store_result`, so it
-            # writes to the shared SQLite memory database, and the local
-            # interpreter has no torch. Ratchet it DOWN to the reported units.
-            assert_within_work_budget(processing_time, 50.0, "Single multimodal processing")
+            # 20.8 units. DERIVATION in the module header's terms: 17 local runs
+            # with storage mocked read 0.596-1.626 units (was 68.709 unmocked, and
+            # 164.422 on CI run 33161132835), so the highest local observation is
+            # 1.626; x3.2 for the CI conversion the header records = 5.2. HEADROOM
+            # 4x, between the header's two classes on purpose: the numerator is
+            # milliseconds, not the single-digit microseconds that put a site in
+            # the 8x class, but its spread is load-driven at cv ~33% rather than
+            # the under-12% that puts a site in the 3x class. Ratchet DOWN as runs
+            # report lower.
+            assert_within_work_budget(processing_time, 20.8, "Single multimodal processing")
             assert result.success is True
+            # #15232: mocking storage removes it from the clock, not from the
+            # contract. Without this, a change that stopped persisting results
+            # would make the benchmark faster and still pass.
+            mock_store.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_concurrent_processing_performance(self):
