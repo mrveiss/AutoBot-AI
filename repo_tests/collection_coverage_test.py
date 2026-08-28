@@ -41,24 +41,16 @@ that would have caught it, and is now here.
 
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 
 import pytest
 
-
-#: Git variables a hook exports into its child processes. With ``GIT_DIR`` set
-#: and no ``GIT_WORK_TREE``, git treats the *current directory* as the work
-#: tree, so ``rev-parse --show-toplevel`` answers `repo_tests/` rather than the
-#: repository root and every path derived from it is wrong. The pre-push hook
-#: runs this module, so that is a real environment here, not a hypothetical.
-_AMBIENT_GIT_VARS = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE")
-
-
-def _git_env() -> dict[str, str]:
-    """The environment minus whatever git state a calling hook exported."""
-    return {k: v for k, v in os.environ.items() if k not in _AMBIENT_GIT_VARS}
+from autobot_shared.paths import (
+    GitRepoRootUnavailable,
+    git_repo_root,
+    scrubbed_git_env,
+)
 
 
 def project_root() -> Path:
@@ -70,23 +62,20 @@ def project_root() -> Path:
     #13659 stack lands, switching to the canonical resolver removes this
     dependency entirely.
 
+    #15176: the ``GIT_DIR``/``GIT_WORK_TREE`` scrub this module introduced now
+    lives in ``autobot_shared.paths`` — five sibling guards had the same
+    unscrubbed call, and a per-site copy is how that became a family.
+
     The whole module is git-driven — every check enumerates *tracked* files — so
     without git there is nothing to assert rather than something failing. This
     repository ships a `.dockerignore` that strips `.git` from build contexts,
     so a git-less checkout is a real configuration here, not a hypothetical, and
     it must skip rather than raise `CalledProcessError` out of ten tests.
     """
-    out = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        capture_output=True,
-        text=True,
-        cwd=str(Path(__file__).resolve().parent),
-        env=_git_env(),
-        check=False,
-    )
-    if out.returncode != 0:
+    try:
+        return git_repo_root(Path(__file__).resolve().parent)
+    except GitRepoRootUnavailable:
         pytest.skip("not a git checkout — these checks enumerate tracked files")
-    return Path(out.stdout.strip())
 
 
 #: Top-level directories collected by ci.yml's backend pytest invocation.
@@ -193,7 +182,7 @@ def _tracked_test_files_by_pattern() -> dict[str, list[str]]:
             capture_output=True,
             text=True,
             cwd=root,
-            env=_git_env(),
+            env=scrubbed_git_env(),
             check=False,
         )
         matched[pattern] = sorted({line for line in out.stdout.splitlines() if line})
@@ -271,9 +260,7 @@ def test_allowlist_has_no_stale_entries() -> None:
         if not any(p.startswith(f"{prefix}/") for p in files)
     )
 
-    assert not stale, (
-        f"these recorded prefixes match no test file and should be removed: {stale}"
-    )
+    assert not stale, f"these recorded prefixes match no test file and should be removed: {stale}"
 
 
 def test_every_python_files_half_is_recorded_with_a_floor() -> None:
@@ -326,6 +313,4 @@ def test_every_python_files_half_matches_at_depth() -> None:
 @pytest.mark.parametrize("directory", sorted(BACKEND_RUN | SLM_RUN))
 def test_collected_directories_still_exist(directory: str) -> None:
     """A renamed directory would silently stop being collected."""
-    assert (project_root() / directory).is_dir(), (
-        f"{directory} is named in ci.yml's collection list but does not exist"
-    )
+    assert (project_root() / directory).is_dir(), f"{directory} is named in ci.yml's collection list but does not exist"

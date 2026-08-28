@@ -33,6 +33,18 @@ import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
 
+# The scrubbed root resolver lives in ``autobot_shared`` and this script runs
+# from a pre-commit virtualenv that does not have the repository installed, so
+# the import path is bootstrapped from this file's own location -- the one
+# derivation an inherited GIT_DIR cannot confuse (#15176).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from autobot_shared.paths import (  # noqa: E402
+    GitRepoRootUnavailable,
+    git_repo_root,
+    scrubbed_git_env,
+)
+
 _REQ = re.compile(r"([A-Za-z0-9_.\-]+)(\[[^\]]*\])?\s*([<>=!~].*)?$")
 # pip accepts both spellings, and a guard that silently skips one reports clean
 # on a file it never opened (#14228 review).
@@ -40,12 +52,21 @@ _INCLUDE = re.compile(r"^\s*(?:-r|--requirement)[\s=]+(\S+)")
 
 
 def _repo_root() -> Path:
-    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, encoding="utf-8"
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        sys.exit(f"FATAL: cannot locate the repo root: {result.stderr.strip()}")
-    return Path(result.stdout.strip())
+    """Absolute repo root, with the ambient git environment scrubbed first.
+
+    Measured for #15176 before the scrub: run from ``repo_tests/`` with
+    ``GIT_DIR`` exported (which is what a hook hands its children), this
+    resolved the root to ``repo_tests/``. ``git ls-files`` still listed the
+    requirements files, so the empty-scope guard below never fired, but every
+    ``root / rel`` join then pointed at a path that does not exist, ``_closure``
+    skipped each one as "not a file", and the check printed its success line
+    having opened **no requirements file at all** -- with a planted
+    ``openpyxl==3.0.0`` conflict standing.
+    """
+    try:
+        return git_repo_root()
+    except GitRepoRootUnavailable as exc:
+        sys.exit(f"FATAL: cannot locate the repo root: {exc}")
 
 
 def _declarations(path: Path) -> dict[str, tuple[int, str]]:
@@ -93,7 +114,14 @@ def _closure(path: Path) -> list[Path]:
 def conflicts(root: Path) -> list[str]:
     """Every package pinned differently anywhere in one install's requirement set."""
     listing = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "*requirements*.txt"], cwd=str(root), capture_output=True, text=True, encoding="utf-8"
+        ["git", "ls-files", "*requirements*.txt"],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        # Same scrub as the root: an inherited GIT_DIR would enumerate one
+        # checkout's index while *root* names another (#15176).
+        env=scrubbed_git_env(),
     )
     if listing.returncode != 0:
         sys.exit(f"FATAL: git ls-files failed: {listing.stderr.strip()}")
@@ -130,8 +158,7 @@ def conflicts(root: Path) -> list[str]:
                     continue
                 reported.add(key)
                 found.append(
-                    f"{name}: {first[0]}:{first[1]}: '{first[2]}' "
-                    f"conflicts with {site[0]}:{site[1]}: '{site[2]}'"
+                    f"{name}: {first[0]}:{first[1]}: '{first[2]}' " f"conflicts with {site[0]}:{site[1]}: '{site[2]}'"
                 )
     return found
 
@@ -143,7 +170,9 @@ def main(argv: list[str] | None = None) -> int:
 
     found = conflicts(_repo_root())
     if not found:
-        print("check-requirements-dupes: no package is pinned differently within any install's requirement set")  # noqa: print
+        print(
+            "check-requirements-dupes: no package is pinned differently within any install's requirement set"
+        )  # noqa: print
         return 0
 
     print(f"check-requirements-dupes: {len(found)} conflicting duplicate(s)\n")  # noqa: print

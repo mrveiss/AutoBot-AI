@@ -17,6 +17,7 @@ from autobot_shared.paths import (
     is_checkout_root,
     project_root,
     resolve_project_root,
+    scrubbed_git_env,
 )
 
 
@@ -208,7 +209,17 @@ class TestRealGitWorktree:
             check=True,
             capture_output=True,
             text=True,
-            env={**os.environ, "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"},
+            # scrubbed_git_env, not os.environ: the pre-push hook runs this
+            # suite with GIT_DIR pointing at the worktree it is pushing, and
+            # `git init`/`git commit` in *this* fixture then operate on that
+            # repository instead of the temporary one. Both tests in this class
+            # failed that way from a worktree, which is every checkout here
+            # (#15176).
+            env={
+                **scrubbed_git_env(),
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+                "GIT_CONFIG_SYSTEM": "/dev/null",
+            },
         )
 
     def _build_main_tree(self, tmp_path: Path) -> Path:
