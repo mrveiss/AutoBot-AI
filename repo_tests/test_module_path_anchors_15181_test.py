@@ -42,6 +42,24 @@ WHAT IS DELIBERATELY NOT CHECKED, AND WHY
   false failures that train people to add allowlist entries.
 * ``os.path.dirname(__file__)`` chains. None exist in a test module today; the
   ``Path`` form is the one the codebase uses and the one the defect appeared in.
+
+UNPARSEABLE IS AN UNKNOWN, NOT AN ABSENCE
+-----------------------------------------
+This sweep's whole claim is that it PARSES rather than imports, so it reaches
+modules hidden behind a collection error. A module too broken to parse is
+therefore the case most likely to be hiding a bad anchor — and it is the one case
+a ``except SyntaxError: return []`` would silently score as clean, contributing
+zero anchors and passing. That is #15202 item 3 reproduced inside the guard
+written to answer it, and #14975 already settled the precedent the other way: a
+file the size gate could not read became a violation, not a pass.
+
+So ``_file_anchors`` raises and ``_sweep`` records the module in a second list,
+which ``test_no_test_module_is_unreadable_by_the_sweep`` fails on. Measured on
+the branch that added this file: 0 unreadable of 1995 modules, so failing loudly
+costs nothing today. ``KNOWN_UNPARSEABLE`` exists as the same down-only escape
+hatch as ``KNOWN_UNRESOLVED`` and is deliberately empty — an entry there is a
+statement that a tracked test module does not parse, which is a defect in its own
+right and has to be argued for at the site.
 """
 
 from __future__ import annotations
@@ -60,7 +78,9 @@ DATA_SUFFIXES = frozenset(
     {".yaml", ".yml", ".json", ".toml", ".ini", ".cfg", ".txt", ".csv", ".sql", ".env", ".md", ".xml", ".sh", ".py"}
 )
 
-SKIP_DIR_PARTS = frozenset({".git", "node_modules", ".venv", "venv", "__pycache__", "scripts", "dist", "build"})
+SKIP_DIR_PARTS = frozenset(
+    {".git", ".worktrees", "node_modules", ".venv", "venv", "__pycache__", "scripts", "dist", "build"}
+)
 
 #: Floor on the swept population. The failure mode a path guard has is not a false
 #: failure but a silent shrink to nothing — an extractor that stops matching reports
@@ -79,6 +99,12 @@ MIN_SWEPT_EXPRESSIONS = 100
 #:   is the repository root. It is inert today only because the enclosing
 #:   ``_import_func`` discards the spec it just built and returns ``None``.
 KNOWN_UNRESOLVED = frozenset({"autobot-backend/tests/unit/test_agents_status_pg_optional.py"})
+
+#: Test modules that do not parse and are therefore swept blind. Empty on purpose:
+#: measured at 0 of 1995 on the branch that added this file. Same down-only
+#: discipline as ``KNOWN_UNRESOLVED`` — an entry here is an admission that a tracked
+#: test module is syntactically broken, which is its own defect, not a waiver.
+KNOWN_UNPARSEABLE: frozenset[str] = frozenset()
 
 
 def _anchor_levels(node: ast.AST) -> int | None:
@@ -141,21 +167,28 @@ def _outermost_divisions(tree: ast.AST) -> list[ast.BinOp]:
 
 
 def _test_modules(root: Path) -> list[Path]:
-    """Every module pytest would treat as a test file, plus conftest."""
+    """Every module pytest would treat as a test file, plus conftest.
+
+    Skipped parts are matched RELATIVE to the root, never against the absolute
+    path. All work here happens inside ``.worktrees/<branch>/``, so matching the
+    absolute path would let the root's own location skip the entire sweep — which
+    it did, silently, the first time ``.worktrees`` was added to the set.
+    """
     return sorted(
         path
         for path in root.rglob("*.py")
-        if not SKIP_DIR_PARTS.intersection(path.parts)
+        if not SKIP_DIR_PARTS.intersection(path.relative_to(root).parts)
         and (path.name.startswith("test_") or path.name.endswith("_test.py") or path.name == "conftest.py")
     )
 
 
 def _file_anchors(module: Path) -> list[tuple[int, str, Path]]:
-    """(lineno, expression-as-written, resolved path) for each anchored data file."""
-    try:
-        tree = ast.parse(module.read_text(encoding="utf-8"))
-    except (SyntaxError, UnicodeDecodeError):
-        return []
+    """(lineno, expression-as-written, resolved path) for each anchored data file.
+
+    Raises rather than returning ``[]`` when the module cannot be read. See
+    ``UNPARSEABLE IS AN UNKNOWN, NOT AN ABSENCE`` in the module docstring.
+    """
+    tree = ast.parse(module.read_text(encoding="utf-8"))
     found: list[tuple[int, str, Path]] = []
     for division in _outermost_divisions(tree):
         peeled = _literal_segments(division)
@@ -172,13 +205,33 @@ def _file_anchors(module: Path) -> list[tuple[int, str, Path]]:
     return found
 
 
-def _sweep(root: Path) -> list[tuple[Path, int, str, Path]]:
-    return [(module, *anchor) for module in _test_modules(root) for anchor in _file_anchors(module)]
+def _sweep(root: Path) -> tuple[list[tuple[Path, int, str, Path]], list[tuple[Path, str]]]:
+    """(anchors, unreadable). A module that cannot be parsed lands in the second list."""
+    anchors: list[tuple[Path, int, str, Path]] = []
+    unreadable: list[tuple[Path, str]] = []
+    for module in _test_modules(root):
+        try:
+            found = _file_anchors(module)
+        except (SyntaxError, UnicodeDecodeError, ValueError, OSError) as failure:
+            unreadable.append((module, f"{type(failure).__name__}: {failure}"))
+            continue
+        anchors.extend((module, *anchor) for anchor in found)
+    return anchors, unreadable
 
 
 @pytest.fixture(scope="module")
-def swept() -> list[tuple[Path, int, str, Path]]:
+def sweep_result() -> tuple[list[tuple[Path, int, str, Path]], list[tuple[Path, str]]]:
     return _sweep(project_root())
+
+
+@pytest.fixture(scope="module")
+def swept(sweep_result) -> list[tuple[Path, int, str, Path]]:
+    return sweep_result[0]
+
+
+@pytest.fixture(scope="module")
+def unreadable(sweep_result) -> list[tuple[Path, str]]:
+    return sweep_result[1]
 
 
 class TestEveryAnchoredDataFileExists:
@@ -225,6 +278,34 @@ class TestEveryAnchoredDataFileExists:
         stale = KNOWN_UNRESOLVED - still_missing
         assert not stale, f"these entries are fixed and must be removed from KNOWN_UNRESOLVED: {sorted(stale)}"
         assert len(KNOWN_UNRESOLVED) <= 1, "KNOWN_UNRESOLVED is a down-only ratchet; a new defect is fixed, not listed"
+
+
+class TestAModuleTheSweepCannotReadIsNotClean:
+    """#15202 item 3: an unparseable file is an unknown, not an absence."""
+
+    def test_no_test_module_is_unreadable_by_the_sweep(self, unreadable) -> None:
+        root = project_root()
+        offenders = [
+            f"{module.relative_to(root)}  ->  {reason}"
+            for module, reason in unreadable
+            if str(module.relative_to(root)) not in KNOWN_UNPARSEABLE
+        ]
+        assert not offenders, (
+            "These test modules could not be parsed, so this sweep saw NONE of their "
+            "path anchors and scored them clean without reading them. A file too broken "
+            "to parse is the one most likely to be hiding a bad anchor — fix it, or add "
+            "it to KNOWN_UNPARSEABLE with a reason:\n  " + "\n  ".join(offenders)
+        )
+
+    def test_the_unparseable_set_is_down_only_and_still_earned(self, unreadable) -> None:
+        root = project_root()
+        still_unreadable = {str(module.relative_to(root)) for module, _reason in unreadable}
+        stale = KNOWN_UNPARSEABLE - still_unreadable
+        assert not stale, f"these modules parse again and must leave KNOWN_UNPARSEABLE: {sorted(stale)}"
+        assert not KNOWN_UNPARSEABLE, (
+            "KNOWN_UNPARSEABLE was empty when this guard was written and is down-only. "
+            "A tracked test module that does not parse is a defect to fix, not to list."
+        )
 
 
 class TestTheExtractorItself:
@@ -276,6 +357,34 @@ class TestTheExtractorItself:
             encoding="utf-8",
         )
         assert [anchor[2].exists() for anchor in _file_anchors(module)] == [False]
+
+    def test_an_unparseable_module_raises_rather_than_reporting_no_anchors(self, tmp_path: Path) -> None:
+        """The behaviour chosen for #15202 item 3, pinned rather than described.
+
+        The fixture carries a real anchor so the assertion cannot pass for the
+        trivial reason that there was nothing to find: the SAME text parses to one
+        anchor once the syntax error is removed.
+        """
+        anchored = 'GOOD = Path(__file__).parent / "data.yaml"\n'
+        module = tmp_path / "test_broken.py"
+
+        module.write_text("from pathlib import Path\n" + anchored + "def oops(:\n", encoding="utf-8")
+        with pytest.raises(SyntaxError):
+            _file_anchors(module)
+
+        module.write_text("from pathlib import Path\n" + anchored, encoding="utf-8")
+        assert len(_file_anchors(module)) == 1, "the fixture must contribute an anchor when it parses"
+
+    def test_the_sweep_records_an_unparseable_module_instead_of_dropping_it(self, tmp_path: Path) -> None:
+        """End to end: a broken module reaches the `unreadable` list, not the floor."""
+        module = tmp_path / "test_broken.py"
+        module.write_text("def oops(:\n", encoding="utf-8")
+
+        anchors, unreadable = _sweep(tmp_path)
+
+        assert anchors == []
+        assert [entry[0] for entry in unreadable] == [module]
+        assert unreadable[0][1].startswith("SyntaxError")
 
     def test_a_chain_is_counted_once_not_per_link(self) -> None:
         tree = ast.parse('Path(__file__).parent / "a" / "b" / "c.yaml"')
