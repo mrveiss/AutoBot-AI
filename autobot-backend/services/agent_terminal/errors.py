@@ -34,6 +34,10 @@ if TYPE_CHECKING:
 
 # Wire values. Kept as module constants so callers and tests cannot drift.
 EXECUTION_FAILED_CODE = "executionFailed"
+#: #15110: the command never reached the executor because no terminal
+#: session could be established. Distinct from EXECUTION_FAILED_CODE, which
+#: means the session existed and the command itself did not produce a result.
+SESSION_SETUP_FAILED_CODE = "sessionSetupFailed"
 POST_EXECUTION_FAILED_CODE = "postExecutionFailed"
 POST_EXECUTION_FAILED_STATUS = "completed_with_errors"
 

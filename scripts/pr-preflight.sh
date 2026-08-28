@@ -81,7 +81,25 @@ section() { printf '\n%s\n' "$1"; }
 section "interpreter"
 
 if [ "$PY_SOURCE" = "CI-parity venv" ]; then
-  pass "python $PY_VERSION from the CI-parity venv"
+  # "from the CI-parity venv" is a claim about the PACKAGES, not the path. The
+  # venv reconciles on every setup run now, but it can still go stale between
+  # those runs, and an unqualified ok next to a floor report listing
+  # 21 shortfalls said two contradictory things at once (#15130). Ask that
+  # script -- in --check mode, so preflight never installs anything -- and let
+  # the answer decide which of the two lines this is.
+  #
+  # Reported, not gated -- the same call #15091 made. A stale venv is still a
+  # far better interpreter than the system one, and failing preflight for a
+  # condition unrelated to the diff teaches people to ignore preflight. The
+  # detail is left to the floor report immediately below; this line only has
+  # to stop claiming parity it does not have.
+  if scripts/setup-ci-parity-env.sh --check >/dev/null 2>&1; then
+    pass "python $PY_VERSION from the CI-parity venv"
+  else
+    note "python $PY_VERSION from the CI-parity venv -- but the venv is STALE (#15130)"
+    note "it no longer matches requirements-ci.txt / requirements-ci-test.txt"
+    note "reconcile it: scripts/setup-ci-parity-env.sh"
+  fi
 else
   note "python $PY_VERSION from the system python3 -- CI runs 3.14 (#13573)"
   note "black skips its AST safety check on an older interpreter; build parity with:"

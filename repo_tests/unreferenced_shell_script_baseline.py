@@ -9,7 +9,9 @@ fails while a stale entry remains.
 
 Being listed here is not approval. Each of these is either unfinished wiring or a
 manual tool whose documentation was never written, and #15127 tracks working
-through them. The list exists so that the *next* script to arrive unreferenced
+through them. #15127's first batch took ten off this list: five retired, two
+wired in, three recorded as operator tools. Eleven remain, each still undecided
+-- see that issue for what is known about them. The list exists so that the *next* script to arrive unreferenced
 fails immediately instead of joining a pile nobody is counting.
 """
 
@@ -19,24 +21,14 @@ KNOWN_UNREFERENCED: frozenset[str] = frozenset(
     {
         "autobot-infrastructure/shared/scripts/backup_ollama_models.sh",
         "autobot-infrastructure/shared/scripts/build_secure_sandbox.sh",
-        "autobot-infrastructure/shared/scripts/cleanup-disk-space.sh",
         "autobot-infrastructure/shared/scripts/cleanup-legacy-python.sh",
         "autobot-infrastructure/shared/scripts/debug_chat_system.sh",
         "autobot-infrastructure/shared/scripts/fix-frontend-dependencies.sh",
-        "autobot-infrastructure/shared/scripts/git-askpass.sh",
-        "autobot-infrastructure/shared/scripts/install-doc-sync-hook.sh",
-        "autobot-infrastructure/shared/scripts/monitor_testing.sh",
-        "autobot-infrastructure/shared/scripts/network/fix-wsl-networking.sh",
         "autobot-infrastructure/shared/scripts/start_containers.sh",
         "autobot-infrastructure/shared/scripts/start_seq.sh",
-        "autobot-infrastructure/shared/scripts/start_vnc.sh",
         "autobot-infrastructure/shared/scripts/utilities/batch-configure-vms.sh",
-        "autobot-infrastructure/shared/scripts/utilities/create_github_issues.sh",
         "autobot-infrastructure/shared/scripts/utilities/enable-phase4-enterprise.sh",
-        "autobot-infrastructure/shared/scripts/utilities/load-env.sh",
         "autobot-infrastructure/shared/scripts/utilities/ollama_thread_utility.sh",
         "autobot-infrastructure/shared/scripts/utilities/security-audit.sh",
-        "autobot-infrastructure/shared/scripts/utilities/start-seq-forwarder.sh",
-        "autobot-infrastructure/shared/scripts/utilities/sync-grafana-dashboards.sh",
     }
 )

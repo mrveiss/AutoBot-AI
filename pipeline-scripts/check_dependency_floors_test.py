@@ -208,3 +208,143 @@ class TestMainExitCodes:
         monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("absent.txt",))
         assert checker.main(["--root", str(tmp_path)]) == 2
         assert "no version declarations found" in capsys.readouterr().err
+
+
+class TestScopedRoots:
+    """``--roots`` narrows the sweep to what one caller actually installs (#15130).
+
+    ``scripts/setup-ci-parity-env.sh`` installs two of the four entry points.
+    Judged against all four it looks permanently below floor, because the
+    backend declarations describe packages neither it nor CI's python suite
+    ever installs — so the number it reports has to be the number it can act on.
+    """
+
+    def _tree(self, tmp_path):
+        _write(tmp_path, "installed.txt", "fastapi>=0.141.1\n")
+        _write(tmp_path, "never-installed.txt", "sqlalchemy>=2.0.52\n")
+
+    def test_a_narrowed_sweep_reads_only_the_named_files(self, tmp_path, monkeypatch):
+        self._tree(tmp_path)
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {"fastapi": "0.141.1"})
+        found, examined = checker.audit(tmp_path, ("installed.txt",))
+        assert examined == 1
+        assert found == []
+
+    def test_the_same_tree_unscoped_still_reads_every_root(self, tmp_path, monkeypatch):
+        """The default must not change: this option is additive, not a redefinition."""
+        self._tree(tmp_path)
+        monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("installed.txt", "never-installed.txt"))
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {"fastapi": "0.141.1"})
+        _, examined = checker.audit(tmp_path)
+        assert examined == 2
+
+    def test_scoping_out_the_file_that_holds_the_shortfall_clears_it(self, tmp_path, monkeypatch):
+        """The whole point: a shortfall you never installed is not your drift."""
+        self._tree(tmp_path)
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {"fastapi": "0.141.1", "sqlalchemy": "2.0.51"})
+        wide, _ = checker.audit(tmp_path, ("installed.txt", "never-installed.txt"))
+        narrow, _ = checker.audit(tmp_path, ("installed.txt",))
+        assert [shortfall.declaration.name for shortfall in wide] == ["sqlalchemy"]
+        assert narrow == []
+
+    def test_include_graph_is_still_followed_from_a_narrowed_root(self, tmp_path, monkeypatch):
+        _write(tmp_path, "top.txt", "-r child.txt\nfastapi>=0.141.1\n")
+        _write(tmp_path, "child.txt", "starlette>=1.6.0\n")
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {})
+        _, examined = checker.audit(tmp_path, ("top.txt",))
+        assert examined == 2
+
+    def test_a_narrowed_sweep_that_reads_nothing_still_raises(self, tmp_path):
+        """Narrowing must not become a way to reach a vacuous clean report."""
+        self._tree(tmp_path)
+        with pytest.raises(checker.EmptyEnumerationError):
+            checker.audit(tmp_path, ("absent.txt",))
+
+    def test_cli_passes_the_narrowed_roots_through(self, tmp_path, monkeypatch):
+        self._tree(tmp_path)
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {"fastapi": "0.141.1", "sqlalchemy": "2.0.51"})
+        monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("installed.txt", "never-installed.txt"))
+        assert checker.main(["--root", str(tmp_path), "--strict"]) == 1
+        assert checker.main(["--root", str(tmp_path), "--strict", "--roots", "installed.txt"]) == 0
+
+    def test_cli_refuses_an_empty_roots_list(self, tmp_path, capsys):
+        """An empty enumeration exits 2, never 0 — there was nothing to check."""
+        assert checker.main(["--root", str(tmp_path), "--roots"]) == 2
+        assert "nothing to check" in capsys.readouterr().err
+
+
+class TestRequirePresent:
+    """Absence is a shortfall only where the caller installed the file (#15130).
+
+    The default stays "absent says nothing" — an arbitrary box not having a
+    package is not evidence about CI. The parity venv is the exception: it
+    installs these files, so a declaration with nothing against it means the
+    install did not take, and the consequence is a silently smaller test run.
+    """
+
+    DECLARATIONS = (
+        ("fastapi", ">=", "0.141.1"),
+        ("docker", ">=", "7.1.0"),
+    )
+
+    def _declarations(self):
+        assert self.DECLARATIONS, "no declarations to check — the cases below would be vacuous"
+        return [
+            _declaration(name=n, operator=o, required=r, source=f"r.txt:{i}")
+            for i, (n, o, r) in enumerate(self.DECLARATIONS, 1)
+        ]
+
+    def test_absent_is_ignored_by_default(self):
+        found = checker.shortfalls(self._declarations(), {"fastapi": "0.141.1"})
+        assert found == []
+
+    def test_absent_is_reported_when_required_present(self):
+        found = checker.shortfalls(self._declarations(), {"fastapi": "0.141.1"}, require_present=True)
+        assert [shortfall.declaration.name for shortfall in found] == ["docker"]
+        assert found[0].installed == checker.ABSENT
+
+    def test_an_absent_package_reads_as_not_installed_not_as_a_version(self):
+        found = checker.shortfalls(self._declarations(), {"fastapi": "0.141.1"}, require_present=True)
+        described = found[0].describe()
+        assert "NOT INSTALLED" in described
+        assert ">=7.1.0" in described
+        assert checker.ABSENT not in described
+
+    def test_a_below_floor_package_is_still_reported_with_its_version(self):
+        """Requiring presence must not swallow the ordinary case."""
+        found = checker.shortfalls(
+            self._declarations(), {"fastapi": "0.135.2", "docker": "7.1.0"}, require_present=True
+        )
+        assert [shortfall.installed for shortfall in found] == ["0.135.2"]
+
+    def test_cli_flag_changes_the_exit_code(self, tmp_path, monkeypatch):
+        _write(tmp_path, "r.txt", "fastapi>=0.141.1\ndocker>=7.1.0\n")
+        monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("r.txt",))
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {"fastapi": "0.141.1"})
+        assert checker.main(["--root", str(tmp_path), "--strict"]) == 0
+        assert checker.main(["--root", str(tmp_path), "--strict", "--require-present"]) == 1
+
+
+class TestLocalVersionSegments:
+    """A ``+local`` build satisfies the release it is built from (#15130).
+
+    ``setup-ci-parity-env.sh`` installs torch from the PyTorch CPU index on
+    purpose, which yields ``2.13.0+cpu``. Reading that as a pre-release made it
+    a permanent, false shortfall against its own ``==2.13.0`` pin.
+    """
+
+    @pytest.mark.parametrize(
+        "installed,operator,required,expected",
+        [
+            ("2.13.0+cpu", "==", "2.13.0", True),
+            ("2.13.0+cpu", ">=", "2.13.0", True),
+            ("2.13.0+cpu", ">=", "2.12.0", True),
+            ("2.13.0+cpu", ">=", "2.14.0", False),
+            ("2.13.0+cpu", ">", "2.13.0", False),
+            # The pre-release rule is untouched by the local-segment handling.
+            ("1.6.0rc1", ">=", "1.6.0", False),
+            ("1.6.0rc1+local", ">=", "1.6.0", False),
+        ],
+    )
+    def test_local_segment_does_not_demote_the_release(self, installed, operator, required, expected):
+        assert checker.satisfies(installed, operator, required) is expected
