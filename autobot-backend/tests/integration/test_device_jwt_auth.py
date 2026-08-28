@@ -53,8 +53,8 @@ def device_jwt_env(monkeypatch):
 def device_exists(monkeypatch):
     """Pass the GH#9493 revocation check — device exists in the DB."""
     monkeypatch.setattr(
-        "services.device_jwt._device_exists_cached",
-        AsyncMock(return_value=True),
+        "services.device_jwt._device_state_cached",
+        AsyncMock(return_value="active"),
     )
 
 
@@ -133,8 +133,8 @@ class TestDeviceJWTValidation:
     async def test_validate_device_jwt_rejects_unpaired_device(self, device_jwt_env, monkeypatch):
         """Tokens for deleted (unpaired) devices must be rejected."""
         monkeypatch.setattr(
-            "services.device_jwt._device_exists_cached",
-            AsyncMock(return_value=False),
+            "services.device_jwt._device_state_cached",
+            AsyncMock(return_value="absent"),
         )
         token = mint_device_jwt(str(uuid.uuid4()), "user123")
 
@@ -396,8 +396,8 @@ class TestDeviceScopeEnforcement:
         chain ends in the generic authentication-required error.
         """
         monkeypatch.setattr(
-            "services.device_jwt._device_exists_cached",
-            AsyncMock(return_value=False),
+            "services.device_jwt._device_state_cached",
+            AsyncMock(return_value="absent"),
         )
         token = mint_device_jwt(str(uuid.uuid4()), "test-user", scope="read")
         request = _bearer_request(token, path="/api/devices/", method="GET")
@@ -467,8 +467,8 @@ class TestRequireDeviceJwtDependency:
     async def test_revoked_device_returns_401(self, device_jwt_env, real_auth_middleware, monkeypatch):
         """Unpaired device fails the canonical revocation check → 401."""
         monkeypatch.setattr(
-            "services.device_jwt._device_exists_cached",
-            AsyncMock(return_value=False),
+            "services.device_jwt._device_state_cached",
+            AsyncMock(return_value="absent"),
         )
         token = mint_device_jwt(str(uuid.uuid4()), "user123", scope="write")
 
