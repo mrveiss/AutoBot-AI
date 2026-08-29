@@ -153,18 +153,23 @@ def collectable_tests(tree: ast.Module) -> list[ast.FunctionDef | ast.AsyncFunct
     Module-level ``test_*`` functions, and ``test_*`` methods of ``Test*``
     classes. A method of any other class is not collected, so its return value
     is nobody's verdict.
+
+    A method carries its enclosing class's decorators on ``class_decorator_list``
+    (empty for a module-level function), because the AST gives no parent
+    pointer and ``is_declared_not_running`` needs to see a class-level
+    ``@pytest.mark.skip`` that the method itself never spells out (#15263).
     """
     functions, classes = prefixes()
     found: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            node.class_decorator_list = []  # type: ignore[attr-defined]
             found.append(node)
         elif isinstance(node, ast.ClassDef) and node.name.startswith(classes):
-            found.extend(
-                child
-                for child in node.body
-                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
-            )
+            for child in node.body:
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    child.class_decorator_list = node.decorator_list  # type: ignore[attr-defined]
+                    found.append(child)
     return [node for node in found if node.name.startswith(functions)]
 
 
@@ -354,7 +359,15 @@ DECLARED_NOT_RUNNING = frozenset({"skip", "skipif", "xfail"})
 
 
 def is_declared_not_running(function: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    for decorator in function.decorator_list:
+    """True if the function OR its enclosing ``Test*`` class declares a skip.
+
+    A method under a class-level ``@pytest.mark.skip`` never repeats the
+    decorator on itself, but pytest still honours the class's — so a method's
+    own ``decorator_list`` alone is not enough (#15263).
+    """
+    own = function.decorator_list
+    inherited = getattr(function, "class_decorator_list", [])
+    for decorator in (*own, *inherited):
         node = decorator.func if isinstance(decorator, ast.Call) else decorator
         name = node.attr if isinstance(node, ast.Attribute) else getattr(node, "id", "")
         if name in DECLARED_NOT_RUNNING:
@@ -366,9 +379,13 @@ def does_nothing(statement: ast.stmt) -> bool:
     """True for a statement that cannot observe, change or check anything.
 
     ``pass``, ``...``, a bare string (docstring, or a comment written as one)
-    and ``print(...)`` — the four ways a body can be written out in full and
-    still run no check. ``print`` is matched only as a bare name: an attribute
-    call such as ``reporter.print(...)`` is somebody's method and may do work.
+    and ``print(literal, ...)`` — the four ways a body can be written out in
+    full and still run no check. ``print`` is matched only as a bare name: an
+    attribute call such as ``reporter.print(...)`` is somebody's method and
+    may do work. ``print(subject())`` is not a no-op either: the argument is
+    evaluated before ``print`` ever runs, so it is a real call that can raise
+    — the same "a call is a real check" principle this module applies
+    everywhere else — and only a literal argument leaves nothing evaluated.
     """
     if isinstance(statement, ast.Pass):
         return True
@@ -381,6 +398,8 @@ def does_nothing(statement: ast.stmt) -> bool:
         isinstance(value, ast.Call)
         and isinstance(value.func, ast.Name)
         and value.func.id == "print"
+        and not value.keywords
+        and all(isinstance(arg, ast.Constant) for arg in value.args)
     )
 
 
