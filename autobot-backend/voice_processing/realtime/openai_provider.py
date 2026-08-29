@@ -15,8 +15,6 @@ browser.
 
 from __future__ import annotations
 
-import os
-
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
@@ -60,8 +58,17 @@ class OpenAIRealtimeProvider(RealtimeVoiceProvider):
 
     @staticmethod
     def _api_key() -> str:
-        """Return the OpenAI API key: env, then System vault, then a literal env-var
-        read as a last-resort safety net.
+        """Return the OpenAI API key: env (via ssot_config), then the System vault.
+
+        Exactly two tiers -- no third ``os.environ.get(...)`` fallback. Once
+        ``cfg.llm.openai_api_key`` (an ssot_config field, populated straight from
+        ``os.environ``/``.env`` at load) is non-empty, an unconditional literal
+        ``os.environ`` re-read can only ever repeat the same value: nothing in this
+        codebase mutates ``os.environ`` for ``OPENAI_API_KEY`` at runtime, and a
+        process's environment does not change out from under it externally, so the
+        two can never diverge within one process lifetime. A prior revision of this
+        method carried such a tail; it was dead code that could not fire, removed
+        rather than kept as a decoration (#15269 review).
 
         Found during #15269's guard sweep: a key captured through the setup wizard
         resolved for every other OpenAI consumer but silently failed realtime voice
@@ -70,7 +77,7 @@ class OpenAIRealtimeProvider(RealtimeVoiceProvider):
         from services.provider_key_vault import resolve_provider_key
 
         cfg = get_config()
-        return resolve_provider_key("OPENAI_API_KEY", cfg.llm.openai_api_key) or os.environ.get("OPENAI_API_KEY", "")
+        return resolve_provider_key("OPENAI_API_KEY", cfg.llm.openai_api_key)
 
     @staticmethod
     def _model() -> str:
