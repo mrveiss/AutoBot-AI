@@ -99,90 +99,20 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         f"{_AUTH_BOOTSTRAP}: internal ChromaDB data-layer service credential"
     ),
     # --- tracked gap: third-party/service credentials, same defect class as
-    # --- #15267/#15268, not yet migrated. See #15276.
-    ("autobot-backend/llm_shared/adapters/anthropic_adapter.py", "anthropic_api_key"): (
-        f"{_TRACKED} #15276: AdapterRegistry connectivity-test path"
-    ),
-    ("autobot-backend/llm_shared/adapters/groq_adapter.py", "groq_api_key"): (
-        f"{_TRACKED} #15276: AdapterRegistry connectivity-test path"
-    ),
-    ("autobot-backend/llm_shared/adapters/openai_adapter.py", "openai_api_key"): (
-        f"{_TRACKED} #15276: AdapterRegistry connectivity-test path"
-    ),
-    ("autobot-backend/llm_shared/providers/anthropic.py", "anthropic_api_key"): (
-        f"{_TRACKED} #15276: Provider class's fallback for construction outside the registry"
-    ),
-    ("autobot-backend/llm_shared/providers/groq.py", "groq_api_key"): (
-        f"{_TRACKED} #15276: Provider class's fallback for construction outside the registry"
-    ),
-    ("autobot-backend/llm_shared/providers/openai.py", "openai_api_key"): (
-        f"{_TRACKED} #15276: Provider class's fallback for construction outside the registry"
-    ),
-    ("autobot-backend/llm_shared/providers/mistral.py", "mistral_api_key"): (
-        f"{_TRACKED} #15276: Provider class's fallback for construction outside the registry"
-    ),
-    ("autobot-backend/llm_shared/providers/custom_openai.py", "custom_openai_api_key"): (
-        f"{_TRACKED} #15276: Provider class's fallback for construction outside the registry"
-    ),
-    ("autobot-backend/llm_shared/providers/openrouter.py", "openrouter_api_key"): (
-        f"{_TRACKED} #15276: Provider class's fallback for construction outside the registry"
-    ),
-    ("autobot-backend/llm_shared/providers/huggingface.py", "hf_token"): (
-        f"{_TRACKED} #15276: Provider class's fallback for construction outside the registry"
-    ),
-    ("autobot-backend/llm_shared/providers/huggingface.py", "huggingface_api_token"): (
-        f"{_TRACKED} #15276: Provider class's fallback for construction outside the registry"
-    ),
-    ("autobot-backend/llm_shared/providers/nous_portal.py", "hf_token"): (
-        f"{_TRACKED} #15276: Provider class's fallback for construction outside the registry"
-    ),
-    ("autobot-backend/llm_shared/providers/nous_portal.py", "huggingface_api_token"): (
-        f"{_TRACKED} #15276: Provider class's fallback for construction outside the registry"
-    ),
-    ("autobot-backend/llm_shared/providers/nous_portal.py", "nous_api_key"): (
-        f"{_TRACKED} #15276: Provider class's fallback for construction outside the registry"
-    ),
+    # --- #15267/#15268. 27 of the 29 sites named in #15276 were migrated to
+    # --- the vault seam in that issue's fix; these two remain because their
+    # --- file already sits at its frozen KNOWN_LARGE ceiling
+    # --- (scripts/python_file_size_known_large.py) and the mandatory new
+    # --- resolve_provider_key import has no line-neutral home in either --
+    # --- no existing services.provider_key_vault import to fold it into, no
+    # --- genuinely dead line to remove instead. Raising a grandfathered
+    # --- file's ceiling to make room is exactly what #14236 forbids.
     ("autobot-backend/services/execution/claude_code_backend.py", "anthropic_api_key"): (
-        f"{_TRACKED} #15276: execution backend reads the key directly rather than via the registry"
+        f"{_TRACKED} #15276: execution backend reads the key directly rather than via the registry -- "
+        "blocked on a line-neutral import site in a KNOWN_LARGE file at its frozen ceiling"
     ),
-    ("autobot-backend/services/provider_health/providers.py", "anthropic_api_key"): (
-        f"{_TRACKED} #15276: health-check probe reads config directly rather than via the registry"
-    ),
-    ("autobot-backend/services/provider_health/providers.py", "openai_api_key"): (
-        f"{_TRACKED} #15276: health-check probe reads config directly rather than via the registry"
-    ),
-    ("autobot-backend/services/provider_health/providers.py", "google_api_key"): (
-        f"{_TRACKED} #15276: health-check probe reads config directly rather than via the registry"
-    ),
-    ("autobot-backend/agent_loop/slack_hook.py", "slack_bot_token"): f"{_TRACKED} #15276: Slack bot token",
-    ("autobot-backend/security/threat_intelligence.py", "virustotal_api_key"): (
-        f"{_TRACKED} #15276: threat-intel API key"
-    ),
-    ("autobot-backend/security/threat_intelligence.py", "urlvoid_api_key"): (
-        f"{_TRACKED} #15276: threat-intel API key"
-    ),
-    ("autobot-backend/services/notification_service.py", "smtp_password"): f"{_TRACKED} #15276: SMTP credential",
-    ("autobot-backend/initialization/lifespan.py", "anthropic_api_key"): (
-        f"{_TRACKED} #15276: AdapterRegistry gating check (adapter-listing only, not the LLM-call routing path)"
-    ),
-    ("autobot-backend/initialization/lifespan.py", "groq_api_key"): (
-        f"{_TRACKED} #15276: AdapterRegistry gating check (adapter-listing only, not the LLM-call routing path)"
-    ),
-    ("autobot-backend/initialization/lifespan.py", "openai_api_key"): (
-        f"{_TRACKED} #15276: AdapterRegistry gating check (adapter-listing only, not the LLM-call routing path)"
-    ),
-    ("autobot-backend/integrations/capability_registry.py", "slack_bot_token"): (
-        f"{_TRACKED} #15276: the third CredentialGatedRegistry sibling (see "
-        "autobot_shared/credential_gated_registry.py's own docstring) never migrated"
-    ),
-    ("autobot-backend/integrations/capability_registry.py", "discord_bot_token"): (
-        f"{_TRACKED} #15276: the third CredentialGatedRegistry sibling (see "
-        "autobot_shared/credential_gated_registry.py's own docstring) never migrated"
-    ),
-    ("autobot-backend/knowledge/base.py", "anthropic_api_key"): (
-        f"{_TRACKED} #15276: LlamaIndex LLM configuration reads the key directly"
-    ),
-    ("autobot-backend/knowledge/base.py", "openai_api_key"): (
-        f"{_TRACKED} #15276: LlamaIndex LLM/embedding configuration reads the key directly"
+    ("autobot-backend/services/notification_service.py", "smtp_password"): (
+        f"{_TRACKED} #15276: SMTP credential -- blocked on a line-neutral import site "
+        "in a KNOWN_LARGE file at its frozen ceiling"
     ),
 }

@@ -34,10 +34,8 @@ from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from knowledge.backends import BaseCollection, get_async_default_client, get_default_client
+from services.provider_key_vault import resolve_provider_key
 from utils.knowledge_base_timeouts import kb_timeouts
-
-if TYPE_CHECKING:
-    pass
 
 logger = get_logger(__name__)
 
@@ -218,7 +216,7 @@ class KnowledgeBaseCore:
 
             Settings.llm = LlamaIndexOpenAI(
                 model=model,
-                api_key=ssot_config.llm.openai_api_key,
+                api_key=resolve_provider_key("OPENAI_API_KEY", ssot_config.llm.openai_api_key),
                 timeout=timeout,
             )
         elif provider == "anthropic":
@@ -226,7 +224,7 @@ class KnowledgeBaseCore:
 
             Settings.llm = LlamaIndexAnthropic(
                 model=model,
-                api_key=ssot_config.llm.anthropic_api_key,
+                api_key=resolve_provider_key("ANTHROPIC_API_KEY", ssot_config.llm.anthropic_api_key),
                 timeout=timeout,
             )
         else:
@@ -260,7 +258,7 @@ class KnowledgeBaseCore:
 
             Settings.embed_model = OpenAIEmbedding(
                 model=model_name,
-                api_key=ssot_config.llm.openai_api_key,
+                api_key=resolve_provider_key("OPENAI_API_KEY", ssot_config.llm.openai_api_key),
             )
             # OpenAI text-embedding-3-small: 1536, text-embedding-3-large: 3072
             return 1536

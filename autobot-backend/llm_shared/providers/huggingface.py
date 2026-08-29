@@ -27,6 +27,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from llm_shared.models import LLMRequest, LLMResponse
 from llm_shared.types import ProviderType
+from services.provider_key_vault import resolve_provider_key
 
 from ..base_provider import BaseProvider
 
@@ -63,7 +64,11 @@ class HuggingFaceProvider(BaseProvider):
         """Resolve HF token from settings or environment."""
         if self._api_token:
             return self._api_token
-        self._api_token = self._get_setting("api_token") or config.hf_token or config.huggingface_api_token
+        self._api_token = (
+            self._get_setting("api_token")
+            or resolve_provider_key("HF_TOKEN", config.hf_token)
+            or resolve_provider_key("HUGGINGFACE_API_TOKEN", config.huggingface_api_token)
+        )
         return self._api_token
 
     def _build_headers(self) -> Dict[str, str]:

@@ -25,6 +25,7 @@ from typing import List
 
 from autobot_shared.ssot_config import config
 from llm_shared.types import ProviderType
+from services.provider_key_vault import resolve_provider_key
 
 from .openai_compatible import OpenAICompatibleProvider
 
@@ -54,7 +55,9 @@ class OpenRouterProvider(OpenAICompatibleProvider):
         """Resolve API key from settings or environment."""
         if self._api_key:
             return self._api_key
-        self._api_key = self._get_setting("api_key") or config.openrouter_api_key
+        self._api_key = self._get_setting("api_key") or resolve_provider_key(
+            "OPENROUTER_API_KEY", config.openrouter_api_key
+        )
         return self._api_key
 
     def _resolve_base_url(self) -> str:
