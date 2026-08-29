@@ -192,9 +192,7 @@ async def start_comprehensive_testing(
 
         # Estimate test count (#15238: explicit project root, not the shared /tmp default)
         try:
-            safe_test_path = validate_path(
-                request.test_path, must_exist=True, allowed_roots=[str(PATH.PROJECT_ROOT)]
-            )
+            safe_test_path = validate_path(request.test_path, must_exist=True, allowed_roots=[str(PATH.PROJECT_ROOT)])
         except (ValueError, PermissionError):
             raise HTTPException(status_code=400, detail="Invalid or inaccessible test path")
 
