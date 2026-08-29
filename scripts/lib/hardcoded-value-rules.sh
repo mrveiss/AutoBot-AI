@@ -122,6 +122,11 @@ declare -A HV_SSOT_MODELS=(
 # Detector 1's VM-IP pattern covered EVERY fourth octet; detector 3's covered
 # only 19-25. The union keeps the wide one, so a new fleet address is caught the
 # day it is typed rather than the day someone remembers to widen a regex.
+# PARSED BY tools/lint/check_docs_no_fleet_addressing.py (#15208), which truncates
+# this pattern at its final '\.' to derive the bare subnet prefix for docs/. Keep
+# the assignment un-indented, single-quoted and without an 'export' prefix: that
+# reader fails closed, so a reformat here breaks the docs guard rather than
+# silently narrowing it.
 HV_VM_IP='172\.16\.168\.[0-9]+'
 HV_PORTS='8001|5173|6379|11434|6080|8080|8081|8082|3000|8443|5432|9090'
 HV_AUTOBOT_PATHS='/opt/autobot|/tmp/autobot|/var/lib/autobot'

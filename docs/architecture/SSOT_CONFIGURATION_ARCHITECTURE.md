@@ -59,7 +59,7 @@ This document defines the Single Source of Truth (SSOT) configuration architectu
 ### 1.2 Key Problems Identified
 
 1. **No Single Authority**: 19+ files contain configuration logic with unclear precedence
-2. **Hardcoded Fallbacks**: IP addresses (172.16.168.x) hardcoded in 6+ locations
+2. **Hardcoded Fallbacks**: IP addresses (<network-subnet>) hardcoded in 6+ locations
 3. **Cross-Language Duplication**: Python `NetworkConstants` duplicated in TypeScript
 4. **Complex Precedence**: `config.yaml` -> `settings.json` -> environment variables
 5. **Nested Duplication**: `config.yaml` has 5+ levels of nested `unified` blocks (bug)

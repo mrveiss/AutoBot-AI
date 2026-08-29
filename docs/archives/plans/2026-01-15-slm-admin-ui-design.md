@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # SLM Admin UI Design
 
 > Phase 5 of Service Lifecycle Manager (Issue #726)
@@ -9,7 +11,7 @@ The SLM Admin UI is a standalone Vue 3 application providing a dedicated managem
 ## Architecture Decisions
 
 ### Deployment
-- **Host:** 172.16.168.19 (dedicated admin machine)
+- **Host:** <slm-manager-ip> (dedicated admin machine)
 - **Credentials:** autobot:autobot
 - **Port:** 5174 (to avoid conflicts)
 - **Directory:** `/home/kali/Desktop/AutoBot/slm-admin/`
@@ -173,7 +175,7 @@ export function useSlmWebSocket() {
   const events = ref<SLMEvent[]>([])
 
   const connect = () => {
-    socket.value = new WebSocket('wss://172.16.168.20:8443/v1/slm/ws')
+    socket.value = new WebSocket('wss://<backend-ip>:8443/v1/slm/ws')
     // Handle messages, reconnection, etc.
   }
 
@@ -300,7 +302,7 @@ slm-admin/
 - Adapt for standalone deployment
 
 ### Step 8: Deployment Script
-- Create sync script for 172.16.168.19
+- Create sync script for <slm-manager-ip>
 - Configure nginx/serve for production
 - Test end-to-end functionality
 
@@ -321,7 +323,7 @@ The Admin UI depends on these backend endpoints (all implemented in Phases 1-4):
 
 ## Success Criteria
 
-1. ✅ Standalone Vue 3 app running on 172.16.168.19
+1. ✅ Standalone Vue 3 app running on <slm-manager-ip>
 2. ✅ Real-time fleet health visualization
 3. ✅ Deployment wizard with Ansible integration
 4. ✅ Backup/restore functionality

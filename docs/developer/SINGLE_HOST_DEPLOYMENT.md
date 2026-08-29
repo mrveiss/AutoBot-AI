@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../architecture/VM_ROLES.md) for role definitions.
+
 # Single-Host AutoBot Deployment
 
 **Issue #2961** | Last updated: 2026-04-12
@@ -373,7 +375,7 @@ ss -tlnp | grep 8001   # Verify uvicorn is actually bound
 
 **Symptom:** Backend logs show `ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 6379)`.
 
-**Cause A:** `AUTOBOT_REDIS_HOST` not set, defaulting to multi-host IP (e.g., `172.16.168.23`).
+**Cause A:** `AUTOBOT_REDIS_HOST` not set, defaulting to multi-host IP (e.g., `<database-ip>`).
 
 ```bash
 grep AUTOBOT_REDIS_HOST /etc/autobot/backend.env

@@ -340,8 +340,8 @@ class TestNewService:
         service_config = services_config.get("new_service", {})
         service_host = service_config.get("host")
 
-        assert service_host == "172.16.168.XX", (
-            f"New service must run on VM X (172.16.168.XX), currently: {service_host}"
+        assert service_host == "<new-node-ip>", (
+            f"New service must run on VM X (<new-node-ip>), currently: {service_host}"
         )
 ```
 

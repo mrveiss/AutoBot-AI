@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Role-Based Code Sync Design
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -17,7 +19,7 @@
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                     CODE-SOURCE NODE (role: code-version-watcher)        │
-│                              172.16.168.20                                │
+│                              <backend-ip>                                │
 │  ┌────────────────────────────────────────────────────────────────────┐  │
 │  │ • Git repository (only git-connected node)                         │  │
 │  │ • Post-commit hook notifies SLM of new versions                    │  │
@@ -29,7 +31,7 @@
                                   │ 2. SLM pulls code
                                   ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                          SLM SERVER (172.16.168.19)                      │
+│                          SLM SERVER (<slm-manager-ip>)                   │
 │  ┌────────────────────────────────────────────────────────────────────┐  │
 │  │ CODE CACHE         │ VERSION REGISTRY    │ ROLE REGISTRY           │  │
 │  │ /var/lib/slm/code/ │ tracks all node     │ role→paths mapping      │  │
