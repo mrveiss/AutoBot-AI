@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Port Cleanup Targets for Issue #725
 
 **Related to:** mTLS Service Authentication Migration
@@ -15,7 +17,7 @@ Remove stale port references (8000, 8090) from main-host and clean up unused con
 
 ### 1. Firewall Port Ranges (via SLM/SSOT Config)
 
-**Note:** Ansible inventory files contain template values (192.168.100.0/24). The actual production network (172.16.168.0/24) is configured via SLM and SSOT config.
+**Note:** Ansible inventory files contain template values (192.168.100.0/24). The actual production network (<network-subnet>) is configured via SLM and SSOT config.
 
 **Port ranges to clean up via SLM firewall management:**
 

@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # SLM Node Decommission Feature
 
 **Date:** 2026-03-04
@@ -196,7 +198,7 @@ Opened from NodeCard action menu -> "Decommission".
 ```
 +---------------------------------------------+
 |  ! Decommission Node: 04-NPU-Worker        |
-|  IP: 172.16.168.22                          |
+|  IP: <npu-ip>                          |
 |                                             |
 |  This will permanently remove all AutoBot   |
 |  software and data from this node.          |

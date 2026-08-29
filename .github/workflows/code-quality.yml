@@ -34,7 +34,14 @@ on:
       # so the guard could not fire on the change it exists to catch.
       - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
       - '.github/actions/**'
-      - 'docs/developer/**'
+      # #15208: the documentation fleet-addressing guard reads every Markdown file
+      # under docs/ and takes its pattern from scripts/lib/hardcoded-value-rules.sh.
+      # 'docs/developer/**' (added for the guards that read that folder) is subsumed
+      # by 'docs/**'. Without the wider entry a docs-only PR -- the exact shape that
+      # reintroduces an address -- skips code-quality, and a skipped required job
+      # satisfies branch protection.
+      - 'docs/**'
+      - 'scripts/lib/**'
       - '.github/workflows/code-quality.yml'
   # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
   # required-check context ("code-quality") always reports a conclusion. A
@@ -89,7 +96,10 @@ jobs:
               - 'autobot-backend/static/error_messages.yaml'
               - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
               - '.github/actions/**'
-              - 'docs/developer/**'
+              # #15208: see the on.push.paths list above -- docs/ and the shared rule
+              # set are the documentation guard's inputs.
+              - 'docs/**'
+              - 'scripts/lib/**'
               - '.github/workflows/code-quality.yml'
 
   code-quality:
@@ -508,6 +518,24 @@ jobs:
         # literals (#13658) by path, anchor symbol and exact count, so a rename
         # cannot strand an exemption. There is no growable baseline.
         python3 tools/lint/check_no_shell_placeholder_paths.py --audit
+
+    - name: Audit documentation for fleet node addressing (#15208)
+      run: |
+        # #3315 replaced the fleet's literal node addresses in docs/architecture/ with
+        # role placeholders. Nothing watched the rest of the tree: the same addressing --
+        # role-to-host mappings and database endpoints, which together read as a network
+        # map -- survived in docs/archives/plans/ one folder across, because
+        # HV_SCAN_EXTENSIONS in scripts/lib/hardcoded-value-rules.sh is
+        # py|ts|vue|js|sh|yml|yaml and Markdown is not in it. This has to run in a
+        # REQUIRED check for the same directional reason as #14419/#14405/#14489: a
+        # document that stops being scanned reports fewer findings, so the failure goes
+        # greener rather than redder. It parses its pattern out of the shared rule set
+        # rather than restating it, aborts if that cannot be read, and fails below a
+        # discovery floor -- #15208 exists because a sweep that never looked at
+        # docs/archives/ reported a comfortable zero. Deliberate counter-examples are
+        # exempted by an in-document block marker, and a marker covering no address is
+        # itself a finding, so no exemption outlives its reason.
+        python3 tools/lint/check_docs_no_fleet_addressing.py --audit
 
     - name: Audit MCP tool permission coverage (#14494)
       run: |

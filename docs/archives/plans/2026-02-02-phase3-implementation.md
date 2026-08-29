@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Phase 3: Service Discovery & Agent Config Migration Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -43,14 +45,14 @@ class TestServiceDiscoveryCache:
     def test_cache_hit_returns_url(self):
         """Cache returns URL for known service."""
         cache = ServiceDiscoveryCache(ttl_seconds=60)
-        cache.set("redis", {"url": "http://172.16.168.23:6379", "healthy": True})
+        cache.set("redis", {"url": "http://<database-ip>:6379", "healthy": True})
         result = cache.get("redis")
-        assert result == "http://172.16.168.23:6379"
+        assert result == "http://<database-ip>:6379"
 
     def test_cache_expires_after_ttl(self):
         """Cache entry expires after TTL."""
         cache = ServiceDiscoveryCache(ttl_seconds=1)
-        cache.set("redis", {"url": "http://172.16.168.23:6379", "healthy": True})
+        cache.set("redis", {"url": "http://<database-ip>:6379", "healthy": True})
         time.sleep(1.1)
         assert cache.get("redis") is None
 ```
@@ -164,9 +166,9 @@ class TestDiscoverService:
     async def test_discover_service_from_cache(self):
         """Returns URL from cache when available."""
         with patch("backend.services.slm_client._discovery_cache") as mock_cache:
-            mock_cache.get.return_value = "http://172.16.168.23:6379"
+            mock_cache.get.return_value = "http://<database-ip>:6379"
             url = await discover_service("redis")
-            assert url == "http://172.16.168.23:6379"
+            assert url == "http://<database-ip>:6379"
             mock_cache.get.assert_called_once_with("redis")
 
     @pytest.mark.asyncio

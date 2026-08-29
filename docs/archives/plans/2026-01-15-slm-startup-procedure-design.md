@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # SLM Startup Procedure Design
 
 > **Status**: Draft
@@ -10,14 +12,14 @@ This document defines the new simplified startup procedure for AutoBot where the
 
 ## Architecture
 
-### Admin Machine (172.16.168.19)
+### Admin Machine (<slm-manager-ip>)
 
 The admin machine is a clean, dedicated management host running only SLM-related services.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                 SLM Admin Machine                        │
-│                   172.16.168.19                          │
+│                   <slm-manager-ip>                      │
 │                                                          │
 │  ┌─────────────────┐  ┌─────────────────┐               │
 │  │  SLM Backend    │  │  SLM Admin UI   │               │
@@ -49,30 +51,30 @@ The admin machine is a clean, dedicated management host running only SLM-related
 ### Fleet Architecture
 
 ```
-172.16.168.19 (Admin/Management)
+<slm-manager-ip> (Admin/Management)
 ├── SLM Backend + Admin UI
 ├── Grafana + Prometheus (default, portable)
 ├── Ansible controller
 ├── SQLite state DB
 └── Full AutoBot codebase (distribution source)
 
-172.16.168.20 (Main AutoBot) - deployed via SLM
+<backend-ip> (Main AutoBot) - deployed via SLM
 ├── AutoBot Backend (chat, agents, LLM, etc.)
 └── VNC server
 
-172.16.168.21 (Frontend) - deployed via SLM
+<frontend-ip> (Frontend) - deployed via SLM
 └── AutoBot Vue frontend
 
-172.16.168.22 (NPU Worker) - deployed via SLM
+<npu-ip> (NPU Worker) - deployed via SLM
 └── Hardware AI acceleration
 
-172.16.168.23 (Redis) - deployed via SLM
+<database-ip> (Redis) - deployed via SLM
 └── Redis database
 
-172.16.168.24 (AI Stack) - deployed via SLM
+<aiml-ip> (AI Stack) - deployed via SLM
 └── Ollama / AI processing
 
-172.16.168.25 (Browser) - deployed via SLM
+<browser-ip> (Browser) - deployed via SLM
 └── Playwright automation
 ```
 
@@ -150,7 +152,7 @@ Minimal set (~10 packages):
          └──► slm-admin-ui.service (port 5174)
          │
          ▼
-3. Admin opens https://172.16.168.19/
+3. Admin opens https://<slm-manager-ip>/
          │
          ▼
 4. Login with admin credentials
@@ -239,8 +241,8 @@ WantedBy=slm.target
 ```
 External Access (nginx HTTPS :443)
 ─────────────────────────────────────
-https://172.16.168.19/         → SLM Admin UI
-https://172.16.168.19/api/     → SLM Backend
+https://<slm-manager-ip>/         → SLM Admin UI
+https://<slm-manager-ip>/api/     → SLM Backend
 
 Internal Only (localhost)
 ─────────────────────────────────────
@@ -251,7 +253,7 @@ Internal Only (localhost)
 ### Authentication Layers
 
 1. **Network**: Admin machine accessible only from trusted sources
-   - Dev machine (172.16.168.20)
+   - Dev machine (<backend-ip>)
    - Local network / VPN
    - Optional IP whitelist during install
 
@@ -271,7 +273,7 @@ Internal Only (localhost)
 ```nginx
 server {
     listen 443 ssl;
-    server_name 172.16.168.19;
+    server_name <slm-manager-ip>;
 
     ssl_certificate /etc/ssl/slm/cert.pem;
     ssl_certificate_key /etc/ssl/slm/key.pem;
@@ -334,7 +336,7 @@ SLM GUI: Settings → Monitoring → Location
 
 **Scenario A: All-in-one (default)**
 ```
-172.16.168.19 (Admin)
+<slm-manager-ip> (Admin)
 ├── SLM Backend + UI
 ├── Grafana (proxied through SLM)
 └── Prometheus (proxied through SLM)
@@ -342,7 +344,7 @@ SLM GUI: Settings → Monitoring → Location
 
 **Scenario B: Separate monitoring host**
 ```
-172.16.168.19 (Admin)
+<slm-manager-ip> (Admin)
 ├── SLM Backend + UI
 └── Points to external monitoring
 
@@ -394,7 +396,7 @@ prometheus_url: "http://..."
 
 [1/6] Code source:
   1) Clone from GitHub (mrveiss/AutoBot-AI)
-  2) Sync from dev machine (172.16.168.20)
+  2) Sync from dev machine (<backend-ip>)
   > 1
 
 [2/6] Branch/version:
@@ -443,7 +445,7 @@ install-slm.sh
 14. Enable and start slm.target
 15. Print access URL + credentials
 ─────────────────────────────────────
-Done! Access SLM at https://172.16.168.19/
+Done! Access SLM at https://<slm-manager-ip>/
 ```
 
 ### Unattended Defaults

@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Issue #694: Full Configuration Consolidation Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -34,7 +36,7 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
     set -a && source "$PROJECT_ROOT/.env" && set +a
 fi
 # Use env vars with fallbacks
-REMOTE_HOST="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+REMOTE_HOST="${AUTOBOT_FRONTEND_HOST:-<frontend-ip>}"
 ```
 
 ---
@@ -96,12 +98,12 @@ Replace lines 237-245:
 ```python
 # VM definitions for certificate generation
 VM_DEFINITIONS: Dict[str, str] = {
-    "main-host": "172.16.168.20",
-    "frontend": "172.16.168.21",
-    "npu-worker": "172.16.168.22",
-    "redis": "172.16.168.23",
-    "ai-stack": "172.16.168.24",
-    "browser": "172.16.168.25",
+    "main-host": "<backend-ip>",
+    "frontend": "<frontend-ip>",
+    "npu-worker": "<npu-ip>",
+    "redis": "<database-ip>",
+    "ai-stack": "<aiml-ip>",
+    "browser": "<browser-ip>",
 }
 ```
 
@@ -117,12 +119,12 @@ def _get_vm_definitions() -> Dict[str, str]:
     except Exception:
         # Fallback for standalone PKI tool usage
         return {
-            "main-host": "172.16.168.20",
-            "frontend": "172.16.168.21",
-            "npu-worker": "172.16.168.22",
-            "redis": "172.16.168.23",
-            "ai-stack": "172.16.168.24",
-            "browser": "172.16.168.25",
+            "main-host": "<backend-ip>",
+            "frontend": "<frontend-ip>",
+            "npu-worker": "<npu-ip>",
+            "redis": "<database-ip>",
+            "ai-stack": "<aiml-ip>",
+            "browser": "<browser-ip>",
         }
 
 VM_DEFINITIONS: Dict[str, str] = _get_vm_definitions()
@@ -159,9 +161,9 @@ def _get_default_postgres_host() -> str:
         from src.config.ssot_config import get_config
         config = get_config()
         # PostgreSQL typically runs on Redis VM in AutoBot architecture
-        return config.vm.redis if config else "172.16.168.23"
+        return config.vm.redis if config else "<database-ip>"
     except Exception:
-        return "172.16.168.23"
+        return "<database-ip>"
 ```
 
 With:
@@ -170,7 +172,7 @@ def _get_default_postgres_host() -> str:
     """
     Get default PostgreSQL host from SSOT config.
 
-    PostgreSQL runs on the Redis VM (172.16.168.23) in AutoBot architecture.
+    PostgreSQL runs on the Redis VM (<database-ip>) in AutoBot architecture.
     Issue #694: Config consolidation - uses SSOT with proper fallback.
     """
     try:
@@ -179,7 +181,7 @@ def _get_default_postgres_host() -> str:
     except Exception:
         # Fallback only if SSOT config completely unavailable
         import os
-        return os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
+        return os.getenv("AUTOBOT_REDIS_HOST", "<database-ip>")
 ```
 
 **Step 2: Run syntax check**
@@ -221,13 +223,13 @@ Replace lines 133-156 (the infrastructure section):
 ```python
             "infrastructure": {
                 "hosts": {
-                    "backend": "172.16.168.20",
-                    "frontend": "172.16.168.21",
-                    "redis": "172.16.168.23",
-                    "ollama": "172.16.168.20",
-                    "ai_stack": "172.16.168.24",
-                    "npu_worker": "172.16.168.22",
-                    "browser_service": "172.16.168.25"
+                    "backend": "<backend-ip>",
+                    "frontend": "<frontend-ip>",
+                    "redis": "<database-ip>",
+                    "ollama": "<backend-ip>",
+                    "ai_stack": "<aiml-ip>",
+                    "npu_worker": "<npu-ip>",
+                    "browser_service": "<browser-ip>"
                 },
                 "ports": {
                     "backend": 8001,
@@ -286,13 +288,13 @@ Add after `_load_default_config` method:
         # Fallback defaults
         return {
             "hosts": {
-                "backend": "172.16.168.20",
-                "frontend": "172.16.168.21",
-                "redis": "172.16.168.23",
+                "backend": "<backend-ip>",
+                "frontend": "<frontend-ip>",
+                "redis": "<database-ip>",
                 "ollama": "127.0.0.1",
-                "ai_stack": "172.16.168.24",
-                "npu_worker": "172.16.168.22",
-                "browser_service": "172.16.168.25",
+                "ai_stack": "<aiml-ip>",
+                "npu_worker": "<npu-ip>",
+                "browser_service": "<browser-ip>",
             },
             "ports": {
                 "backend": 8001,
@@ -582,12 +584,12 @@ fi
 # =============================================================================
 # VM Configuration (with fallbacks matching ssot_config.py)
 # =============================================================================
-AUTOBOT_BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
-AUTOBOT_FRONTEND_HOST="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
-AUTOBOT_NPU_WORKER_HOST="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
-AUTOBOT_REDIS_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
-AUTOBOT_AI_STACK_HOST="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
-AUTOBOT_BROWSER_SERVICE_HOST="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
+AUTOBOT_BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-<backend-ip>}"
+AUTOBOT_FRONTEND_HOST="${AUTOBOT_FRONTEND_HOST:-<frontend-ip>}"
+AUTOBOT_NPU_WORKER_HOST="${AUTOBOT_NPU_WORKER_HOST:-<npu-ip>}"
+AUTOBOT_REDIS_HOST="${AUTOBOT_REDIS_HOST:-<database-ip>}"
+AUTOBOT_AI_STACK_HOST="${AUTOBOT_AI_STACK_HOST:-<aiml-ip>}"
+AUTOBOT_BROWSER_SERVICE_HOST="${AUTOBOT_BROWSER_SERVICE_HOST:-<browser-ip>}"
 
 # Port Configuration
 AUTOBOT_BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
@@ -698,11 +700,11 @@ Replace lines 14-24:
 SSH_KEY="$HOME/.ssh/autobot_key"
 SSH_USER="autobot"
 declare -A VMS=(
-    ["frontend"]="172.16.168.21"
-    ["npu-worker"]="172.16.168.22"
-    ["redis"]="172.16.168.23"
-    ["ai-stack"]="172.16.168.24"
-    ["browser"]="172.16.168.25"
+    ["frontend"]="<frontend-ip>"
+    ["npu-worker"]="<npu-ip>"
+    ["redis"]="<database-ip>"
+    ["ai-stack"]="<aiml-ip>"
+    ["browser"]="<browser-ip>"
 )
 ```
 
@@ -721,7 +723,7 @@ SSH_USER="$AUTOBOT_SSH_USER"
 
 **Step 2: Update hardcoded IPs in function bodies**
 
-Replace all instances like `172.16.168.21` with `${VMS["frontend"]}` etc.
+Replace all instances like `<frontend-ip>` with `${VMS["frontend"]}` etc.
 
 **Step 3: Apply same pattern to status-all-vms.sh and stop-all-vms.sh**
 
@@ -769,12 +771,12 @@ source "$SCRIPT_DIR/lib/ssot-config.sh" 2>/dev/null || source "$SCRIPT_DIR/../li
 ```
 
 2. Replace hardcoded IPs:
-   - `172.16.168.20` → `${AUTOBOT_BACKEND_HOST:-172.16.168.20}`
-   - `172.16.168.21` → `${AUTOBOT_FRONTEND_HOST:-172.16.168.21}`
-   - `172.16.168.22` → `${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}`
-   - `172.16.168.23` → `${AUTOBOT_REDIS_HOST:-172.16.168.23}`
-   - `172.16.168.24` → `${AUTOBOT_AI_STACK_HOST:-172.16.168.24}`
-   - `172.16.168.25` → `${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}`
+   - `<backend-ip>` → `${AUTOBOT_BACKEND_HOST:-<backend-ip>}`
+   - `<frontend-ip>` → `${AUTOBOT_FRONTEND_HOST:-<frontend-ip>}`
+   - `<npu-ip>` → `${AUTOBOT_NPU_WORKER_HOST:-<npu-ip>}`
+   - `<database-ip>` → `${AUTOBOT_REDIS_HOST:-<database-ip>}`
+   - `<aiml-ip>` → `${AUTOBOT_AI_STACK_HOST:-<aiml-ip>}`
+   - `<browser-ip>` → `${AUTOBOT_BROWSER_SERVICE_HOST:-<browser-ip>}`
 
 **Commit after each batch of 3-4 scripts:**
 
