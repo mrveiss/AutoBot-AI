@@ -45,7 +45,18 @@ fi
 HOOK_SCRIPTS_DIR="$GIT_ROOT/autobot-infrastructure/shared/scripts"
 FIXED=0
 if [ -d "$HOOK_SCRIPTS_DIR" ]; then
+    # Require a shebang as well as the filename match (#15253). The previous filename
+    # patterns matched files that must NOT be executable and chmod'd them on
+    # every checkout, leaving every working tree permanently dirty:
+    #   -name "pre-commit-*"  also matched pre-commit-*_test.py (pytest files)
+    #   -name "*.sh"          also matched hooks/lib/_common.sh (a sourced library)
+    # A leading "#!" is the property that actually justifies the bit. The name
+    # patterns are kept so scope is unchanged: dropping them would pull in 52
+    # further shebang-bearing scripts this hook has never touched, trading one
+    # source of churn for a larger one.
     while IFS= read -r -d '' f; do
+        read -r -n 2 shebang < "$f" 2>/dev/null || continue
+        [ "$shebang" = "#!" ] || continue
         chmod +x "$f"
         FIXED=$((FIXED + 1))
     done < <(find "$HOOK_SCRIPTS_DIR/hooks" "$HOOK_SCRIPTS_DIR/utilities" \
