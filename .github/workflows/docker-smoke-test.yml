@@ -15,6 +15,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Least privilege (#15299). The workflow only checks out, builds images, starts
+# the compose stack and uploads an artifact — none of which needs write. It had
+# no block at all until CodeQL flagged both jobs once this file was touched;
+# hardened-smoke-test.yml and co-located-smoke.yml already declare exactly this.
+permissions:
+  contents: read
+
 jobs:
   # Gated because the build is the whole cost: on PR #15250 (one markdown file)
   # `smoke-test` spent 373s building images and 65s starting the stack for a
