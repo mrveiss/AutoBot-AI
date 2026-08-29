@@ -41,7 +41,8 @@ cannot tokenize at all exits :data:`EXIT_UNPARSEABLE` so the caller can refuse
 to judge out loud instead of guessing silently.
 
 Output: one tab-separated record per invocation on stdout --
-``<directory>\t<git-dir>\t<flags>\t<branch-arg>`` -- where *directory* is empty
+``<directory>|<git-dir>|<flags>|<branch-arg>``, separated by 0x1f (see
+:data:`FIELD_SEPARATOR`) -- where *directory* is empty
 for "the caller's own working directory" and ``?`` for "could not be resolved",
 and *flags* is a comma-separated subset of ``new``/``restore``.
 """
@@ -55,9 +56,18 @@ import sys
 # shlex treats newlines as plain whitespace once ``whitespace_split`` is on, so
 # without this an invocation on the second line would look like an argument of
 # the command on the first.
-SENTINEL = "\x1fNL\x1f"
+SENTINEL = "\x1eNL\x1e"
 
 EXIT_UNPARSEABLE = 3
+
+#: Field separator for the records written to stdout. Deliberately NOT a tab:
+#: tab is IFS *whitespace*, so `read` in the calling shell collapses a run of
+#: them and drops every leading empty field. A record for a plain branch switch
+#: is three empty fields then the branch name, which arrived in the shell as the
+#: branch name in the FIRST variable -- the guard then looked for a directory
+#: named after the branch, found none, and allowed the switch (#15296). 0x1f is
+#: not IFS whitespace, so empty fields survive.
+FIELD_SEPARATOR = "\x1f"
 
 #: Tokens made only of these characters end one command and start another.
 _SEPARATOR_CHARS = set(";&|")
@@ -399,7 +409,7 @@ def main(argv: list[str]) -> int:
         )
         # stdout is this tool's interface, not a log line: the calling hook
         # parses these records. Written explicitly so that reads as deliberate.
-        sys.stdout.write("\t".join(fields) + "\n")
+        sys.stdout.write(FIELD_SEPARATOR.join(fields) + "\n")
     return 0
 
 

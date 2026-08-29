@@ -27,6 +27,8 @@ isolation, where a failure names the token that was misread.
 from __future__ import annotations
 
 import importlib.util
+import string
+import subprocess
 import sys
 from types import ModuleType
 
@@ -195,3 +197,42 @@ def test_new_branch_and_restore_flags_survive_the_argument_scan() -> None:
     assert invocations(f"git -c core.foo=bar {CHECKOUT} -b issue-9999 origin/Dev_new_gui")[0]["flags"] == "new"
     assert invocations(f"git {CHECKOUT} -- file.py")[0]["flags"] == "restore"
     assert invocations(f"git {SWITCH} --create issue-9999")[0]["flags"] == "new"
+
+
+# ── The wire format between the parser and the shell that reads it ──────────
+
+
+def test_the_field_separator_is_not_ifs_whitespace() -> None:
+    """A tab here silently deletes every leading empty field (#15296).
+
+    ``read`` collapses a *run* of IFS whitespace into one delimiter and strips
+    it at the start of the line, and tab is IFS whitespace. A plain branch
+    switch emits three empty fields then the branch name, so with a tab the
+    branch name arrived in the shell as the *directory* — the guard looked for a
+    directory named after the branch, did not find one, concluded the command
+    targeted some other repository, and allowed every switch on the main tree.
+    Nothing about the parser was wrong; the wire format was.
+    """
+    assert parser.FIELD_SEPARATOR not in string.whitespace
+
+
+def test_a_record_survives_the_shell_read_it_is_written_for() -> None:
+    """End to end through a real shell: the branch name must land in field 4.
+
+    Asserting the constant is necessary but not sufficient — this runs the
+    parser as the hook runs it and reads the record as the hook reads it.
+    """
+    parser_path = project_root() / ".claude" / "hooks" / "git_invocation_parse.py"
+    script = (
+        f'python3 "$1" "git {CHECKOUT} some-branch" | '
+        '{ IFS=$\'\\x1f\' read -r a b c d; printf \'%s|%s|%s|%s\' "$a" "$b" "$c" "$d"; }'
+    )
+    result = subprocess.run(  # nosec B603 B607 - fixed argv, no shell string from input
+        ["bash", "-c", script, "bash", str(parser_path)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "|||some-branch", result.stdout

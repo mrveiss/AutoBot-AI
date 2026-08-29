@@ -78,7 +78,7 @@ preflight() {
   gitdir=$(git -C "$THIS_REPO" rev-parse --path-format=absolute --git-dir 2>&1)
   echo "  sandbox common-dir: $common"
   echo "  sandbox git-dir:    $gitdir"
-  records=$(python3 "$THIS_REPO/.claude/hooks/git_invocation_parse.py" "git checkout some-branch" | tr '\t' '|')
+  records=$(python3 "$THIS_REPO/.claude/hooks/git_invocation_parse.py" "git checkout some-branch" | tr '\037' '|')
   echo "  parser records for a real branch switch: [$records]"
   if [ -z "$records" ]; then
     echo "FATAL: the parser reports nothing for a real invocation — the suite cannot test the guard"
@@ -92,7 +92,7 @@ preflight() {
 
 parser_says() {
   python3 "$THIS_REPO/.claude/hooks/git_invocation_parse.py" "$1" 2>&1 |
-    tr '\t' '|' | tr '\n' ';'
+    tr '\037' '|' | tr '\n' ';'
   printf ' rc=%s' "${PIPESTATUS[0]}"
 }
 

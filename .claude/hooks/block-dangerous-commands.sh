@@ -172,7 +172,10 @@ if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch; then
     deny "Blocked: the branch-switch guard's parser exited $PARSE_STATUS, so nothing was checked (#15296). Restore .claude/hooks/git_invocation_parse.py instead of working around the guard."
   fi
 
-  while IFS=$'\t' read -r WT_DIR WT_GIT_DIR SWITCH_FLAGS BRANCH_ARG; do
+  # 0x1f, not tab: tab is IFS whitespace, so `read` collapses a run of them
+  # and every leading empty field vanishes -- the branch name would land in
+  # WT_DIR and the guard would go looking for a directory by that name (#15296).
+  while IFS=$'\x1f' read -r WT_DIR WT_GIT_DIR SWITCH_FLAGS BRANCH_ARG; do
     [ -n "$WT_DIR$WT_GIT_DIR$SWITCH_FLAGS$BRANCH_ARG" ] || continue
     targets_this_main_tree "$WT_DIR" "$WT_GIT_DIR" || continue
 
