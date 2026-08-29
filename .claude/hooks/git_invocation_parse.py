@@ -397,7 +397,9 @@ def main(argv: list[str]) -> int:
             invocation["flags"],
             invocation["arg"],
         )
-        print("\t".join(fields))
+        # stdout is this tool's interface, not a log line: the calling hook
+        # parses these records. Written explicitly so that reads as deliberate.
+        sys.stdout.write("\t".join(fields) + "\n")
     return 0
 
 
