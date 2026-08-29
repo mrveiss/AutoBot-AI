@@ -30,6 +30,14 @@ log_header() {
     echo -e "${BLUE}[AUDIT]${NC} $1"
 }
 
+# (#15127) Every counter used to be bumped with an arithmetic command under
+# `set -e`. Post-increment evaluates to the OLD value, so the first bump of a
+# zero counter has arithmetic result 0, which bash reports as exit status 1 --
+# and `set -e` then killed the audit at the moment it found its first finding,
+# before the .gitignore, SSH-permission and .env checks ran and before the
+# summary printed. An audit that stops at finding number one is worse than no
+# audit, because it looks like it completed. Arithmetic assignment has no such
+# exit-status coupling.
 ISSUES_FOUND=0
 
 log_header "AutoBot Security Audit"
@@ -56,7 +64,7 @@ for pattern in "${SENSITIVE_PATTERNS[@]}"; do
     if [ -n "$results" ]; then
         log_error "Found sensitive files matching pattern '$pattern':"
         echo "$results" | sed 's/^/  /'
-        ((ISSUES_FOUND++))
+        ISSUES_FOUND=$((ISSUES_FOUND + 1))
     fi
 done
 
@@ -100,13 +108,13 @@ for pattern in "${PASSWORD_PATTERNS[@]}"; do
             log_warn "Found potential hardcoded passwords (showing first 5):"
         fi
         echo "$results" | sed 's/^/  /'
-        ((PASSWORD_ISSUES++))
+        PASSWORD_ISSUES=$((PASSWORD_ISSUES + 1))
     fi
 done
 
 if [ $PASSWORD_ISSUES -gt 0 ]; then
     log_warn "Review the above for actual hardcoded passwords"
-    ((ISSUES_FOUND+=$PASSWORD_ISSUES))
+    ISSUES_FOUND=$((ISSUES_FOUND + PASSWORD_ISSUES))
 else
     log_info "No obvious hardcoded passwords found"
 fi
@@ -129,14 +137,14 @@ MISSING_PATTERNS=0
 for pattern in "${REQUIRED_PATTERNS[@]}"; do
     if ! grep -q "$pattern" .gitignore 2>/dev/null; then
         log_warn ".gitignore missing pattern: $pattern"
-        ((MISSING_PATTERNS++))
+        MISSING_PATTERNS=$((MISSING_PATTERNS + 1))
     fi
 done
 
 if [ $MISSING_PATTERNS -eq 0 ]; then
     log_info ".gitignore properly configured for sensitive files"
 else
-    ((ISSUES_FOUND+=$MISSING_PATTERNS))
+    ISSUES_FOUND=$((ISSUES_FOUND + MISSING_PATTERNS))
 fi
 
 # Check SSH key permissions
@@ -148,7 +156,7 @@ if [ -d ~/.ssh ]; then
             perms=$(stat -c %a "$keyfile")
             if [ "$perms" != "600" ]; then
                 log_error "$keyfile has insecure permissions: $perms (should be 600)"
-                ((ISSUES_FOUND++))
+                ISSUES_FOUND=$((ISSUES_FOUND + 1))
             else
                 log_info "$keyfile has correct permissions: $perms"
             fi
@@ -162,7 +170,7 @@ log_header "Checking environment configuration..."
 if [ -f .env ]; then
     if git ls-files .env 2>/dev/null | grep -q ".env"; then
         log_error ".env file is tracked in git!"
-        ((ISSUES_FOUND++))
+        ISSUES_FOUND=$((ISSUES_FOUND + 1))
     else
         log_info ".env file is not tracked in git"
     fi
