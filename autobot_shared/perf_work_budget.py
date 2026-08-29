@@ -49,12 +49,15 @@ the finding, not the obstacle.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import TypeVar
 
 REFERENCE_WORKLOAD_ITERATIONS = 20_000
 REFERENCE_WORKLOAD_SAMPLES = 9
+
+_T = TypeVar("_T")
 
 # The junit sink for reported measurements, set per test by
 # `recording_work_units()` so call sites need not thread a fixture through.
@@ -221,4 +224,58 @@ def assert_within_baseline_ratio(
         f"{report}. This is a ratio against a baseline measured on the same loop "
         f"moments earlier, not a wall-clock ceiling — runner load moves both "
         f"terms, so investigate the code, do not raise it."
+    )
+
+
+class MeasurementStarved(Exception):
+    """A measurement window could not collect enough samples to mean anything.
+
+    Raised by a caller's measurement callable, never by this module — the
+    caller is the one that knows how many samples its window needs. Deliberately
+    NOT an `AssertionError`: `measure_with_starvation_retry` catches only this
+    type, so a real assertion failure inside the callable (a regression the
+    measurement *did* complete and then failed) is never mistaken for a window
+    that produced no measurement at all, and is never retried or swallowed.
+    """
+
+
+async def measure_with_starvation_retry(
+    measure: Callable[[], Awaitable[_T]],
+    *,
+    max_attempts: int,
+    what: str,
+) -> _T:
+    """Retry `measure` a small bounded number of times if its window starves (#15266).
+
+    A window that could not collect enough samples is neither a pass nor a
+    failure — it is a runner that was too busy to take the measurement at all,
+    which says nothing about the code under test. Failing outright on that
+    reports an environment condition as a code regression (#15221's second
+    sighting); silently skipping is how a real regression hides (the
+    unreachable `pytest.skip` fixed in #15248). Retrying a small, FIXED number
+    of times distinguishes "momentarily busy" from "persistently starved": if
+    every attempt starves, this still raises, because persistent starvation is
+    a fact worth a red, not noise to average away.
+
+    WHAT THIS DOES NOT RETRY, and must not: if `measure` completes and its own
+    assertion then fails — a real regression — that is a plain `AssertionError`,
+    not `MeasurementStarved`, and this function does not catch it. It propagates
+    on the first attempt. Retrying is scoped exclusively to "could this window
+    be measured at all", so a genuine regression can never be masked by
+    landing on a lucky retry, and a starved attempt can never be scored as a
+    pass — starvation only ever produces a retry or, on the last attempt, a
+    distinct failure message naming persistent starvation rather than a
+    budget breach.
+    """
+    last_reason: str | None = None
+    for _attempt in range(1, max_attempts + 1):
+        try:
+            return await measure()
+        except MeasurementStarved as starved:
+            last_reason = str(starved)
+    raise AssertionError(
+        f"{what}: starved on all {max_attempts} attempts, last reason: "
+        f"{last_reason} — the event loop was persistently unable to produce a "
+        "usable measurement window, not merely busy once; this is distinct "
+        "from a measured budget breach, which fails on its first attempt"
     )

@@ -49,7 +49,12 @@ from typing import NamedTuple
 
 import pytest
 
-from autobot_shared.perf_work_budget import assert_within_baseline_ratio, recording_work_units
+from autobot_shared.perf_work_budget import (
+    MeasurementStarved,
+    assert_within_baseline_ratio,
+    measure_with_starvation_retry,
+    recording_work_units,
+)
 from code_intelligence.shared import process_offload
 from code_intelligence.shared.process_offload import (
     run_directory_scan,
@@ -121,6 +126,13 @@ _IDLE_BASELINE_WINDOW_SECONDS = 0.3
 
 #: Fewest ticks a window may contribute before its median describes anything.
 _MIN_TICKS_PER_WINDOW = 10
+
+#: Bounded retries for a window that starved (#15266): fewer than
+#: _MIN_TICKS_PER_WINDOW ticks says the runner was too busy to take THIS
+#: measurement, not that the code regressed. Small and FIXED, never widened —
+#: see ``measure_with_starvation_retry`` for why a starved window is retried
+#: while a measured-and-failed ratio never is.
+_MAX_STARVATION_RETRIES = 3
 
 #: How far the heartbeat may drift above its own idle baseline while a scan runs
 #: in another process. Measured over three runs on the #15221 host: 1.009, 1.016
@@ -268,15 +280,21 @@ async def _tick_latency_during_scan(force_thread: bool) -> _TickLatency:
     await shutdown_scan_pool()
     process_offload._pool_unavailable_reason = None
 
-    assert len(busy) >= _MIN_TICKS_PER_WINDOW, (
-        f"the heartbeat produced {len(busy)} ticks while the scan ran — fewer than "
-        f"{_MIN_TICKS_PER_WINDOW}, so there is no median to compare and the "
-        "measurement is meaningless"
-    )
-    assert len(idle) >= _MIN_TICKS_PER_WINDOW, (
-        f"the heartbeat produced {len(idle)} ticks on the idle loop — fewer than "
-        f"{_MIN_TICKS_PER_WINDOW}, so there is no baseline to compare against"
-    )
+    # A short window is starved, not regressed (#15266): raising
+    # MeasurementStarved rather than asserting lets the caller retry a bounded
+    # number of times instead of either failing on ordinary runner load or
+    # skipping past a real regression. See measure_with_starvation_retry.
+    if len(busy) < _MIN_TICKS_PER_WINDOW:
+        raise MeasurementStarved(
+            f"the heartbeat produced {len(busy)} ticks while the scan ran — fewer than "
+            f"{_MIN_TICKS_PER_WINDOW}, so there is no median to compare and the "
+            "measurement is meaningless"
+        )
+    if len(idle) < _MIN_TICKS_PER_WINDOW:
+        raise MeasurementStarved(
+            f"the heartbeat produced {len(idle)} ticks on the idle loop — fewer than "
+            f"{_MIN_TICKS_PER_WINDOW}, so there is no baseline to compare against"
+        )
     return _TickLatency(_median_ms(busy), _median_ms(idle), len(busy), len(idle), unavailable)
 
 
@@ -291,9 +309,30 @@ async def test_a_scan_in_a_process_does_not_delay_the_event_loop():
 
     Compared within the test rather than against a fixed threshold, so a loaded
     CI runner shifts both numbers together instead of flaking.
+
+    A WINDOW TOO SHORT TO MEDIAN IS A RETRY, NOT A SKIP OR A PASS (#15266). A
+    contended runner can starve the heartbeat below ``_MIN_TICKS_PER_WINDOW``
+    before either scan even starts, and that says nothing about the code below —
+    but neither does silently passing nor silently skipping past it, which is
+    how a real regression would hide. ``measure_with_starvation_retry`` retakes
+    the window up to ``_MAX_STARVATION_RETRIES`` times and only THEN fails, with
+    a message naming persistent starvation rather than a budget breach. It
+    cannot mask a genuine regression: it retries `_tick_latency_during_scan`
+    only on ``MeasurementStarved`` (an empty window), never on the ratio
+    assertions below, which run outside this call and fail on their first and
+    only attempt — a scan that measurably delays the loop fails here every
+    time, retries or not.
     """
-    in_thread = await _tick_latency_during_scan(force_thread=True)
-    in_process = await _tick_latency_during_scan(force_thread=False)
+    in_thread = await measure_with_starvation_retry(
+        lambda: _tick_latency_during_scan(force_thread=True),
+        max_attempts=_MAX_STARVATION_RETRIES,
+        what="in-thread heartbeat window",
+    )
+    in_process = await measure_with_starvation_retry(
+        lambda: _tick_latency_during_scan(force_thread=False),
+        max_attempts=_MAX_STARVATION_RETRIES,
+        what="in-process heartbeat window",
+    )
 
     if in_process.pool_unavailable:
         pytest.skip(f"process pool unavailable here: {in_process.pool_unavailable}")

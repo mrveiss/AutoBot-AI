@@ -12,11 +12,17 @@ marker-excluded selection whose benchmarks they underwrite.
 import pytest
 
 from autobot_shared.perf_work_budget import (
+    MeasurementStarved,
     assert_within_work_budget,
     measure_reference_ms,
+    measure_with_starvation_retry,
     recording_work_units,
     reference_workload,
 )
+
+# Only the classes below hold coroutine tests; the ones above are plain sync
+# functions and this marker is a no-op for them (#15266).
+pytestmark = pytest.mark.asyncio
 
 
 class TestWorkBudgetHarness:
@@ -66,3 +72,72 @@ class TestWorkBudgetHarness:
             pass
         # No recorder installed: the assertion still works and reports nowhere.
         assert_within_work_budget(measure_reference_ms(), 1000.0, "unrecorded measurement")
+
+
+class TestStarvationRetry:
+    """``measure_with_starvation_retry``: a starved window retries, a real
+    measured failure never does (#15266). The retry exists so a window too
+    short to hold a median is neither a false pass (silently skipped) nor a
+    false regression (failed on ordinary runner load) — see
+    ``process_offload_test.py::test_a_scan_in_a_process_does_not_delay_the_event_loop``
+    for the call site this was built for.
+    """
+
+    async def test_succeeds_without_retry_when_the_first_attempt_is_not_starved(self):
+        calls = 0
+
+        async def measure():
+            nonlocal calls
+            calls += 1
+            return "measured"
+
+        result = await measure_with_starvation_retry(measure, max_attempts=3, what="unstarved")
+        assert result == "measured"
+        assert calls == 1, "a clean first attempt must not be retried"
+
+    async def test_retries_a_starved_window_and_succeeds_once_it_is_not(self):
+        calls = 0
+
+        async def measure():
+            nonlocal calls
+            calls += 1
+            if calls < 3:
+                raise MeasurementStarved(f"attempt {calls} starved")
+            return "measured on the third attempt"
+
+        result = await measure_with_starvation_retry(measure, max_attempts=3, what="eventually unstarved")
+        assert result == "measured on the third attempt"
+        assert calls == 3
+
+    async def test_persistent_starvation_fails_after_the_bounded_ceiling(self):
+        """Starvation on every attempt still goes red — this is not a skip."""
+        calls = 0
+
+        async def measure():
+            nonlocal calls
+            calls += 1
+            raise MeasurementStarved(f"attempt {calls} starved")
+
+        with pytest.raises(AssertionError, match="starved on all 3 attempts"):
+            await measure_with_starvation_retry(measure, max_attempts=3, what="persistently starved")
+        assert calls == 3, "the ceiling is bounded, not unbounded"
+
+    async def test_a_measured_regression_is_never_retried_or_masked(self):
+        """The mutation argument (#15266): a real regression fails on attempt one.
+
+        ``MeasurementStarved`` is the ONLY exception this retries. A plain
+        ``AssertionError`` — what a completed measurement raises when its own
+        ratio budget fails, e.g. the ~1.994x reading a forced in-process scan
+        produces against the 1.5 budget — propagates immediately. It can never
+        land on a lucky retry and can never be averaged away by one.
+        """
+        calls = 0
+
+        async def measure():
+            nonlocal calls
+            calls += 1
+            raise AssertionError("1.994x its own idle baseline (budget 1.5)")
+
+        with pytest.raises(AssertionError, match="1.994x"):
+            await measure_with_starvation_retry(measure, max_attempts=3, what="regressed")
+        assert calls == 1, "a measured regression must not be retried"
