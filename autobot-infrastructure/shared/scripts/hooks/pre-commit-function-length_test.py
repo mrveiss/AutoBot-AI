@@ -16,11 +16,25 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from autobot_shared.paths import scrubbed_git_env
+
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-function-length"
 
 
+def _test_git_env() -> dict[str, str]:
+    """#15246: env for every git subprocess this suite spawns.
+
+    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    GIT_DIR pointing at the worktree it is pushing (every checkout here is
+    one), and an unscrubbed `git init`/`git add`/`git commit` in a
+    fixture then operates on THAT repository instead of tmp_path's. See
+    autobot_shared/paths_test.py and #15246 for the reproduced incident.
+    """
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+
+
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True)
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env())
 
 
 def _init_repo(tmp_path: Path) -> Path:
@@ -39,7 +53,7 @@ def test_blocks_overlong_function(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     (repo / "bad.py").write_text(_long_function_source(), encoding="utf-8")
     _git(repo, "add", "bad.py")
-    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True)
+    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
     assert result.returncode != 0, result.stdout + result.stderr
 
 
@@ -47,7 +61,7 @@ def test_allows_short_function(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     (repo / "ok.py").write_text("def small():\n    return 1\n", encoding="utf-8")
     _git(repo, "add", "ok.py")
-    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True)
+    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -63,7 +77,7 @@ class TestFailsClosedOnGitFailure:
         # Corrupt the index so git errors rather than returning an empty answer.
         (repo / ".git" / "index").write_text("garbage", encoding="utf-8")
 
-        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True)
+        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
         assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"
 
 
@@ -92,7 +106,7 @@ class TestArgvModeIsNotSilentlyIgnored:
         # Nothing staged now -- git diff --cached is empty.
 
         result = subprocess.run(
-            ["bash", str(HOOK_PATH), "bad.py"], cwd=repo, capture_output=True, text=True
+            ["bash", str(HOOK_PATH), "bad.py"], cwd=repo, capture_output=True, text=True, env=_test_git_env()
         )
         assert result.returncode != 0, (
             "argv mode was ignored -- fell back to the (empty) staged set: "

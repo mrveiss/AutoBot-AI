@@ -290,6 +290,21 @@ repos:
         stages: [pre-commit]
         description: "An inherited GIT_DIR makes --show-toplevel answer with the caller's CWD; resolve the root with autobot_shared.paths.git_repo_root()"
 
+      # #15246: a test that shells out to `git init`/`add`/`commit`/`checkout`/
+      # etc. in a tmp_path fixture, with subprocess.run's default of inheriting
+      # os.environ, does not touch that fixture at all under the pre-push hook
+      # -- it writes to whatever GIT_DIR names, which is the pushing worktree's
+      # own git directory. autobot_shared/paths_test.py did exactly that and
+      # dropped 86 tracked files from the live index (#15243 fixed the
+      # instance; this gates the class).
+      - id: git-write-env-scrubbed
+        name: "A test's git write must scrub GIT_DIR first (#15246)"
+        entry: tools/lint/check_git_write_env_scrubbed.py
+        language: python
+        files: (_test\.py|(^|/)test_[^/]+\.py)$
+        stages: [pre-commit]
+        description: "An inherited GIT_DIR makes a test fixture's git init/add/commit/etc. write to the real repository instead of tmp_path; pass env=scrubbed_git_env()"
+
       # #14228: autobot-backend/requirements.txt ends with `-r ../requirements.txt`,
       # so pip sees both files as one set and aborts when the same distribution
       # arrives with different specifiers. openpyxl and python-pptx did exactly

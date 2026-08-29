@@ -16,16 +16,29 @@ the same technique pre-commit-worktree-branch-guard_test.py uses for
 
 from __future__ import annotations
 
-import os
 import stat
 import subprocess
 from pathlib import Path
 
+from autobot_shared.paths import scrubbed_git_env
+
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-target-branch-guard"
 
 
+def _test_git_env() -> dict[str, str]:
+    """#15246: env for every git subprocess this suite spawns.
+
+    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    GIT_DIR pointing at the worktree it is pushing (every checkout here is
+    one), and an unscrubbed `git init`/`git add`/`git commit` in a
+    fixture then operates on THAT repository instead of tmp_path's. See
+    autobot_shared/paths_test.py and #15246 for the reproduced incident.
+    """
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+
+
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True)
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env())
 
 
 def _init_repo(tmp_path: Path, branch: str) -> Path:
@@ -40,13 +53,13 @@ def _init_repo(tmp_path: Path, branch: str) -> Path:
 
 def test_allowed_branch_permits_commit(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path, branch="issue-9999")
-    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True)
+    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
     assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_main_branch_blocks_commit(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path, branch="main")
-    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True)
+    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
     assert result.returncode != 0, result.stdout + result.stderr
     assert "COMMIT BLOCKED" in result.stdout
 
@@ -65,7 +78,7 @@ class TestFailsClosedWhenDependencyMissing:
         hook_copy.write_bytes(HOOK_PATH.read_bytes())
         hook_copy.chmod(0o755)
 
-        result = subprocess.run([str(hook_copy)], cwd=repo, capture_output=True, text=True)
+        result = subprocess.run([str(hook_copy)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
         assert result.returncode != 0, "the hook reported clean with no dependency while on a protected branch"
 
 
@@ -101,7 +114,7 @@ class TestFailsClosedWhenGitCannotAnswer:
         repo = _init_repo(tmp_path, branch="main")  # a genuine violation present
 
         fake_bin = self._make_fake_git(tmp_path)
-        env = dict(os.environ)
+        env = dict(_test_git_env())
         env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
 
         result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=env)
