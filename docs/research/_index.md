@@ -24,6 +24,7 @@ Research reports covering hardware integration, system conflicts, and technology
 | [[layered-agent-memory-and-context-offload]] | Layered agent memory + symbolic context offload — tiered L0–L4 stack built but never ran, 2 of 5 layers structurally disconnected, memory plane untenanted (#13685) |
 | [[desktop-worker-harness-approval-and-compaction]] | Desktop worker-agent harness comparison — our SSRF guard, command-risk and guard-profile work is ahead; gaps are a success-shaped compaction failure, an ungated outbound gateway seam, approvals unreachable when nobody is at the screen, and four unreconciled tool-classification planes (#14065–#14068) |
 | [[agent-harness-guard-and-context-audit]] | Agent harness comparison — our loop guards are stronger, but guard input is un-normalized, context windows are a static 4096 fallback, ingest has no bot-self filter, and `AgentLoop` has no production caller (#14027–#14031) |
+| [[model-hardware-standard]] | Anthropic Model Hardware Standard (MHS) research preview — source analysis; spec not public, all metrics self-reported, transferable patterns are states/procedures, NL capability tags and driver-enforced safety floors |
 
 ## Related Sections
 
