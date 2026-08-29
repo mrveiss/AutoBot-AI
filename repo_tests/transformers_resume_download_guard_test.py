@@ -7,21 +7,46 @@
 tree passed it anyway.
 
 What actually happens at 5.15.1, read from the installed package's own source
-rather than assumed from memory: ``resume_download`` is popped nowhere --
-``modeling_utils.py``'s ``from_pretrained`` forwards unrecognized kwargs through
-``config_class.from_pretrained(..., return_unused_kwargs=True, **kwargs)`` and the
-unused remainder lands in ``model_kwargs``, which then reaches
-``cls(config, *model_args, **model_kwargs)``. A direct model/processor class
-(``CLIPModel``, ``Wav2Vec2Model``, ``WhisperForConditionalGeneration``, ...) has no
-``**kwargs`` catch-all on ``__init__``, so this is a live ``TypeError`` -- exactly
-the CI reproduction the issue cites: ``CLIPModel.__init__() got an unexpected
-keyword argument 'resume_download'`` (run 32839088246). An ``AutoConfig``/
-``AutoTokenizer`` call instead survives it: ``PretrainedConfig.__post_init__``
-stores any leftover kwarg as a bare instance attribute and
-``PreTrainedTokenizerBase.__init__`` just leaves it sitting, unused, in
-``init_kwargs`` -- silently swallowed, latent debt rather than a crash on that
-path. Either way resumption is automatic in v5, so the argument is dead
-everywhere and belongs nowhere; no replacement kwarg exists to substitute.
+rather than assumed from memory: ``resume_download`` is popped nowhere before
+``cls(*args, **kwargs)`` runs, so the split is entirely about what that
+particular ``__init__`` does with the leftover kwarg.
+
+**8 of this fix's 18 sites raise.** ``PreTrainedModel.from_pretrained``
+(``modeling_utils.py``) forwards unrecognized kwargs through
+``config_class.from_pretrained(..., return_unused_kwargs=True, **kwargs)``; the
+still-unused remainder becomes ``model_kwargs``, reaching
+``cls(config, *model_args, **model_kwargs)``. ``CLIPModel`` x2,
+``Wav2Vec2Model``, ``AutoModel``, ``Blip2ForConditionalGeneration`` x2,
+``WhisperForConditionalGeneration`` and ``Wav2Vec2ForCTC`` have no ``**kwargs``
+catch-all on ``__init__`` -- each takes only ``config`` (plus ``target_lang`` for
+``Wav2Vec2ForCTC``) -- so this is a live ``TypeError``, exactly the CI
+reproduction the issue cites: ``CLIPModel.__init__() got an unexpected keyword
+argument 'resume_download'`` (run 32839088246).
+
+**The other 10 swallow it silently -- including every Processor class, not
+just Auto*.** ``CLIPProcessor`` x2, ``Wav2Vec2Processor`` x2, ``Blip2Processor``,
+``WhisperProcessor``, ``AutoTokenizer`` x2 and ``AutoConfig`` x2 never reach a
+strict ``__init__`` with this kwarg still attached.
+``ProcessorMixin.from_args_and_dict`` (``processing_utils.py``) computes
+``accepted_args_and_kwargs`` from ``cls.__init__.__code__.co_varnames`` and calls
+``validate_init_kwargs`` to split the incoming dict into
+``valid_kwargs``/``unused_kwargs`` *before* instantiating -- ``resume_download``
+lands in ``unused_kwargs`` and is dropped, never passed to ``__init__`` at all
+(an earlier pass at this docstring got this wrong, assuming Processor classes
+raised like Model classes do; a review of this PR caught it by reading
+``from_args_and_dict``/``validate_init_kwargs`` directly). Config classes take a
+different silent path: ``PretrainedConfig.__post_init__`` stores any leftover
+kwarg as a bare instance attribute, and ``PreTrainedTokenizerBase.__init__``
+just leaves it sitting, unused, in ``init_kwargs``.
+
+Either way the conclusion is unchanged: **live breakage**, not latent debt,
+because every one of this fix's six loaders calls its Model class before its
+Processor class (e.g. ``vision.py``'s ``_load_models``: ``CLIPModel.from_pretrained``
+before ``CLIPProcessor.from_pretrained``) -- the Model call's ``TypeError`` aborts
+the whole ``_load_models`` sequence before the Processor call, whichever way it
+would have gone, is ever reached. And regardless of which half a given call falls
+into, resumption is automatic in v5, so the argument is dead everywhere and
+belongs nowhere; no replacement kwarg exists to substitute.
 
 Mechanism
 ---------
@@ -45,13 +70,40 @@ comfortably below 22 so an unrelated trim doesn't false-fail this guard, but far
 above zero, so a walk that stops finding call sites (moved root, renamed helper)
 fails loudly instead of reporting a false "no offenders" having checked nothing.
 
+Known limitation -- the splat blind spot
+-----------------------------------------
+This is a text scanner, not an interpreter: it can only see a kwarg spelled
+literally inside a ``from_pretrained(...)`` span. A ``**splat`` of a variable
+built elsewhere (``_dl_kwargs = {"resume_download": True}`` two lines above,
+then ``CLIPModel.from_pretrained("x", **_dl_kwargs)``) hides the kwarg from a
+plain-text ban, and resolving the splat's actual contents would mean executing
+code -- something this guard, and this whole fix, deliberately never does.
+:data:`SPLAT_ALLOWLIST` closes that gap the same way the (unrelated)
+``ALLOWLIST`` in ``credential_vault_resolution_guard_test.py`` closes its own:
+*any* ``**splat`` inside a ``from_pretrained`` span is review-required, not
+trusted, by default. An unlisted one fails
+``test_no_unreviewed_splat_kwargs_reach_from_pretrained`` outright, forcing a
+human to read the splatted dict's construction and either add a justified entry
+(as ``layer_inference.py``'s two ``**kwargs`` sites below did -- both build
+``kwargs`` from ``cache_dir``/``use_fast`` only, read by hand) or fix a real
+offender. The allowlist is keyed by ``(file, line)``, not by the splat's
+content, so it inherits the same residual tradeoff the credential guard's
+allowlist already accepts in this repo: it re-verifies on every line-number
+drift (``test_splat_allowlist_entries_still_correspond_to_a_real_splat`` catches
+a stale entry), but not on an in-place edit to the same line's dict that keeps
+the line number fixed.
+
 The mutation this guard exists to catch
 ----------------------------------------
-``test_a_reintroduced_resume_download_is_caught`` proves the detector directly
-against a reproduction of the exact pre-fix
+``test_a_reintroduced_resume_download_is_caught`` proves the direct-kwarg
+detector against a reproduction of the exact pre-fix
 ``multimodal_processor/processors/vision.py`` ``CLIPModel.from_pretrained`` call
 site (fixed in this same PR) -- a ``resume_download=True`` kwarg on a line other
-than the call's own opening line, the shape every real offender in this repo used.
+than the call's own opening line, the shape every real offender in this repo
+used. ``test_a_splat_kwargs_call_is_flagged_for_review`` proves the splat
+detector against the indirect shape above, confirming the guard degrades to
+"flag for review" rather than "silently pass" on the one shape it cannot resolve
+by reading alone.
 """
 
 from __future__ import annotations
@@ -66,11 +118,27 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _FROM_PRETRAINED_RE = re.compile(r"\bfrom_pretrained\s*\(")
 _RESUME_DOWNLOAD_RE = re.compile(r"\bresume_download\b")
+_SPLAT_RE = re.compile(r"\*\*\w+")
 _SKIP_PATH_SUBSTRINGS = ("/tests/", "repo_tests/")
 
 #: Below this, the sweep itself is broken (moved root, renamed helper), not a
 #: genuinely thinned-out tree. See module docstring's "Reach floor" section.
 FROM_PRETRAINED_REACH_FLOOR = 15
+
+#: ``(repo-relative file, line_no) -> reason`` for every ``**splat`` this guard's
+#: text scan cannot resolve on its own (see module docstring's "Known
+#: limitation" section). Each entry was read by hand at the time it was added
+#: and confirmed to never carry ``resume_download``.
+SPLAT_ALLOWLIST: dict[tuple[str, int], str] = {
+    (
+        "autobot-backend/llm_shared/optimization/layer_inference.py",
+        198,
+    ): "kwargs built two lines above from cache_dir only (#15054)",
+    (
+        "autobot-backend/llm_shared/optimization/layer_inference.py",
+        565,
+    ): "kwargs built two lines above from use_fast/cache_dir only (#15054)",
+}
 
 
 def _tracked_python_files() -> list[str]:
@@ -222,3 +290,61 @@ def test_a_docstring_mention_is_not_counted_as_a_call_site() -> None:
         '    """\n'
     )
     assert find_from_pretrained_calls(strip_prose(docstring_only)) == []
+
+
+def test_no_unreviewed_splat_kwargs_reach_from_pretrained() -> None:
+    """The splat half of the guard: an unlisted ``**splat`` fails, forcing review.
+
+    Text alone cannot tell whether a splatted dict carries ``resume_download``
+    (see module docstring's "Known limitation" section), so every ``**splat``
+    inside a ``from_pretrained`` span must be on :data:`SPLAT_ALLOWLIST`, with a
+    reason confirming it was actually read.
+    """
+    unreviewed = [
+        (rel, lineno)
+        for rel, calls in production_from_pretrained_calls().items()
+        for lineno, span in calls
+        if _SPLAT_RE.search(span) and (rel, lineno) not in SPLAT_ALLOWLIST
+    ]
+    assert not unreviewed, "unreviewed **splat inside a from_pretrained call -- read it and allowlist or fix it:\n" + "\n".join(
+        f"  {rel}:{lineno}" for rel, lineno in sorted(unreviewed)
+    )
+
+
+def test_splat_allowlist_entries_still_correspond_to_a_real_splat() -> None:
+    """A stale entry (the splat it excused is gone) should shrink, not linger."""
+    found = production_from_pretrained_calls()
+    live_splats = {
+        (rel, lineno) for rel, calls in found.items() for lineno, span in calls if _SPLAT_RE.search(span)
+    }
+    stale = sorted(key for key in SPLAT_ALLOWLIST if key not in live_splats)
+    assert not stale, f"SPLAT_ALLOWLIST entries with no matching splat left -- delete them: {stale}"
+
+
+def test_a_splat_kwargs_call_is_flagged_for_review() -> None:
+    """The blind spot's contrast mutation: an indirect splat is still caught.
+
+    Reproduces the exact reproduction this guard cannot resolve by reading
+    alone -- a ``resume_download`` hidden inside a splatted dict -- and proves
+    it is flagged as unreviewed (not allowlisted, not silently passed) rather
+    than invisible to the guard entirely.
+    """
+    splat_shape = (
+        '        _dl_kwargs = {"resume_download": True}\n'
+        '        CLIPModel.from_pretrained("x", **_dl_kwargs)\n'
+    )
+    calls = find_from_pretrained_calls(splat_shape)
+    assert len(calls) == 1
+    lineno, span = calls[0]
+    assert _SPLAT_RE.search(span) is not None, "the splat detector missed a **_dl_kwargs splat entirely"
+
+    fake_file = "repro/not_a_real_file.py"
+    unreviewed = [
+        (fake_file, ln)
+        for ln, sp in calls
+        if _SPLAT_RE.search(sp) and (fake_file, ln) not in SPLAT_ALLOWLIST
+    ]
+    assert unreviewed == [(fake_file, lineno)], (
+        "the reproduction of the indirect-splat resume_download shape was not "
+        "flagged for review -- this guard would not have caught it"
+    )
