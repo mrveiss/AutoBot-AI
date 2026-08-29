@@ -48,6 +48,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FLAKE8_CONFIG = REPO_ROOT / ".flake8"
 _CHECKER = REPO_ROOT / "tools" / "lint" / "check_flake8_exclude_anchoring.py"
@@ -280,7 +282,14 @@ def test_audit_entrypoint_fails_on_the_pre_fix_config(tmp_path):
     """
     (tmp_path / ".flake8").write_text(PRE_FIX_EXCLUDE, encoding="utf-8")
     subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "init", "-q"], cwd=tmp_path, capture_output=True, text=True, check=True
+        # #15246: scrubbed -- an inherited GIT_DIR would init the real repo
+        # instead of tmp_path.
+        ["git", "init", "-q"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=scrubbed_git_env(),
     )
     reached, problems = checker.audit_excludes(tmp_path)
 

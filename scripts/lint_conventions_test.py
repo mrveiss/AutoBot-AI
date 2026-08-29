@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 SCRIPT = Path(__file__).resolve().parent / "lint-conventions.sh"
 # #13984: the script now sources the canonical base/head resolver instead of
 # carrying its own copy, so the throwaway repo has to ship the library too --
@@ -22,7 +24,10 @@ LIB = Path(__file__).resolve().parent / "lib" / "git-scope.sh"
 
 
 def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    """#15246: env scrubbed -- an inherited GIT_DIR would run this against the
+    real repository instead of the throwaway one at ``repo``.
+    """
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=scrubbed_git_env())
 
 
 @pytest.fixture()
