@@ -136,3 +136,89 @@ def assert_within_work_budget(elapsed_ms: float, budget_units: float, what: str)
         f"{report}. This is a load-invariant ratio, not a wall-clock ceiling — "
         f"investigate the code, do not raise it."
     )
+
+
+def assert_within_baseline_ratio(
+    measured_ms: float,
+    baseline_ms: float,
+    budget_ratio: float,
+    what: str,
+) -> None:
+    """Assert a measurement stayed within `budget_ratio` of its OWN idle baseline.
+
+    The sibling of `assert_within_work_budget`, for quantities a CPU work unit
+    cannot normalise (#15221).
+
+    WHY THE WORK UNIT DOES NOT TRANSFER TO A CONTENTION MEASURE. `reference_workload()`
+    is a CPU-throughput yardstick. It normalises a numerator that is also CPU
+    throughput. It does not normalise event-loop wakeup latency, for two
+    independent reasons:
+
+    * Timed WHILE the operation under test runs, the yardstick is starved by
+      exactly the contention the assertion exists to detect, so numerator and
+      denominator inflate together and the signal cancels. A test that cannot
+      fail is not a test.
+    * Timed BEFORE or AFTER instead, it describes a different moment and a
+      different physical quantity. Measured on the #15221 host it spread
+      1.43ms-3.27ms across six consecutive samples — a 2.3x swing in the
+      DENOMINATOR alone, wider than the 2.0x signal the assertion has to
+      resolve. It would manufacture flake rather than absorb it.
+
+    WHAT REPLACES IT. The baseline is the SAME quantity as the numerator, taken
+    on the same loop in the same process in an adjacent window, differing only in
+    whether the operation under test was in flight. Under an external delay L the
+    baseline reads `b + L` and the measurement `b + L + tax`, so the ratio is
+    `1 + tax/(b + L)` — decreasing in L. Load pushes it toward 1.0 and away from
+    the budget, and the regression it guards raises only the numerator.
+
+    THE PREMISE THAT ALGEBRA RESTS ON, stated because it is not guaranteed: L
+    must be COMPARABLE across the baseline and measurement windows. They are
+    temporally disjoint — a caller typically spans a second or two end to end —
+    so a load burst from a sibling job that lands inside the measurement window
+    and is gone before the baseline is resampled inflates the numerator with no
+    matching rise in the denominator, and pushes the ratio UP. That is a real
+    false-failure path this helper does not exclude. It is much narrower than the
+    absolute wall-clock ceiling it replaces, which tripped on any load bump at
+    all: a spike now has to be timed to miss the baseline windows entirely. But
+    the guarantee is "much less likely", NOT "impossible", and a red here is not
+    on its own proof of a regression. Callers should bracket the measurement with
+    a baseline window either side rather than take one before it, so that a
+    monotone drift in load is shared by both terms.
+
+    TWO MORE THINGS A CALLER OWNS, not this helper:
+
+    * A SETTLING GAP between the operation and a trailing baseline window. If the
+      operation's effects outlive its completion — pool teardown, a GC pause,
+      page-cache pressure — that tax lands in the "idle" baseline, inflating the
+      denominator and SHRINKING the ratio. That weakens detection exactly where
+      it matters, and it fails quietly. #15221's caller samples with no gap
+      because its workload demonstrably leaves nothing behind; a caller whose
+      does should wait it out first.
+    * The STATISTIC over each window. A median answers "did the typical sample
+      move", so a regression that delays only a minority of samples will not move
+      it. Choose a high percentile instead where a tail is the thing at stake.
+
+    Fails on four distinct conditions, all of them real: the measurement exceeded
+    its budget relative to its own baseline; nothing was measured; no baseline
+    was measured; or the baseline is zero and cannot be a divisor.
+    """
+    assert isinstance(measured_ms, (int, float)), f"{what}: no measurement was taken (got {measured_ms!r})"
+    assert isinstance(baseline_ms, (int, float)), f"{what}: no baseline was taken (got {baseline_ms!r})"
+    assert measured_ms > 0.0, f"{what}: measured {measured_ms}ms — the operation under test did not run"
+    assert baseline_ms > 0.0, f"{what}: baseline measured {baseline_ms}ms and cannot be a divisor"
+
+    ratio = measured_ms / baseline_ms
+    report = (
+        f"{what}: {ratio:.3f}x its own idle baseline (budget {budget_ratio}) "
+        f"= {measured_ms:.3f}ms / {baseline_ms:.3f}ms idle"
+    )
+    print(f"[perf #15221] {report}")  # noqa: print
+    recorder = _WORK_UNIT_RECORDER.get()
+    if recorder is not None:
+        recorder("perf_baseline_ratio", report)
+
+    assert ratio < budget_ratio, (
+        f"{report}. This is a ratio against a baseline measured on the same loop "
+        f"moments earlier, not a wall-clock ceiling — runner load moves both "
+        f"terms, so investigate the code, do not raise it."
+    )
