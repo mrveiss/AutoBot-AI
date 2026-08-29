@@ -47,7 +47,6 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_7_DAYS
 from services.gateway.egress_governor import egress_governor
-from services.provider_key_vault import resolve_provider_key
 
 logger = get_logger(__name__)
 
@@ -448,7 +447,7 @@ class NotificationService:
         smtp_host = config.smtp_host
         smtp_port = int(config.smtp_port)
         smtp_user = config.smtp_user
-        smtp_password = resolve_provider_key("AUTOBOT_SMTP_PASSWORD", config.smtp_password)
+        smtp_password = config.smtp_password
         smtp_from = config.smtp_from
         use_tls = config.smtp_tls.lower() != "false"
 

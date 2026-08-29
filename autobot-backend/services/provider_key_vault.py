@@ -102,13 +102,21 @@ SEARCH_PROVIDER_KEY_NAMES: frozenset[str] = frozenset(
 #: tokens ``integrations.capability_registry`` gates its Slack/Discord
 #: adapters on -- the third ``CredentialGatedRegistry`` sibling named in
 #: ``autobot_shared/credential_gated_registry.py``'s own docstring, never
-#: migrated to this seam at all -- the Google/VirusTotal/URLVoid health and
-#: threat-intel probe keys ``services.provider_health.providers`` and
-#: ``security.threat_intelligence`` read directly, and the outbound SMTP
-#: password ``services.notification_service`` reads directly. SLACK_BOT_TOKEN
-#: has a second, independent reader, ``agent_loop.slack_hook`` (the Slack
+#: migrated to this seam at all -- and the Google/VirusTotal/URLVoid health
+#: and threat-intel probe keys ``services.provider_health.providers`` and
+#: ``security.threat_intelligence`` read directly. SLACK_BOT_TOKEN has a
+#: second, independent reader, ``agent_loop.slack_hook`` (the Slack
 #: notification bot itself, distinct from the capability registry's
 #: messaging adapter) -- both route through this same name.
+#:
+#: ``services.notification_service``'s SMTP password is deliberately not
+#: here: routing it through this seam needs a new module-level import in a
+#: ``KNOWN_LARGE`` file at its frozen line-count ceiling
+#: (``scripts/python_file_size_known_large.py``), and that ceiling may not
+#: grow to make room for it (#14236). Left as a TRACKED_GAP entry in
+#: ``repo_tests/credential_vault_resolution_allowlist.py`` for a change that
+#: can also address the file-size constraint, rather than bending the ratchet
+#: here.
 SERVICE_CREDENTIAL_KEY_NAMES: frozenset[str] = frozenset(
     {
         "SLACK_BOT_TOKEN",
@@ -116,7 +124,6 @@ SERVICE_CREDENTIAL_KEY_NAMES: frozenset[str] = frozenset(
         "GOOGLE_API_KEY",
         "VIRUSTOTAL_API_KEY",
         "URLVOID_API_KEY",
-        "AUTOBOT_SMTP_PASSWORD",
     }
 )
 
@@ -137,7 +144,6 @@ _CREDENTIAL_CONSUMERS: dict[str, str] = {
     "GOOGLE_API_KEY": "services.provider_health.providers",
     "VIRUSTOTAL_API_KEY": "security.threat_intelligence",
     "URLVOID_API_KEY": "security.threat_intelligence",
-    "AUTOBOT_SMTP_PASSWORD": "services.notification_service",
 }
 
 _SYSTEM_VAULT = VaultRef(VaultKind.SYSTEM)

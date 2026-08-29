@@ -66,15 +66,6 @@ class ThreatScore:
     cached: bool = False
 
 
-@dataclass
-class RateLimitState:
-    """Rate limiter state for API calls"""
-
-    requests_made: int = 0
-    window_start: float = field(default_factory=time.time)
-    requests_per_minute: int = 4  # Default VirusTotal free tier
-
-
 class ThreatIntelligenceCache:
     """Thread-safe cache for threat intelligence results"""
 

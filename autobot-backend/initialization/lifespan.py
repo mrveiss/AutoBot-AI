@@ -1469,7 +1469,6 @@ async def _init_llm_adapters() -> None:
     logger.info("[ 97%%] LLM Adapters: registering adapters...")
     try:
         from autobot_shared.ssot_config import config as _cfg
-        from autobot_shared.ssot_config import get_ollama_url
         from llm_shared.adapters import (
             AnthropicAdapter,
             GroqAdapter,
@@ -1483,7 +1482,7 @@ async def _init_llm_adapters() -> None:
 
         # Ollama — always registered (local provider, no key required)
         try:
-            ollama_url = get_ollama_url()
+            ollama_url = _cfg.ollama_url  # equivalent to get_ollama_url(); avoids a second ssot_config import (#15276)
             from llm_shared.adapters.base import AdapterConfig
 
             ollama = OllamaAdapter(AdapterConfig(adapter_type="ollama", settings={"base_url": ollama_url}))
