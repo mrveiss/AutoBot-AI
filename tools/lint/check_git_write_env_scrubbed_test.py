@@ -133,6 +133,43 @@ def _init(repo):
 """
 
 
+_DYNAMIC_PATH_AFTER_A_READ_VERB = """
+import subprocess
+
+
+def tracked(root):
+    return subprocess.run(["git", "-C", str(root), "ls-files", "*.py"], capture_output=True, text=True)
+"""
+
+_NO_SPREAD_DICT_ACCEPTED = """
+import subprocess
+
+
+def _commit(repo, name, email):
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-q", "-m", "x"],
+        check=True,
+        env={"PATH": "/usr/bin:/bin", "GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email},
+    )
+"""
+
+_TWO_LEVEL_INDIRECTION_SCRUBBED = """
+import subprocess
+
+from autobot_shared.paths import scrubbed_git_env
+
+
+def _test_git_env():
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null"}
+
+
+def _run(tmp_path):
+    env = _test_git_env()
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True, env=env)
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True, env=env)
+"""
+
+
 def _write(tmp_path: Path, source: str, name: str = "sample_test.py") -> Path:
     path = tmp_path / name
     path.write_text(source, encoding="utf-8")
@@ -176,6 +213,29 @@ def test_an_unscrubbed_read_verb_is_left_alone(tmp_path: Path) -> None:
     """`git ls-files` is not in WRITE_VERBS -- reads against a real root are
     common and correct elsewhere in this suite (see the module docstring)."""
     assert scan(_write(tmp_path, _READ_VERB_UNSCRUBBED), tmp_path) == []
+
+
+def test_a_dynamic_path_after_a_resolved_read_verb_is_left_alone(tmp_path: Path) -> None:
+    """`git -C str(root) ls-files "*.py"` -- #15246 review found this shape
+    misclassified as a write by an earlier version of `_is_git_write`, which
+    treated ANY dynamic argv element as making the verb unknowable rather
+    than only a dynamic element AT the verb's own position."""
+    assert scan(_write(tmp_path, _DYNAMIC_PATH_AFTER_A_READ_VERB), tmp_path) == []
+
+
+def test_a_hand_built_dict_with_no_environ_spread_is_accepted(tmp_path: Path) -> None:
+    """`env={"PATH": ..., "GIT_AUTHOR_NAME": ...}` -- scripts/lint_conventions_test.py's
+    `_bot_commit` shape. No `**os.environ`/`**scrubbed_git_env()` anywhere in
+    it, so it cannot carry an ambient GIT_DIR regardless of what built it."""
+    assert scan(_write(tmp_path, _NO_SPREAD_DICT_ACCEPTED), tmp_path) == []
+
+
+def test_a_local_variable_holding_a_trusted_wrapper_call_is_accepted(tmp_path: Path) -> None:
+    """`env = _test_git_env()` followed by `env=env` at each call site --
+    pre-commit-hardcoded-values_test.py's actual shape. Needs trusted_names'
+    second pass: the Assign's value is a call to an ALREADY-trusted function,
+    not a call that itself mentions scrubbed_git_env textually."""
+    assert scan(_write(tmp_path, _TWO_LEVEL_INDIRECTION_SCRUBBED), tmp_path) == []
 
 
 def test_a_dash_c_config_flag_does_not_hide_the_verb_behind_it(tmp_path: Path) -> None:

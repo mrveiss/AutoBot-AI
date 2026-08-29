@@ -43,7 +43,13 @@ SCOPE
   the dominant helper shape this sweep found — carries no verb literal at
   its own call site; the caller decides. Refusing to guess safe means every
   call through such a helper is reported unless scrubbed, which is also
-  simply true of every site this sweep fixed.
+  simply true of every site this sweep fixed. A dynamic value elsewhere in
+  the argv (``git -C str(root) ls-files "*.py"``) does not trigger this: the
+  verb itself is still a literal at a known position, only its *position* has
+  to be found by walking past any ``-C``/``-c`` pairs first.
+* **A hand-built ``env={"PATH": ..., ...}`` dict with no ``**`` unpacking is
+  accepted without calling a recognized helper at all** — it cannot carry an
+  ambient variable it was never given, so scrubbing it would verify nothing.
 
 KNOWN GAPS — WHAT THIS DOES **NOT** CATCH
 -----------------------------------------
@@ -152,26 +158,46 @@ def _is_subprocess_call(node: ast.Call, modules: Set[str], functions: Set[str]) 
     return False
 
 
+#: One slot per argv element: its literal string if the element is a plain
+#: string constant, otherwise ``None`` (a dynamic value at a KNOWN position,
+#: e.g. ``str(repo)``) -- except a `Starred` element, which is a run-time
+#: expansion of unknown length and makes every position after it unknown too.
+_STARRED = object()
+
+
+def _argv_slots(argv: ast.List) -> List[object]:
+    slots: List[object] = []
+    for element in argv.elts:
+        if isinstance(element, ast.Starred):
+            slots.append(_STARRED)
+        elif isinstance(element, ast.Constant) and isinstance(element.value, str):
+            slots.append(element.value)
+        else:
+            slots.append(None)
+    return slots
+
+
 def _is_git_write(node: ast.Call) -> bool:
     """True when *node*'s first arg is a `git` argv naming a write verb, or
-    the verb is not statically knowable at all (see module docstring)."""
+    the verb itself is not statically knowable (see module docstring).
+
+    A dynamic value elsewhere in the argv -- ``git -C str(root) ls-files
+    "*.py"`` is the common shape -- does not make the call unresolvable: the
+    verb is still the literal at a known position. Only a dynamic or starred
+    element AT the verb's position does.
+    """
     if not node.args or not isinstance(node.args[0], ast.List):
         return False
-    literals: List[str] = []
-    dynamic = False
-    for element in node.args[0].elts:
-        if isinstance(element, ast.Constant) and isinstance(element.value, str):
-            literals.append(element.value)
-        else:
-            dynamic = True
-    if not literals or literals[0] != "git":
+    slots = _argv_slots(node.args[0])
+    if not slots or slots[0] != "git":
         return False
-    if dynamic:
-        return True
     index = 1
-    while index < len(literals) - 1 and literals[index] in ("-C", "-c"):
+    while index < len(slots) - 1 and slots[index] in ("-C", "-c"):
         index += 2
-    return index < len(literals) and literals[index] in WRITE_VERBS
+    if index >= len(slots):
+        return False
+    verb = slots[index]
+    return verb is None or verb is _STARRED or verb in WRITE_VERBS
 
 
 def _mentions_scrub_helper(node: ast.AST) -> bool:
@@ -184,19 +210,45 @@ def _mentions_scrub_helper(node: ast.AST) -> bool:
     return False
 
 
+def _resolved_call_name(value: ast.AST) -> str | None:
+    if not isinstance(value, ast.Call):
+        return None
+    func = value.func
+    return func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+
+
 def trusted_names(tree: ast.Module) -> Set[str]:
-    """Local function/variable names whose own definition mentions a
-    recognized scrub helper, so `env=<name>` or `env=<name>()` at a call
-    site is accepted without re-deriving the call graph there."""
+    """Local function/variable names that resolve to a recognized scrub
+    helper, so `env=<name>` or `env=<name>()` at a call site is accepted
+    without re-deriving the call graph there.
+
+    Two passes: a name can be trusted because its OWN body/value mentions
+    the helper directly (``def _test_git_env(): return scrubbed_git_env()``),
+    or because it is a variable holding the result of a call to an
+    ALREADY-trusted local name (``env = _test_git_env()``) -- the shape
+    ``pre-commit-hardcoded-values_test.py`` actually uses. One pass over
+    Assign nodes cannot see the second kind before the first pass has run.
+    """
     trusted: Set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and _mentions_scrub_helper(node):
             trusted.add(node.name)
-        elif isinstance(node, ast.Assign) and _mentions_scrub_helper(node.value):
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    trusted.add(target.id)
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not (_mentions_scrub_helper(node.value) or _resolved_call_name(node.value) in trusted):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                trusted.add(target.id)
     return trusted
+
+
+def _is_unpack_free_dict(value: ast.AST) -> bool:
+    """True for `{"PATH": ..., "HOME": ...}` -- a dict literal with no `**`
+    unpacking anywhere. It cannot carry an ambient variable it was never
+    given, so it needs no call to a recognized helper to be safe."""
+    return isinstance(value, ast.Dict) and None not in value.keys
 
 
 def _env_is_scrubbed(node: ast.Call, trusted: Set[str]) -> bool:
@@ -204,15 +256,11 @@ def _env_is_scrubbed(node: ast.Call, trusted: Set[str]) -> bool:
         if keyword.arg != "env":
             continue
         value = keyword.value
-        if _mentions_scrub_helper(value):
+        if _mentions_scrub_helper(value) or _is_unpack_free_dict(value):
             return True
         if isinstance(value, ast.Name):
             return value.id in trusted
-        if isinstance(value, ast.Call):
-            func = value.func
-            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
-            return name in trusted
-        return False
+        return _resolved_call_name(value) in trusted
     return False
 
 
