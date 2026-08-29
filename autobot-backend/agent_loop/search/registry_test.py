@@ -28,9 +28,11 @@ _SEARCH_KEY_NAMES = {
 def asked_names(monkeypatch) -> list[str]:
     """Run the registry build, recording every credential name it resolves.
 
-    The spy returns ``""`` for every name so no provider actually registers --
-    the assertion is about which names are *asked for*, not what a real vault
-    or env would return.
+    The spy returns a non-empty placeholder (never a real credential shape) for
+    every name so SEARXNG_INSTANCE_URL resolves truthy and the registry's own
+    ``if searxng_url:`` gate does not short-circuit before asking for the
+    basic-auth user/pass/token nested inside it -- the assertion is about which
+    names are *asked for*, not what a real vault or env would return.
     """
     import services.provider_key_vault as vault_mod
 
@@ -38,7 +40,7 @@ def asked_names(monkeypatch) -> list[str]:
 
     def _spy(name: str, fallback: str = "") -> str:
         asked.append(name)
-        return ""
+        return "placeholder"
 
     monkeypatch.setattr(vault_mod, "resolve_provider_key", _spy)
     _populate_default_providers(SearchProviderRegistry())
