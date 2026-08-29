@@ -22,7 +22,22 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-hardcoded-values"
+
+
+def _test_git_env() -> dict[str, str]:
+    """#15273/#15246: env for every git subprocess this suite spawns.
+
+    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    GIT_DIR pointing at the worktree it is pushing (every checkout here is
+    one), and an unscrubbed `git init`/`git add`/`git diff --cached` in a
+    fixture then operates on THAT repository instead of tmp_path's --
+    reproduced: it staged ~20 bogus entries into the real worktree and
+    overwrote two tracked files' index blobs with 1-line test content.
+    """
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
 
 
 def _run_hook_with_staged(tmp_path: Path, files: dict[str, str]) -> subprocess.CompletedProcess:
@@ -31,20 +46,25 @@ def _run_hook_with_staged(tmp_path: Path, files: dict[str, str]) -> subprocess.C
 
     files: relative path -> file content
     """
-    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.email", "test@test"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
+    env = _test_git_env()
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True, env=env)
+    subprocess.run(["git", "config", "user.email", "test@test"], cwd=tmp_path, check=True, env=env)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True, env=env)
     for rel, content in files.items():
         path = tmp_path / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-        subprocess.run(["git", "add", rel], cwd=tmp_path, check=True)
+        subprocess.run(["git", "add", rel], cwd=tmp_path, check=True, env=env)
 
+    # Same scrub: the hook itself runs `git diff --cached` against
+    # tmp_path, and an inherited GIT_DIR would point it at the real
+    # worktree's staged set instead.
     return subprocess.run(
         ["bash", str(HOOK_PATH)],
         cwd=tmp_path,
         capture_output=True,
         text=True,
+        env=env,
     )
 
 
@@ -791,7 +811,9 @@ class TestHardcodedTimeouts:
 
 
 def _git(repo, *args):
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True)
+    return subprocess.run(
+        ["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env()
+    )
 
 
 @pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
@@ -817,5 +839,7 @@ class TestFailsClosedOnGitFailure:
         # Corrupt the index so git errors rather than returning an empty answer.
         (tmp_path / ".git" / "index").write_text("garbage", encoding="utf-8")
 
-        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=tmp_path, capture_output=True, text=True)
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH)], cwd=tmp_path, capture_output=True, text=True, env=_test_git_env()
+        )
         assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"
