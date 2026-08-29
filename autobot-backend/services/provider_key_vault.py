@@ -139,8 +139,8 @@ VAULT_RESOLVED_CREDENTIAL_NAMES: frozenset[str] = (
 _CREDENTIAL_CONSUMERS: dict[str, str] = {
     **{name: "llm_shared.provider_registry" for name in LLM_PROVIDER_KEY_NAMES},
     **{name: "agent_loop.search.registry" for name in SEARCH_PROVIDER_KEY_NAMES},
-    "SLACK_BOT_TOKEN": "integrations.capability_registry",
-    "DISCORD_BOT_TOKEN": "integrations.capability_registry",
+    "SLACK_BOT_TOKEN": "integrations.capability_registry",  # nosec B105  # module path, not a credential
+    "DISCORD_BOT_TOKEN": "integrations.capability_registry",  # nosec B105  # module path, not a credential
     "GOOGLE_API_KEY": "services.provider_health.providers",
     "VIRUSTOTAL_API_KEY": "security.threat_intelligence",
     "URLVOID_API_KEY": "security.threat_intelligence",
