@@ -2,7 +2,11 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 # Session Stop Orphan Check
-# Detects work not linked to a GitHub issue and auto-creates one.
+# Two kinds of orphan, deliberately handled differently:
+#   main tree  — commits not linked to a GitHub issue; auto-creates one
+#   worktree   — commits the PR base never received; reported, never filed
+# The branch is already the record for parked work, so filing there would add
+# backlog without adding closure.
 # Called by Claude Code Stop hook.
 #
 # AutoBot - AI-Powered Automation Platform
@@ -19,10 +23,70 @@ fi
 
 BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 
-# Skip if we're inside a worktree (worktrees are actively used for parallel work)
+# The branch PRs target, which is not necessarily the remote default branch.
+# Best-effort: the candidate list is a guess, not the branch's real PR target.
+# `gh pr view --json baseRefName` would be authoritative but costs an API call
+# before we know a PR exists at all. For a branch stacked on another unmerged
+# branch this inflates the reported commit count; it never causes a false report.
+pr_base() {
+  local candidate
+  for candidate in "${ORPHAN_CHECK_BASE:-}" Dev_new_gui develop main master; do
+    [ -n "$candidate" ] || continue
+    if git rev-parse --verify --quiet "origin/$candidate" >/dev/null 2>&1; then
+      printf 'origin/%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# A worktree branch carrying commits the base never received. Surfaced, never
+# filed: an auto-filed issue would add backlog while closing nothing, and the
+# branch already records the work.
+report_parked_branch() {
+  local base ahead dirty pr_states
+  # Detached HEAD prints nothing and exits 0, so the "unknown" fallback at the
+  # BRANCH assignment never fires — the empty case has to be caught here.
+  if [ -z "$BRANCH" ] || [ "$BRANCH" = "unknown" ]; then
+    return 0
+  fi
+  base=$(pr_base) || return 0
+
+  ahead=$(git rev-list --count "$base"..HEAD 2>/dev/null || echo 0)
+  dirty=$(git status --porcelain 2>/dev/null \
+    | grep -cvE '(node_modules|__pycache__|\.pyc|dist/)' || true)
+  case "$ahead" in ''|*[!0-9]*) ahead=0 ;; esac
+  case "$dirty" in ''|*[!0-9]*) dirty=0 ;; esac
+  # Commits ahead is the parked-work signal. A merely dirty tree is normal
+  # mid-task state and fires on every Stop, so it is an addendum, never a cause.
+  [ "$ahead" -gt 0 ] || return 0
+
+  # One request, not two: this runs on every Stop of an active worktree session.
+  # A non-zero exit means gh is offline, unauthenticated, or rate-limited — that
+  # is inconclusive, not "no PR", and guessing would report work that has landed.
+  pr_states=$(gh pr list --head "$BRANCH" --state all --limit 20 --json state \
+    --jq '.[].state' 2>/dev/null) || return 0
+
+  # MERGED means these commits are rebase leftovers; OPEN means it is already in
+  # the pipeline. A closed-unmerged PR leaves the work parked, so it still reports.
+  if printf '%s\n' "$pr_states" | grep -qxE 'MERGED|OPEN'; then
+    return 0
+  fi
+
+  echo "PARKED WORK on $BRANCH: $ahead commit(s) ahead of $base, no PR open."
+  # `|| true` is load-bearing under `set -e`: a false test in a `&&` list that
+  # ends a function aborts the whole hook at the call site, silently.
+  [ "$dirty" -gt 0 ] && echo "  plus $dirty uncommitted path(s)." || true
+  echo "  Finished work returns nothing until it lands. Open a PR for it,"
+  echo "  or rank what to land next:  ~/.claude/scripts/drain-parked.sh"
+}
+
+# Inside a worktree this used to exit immediately — blind to the case that
+# actually costs work, since every code-touching task runs in a worktree.
 GIT_COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null)"
 ACTUAL_GIT_DIR="$(git rev-parse --git-dir 2>/dev/null)"
 if [ "$GIT_COMMON_DIR" != "$ACTUAL_GIT_DIR" ]; then
+  report_parked_branch
   exit 0
 fi
 
