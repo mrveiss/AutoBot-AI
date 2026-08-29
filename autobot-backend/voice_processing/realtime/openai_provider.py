@@ -60,9 +60,19 @@ class OpenAIRealtimeProvider(RealtimeVoiceProvider):
 
     @staticmethod
     def _api_key() -> str:
-        """Return the OpenAI API key from SSOT config with env-var fallback."""
+        """Return the OpenAI API key: env, then System vault, then a literal env-var
+        read as a last-resort safety net.
+
+        Found during #15269's guard sweep: a key captured through the setup wizard
+        resolved for every other OpenAI consumer but silently failed realtime voice
+        negotiation, since this call site never consulted the vault seam.
+        """
+        from services.provider_key_vault import resolve_provider_key
+
         cfg = get_config()
-        return cfg.llm.openai_api_key or os.environ.get("OPENAI_API_KEY", "")
+        return resolve_provider_key("OPENAI_API_KEY", cfg.llm.openai_api_key) or os.environ.get(
+            "OPENAI_API_KEY", ""
+        )
 
     @staticmethod
     def _model() -> str:
