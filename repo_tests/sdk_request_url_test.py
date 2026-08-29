@@ -46,6 +46,7 @@ marker-carrying tests there, so an unmarked test under
 from __future__ import annotations
 
 import asyncio
+import functools
 import importlib.util
 import inspect
 import re
@@ -61,14 +62,21 @@ from autobot_shared.ssot_config import config
 from repo_tests.sdk_request_shared import (
     _BACKEND,
     _BACKEND_API_ROOT,
-    _BASE,
     _REPO,
     _RESOURCE_ATTRS,
     SDK_REQUESTS,
     _assert_sent_params_are_accepted,
     _template_for,
-    _urls,
 )
+from repo_tests.sdk_request_shared import _urls as _shared_urls
+
+# Own mock base URL rather than importing one: sdk_request_shared.py cannot
+# hold this literal (see its module docstring -- the hardcoded-value hook's
+# test-file exemption is filename-matched, and that module's name does not
+# qualify). Rebinding ``_urls`` to a partial keeps every ``_urls(call)`` call
+# site below unchanged.
+_BASE = "http://backend.test:9999"
+_urls = functools.partial(_shared_urls, base=_BASE)
 
 
 def _route_decorator_re():

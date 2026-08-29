@@ -16,6 +16,17 @@ mode #15119's guard exists to prevent. ``route_query_params`` stays in
 ``repo_tests/``) strips an import it cannot see referenced as an expression,
 which is exactly how a fixture *reused* across test files (rather than
 defined by ``@pytest.fixture`` where pytest finds it) would be imported.
+
+The mock base URL is NOT owned here either, for a sibling reason: the
+hardcoded-value hook's test-file exemption
+(``docs/developer/HARDCODING_PREVENTION.md``) is matched on filename, and
+this module's name matches none of ``test_*.py``/``*_test.py``. A literal
+that was allowed at its old address in ``sdk_request_url_test.py`` became a
+violation purely by moving here, with no line changed (#15187 review; the
+allowlist gap itself is filed separately, not fixed in this module). ``_urls``
+takes ``base`` as a required argument instead; each ``*_test.py`` module
+defines its own ``_BASE`` and rebinds ``_urls`` to a ``functools.partial``
+that supplies it, so every existing ``_urls(call)`` call site is unchanged.
 """
 
 from __future__ import annotations
@@ -29,7 +40,6 @@ from autobot_sdk import AutoBot
 
 _REPO = Path(__file__).resolve().parents[1]
 _BACKEND = _REPO / "autobot-backend"
-_BASE = "http://backend.test:9999"
 
 # The BACKEND's API root, stated here independently of the SDK. If the oracle
 # in ``conftest.py`` read ``autobot_sdk.API_PREFIX`` instead, dropping the
@@ -41,13 +51,16 @@ _BASE = "http://backend.test:9999"
 _BACKEND_API_ROOT = "/api"
 
 
-async def _record(call) -> list[tuple[str, str, frozenset[str]]]:
+async def _record(call, base: str) -> list[tuple[str, str, frozenset[str]]]:
     """Run one SDK call against a transport that answers without dialling.
 
     The third element is the set of query-parameter **names** actually put on the
     wire. Read off ``request.url.params`` rather than off the method signature:
     ``AutoBotClient.get()`` drops ``None`` values, so what a method accepts and
     what it sends are two different sets and only the second one reaches a route.
+
+    ``base`` is the caller's mock URL, not a literal owned here -- see the
+    module docstring for why.
     """
     seen: list[tuple[str, str, frozenset[str]]] = []
 
@@ -55,7 +68,7 @@ async def _record(call) -> list[tuple[str, str, frozenset[str]]]:
         seen.append((request.method, request.url.path, frozenset(request.url.params.keys())))
         return httpx.Response(200, json={"success": True, "data": None, "status": "healthy"})
 
-    async with AutoBot(base_url=_BASE, token="t") as bot:
+    async with AutoBot(base_url=base, token="t") as bot:
         # Swap the transport in place so the real client construction, the real
         # base-URL merge and the real resource paths are all exercised.
         bot._client._transport = httpx.MockTransport(handler)
@@ -63,8 +76,8 @@ async def _record(call) -> list[tuple[str, str, frozenset[str]]]:
     return seen
 
 
-def _urls(call) -> list[tuple[str, str, frozenset[str]]]:
-    return asyncio.run(_record(call))
+def _urls(call, base: str) -> list[tuple[str, str, frozenset[str]]]:
+    return asyncio.run(_record(call, base))
 
 
 # ``(name, coroutine, expected METHOD, expected full path)`` — one row per

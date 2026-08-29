@@ -36,6 +36,7 @@ here so nobody assumes this file's coverage extends to that shape.
 
 from __future__ import annotations
 
+import functools
 import inspect
 import types
 import typing
@@ -44,7 +45,16 @@ from typing import Any
 import pytest
 from autobot_sdk import resources
 
-from repo_tests.sdk_request_shared import SDK_REQUESTS, _RESOURCE_ATTRS, _assert_sent_params_are_accepted, _urls
+from repo_tests.sdk_request_shared import SDK_REQUESTS, _RESOURCE_ATTRS, _assert_sent_params_are_accepted
+from repo_tests.sdk_request_shared import _urls as _shared_urls
+
+# Own mock base URL rather than importing one: sdk_request_shared.py cannot
+# hold this literal (see its module docstring -- the hardcoded-value hook's
+# test-file exemption is filename-matched, and that module's name does not
+# qualify). Rebinding ``_urls`` to a partial keeps every ``_urls(call)`` call
+# site below unchanged.
+_BASE = "http://backend.test:9999"
+_urls = functools.partial(_shared_urls, base=_BASE)
 
 
 def _dummy_value(annotation: Any) -> Any:
