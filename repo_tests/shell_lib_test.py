@@ -14,6 +14,12 @@ Wrapping them here rather than adding a workflow step keeps them in the suite
 that already runs on every PR. ``repo_tests`` is used deliberately: ``scripts/``
 is *not* in CI's collection list either, so a wrapper placed next to the shell
 files would have been just as dormant as the files it runs.
+
+``.claude/hooks/block-dangerous-commands_test.sh`` was in the same position
+(#15296): it is the only regression suite for the hook that decides which
+commands every session may run, and nothing invoked it either — ``.claude`` is
+not on pytest's ``testpaths`` allowlist and no workflow named it. Registering it
+here is what makes the #15296 fixes verifiable rather than merely asserted.
 """
 
 from __future__ import annotations
@@ -26,7 +32,12 @@ import pytest
 
 from autobot_shared.paths import project_root
 
+#: Directories swept for bash suites. A suite living anywhere else is invisible
+#: to the registration check below, so new homes belong here, not in a comment.
+SUITE_DIRS = (".claude/hooks", "scripts/lib")
+
 SHELL_SUITES = [
+    ".claude/hooks/block-dangerous-commands_test.sh",
     "scripts/lib/branch-guards_test.sh",
     "scripts/lib/git-scope_test.sh",
     "scripts/lib/project_root_test.sh",
@@ -48,7 +59,8 @@ def test_shell_suite_passes(suite: str) -> None:
         [bash, str(script)],
         capture_output=True,
         text=True,
-        timeout=120,
+        # The hook suite runs ~65 cases, each spawning bash, jq and python3.
+        timeout=300,
         cwd=str(project_root()),
     )
 
@@ -70,9 +82,7 @@ def test_every_project_root_source_path_resolves() -> None:
     default did (#13092). This test makes it loud at PR time instead.
     """
     root = project_root()
-    pattern = re.compile(
-        r'source\s+"\$\(dirname\s+"\$\{BASH_SOURCE\[0\]\}"\)/([^"]*project_root\.sh)"'
-    )
+    pattern = re.compile(r'source\s+"\$\(dirname\s+"\$\{BASH_SOURCE\[0\]\}"\)/([^"]*project_root\.sh)"')
 
     broken: list[str] = []
     checked = 0
@@ -96,14 +106,23 @@ def test_every_project_root_source_path_resolves() -> None:
 
 
 def test_every_shell_suite_is_registered() -> None:
-    """A new scripts/lib/*_test.sh must be added above, or it silently never runs.
+    """A new ``*_test.sh`` must be added above, or it silently never runs.
 
     This is the guard for the failure this module exists to fix: the suite was
     not broken, it was simply never invoked by anything.
-    """
-    lib = project_root() / "scripts" / "lib"
-    on_disk = {f"scripts/lib/{p.name}" for p in lib.glob("*_test.sh")}
 
+    Each swept directory carries a reach floor. Without one, a directory that
+    was renamed, moved, or excluded from the checkout would contribute an empty
+    set, the equality would still hold against a shrunken ``SHELL_SUITES``, and
+    the sweep would report clean having asserted nothing about it (#15296).
+    """
+    root = project_root()
+    per_dir = {rel: {f"{rel}/{p.name}" for p in (root / rel).glob("*_test.sh")} for rel in SUITE_DIRS}
+
+    empty = sorted(rel for rel, found in per_dir.items() if not found)
+    assert not empty, f"swept directories with no *_test.sh at all — the sweep lost reach: {empty}"
+
+    on_disk: set[str] = set().union(*per_dir.values())
     assert on_disk == set(SHELL_SUITES), (
         "shell test suites on disk do not match the registered list — "
         f"unregistered: {sorted(on_disk - set(SHELL_SUITES))}, "
