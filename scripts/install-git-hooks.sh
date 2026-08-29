@@ -31,6 +31,16 @@
 
 set -uo pipefail
 
+# #15246: this repo's own checkouts are all worktrees, and the pre-push hook
+# exports GIT_DIR (pointing at the pushing worktree's own git directory) with
+# no GIT_WORK_TREE. Every `git` call below would then answer for THAT
+# directory instead of wherever this script is actually run from --
+# `--show-toplevel` silently returning the wrong root is what made
+# repo_tests/git_hooks_installer_test.py install hooks into the live repo
+# instead of its throwaway fixture. Unset once, up front, same as
+# autobot_shared.paths.scrubbed_git_env() does for the Python side.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
+
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
 info()  { printf "${CYAN}[install-hooks]${NC} %s\n" "$*"; }
 ok()    { printf "${GREEN}[install-hooks]${NC} %s\n" "$*"; }
