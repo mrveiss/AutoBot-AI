@@ -20,14 +20,21 @@ report a human reads to judge it. This is the single copy.
 
 ## Why static
 
-Under ``fastapi>=0.139`` ``include_router`` defers: neither the include-time
-``prefix=`` nor an include-time ``dependencies=`` list is recoverable from the
-route objects afterwards (#15093, and see
-``autobot_shared/api_routing/router_routes.py`` for the runtime half). A
-development checkout may resolve a lower FastAPI where some of it *is* readable
-(#15091), so a runtime-introspection guard would mean one thing locally and
-another in CI — worse than no guard. Parsing the registration sites is
-version-independent, which is the property both consumers need.
+Under ``fastapi>=0.139`` ``include_router`` defers, and neither the include-time
+``prefix=`` nor an include-time ``dependencies=`` list is recoverable through
+the *public* route objects afterwards (#15093, and see
+``autobot_shared/api_routing/router_routes.py`` for the runtime half). Correction
+(#15126, verified against fastapi 0.141.1's own ``routing.py``): the prefix is
+not actually gone -- ``_IncludedRouter.include_context.prefix`` carries the
+combined value -- it is only unreachable from the *public* surface every
+runtime consumer here reads. Depending on that private, underscore-prefixed
+pair would mean trusting an implementation detail with no stability guarantee
+across a version bump, which is a worse bet than the deferral itself. A
+development checkout may resolve a lower FastAPI where some of it *is* publicly
+readable (#15091), so a runtime-introspection guard would mean one thing
+locally and another in CI regardless — worse than no guard. Parsing the
+registration sites is version-independent, which is the property both
+consumers need.
 
 ## What it cannot see
 
@@ -105,6 +112,14 @@ class Mount:
     child: str
     guards: FrozenSet[str]
     site: str
+    #: The literal ``prefix=`` argument at *this* ``include_router`` call, or
+    #: ``None`` when absent or not a plain string literal (#15126) -- the
+    #: include-time term #15093 found unreadable from the route objects after
+    #: the fact (see ``router_routes.py``). A registry-entry edge always leaves
+    #: this ``None``: ``app_factory`` mounts those with a computed
+    #: ``prefix=f"/api{prefix}"``, not a literal at the call site. ``None`` and
+    #: ``""`` are distinct, matching ``router_prefixes.apirouter_prefix``.
+    prefix: Optional[str] = None
 
 
 @dataclass
@@ -242,6 +257,17 @@ def _call_kwarg(call: ast.Call, name: str) -> ast.AST | None:
     for keyword in call.keywords:
         if keyword.arg == name:
             return keyword.value
+    return None
+
+
+def _string_literal(node: ast.AST | None) -> str | None:
+    """*node*'s value if it is a plain string constant, else ``None``.
+
+    An f-string or a name reference is real but not statically resolvable here;
+    treated the same as "no ``prefix=``" rather than guessed at (#15126).
+    """
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
     return None
 
 
@@ -450,7 +476,8 @@ class ModuleScan:
                 if parent_expr not in {"app", "application", "self.app"}:
                     self.unresolved.append(f"{site} parent={parent_expr or '<expr>'}")
             guards = _guards_from_keyword(_call_kwarg(node, "dependencies") or ast.List(elts=[]))
-            self.edges.append(Mount(parent=parent, child=child, guards=guards, site=site))
+            prefix = _string_literal(_call_kwarg(node, "prefix"))
+            self.edges.append(Mount(parent=parent, child=child, guards=guards, site=site, prefix=prefix))
 
 
 # --- registry entries -------------------------------------------------------
