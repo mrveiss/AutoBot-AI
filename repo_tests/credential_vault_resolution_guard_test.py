@@ -27,12 +27,15 @@ Mechanism
    themselves, for the un-assigned chained-call shape (``get_config().field``, seen in
    ``initialization/lifespan.py``). An empty result means the file never touches
    ssot_config at all.
-3. :func:`find_direct_reads` greps every git-tracked, non-test production ``.py`` file
-   for a *direct* read of one of those fields through any binding
-   :func:`_ssot_config_bindings` found -- ``config.<field>``, ``cfg.llm.<field>``
-   (nested submodel access, real inside ``ssot_config.py``'s own
-   ``AutoBotConfig.__getattr__`` delegation), ``get_config().auth.<field>`` (chained,
-   unassigned), or ``getattr(config, "<field>", ...)`` -- that is **not** spanned by a
+3. :func:`find_direct_reads` first blanks every comment and docstring
+   (:func:`~repo_tests.credential_vault_prose_strip.strip_prose`, #15280 -- a real
+   read can never live in either) then greps every git-tracked, non-test
+   production ``.py`` file for a *direct* read of
+   one of those fields through any binding :func:`_ssot_config_bindings` found --
+   ``config.<field>``, ``cfg.llm.<field>`` (nested submodel access, real inside
+   ``ssot_config.py``'s own ``AutoBotConfig.__getattr__`` delegation),
+   ``get_config().auth.<field>`` (chained, unassigned), or
+   ``getattr(config, "<field>", ...)`` -- that is **not** spanned by a
    ``resolve_provider_key(...)`` call, including a 120-column-wrapped one -- the shape
    every vault-routed call site in the repo already uses
    (``services/provider_key_vault.py``, ``llm_shared/provider_registry.py``,
@@ -73,6 +76,8 @@ from __future__ import annotations
 import re
 import subprocess  # nosec B404  # fixed argv (git ls-files), no shell, no caller input
 from pathlib import Path
+
+from repo_tests.credential_vault_prose_strip import UnparseableSourceError, strip_prose
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SSOT_CONFIG = REPO_ROOT / "autobot_shared" / "ssot_config.py"
@@ -198,26 +203,32 @@ def _vault_routed_line_numbers(lines: list[str]) -> set[int]:
 def find_direct_reads(text: str, fields: dict[str, str]) -> list[tuple[str, int, str]]:
     """Every ``(field, line_no, line)`` in *text* reading *fields* directly.
 
-    Discovers *text*'s own ssot_config bindings (see :func:`_ssot_config_bindings`)
-    rather than assuming a fixed set of names, so a file is skipped entirely --
-    rather than false-positiving on an unrelated same-named local -- when it never
-    touches ssot_config at all. A line spanned by a ``resolve_provider_key(...)``
-    call (see :func:`_vault_routed_line_numbers`) is vault-routed and excluded -- the
-    call-site shape every seam consumer in the repo already uses.
+    Scans with comments and docstrings blanked first
+    (:func:`~repo_tests.credential_vault_prose_strip.strip_prose`, #15280) -- a
+    real read can never live in either, so this only removes false positives, not
+    a genuine one. Discovers *text*'s own ssot_config bindings (see
+    :func:`_ssot_config_bindings`) rather than assuming a fixed set of names, so a
+    file is skipped entirely -- rather than false-positiving on an unrelated
+    same-named local -- when it never touches ssot_config at all. A line spanned
+    by a ``resolve_provider_key(...)`` call (see :func:`_vault_routed_line_numbers`)
+    is vault-routed and excluded -- the call-site shape every seam consumer in the
+    repo already uses. Reported line text is *text*'s own, not the blanked copy.
     """
-    roots, factories = _ssot_config_bindings(text)
+    scan_text = strip_prose(text)
+    roots, factories = _ssot_config_bindings(scan_text)
     if not roots and not factories:
         return []
     hits: list[tuple[str, int, str]] = []
-    lines = text.splitlines()
-    routed_lines = _vault_routed_line_numbers(lines)
+    original_lines = text.splitlines()
+    scan_lines = scan_text.splitlines()
+    routed_lines = _vault_routed_line_numbers(scan_lines)
     for field in fields:
         pattern = _read_pattern(field, roots, factories)
-        for lineno, line in enumerate(lines, start=1):
+        for lineno, scan_line in enumerate(scan_lines, start=1):
             if lineno in routed_lines:
                 continue
-            if pattern.search(line):
-                hits.append((field, lineno, line.strip()))
+            if pattern.search(scan_line):
+                hits.append((field, lineno, original_lines[lineno - 1].strip()))
     return hits
 
 
@@ -238,7 +249,12 @@ def _is_production_file(rel_path: str) -> bool:
 
 
 def production_credential_reads() -> dict[tuple[str, str], list[tuple[int, str]]]:
-    """Every ``(repo-relative file, field) -> [(line_no, line), ...]`` direct read."""
+    """Every ``(repo-relative file, field) -> [(line_no, line), ...]`` direct read.
+
+    A file that fails to tokenize (see :class:`UnparseableSourceError`) fails this
+    call outright, with the offending path attached, rather than being silently
+    skipped -- #15280.
+    """
     fields = credential_shaped_fields(SSOT_CONFIG.read_text(encoding="utf-8"))
     found: dict[tuple[str, str], list[tuple[int, str]]] = {}
     for rel in _tracked_python_files():
@@ -249,7 +265,11 @@ def production_credential_reads() -> dict[tuple[str, str], list[tuple[int, str]]
             text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
-        for field, lineno, line in find_direct_reads(text, fields):
+        try:
+            reads = find_direct_reads(text, fields)
+        except UnparseableSourceError as exc:
+            raise UnparseableSourceError(f"{rel}: {exc}") from exc
+        for field, lineno, line in reads:
             found.setdefault((rel, field), []).append((lineno, line))
     return found
 
@@ -277,8 +297,7 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         f"{_AUTH_BOOTSTRAP}: platform user-session signing key"
     ),
     ("autobot-backend/services/slm_client.py", "jwt_secret"): (
-        f"{_AUTH_BOOTSTRAP}: platform user-session signing key, reused to mint SLM service JWTs "
-        "(two of the three matches in this file are a docstring cross-reference, not a second read)"
+        f"{_AUTH_BOOTSTRAP}: platform user-session signing key, reused to mint SLM service JWTs"
     ),
     ("autobot-backend/services/run_jwt.py", "run_jwt_secret"): f"{_AUTH_BOOTSTRAP}: run-worker JWT signing key",
     ("autobot-backend/services/mcp_isolated_runtime.py", "run_jwt_secret"): (
@@ -326,13 +345,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ),
     ("autobot-backend/utils/chromadb_client.py", "chromadb_auth_token"): (
         f"{_AUTH_BOOTSTRAP}: internal ChromaDB data-layer service credential"
-    ),
-    # --- prose the regex matches textually but which reads nothing.
-    ("autobot-backend/services/mcp_isolated_runtime.py", "jwt_secret"): (
-        f"{_NOT_A_READ}: docstring prose contrasting run_jwt_secret with the platform session key"
-    ),
-    ("autobot-backend/services/run_jwt.py", "jwt_secret"): (
-        f"{_NOT_A_READ}: docstring prose contrasting run_jwt_secret with the platform session key"
     ),
     # --- tracked gap: third-party/service credentials, same defect class as
     # --- #15267/#15268, not yet migrated. See #15276.
@@ -557,3 +569,27 @@ def test_a_file_with_no_ssot_config_binding_is_never_scanned() -> None:
     fields = {"openai_api_key": "OPENAI_API_KEY"}
     unrelated = "cfg = SomeUnrelatedObject()\nx = cfg.llm.openai_api_key\n"
     assert find_direct_reads(unrelated, fields) == []
+
+
+def test_prose_naming_a_field_is_not_reported_but_a_real_read_in_it_still_is() -> None:
+    """The exclusion this guard adds (#15280) must not be over-broad.
+
+    One fixture carries both shapes for the same field: a module docstring naming
+    it in prose (the exact shape #15277 hit on
+    ``voice_processing/realtime/openai_provider.py``, reworded there to unblock
+    CI) and, a few lines later, a real, unrouted ``cfg.llm.<field>`` read. Only
+    the second may be reported -- proving the exclusion is scoped to prose, not
+    to the field name wherever it appears.
+    """
+    fields = {"openai_api_key": "OPENAI_API_KEY"}
+    mixed = (
+        '"""Explains why ``cfg.llm.openai_api_key`` is read directly below."""\n'
+        "\n"
+        "from autobot_shared.ssot_config import get_config\n"
+        "\n"
+        "# cfg.llm.openai_api_key is read once, right here:\n"
+        "cfg = get_config()\n"
+        "value = cfg.llm.openai_api_key\n"
+    )
+    hits = find_direct_reads(mixed, fields)
+    assert [lineno for _field, lineno, _line in hits] == [7]

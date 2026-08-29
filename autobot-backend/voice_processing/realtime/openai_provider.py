@@ -60,15 +60,16 @@ class OpenAIRealtimeProvider(RealtimeVoiceProvider):
     def _api_key() -> str:
         """Return the OpenAI API key: env (via ssot_config), then the System vault.
 
-        Exactly two tiers -- no third ``os.environ.get(...)`` fallback. The
-        ssot_config field this method reads below is itself populated straight from
+        Exactly two tiers -- no third ``os.environ.get(...)`` fallback.
+        ``cfg.llm.openai_api_key`` is itself populated straight from
         ``os.environ``/``.env`` at load, so once it is non-empty an unconditional
         literal ``os.environ`` re-read could only ever repeat the same value:
         nothing in this codebase mutates ``os.environ`` for ``OPENAI_API_KEY`` at
         runtime, and a process's environment does not change out from under it
         externally, so the two can never diverge within one process lifetime. A
         prior revision of this method carried such a tail; it was dead code that
-        could not fire, removed rather than kept as a decoration (#15269 review).
+        could not fire, removed rather than kept as a decoration (#15269 review,
+        #15280: naming the field here no longer trips the resolution-path guard).
 
         Found during #15269's guard sweep: a key captured through the setup wizard
         resolved for every other OpenAI consumer but silently failed realtime voice
