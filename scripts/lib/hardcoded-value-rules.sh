@@ -198,6 +198,16 @@ HV_SCAN_EXTENSIONS='py|ts|vue|js|sh|yml|yaml'
 _HV_EXCLUDE_RE='(/__pycache__/|/node_modules/|/\.venv/|/venv/|/archive/|/dist/|/tmp/|/\.tmp/|^tmp/|^archive/)'
 _HV_EXCLUDE_RE+='|(^|/)(_generated|generated)/'
 _HV_EXCLUDE_RE+='|(test_[^/]*\.(py|ts)$|[^/]*_test\.(py|ts)$|[^/]*\.(test|spec)\.(ts|js)$|/__tests__/)'
+# #15273: test-SUPPORT modules living under repo_tests/ -- helper functions
+# and fixture data imported only by *_test.py files, collected as a test by
+# none of them -- get the same exemption the filename rule above already
+# grants its siblings, for the reason that rule states at its own top: a
+# module whose only reachable caller is test code carries the same
+# 'fixtures legitimately use literal IPs' rationale (HARDCODING_PREVENTION.md)
+# no matter what its filename happens to be. Scoped to the DIRECTORY, not to
+# a widened filename pattern, so it cannot reach into production code that
+# happens to share a name -- repo_tests/ carries nothing else (#15187/#15195).
+_HV_EXCLUDE_RE+='|(^|/)repo_tests/'
 _HV_EXCLUDE_RE+='|(ssot_config\.py|ssot-config\.ts|ssot_mappings\.py|registry_defaults\.py|threshold_constants\.py)'
 _HV_EXCLUDE_RE+='|(path_constants\.py|network_constants\.py|security_constants\.py|constants/network\.ts)'
 _HV_EXCLUDE_RE+='|(/constants/|config\.py$|config\.yaml$|\.env|\.example$|\.lock$)'
