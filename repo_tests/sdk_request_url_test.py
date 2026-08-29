@@ -403,7 +403,12 @@ def _dummy_value(annotation: Any) -> Any:
     if annotation is float:
         return 1.5
     if annotation is dict or origin is dict:
-        return {}
+        # Truthy on purpose. Several call sites include an optional argument
+        # only under ``if param:``, so an empty dict would be dropped before
+        # it reached the wire — the parameter would read as "forced" while
+        # never actually being checked, which is the exact blindness this
+        # guard exists to remove (#15187 review).
+        return {"x": "x"}
     return "x"
 
 
