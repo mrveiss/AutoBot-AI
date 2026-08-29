@@ -49,7 +49,12 @@ from typing import NamedTuple
 
 import pytest
 
-from autobot_shared.perf_work_budget import assert_within_baseline_ratio, recording_work_units
+from autobot_shared.perf_work_budget import (
+    MeasurementStarved,
+    assert_within_baseline_ratio,
+    measure_with_starvation_retry,
+    recording_work_units,
+)
 from code_intelligence.shared import process_offload
 from code_intelligence.shared.process_offload import (
     run_directory_scan,
@@ -121,6 +126,13 @@ _IDLE_BASELINE_WINDOW_SECONDS = 0.3
 
 #: Fewest ticks a window may contribute before its median describes anything.
 _MIN_TICKS_PER_WINDOW = 10
+
+#: Bounded retries for a window that starved (#15266): fewer than
+#: _MIN_TICKS_PER_WINDOW ticks says the runner was too busy to take THIS
+#: measurement, not that the code regressed. Small and FIXED, never widened —
+#: see ``measure_with_starvation_retry`` for why a starved window is retried
+#: while a measured-and-failed ratio never is.
+_MAX_STARVATION_RETRIES = 3
 
 #: How far the heartbeat may drift above its own idle baseline while a scan runs
 #: in another process. Measured over three runs on the #15221 host: 1.009, 1.016
@@ -209,6 +221,47 @@ def _median_ms(samples: list[float]) -> float:
     return ordered[len(ordered) // 2] * 1000.0
 
 
+def _raise_if_a_window_starved(busy: list[float], idle: list[float]) -> None:
+    """Tell a blockage regression apart from ordinary runner contention (#15266).
+
+    The idle windows bracket the busy one in time (see
+    ``_tick_latency_during_scan``), so if they are healthy while the busy
+    window is not, nothing external explains it — the scan itself is what
+    stopped the loop. That is total blockage, the worst-case version of the
+    exact regression #12866 exists to catch, and it must fail on the spot, as
+    an ordinary ``AssertionError``, never retried: retrying a real regression
+    is how a real regression hides, and averaging it away is worse than
+    failing loudly with a slower message.
+
+    Either window short with no such asymmetry to pin on the scan — both
+    starved, or only the idle one — says the loop was generally unable to
+    keep up rather than blocked specifically by the scan. That is the
+    ordinary-contention case ``measure_with_starvation_retry`` exists for, so
+    it raises ``MeasurementStarved`` instead: retried, not failed outright.
+    See that function's docstring for why it cannot make this call by itself.
+    """
+    busy_starved = len(busy) < _MIN_TICKS_PER_WINDOW
+    idle_starved = len(idle) < _MIN_TICKS_PER_WINDOW
+
+    if busy_starved and not idle_starved:
+        raise AssertionError(
+            f"the heartbeat produced only {len(busy)} ticks while the scan ran, "
+            f"against {len(idle)} on the surrounding idle loop — the loop was "
+            "healthy before and after the scan, so the scan itself is what "
+            "stopped it. That is total blockage, not a starved runner, and "
+            "this failure is not retried."
+        )
+    if busy_starved or idle_starved:
+        starved_where = "the scan window" if busy_starved else "the idle window"
+        raise MeasurementStarved(
+            f"{starved_where} produced too few ticks to median (busy={len(busy)}, "
+            f"idle={len(idle)}, need >= {_MIN_TICKS_PER_WINDOW} each) — nothing "
+            "singles out the scan as the cause, so this looks like a generally "
+            "starved runner rather than a blockage, and is retried rather than "
+            "failed outright"
+        )
+
+
 async def _tick_latency_during_scan(force_thread: bool) -> _TickLatency:
     """Time a 5 ms heartbeat while a GIL-bound scan runs, and on the quiet loop.
 
@@ -268,15 +321,10 @@ async def _tick_latency_during_scan(force_thread: bool) -> _TickLatency:
     await shutdown_scan_pool()
     process_offload._pool_unavailable_reason = None
 
-    assert len(busy) >= _MIN_TICKS_PER_WINDOW, (
-        f"the heartbeat produced {len(busy)} ticks while the scan ran — fewer than "
-        f"{_MIN_TICKS_PER_WINDOW}, so there is no median to compare and the "
-        "measurement is meaningless"
-    )
-    assert len(idle) >= _MIN_TICKS_PER_WINDOW, (
-        f"the heartbeat produced {len(idle)} ticks on the idle loop — fewer than "
-        f"{_MIN_TICKS_PER_WINDOW}, so there is no baseline to compare against"
-    )
+    # #15266's review: a starved window and a blockage regression are not
+    # the same thing, and only the surrounding idle windows can tell them
+    # apart — see _raise_if_a_window_starved.
+    _raise_if_a_window_starved(busy, idle)
     return _TickLatency(_median_ms(busy), _median_ms(idle), len(busy), len(idle), unavailable)
 
 
@@ -291,9 +339,40 @@ async def test_a_scan_in_a_process_does_not_delay_the_event_loop():
 
     Compared within the test rather than against a fixed threshold, so a loaded
     CI runner shifts both numbers together instead of flaking.
+
+    A WINDOW TOO SHORT TO MEDIAN IS A RETRY, NOT A SKIP OR A PASS — BUT ONLY IF
+    NOTHING PINS THE SHORTFALL ON THE SCAN (#15266, and its own review). A
+    runner can starve the heartbeat below ``_MIN_TICKS_PER_WINDOW`` before
+    either scan even starts, which says nothing about the code below — but
+    neither does silently passing nor silently skipping past it, which is how
+    a real regression would hide. ``measure_with_starvation_retry`` retakes
+    that window up to ``_MAX_STARVATION_RETRIES`` times and only THEN fails,
+    with a message naming persistent starvation rather than a budget breach.
+
+    A near-empty window is NOT always that ambiguous, though: total blockage —
+    the scan stalling the loop so completely almost nothing gets measured — is
+    the worst-case version of the exact regression #12866 exists to catch, and
+    it produces a near-empty window too. ``_raise_if_a_window_starved`` tells
+    the two apart using the idle windows that bracket the scan: if they are
+    healthy while only the scan window is not, nothing external explains it,
+    so that raises a plain, non-retried ``AssertionError`` instead of
+    ``MeasurementStarved`` — scored on its first and only attempt, exactly like
+    the ratio assertions below, which run outside this call and are never
+    retried either way. Retrying is reserved for the case with no such
+    asymmetry: both windows short, or only the idle one — a scan that
+    measurably delays or blocks the loop fails here every time, retries or
+    not.
     """
-    in_thread = await _tick_latency_during_scan(force_thread=True)
-    in_process = await _tick_latency_during_scan(force_thread=False)
+    in_thread = await measure_with_starvation_retry(
+        lambda: _tick_latency_during_scan(force_thread=True),
+        max_attempts=_MAX_STARVATION_RETRIES,
+        what="in-thread heartbeat window",
+    )
+    in_process = await measure_with_starvation_retry(
+        lambda: _tick_latency_during_scan(force_thread=False),
+        max_attempts=_MAX_STARVATION_RETRIES,
+        what="in-process heartbeat window",
+    )
 
     if in_process.pool_unavailable:
         pytest.skip(f"process pool unavailable here: {in_process.pool_unavailable}")
@@ -312,6 +391,76 @@ async def test_a_scan_in_a_process_does_not_delay_the_event_loop():
         _TICK_BUDGET_VS_IDLE,
         f"5ms heartbeat during an offloaded scan ({in_process.busy_ticks} ticks " f"vs {in_process.idle_ticks} idle)",
     )
+
+
+def test_scan_only_starvation_is_an_assertion_error_not_measurement_starved():
+    """The blockage regression's signature: idle healthy, busy near-empty (#15266).
+
+    Pins ``_raise_if_a_window_starved``'s discrimination directly: this must
+    NOT be ``MeasurementStarved``, or a caller retrying only that type would
+    retry the worst-case regression instead of failing on it immediately.
+    """
+    busy = [0.005]
+    idle = [0.005] * _MIN_TICKS_PER_WINDOW
+
+    with pytest.raises(AssertionError) as excinfo:
+        _raise_if_a_window_starved(busy, idle)
+
+    assert not isinstance(excinfo.value, MeasurementStarved), (
+        "scan-only starvation must raise a plain AssertionError, not "
+        "MeasurementStarved, or measure_with_starvation_retry will retry a "
+        "real regression"
+    )
+    assert "not retried" in str(excinfo.value)
+
+
+def test_both_windows_starved_is_measurement_starved_and_retryable():
+    """No asymmetry to pin on the scan: ordinary contention, not a blockage."""
+    with pytest.raises(MeasurementStarved):
+        _raise_if_a_window_starved([0.005], [0.005])
+
+
+def test_idle_only_starved_is_also_measurement_starved():
+    """The busy window was fine — nothing implicates the scan either."""
+    busy = [0.005] * _MIN_TICKS_PER_WINDOW
+    idle = [0.005]
+    with pytest.raises(MeasurementStarved):
+        _raise_if_a_window_starved(busy, idle)
+
+
+def test_two_healthy_windows_raise_nothing():
+    busy = [0.005] * _MIN_TICKS_PER_WINDOW
+    idle = [0.005] * _MIN_TICKS_PER_WINDOW
+    _raise_if_a_window_starved(busy, idle)  # must not raise
+
+
+async def test_scan_only_starvation_fails_on_the_first_attempt_without_retrying():
+    """The case that matters most (#15266's review): no 3x-slower detour."""
+    calls = 0
+
+    async def measure():
+        nonlocal calls
+        calls += 1
+        _raise_if_a_window_starved([0.005], [0.005] * _MIN_TICKS_PER_WINDOW)
+
+    with pytest.raises(AssertionError, match="not retried"):
+        await measure_with_starvation_retry(measure, max_attempts=_MAX_STARVATION_RETRIES, what="scan-only")
+
+    assert calls == 1, "a blockage regression must fail on its first attempt, never retried"
+
+
+async def test_both_windows_starved_retries_to_the_bounded_ceiling():
+    calls = 0
+
+    async def measure():
+        nonlocal calls
+        calls += 1
+        _raise_if_a_window_starved([0.005], [0.005])
+
+    with pytest.raises(AssertionError, match="starved on all"):
+        await measure_with_starvation_retry(measure, max_attempts=_MAX_STARVATION_RETRIES, what="both-starved")
+
+    assert calls == _MAX_STARVATION_RETRIES, "ordinary contention retries to the ceiling, not once"
 
 
 async def test_the_responsiveness_budget_cannot_pass_without_a_measurement():
