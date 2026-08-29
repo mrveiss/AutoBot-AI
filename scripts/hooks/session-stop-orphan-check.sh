@@ -2,7 +2,11 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 # Session Stop Orphan Check
-# Detects work not linked to a GitHub issue and auto-creates one.
+# Two kinds of orphan, deliberately handled differently:
+#   main tree  — commits not linked to a GitHub issue; auto-creates one
+#   worktree   — commits the PR base never received; reported, never filed
+# The branch is already the record for parked work, so filing there would add
+# backlog without adding closure.
 # Called by Claude Code Stop hook.
 #
 # AutoBot - AI-Powered Automation Platform
@@ -19,10 +23,58 @@ fi
 
 BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 
-# Skip if we're inside a worktree (worktrees are actively used for parallel work)
+# The branch PRs target, which is not necessarily the remote default branch.
+pr_base() {
+  local candidate
+  for candidate in "${ORPHAN_CHECK_BASE:-}" Dev_new_gui develop main master; do
+    [ -n "$candidate" ] || continue
+    if git rev-parse --verify --quiet "origin/$candidate" >/dev/null 2>&1; then
+      printf 'origin/%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# A worktree branch carrying commits the base never received. Surfaced, never
+# filed: an auto-filed issue would add backlog while closing nothing, and the
+# branch already records the work.
+report_parked_branch() {
+  local base ahead dirty merged open_pr
+  [ "$BRANCH" != "unknown" ] || return 0
+  base=$(pr_base) || return 0
+
+  ahead=$(git rev-list --count "$base"..HEAD 2>/dev/null || echo 0)
+  dirty=$(git status --porcelain 2>/dev/null \
+    | grep -cvE '(node_modules|__pycache__|\.pyc|dist/)' || true)
+  case "$ahead" in ''|*[!0-9]*) ahead=0 ;; esac
+  case "$dirty" in ''|*[!0-9]*) dirty=0 ;; esac
+  # Commits ahead is the parked-work signal. A merely dirty tree is normal
+  # mid-task state and fires on every Stop, so it is an addendum, never a cause.
+  [ "$ahead" -gt 0 ] || return 0
+
+  # A merged PR means these commits are rebase leftovers, not parked work.
+  merged=$(gh pr list --head "$BRANCH" --state merged --json number \
+    --jq '.[0].number // empty' 2>/dev/null || true)
+  [ -z "$merged" ] || return 0
+
+  # An open PR means the work is already in the pipeline.
+  open_pr=$(gh pr list --head "$BRANCH" --state open --json number \
+    --jq '.[0].number // empty' 2>/dev/null || true)
+  [ -z "$open_pr" ] || return 0
+
+  echo "PARKED WORK on $BRANCH: $ahead commit(s) ahead of $base, no PR open."
+  [ "$dirty" -gt 0 ] && echo "  plus $dirty uncommitted path(s)."
+  echo "  Finished work returns nothing until it lands. Open a PR for it,"
+  echo "  or rank what to land next:  ~/.claude/scripts/drain-parked.sh"
+}
+
+# Inside a worktree this used to exit immediately — blind to the case that
+# actually costs work, since every code-touching task runs in a worktree.
 GIT_COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null)"
 ACTUAL_GIT_DIR="$(git rev-parse --git-dir 2>/dev/null)"
 if [ "$GIT_COMMON_DIR" != "$ACTUAL_GIT_DIR" ]; then
+  report_parked_branch
   exit 0
 fi
 
