@@ -261,11 +261,33 @@ async def measure_with_starvation_retry(
     assertion then fails — a real regression — that is a plain `AssertionError`,
     not `MeasurementStarved`, and this function does not catch it. It propagates
     on the first attempt. Retrying is scoped exclusively to "could this window
-    be measured at all", so a genuine regression can never be masked by
-    landing on a lucky retry, and a starved attempt can never be scored as a
-    pass — starvation only ever produces a retry or, on the last attempt, a
-    distinct failure message naming persistent starvation rather than a
-    budget breach.
+    be measured at all", so a starved attempt can never be scored as a pass —
+    starvation only ever produces a retry or, on the last attempt, a distinct
+    failure message naming persistent starvation rather than a budget breach.
+
+    THE PART THIS FUNCTION CANNOT GUARANTEE ON ITS OWN, stated because a review
+    of #15266 found it violated: whether "a genuine regression can never be
+    masked" also holds depends on `measure` raising `MeasurementStarved` ONLY
+    for a window the ENVIRONMENT emptied, never for one the operation under
+    test emptied itself. A total-blockage regression — the code under test
+    stalling the loop so completely that almost nothing gets measured — looks
+    identical, from inside `measure`, to a runner too busy to schedule the
+    heartbeat at all: both are "too few samples". A caller that raises
+    `MeasurementStarved` on tick count alone, with no other signal, will retry
+    that regression up to `max_attempts` times and still fail in the end —
+    this function raises unconditionally once every attempt is exhausted, so
+    the failure is never silently green — but the final message reads as
+    environmental contention when it was actually the worst possible
+    regression, and it takes `max_attempts` times as long to say so. A caller
+    whose "operation under test" and "environment" can both empty the same
+    window must discriminate the two BEFORE raising `MeasurementStarved`, not
+    leave it to this function, which has no way to tell them apart from a
+    tick count alone. `process_offload_test.py::_raise_if_a_window_starved` is
+    the worked example: it brackets the measurement with an idle window on
+    each side and raises `MeasurementStarved` only when the idle window is
+    ALSO starved; a busy window starved while the idle windows are healthy
+    means the operation under test emptied it, which is scored as an
+    immediate, non-retried `AssertionError` instead.
     """
     last_reason: str | None = None
     for _attempt in range(1, max_attempts + 1):
