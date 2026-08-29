@@ -1,10 +1,11 @@
-# GPU / vLLM inference — OPTIONAL extra (#10251)
+# vLLM inference — OPTIONAL extra (#10251, #15162)
 #
 # NOT installed by the default backend image. vLLM provides high-performance
 # in-process LLM inference (3-4x throughput, prefix caching) but requires a
 # CUDA-compatible GPU and pulls the full CUDA toolkit (cuda-toolkit, nvidia-*,
-# flashinfer, CUDA-built torch) — several GB. Installing it into the default
-# CPU image was the cause of image bloat and intermittent CI disk-full failures.
+# flashinfer) — several GB on top of CUDA torch. Installing it into the
+# default CPU image was the cause of image bloat and intermittent CI
+# disk-full failures.
 #
 # Install ONLY on GPU deployments that enable vLLM (config: llm.vllm.enabled = true):
 #     pip install -r requirements-gpu.txt
@@ -13,11 +14,12 @@
 # vllm, so the backend runs normally without this file; the provider only activates
 # when explicitly enabled and installed.
 #
+# CUDA torch itself is NOT pinned here (#15162): it lives in
+# requirements-gpu-torch.txt, which the ansible backend role installs
+# whenever a GPU is present, independent of this vLLM opt-in. vllm pins the
+# same torch build, so pip resolves it as already-satisfied when this file
+# is installed on top.
+#
 # Requires: CUDA-compatible GPU, Python 3.12.
 
 vllm>=0.27.1
-
-# vLLM pins these exact torch builds (CUDA). They intentionally override the
-# CPU torch installed in the default image when this GPU extra is used.
-torch==2.13.0
-torchvision==0.28.0
