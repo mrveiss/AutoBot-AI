@@ -23,6 +23,8 @@ import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 from pathlib import Path
 
 import pytest
+
+from autobot_shared.paths import scrubbed_git_env
 from repo_tests.unreferenced_shell_script_baseline import KNOWN_UNREFERENCED
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -55,12 +57,17 @@ NOT_A_REFERENCE = frozenset(
 
 
 def _git(*args: str) -> list[str]:
+    """#15246: env scrubbed -- this deliberately reads the REAL repo (cwd=
+    REPO_ROOT), and a scrub makes that authoritative instead of contingent on
+    an inherited GIT_DIR happening to agree with it.
+    """
     result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", *args],
         capture_output=True,
         text=True,
         encoding="utf-8",
         cwd=REPO_ROOT,
+        env=scrubbed_git_env(),
     )
     if result.returncode not in (0, 1):  # 1 = git grep found nothing
         raise RuntimeError(f"git {' '.join(args)} failed: {result.stderr.strip()}")

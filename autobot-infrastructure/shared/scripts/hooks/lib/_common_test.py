@@ -16,36 +16,44 @@ and asserts on stdout/exit code.
 
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 LIB_PATH = Path(__file__).resolve().parent / "_common.sh"
+
+
+def _test_git_env() -> dict[str, str]:
+    """#15246: env for every git subprocess this suite spawns.
+
+    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    GIT_DIR pointing at the worktree it is pushing (every checkout here is
+    one), and an unscrubbed `git init`/`git add`/`git commit` in a
+    fixture then operates on THAT repository instead of tmp_path's. See
+    autobot_shared/paths_test.py and #15246 for the reproduced incident.
+    """
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
 
 
 def _run_in_subshell(script: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
     """Source _common.sh and run a snippet; capture stdout/stderr/exit."""
     full = f'source "{LIB_PATH}"\n{script}'
-    return subprocess.run(
-        ["bash", "-c", full],
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-    )
+    return subprocess.run(["bash", "-c", full], capture_output=True, text=True, cwd=cwd, env=_test_git_env())
 
 
 def _make_git_repo(tmp_path: Path, files: dict[str, str]) -> Path:
     """Initialize a git repo at tmp_path with `files` staged."""
-    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.email", "test@test"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True, env=_test_git_env())
+    subprocess.run(["git", "config", "user.email", "test@test"], cwd=tmp_path, check=True, env=_test_git_env())
+    subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True, env=_test_git_env())
     for rel, content in files.items():
         path = tmp_path / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-        subprocess.run(["git", "add", rel], cwd=tmp_path, check=True)
+        subprocess.run(["git", "add", rel], cwd=tmp_path, check=True, env=_test_git_env())
     return tmp_path
 
 

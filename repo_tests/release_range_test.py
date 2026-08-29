@@ -21,6 +21,8 @@ import subprocess
 
 import yaml
 
+from autobot_shared.paths import scrubbed_git_env
+
 WORKFLOW = pathlib.Path(__file__).resolve().parents[1] / ".github" / "workflows" / "release.yml"
 
 # The shell body of the range step, extracted so the logic is executed rather
@@ -47,11 +49,16 @@ def _step(step_id: str) -> dict:
 
 
 def _git(repo, *args):
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    """#15246: env scrubbed -- an inherited GIT_DIR would run this against the
+    real repository instead of the throwaway one at ``repo``.
+    """
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=scrubbed_git_env())
 
 
 def _run_range_logic(repo) -> tuple:
-    out = subprocess.run(["bash", "-c", RANGE_LOGIC], cwd=str(repo), capture_output=True, text=True, check=True)
+    out = subprocess.run(
+        ["bash", "-c", RANGE_LOGIC], cwd=str(repo), capture_output=True, text=True, check=True, env=scrubbed_git_env()
+    )
     rng, count = out.stdout.strip().split("|")
     return rng, int(count)
 
@@ -100,7 +107,7 @@ def test_an_empty_range_is_still_a_clean_no_op():
 
 
 def test_a_tagged_repo_yields_the_range_since_its_latest_tag(tmp_path):
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=scrubbed_git_env())
     _git(tmp_path, "config", "user.email", "a@b.c")
     _git(tmp_path, "config", "user.name", "t")
     (tmp_path / "f.txt").write_text("1\n", encoding="utf-8")
@@ -123,7 +130,7 @@ def test_a_merge_commit_range_reports_every_commit_not_just_the_merge(tmp_path):
     range must report the whole set, or the version decision has nothing to work
     from.
     """
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=scrubbed_git_env())
     _git(tmp_path, "config", "user.email", "a@b.c")
     _git(tmp_path, "config", "user.name", "t")
     (tmp_path / "f.txt").write_text("1\n", encoding="utf-8")
@@ -143,6 +150,7 @@ def test_a_merge_commit_range_reports_every_commit_not_just_the_merge(tmp_path):
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     ).stdout.strip()
     rng, count = _run_range_logic(tmp_path)
 
@@ -152,13 +160,17 @@ def test_a_merge_commit_range_reports_every_commit_not_just_the_merge(tmp_path):
 
 def _has_master(repo) -> bool:
     out = subprocess.run(
-        ["git", "-C", str(repo), "branch", "--list", "master"], capture_output=True, text=True, check=True
+        ["git", "-C", str(repo), "branch", "--list", "master"],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=scrubbed_git_env(),
     )
     return bool(out.stdout.strip())
 
 
 def test_an_untagged_repo_falls_back_to_all_history(tmp_path):
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=scrubbed_git_env())
     _git(tmp_path, "config", "user.email", "a@b.c")
     _git(tmp_path, "config", "user.name", "t")
     (tmp_path / "f.txt").write_text("1\n", encoding="utf-8")
