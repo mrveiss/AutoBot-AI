@@ -182,7 +182,9 @@ def terminal_tools_include_prefix() -> str:
     """
     backend_root = Path(__file__).resolve().parents[1]
     graph = build_graph(backend_root)
-    edges = [e for e in graph.edges if e.parent == "api.terminal:admin_router" and e.child == "api.terminal_tools:router"]
+    edges = [
+        e for e in graph.edges if e.parent == "api.terminal:admin_router" and e.child == "api.terminal_tools:router"
+    ]
     assert edges, (
         "the api.terminal:admin_router -> api.terminal_tools:router mount "
         "(api/terminal.py:198) was not found in the static mount graph -- "
