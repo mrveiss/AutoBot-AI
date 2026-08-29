@@ -70,9 +70,7 @@ class OpenAIRealtimeProvider(RealtimeVoiceProvider):
         from services.provider_key_vault import resolve_provider_key
 
         cfg = get_config()
-        return resolve_provider_key("OPENAI_API_KEY", cfg.llm.openai_api_key) or os.environ.get(
-            "OPENAI_API_KEY", ""
-        )
+        return resolve_provider_key("OPENAI_API_KEY", cfg.llm.openai_api_key) or os.environ.get("OPENAI_API_KEY", "")
 
     @staticmethod
     def _model() -> str:
