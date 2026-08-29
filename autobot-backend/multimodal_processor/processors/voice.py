@@ -117,23 +117,21 @@ class VoiceProcessor(BaseModalProcessor):
             self.logger.info("Loading Whisper model...")
             # HuggingFace model loaded by name; revision pinning managed operationally.
             self.whisper_processor = WhisperProcessor.from_pretrained(  # nosec B615
-                "openai/whisper-base", resume_download=True
+                "openai/whisper-base"
             )
             self.whisper_model = WhisperForConditionalGeneration.from_pretrained(  # nosec B615
                 "openai/whisper-base",
                 torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
-                resume_download=True,
             ).to(self.device)
 
             # Load Wav2Vec2 model for audio embeddings and feature extraction
             self.logger.info("Loading Wav2Vec2 model...")
             self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(  # nosec B615
-                "facebook/wav2vec2-base-960h", use_fast=True, resume_download=True
+                "facebook/wav2vec2-base-960h", use_fast=True
             )
             self.wav2vec_model = Wav2Vec2ForCTC.from_pretrained(  # nosec B615
                 "facebook/wav2vec2-base-960h",
                 torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
-                resume_download=True,
             ).to(self.device)
 
             # Set models to evaluation mode

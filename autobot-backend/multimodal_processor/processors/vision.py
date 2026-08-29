@@ -100,19 +100,19 @@ class VisionProcessor(BaseModalProcessor):
             # Load CLIP model for image embeddings and classification
             self.logger.info("Loading CLIP model...")
             self.clip_model = CLIPModel.from_pretrained(
-                "openai/clip-vit-base-patch32", resume_download=True
+                "openai/clip-vit-base-patch32"
             ).to(  # nosec B615  # HuggingFace model loaded by name; revision pinning managed operationally
                 self.device
             )
             self.clip_processor = CLIPProcessor.from_pretrained(  # nosec B615
-                "openai/clip-vit-base-patch32", use_fast=True, resume_download=True
+                "openai/clip-vit-base-patch32", use_fast=True
             )
 
             # Load BLIP-2 model for image captioning and VQA
             # Using smaller model for memory efficiency
             self.logger.info("Loading BLIP-2 model...")
             self.blip_processor = Blip2Processor.from_pretrained(  # nosec B615
-                "Salesforce/blip2-opt-2.7b", use_fast=True, resume_download=True
+                "Salesforce/blip2-opt-2.7b", use_fast=True
             )
 
             # Check if accelerate is available for device_map
@@ -128,13 +128,11 @@ class VisionProcessor(BaseModalProcessor):
                     "Salesforce/blip2-opt-2.7b",
                     torch_dtype=torch.float16,
                     device_map="auto",
-                    resume_download=True,
                 )
             else:
                 self.blip_model = Blip2ForConditionalGeneration.from_pretrained(  # nosec B615
                     "Salesforce/blip2-opt-2.7b",
                     torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
-                    resume_download=True,
                 ).to(self.device)
 
             # Set models to evaluation mode

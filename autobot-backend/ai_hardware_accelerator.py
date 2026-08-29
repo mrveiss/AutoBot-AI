@@ -623,12 +623,11 @@ class AIHardwareAccelerator:
 
         # HuggingFace model loaded by name; revision pinning managed operationally.
         self.clip_processor = CLIPProcessor.from_pretrained(  # nosec B615
-            "openai/clip-vit-base-patch32", resume_download=True
+            "openai/clip-vit-base-patch32"
         )
         self.clip_model = CLIPModel.from_pretrained(  # nosec B615
             "openai/clip-vit-base-patch32",
             torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
-            resume_download=True,
         ).to(device)
         self.clip_model.eval()
 
@@ -642,12 +641,11 @@ class AIHardwareAccelerator:
 
         # HuggingFace model loaded by name; revision pinning managed operationally.
         self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(  # nosec B615
-            "facebook/wav2vec2-base-960h", resume_download=True
+            "facebook/wav2vec2-base-960h"
         )
         self.wav2vec_model = Wav2Vec2Model.from_pretrained(  # nosec B615
             "facebook/wav2vec2-base-960h",
             torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
-            resume_download=True,
         ).to(device)
         self.wav2vec_model.eval()
 

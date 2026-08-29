@@ -264,7 +264,7 @@ def _inspect_via_config(model_name: str) -> ModelInfo | None:
 
     try:
         # HuggingFace model loaded by name; revision pinning managed operationally.
-        cfg = transformers.AutoConfig.from_pretrained(model_name, resume_download=True)  # nosec B615
+        cfg = transformers.AutoConfig.from_pretrained(model_name)  # nosec B615
         param_count = _count_params_via_skeleton(cfg, transformers, accelerate)
         if param_count is None:
             logger.debug("model_inspector: using formula fallback for %s", model_name)
