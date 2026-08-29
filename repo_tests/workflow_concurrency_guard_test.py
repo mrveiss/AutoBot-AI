@@ -38,8 +38,11 @@ DELIBERATELY_EXEMPT = {
         "publishes the required 'Unit & Integration Tests' context; cancelling a "
         "superseded run would leave it unreported and deadlock the pull request"
     ),
-    "python-required-context.yml": (
-        "publishes the required 'python-suite' context; same deadlock (#14353)"
+    "python-required-context.yml": ("publishes the required 'python-suite' context; same deadlock (#14353)"),
+    # Landed by #15300 with the rationale spelled out inline and the exemption
+    # never added here, so the guard has failed on every pull request since.
+    "docker-smoke-required-context.yml": (
+        "publishes the required 'docker-smoke-required-context' context; same deadlock (#15300)"
     ),
 }
 
@@ -150,11 +153,7 @@ def test_base_branch_cancellation_does_not_spread():
     A new offender - e.g. copying `cancel-in-progress: true` from a neighbour -
     must fail here, not accumulate until the next audit finds it.
     """
-    offenders = {
-        path.name
-        for path, doc in _pull_request_workflows()
-        if _cancels_base_branch_runs_unguarded(path, doc)
-    }
+    offenders = {path.name for path, doc in _pull_request_workflows() if _cancels_base_branch_runs_unguarded(path, doc)}
 
     assert not offenders, (
         f"{sorted(offenders)} trigger on push and cancel unconditionally, so a merge "
