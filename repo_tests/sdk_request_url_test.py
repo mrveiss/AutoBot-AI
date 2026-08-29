@@ -27,6 +27,16 @@ that is not paginated, and both analytics methods sent a ``period`` neither rout
 takes. Response *shapes* are asserted next door in
 ``sdk_response_model_contract_test.py`` and ``sdk_response_parsing_test.py``.
 
+The checks here only see a parameter a ``SDK_REQUESTS`` row actually passes; a
+parameter defaulting to ``None`` that no row bothers to pass reaches neither
+this file's ``observed`` set nor a route that might reject it (#15187). That
+gap is closed in ``sdk_request_signature_params_test.py``, split out once this
+file's own #15187 section pushed it past the 600-line cap
+(``scripts/check_python_file_size.py``). ``SDK_REQUESTS``, the wire-capture
+harness and the per-row comparison both files share live in
+``sdk_request_shared.py``; ``route_query_params`` is a fixture in
+``conftest.py``, visible to both without either importing it by name.
+
 This lives in ``repo_tests`` rather than beside the SDK deliberately: ci.yml's
 roots do not include ``libs``, and marker-tests.yml selects only
 marker-carrying tests there, so an unmarked test under
@@ -36,33 +46,37 @@ marker-carrying tests there, so an unmarked test under
 from __future__ import annotations
 
 import asyncio
-import importlib
+import functools
 import importlib.util
+import inspect
 import re
 import sys
 from pathlib import Path
 
 import httpx
 import pytest
-from autobot_sdk import API_PREFIX, AutoBot, api_path, default_base_url
-from fastapi import FastAPI
-from fastapi.openapi.utils import get_openapi
+from autobot_sdk import API_PREFIX, AutoBot, api_path, default_base_url, resources
 
 from autobot_shared.api_routing import router_prefixes as routing
 from autobot_shared.ssot_config import config
+from repo_tests.sdk_request_shared import (
+    _BACKEND,
+    _BACKEND_API_ROOT,
+    _REPO,
+    _RESOURCE_ATTRS,
+    SDK_REQUESTS,
+    _assert_sent_params_are_accepted,
+    _template_for,
+)
+from repo_tests.sdk_request_shared import _urls as _shared_urls
 
-_REPO = Path(__file__).resolve().parents[1]
-_BACKEND = _REPO / "autobot-backend"
+# Own mock base URL rather than importing one: sdk_request_shared.py cannot
+# hold this literal (see its module docstring -- the hardcoded-value hook's
+# test-file exemption is filename-matched, and that module's name does not
+# qualify). Rebinding ``_urls`` to a partial keeps every ``_urls(call)`` call
+# site below unchanged.
 _BASE = "http://backend.test:9999"
-
-# The BACKEND's API root, stated here independently of the SDK. If the oracle
-# below read ``autobot_sdk.API_PREFIX`` instead, dropping the prefix from the
-# SDK would move the route table with it and every assertion would still pass
-# — the mutation would have deleted its own detector.
-# ``test_the_api_root_is_the_one_the_application_factory_mounts`` anchors this
-# constant to app_factory.py, and ``test_the_sdk_uses_the_backend_api_root``
-# anchors the SDK to it.
-_BACKEND_API_ROOT = "/api"
+_urls = functools.partial(_shared_urls, base=_BASE)
 
 
 def _route_decorator_re():
@@ -125,66 +139,6 @@ def _matches_a_route(concrete: str, routes: set[str]) -> bool:
     return False
 
 
-async def _record(call) -> list[tuple[str, str, frozenset[str]]]:
-    """Run one SDK call against a transport that answers without dialling.
-
-    The third element is the set of query-parameter **names** actually put on the
-    wire. Read off ``request.url.params`` rather than off the method signature:
-    ``AutoBotClient.get()`` drops ``None`` values, so what a method accepts and
-    what it sends are two different sets and only the second one reaches a route.
-    """
-    seen: list[tuple[str, str, frozenset[str]]] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append((request.method, request.url.path, frozenset(request.url.params.keys())))
-        return httpx.Response(200, json={"success": True, "data": None, "status": "healthy"})
-
-    async with AutoBot(base_url=_BASE, token="t") as bot:
-        # Swap the transport in place so the real client construction, the real
-        # base-URL merge and the real resource paths are all exercised.
-        bot._client._transport = httpx.MockTransport(handler)
-        await call(bot)
-    return seen
-
-
-def _urls(call) -> list[tuple[str, str, frozenset[str]]]:
-    return asyncio.run(_record(call))
-
-
-# ``(name, coroutine, expected METHOD, expected full path)`` — one row per
-# request the SDK can make. Adding a resource method without a row here fails
-# ``test_every_sdk_request_is_covered`` below.
-SDK_REQUESTS = [
-    ("sessions.list", lambda b: b.sessions.list(scope="team", team_id="t1"), "GET", "/api/chat/sessions"),
-    ("sessions.get", lambda b: b.sessions.get("s1", page=2, per_page=10), "GET", "/api/chat/sessions/s1"),
-    ("sessions.create", lambda b: b.sessions.create(title="t"), "POST", "/api/chat/sessions"),
-    ("sessions.update", lambda b: b.sessions.update("s1", title="t"), "PUT", "/api/chat/sessions/s1"),
-    ("sessions.delete", lambda b: b.sessions.delete("s1"), "DELETE", "/api/chat/sessions/s1"),
-    ("agents.health", lambda b: b.agents.health(), "GET", "/api/agent/health/detailed"),
-    ("agents.get_config", lambda b: b.agents.get_config("a1"), "GET", "/api/agent_config/agents/a1"),
-    ("agents.set_model", lambda b: b.agents.set_model("a1", "m"), "POST", "/api/agent_config/agents/a1/model"),
-    ("agents.set_enabled_on", lambda b: b.agents.set_enabled("a1", True), "POST", "/api/agent_config/agents/a1/enable"),
-    (
-        "agents.set_enabled_off",
-        lambda b: b.agents.set_enabled("a1", False),
-        "POST",
-        "/api/agent_config/agents/a1/disable",
-    ),
-    ("agents.send_command", lambda b: b.agents.send_command("ls"), "POST", "/api/agent/execute_command"),
-    ("knowledge.stats", lambda b: b.knowledge.stats(), "GET", "/api/knowledge_base/stats"),
-    ("knowledge.add_text", lambda b: b.knowledge.add_text("x"), "POST", "/api/knowledge_base/add_text"),
-    ("knowledge.search", lambda b: b.knowledge.search("q"), "POST", "/api/knowledge_base/search"),
-    (
-        "knowledge.get_entries",
-        lambda b: b.knowledge.get_entries(limit=5, cursor="7", category="ops"),
-        "GET",
-        "/api/knowledge_base/entries",
-    ),
-    ("analytics.usage", lambda b: b.analytics.usage(), "GET", "/api/analytics/usage/statistics"),
-    ("analytics.performance", lambda b: b.analytics.performance(), "GET", "/api/analytics/performance/metrics"),
-]
-
-
 @pytest.mark.parametrize("name,call,method,expected", SDK_REQUESTS, ids=[r[0] for r in SDK_REQUESTS])
 def test_the_sdk_puts_the_expected_url_on_the_wire(name, call, method, expected):
     """Pin the exact method and path, not that some mock was called."""
@@ -208,79 +162,15 @@ def test_the_url_the_sdk_builds_names_a_route_the_backend_serves(name, call, met
 # Query parameters (#15119)
 # --------------------------------------------------------------------------
 
-#: Backend modules serving the paths above. Only these are imported, so the
-#: oracle costs one small app rather than the whole backend.
-#:
-#: This list cannot go stale unnoticed: the app built from it is asked for every
-#: path in ``SDK_REQUESTS``, so a module missing here shows up as a path the spec
-#: does not contain, and ``test_every_sdk_request_path_is_in_the_query_oracle``
-#: fails naming it.
-SERVING_MODULES: tuple[str, ...] = (
-    "api.agent",
-    "api.agent_config",
-    "api.analytics",
-    "api.chat_sessions",
-    "api.knowledge",
-    "api.knowledge_search",
-)
-
 #: Every query-parameter name the SDK can put on the wire, across all of
 #: ``SDK_REQUESTS``. Pinned rather than merely non-empty: a new parameter added to
 #: a resource method without a row exercising it would otherwise be sent by
 #: nothing here, and the subset assertion below would pass without ever seeing it.
+#:
+#: This is deliberately weaker than ``sdk_request_signature_params_test.py``'s
+#: coverage -- it only sees what a row here happens to pass -- but stays as a
+#: fast, no-oracle sanity check that a row was not simply deleted.
 SENT_QUERY_PARAMS = frozenset({"scope", "team_id", "page", "per_page", "limit", "cursor", "category"})
-
-
-@pytest.fixture(scope="module")
-def route_query_params() -> dict[tuple[str, str], frozenset[str]]:
-    """``(METHOD, path template) -> declared query parameter names``.
-
-    Built through ``fastapi.openapi.utils.get_openapi`` on an app that mounts the
-    modules above exactly as ``app_factory`` mounts them -- ``/api`` + the prefix
-    ``initialization/router_registry`` gives that module. Deliberately **not** a
-    walk over ``router.routes``: from ``fastapi>=0.139`` ``include_router`` records
-    an opaque wrapper instead of copying the child's routes onto the parent, so a
-    flat walk finds almost nothing and every assertion over it passes vacuously.
-    CI pins 0.141.1 and a development checkout may resolve below 0.139, so a local
-    pass would prove nothing about the runner (#15091, #15093). ``get_openapi`` is
-    the view FastAPI itself serves ``/openapi.json`` from and answers the same on
-    both shapes.
-
-    The mount prefixes are read from the registry rather than written here, so a
-    router that moves is followed rather than silently mismatched.
-    """
-    registry = dict(routing.registry_entries(_BACKEND / "initialization" / "router_registry"))
-    assert registry, "the router registry parsed no entries -- the oracle below would have nothing to mount"
-
-    app = FastAPI()
-    for module_path in SERVING_MODULES:
-        assert module_path in registry, f"{module_path} is not mounted by initialization/router_registry"
-        app.include_router(
-            importlib.import_module(module_path).router, prefix=f"{_BACKEND_API_ROOT}{registry[module_path]}"
-        )
-
-    spec = get_openapi(title="sdk-request-oracle", version="1", routes=app.routes)
-    declared: dict[tuple[str, str], frozenset[str]] = {}
-    for path, operations in spec.get("paths", {}).items():
-        for verb, operation in operations.items():
-            names = {p["name"] for p in operation.get("parameters", []) if p.get("in") == "query"}
-            declared[(verb.upper(), path)] = frozenset(names)
-
-    assert declared, "the oracle enumerated no routes at all; every assertion below would pass vacuously"
-    assert any(names for names in declared.values()), (
-        "no route in the oracle declares a single query parameter. Either the mounted set is wrong or "
-        "the parameter extraction is -- an oracle where everything accepts nothing cannot detect a wrong name."
-    )
-    return declared
-
-
-def _template_for(concrete: str, templates) -> str | None:
-    """The route template *concrete* fills in, or ``None``."""
-    for template in templates:
-        pattern = "/".join("[^/]+" if seg.startswith("{") else re.escape(seg) for seg in template.split("/"))
-        if re.fullmatch(pattern, concrete):
-            return template
-    return None
 
 
 def test_the_rows_above_exercise_every_query_parameter_the_sdk_can_send():
@@ -295,13 +185,15 @@ def test_the_rows_above_exercise_every_query_parameter_the_sdk_can_send():
 
 @pytest.mark.parametrize("name,call,method,expected", SDK_REQUESTS, ids=[r[0] for r in SDK_REQUESTS])
 def test_every_sdk_request_path_is_in_the_query_oracle(name, call, method, expected, route_query_params):
-    """Proves SERVING_MODULES is sufficient before anything is read out of the oracle."""
+    """Proves ``conftest.py``'s ``SERVING_MODULES`` is sufficient before anything
+    is read out of the oracle it builds.
+    """
     verb, wanted, _params = _urls(call)[0]
     template = _template_for(wanted, {path for _verb, path in route_query_params})
 
     assert template is not None, (
         f"{name} requests {wanted}, which the oracle's mounted modules do not serve. "
-        f"Add the module serving it to SERVING_MODULES."
+        f"Add the module serving it to conftest.py's SERVING_MODULES."
     )
     assert (verb, template) in route_query_params, f"{name} uses {verb} on {template}, which serves other verbs only"
 
@@ -312,18 +204,12 @@ def test_every_query_parameter_the_sdk_sends_exists_on_the_route(name, call, met
 
     ``limit``/``offset`` on ``/chat/sessions``, ``offset`` on
     ``/knowledge_base/entries`` and ``period`` on both analytics routes each
-    failed this way -- sent on every call, ignored on every call.
+    failed this way -- sent on every call, ignored on every call. The
+    ``None``-defaulted-and-unexercised half of this same shape is guarded in
+    ``sdk_request_signature_params_test.py`` instead (#15187).
     """
     verb, wanted, sent = _urls(call)[0]
-    template = _template_for(wanted, {path for _verb, path in route_query_params})
-    accepted = route_query_params[(verb, template)]
-
-    unknown = sent - accepted
-    assert not unknown, (
-        f"{name} sends {sorted(unknown)} to {verb} {template}, which declares "
-        f"{sorted(accepted) or 'no query parameters at all'}. FastAPI drops an undeclared parameter "
-        "without an error, so the caller's intent silently does not apply."
-    )
+    _assert_sent_params_are_accepted(name, verb, wanted, sent, route_query_params)
 
 
 def test_pagination_advances_when_the_cursor_from_one_page_is_passed_to_the_next():
@@ -360,20 +246,8 @@ def test_pagination_advances_when_the_cursor_from_one_page_is_passed_to_the_next
     assert second.has_more is False
 
 
-_RESOURCE_ATTRS = {
-    "AgentsResource": "agents",
-    "AnalyticsResource": "analytics",
-    "KnowledgeResource": "knowledge",
-    "SessionsResource": "sessions",
-}
-
-
 def test_every_sdk_request_is_covered():
     """A new resource method must arrive with a URL row above, or this fails."""
-    import inspect
-
-    from autobot_sdk import resources
-
     declared = {
         f"{_RESOURCE_ATTRS[cls.__name__]}.{name}"
         for cls in (
