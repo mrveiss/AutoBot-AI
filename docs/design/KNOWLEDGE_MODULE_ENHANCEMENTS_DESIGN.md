@@ -1,5 +1,7 @@
 # Knowledge Module Enhancements Design
 
+> **Freshness:** current (draft) — 2026-08-30. Self-declared `Status: Draft`; unchanged by this move.
+
 **Issue**: #645 - Implement Industry-Standard Agent Architecture Patterns
 **Author**: mrveiss
 **Date**: 2025-12-28

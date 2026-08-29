@@ -6,6 +6,8 @@ issue: 4069
 
 # Causal Inference Algorithms
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 Reference for the scoring and ranking algorithms used by `CausalInferenceEngine` (`autobot-backend/services/causal_inference_engine.py`).
 
 ---

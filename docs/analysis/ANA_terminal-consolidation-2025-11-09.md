@@ -1,5 +1,7 @@
 # Terminal Integration Consolidation Analysis
 
+> **Freshness:** historical — 2026-08-30. Self-declared date corrected from `2025-01-09` to the git first-commit date `2025-11-09` per the tie-break rule recorded on #15190 (body date implausibly precedes first commit by 10 months). Describes completed, shipped work.
+
 **Date**: 2025-01-09
 **Status**: Phase 1, 2 & 3 Complete ✅ - Production Ready
 **Impact**: Reduced codebase by 1,046 lines (~28.7%) + Queue-based performance improvements

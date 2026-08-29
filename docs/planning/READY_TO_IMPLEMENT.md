@@ -38,7 +38,7 @@
    - Next steps guide
 
 6. **Architecture Analysis** (2,202 lines)
-   - Location: `docs/architecture/BACKEND_CRITICAL_ISSUES_ARCHITECTURAL_ANALYSIS.md`
+   - Location: `docs/analysis/ANA_backend-critical-issues-architectural-2025-10-05.md`
    - Distributed system impact analysis
    - Best practices research
 

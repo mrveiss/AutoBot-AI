@@ -1,9 +1,11 @@
 # Backend Critical Issues - Distributed Architecture Impact Analysis
 
+> **Freshness:** historical — 2026-08-30. The `DEPLOYMENT BLOCKED` status above is **false as of this date**. Verified against current base: Issue #1 (access control bypass) is fixed — `autobot-backend/api/conversation_files.py:230-257` (`validate_session_ownership`) performs real ownership checks, not the always-`True` stub this document describes. Issue #2 (missing DB init) is fixed — `autobot-backend/conversation_file_manager.py:465-498` (`_initialize_schema`) applies the schema. Issue #3 (sync Redis blocking the event loop) is fixed — `autobot-backend/chat_workflow/manager.py:337` now uses `get_redis_manager(async_client=True, ...)`. Issue #6 (unlocked read-modify-write race) is fixed — the same manager now holds `self._lock = asyncio.Lock()` (`manager.py:315`) and takes it around the relevant sections (`manager.py:392, 4053`); `_append_to_transcript` was renamed/refactored away. Issues #4 (context overflow) and #5 (zero test coverage, broad claim) were not individually re-verified. Tests exist for the module (`autobot-backend/conversation_file_manager_init_test.py`), contradicting the "zero test coverage" claim. The module paths this document names (`src/conversation_file_manager.py`, `src/chat_workflow_manager.py`) no longer exist — code was reorganized under `autobot-backend/`. Kept as a historical record of an 11-month-old audit; not a statement about the live system.
+
 **Date:** 2025-10-05
 **Analysis Type:** Architectural Impact Assessment
 **Scope:** 6 Critical Backend Issues in Distributed 6-VM Architecture
-**Status:** DEPLOYMENT BLOCKED - Critical Security and Performance Failures
+**Status:** HISTORICAL — the "DEPLOYMENT BLOCKED" finding below is stale; see the Freshness note above (verified 2026-08-30, issues #1-#3 confirmed fixed in current code)
 
 ---
 
