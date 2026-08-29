@@ -16,6 +16,11 @@ execution:
 * **Can this test fail?** ``propagating_guards`` answers whether an ``assert``
   or ``raise`` in a collected test can actually reach pytest, which is a
   different question from whether one is written down (#15195, below).
+* **Does this test run anything?** ``empty_bodies`` answers whether a collected
+  test's body is entirely no-ops — ``pass``, ``...``, a docstring, ``print()``
+  — which neither of the ceilings driven from here can see, because such a test
+  returns no verdict to discard and holds no assertion to discount (#15189,
+  below).
 
 Split out of ``tests_that_return_instead_of_asserting_test.py`` when a second
 guard needed the same model. Two copies of "what pytest collects" would drift,
@@ -323,3 +328,77 @@ def test_functions_by_tree() -> dict[str, int]:
         found = collectable_tests(parse_module(module))
         counts[tree] = counts.get(tree, 0) + len(found)
     return counts
+
+
+# ---------------------------------------------------------------------------
+# Does this test execute anything at all? (#15189)
+#
+# The third shape, and the one neither ceiling above can see. A test with no
+# `return` and no `assert` is invisible to both — there is no returned verdict
+# to discard and no inert assertion to discount — yet a body of `pass` plus a
+# docstring claiming a check is the same defect in its purest form: a green
+# tile for work never done. `test_migrated_files_import` in #15189 was exactly
+# this, six `print()` calls announcing six successful imports with the `import`
+# statements stripped out, and it reported success for all six.
+#
+# The rule is deliberately the narrowest one that catches it: EVERY statement
+# in the body is a no-op. A body that calls anything at all is out of scope,
+# because "it does not raise" is a real, if thin, assertion and flagging it
+# would make this guard the kind somebody switches off.
+# ---------------------------------------------------------------------------
+
+# Decorators that declare the test is not expected to run or not expected to
+# pass. An empty body under one of those is honest rather than misleading, so
+# it is not this guard's subject.
+DECLARED_NOT_RUNNING = frozenset({"skip", "skipif", "xfail"})
+
+
+def is_declared_not_running(function: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    for decorator in function.decorator_list:
+        node = decorator.func if isinstance(decorator, ast.Call) else decorator
+        name = node.attr if isinstance(node, ast.Attribute) else getattr(node, "id", "")
+        if name in DECLARED_NOT_RUNNING:
+            return True
+    return False
+
+
+def does_nothing(statement: ast.stmt) -> bool:
+    """True for a statement that cannot observe, change or check anything.
+
+    ``pass``, ``...``, a bare string (docstring, or a comment written as one)
+    and ``print(...)`` — the four ways a body can be written out in full and
+    still run no check. ``print`` is matched only as a bare name: an attribute
+    call such as ``reporter.print(...)`` is somebody's method and may do work.
+    """
+    if isinstance(statement, ast.Pass):
+        return True
+    if not isinstance(statement, ast.Expr):
+        return False
+    value = statement.value
+    if isinstance(value, ast.Constant):
+        return True
+    return (
+        isinstance(value, ast.Call)
+        and isinstance(value.func, ast.Name)
+        and value.func.id == "print"
+    )
+
+
+def empty_bodies(source: str) -> list[tuple[str, int]]:
+    """``(test name, line)`` for every collected test that executes nothing.
+
+    Source-driven for the same reason ``swallowed_assertions`` is: a detector
+    only ever pointed at the live tree cannot be told apart from one that has
+    stopped detecting.
+    """
+    return empty_bodies_in(ast.parse(source))
+
+
+def empty_bodies_in(tree: ast.Module) -> list[tuple[str, int]]:
+    found: list[tuple[str, int]] = []
+    for function in collectable_tests(tree):
+        if is_fixture(function) or is_declared_not_running(function):
+            continue
+        if all(does_nothing(statement) for statement in function.body):
+            found.append((function.name, function.lineno))
+    return found
