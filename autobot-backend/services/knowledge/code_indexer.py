@@ -38,6 +38,7 @@ from typing import Any
 
 from autobot_shared.code_graph import ResolvedCall, compute_node_id, module_path_from_rel_path, resolve_call
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import scrubbed_git_env
 from constants.path_constants import PATH
 from utils.file_categorization import (
     ALL_CODE_EXTENSIONS,
@@ -989,14 +990,13 @@ def _git(root_dir: str, *args: str) -> str:
     fail an index run that otherwise succeeded.
     """
     try:
-        completed = (
-            subprocess.run(  # nosec B603 B607  # fixed argv, shell=False, no user-supplied option can be injected
-                ["git", "-C", root_dir, *args],
-                capture_output=True,
-                text=True,
-                timeout=_GIT_TIMEOUT_SECONDS,
-                check=False,
-            )
+        completed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell, no injection
+            ["git", "-C", root_dir, *args],
+            capture_output=True,
+            text=True,
+            timeout=_GIT_TIMEOUT_SECONDS,
+            check=False,
+            env=scrubbed_git_env(),  # #15246: an inherited GIT_DIR would override -C
         )
     except (OSError, subprocess.SubprocessError) as exc:
         logger.debug("code_indexer: git %s failed in %s: %s", args, root_dir, exc)

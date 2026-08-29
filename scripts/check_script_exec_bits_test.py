@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 _MODULE_PATH = Path(__file__).resolve().parent / "check_script_exec_bits.py"
 _spec = importlib.util.spec_from_file_location("check_script_exec_bits", _MODULE_PATH)
 checker = importlib.util.module_from_spec(_spec)
@@ -98,7 +100,13 @@ def test_ignores_interpreter_prefixed_and_directives(line):
 # whatever the developer or runner has set globally — `commit.gpgsign = true`
 # alone made every test here fail — and `core.hooksPath` / `init.templateDir`
 # could reach into the throwaway repo.
-_GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
+#
+# #15246: `{**os.environ, ...}` here previously carried GIT_DIR straight
+# through. The pre-push hook exports it pointing at the pushing worktree's
+# own git directory, so `git init`/`add`/`update-index` below would write to
+# THAT repository instead of `root` -- the identical bug autobot_shared/
+# paths_test.py hit under the same hook. scrubbed_git_env() strips it first.
+_GIT_ENV = {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
 
 
 def _init_repo(root: Path) -> None:

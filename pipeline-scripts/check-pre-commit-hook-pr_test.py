@@ -24,11 +24,15 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = REPO_ROOT / "pipeline-scripts" / "check-pre-commit-hook-pr.sh"
 NO_PRINT_CONSOLE_HOOK = (
     REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "hooks" / "pre-commit-no-print-console"
 )
+
+E = scrubbed_git_env()  # 15246: ambient GIT_DIR would redirect these git calls to the live repo
 
 
 def _make_pr(tmp_path: Path, files: dict[str, str]) -> tuple[str, str]:
@@ -36,33 +40,25 @@ def _make_pr(tmp_path: Path, files: dict[str, str]) -> tuple[str, str]:
 
     Returns (base_sha, head_sha) suitable for BASE_SHA/HEAD_SHA env.
     """
-    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True, env=E)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True, env=E)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True, env=E)
     # Empty base commit so we have something to diff against.
     (tmp_path / ".gitkeep").write_text("", encoding="utf-8")
-    subprocess.run(["git", "add", ".gitkeep"], cwd=tmp_path, check=True)
-    subprocess.run(
-        ["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base"],
-        cwd=tmp_path,
-        check=True,
-    )
+    subprocess.run(["git", "add", ".gitkeep"], cwd=tmp_path, check=True, env=E)
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True, env=E)
     base = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True, env=E
     ).stdout.strip()
     # Add the PR's files in a second commit.
     for rel, content in files.items():
         path = tmp_path / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-        subprocess.run(["git", "add", rel], cwd=tmp_path, check=True)
-    subprocess.run(
-        ["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "pr"],
-        cwd=tmp_path,
-        check=True,
-    )
+        subprocess.run(["git", "add", rel], cwd=tmp_path, check=True, env=E)
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "pr"], cwd=tmp_path, check=True, env=E)
     head = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True, env=E
     ).stdout.strip()
     # Hooks live at <REPO_ROOT>/autobot-infrastructure/...; tmp_path doesn't
     # have those, so we run the wrapper from the real REPO_ROOT and pass
@@ -270,26 +266,26 @@ def _amend_pr(tmp_path: Path, files: dict[str, str]) -> tuple[str, str]:
     and "on a line this PR added", so the fixture has to be able to express it:
     the base carries pre-existing content and the PR appends to it.
     """
-    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True, env=E)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True, env=E)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True, env=E)
     for rel, content in files.items():
         path = tmp_path / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-        subprocess.run(["git", "add", rel], cwd=tmp_path, check=True)
-    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True)
+        subprocess.run(["git", "add", rel], cwd=tmp_path, check=True, env=E)
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "base"], cwd=tmp_path, check=True, env=E)
     base = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True, env=E
     ).stdout.strip()
     return base, ""
 
 
 def _commit_pr(tmp_path: Path) -> str:
-    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "pr"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True, env=E)
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "pr"], cwd=tmp_path, check=True, env=E)
     return subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True, env=E
     ).stdout.strip()
 
 
@@ -739,7 +735,7 @@ class TestChangedLinesOnlyPrintConsole:
 
         # Confirm the diff really is closing-line-only, or this test proves nothing.
         diff = subprocess.run(
-            ["git", "diff", base, head, "--", "m.py"], cwd=tmp_path, capture_output=True, text=True, check=True
+            ["git", "diff", base, head, "--", "m.py"], cwd=tmp_path, capture_output=True, text=True, check=True, env=E
         ).stdout
         removed = [ln for ln in diff.splitlines() if ln.startswith("-") and not ln.startswith("---")]
         added = [ln for ln in diff.splitlines() if ln.startswith("+") and not ln.startswith("+++")]

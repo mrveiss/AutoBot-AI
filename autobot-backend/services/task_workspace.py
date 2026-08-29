@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, Iterator, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.time_utils import utc_timestamp
 from services.task_workspace_common import validate_task_id
 
@@ -216,6 +217,11 @@ def release(
             check=True,
             capture_output=True,
             text=True,
+            # #15246: an inherited GIT_DIR (a caller invoked from inside a git
+            # hook, or a test with one ambient from the pre-push hook running
+            # this suite) overrides cwd, so this can silently act on the WRONG
+            # repository -- worktree removal AND the branch -D below it.
+            env=scrubbed_git_env(),
         )
         # Best-effort branch deletion — ignore failures (e.g. branch pushed / not
         # found). Cleanup/eviction passes force_branch=False → ``-d`` keeps a
@@ -225,6 +231,7 @@ def release(
             cwd=str(root),
             check=False,
             capture_output=True,
+            env=scrubbed_git_env(),  # #15246: see the worktree-remove call above
         )
         logger.info("Released workspace for task=%s", task_id)
     except subprocess.CalledProcessError as exc:
@@ -347,6 +354,9 @@ def _git_add_worktree(root: Path, workspace_dir: Path, branch: str) -> None:
             check=True,
             capture_output=True,
             text=True,
+            # #15246: see _git_add_worktree's sibling call below and release()'s
+            # worktree-remove above -- an inherited GIT_DIR overrides cwd here too.
+            env=scrubbed_git_env(),
         )
     except subprocess.CalledProcessError as exc:
         stderr = exc.stderr or ""
@@ -359,6 +369,7 @@ def _git_add_worktree(root: Path, workspace_dir: Path, branch: str) -> None:
                     check=True,
                     capture_output=True,
                     text=True,
+                    env=scrubbed_git_env(),  # #15246: see the first worktree-add call above
                 )
             except subprocess.CalledProcessError as exc2:
                 stderr2 = exc2.stderr or ""
