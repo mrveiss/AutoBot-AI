@@ -53,7 +53,11 @@ FIXED=0
 # working tree in the repository permanently dirty with mode-only changes.
 if [ -d "$HOOK_SCRIPTS_DIR" ]; then
     while IFS= read -r -d '' f; do
-        IFS= read -r firstline < "$f" 2>/dev/null || firstline=""
+        # Reset first: read returns non-zero at EOF but still assigns, so a
+        # one-line file with no trailing newline must keep what it read, while
+        # an unreadable file must not inherit the previous iteration's value.
+        firstline=""
+        IFS= read -r firstline < "$f" 2>/dev/null || true
         case "$firstline" in
             '#!'*) ;;
             *) continue ;;
