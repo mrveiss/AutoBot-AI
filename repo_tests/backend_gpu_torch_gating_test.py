@@ -84,6 +84,24 @@ def _when_text(task: dict[str, Any]) -> str:
     return str(when)
 
 
+def _requirement_pins(text: str) -> list[str]:
+    """The actual pip-installable lines of a requirements file -- never raw text.
+
+    #15162 review: pip itself strips everything from ``#`` onward and skips
+    blank lines; a check that instead substring-matches the whole file cannot
+    tell a package pin from a comment *describing* one, and this file's header
+    comment explains the vLLM/torch split in prose, mentioning both by name.
+    Parsing it the way pip does is the only way "vllm is absent" and "vllm is
+    documented" stay distinguishable.
+    """
+    pins = []
+    for line in text.splitlines():
+        pin = line.split("#", 1)[0].strip()
+        if pin:
+            pins.append(pin)
+    return pins
+
+
 def test_gpu_probe_is_not_gated_on_vllm() -> None:
     """The nvidia-smi probe must run whenever backend_has_gpu == "auto", vLLM or not."""
     task = _task_named("Detect NVIDIA GPU")
@@ -149,23 +167,64 @@ def test_deploy_reports_the_gpu_torch_decision() -> None:
 
 def test_requirements_gpu_torch_file_carries_cuda_torch() -> None:
     assert REQUIREMENTS_GPU_TORCH.is_file(), f"{REQUIREMENTS_GPU_TORCH} missing"
-    text = REQUIREMENTS_GPU_TORCH.read_text(encoding="utf-8")
-    assert "torch==" in text
-    assert "torchvision==" in text
-    assert "vllm" not in text.lower(), (
-        "requirements-gpu-torch.txt must stay vLLM-free — it installs on every GPU host, "
-        "with or without the vLLM opt-in, and must not drag vllm's extra CUDA-toolkit deps"
+    pins = _requirement_pins(REQUIREMENTS_GPU_TORCH.read_text(encoding="utf-8"))
+    assert any(pin.startswith("torch==") for pin in pins), pins
+    assert any(pin.startswith("torchvision==") for pin in pins), pins
+    assert not any(pin.lower().startswith("vllm") for pin in pins), (
+        f"requirements-gpu-torch.txt has an actual vllm requirement line ({pins!r}); "
+        "it must stay vLLM-free -- it installs on every GPU host, with or without the "
+        "vLLM opt-in, and must not drag vllm's extra CUDA-toolkit deps"
     )
+
+
+@pytest.mark.parametrize(
+    ("contents", "expect_vllm_pin"),
+    [
+        pytest.param(
+            "\n".join(
+                [
+                    "# vLLM needs CUDA torch; this file provides it independent of vLLM (#15162).",
+                    "# See requirements-gpu.txt for the actual vllm install.",
+                    "torch==2.13.0",
+                    "torchvision==0.28.0  # CUDA build",
+                    "",
+                ]
+            ),
+            False,
+            id="vllm-only-in-prose",
+        ),
+        pytest.param(
+            "\n".join(["torch==2.13.0", "vllm>=0.27.1", ""]),
+            True,
+            id="vllm-as-a-real-requirement-line",
+        ),
+    ],
+)
+def test_requirement_pin_parse_distinguishes_prose_from_a_real_pin(
+    contents: str, expect_vllm_pin: bool
+) -> None:
+    """#15162 review: pins the exact regression a whole-text substring check invited.
+
+    A comment naming ``vllm`` (documenting the decoupling this file exists for)
+    must never fail the vLLM-free check; an actual ``vllm`` requirement line
+    always must. Both halves are asserted so neither direction can go quietly
+    wrong: a parse that is too eager passes the first case for the wrong reason,
+    one that is too lax passes the second for the wrong reason.
+    """
+    pins = _requirement_pins(contents)
+    has_vllm_pin = any(pin.lower().startswith("vllm") for pin in pins)
+    assert has_vllm_pin is expect_vllm_pin, (
+        f"parsed pins {pins!r} from {contents!r}; expected a vllm pin={expect_vllm_pin}"
+    )
+    # The trailing-comment shape used throughout this repo's requirements files
+    # (`torch==2.13.0  # CUDA build`) must still parse to a bare pin.
+    assert not any("#" in pin for pin in pins), f"a comment leaked into a parsed pin: {pins!r}"
 
 
 def test_requirements_gpu_file_no_longer_pins_torch_directly() -> None:
     """The vLLM-only file must not re-duplicate the CUDA-torch pin split into the new file."""
     assert REQUIREMENTS_GPU_VLLM.is_file(), f"{REQUIREMENTS_GPU_VLLM} missing"
-    lines = [
-        line.split("#", 1)[0].strip()
-        for line in REQUIREMENTS_GPU_VLLM.read_text(encoding="utf-8").splitlines()
-    ]
-    pins = [line for line in lines if line]
+    pins = _requirement_pins(REQUIREMENTS_GPU_VLLM.read_text(encoding="utf-8"))
     assert not any(pin.startswith(("torch==", "torchvision==")) for pin in pins), (
         f"requirements-gpu.txt still pins torch/torchvision directly: {pins!r}; "
         "that pin belongs solely in requirements-gpu-torch.txt (#15162) so the GPU-only "
