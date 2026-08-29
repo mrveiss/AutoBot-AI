@@ -41,3 +41,44 @@ def test_a_getattr_field_name_literal_survives_stripping() -> None:
 def test_a_file_that_fails_to_tokenize_raises_rather_than_returning_something() -> None:
     with pytest.raises(UnparseableSourceError):
         strip_prose("def f(:\n    pass\n")
+
+
+def test_an_implicitly_concatenated_floating_docstring_is_blanked_in_full() -> None:
+    """#15285 shape 2: two adjacent STRING tokens, not STRING-then-NEWLINE."""
+    text = '"Mentions cfg.llm.openai_api_key " "in prose."\n\nx = 1\n'
+    stripped = strip_prose(text)
+    assert "openai_api_key" not in stripped
+    assert stripped.count("\n") == text.count("\n")
+
+
+def test_a_paren_wrapped_multiline_concatenated_docstring_is_blanked_in_full() -> None:
+    """#15285: parens solely grouping a multi-line implicit concatenation are
+    still recognised by Python as a docstring, so the whole run must go too.
+    """
+    text = '(\n    "Mentions cfg.llm.openai_api_key "\n    "across two lines."\n)\n\nx = 1\n'
+    stripped = strip_prose(text)
+    assert "openai_api_key" not in stripped
+    assert stripped.count("\n") == text.count("\n")
+
+
+def test_a_floating_fstring_is_blanked_as_prose() -> None:
+    """#15285 shape 1: under PEP 701 (3.12+) an f-string is FSTRING_START /
+    FSTRING_MIDDLE / FSTRING_END, never a single STRING token -- this must be
+    blanked identically to 3.10, where it tokenizes as one STRING.
+    """
+    text = 'f"Mentions cfg.llm.openai_api_key: {1}"\n\nx = 1\n'
+    stripped = strip_prose(text)
+    assert "openai_api_key" not in stripped
+    assert stripped.count("\n") == text.count("\n")
+
+
+def test_a_call_argument_dict_value_and_assignment_rhs_all_survive_stripping() -> None:
+    """Only floating statements are prose; a string in expression position is
+    code and must never be blanked, on every shape #15285 adds handling for.
+    """
+    call_arg = 'log("openai_api_key present")\n'
+    dict_value = 'cfg = {"key": "openai_api_key"}\n'
+    assignment_rhs = 'msg = "openai_api_key" "leaked"\n'
+    assert strip_prose(call_arg) == call_arg
+    assert strip_prose(dict_value) == dict_value
+    assert strip_prose(assignment_rhs) == assignment_rhs
