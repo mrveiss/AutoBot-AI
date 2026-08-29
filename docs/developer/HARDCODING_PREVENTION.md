@@ -62,6 +62,7 @@ GITHUB_BASE_REF=Dev_new_gui bash pipeline-scripts/check-hardcoded-values-pr.sh
 - `network_constants.py`, `path_constants.py`, `security_constants.py`, `threshold_constants.py`
 - Anything under `constants/`, `config.py`, or `.env*`
 - Test files (`test_*.py`, `*_test.py`, `*.test.ts`, `*.spec.ts`) — fixtures legitimately use literal IPs
+- Any file under `repo_tests/` (#15273) — that directory is test-support code by construction, so a non-test-named helper module living there (e.g. one holding fixture constants shared by several `*_test.py` siblings) gets the same exemption on the strength of its DIRECTORY rather than its filename. The same file outside `repo_tests/` is still scanned.
 - Lines containing `config.`, `getenv`, `CONFIG[`, or `AUTOBOT_` (already routed through SSOT)
 - Comments (any line starting with `#` / `//` / ` *`)
 - File types other than `.py` / `.ts` / `.vue` (Markdown, YAML, JSON, etc. are not scanned at all — Ansible inventories and docs are explicitly out of scope)

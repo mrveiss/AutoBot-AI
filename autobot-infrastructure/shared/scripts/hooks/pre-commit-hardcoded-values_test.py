@@ -182,6 +182,47 @@ class TestAllowlistedContexts:
 
 
 @pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
+class TestRepoTestsSupportModuleExemption:
+    """#15273: a test-SUPPORT module under repo_tests/ (not itself named
+    *_test.py) gets the same exemption the filename rule already grants its
+    siblings -- scoped to the DIRECTORY so production code keeps exactly the
+    exemption it had before and no more."""
+
+    _URL = 'http://backend.test:9999'
+
+    def test_allows_literal_in_repo_tests_support_module(self, tmp_path: Path) -> None:
+        # repo_tests/sdk_request_shared.py (#15265): a non-test-named helper
+        # module, collected by nothing, imported only by *_test.py siblings.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"repo_tests/sdk_request_shared.py": f'_BASE = "{self._URL}"\n'},
+        )
+        assert result.returncode == 0, f"repo_tests/ support module should be exempt:\n{result.stdout}"
+
+    def test_blocks_same_literal_in_production_code(self, tmp_path: Path) -> None:
+        # The identical literal, in a non-test-named file OUTSIDE repo_tests/,
+        # must still be flagged -- proves the new exemption is scoped to the
+        # directory and did not loosen the filename rule generally.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"autobot-backend/sdk_request_shared.py": f'_BASE = "{self._URL}"\n'},
+        )
+        assert result.returncode != 0
+        assert self._URL in result.stdout
+
+    def test_does_not_match_a_directory_merely_containing_the_substring(self, tmp_path: Path) -> None:
+        # `not_repo_tests/` and `repo_tests_archive/` must NOT be swept in by
+        # a loose substring match -- the exemption is anchored on the exact
+        # path segment `repo_tests/`.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"not_repo_tests/sdk_request_shared.py": f'_BASE = "{self._URL}"\n'},
+        )
+        assert result.returncode != 0
+        assert self._URL in result.stdout
+
+
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestNonBlockingPatterns:
     """Lines that look like hardcoded IPs but aren't deployment IPs are allowed."""
 
