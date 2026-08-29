@@ -24,6 +24,10 @@ fi
 BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 
 # The branch PRs target, which is not necessarily the remote default branch.
+# Best-effort: the candidate list is a guess, not the branch's real PR target.
+# `gh pr view --json baseRefName` would be authoritative but costs an API call
+# before we know a PR exists at all. For a branch stacked on another unmerged
+# branch this inflates the reported commit count; it never causes a false report.
 pr_base() {
   local candidate
   for candidate in "${ORPHAN_CHECK_BASE:-}" Dev_new_gui develop main master; do
@@ -40,8 +44,12 @@ pr_base() {
 # filed: an auto-filed issue would add backlog while closing nothing, and the
 # branch already records the work.
 report_parked_branch() {
-  local base ahead dirty merged open_pr
-  [ "$BRANCH" != "unknown" ] || return 0
+  local base ahead dirty pr_states
+  # Detached HEAD prints nothing and exits 0, so the "unknown" fallback at the
+  # BRANCH assignment never fires — the empty case has to be caught here.
+  if [ -z "$BRANCH" ] || [ "$BRANCH" = "unknown" ]; then
+    return 0
+  fi
   base=$(pr_base) || return 0
 
   ahead=$(git rev-list --count "$base"..HEAD 2>/dev/null || echo 0)
@@ -53,18 +61,22 @@ report_parked_branch() {
   # mid-task state and fires on every Stop, so it is an addendum, never a cause.
   [ "$ahead" -gt 0 ] || return 0
 
-  # A merged PR means these commits are rebase leftovers, not parked work.
-  merged=$(gh pr list --head "$BRANCH" --state merged --json number \
-    --jq '.[0].number // empty' 2>/dev/null || true)
-  [ -z "$merged" ] || return 0
+  # One request, not two: this runs on every Stop of an active worktree session.
+  # A non-zero exit means gh is offline, unauthenticated, or rate-limited — that
+  # is inconclusive, not "no PR", and guessing would report work that has landed.
+  pr_states=$(gh pr list --head "$BRANCH" --state all --limit 20 --json state \
+    --jq '.[].state' 2>/dev/null) || return 0
 
-  # An open PR means the work is already in the pipeline.
-  open_pr=$(gh pr list --head "$BRANCH" --state open --json number \
-    --jq '.[0].number // empty' 2>/dev/null || true)
-  [ -z "$open_pr" ] || return 0
+  # MERGED means these commits are rebase leftovers; OPEN means it is already in
+  # the pipeline. A closed-unmerged PR leaves the work parked, so it still reports.
+  if printf '%s\n' "$pr_states" | grep -qxE 'MERGED|OPEN'; then
+    return 0
+  fi
 
   echo "PARKED WORK on $BRANCH: $ahead commit(s) ahead of $base, no PR open."
-  [ "$dirty" -gt 0 ] && echo "  plus $dirty uncommitted path(s)."
+  # `|| true` is load-bearing under `set -e`: a false test in a `&&` list that
+  # ends a function aborts the whole hook at the call site, silently.
+  [ "$dirty" -gt 0 ] && echo "  plus $dirty uncommitted path(s)." || true
   echo "  Finished work returns nothing until it lands. Open a PR for it,"
   echo "  or rank what to land next:  ~/.claude/scripts/drain-parked.sh"
 }
