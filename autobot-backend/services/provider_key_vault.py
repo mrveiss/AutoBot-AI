@@ -49,12 +49,16 @@ from __future__ import annotations
 import logging
 import os
 import uuid
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
+
+if TYPE_CHECKING:  # pragma: no cover -- annotation-only; zero runtime import cost
+    from services.envelope_secrets_service import EnvelopeSecretsService
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +223,7 @@ async def _register_credential_dependency(session: AsyncSession, *, name: str, s
 
 
 async def _hydrate_one_key(
-    session: AsyncSession, service: "EnvelopeSecretsService", *, name: str, secret_id: uuid.UUID
+    session: AsyncSession, service: EnvelopeSecretsService, *, name: str, secret_id: uuid.UUID
 ) -> bool:
     """Decrypt *secret_id* into ``_hydrated_keys[name]``. Returns whether it hydrated."""
     try:
