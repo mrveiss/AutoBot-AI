@@ -44,8 +44,20 @@ fi
 # ---------------------------------------------------------------------------
 HOOK_SCRIPTS_DIR="$GIT_ROOT/autobot-infrastructure/shared/scripts"
 FIXED=0
+# A filename never justified the executable bit; a shebang does (#15253). The
+# name patterns below only nominate candidates — each one still has to declare
+# itself executable before it is chmod'ed. Without that gate "pre-commit-*" also
+# matched the pre-commit-*_test.py pytest files, and "*.sh" also matched
+# hooks/lib/_common.sh, which is sourced rather than run. Neither carries a
+# shebang, neither is tracked as executable, and chmod'ing them left every
+# working tree in the repository permanently dirty with mode-only changes.
 if [ -d "$HOOK_SCRIPTS_DIR" ]; then
     while IFS= read -r -d '' f; do
+        IFS= read -r firstline < "$f" 2>/dev/null || firstline=""
+        case "$firstline" in
+            '#!'*) ;;
+            *) continue ;;
+        esac
         chmod +x "$f"
         FIXED=$((FIXED + 1))
     done < <(find "$HOOK_SCRIPTS_DIR/hooks" "$HOOK_SCRIPTS_DIR/utilities" \
