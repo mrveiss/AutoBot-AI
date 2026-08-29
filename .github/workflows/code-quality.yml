@@ -525,7 +525,7 @@ jobs:
         # role placeholders. Nothing watched the rest of the tree: the same addressing --
         # role-to-host mappings and database endpoints, which together read as a network
         # map -- survived in docs/archives/plans/ one folder across, because
-        # HV_SCAN_EXTENSIONS in scripts/lib/hardcoded-value-rules.sh is
+        # HV_SCAN_EXTENSIONS in `scripts/lib/hardcoded-value-rules.sh` is
         # py|ts|vue|js|sh|yml|yaml and Markdown is not in it. This has to run in a
         # REQUIRED check for the same directional reason as #14419/#14405/#14489: a
         # document that stops being scanned reports fewer findings, so the failure goes
