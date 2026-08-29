@@ -354,10 +354,23 @@ class GeneralStorage:
         rows.
 
         ``new_owner_id`` goes through :func:`_require_user_id` with
-        ``for_write=True``, so the reserved id is rejected as a target — it
-        cannot be reassigned to itself.
+        ``for_write=True``, so LEGACY_UNSCOPED_OWNER is rejected as a target —
+        it cannot be reassigned to itself. SYSTEM_OWNER is rejected here too,
+        separately: ``for_write`` alone does not cover it, because SYSTEM_OWNER
+        is a legitimate write target for :meth:`store` and rejecting it there
+        would break that path. But it is not a legitimate *reassignment*
+        target — cleanup_old's retention exemption is keyed to
+        LEGACY_UNSCOPED_OWNER only, so moving parked rows to SYSTEM_OWNER would
+        silently strip that exemption and let the next retention sweep delete
+        them once they age out, with no explicit purge decision ever made.
         """
         owner = _require_user_id(new_owner_id, for_write=True)
+        if owner == SYSTEM_OWNER:
+            raise ValueError(
+                f"{SYSTEM_OWNER!r} is not a valid reassignment target: it carries no retention "
+                "exemption, so parked rows moved there would be silently deleted by the next "
+                "retention sweep"
+            )
         report = await self.count_unscoped()
         if dry_run:
             return {**report, "reassigned": 0, "dry_run": True, "new_owner_id": owner}

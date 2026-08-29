@@ -22,7 +22,7 @@ import pytest
 from memory.enums import MemoryCategory
 from memory.manager import MemoryManager
 from memory.models import MemoryEntry
-from memory.storage.general_storage import LEGACY_UNSCOPED_OWNER, GeneralStorage
+from memory.storage.general_storage import LEGACY_UNSCOPED_OWNER, SYSTEM_OWNER, GeneralStorage
 
 ALICE = "user-alice"
 BOB = "user-bob"
@@ -458,7 +458,19 @@ class TestReassignUnscopedEntries:
 
     @pytest.mark.asyncio
     async def test_reserved_id_is_rejected_as_a_reassignment_target(self, storage):
+        """Neither reserved owner id is a valid reassignment target (#13719 review).
+
+        LEGACY_UNSCOPED_OWNER cannot be reassigned to itself. SYSTEM_OWNER is
+        a legitimate *write* target elsewhere (see store()) but carries no
+        retention exemption in cleanup_old — reassigning parked rows there
+        would silently strip their "never auto-delete" protection ahead of
+        the next retention sweep, so it must be rejected here too.
+        """
         with pytest.raises(ValueError, match="reserved"):
             await storage.reassign_unscoped_entries(LEGACY_UNSCOPED_OWNER, dry_run=True)
         with pytest.raises(ValueError, match="reserved"):
             await storage.reassign_unscoped_entries(LEGACY_UNSCOPED_OWNER, dry_run=False)
+        with pytest.raises(ValueError, match="not a valid reassignment target"):
+            await storage.reassign_unscoped_entries(SYSTEM_OWNER, dry_run=True)
+        with pytest.raises(ValueError, match="not a valid reassignment target"):
+            await storage.reassign_unscoped_entries(SYSTEM_OWNER, dry_run=False)
