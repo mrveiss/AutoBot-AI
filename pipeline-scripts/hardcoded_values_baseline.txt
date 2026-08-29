@@ -1251,7 +1251,6 @@
 1|other|autobot-slm-backend/ansible/roles/backend/defaults/main.yml|https://github.com/mrveiss/AutoBot-AI.git
 1|ssot|autobot-slm-backend/ansible/roles/backend/defaults/main.yml|:11434
 1|ssot|autobot-slm-backend/ansible/roles/backend/defaults/main.yml|qwen3.5:9b
-8|other|autobot-slm-backend/ansible/roles/backend/tasks/main.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/backend/tasks/main.yml|'/var/lib/autobot/celerybeat-schedule
 4|other|autobot-slm-backend/ansible/roles/backend/tasks/main.yml|120
 2|other|autobot-slm-backend/ansible/roles/backend/tasks/main.yml|60

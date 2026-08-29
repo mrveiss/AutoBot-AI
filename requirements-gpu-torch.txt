@@ -1,0 +1,23 @@
+# CUDA-built torch — OPTIONAL extra, GPU-gated but vLLM-independent (#15162)
+#
+# NOT installed by the default backend image (CPU-only torch, from
+# autobot-backend/requirements.txt, is installed there instead).
+#
+# Fixes #15162: this extra used to be bundled into requirements-gpu.txt,
+# which the ansible backend role only installed when BOTH a GPU was present
+# AND vLLM was explicitly enabled. That coupled two independent decisions —
+# "does this host have an NVIDIA GPU" and "does this host run in-process
+# vLLM" — so a GPU host that left vLLM disabled (the default) silently kept
+# CPU-only torch, with nothing reporting the downgrade. GPU-accelerated code
+# such as autobot-backend/utils/semantic_chunker_gpu.py then ran against a
+# torch build with no CUDA support.
+#
+# The ansible backend role installs this file whenever backend_gpu_available
+# is true, regardless of backend_vllm_enabled. vllm (requirements-gpu.txt)
+# pins the same torch build, so installing both together (GPU + vLLM
+# enabled) resolves torch once, not twice.
+#
+# Requires: CUDA-compatible GPU, Python 3.12.
+
+torch==2.13.0
+torchvision==0.28.0
