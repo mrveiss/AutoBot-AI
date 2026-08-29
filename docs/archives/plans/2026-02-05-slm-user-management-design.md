@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # SLM User Management System Design
 
 **Issue:** #576 - User Management happens on SLM system
@@ -13,37 +15,37 @@ Migrate all user management functionality from main AutoBot backend to SLM serve
 ### Two User Databases
 
 ```
-┌──────────────────────────────────────────────────────┐
-│ PostgreSQL Server 1: SLM Server (172.16.168.19:5432)│
-│                                                      │
-│ ┌──────────────────────────────────────────────┐   │
-│ │ Database: slm_users (local)                  │   │
-│ │ Purpose: SLM fleet management access         │   │
-│ │ Users: Fleet admins, DevOps, system admins   │   │
-│ │ Auth: SLM authenticates locally              │   │
-│ └──────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│ PostgreSQL Server 1: SLM Server (<slm-manager-ip>:5432)│
+│                                                        │
+│ ┌──────────────────────────────────────────────┐       │
+│ │ Database: slm_users (local)                  │       │
+│ │ Purpose: SLM fleet management access         │       │
+│ │ Users: Fleet admins, DevOps, system admins   │       │
+│ │ Auth: SLM authenticates locally              │       │
+│ └──────────────────────────────────────────────┘       │
+└────────────────────────────────────────────────────────┘
 
-┌──────────────────────────────────────────────────────┐
-│ PostgreSQL Server 2: Redis VM (172.16.168.23:5432)  │
-│                                                      │
-│ ┌──────────────────────────────────────────────┐   │
-│ │ Database: autobot_users (shared)             │   │
-│ │ Purpose: AutoBot application functionality   │   │
-│ │ Users: Chat users, tool users, end-users     │   │
-│ │ Auth: Frontend/Main VM authenticate here    │   │
-│ └──────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│ PostgreSQL Server 2: Redis VM (<database-ip>:5432)     │
+│                                                        │
+│ ┌──────────────────────────────────────────────┐       │
+│ │ Database: autobot_users (shared)             │       │
+│ │ Purpose: AutoBot application functionality   │       │
+│ │ Users: Chat users, tool users, end-users     │       │
+│ │ Auth: Frontend/Main VM authenticate here     │       │
+│ └──────────────────────────────────────────────┘       │
+└────────────────────────────────────────────────────────┘
 ```
 
 ### Connection Matrix
 
 | Component | Connects To | Purpose |
 |-----------|-------------|---------|
-| **SLM Server** | `172.16.168.19:5432/slm_users` | Own auth |
-| **SLM Server** | `172.16.168.23:5432/autobot_users` | Manage AutoBot users |
-| **Frontend VM** | `172.16.168.23:5432/autobot_users` | User auth |
-| **Main Backend** | `172.16.168.23:5432/autobot_users` | User auth |
+| **SLM Server** | `<slm-manager-ip>:5432/slm_users` | Own auth |
+| **SLM Server** | `<database-ip>:5432/autobot_users` | Manage AutoBot users |
+| **Frontend VM** | `<database-ip>:5432/autobot_users` | User auth |
+| **Main Backend** | `<database-ip>:5432/autobot_users` | User auth |
 
 ### Benefits
 
@@ -94,15 +96,15 @@ TO:   /home/kali/Desktop/AutoBot/slm-server/user_management/
 
 ```python
 def get_slm_engine():
-    """SLM local database (172.16.168.19:5432/slm_users)"""
+    """SLM local database (<slm-manager-ip>:5432/slm_users)"""
     return create_async_engine(
-        f"postgresql+asyncpg://{user}:{pwd}@172.16.168.19:5432/slm_users"
+        f"postgresql+asyncpg://{user}:{pwd}@<slm-manager-ip>:5432/slm_users"
     )
 
 def get_autobot_engine():
-    """AutoBot user database (172.16.168.23:5432/autobot_users)"""
+    """AutoBot user database (<database-ip>:5432/autobot_users)"""
     return create_async_engine(
-        f"postgresql+asyncpg://{user}:{pwd}@172.16.168.23:5432/autobot_users"
+        f"postgresql+asyncpg://{user}:{pwd}@<database-ip>:5432/autobot_users"
     )
 ```
 
@@ -112,11 +114,11 @@ def get_autobot_engine():
 class UserService:
     async def create_slm_user(self, db: AsyncSession, user_data):
         """Create user in SLM database"""
-        # db connected to 172.16.168.19
+        # db connected to <slm-manager-ip>
 
     async def create_autobot_user(self, db: AsyncSession, user_data):
         """Create user in AutoBot database"""
-        # db connected to 172.16.168.23
+        # db connected to <database-ip>
 ```
 
 ### Files to Delete from AutoBot
@@ -130,7 +132,7 @@ class UserService:
 ### SLM API Endpoints
 
 ```
-SLM Server: http://172.16.168.19:8000/api/
+SLM Server: http://<slm-manager-ip>:8000/api/
 
 ┌─────────────────────────────────────────────────────┐
 │ SLM Admin User Management (Local DB)                │
@@ -168,7 +170,7 @@ SLM Server: http://172.16.168.19:8000/api/
 ```
 User → SLM Admin UI → POST /api/slm-auth/login
                       ↓
-                SLM checks 172.16.168.19:5432/slm_users
+                SLM checks <slm-manager-ip>:5432/slm_users
                       ↓
                 Returns JWT token
 ```
@@ -177,7 +179,7 @@ User → SLM Admin UI → POST /api/slm-auth/login
 ```
 User → Frontend UI → POST /api/auth/login
                      ↓
-           Main Backend checks 172.16.168.23:5432/autobot_users
+           Main Backend checks <database-ip>:5432/autobot_users
                      ↓
                 Returns JWT token
 ```
@@ -187,7 +189,7 @@ User → Frontend UI → POST /api/auth/login
 ```python
 # autobot-backend/api/auth.py
 async def login(username, password):
-    # Connect to 172.16.168.23:5432/autobot_users
+    # Connect to <database-ip>:5432/autobot_users
     async with get_autobot_db_session() as db:
         user = await authenticate_user(db, username, password)
         return create_jwt_token(user)
@@ -202,7 +204,7 @@ async def create_autobot_user(
     user_data: UserCreate,
     current_admin: User = Depends(require_slm_admin)
 ):
-    # Connect to REMOTE database (172.16.168.23)
+    # Connect to REMOTE database (<database-ip>)
     async with get_autobot_db_session() as db:
         user = await user_service.create_user(db, user_data)
 
@@ -219,7 +221,7 @@ async def create_autobot_user(
 ```
 SLM creates user
     ↓
-Writes to 172.16.168.23:5432/autobot_users
+Writes to <database-ip>:5432/autobot_users
     ↓
 Frontend/Main Backend reads from same database
     ↓
@@ -278,7 +280,7 @@ Update `slm-admin/src/views/settings/admin/UserManagementSettings.vue`:
 const API_BASE = '/autobot-api'
 
 // NEW: Calls SLM backend with dual user management
-const SLM_API_BASE = 'http://172.16.168.19:8000/api'
+const SLM_API_BASE = 'http://<slm-manager-ip>:8000/api'
 
 // Two user management sections:
 // 1. SLM Admins
@@ -329,17 +331,17 @@ Minimal changes - just update API connection:
 ```typescript
 // autobot-frontend/src/stores/auth.ts
 // No changes - still connects to Main Backend
-const API_BASE = 'https://172.16.168.20:8443/api'
+const API_BASE = 'https://<backend-ip>:8443/api'
 
-// Main Backend now connects to 172.16.168.23:5432/autobot_users
+// Main Backend now connects to <database-ip>:5432/autobot_users
 // Frontend doesn't need to know about SLM
 ```
 
 ## Implementation Phases
 
 ### Phase 1: Database Setup
-- [ ] Create `slm_users` database on SLM Server (172.16.168.19:5432)
-- [ ] Create `autobot_users` database on Redis VM (172.16.168.23:5432)
+- [ ] Create `slm_users` database on SLM Server (<slm-manager-ip>:5432)
+- [ ] Create `autobot_users` database on Redis VM (<database-ip>:5432)
 - [ ] Run Alembic migrations on both databases
 - [ ] Create initial SLM admin user
 
@@ -350,7 +352,7 @@ const API_BASE = 'https://172.16.168.20:8443/api'
 - [ ] Create SLM API endpoints (`/api/slm-users`, `/api/autobot-users`)
 
 ### Phase 3: AutoBot Backend Updates
-- [ ] Update `autobot-backend/api/auth.py` to connect to `172.16.168.23:5432/autobot_users`
+- [ ] Update `autobot-backend/api/auth.py` to connect to `<database-ip>:5432/autobot_users`
 - [ ] Remove `src/user_management/` from AutoBot
 - [ ] Remove `autobot-backend/api/user_management/` from AutoBot
 - [ ] Update SSOT config for PostgreSQL connections
