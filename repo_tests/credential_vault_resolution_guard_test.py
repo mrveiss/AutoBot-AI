@@ -19,15 +19,25 @@ Mechanism
    ends in one of :data:`_CREDENTIAL_ALIAS_SUFFIXES` (the naming convention #15269's
    evidence names, plus ``_PASS`` so ``SEARXNG_BASIC_AUTH_PASS`` -- #15267's own
    evidence -- is not excluded by the shorter ``_PASSWORD`` alone).
-2. :func:`find_direct_reads` greps every git-tracked, non-test production ``.py`` file
-   that imports the ``ssot_config`` singleton for a *direct* read of one of those
-   fields (``config.<field>``, ``ssot_config.<field>``, or
-   ``getattr(config, "<field>", ...)``) that is **not** spanned by a
-   ``resolve_provider_key(...)`` call, including a 120-column-wrapped one -- the
-   shape every vault-routed call site in the repo already uses
+2. :func:`_ssot_config_bindings` finds every identifier in a file bound to the
+   ssot_config singleton: the flat proxy, plain or aliased (``from ... import config``
+   / ``... import config as X``), the whole module aliased (``import ... as X``), and
+   a local variable assigned from the factory, however that was imported/aliased
+   (``cfg = get_config()`` / ``ssot = get_ssot_config()``) -- plus the factory names
+   themselves, for the un-assigned chained-call shape (``get_config().field``, seen in
+   ``initialization/lifespan.py``). An empty result means the file never touches
+   ssot_config at all.
+3. :func:`find_direct_reads` greps every git-tracked, non-test production ``.py`` file
+   for a *direct* read of one of those fields through any binding
+   :func:`_ssot_config_bindings` found -- ``config.<field>``, ``cfg.llm.<field>``
+   (nested submodel access, real inside ``ssot_config.py``'s own
+   ``AutoBotConfig.__getattr__`` delegation), ``get_config().auth.<field>`` (chained,
+   unassigned), or ``getattr(config, "<field>", ...)`` -- that is **not** spanned by a
+   ``resolve_provider_key(...)`` call, including a 120-column-wrapped one -- the shape
+   every vault-routed call site in the repo already uses
    (``services/provider_key_vault.py``, ``llm_shared/provider_registry.py``,
    ``agent_loop/search/registry.py``).
-3. Every match must be on :data:`ALLOWLIST`, keyed by ``(file, field)`` (not line
+4. Every match must be on :data:`ALLOWLIST`, keyed by ``(file, field)`` (not line
    number, which drifts on any unrelated edit) with a written reason -- either
    ``AUTH_BOOTSTRAP`` (the credential gates the vault/DB itself or is the platform's
    own internal-auth token, so vaulting it would be a confused-deputy cycle -- the
@@ -49,6 +59,13 @@ source text reproducing the exact pre-fix shape of #15267 (an unwrapped
 ``config.hf_token or config.huggingface_api_token``) -- both flagged -- and on a
 wholly novel field name standing in for a consumer that does not exist yet, proving
 the check is general rather than a fixed list of two prior mistakes.
+``test_nested_submodel_access_is_rejected`` and
+``test_get_config_import_and_chained_call_are_rejected`` do the same for the two
+binding shapes a security review found this detector originally missed --
+``cfg.llm.<field>`` (nested submodel access, real via ``AutoBotConfig.__getattr__``)
+and a file that only imports ``get_config`` -- both reproducing the real
+pre-fix line of ``voice_processing/realtime/openai_provider.py`` (fixed in this
+same PR) and ``initialization/lifespan.py`` (an existing, allowlisted gap).
 """
 
 from __future__ import annotations
@@ -67,16 +84,15 @@ _CREDENTIAL_ALIAS_SUFFIXES = ("_API_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_PA
 
 _FIELD_ALIAS_RE = re.compile(r'^\s*([a-z_0-9]+):\s*[^=]+=\s*Field\([^)]*alias="([A-Z0-9_]+)"', re.MULTILINE)
 
-#: A file counts as an ssot_config consumer only if it imports the singleton under
-#: one of these forms -- the convention every real read site in the repo uses. This
-#: is also what keeps a per-connector ``self.config.api_key`` (an unrelated local
-#: config object, e.g. ``integrations/*.py``) from being mistaken for an ssot_config
-#: read: those files do not import ``autobot_shared.ssot_config`` at all.
-_IMPORTS_SSOT_CONFIG_RE = re.compile(
-    r"from\s+autobot_shared\.ssot_config\s+import\s+.*\bconfig\b|import\s+autobot_shared\.ssot_config\s+as\s+config"
-)
-
 _SKIP_PATH_SUBSTRINGS = ("/tests/", "repo_tests/", "/ssot_config.py")
+
+#: ``from autobot_shared.ssot_config import <names>`` -- captures the whole imported
+#: name list so aliases (``config as X``, ``get_config as Y``) can be pulled out of it.
+_FROM_IMPORT_RE = re.compile(r"from\s+autobot_shared\.ssot_config\s+import\s+([^\n]+)")
+#: ``import autobot_shared.ssot_config as X`` -- the whole-module-alias form.
+_IMPORT_AS_RE = re.compile(r"import\s+autobot_shared\.ssot_config\s+as\s+(\w+)")
+#: The two factory functions, however aliased on import (``get_config as ssot``).
+_FACTORY_FUNCTION_NAMES = ("get_config", "get_ssot_config")
 
 
 def credential_shaped_fields(ssot_text: str) -> dict[str, str]:
@@ -89,13 +105,64 @@ def credential_shaped_fields(ssot_text: str) -> dict[str, str]:
     return fields
 
 
-def _read_pattern(field: str) -> re.Pattern[str]:
-    """A direct singleton read of *field*, never ``self.config.<field>`` (a different,
-    per-instance object almost everywhere it appears) or the field name buried inside
-    a longer identifier or string literal (``(?<![\\w.])`` rejects both)."""
-    attr = rf"(?<![\w.])(?:config|ssot_config|_ssot_config)\.{field}\b"
-    getattr_call = rf'getattr\(\s*(?:config|ssot_config)\s*,\s*["\']{field}["\']'
-    return re.compile(rf"{attr}|{getattr_call}")
+def _ssot_config_bindings(text: str) -> tuple[set[str], set[str]]:
+    """``(roots, factories)`` -- every identifier in *text* bound to the ssot_config
+    singleton, and every name the ``get_config``/``get_ssot_config`` factory itself can
+    be called under.
+
+    Three binding shapes seen in production: the flat proxy, plain or aliased
+    (``from ... import config`` / ``... import config as X``); the whole module
+    aliased (``import ... as X``); and a local variable assigned from the factory,
+    however that factory was imported/aliased (``cfg = get_config()`` --
+    ``voice_processing/realtime/openai_provider.py``, ``initialization/lifespan.py``).
+    An empty ``roots`` (with an empty ``factories``) means the file never touches
+    ssot_config at all.
+    """
+    roots: set[str] = set()
+    factories: set[str] = set()
+    for match in _FROM_IMPORT_RE.finditer(text):
+        imported = match.group(1)
+        alias = re.search(r"\bconfig\s+as\s+(\w+)", imported)
+        if alias:
+            roots.add(alias.group(1))
+        elif re.search(r"(?<![\w.])config\b", imported):
+            roots.add("config")
+        for factory in _FACTORY_FUNCTION_NAMES:
+            factory_alias = re.search(rf"\b{factory}\s+as\s+(\w+)", imported)
+            if factory_alias:
+                factories.add(factory_alias.group(1))
+            elif re.search(rf"(?<![\w.]){factory}\b", imported):
+                factories.add(factory)
+    for match in _IMPORT_AS_RE.finditer(text):
+        roots.add(match.group(1))
+    for factory in factories:
+        roots.update(m.group(1) for m in re.finditer(rf"\b(\w+)\s*=\s*{re.escape(factory)}\(\)", text))
+    return roots, factories
+
+
+def _read_pattern(field: str, roots: set[str], factories: set[str]) -> re.Pattern[str]:
+    """A direct read of *field* through any binding in *roots*/*factories*.
+
+    Matches an arbitrary chain of ``.submodel`` segments before the field (nested
+    submodel access, e.g. ``cfg.llm.openai_api_key`` -- real, via
+    ``AutoBotConfig.__getattr__`` delegation for the flat form and directly for the
+    nested one) and the unassigned chained-call shape (``get_config().field``).
+    Never matches ``self.config.<field>`` (a different, per-instance object almost
+    everywhere it appears) or the field name buried inside a longer identifier or
+    string literal (``(?<![\\w.])`` rejects both).
+    """
+    parts: list[str] = []
+    if roots:
+        root_alt = "|".join(re.escape(r) for r in sorted(roots))
+        chain = rf"(?:{root_alt})(?:\.\w+)*"
+        parts.append(rf"(?<![\w.]){chain}\.{field}\b")
+        parts.append(rf'getattr\(\s*{chain}\s*,\s*["\']{field}["\']')
+    if factories:
+        factory_alt = "|".join(re.escape(f) for f in sorted(factories))
+        parts.append(rf"(?<![\w.])(?:{factory_alt})\(\)(?:\.\w+)*\.{field}\b")
+    if not parts:
+        return re.compile(r"(?!)")  # a pattern that can never match anything
+    return re.compile("|".join(parts))
 
 
 def _vault_routed_line_numbers(lines: list[str]) -> set[int]:
@@ -131,15 +198,21 @@ def _vault_routed_line_numbers(lines: list[str]) -> set[int]:
 def find_direct_reads(text: str, fields: dict[str, str]) -> list[tuple[str, int, str]]:
     """Every ``(field, line_no, line)`` in *text* reading *fields* directly.
 
-    A line spanned by a ``resolve_provider_key(...)`` call (see
-    :func:`_vault_routed_line_numbers`) is vault-routed and excluded -- the call-site
-    shape every seam consumer in the repo already uses.
+    Discovers *text*'s own ssot_config bindings (see :func:`_ssot_config_bindings`)
+    rather than assuming a fixed set of names, so a file is skipped entirely --
+    rather than false-positiving on an unrelated same-named local -- when it never
+    touches ssot_config at all. A line spanned by a ``resolve_provider_key(...)``
+    call (see :func:`_vault_routed_line_numbers`) is vault-routed and excluded -- the
+    call-site shape every seam consumer in the repo already uses.
     """
+    roots, factories = _ssot_config_bindings(text)
+    if not roots and not factories:
+        return []
     hits: list[tuple[str, int, str]] = []
     lines = text.splitlines()
     routed_lines = _vault_routed_line_numbers(lines)
     for field in fields:
-        pattern = _read_pattern(field)
+        pattern = _read_pattern(field, roots, factories)
         for lineno, line in enumerate(lines, start=1):
             if lineno in routed_lines:
                 continue
@@ -175,8 +248,6 @@ def production_credential_reads() -> dict[tuple[str, str], list[tuple[int, str]]
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
-            continue
-        if not _IMPORTS_SSOT_CONFIG_RE.search(text):
             continue
         for field, lineno, line in find_direct_reads(text, fields):
             found.setdefault((rel, field), []).append((lineno, line))
@@ -224,6 +295,37 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ),
     ("autobot-backend/user_management/config.py", "postgres_password"): (
         f"{_AUTH_BOOTSTRAP}: the vault's own Postgres backing store cannot gate itself"
+    ),
+    ("autobot-backend/auth_middleware.py", "internal_api_key"): (
+        f"{_AUTH_BOOTSTRAP}: the exact confused-deputy example "
+        "autobot-slm-backend/services/system_secrets_vault.py documents for this same credential"
+    ),
+    ("autobot-backend/initialization/lifespan.py", "slm_auth_token"): (
+        f"{_AUTH_BOOTSTRAP}: internal backend-to-SLM service auth token, same as the two siblings above"
+    ),
+    ("autobot-backend/user_management/services/seed.py", "admin_password"): (
+        f"{_AUTH_BOOTSTRAP}: bootstrap admin-account creation, read before any auth subsystem exists"
+    ),
+    ("autobot_shared/security/password_weakness.py", "admin_password"): (
+        f"{_AUTH_BOOTSTRAP}: same bootstrap admin password as seed.py, checked for weakness"
+    ),
+    # --- auth-bootstrap: internal data-layer service credentials (Redis/ChromaDB),
+    # --- same class as the Postgres password above -- the app's own storage
+    # --- layer must be reachable before anything, including the vault, can start.
+    ("autobot-backend/api/npu_workers.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
+    ("autobot-backend/celery_app.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
+    ("autobot-backend/config/__init__.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
+    ("autobot-backend/config/defaults.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
+    ("autobot-backend/config/service_config.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
+    ("autobot-backend/knowledge/base.py", "password"): f"{_AUTH_BOOTSTRAP}: Redis connection password",
+    ("autobot-backend/utils/async_chromadb_client.py", "chromadb_auth_token"): (
+        f"{_AUTH_BOOTSTRAP}: internal ChromaDB data-layer service credential"
+    ),
+    ("autobot-backend/utils/chromadb_auth.py", "chromadb_auth_token"): (
+        f"{_AUTH_BOOTSTRAP}: internal ChromaDB data-layer service credential"
+    ),
+    ("autobot-backend/utils/chromadb_client.py", "chromadb_auth_token"): (
+        f"{_AUTH_BOOTSTRAP}: internal ChromaDB data-layer service credential"
     ),
     # --- prose the regex matches textually but which reads nothing.
     ("autobot-backend/services/mcp_isolated_runtime.py", "jwt_secret"): (
@@ -296,6 +398,29 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         f"{_TRACKED} #15276: threat-intel API key"
     ),
     ("autobot-backend/services/notification_service.py", "smtp_password"): f"{_TRACKED} #15276: SMTP credential",
+    ("autobot-backend/initialization/lifespan.py", "anthropic_api_key"): (
+        f"{_TRACKED} #15276: AdapterRegistry gating check (adapter-listing only, not the LLM-call routing path)"
+    ),
+    ("autobot-backend/initialization/lifespan.py", "groq_api_key"): (
+        f"{_TRACKED} #15276: AdapterRegistry gating check (adapter-listing only, not the LLM-call routing path)"
+    ),
+    ("autobot-backend/initialization/lifespan.py", "openai_api_key"): (
+        f"{_TRACKED} #15276: AdapterRegistry gating check (adapter-listing only, not the LLM-call routing path)"
+    ),
+    ("autobot-backend/integrations/capability_registry.py", "slack_bot_token"): (
+        f"{_TRACKED} #15276: the third CredentialGatedRegistry sibling (see "
+        "autobot_shared/credential_gated_registry.py's own docstring) never migrated"
+    ),
+    ("autobot-backend/integrations/capability_registry.py", "discord_bot_token"): (
+        f"{_TRACKED} #15276: the third CredentialGatedRegistry sibling (see "
+        "autobot_shared/credential_gated_registry.py's own docstring) never migrated"
+    ),
+    ("autobot-backend/knowledge/base.py", "anthropic_api_key"): (
+        f"{_TRACKED} #15276: LlamaIndex LLM configuration reads the key directly"
+    ),
+    ("autobot-backend/knowledge/base.py", "openai_api_key"): (
+        f"{_TRACKED} #15276: LlamaIndex LLM/embedding configuration reads the key directly"
+    ),
 }
 
 
@@ -385,3 +510,50 @@ def test_the_seam_call_site_shape_is_not_flagged() -> None:
         "anthropic_key = resolve_provider_key(\"ANTHROPIC_API_KEY\", config.anthropic_api_key)\n"
     )
     assert find_direct_reads(routed, fields) == []
+
+
+def test_nested_submodel_access_is_rejected() -> None:
+    """A file bound via ``get_config()`` reading a nested submodel field directly.
+
+    Reproduces the exact pre-fix shape of
+    ``voice_processing/realtime/openai_provider.py`` (found by this widened
+    detector, then fixed in this same PR): ``cfg = get_config()`` followed by
+    ``cfg.llm.openai_api_key``, never spelled ``config.openai_api_key``, so the
+    original single-segment-only pattern missed it entirely.
+    """
+    fields = {"openai_api_key": "OPENAI_API_KEY", "admin_password": "AUTOBOT_ADMIN_PASSWORD"}
+    nested_via_local_var = (
+        "from autobot_shared.ssot_config import get_config\ncfg = get_config()\nx = cfg.llm.openai_api_key\n"
+    )
+    nested_via_flat_singleton = (
+        "from autobot_shared.ssot_config import config\ny = config.auth.admin_password\n"
+    )
+    hits = find_direct_reads(nested_via_local_var, fields)
+    assert {"openai_api_key"} == {field for field, _lineno, _line in hits}
+    hits = find_direct_reads(nested_via_flat_singleton, fields)
+    assert {"admin_password"} == {field for field, _lineno, _line in hits}
+
+
+def test_get_config_import_and_chained_call_are_rejected() -> None:
+    """A file that only imports ``get_config`` (never ``config``) is not skipped.
+
+    Reproduces ``initialization/lifespan.py:1353``'s unassigned chained-call shape
+    (``get_config().field``, no local variable at all) -- the other blind spot the
+    original single-import-form gate missed.
+    """
+    fields = {"slm_auth_token": "SLM_AUTH_TOKEN"}
+    chained_call = "from autobot_shared.ssot_config import get_config\nx = get_config().slm_auth_token\n"
+    hits = find_direct_reads(chained_call, fields)
+    assert {"slm_auth_token"} == {field for field, _lineno, _line in hits}
+
+
+def test_a_file_with_no_ssot_config_binding_is_never_scanned() -> None:
+    """The other half of the same guard: no false positive on an unrelated local.
+
+    A bare ``cfg`` that was never bound to ``get_config()``/``config`` must not be
+    mistaken for the singleton merely because some *other* file in the sweep uses
+    that name -- root discovery is per-file, not a fixed global name list.
+    """
+    fields = {"openai_api_key": "OPENAI_API_KEY"}
+    unrelated = "cfg = SomeUnrelatedObject()\nx = cfg.llm.openai_api_key\n"
+    assert find_direct_reads(unrelated, fields) == []
