@@ -227,7 +227,7 @@ def test_a_record_survives_the_shell_read_it_is_written_for() -> None:
         f'python3 "$1" "git {CHECKOUT} some-branch" | '
         '{ IFS=$\'\\x1f\' read -r a b c d; printf \'%s|%s|%s|%s\' "$a" "$b" "$c" "$d"; }'
     )
-    result = subprocess.run(  # nosec B603 B607 - fixed argv, no shell string from input
+    result = subprocess.run(  # nosec B603 B607  # fixed argv; nothing here comes from input
         ["bash", "-c", script, "bash", str(parser_path)],
         capture_output=True,
         text=True,
