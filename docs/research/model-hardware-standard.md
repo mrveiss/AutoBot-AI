@@ -176,7 +176,8 @@ surfaces AutoBot already drives.
   for `resource_limits` finds **no enforcement consumer for the manifest field** — the
   limits that actually bind come from a separate, env-var authority,
   [`services/mcp_isolation_config.py`](../../autobot-backend/services/mcp_isolation_config.py)
-  `BridgePolicy` (`MCP_BRIDGE_CPU_LIMIT` / `MEM_LIMIT_MB` / `NOFILE_LIMIT`). A bridge can
+  `BridgePolicy` (`MCP_BRIDGE_CPU_LIMIT` / `MCP_BRIDGE_MEM_LIMIT_MB` /
+  `MCP_BRIDGE_NOFILE_LIMIT`). A bridge can
   therefore *declare* a ceiling that nothing checks.
 - **MHS parallel.** Its central safety property is that device-level limits live in the
   driver and the agent cannot override them (S2). Declared-and-unenforced is the failure
@@ -276,15 +277,20 @@ surfaces AutoBot already drives.
 
 Prioritised by impact to AutoBot.
 
-1. **The approval-stall answer is built and unwired — highest priority, and it is a
-   discovered defect, not an MHS import.** MHS documents its sharpest operational cost:
+1. **The approval-stall answer is half-built, and already tracked — not an MHS import.**
+   MHS documents its sharpest operational cost:
    overnight human-confirmation requests idle a run (S3). AutoBot has the fix —
    [`services/remote_approval.py`](../../autobot-backend/services/remote_approval.py),
    [`services/remote_approval_routing.py`](../../autobot-backend/services/remote_approval_routing.py)
    and [`services/slack_approval_integration.py`](../../autobot-backend/services/slack_approval_integration.py)
    — but a tree-wide grep finds **only test callers and docstring mentions** for all three;
    no production import path reaches them. An approval today can only be answered by
-   someone at the screen. *Per "cleanup means finishing the work": wire it in.*
+   someone at the screen. This is **deliberately staged work, not dropped work**:
+   `remote_approval.py`'s own header names delivery and the per-session routing flag as "the
+   next change in the stack", and #14068 tracks the remaining halves, with #14677 (no approver
+   identity, no replay protection in the remote-approval schema) as a blocker to close first.
+   Listed here because the external material independently confirms the cost of leaving it
+   unfinished — not because it was an undiscovered defect.
 2. **Declared limits with no enforcement** (`MCPBridgeManifest.resource_limits`) — adopt
    item 1 above. Small, contained, closes a real honesty gap in the registry response.
 3. **Structured failure to the model** — adopt item 3. Cheapest change with the most direct
@@ -323,9 +329,14 @@ Prioritised by impact to AutoBot.
 ## Bottom Line
 
 MHS is not adoptable — there is no spec — and its device domain is not AutoBot's. Its
-*doctrine* is worth taking: declared limits that bind, capability descriptors that state
-their own bounds, structured failure the model can act on, and closed-loop tuning against a
-measured objective. Three of those four map onto code AutoBot already has and only
-partially finished. The single most valuable finding is not an import at all: **AutoBot's
-answer to the approval-stall problem MHS documents is already written and has no production
-caller.**
+*doctrine* is worth taking, in four parts: declared limits that bind, capability descriptors
+that state their own bounds, structured failure the model can act on, and closed-loop tuning
+against a measured objective. The first three map onto code AutoBot already has and only
+partially finished; the fourth is absent and is the highest-upside idea in the source. A fifth
+candidate — a declared state contract for the desktop actuation surface — is examined above and
+**rejected on hidden cost**: a stale state contract is a confidently wrong agent driving a real
+screen, where pixels are slow but self-correcting.
+
+The most useful thing the source did was not supply a pattern at all. It independently confirms
+the cost of an approval nobody can answer — a problem AutoBot has already diagnosed, half-built
+and tracked in #14068. External corroboration of a known priority, rather than a new import.
