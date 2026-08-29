@@ -13,22 +13,25 @@ param, filename, or plugin manifest. Everything downstream of the validator is
 trusted to be inside a root.
 
 **Canonical enforcement:** [`autobot_shared/security/path_validator.py`](../../autobot_shared/security/path_validator.py)
-— `validate_path` (:84) absolute paths · `validate_relative_path` (:145) a segment under a
-known base · `resolve_within_sandbox` (:241) the file-management sandbox ·
-`require_path_string` (:193) type gate before `Path()` / `os.makedirs`.
+— `validate_path` (:95) absolute paths · `validate_relative_path` (:156) a segment under a
+known base · `resolve_within_sandbox` (:252) the file-management sandbox ·
+`require_path_string` (:204) type gate before `Path()` / `os.makedirs`.
 
 **Invariants**
 
 - `validate_path` is never called without an explicit `allowed_roots`. The default
-  `_DEFAULT_ALLOWED_ROOTS` (:26) includes `/tmp` — fine for tests, a hole in a request path.
-- Decode before resolve: `_canonicalize` (:53) runs `_MAX_DECODE_ROUNDS` unquote passes plus
+  `_DEFAULT_ALLOWED_ROOTS` (:33) is `("/opt/autobot",)` — no `/tmp` (#15238): world-writable and
+  shared, so a default including it let an unprivileged local process plant a file for any
+  fallback-taking handler to read back. Prefer `PROJECT_ALLOWED_ROOTS` (:40) —
+  `str(project_root())` — over the default for a request-supplied path scoped to this project.
+- Decode before resolve: `_canonicalize` (:64) runs `_MAX_DECODE_ROUNDS` unquote passes plus
   NFKC. `realpath` decodes nothing, so a denylist on the raw string is always wrong.
 - The containment check is the **sole** authority — `resolved.relative_to(root_resolved)`,
   both sides realpath'd. A new string-level `..` check added "as well" is a smell, not defence.
 - The validated string is the string used. Validating `user_path` then opening something
   rebuilt from the original input is a finding.
 - `resolve_within_sandbox` forbids **any** `..`, `~`, leading `/`, or
-  `SANDBOX_INVALID_PATH_CHARACTERS` (:34) — in-bounds or not. `''`, `'/'`, `'//'` legitimately
+  `SANDBOX_INVALID_PATH_CHARACTERS` (:45) — in-bounds or not. `''`, `'/'`, `'//'` legitimately
   address the sandbox root and return it unchanged (#11823); a diff that makes them raise
   again breaks root listing.
 
