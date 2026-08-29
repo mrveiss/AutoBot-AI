@@ -13,6 +13,7 @@ This replaces manual architecture fix scripts with automated validation.
 
 import socket
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -162,14 +163,80 @@ class TestRedisConnection:
 
     @pytest.mark.integration
     def test_redis_connectivity(self):
-        """Test that Redis is accessible at configured host"""
+        """Redis serves commands on the SSOT-configured endpoint, in the SSOT-allocated DB.
+
+        #15182: this called ``client.ping()`` and then asserted ``assert True``,
+        skipping on ``ConnectionError``. There was no input under which it failed:
+        with Redis it passed asserting nothing, without Redis it skipped. #15182 put
+        it at 1 of the 8 tests the marker run selected from this tree; re-measured on
+        this branch the selection is 19 (16 passed, 3 skipped, 17 deselected of 36
+        collected), #15161 having restored the collection the earlier figure was taken
+        under. Either way a whole test of this directory's signal was a constant.
+
+        WHAT THIS TEST IS FOR, decided: not "a socket opened", but "the canonical
+        accessor hands back a client wired to the parameters the SSOT declares, and
+        that client serves commands". Three claims, each asserted separately so a
+        failure names which one broke:
+
+        1. ``get_redis_client()`` returns a client at all. It is documented to return
+           ``None`` when Redis is disabled or the connection fails inside the manager,
+           and the old body would have raised ``AttributeError`` on that path rather
+           than reporting it.
+        2. The pool's host and port are the ones ``unified_config_manager`` declares,
+           and its ``db`` is the number ``redis-databases.yaml`` allocates to the named
+           database ``main`` — the same mapping ``test_redis_db_ssot.py`` guards
+           (#15181). A client that connects to something other than the configured
+           endpoint is exactly the failure "connectivity" is assumed to cover.
+        3. A set/get/delete round-trip. A PING handshake proves reachability; it does
+           not prove the pool serves commands against the selected database.
+
+        NO SKIP, deliberately. ``marker-tests.yml`` is the only workflow that selects
+        ``integration``, and it provisions ``redis:7-alpine`` as a service container
+        with a ``redis-cli ping`` health gate, so Redis is not optional where this test
+        runs. An unreachable Redis there is the condition this test exists to report,
+        not a reason to withhold a verdict — a skip converts the one real failure mode
+        into a non-result. The ``except`` below is kept only to turn a transport error
+        into a named failure instead of a bare traceback; it does not carry the value,
+        which is why it does not interpolate the endpoint it dialled.
+        """
+        from autobot_shared.redis_management.types import DATABASE_MAPPING
+
+        expected = unified_config_manager.get_redis_config()
+        expected_db = DATABASE_MAPPING["main"]
+
         try:
             # Use canonical get_redis_client() pattern for consistency
             client = get_redis_client(async_client=False, database="main")
-            client.ping()
-            assert True, "Redis connection successful"
-        except (redis.ConnectionError, socket.timeout) as e:
-            pytest.skip(f"Redis not available (expected in CI): {e}")
+            assert client is not None, (
+                "get_redis_client(database='main') returned None — Redis is disabled, "
+                "or the connection failed inside the canonical accessor"
+            )
+
+            params = client.connection_pool.connection_kwargs
+            assert params.get("host") == expected.get(
+                "host"
+            ), "Redis pool host is not the one unified_config_manager declares"
+            assert params.get("port") == expected.get(
+                "port"
+            ), "Redis pool port is not the one unified_config_manager declares"
+            assert params.get("db") == expected_db, (
+                f"Redis pool selected db {params.get('db')} for database='main'; "
+                f"redis-databases.yaml allocates db {expected_db}"
+            )
+
+            assert client.ping() is True, "Redis PING did not return True"
+
+            probe_key = f"autobot:test:architecture-compliance:{uuid.uuid4().hex}"
+            try:
+                client.set(probe_key, "reachable")
+                assert client.get(probe_key) in (
+                    "reachable",
+                    b"reachable",
+                ), "Redis round-trip returned a different value than was written"
+            finally:
+                client.delete(probe_key)
+        except (redis.ConnectionError, redis.TimeoutError, socket.timeout) as e:
+            pytest.fail(f"Redis unreachable on the SSOT-configured endpoint: {type(e).__name__}: {e}")
 
     @pytest.mark.integration
     def test_redis_timeout_configuration(self):
