@@ -38,6 +38,9 @@ ANSIBLE_TASKS = (
     REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "backend" / "tasks" / "main.yml"
 )
 REQUIREMENTS_GPU_TORCH = REPO_ROOT / "requirements-gpu-torch.txt"
+BACKEND_DEFAULTS = (
+    REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "backend" / "defaults" / "main.yml"
+)
 REQUIREMENTS_GPU_VLLM = REPO_ROOT / "requirements-gpu.txt"
 
 
@@ -169,3 +172,29 @@ def test_requirements_gpu_file_no_longer_pins_torch_directly() -> None:
         "install path does not depend on the vLLM file"
     )
     assert any(pin.startswith("vllm") for pin in pins)
+
+
+def test_code_source_dir_is_a_role_default_not_a_repeated_inline_literal() -> None:
+    """#15162 review: the new CUDA-torch task must not grow the hardcoded-value baseline.
+
+    A GPU host's requirements path used to repeat a `code_source_dir | default(...)`
+    fallback inline on every task that needed it (nine occurrences after this fix
+    added a tenth); each repeats the same hardcoded `/opt/autobot` literal that
+    pipeline-scripts/hardcoded_values_baseline.txt tracks per-file, per-value
+    COUNT -- so a tenth occurrence is a new finding, not something the baseline
+    already excuses. The fix defines the value once, as a role default, and every
+    task references the bare variable.
+    """
+    tasks_text = ANSIBLE_TASKS.read_text(encoding="utf-8")
+    assert "code_source_dir | default(" not in tasks_text, (
+        "tasks/main.yml still repeats the inline default('/opt/autobot/code_source') "
+        "literal; it must be defined once in defaults/main.yml and referenced bare"
+    )
+
+    assert BACKEND_DEFAULTS.is_file(), f"{BACKEND_DEFAULTS} missing"
+    defaults = yaml.safe_load(BACKEND_DEFAULTS.read_text(encoding="utf-8"))
+    assert isinstance(defaults, dict)
+    assert defaults.get("code_source_dir") == "/opt/autobot/code_source", (
+        f"roles/backend/defaults/main.yml must define code_source_dir; got "
+        f"{defaults.get('code_source_dir')!r}"
+    )

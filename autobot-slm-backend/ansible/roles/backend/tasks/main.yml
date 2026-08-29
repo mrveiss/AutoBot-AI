@@ -539,7 +539,7 @@
 
   - name: Sync autobot-backend code from code_source
     ansible.posix.synchronize:
-      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/"
+      src: "{{ code_source_dir }}/autobot-backend/"
       dest: "{{ backend_code_dir }}/"
       rsync_opts:
         - "--exclude=__pycache__"
@@ -589,7 +589,7 @@
 
   - name: Sync backend config directory from code_source
     ansible.posix.synchronize:
-      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/config/"
+      src: "{{ code_source_dir }}/autobot-backend/config/"
       dest: "{{ backend_code_dir }}/config/"
       rsync_opts:
         - "--exclude=__pycache__"
@@ -604,7 +604,7 @@
   # generation, kb-event, etc.) silently failed to register. Sync them into place.
   - name: Sync plugins directory from code_source (#10294)
     ansible.posix.synchronize:
-      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/plugins/"
+      src: "{{ code_source_dir }}/plugins/"
       dest: "{{ backend_code_dir }}/plugins/"
       rsync_opts:
         - "--exclude=__pycache__"
@@ -659,7 +659,7 @@
   # path is now a symlink to this directory, so syncing here is sufficient for all consumers.
   - name: "Backend | Sync autobot_shared to standalone PYTHONPATH dir (#3649)"
     ansible.posix.synchronize:
-      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot_shared/"
+      src: "{{ code_source_dir }}/autobot_shared/"
       dest: "{{ backend_shared_standalone_dir }}/"
       rsync_opts:
         - "--exclude=__pycache__"
@@ -681,7 +681,7 @@
 
   - name: "Backend | Sync docs directory from code_source (#4100)"
     ansible.posix.synchronize:
-      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/docs/"
+      src: "{{ code_source_dir }}/docs/"
       dest: "{{ backend_install_dir }}/../docs/"
       delete: true
       rsync_opts:
@@ -862,9 +862,9 @@
   - name: Create filtered backend requirements file
     ansible.builtin.shell:
       cmd: >-
-        bash {{ code_source_dir | default('/opt/autobot/code_source') }}/scripts/build-filtered-requirements.sh
+        bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ backend_code_dir }}/requirements.txt
-        {{ code_source_dir | default('/opt/autobot/code_source') }}
+        {{ code_source_dir }}
         > /tmp/requirements-filtered.txt
     become_user: "{{ backend_user }}"
 
@@ -911,7 +911,7 @@
   # backend code rsync).
   - name: "Backend | Install CUDA torch requirements (requirements-gpu-torch.txt) (#15162)"
     ansible.builtin.pip:
-      requirements: "{{ code_source_dir | default('/opt/autobot/code_source') }}/requirements-gpu-torch.txt"
+      requirements: "{{ code_source_dir }}/requirements-gpu-torch.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
     become_user: "{{ backend_user }}"
     environment:
@@ -925,7 +925,7 @@
   # duplicate CUDA-torch download happens here.
   - name: "Backend | Install GPU/vLLM requirements (requirements-gpu.txt) (#10288)"
     ansible.builtin.pip:
-      requirements: "{{ code_source_dir | default('/opt/autobot/code_source') }}/requirements-gpu.txt"
+      requirements: "{{ code_source_dir }}/requirements-gpu.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
     become_user: "{{ backend_user }}"
     environment:
@@ -944,6 +944,13 @@
       backend_vllm_installed: >-
         {{ (backend_vllm_enabled | bool) and
            (backend_gpu_available | default(false) | bool) }}
+      # "no GPU detected" only applies to the auto-probe path; an explicit
+      # backend_has_gpu override that still resolves to no GPU names the
+      # override itself, so the operator sees the actual reason rather than
+      # a probe result that never ran.
+      backend_gpu_skip_reason: >-
+        {{ 'no GPU detected' if backend_has_gpu == 'auto'
+           else 'backend_has_gpu=' ~ backend_has_gpu }}
 
   - name: "Backend | Report GPU/CUDA-torch deploy decision (#15162)"
     ansible.builtin.debug:
@@ -951,11 +958,11 @@
         GPU deploy decision: gpu_available={{ backend_gpu_available | default(false) }}
         (backend_has_gpu={{ backend_has_gpu }}) ->
         cuda_torch={{ 'installed' if backend_cuda_torch_installed
-          else 'skipped (no GPU detected)' }};
+          else 'skipped (' ~ backend_gpu_skip_reason ~ ')' }};
         vllm_enabled={{ backend_vllm_enabled | bool }} ->
         vllm={{ 'installed' if backend_vllm_installed
           else ('skipped (vLLM disabled)' if not (backend_vllm_enabled | bool)
-          else 'skipped (no GPU detected)') }}
+          else 'skipped (' ~ backend_gpu_skip_reason ~ ')') }}
 
   - name: Deploy aioredis compatibility shim for Python 3.14
     ansible.builtin.template:
