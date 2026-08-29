@@ -95,7 +95,12 @@ jobs:
   code-quality:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest  # Temporary: self-hosted runner offline (MVA-2605)
+    # Back on self-hosted (#15310). The MVA-2605 outage this was moved away from
+    # is over: both runners are online. This job is the slowest in the set at
+    # ~601s average and is a single unsharded job, so its wall-clock is one job's
+    # duration on either runner type — it gives up no parallelism by moving,
+    # unlike the sharded suites which stay hosted deliberately.
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
     - name: Checkout code

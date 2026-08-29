@@ -23,7 +23,11 @@ permissions:
 
 jobs:
   verify-precommit-config:
-    runs-on: ubuntu-latest
+    # Self-hosted (#15310). Python and shell only — no Docker, no service
+    # containers — so the runner needs nothing the hosted image uniquely
+    # provides. A single unsharded job at ~462s average, so moving it forfeits
+    # no parallelism.
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -242,7 +246,8 @@ jobs:
           bash autobot-infrastructure/shared/scripts/hooks/pre-commit-no-gitignore-shadow
 
   check-instructions:
-    runs-on: ubuntu-latest
+    # Self-hosted (#15310) — same reasoning as verify-precommit-config above.
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
