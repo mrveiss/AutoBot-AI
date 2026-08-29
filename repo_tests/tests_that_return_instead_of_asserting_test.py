@@ -225,8 +225,14 @@ _KNOWN_OFFENDERS = {
     # A number here may be raised again ONLY on the same terms: the detector got
     # stricter, and the delta is enumerated in this comment. Fixing tests still
     # requires no permission at all.
+    # 127 -> 121 with #15189: the three swallowing driver functions in
+    # shared/scripts/test_configuration.py lost their `except Exception:
+    # return False` wrappers, so their assertions propagate. Each still returns
+    # True for the module's own main(), but a test with a LIVE assertion is
+    # exempt by the rule above — removing six swallowed returns from this
+    # ceiling took nothing away from what is enforced.
     "autobot-backend": (86, 18000),
-    "autobot-infrastructure": (127, 250),
+    "autobot-infrastructure": (121, 250),
     "autobot-npu-worker": (7, 150),
 }
 
@@ -245,9 +251,19 @@ _KNOWN_OFFENDERS = {
 # tolerate an error, catch the specific exception it tolerates; if it is meant
 # to report one, `pytest.fail(...)` or `raise` in the handler, both of which
 # this guard already recognises as reporting rather than swallowing.
+#
+# 9 -> 5 with #15189, and `autobot-infrastructure` deleted rather than left at
+# zero: three driver functions in shared/scripts/test_configuration.py and
+# `test_secrets_service_config_migration` in autobot-backend/config/
+# config_migration_integration_test.py were unwrapped, and every assertion each
+# one holds now reaches pytest. The five that remain are named in #15189 and
+# left deliberately: config/config_consolidation_p2_test.py (one 200-line
+# driver function) and four scenario-report methods in tests/integration/
+# test_causal_framework_integration.py that catch AssertionError into a
+# dataclass an aggregator consumes. Both need the restructuring #15166 did for
+# the sibling file, not an unwrap.
 _SWALLOWED_ASSERTIONS = {
-    "autobot-backend": (6, 18000),
-    "autobot-infrastructure": (3, 250),
+    "autobot-backend": (5, 18000),
 }
 
 # Floors under the whole population. A sweep that has silently stopped matching
