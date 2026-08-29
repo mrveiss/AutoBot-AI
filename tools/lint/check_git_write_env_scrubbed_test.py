@@ -198,8 +198,9 @@ def test_a_non_test_file_is_out_of_scope_even_with_a_bare_write(tmp_path: Path) 
 
 
 def test_allowlisted_files_are_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The mechanism, proven even though today's real list is empty (no
-    legitimate real-repo WRITE has been found in this sweep)."""
+    """The mechanism, proven with a synthetic entry independent of whatever
+    is in the real ALLOWLIST today (see test_every_allowlist_entry_still_exists
+    for that)."""
     entry = "repo_tests/synthetic_allowlist_entry_test.py"
     monkeypatch.setattr("check_git_write_env_scrubbed.ALLOWLIST", frozenset({entry}))
     path = tmp_path / entry
@@ -213,6 +214,13 @@ def test_every_allowlist_entry_still_exists() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     missing = [entry for entry in ALLOWLIST if not (repo_root / entry).is_file()]
     assert not missing, f"allowlist entries no longer in the tree: {missing}"
+
+
+def test_the_operational_remediation_tool_is_the_documented_allowlist_entry() -> None:
+    """`scripts/test_first_remediation.py` is real code, not a fixture: a real
+    worktree, a real push. It is allowlisted for exactly that reason -- pinned
+    here so the entry cannot silently start covering something else."""
+    assert ALLOWLIST == frozenset({"scripts/test_first_remediation.py"})
 
 
 def test_main_exits_nonzero_on_a_violation(tmp_path: Path) -> None:

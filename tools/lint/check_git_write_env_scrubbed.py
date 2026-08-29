@@ -119,7 +119,18 @@ WRITE_VERBS = frozenset(
 
 #: Files allowed to run an unscrubbed git write, POSIX-relative to the repo
 #: root. Each entry needs the real reason recorded, not just the path.
-ALLOWLIST: frozenset[str] = frozenset()
+ALLOWLIST: frozenset[str] = frozenset(
+    {
+        # An operational CLI tool (argparse, `if __name__ == "__main__":`, no
+        # `def test_*` anywhere in it) that deliberately creates real worktrees
+        # off `origin/Dev_new_gui` and pushes real branches -- the opposite of
+        # a throwaway fixture. Named `test_first_remediation.py` for pytest's
+        # own `test_*.py` collection glob, which is exactly why it also
+        # matches this guard's naming heuristic; scrubbing it would break the
+        # tool it is.
+        "scripts/test_first_remediation.py",
+    }
+)
 
 #: 2063 tracked test files (`*_test.py` / `test_*.py`) measured the day this
 #: guard was written. A walk that reaches far fewer has stopped covering the
