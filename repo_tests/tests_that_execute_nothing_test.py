@@ -207,6 +207,9 @@ def test_the_detector_finds_an_empty_body_and_spares_a_real_one() -> None:
         "def test_a():\n    subject()\n"
     ), "a call is a real check — it can raise, which is a thin assertion but a real one"
     assert not empty_bodies(
+        "def test_a():\n    print(subject())\n"
+    ), "print(subject()) evaluates subject() first — a real call, not print('literal') (#15263)"
+    assert not empty_bodies(
         "def test_a():\n    assert subject()\n"
     ), "an assertion is a body"
     assert not empty_bodies(
@@ -228,6 +231,14 @@ def test_the_detector_finds_an_empty_body_and_spares_a_real_one() -> None:
         assert not empty_bodies(
             f"import pytest\n\n\n@pytest.mark.{marker}\ndef test_a():\n    pass\n"
         ), f"`{marker}` declares the test does not run — that is honest, not misleading"
+    for marker in ("skip", 'skipif(True, reason="x")', "xfail"):
+        assert not empty_bodies(
+            "import pytest\n\n\n"
+            f"@pytest.mark.{marker}\nclass TestX:\n    def test_a(self):\n        pass\n"
+        ), (
+            f"a class-level `{marker}` exempts its methods the same as a method-level "
+            "one — the method never repeats a decorator it inherits (#15263)"
+        )
     assert empty_bodies(
         "import pytest\n\n\n@pytest.mark.asyncio\nasync def test_a():\n    pass\n"
     ), "an unrelated marker does not excuse an empty body — asyncio still runs it"
