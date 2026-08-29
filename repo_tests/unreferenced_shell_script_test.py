@@ -270,6 +270,113 @@ class TestTheBatchThisIssueResolved:
         )
 
 
+class TestTheSecondBatchThisIssueResolved:
+    """#15127 batch two: two retired, two wired in, two documented.
+
+    Same standard as batch one -- a kept script is pinned to the document whose
+    entry is the reason it is not debris, and a wired-in script is pinned to the
+    defect that made it unrunnable, not merely to "is referenced".
+    """
+
+    RETIRED = (
+        "start_seq.sh",
+        "utilities/ollama_thread_utility.sh",
+    )
+
+    #: Files retired alongside a script because nothing else named them.
+    RETIRED_COMPANIONS = (
+        f"{SCRIPT_DIR}/utilities/ollama.service.new",
+        "autobot-infrastructure/shared/systemd/ollama.service.new",
+    )
+
+    #: kept script -> the file whose reference is the reason it is not debris.
+    KEPT = {
+        "backup_ollama_models.sh": f"{SCRIPT_DIR}/README.md",
+        "build_secure_sandbox.sh": f"{SCRIPT_DIR}/README.md",
+        "utilities/security-audit.sh": f"{SCRIPT_DIR}/README.md",
+        "debug_chat_system.sh": "docs/development/MCP_DEBUG_SCENARIOS.md",
+    }
+
+    #: The build context the sandbox Dockerfile's COPY paths resolve against.
+    SANDBOX_CONTEXT = "autobot-infrastructure/shared"
+
+    @pytest.mark.parametrize("name", RETIRED)
+    def test_retired_script_is_gone_from_tree_and_baseline(self, scripts, name):
+        path = f"{SCRIPT_DIR}/{name}"
+        assert path not in scripts, f"{name} was retired but is tracked again"
+        assert path not in KNOWN_UNREFERENCED, f"{name} was retired but still sits in the baseline"
+
+    @pytest.mark.parametrize("path", RETIRED_COMPANIONS)
+    def test_retired_companion_file_is_gone(self, path):
+        """Both ollama.service.new copies existed only for the retired utility.
+
+        Each also pinned a PATH from one developer's machine, so re-adding one
+        would reintroduce a unit file that cannot work on any other host.
+        """
+        assert not (REPO_ROOT / path).exists(), f"{path} was retired with its only caller but is back"
+
+    @pytest.mark.parametrize("name,document", sorted(KEPT.items()))
+    def test_kept_script_is_referenced_by_its_document(self, scripts, name, document):
+        path = f"{SCRIPT_DIR}/{name}"
+        assert path in scripts, f"{name} was kept and documented but is no longer tracked"
+        assert path not in KNOWN_UNREFERENCED
+        text = (REPO_ROOT / document).read_text(encoding="utf-8")
+        assert name in text, (
+            f"{document} no longer names {name}. That entry is the whole reason the script is "
+            "not debris -- restore it or retire the script (#15127)."
+        )
+
+    def test_the_sandbox_builder_can_reach_every_input_it_builds_from(self):
+        """The builder named a Dockerfile path that had not held it since the moves.
+
+        ``autobot/secure-sandbox:latest`` is what ``secure_sandbox_executor.py``
+        runs code-execution containers from, and this script is its only builder,
+        so a stale ``-f`` here means the image can never be produced.
+        """
+        context = REPO_ROOT / self.SANDBOX_CONTEXT
+        dockerfile = context / "docker/secure-sandbox.Dockerfile"
+        assert dockerfile.is_file(), "the sandbox Dockerfile must sit in the context its COPY paths assume"
+
+        copied = re.findall(r"^COPY\s+(\S+)\s", dockerfile.read_text(encoding="utf-8"), re.MULTILINE)
+        assert copied, "no COPY instructions found; the parse is broken, not the Dockerfile"
+        missing = sorted(source for source in copied if not (context / source).exists())
+        assert not missing, f"the sandbox Dockerfile COPYs paths absent from its build context: {missing}"
+
+    def test_the_sandbox_builder_refuses_to_tag_an_unhardened_image(self):
+        """It used to build a bare alpine and tag it as the hardened sandbox.
+
+        The executor and the code-execution smoke gate both treat that tag as
+        proof of hardening, so a silent downgrade defeats the boundary itself.
+        """
+        builder = (REPO_ROOT / SCRIPT_DIR / "build_secure_sandbox.sh").read_text(encoding="utf-8")
+        assert "docker/secure-sandbox.Dockerfile" in builder
+        assert "FROM alpine" not in builder, "the fabricated fallback Dockerfile is back"
+        assert builder.count("docker build") == 1, (
+            "more than one build in the sandbox builder means a fallback image can be tagged "
+            "autobot/secure-sandbox:latest when the hardened build fails"
+        )
+
+    def test_the_chat_debugger_anchors_its_helpers_to_the_project_root(self):
+        """It sourced project_root.sh and then ignored it, so it ran only from the root."""
+        debugger = (REPO_ROOT / SCRIPT_DIR / "debug_chat_system.sh").read_text(encoding="utf-8")
+        assert "node .mcp/autobot-mcp-server.js" not in debugger
+        assert 'node "${PROJECT_ROOT}/.mcp/autobot-mcp-server.js"' in debugger
+        assert (REPO_ROOT / ".mcp/autobot-mcp-server.js").is_file()
+        assert 'chmod +x "$0"' not in debugger, "a script must not chmod itself on every run"
+
+    def test_the_security_audit_does_not_stop_at_its_first_finding(self):
+        """``set -e`` plus a post-increment on a zero counter aborted the audit.
+
+        The arithmetic result of the first bump is 0, which bash reports as exit
+        status 1, so the sweep died the moment it found something -- before the
+        remaining checks and the summary.
+        """
+        audit = (REPO_ROOT / SCRIPT_DIR / "utilities/security-audit.sh").read_text(encoding="utf-8")
+        assert "set -e" in audit, "the guard below only matters while this runs under set -e"
+        bumps = re.findall(r"^\s*\(\(\s*\w+\s*(?:\+\+|\+=)", audit, re.MULTILINE)
+        assert not bumps, f"arithmetic-command counter bumps are back under set -e: {bumps}"
+
+
 class TestTheTwoScriptsThisIssueResolved:
     def test_the_retired_script_is_gone(self, scripts):
         retired = f"{SCRIPT_DIR}/diagnose_startup_performance.sh"
