@@ -1,5 +1,7 @@
 # Research Agent: Precision & Efficiency Architecture
 
+> **Freshness:** current — 2026-08-30. Front matter self-declares `Status: Research & Design`; last updated 2026-07-26.
+
 > **Issue:** [#12621](https://github.com/mrveiss/AutoBot-AI/issues/12621) (umbrella) · children #12622–#12625
 > **Status:** Research & Design
 > **Author:** mrveiss

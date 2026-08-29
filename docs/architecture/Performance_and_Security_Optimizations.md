@@ -1,5 +1,7 @@
 # AutoBot Performance and Security Optimizations
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 **Document Version**: 1.0  
 **Last Updated**: 2025-08-19  
 **Status**: Implemented  

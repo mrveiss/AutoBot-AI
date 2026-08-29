@@ -1,5 +1,7 @@
 # Code-Execution Agent Mode — Design (Issue #11523)
 
+> **Freshness:** current (draft) — 2026-08-30. Self-declared `Status: Draft — awaiting owner approval`; unchanged by this move.
+
 **Status:** Draft — awaiting owner approval of the governance section (gate for any implementation issue)
 **Umbrella:** #11518 (Task 6) · **Design only — no implementation under this issue**
 

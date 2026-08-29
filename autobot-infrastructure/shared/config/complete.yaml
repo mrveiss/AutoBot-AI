@@ -45,7 +45,7 @@ infrastructure:
 # ============================================================================
 # Centralized timeout configuration for all async operations.
 # KB-ASYNC-014: Comprehensive timeout configuration system
-# See: docs/architecture/TIMEOUT_CONFIGURATION_PROMETHEUS_METRICS_DESIGN.md
+# See: docs/design/TIMEOUT_CONFIGURATION_PROMETHEUS_METRICS_DESIGN.md
 # ============================================================================
 
 timeouts:

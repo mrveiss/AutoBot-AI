@@ -5,6 +5,8 @@ date: 2026-06-04
 
 # Counterfactual Reasoning — Architecture
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 `CounterfactualReasoner` extends AutoBot's decision engine with "what if" simulation. Before committing to risky decisions (escalate, retry, automate), agents predict outcomes and understand side effects without executing.
 
 **Module:** `context_aware_decision.counterfactual_reasoner`

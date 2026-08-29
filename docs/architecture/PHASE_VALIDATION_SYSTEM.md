@@ -1,5 +1,7 @@
 # Phase Validation System - On-Demand Architecture
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 ## Overview
 
 The AutoBot Phase Validation System provides comprehensive validation of development phases and system maturity. As of the latest update, the system has been redesigned to operate **on-demand only** to improve performance and reduce resource usage.

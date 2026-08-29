@@ -1,5 +1,7 @@
 # Terminal System Architecture Diagram
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 **AutoBot Terminal Integration - Complete Overview**
 
 ---
@@ -599,7 +601,7 @@ AutoBot/
 │
 └── docs/architecture/
     ├── TERMINAL_ARCHITECTURE_DIAGRAM.md  ← This file
-    └── TERMINAL_CONSOLIDATION_ANALYSIS.md
+    └── ../analysis/ANA_terminal-consolidation-2025-11-09.md
 ```
 
 ---

@@ -1,5 +1,10 @@
 # Timeout Configuration & Prometheus Metrics Architecture Design
 
+> **Correction (2026-08-30, #15206):** this document names `unified_config` / `unified_config_manager` / `UnifiedConfigManager` as current or pending. That name is a **deprecated alias** (`autobot-backend/config/__init__.py:148-157`) or, for the module path specifically, never existed. The canonical configuration entry point is `autobot_shared/ssot_config.py` (infrastructure/SSOT) plus `config_manager` / `get_config_manager()` from `config.manager` (`autobot-backend/config/manager.py:51`) for everything else. See `docs/developer/SSOT_CONFIG_GUIDE.md`. Historical content below is otherwise unchanged.
+
+
+> **Freshness:** superseded (mostly shipped) — 2026-08-30. `PrometheusMetricsManager`, `AsyncRedisManager` and `KnowledgeBaseTimeouts` shipped. `AsyncRedisDatabase` and `AUTOBOT_REDIS_TIMEOUT` as named here do not exist in the current codebase — the equivalent is `REDIS_TIMEOUT` in `autobot_shared/ssot_constants.py:793` and `AUTOBOT_RETRIEVAL_REDIS_TIMEOUT` in `autobot_shared/env_registry.py:978`. "Design Phase - Awaiting Review" is stale; this shipped under different names.
+
 **Design Document for KB-ASYNC-014 and KB-ASYNC-015**
 
 **Version:** 1.0

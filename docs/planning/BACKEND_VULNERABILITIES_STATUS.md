@@ -195,7 +195,7 @@
 ### Architecture Documentation
 
 8. **Architecture Analysis** (2,202 lines)
-   - Location: `docs/architecture/BACKEND_CRITICAL_ISSUES_ARCHITECTURAL_ANALYSIS.md`
+   - Location: `docs/analysis/ANA_backend-critical-issues-architectural-2025-10-05.md`
    - Distributed system impact analysis
 
 ---
@@ -308,7 +308,7 @@
 - `reports/code-review/week1_database_initialization_bug_fixes_review.md` - Final review
 
 ### Architecture
-- `docs/architecture/BACKEND_CRITICAL_ISSUES_ARCHITECTURAL_ANALYSIS.md` - System impact
+- `docs/analysis/ANA_backend-critical-issues-architectural-2025-10-05.md` - System impact
 
 ### Project Guidelines
 - `CLAUDE.md` - Development standards and "No Temporary Fixes" policy
