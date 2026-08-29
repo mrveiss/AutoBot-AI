@@ -40,7 +40,7 @@ from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
@@ -501,8 +501,8 @@ async def analyze_path(
     """
     start_time = datetime.now(tz=timezone.utc)
 
-    # Validate path stays within allowed roots before analysis (#3164)
-    safe_path = validate_path(path)
+    # Validate path stays within allowed roots before analysis (#3164, narrowed #15238)
+    safe_path = validate_path(path, allowed_roots=PROJECT_ALLOWED_ROOTS)
     # Issue #398: Use extracted helper
     files_to_analyze = await _get_files_to_analyze(safe_path)
 

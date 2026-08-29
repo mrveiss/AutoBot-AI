@@ -37,7 +37,7 @@ from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from autobot_shared.time_utils import utc_timestamp
 from code_intelligence.merge_conflict_resolver import (
     ConflictBlock,
@@ -154,7 +154,7 @@ def _assert_safe_path(user_path: str) -> Path:
     Issue #2848.
     """
     try:
-        return validate_path(user_path, must_exist=False)
+        return validate_path(user_path, must_exist=False, allowed_roots=PROJECT_ALLOWED_ROOTS)
     except ValueError as exc:
         logger.warning("Path traversal attempt blocked: %s — %s", user_path, exc)
         raise HTTPException(status_code=400, detail="Invalid or disallowed path")

@@ -23,10 +23,21 @@ import urllib.parse
 from pathlib import Path
 from typing import Sequence
 
-_DEFAULT_ALLOWED_ROOTS: tuple[str, ...] = (
-    "/opt/autobot",
-    "/tmp",  # nosec B108  # test/controlled code uses tmpdir intentionally
-)
+from autobot_shared.paths import project_root
+
+# #15238: no `/tmp` here. It is world-writable and shared with every other
+# process on the host, so an unprivileged local process can plant a file
+# there for any endpoint that falls back to this default to read back.
+# Every caller must state the root it actually means; there is no safe
+# universal fallback.
+_DEFAULT_ALLOWED_ROOTS: tuple[str, ...] = ("/opt/autobot",)
+
+#: Call sites that mean "inside the AutoBot project" — the common case for
+#: request handlers analyzing this codebase — import this alongside
+#: ``validate_path`` instead of hand-rolling `/opt/autobot` or reaching for
+#: the (deliberately narrow) default. Centralised so a grandfathered,
+#: line-frozen call site can add it via its *existing* import line (#15238).
+PROJECT_ALLOWED_ROOTS: tuple[str, ...] = (str(project_root()),)
 
 # Characters rejected outright in sandbox-relative user paths (Issue #326).
 # Single source of truth for the sandbox resolver shared by files.py and

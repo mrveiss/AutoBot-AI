@@ -43,7 +43,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
-from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from autobot_shared.ssot_constants import TTL_365_DAYS
 from autobot_shared.time_utils import parse_utc_iso
 
@@ -1119,7 +1119,7 @@ def _validate_evolution_repo_path(repo_path_str: str):
     """
 
     try:
-        repo_path = validate_path(repo_path_str)
+        repo_path = validate_path(repo_path_str, allowed_roots=PROJECT_ALLOWED_ROOTS)
     except ValueError:
         return None, EvolutionAnalysisResponse(
             status="error",

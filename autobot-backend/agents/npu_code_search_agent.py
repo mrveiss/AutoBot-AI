@@ -22,7 +22,7 @@ import aiofiles
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
-from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from autobot_shared.singleton_factory import lazy_singleton
 from code_embedding_generator import get_code_embedding_generator
 from constants.ttl_constants import TTL_1_HOUR, TTL_24_HOURS
@@ -373,7 +373,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         errors = []
 
         try:
-            root_path = str(validate_path(root_path))
+            root_path = str(validate_path(root_path, allowed_roots=PROJECT_ALLOWED_ROOTS))
             self.logger.info("Starting codebase indexing: %s", root_path)
             index_key = self._get_index_key(root_path)
 
@@ -553,7 +553,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
     async def _index_file(self, file_path: str, relative_path: str):
         """Index a single file with embeddings (Issue #207, #398: refactored)."""
         try:
-            file_path = str(validate_path(file_path))
+            file_path = str(validate_path(file_path, allowed_roots=PROJECT_ALLOWED_ROOTS))
             async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
 
@@ -941,7 +941,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return []
 
         try:
-            file_path = str(validate_path(file_path))
+            file_path = str(validate_path(file_path, allowed_roots=PROJECT_ALLOWED_ROOTS))
             async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
             lines = content.splitlines()
@@ -1012,7 +1012,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return []
 
         try:
-            file_path = str(validate_path(file_path))
+            file_path = str(validate_path(file_path, allowed_roots=PROJECT_ALLOWED_ROOTS))
             async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
             lines = content.splitlines()
@@ -1111,7 +1111,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return []
 
         try:
-            file_path = str(validate_path(file_path))
+            file_path = str(validate_path(file_path, allowed_roots=PROJECT_ALLOWED_ROOTS))
             async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
             lines = content.splitlines()
@@ -1327,7 +1327,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
     async def _get_file_context(self, file_path: str, line_number: int, context_size: int = 3) -> List[str]:
         """Get context lines around a specific line number"""
         try:
-            file_path = str(validate_path(file_path))
+            file_path = str(validate_path(file_path, allowed_roots=PROJECT_ALLOWED_ROOTS))
             async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = await f.read()
                 lines = content.splitlines(keepends=True)
