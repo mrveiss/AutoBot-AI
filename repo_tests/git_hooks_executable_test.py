@@ -142,15 +142,22 @@ def test_the_sweep_actually_reached_the_hook_directories() -> None:
     entry — dropping it collapses the count to zero, since ``git ls-files -s``
     then never returns a single path under it (#15264).
     """
-    assert len(_MODES) >= 127, (
+    assert len(_MODES) >= 125, (
         f"only {len(_MODES)} tracked files under {_HOOK_DIRS} — the path list is "
         "no longer reaching the hook directories"
     )
     # Floors sit AT the measured count rather than below it for headroom, so a
-    # retired hook has to come here and say so. Measured on this branch:
-    # 127 tracked (81 of them under utilities/), 47 shebanged and read as a
+    # retired hook has to come here and say so. #15127 is the first change to
+    # come here and say so: it retired utilities/ollama_thread_utility.sh (its
+    # only setting is owned by the Ansible llm role's unit template, and it
+    # could not run from any directory) together with the companion
+    # utilities/ollama.service.new that nothing else named. Both sat under
+    # utilities/, so _MODES and _UTILITIES each drop by two; only the .sh of the
+    # pair carries a shebang, so _SHEBANGED drops by one; both have a suffix, so
+    # the extensionless count is unchanged. Measured on this branch:
+    # 125 tracked (79 of them under utilities/), 46 shebanged and read as a
     # claim, 22 of those extensionless.
-    assert len(_SHEBANGED) >= 47, (
+    assert len(_SHEBANGED) >= 46, (
         f"only {len(_SHEBANGED)} files declare a shebang read as a claim — the "
         "reader has regressed and every assertion below would pass having "
         "checked nothing"
@@ -164,7 +171,7 @@ def test_the_sweep_actually_reached_the_hook_directories() -> None:
         "narrowed to files with a suffix, which is exactly the gap #14891 closed"
     )
 
-    assert len(_UTILITIES) >= 81, (
+    assert len(_UTILITIES) >= 79, (
         f"only {len(_UTILITIES)} tracked files found under "
         f"{_PY_SHEBANG_NOT_A_CLAIM_UNDER!r} — the walk has stopped reaching "
         "utilities/, which is exactly where #15253's 22 stale modes lived (#15264)"

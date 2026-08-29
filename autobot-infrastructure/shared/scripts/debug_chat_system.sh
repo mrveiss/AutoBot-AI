@@ -3,6 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot Chat System Debug Script
 # Demonstrates comprehensive MCP debugging workflow
+#
+# (#15127) This automates Scenario 3 of docs/development/MCP_DEBUG_SCENARIOS.md
+# ("WebSocket Disconnections -- chat messages not sending"), which described the
+# steps by hand and named only mcp_helper.sh. It sourced project_root.sh but
+# then resolved the MCP server, the SQLite database and the file search against
+# the caller's working directory, so it only ever worked from the repo root --
+# and the file-search step passed the literal string "${PROJECT_ROOT}" as a
+# path, because it sat inside single quotes. Everything is anchored to
+# ${PROJECT_ROOT} now.
 
 
 # #13149: this defaulted to the deployed install, so running it from a checkout
@@ -32,7 +41,7 @@ echo -e "${BLUE}📊 Step 1: Initial System Analysis${NC}"
 echo "Checking overall project health..."
 
 PROJECT_HEALTH=$(echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "autobot_analyze_project", "arguments": {"includeStats": true}}}' | \
-    node .mcp/autobot-mcp-server.js 2>&1 | parse_mcp_response)
+    node "${PROJECT_ROOT}/.mcp/autobot-mcp-server.js" 2>&1 | parse_mcp_response)
 
 if [ ! -z "$PROJECT_HEALTH" ]; then
     FRONTEND_VERSION=$(echo "$PROJECT_HEALTH" | jq -r '.structure.frontend.version // "unknown"')
@@ -46,7 +55,7 @@ echo -e "\n${BLUE}🎨 Step 2: Frontend Error Analysis${NC}"
 echo "Checking for console errors..."
 
 FRONTEND_ERRORS=$(echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "autobot_debug_frontend", "arguments": {"action": "console-errors", "timeframe": "30m"}}}' | \
-    node .mcp/autobot-mcp-server.js 2>&1 | parse_mcp_response)
+    node "${PROJECT_ROOT}/.mcp/autobot-mcp-server.js" 2>&1 | parse_mcp_response)
 
 ERROR_COUNT=$(echo "$FRONTEND_ERRORS" | jq -r '.errorCount // 0')
 if [ "$ERROR_COUNT" -gt 0 ]; then
@@ -61,7 +70,7 @@ echo -e "\n${BLUE}🔧 Step 3: API Endpoint Analysis${NC}"
 echo "Analyzing chat API performance..."
 
 API_ANALYSIS=$(echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "autobot_debug_api_calls", "arguments": {"endpoint": "/api/chat", "timeframe": "1h", "includeErrors": true}}}' | \
-    node .mcp/autobot-mcp-server.js 2>&1 | parse_mcp_response)
+    node "${PROJECT_ROOT}/.mcp/autobot-mcp-server.js" 2>&1 | parse_mcp_response)
 
 API_CALLS=$(echo "$API_ANALYSIS" | jq -r '.totalCalls // 0')
 API_ERRORS=$(echo "$API_ANALYSIS" | jq -r '.errorCount // 0')
@@ -76,7 +85,7 @@ echo -e "\n${BLUE}🔌 Step 4: WebSocket Connection Analysis${NC}"
 echo "Checking real-time connections..."
 
 WS_STATUS=$(echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "autobot_debug_websockets", "arguments": {"action": "connections"}}}' | \
-    node .mcp/autobot-mcp-server.js 2>&1 | parse_mcp_response)
+    node "${PROJECT_ROOT}/.mcp/autobot-mcp-server.js" 2>&1 | parse_mcp_response)
 
 ACTIVE_CONNECTIONS=$(echo "$WS_STATUS" | jq -r '.activeConnections // 0')
 CONNECTION_ERRORS=$(echo "$WS_STATUS" | jq -r '.recentErrors // 0')
@@ -93,7 +102,7 @@ echo -e "\n${BLUE}🏥 Step 5: Backend Service Health${NC}"
 echo "Checking backend API status..."
 
 BACKEND_HEALTH=$(echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "autobot_debug_backend", "arguments": {"action": "api-health"}}}' | \
-    node .mcp/autobot-mcp-server.js 2>&1 | parse_mcp_response)
+    node "${PROJECT_ROOT}/.mcp/autobot-mcp-server.js" 2>&1 | parse_mcp_response)
 
 API_STATUS=$(echo "$BACKEND_HEALTH" | jq -r '.healthy // false')
 if [ "$API_STATUS" = "true" ]; then
@@ -108,8 +117,8 @@ echo -e "\n${BLUE}📁 Step 6: File System Analysis${NC}"
 echo "Examining chat implementation files..."
 
 # Check if chat files exist
-CHAT_FILES=$(echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search_files", "arguments": {"path": "${PROJECT_ROOT}", "pattern": "**/[Cc]hat*.{js,vue,py}", "excludePatterns": ["node_modules/**", "venv/**"]}}}' | \
-    mcp-server-filesystem ${PROJECT_ROOT} 2>&1 | parse_mcp_response)
+CHAT_FILES=$(jq -nc --arg root "${PROJECT_ROOT}" '{jsonrpc: "2.0", id: 1, method: "tools/call", params: {name: "search_files", arguments: {path: $root, pattern: "**/[Cc]hat*.{js,vue,py}", excludePatterns: ["node_modules/**", "venv/**"]}}}' | \
+    mcp-server-filesystem "${PROJECT_ROOT}" 2>&1 | parse_mcp_response)
 
 FILE_COUNT=$(echo "$CHAT_FILES" | jq -r '.files | length // 0' 2>/dev/null)
 echo -e "  Found ${GREEN}$FILE_COUNT${NC} chat-related files"
@@ -134,7 +143,7 @@ EOF
 )
 
 LOG_RESULT=$(echo "{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"tools/call\", \"params\": {\"name\": \"create_record\", \"arguments\": {\"table\": \"development_log\", \"data\": {\"project_id\": 1, \"log_entry\": \"Chat system debug session\", \"log_level\": \"DEBUG\", \"details\": $(echo "$DETAILS" | jq -c .)}}}}" | \
-    npx -y mcp-sqlite data/autobot.db 2>&1 | parse_mcp_response)
+    npx -y mcp-sqlite "${PROJECT_ROOT}/data/autobot.db" 2>&1 | parse_mcp_response)
 
 if echo "$LOG_RESULT" | grep -q "success"; then
     echo -e "  ${GREEN}✓ Debug session logged to database${NC}"
@@ -145,7 +154,7 @@ echo -e "\n${YELLOW}💡 Recommendations Based on Analysis:${NC}"
 
 if [ "$ACTIVE_CONNECTIONS" -eq 0 ]; then
     echo "  1. WebSocket connection is down - restart backend services"
-    echo "     Run: ./run_agent.sh"
+    echo "     Run: scripts/start-services.sh restart"
 fi
 
 if [ "$ERROR_COUNT" -gt 0 ]; then
@@ -197,5 +206,3 @@ echo "- Debug session logged to database"
 echo -e "\n${GREEN}✅ Debug session complete!${NC}"
 echo "Use the recommendations above to fix the identified issues."
 
-# Make executable
-chmod +x "$0"
