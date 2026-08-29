@@ -40,7 +40,7 @@ from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 
 logger = get_logger(__name__)
 
@@ -1116,7 +1116,7 @@ async def analyze_file_control_flow(
     Issue #744: Requires admin authentication.
     """
     try:
-        file_path = Path(validate_path(request.file_path, must_exist=True))
+        file_path = Path(validate_path(request.file_path, must_exist=True, allowed_roots=PROJECT_ALLOWED_ROOTS))
     except (ValueError, PermissionError):
         raise HTTPException(status_code=400, detail="Invalid or inaccessible file path")
 

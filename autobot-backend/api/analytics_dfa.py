@@ -45,7 +45,7 @@ from api.schemas_analytics import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 
 logger = get_logger(__name__)
 
@@ -1028,7 +1028,7 @@ async def analyze_file(request: DFAAnalyzeFileRequest, admin_check: bool = Depen
     import aiofiles
 
     try:
-        safe_path = str(validate_path(request.file_path))
+        safe_path = str(validate_path(request.file_path, allowed_roots=PROJECT_ALLOWED_ROOTS))
         async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:
             source_code = await f.read()
 

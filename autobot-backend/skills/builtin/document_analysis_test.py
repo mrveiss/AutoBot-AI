@@ -59,6 +59,17 @@ def skill():
     return DocumentAnalysisSkill()
 
 
+@pytest.fixture(autouse=True)
+def _scope_allowed_roots_to_tmp_path(monkeypatch, tmp_path):
+    """Fixtures below write real documents under ``tmp_path``, exercising the
+    skill directly rather than through the real upload flow (which always
+    writes under the project's file-manager root and is what production
+    scopes ``allowed_roots`` to, #15238). Scope this test run's root to
+    ``tmp_path`` instead of loosening the real default.
+    """
+    monkeypatch.setattr("skills.builtin.document_analysis.PROJECT_ALLOWED_ROOTS", (str(tmp_path),))
+
+
 # ---------------------------------------------------------------------------
 # The invariant
 # ---------------------------------------------------------------------------
