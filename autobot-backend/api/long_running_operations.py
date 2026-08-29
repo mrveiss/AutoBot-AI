@@ -122,11 +122,11 @@ async def start_codebase_indexing(
             "operation_type": "codebase_indexing",
         }
 
-        # Estimate items based on file patterns
-        from pathlib import Path
-
+        # Estimate items based on file patterns (#15238: explicit project root, not the shared /tmp default)
         try:
-            safe_codebase_path = Path(validate_path(request.codebase_path, must_exist=True))
+            safe_codebase_path = validate_path(
+                request.codebase_path, must_exist=True, allowed_roots=[str(PATH.PROJECT_ROOT)]
+            )
         except (ValueError, PermissionError):
             raise HTTPException(status_code=400, detail="Invalid or inaccessible codebase path")
 
@@ -190,11 +190,11 @@ async def start_comprehensive_testing(
             "operation_type": "comprehensive_test_suite",
         }
 
-        # Estimate test count
-        from pathlib import Path
-
+        # Estimate test count (#15238: explicit project root, not the shared /tmp default)
         try:
-            safe_test_path = Path(validate_path(request.test_path, must_exist=True))
+            safe_test_path = validate_path(
+                request.test_path, must_exist=True, allowed_roots=[str(PATH.PROJECT_ROOT)]
+            )
         except (ValueError, PermissionError):
             raise HTTPException(status_code=400, detail="Invalid or inaccessible test path")
 

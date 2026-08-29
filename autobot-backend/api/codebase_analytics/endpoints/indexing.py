@@ -130,7 +130,9 @@ async def _validate_and_get_path(
         return source.clone_path
     if request and request.root_path:
         try:
-            safe_path_str = validate_path(request.root_path, must_exist=True)
+            safe_path_str = validate_path(
+                request.root_path, must_exist=True, allowed_roots=[str(PATH.PROJECT_ROOT)]
+            )
             target_path = Path(safe_path_str)
         except (ValueError, PermissionError):
             raise HTTPException(

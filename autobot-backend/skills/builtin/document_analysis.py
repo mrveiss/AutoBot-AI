@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 
 logger = get_logger(__name__)
@@ -142,7 +142,7 @@ class DocumentAnalysisSkill(BaseSkill):
         # allowed roots, rather than denylisting ".." in the raw string — #14050
         # records why a raw-string denylist is the wrong check.
         try:
-            path = validate_path(raw_path)
+            path = validate_path(raw_path, allowed_roots=PROJECT_ALLOWED_ROOTS)
         except ValueError as exc:
             logger.warning("Rejected document path: %s", exc)
             return None, {"success": False, "error": f"Invalid file_path: {exc}"}
