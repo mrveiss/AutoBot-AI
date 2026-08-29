@@ -102,23 +102,31 @@ def _populate_default_providers(registry: SearchProviderRegistry) -> None:
     from agent_loop.search.brave_provider import BraveSearchProvider
     from agent_loop.search.searxng_provider import SearXNGSearchProvider
     from autobot_shared.ssot_config import config
+    from services.provider_key_vault import resolve_provider_key
 
-    searxng_url = getattr(config, "searxng_instance_url", "")
+    # Credentials/URL resolve through the vault seam (env wins; else System
+    # vault, #15267) -- the same treatment llm_shared.provider_registry
+    # already gives its seven LLM provider keys.
+    searxng_url = resolve_provider_key("SEARXNG_INSTANCE_URL", getattr(config, "searxng_instance_url", ""))
     if searxng_url:
         registry.register(
             SearXNGSearchProvider(
                 settings={
                     "instance_url": searxng_url,
-                    "basic_auth_user": getattr(config, "searxng_basic_auth_user", ""),
-                    "basic_auth_pass": getattr(config, "searxng_basic_auth_pass", ""),
-                    "token": getattr(config, "searxng_token", ""),
+                    "basic_auth_user": resolve_provider_key(
+                        "SEARXNG_BASIC_AUTH_USER", getattr(config, "searxng_basic_auth_user", "")
+                    ),
+                    "basic_auth_pass": resolve_provider_key(
+                        "SEARXNG_BASIC_AUTH_PASS", getattr(config, "searxng_basic_auth_pass", "")
+                    ),
+                    "token": resolve_provider_key("SEARXNG_TOKEN", getattr(config, "searxng_token", "")),
                 }
             )
         )
     else:
         logger.debug("SEARXNG_INSTANCE_URL not set — SearXNG search provider not registered")
 
-    brave_key = getattr(config, "brave_search_api_key", "")
+    brave_key = resolve_provider_key("BRAVE_SEARCH_API_KEY", getattr(config, "brave_search_api_key", ""))
     if brave_key:
         registry.register(BraveSearchProvider(settings={"api_key": brave_key}))
     else:
