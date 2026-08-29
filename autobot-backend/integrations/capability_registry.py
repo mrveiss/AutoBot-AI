@@ -120,10 +120,14 @@ def _register_messaging_if_token(
 
 
 def _populate_default_providers(registry: CapabilityRegistry) -> None:
-    """Credential-gate integration registrations from ssot_config (#11524).
+    """Credential-gate integration registrations from the vault seam (#11524, #15276).
 
     Mirrors ``agent_loop.search.registry``: import lazily, skip silently when
-    credentials are absent.
+    credentials are absent. Slack/Discord bot tokens now route through
+    ``resolve_provider_key`` (env wins; else System vault) -- the third
+    ``CredentialGatedRegistry`` sibling named in
+    ``autobot_shared/credential_gated_registry.py``'s own docstring, and the
+    only one of the three never migrated to the seam until now.
     """
     try:
         from autobot_shared.ssot_config import config as _cfg
@@ -133,10 +137,11 @@ def _populate_default_providers(registry: CapabilityRegistry) -> None:
 
     from integrations.communication_integration import DiscordIntegration, SlackIntegration
     from integrations.messaging_adapters import DiscordMessagingAdapter, SlackMessagingAdapter
+    from services.provider_key_vault import resolve_provider_key
 
-    slack_token = getattr(_cfg, "slack_bot_token", "") or ""
+    slack_token = resolve_provider_key("SLACK_BOT_TOKEN", getattr(_cfg, "slack_bot_token", "") or "")
     _register_messaging_if_token(registry, "slack", slack_token, SlackIntegration, SlackMessagingAdapter)
-    discord_token = getattr(_cfg, "discord_bot_token", "") or ""
+    discord_token = resolve_provider_key("DISCORD_BOT_TOKEN", getattr(_cfg, "discord_bot_token", "") or "")
     _register_messaging_if_token(registry, "discord", discord_token, DiscordIntegration, DiscordMessagingAdapter)
 
     try:
