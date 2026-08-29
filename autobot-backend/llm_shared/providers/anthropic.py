@@ -93,6 +93,7 @@ from constants.model_constants import (
 )
 from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
+from services.provider_key_vault import resolve_provider_key
 
 from ..base_provider import BaseProvider
 from .cache_utils import sorted_for_cache
@@ -309,7 +310,9 @@ class AnthropicProvider(BaseProvider):
         """Resolve API key from settings or environment."""
         if self._api_key:
             return self._api_key
-        self._api_key = self._get_setting("api_key") or config.anthropic_api_key
+        self._api_key = self._get_setting("api_key") or resolve_provider_key(
+            "ANTHROPIC_API_KEY", config.anthropic_api_key
+        )
         return self._api_key
 
     def _ensure_client(self):

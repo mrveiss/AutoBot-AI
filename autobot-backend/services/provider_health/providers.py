@@ -15,6 +15,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.ssot_config import get_ollama_url
 from constants.model_constants import ANTHROPIC_CLAUDE3_HAIKU_DATED
+from services.provider_key_vault import resolve_provider_key
 
 from .base import BaseProviderHealth, ProviderHealthResult, ProviderStatus
 
@@ -106,7 +107,7 @@ class OpenAIHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize OpenAI health checker with API key configuration."""
         super().__init__("openai")
-        self.api_key = ssot_config.openai_api_key
+        self.api_key = resolve_provider_key("OPENAI_API_KEY", ssot_config.openai_api_key)
         # Use env var for base URL, fallback to standard OpenAI API
         self.base_url = ssot_config.openai_api_base_url
 
@@ -205,7 +206,7 @@ class AnthropicHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize Anthropic health checker with API key configuration."""
         super().__init__("anthropic")
-        self.api_key = ssot_config.anthropic_api_key
+        self.api_key = resolve_provider_key("ANTHROPIC_API_KEY", ssot_config.anthropic_api_key)
         # Use env var for base URL, fallback to standard Anthropic API
         self.base_url = ssot_config.anthropic_api_base_url
 
@@ -307,7 +308,7 @@ class GoogleHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize Google health checker with API key from environment."""
         super().__init__("google")
-        self.api_key = ssot_config.google_api_key
+        self.api_key = resolve_provider_key("GOOGLE_API_KEY", ssot_config.google_api_key)
         self.base_url = "https://generativelanguage.googleapis.com/v1"
 
     def _build_google_result(self, response_status: int, data: dict, response_time: float) -> ProviderHealthResult:

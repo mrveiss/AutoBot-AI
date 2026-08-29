@@ -97,16 +97,47 @@ SEARCH_PROVIDER_KEY_NAMES: frozenset[str] = frozenset(
     }
 )
 
+#: Third-party/service credential names outside the LLM and web-search
+#: domains (#15276, tail of the #15267/#15268 sweep): the messaging bot
+#: tokens ``integrations.capability_registry`` gates its Slack/Discord
+#: adapters on -- the third ``CredentialGatedRegistry`` sibling named in
+#: ``autobot_shared/credential_gated_registry.py``'s own docstring, never
+#: migrated to this seam at all -- the Google/VirusTotal/URLVoid health and
+#: threat-intel probe keys ``services.provider_health.providers`` and
+#: ``security.threat_intelligence`` read directly, and the outbound SMTP
+#: password ``services.notification_service`` reads directly. SLACK_BOT_TOKEN
+#: has a second, independent reader, ``agent_loop.slack_hook`` (the Slack
+#: notification bot itself, distinct from the capability registry's
+#: messaging adapter) -- both route through this same name.
+SERVICE_CREDENTIAL_KEY_NAMES: frozenset[str] = frozenset(
+    {
+        "SLACK_BOT_TOKEN",
+        "DISCORD_BOT_TOKEN",
+        "GOOGLE_API_KEY",
+        "VIRUSTOTAL_API_KEY",
+        "URLVOID_API_KEY",
+        "AUTOBOT_SMTP_PASSWORD",
+    }
+)
+
 #: The full set of names eligible for capture-time mirroring and startup
 #: hydration -- provider-agnostic per #15267's suggestion, since this module
 #: is no longer LLM-only once search joins it.
-VAULT_RESOLVED_CREDENTIAL_NAMES: frozenset[str] = LLM_PROVIDER_KEY_NAMES | SEARCH_PROVIDER_KEY_NAMES
+VAULT_RESOLVED_CREDENTIAL_NAMES: frozenset[str] = (
+    LLM_PROVIDER_KEY_NAMES | SEARCH_PROVIDER_KEY_NAMES | SERVICE_CREDENTIAL_KEY_NAMES
+)
 
 #: Which module resolves each name -- the ``secret_dependencies`` edge
 #: (#10088 Task 8.2) recorded during hydration below.
 _CREDENTIAL_CONSUMERS: dict[str, str] = {
     **{name: "llm_shared.provider_registry" for name in LLM_PROVIDER_KEY_NAMES},
     **{name: "agent_loop.search.registry" for name in SEARCH_PROVIDER_KEY_NAMES},
+    "SLACK_BOT_TOKEN": "integrations.capability_registry",
+    "DISCORD_BOT_TOKEN": "integrations.capability_registry",
+    "GOOGLE_API_KEY": "services.provider_health.providers",
+    "VIRUSTOTAL_API_KEY": "security.threat_intelligence",
+    "URLVOID_API_KEY": "security.threat_intelligence",
+    "AUTOBOT_SMTP_PASSWORD": "services.notification_service",
 }
 
 _SYSTEM_VAULT = VaultRef(VaultKind.SYSTEM)

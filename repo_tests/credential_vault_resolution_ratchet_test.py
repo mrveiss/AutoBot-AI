@@ -52,7 +52,7 @@ from repo_tests.credential_vault_resolution_allowlist import ALLOWLIST, _AUTH_BO
 #: adding a new, correctly TRACKED_GAP-marked entry in the same change, and lower it
 #: whenever a TRACKED_GAP entry is fixed and removed -- never leave it stale in
 #: either direction (#15278).
-TRACKED_GAP_CEILING = 29
+TRACKED_GAP_CEILING = 0
 
 _TRACKED_GAP_MARKER_RE = re.compile(rf"^{re.escape(_TRACKED)} #(\d+):\s+\S")
 
@@ -130,11 +130,16 @@ def test_an_added_tracked_gap_entry_is_rejected() -> None:
 
 
 def test_a_removed_tracked_gap_entry_with_a_stale_ceiling_is_rejected() -> None:
-    """Mutation: under. Paying down debt without lowering the ceiling must fail."""
-    mutated = dict(ALLOWLIST)
-    first_tracked_key = next(key for key, reason in ALLOWLIST.items() if reason.startswith(_TRACKED))
-    del mutated[first_tracked_key]
-    verdict = _tracked_gap_verdict(_tracked_gap_count(mutated), TRACKED_GAP_CEILING)
+    """Mutation: under. Paying down debt without lowering the ceiling must fail.
+
+    Built against a synthetically stale ceiling (one above the real,
+    recorded value) rather than by deleting a real ALLOWLIST entry: #15276
+    migrated every TRACKED_GAP site named in it, so the live class is empty
+    today, and this scenario -- "the ceiling wasn't lowered to match a
+    removal" -- must stay provable at any live count, including zero.
+    """
+    stale_ceiling = TRACKED_GAP_CEILING + 1
+    verdict = _tracked_gap_verdict(_tracked_gap_count(ALLOWLIST), stale_ceiling)
     assert verdict is not None and "under its recorded ceiling" in verdict, verdict
 
 

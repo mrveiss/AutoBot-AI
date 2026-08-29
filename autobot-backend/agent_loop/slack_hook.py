@@ -22,6 +22,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from services.provider_key_vault import resolve_provider_key
 
 logger = get_logger(__name__)
 
@@ -185,7 +186,7 @@ def get_slack_hook() -> Any:
     if _hook is not None:
         return _hook
 
-    token = config.slack_bot_token.strip()
+    token = resolve_provider_key("SLACK_BOT_TOKEN", config.slack_bot_token).strip()
     if not token:
         logger.debug("SLACK_BOT_TOKEN not set — Slack notifications disabled")
         _hook = _NullSlackHook()

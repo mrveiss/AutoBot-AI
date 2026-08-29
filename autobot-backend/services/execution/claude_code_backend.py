@@ -66,6 +66,7 @@ from services.execution.base_backend import (
     ExecutionTask,
 )
 from services.execution.env_sanitizer import safe_task_env
+from services.provider_key_vault import resolve_provider_key
 
 logger = get_logger(__name__)
 
@@ -314,7 +315,7 @@ class ClaudeCodeBackend(ExecutionBackend):
     def _resolve_api_key(self) -> Optional[str]:
         if self._api_key:
             return self._api_key
-        self._api_key = config.anthropic_api_key or None
+        self._api_key = resolve_provider_key("ANTHROPIC_API_KEY", config.anthropic_api_key) or None
         return self._api_key
 
     def _feature_flag_enabled(self) -> bool:

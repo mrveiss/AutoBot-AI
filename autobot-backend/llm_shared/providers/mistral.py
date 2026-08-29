@@ -38,6 +38,7 @@ from constants.model_constants import (
 )
 from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
+from services.provider_key_vault import resolve_provider_key
 
 from ..base_provider import BaseProvider
 
@@ -79,7 +80,7 @@ class MistralProvider(BaseProvider):
         """Resolve API key from settings or environment."""
         if self._api_key:
             return self._api_key
-        self._api_key = self._get_setting("api_key") or config.mistral_api_key
+        self._api_key = self._get_setting("api_key") or resolve_provider_key("MISTRAL_API_KEY", config.mistral_api_key)
         return self._api_key
 
     def _resolve_base_url(self) -> str:

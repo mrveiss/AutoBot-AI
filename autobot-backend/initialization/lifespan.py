@@ -1477,6 +1477,7 @@ async def _init_llm_adapters() -> None:
             OpenAIAdapter,
         )
         from llm_shared.adapters.registry import get_adapter_registry
+        from services.provider_key_vault import resolve_provider_key
 
         registry = get_adapter_registry()
 
@@ -1490,16 +1491,16 @@ async def _init_llm_adapters() -> None:
         except Exception as exc:
             logger.debug("Ollama adapter registration skipped: %s", exc)
 
-        # OpenAI — registered when API key is set
-        if getattr(_cfg, "openai_api_key", None):
+        # OpenAI — registered when API key is set (env wins; else vault, #15276)
+        if resolve_provider_key("OPENAI_API_KEY", getattr(_cfg, "openai_api_key", "") or ""):
             registry.register(OpenAIAdapter())
 
-        # Anthropic — registered when API key is set
-        if getattr(_cfg, "anthropic_api_key", None):
+        # Anthropic — registered when API key is set (env wins; else vault, #15276)
+        if resolve_provider_key("ANTHROPIC_API_KEY", getattr(_cfg, "anthropic_api_key", "") or ""):
             registry.register(AnthropicAdapter())
 
-        # Groq — registered when API key is set
-        if getattr(_cfg, "groq_api_key", None):
+        # Groq — registered when API key is set (env wins; else vault, #15276)
+        if resolve_provider_key("GROQ_API_KEY", getattr(_cfg, "groq_api_key", "") or ""):
             registry.register(GroqAdapter())
 
         count = len(registry.list_adapters())
