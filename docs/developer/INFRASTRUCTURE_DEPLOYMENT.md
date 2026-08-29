@@ -320,9 +320,9 @@ redis-cli -h <database-ip> ping
 # Should return: PONG
 
 # Test all VMs from main machine
-for ip in 20 21 22 23 24 25; do
-    echo "Testing 172.16.168.$ip..."
-    ping -c 1 172.16.168.$ip
+for host in <backend-ip> <frontend-ip> <npu-ip> <database-ip> <aiml-ip> <browser-ip>; do
+    echo "Testing $host..."
+    ping -c 1 $host
 done
 ```
 
@@ -673,9 +673,9 @@ ssh autobot@<frontend-ip> "sudo systemctl restart autobot-frontend"
 
 ```bash
 # Check all VMs are reachable
-for ip in 20 21 22 23 24 25; do
-    echo "Checking 172.16.168.$ip..."
-    ping -c 1 172.16.168.$ip && echo "UP" || echo "DOWN"
+for host in <backend-ip> <frontend-ip> <npu-ip> <database-ip> <aiml-ip> <browser-ip>; do
+    echo "Checking $host..."
+    ping -c 1 $host && echo "UP" || echo "DOWN"
 done
 
 # Check services on each VM

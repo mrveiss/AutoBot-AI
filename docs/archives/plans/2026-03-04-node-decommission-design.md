@@ -197,8 +197,8 @@ Opened from NodeCard action menu -> "Decommission".
 
 ```
 +---------------------------------------------+
-|  ! Decommission Node: 04-NPU-Worker        |
-|  IP: <npu-ip>                          |
+|  ! Decommission Node: 04-NPU-Worker         |
+|  IP: <npu-ip>                               |
 |                                             |
 |  This will permanently remove all AutoBot   |
 |  software and data from this node.          |

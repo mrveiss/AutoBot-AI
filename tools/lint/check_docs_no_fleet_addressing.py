@@ -21,8 +21,11 @@ narrower still (TypeScript literals, Python ``os.getenv`` fallbacks). Documentat
 no gate at all, which is exactly why the exposure aged rather than being caught.
 
 THE PATTERN IS NOT COPIED. This module holds no address literal of its own; it parses
-the ``HV_VM_IP`` assignment out of ``scripts/lib/hardcoded-value-rules.sh`` and reuses
-it. One definition of "a fleet address" serves code and documentation, so a renumbered
+the ``HV_VM_IP`` assignment out of ``scripts/lib/hardcoded-value-rules.sh``, then
+truncates it at its final escaped dot to obtain the bare three-octet prefix — a strict
+superset of the original, because documents write the subnet with a placeholder or
+shell-variable fourth octet far more often than with a full quad (see
+``_drop_last_octet``). One definition of "a fleet address" serves code and documentation, so a renumbered
 fleet updates both guards at once — and a second, drifting copy of the range cannot come
 into existence here. A missing or unparseable source aborts loudly, the same doctrine
 that file applies to its own dependencies: an unread pattern and an empty one are
@@ -109,8 +112,35 @@ def repo_root() -> pathlib.Path:
     return pathlib.Path(__file__).resolve().parents[2]
 
 
+def _drop_last_octet(pattern: str) -> str:
+    """Truncate a dotted-quad regex at its last escaped dot, yielding the prefix.
+
+    ``HV_VM_IP`` ends in a numeric fourth-octet class, so it cannot see the forms a
+    document actually writes when it means "some node on this subnet": a placeholder
+    fourth octet (``.x``, ``.XX``), a shell variable (``.$vm``), or the subnet itself.
+    #3315 treated the subnet form as disclosure and redacted it separately, so by the
+    convention this guard follows those are in scope — and a leak the guard cannot see
+    is worse than no guard, because the clean report is believed.
+
+    This derives the prefix from the canonical pattern rather than restating it, so
+    there is still exactly ONE definition of the fleet's addressing in the repository.
+    Truncation is structural (cut at the final ``\\.``), not a rewritten copy.
+    """
+    marker = pattern.rfind("\\.")
+    if marker <= 0:
+        raise RuntimeError(
+            f"cannot derive a subnet prefix from {RULES_REL}'s pattern — it has no dotted "
+            "structure to truncate, so the widened check would silently narrow"
+        )
+    return pattern[:marker]
+
+
 def fleet_address_pattern(base: pathlib.Path | None = None) -> re.Pattern[str]:
-    """The canonical fleet-address regex, read from the shared hardcoded-value rules.
+    """The canonical fleet-address regex, widened to the bare subnet prefix.
+
+    Matches the three-octet prefix regardless of what follows the third dot, which
+    makes it a strict superset of ``HV_VM_IP``: every full address it caught is still
+    caught, and the placeholder-octet, shell-variable and subnet forms are caught too.
 
     Raises ``RuntimeError`` rather than falling back: a guard that cannot load its
     pattern must fail, not report a comfortable zero.
@@ -124,7 +154,7 @@ def fleet_address_pattern(base: pathlib.Path | None = None) -> re.Pattern[str]:
     match = _HV_VM_IP_ASSIGNMENT.search(text)
     if not match:
         raise RuntimeError(f"no HV_VM_IP assignment found in {RULES_REL} — the guard has no pattern to apply")
-    return re.compile(match.group("pattern"))
+    return re.compile(_drop_last_octet(match.group("pattern")))
 
 
 def discover_markdown_files(base: pathlib.Path | None = None) -> list[pathlib.Path]:

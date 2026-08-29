@@ -323,7 +323,7 @@ SLM GUI: Settings → Monitoring → Location
 │    - Proxied through SLM, no separate login             │
 │                                                          │
 │  ○ Remote host                                          │
-│    - Host: [172.16.168.XX]                              │
+│    - Host: [<node-ip>]                                  │
 │    - Grafana credentials: [user/pass]                   │
 │    - Deploy monitoring role via Ansible                 │
 │                                                          │
@@ -348,7 +348,7 @@ SLM GUI: Settings → Monitoring → Location
 ├── SLM Backend + UI
 └── Points to external monitoring
 
-172.16.168.XX (Monitoring)
+<node-ip> (Monitoring)
 ├── Grafana (port 3000, own credentials)
 ├── Prometheus (port 9090)
 └── Deployed via SLM Ansible "monitoring" role
@@ -366,7 +366,7 @@ Both directions automated via Ansible using the same `monitoring` role.
 ```python
 # SLM settings table
 monitoring_mode: "local" | "remote"
-monitoring_host: "172.16.168.XX"
+monitoring_host: "<node-ip>"
 grafana_url: "https://..."
 grafana_credentials: (encrypted)
 prometheus_url: "http://..."

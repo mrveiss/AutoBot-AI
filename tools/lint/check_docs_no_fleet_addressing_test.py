@@ -28,23 +28,36 @@ from tools.lint import check_docs_no_fleet_addressing as guard
 RULES_BODY = "HV_VM_IP='{pattern}'\n"
 
 
-def _canonical_pattern() -> str:
-    """The fleet-address regex as the repository defines it, read once."""
-    return guard.fleet_address_pattern().pattern
+def _raw_hv_vm_ip() -> str:
+    """The ``HV_VM_IP`` assignment exactly as the shared rule set writes it."""
+    text = (guard.repo_root() / guard.RULES_REL).read_text(encoding="utf-8")
+    match = guard._HV_VM_IP_ASSIGNMENT.search(text)
+    assert match, "the shared rule set no longer carries a parseable HV_VM_IP"
+    return match.group("pattern")
+
+
+def _prefix() -> str:
+    """The fleet's three-octet prefix as a literal, derived from the guard's pattern."""
+    return guard.fleet_address_pattern().pattern.replace("\\", "")
 
 
 def _sample_address() -> str:
-    """A literal that the canonical pattern matches, built from the pattern itself."""
-    literal = re.sub(r"\[0-9\]\+$", "17", _canonical_pattern().replace("\\", ""))
+    """A full dotted-quad the guard must catch, built from the derived prefix."""
+    literal = f"{_prefix()}.17"
     assert guard.fleet_address_pattern().search(literal), literal
     return literal
+
+
+def _sample_shape(fourth_octet: str) -> str:
+    """The prefix with a NON-numeric fourth octet — the shape ``HV_VM_IP`` cannot see."""
+    return f"{_prefix()}.{fourth_octet}"
 
 
 def _base(tmp_path: pathlib.Path, docs: dict[str, str]) -> pathlib.Path:
     """A miniature repository: the canonical rule set plus the given documents."""
     rules = tmp_path / guard.RULES_REL
     rules.parent.mkdir(parents=True, exist_ok=True)
-    rules.write_text(RULES_BODY.format(pattern=_canonical_pattern()), encoding="utf-8")
+    rules.write_text(RULES_BODY.format(pattern=_raw_hv_vm_ip()), encoding="utf-8")
     for rel, body in docs.items():
         path = tmp_path / guard.DOCS_DIR / rel
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -74,6 +87,49 @@ def test_flags_a_literal_address_inside_a_fenced_code_block():
     body = f"# Doc\n\n```bash\nssh autobot@{_sample_address()}\n```\n"
     findings, _ = _scan(body)
     assert [f.lineno for f in findings] == [4]
+
+
+# ── the non-numeric fourth octet (#15208 review) ─────────────────────────────
+#
+# HV_VM_IP requires a digit after the third dot, so a guard using it verbatim reports
+# clean over a document that writes the prefix with a placeholder or variable octet.
+# 15 documents carried exactly that and were invisible to the first version of this
+# check. #3315 redacted the subnet form separately, so these are in scope by the
+# convention this guard follows. Each shape is pinned here rather than assumed.
+
+
+@pytest.mark.parametrize("octet", ["x", "X", "XX", "$vm", "$ip", "{21..25}", "0/24"])
+def test_flags_a_non_numeric_fourth_octet(octet):
+    findings, problems = _scan(f"# Doc\n\nReachable on {_sample_shape(octet)} only.\n")
+    assert [f.lineno for f in findings] == [3], octet
+    assert problems == []
+
+
+def test_flags_the_prefix_inside_a_shell_loop_template():
+    body = f"# Doc\n\n```bash\nfor vm in 21 22; do\n  ping -c 1 {_sample_shape('$vm')}\ndone\n```\n"
+    findings, _ = _scan(body)
+    assert [f.lineno for f in findings] == [5]
+
+
+def test_widened_pattern_still_catches_every_full_address():
+    """The derived prefix must be a strict SUPERSET, never a narrowing."""
+    pattern = guard.fleet_address_pattern()
+    for octet in ("19", "20", "21", "22", "23", "24", "25", "0"):
+        assert pattern.search(f"{_prefix()}.{octet}"), octet
+
+
+def test_derived_prefix_is_the_canonical_pattern_minus_its_last_octet():
+    """Pins the single-definition property: derived by truncation, never restated."""
+    raw = _raw_hv_vm_ip()
+    derived = guard._drop_last_octet(raw)
+    assert raw.startswith(derived)
+    assert derived.count(chr(92) + ".") == raw.count(chr(92) + ".") - 1
+    assert derived not in ("", raw)
+
+
+def test_drop_last_octet_refuses_a_pattern_with_no_dotted_structure():
+    with pytest.raises(RuntimeError, match="no dotted structure"):
+        guard._drop_last_octet("[0-9]+")
 
 
 def test_a_role_placeholder_is_not_a_finding():
@@ -141,7 +197,7 @@ def test_stranded_file_marker_is_a_finding():
 
 def test_pattern_comes_from_the_canonical_rule_set(tmp_path):
     base = _base(tmp_path, {})
-    assert guard.fleet_address_pattern(base).pattern == _canonical_pattern()
+    assert guard.fleet_address_pattern(base).pattern == guard._drop_last_octet(_raw_hv_vm_ip())
 
 
 def test_missing_rule_set_aborts_rather_than_reporting_clean(tmp_path):
