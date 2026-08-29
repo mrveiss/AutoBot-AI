@@ -71,7 +71,7 @@ same PR) and ``initialization/lifespan.py`` (an existing, allowlisted gap).
 from __future__ import annotations
 
 import re
-import subprocess  # nosec B404 - fixed argv (git ls-files), no shell, no caller input
+import subprocess  # nosec B404  # fixed argv (git ls-files), no shell, no caller input
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
