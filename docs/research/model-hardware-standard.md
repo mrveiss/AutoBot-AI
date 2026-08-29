@@ -153,4 +153,179 @@ hardware errors — and those patterns can be borrowed without waiting for the s
 
 ---
 
-*Phase 2 (AutoBot comparison) not run — awaiting approval.*
+# AutoBot Comparison: MHS → AutoBot
+
+**Scope note.** MHS governs *physical instruments*; AutoBot has no physical-device layer.
+Grep across the tree for a serial/USB/GPIO/instrument path returns nothing — AutoBot's
+"hardware" is compute accelerators (`autobot-backend/llm_shared/hardware.py`,
+`autobot-npu-worker/`, OpenVINO NPU/GPU/CPU selection), a VNC-driven desktop
+(`autobot-backend/api/vnc_*.py`), paired mobile devices
+(`autobot-backend/models/mobile_device.py`), and browser/TTS workers. Adopting MHS itself
+is out of scope. What transfers is its **interface doctrine**, applied to the actuation
+surfaces AutoBot already drives.
+
+## What We Can Adopt
+
+### 1. Make declared limits actually bind — finish `MCPBridgeManifest.resource_limits`
+
+- **Already-exists audit.** Declared at
+  [`services/mcp_bridge_manifest.py:20`](../../autobot-backend/services/mcp_bridge_manifest.py#L20);
+  echoed to the client at
+  [`api/mcp_registry.py:552`](../../autobot-backend/api/mcp_registry.py#L552);
+  shape-asserted at `tests/unit/api/test_mcp_plugin_discovery.py:36-45`. A tree-wide grep
+  for `resource_limits` finds **no enforcement consumer for the manifest field** — the
+  limits that actually bind come from a separate, env-var authority,
+  [`services/mcp_isolation_config.py`](../../autobot-backend/services/mcp_isolation_config.py)
+  `BridgePolicy` (`MCP_BRIDGE_CPU_LIMIT` / `MEM_LIMIT_MB` / `NOFILE_LIMIT`). A bridge can
+  therefore *declare* a ceiling that nothing checks.
+- **MHS parallel.** Its central safety property is that device-level limits live in the
+  driver and the agent cannot override them (S2). Declared-and-unenforced is the failure
+  mode that property exists to prevent.
+- **Visible benefit:** a bridge's advertised ceiling becomes a real one; one answer to
+  "what is this bridge allowed to consume?".
+- **Hidden cost:** two limit authorities now exist and must be reconciled — declared
+  manifest vs. env policy. Pick one as canonical or the drift returns under a new name.
+- **Verdict: adopt** — and note this is *unwired existing work*, so it is a wire-in, not a
+  new feature. **Effort: moderate.**
+
+### 2. Capability descriptors that carry bounds and risk, not just names
+
+- **Already-exists audit.** Four capability surfaces were read; none carries operating
+  limits:
+  - `ToolMetadata` — [`autobot_shared/tool_sdk/base.py:73-94`](../../autobot_shared/tool_sdk/base.py#L73-L94):
+    `name`, `description`, `version`, `permission`, `tags`. No bounds, no risk grade.
+  - `SelfCapabilitiesResponse` — [`api/schemas_agent.py:902-912`](../../autobot-backend/api/schemas_agent.py#L902-L912),
+    served by [`api/self_capabilities.py`](../../autobot-backend/api/self_capabilities.py):
+    a live route inventory with counts and tag groupings — no constraints, no danger grade.
+  - `MCPBridgeManifest` — `features: List[str]`, a name list.
+  - `Capability` / `TrustTier` — `autobot_shared/plugin_sdk/capabilities.py` (re-exported by
+    [`plugin_sdk/capabilities.py`](../../autobot-backend/plugin_sdk/capabilities.py)):
+    a permission axis, not a physical/operational one.
+  - Risk vocabulary **does** exist — `CommandRisk` at
+    [`autobot_shared/status_enums.py:183`](../../autobot_shared/status_enums.py#L183)
+    (SAFE/MODERATE/HIGH/CRITICAL/DANGEROUS/FORBIDDEN, with `.blocks`) — but it grades
+    *shell command strings*, not tools, routes or bridges.
+- **Missing delta only:** no tool, endpoint or bridge tells the model its own operating
+  bounds or risk grade. The model discovers *what exists*, never *how far it may go*.
+- **Visible benefit:** the agent plans against declared limits instead of discovering them
+  by tripping a guard — MHS's "reference file of capabilities, adjustable parameters and
+  safety limits" (S2).
+- **Hidden cost:** every descriptor becomes a thing that can go stale and lie. A wrong
+  declared bound is worse than none, because the agent trusts it.
+- **Verdict: adopt-with-conditions** — extend `ToolMetadata` with an existing risk grade
+  (`CommandRisk`) plus optional bounds; **do not mint a new vocabulary** (core rules 2 and
+  3). Condition: any declared bound must be enforced at the same call site that publishes
+  it, or it repeats gap #1. **Effort: moderate.**
+
+### 3. Structured failure that reaches the model
+
+- **Already-exists audit.** `ErrorCategory` —
+  [`autobot-backend/utils/error_boundaries/types.py:68-91`](../../autobot-backend/utils/error_boundaries/types.py#L68-L91)
+  — has 9 system categories and 9 HTTP-aligned ones; **none is physical/device**.
+  `RecoveryStrategy` (same file, `:94-102`) enumerates RETRY / FALLBACK /
+  GRACEFUL_DEGRADATION / USER_INTERVENTION / SYSTEM_RESTART / IGNORE. But `classify_error`
+  is consumed in exactly one place — [`agent_loop/loop.py:1916`](../../autobot-backend/agent_loop/loop.py#L1916)
+  — to spend a per-severity **retry budget**. Meanwhile the model's own view of a failure
+  is `ToolResult.error`, a bare string
+  ([`tool_sdk/base.py:116`](../../autobot_shared/tool_sdk/base.py#L116)).
+- **Missing delta:** AutoBot classifies errors *for the loop* and hands the *model* prose.
+  MHS's drivers hand the agent structured error information so it can choose recovery or a
+  safe stop (S2).
+- **Visible benefit:** the agent distinguishes "retry is pointless" from "retry now" —
+  directly the failure MHS documents, where Claude retried an operation identically because
+  it could not tell that air bubbles, not timing, were the cause (S3).
+- **Hidden cost:** a category on the wire is a contract; changing it later breaks prompts
+  and any downstream consumer.
+- **Verdict: adopt** the *structured-error-reaches-the-model* half (add `category` and
+  `recovery` to `ToolResult`, populated from the existing `classify_error`). A `DEVICE`
+  category is **rejected for now** — no physical device layer exists to raise it.
+  **Effort: trivial to moderate.**
+
+### 4. States vs. procedures for the desktop actuation surface
+
+- **Already-exists audit.** VNC control is verb-only:
+  [`api/vnc_humanization.py`](../../autobot-backend/api/vnc_humanization.py) provides
+  `humanize_click_position`, variable typing speed and curved movement — actions, with no
+  companion contract describing the desktop's *current declared state*. The agent reads
+  state by looking at pixels (`components/vision/ScreenCaptureViewer`, screen capture) —
+  inference, not declaration.
+- **Missing delta:** no structured, readable state for a surface the agent actuates. MHS
+  splits every device into *states* ("plate at position 3") and *procedures* ("aspirate"),
+  which is what lets an agent sequence dependent operations without per-step prompting (S2).
+- **Visible benefit:** dependent action sequencing and verification without a screenshot
+  round-trip per step.
+- **Hidden cost: high, and it is the deciding factor.** A declared state contract needs a
+  producer that stays truthful under every failure mode; a stale desktop state is a
+  confidently wrong agent driving a real screen. Pixels are slow but self-correcting.
+- **Verdict: adopt-with-conditions, low priority** — worth it only for a bounded,
+  reliably-observable subset (focused window, session lifecycle, connection state), never
+  as a general "what is on screen" contract. **Effort: significant.**
+
+## What We Already Do Better
+
+| Area | AutoBot | Evidence | vs. MHS |
+|---|---|---|---|
+| Discovery that degrades safely | Credential-gated registries: absent capability returns an empty list, never raises | [`autobot_shared/credential_gated_registry.py`](../../autobot_shared/credential_gated_registry.py), [`integrations/capability_registry.py`](../../autobot-backend/integrations/capability_registry.py), `llm_shared/provider_registry.py`, `agent_loop/search/registry.py` | MHS publishes discovery; nothing on graceful degradation |
+| Registry honesty | A failed fetch never reads as an empty fleet — `FleetSnapshot.source` labels the fallback | [`services/fleet_registry.py:14-27`](../../autobot-backend/services/fleet_registry.py#L14-L27) | Not a property MHS's material claims |
+| Risk vocabulary | `CommandRisk` reconciles two forks, keeps `DANGEROUS` and `FORBIDDEN` as distinct *reasons* for one verdict, and forces `.blocks` over identity comparison | [`status_enums.py:183-208`](../../autobot_shared/status_enums.py#L183-L208) | MHS's published safety story is "limits the agent cannot override" — one axis |
+| Approval as a state machine | Explicit legal transitions, WebSocket notification, comments, revision-request path | [`services/approval_gate_service.py:27-37`](../../autobot-backend/services/approval_gate_service.py#L27-L37), wired via [`api/approval_gates.py:33`](../../autobot-backend/api/approval_gates.py#L33) and `chat_workflow/compose_tool_handler.py:88` | MHS has "human approval for high-risk decisions" with no published lifecycle |
+| Per-component isolation | Bridges run inprocess / subprocess / container with RLIMIT_CPU, RLIMIT_AS, RLIMIT_NOFILE and a restart ceiling | [`services/mcp_isolation_config.py`](../../autobot-backend/services/mcp_isolation_config.py) | MHS publishes nothing on sandboxing the driver itself |
+| Capability revocation timing | Device capability decisions are deliberately **uncached** so a revocation takes effect on the next handshake | [`services/device_capabilities.py:11-17`](../../autobot-backend/services/device_capabilities.py#L11-L17) | Not addressed in MHS material |
+
+## Gaps & Opportunities
+
+Prioritised by impact to AutoBot.
+
+1. **The approval-stall answer is built and unwired — highest priority, and it is a
+   discovered defect, not an MHS import.** MHS documents its sharpest operational cost:
+   overnight human-confirmation requests idle a run (S3). AutoBot has the fix —
+   [`services/remote_approval.py`](../../autobot-backend/services/remote_approval.py),
+   [`services/remote_approval_routing.py`](../../autobot-backend/services/remote_approval_routing.py)
+   and [`services/slack_approval_integration.py`](../../autobot-backend/services/slack_approval_integration.py)
+   — but a tree-wide grep finds **only test callers and docstring mentions** for all three;
+   no production import path reaches them. An approval today can only be answered by
+   someone at the screen. *Per "cleanup means finishing the work": wire it in.*
+2. **Declared limits with no enforcement** (`MCPBridgeManifest.resource_limits`) — adopt
+   item 1 above. Small, contained, closes a real honesty gap in the registry response.
+3. **Structured failure to the model** — adopt item 3. Cheapest change with the most direct
+   effect on agent recovery quality.
+4. **Closed-loop parameter search is absent, and it is MHS's strongest published result.**
+   QuEra PID tuning: 15.7 mV → 1.55 mV over 363 experiments; laser relock 58 % → 99.3 %
+   over 700 trials (S2). This is an agent iterating against a *measurable objective*, and
+   nothing about it is physical. AutoBot's nearest equivalent is workflow retry with
+   budgets ([`services/workflow_automation/safety_limits.py`](../../autobot-backend/services/workflow_automation/safety_limits.py):
+   step timeouts, token and cost ceilings) — retry, not search. The pattern ports directly
+   to LLM parameter tuning, NPU dispatch tuning
+   ([`autobot-npu-worker/workers/openvino_dispatch.py`](../../autobot-npu-worker/workers/openvino_dispatch.py))
+   and hardware-backend selection ([`llm_shared/hardware.py`](../../autobot-backend/llm_shared/hardware.py),
+   whose priority list is static). *Highest-upside idea in the source; entirely
+   software-implementable.*
+5. **No physical device layer** — correctly so. MHS's device categories (microscopes,
+   centrifuges, pipette robots, spectrometers) have no counterpart in AutoBot and no
+   demand. **Do not adopt.** Revisit only if AutoBot ever drives instrumented hardware.
+6. **Natural-language capability tags as durable tacit knowledge** — MHS's genuine novelty
+   is storing "what this machine is and must not do" next to the control surface, in
+   language, so the model reads it. AutoBot's analogue would be operational constraints on
+   fleet nodes and workers; today that knowledge lives in docs and operator heads. Lower
+   priority than 1–4, but it is the idea most worth stealing conceptually.
+
+## Specific Code/Files Affected
+
+| File | Change |
+|---|---|
+| [`autobot-backend/services/mcp_bridge_manifest.py`](../../autobot-backend/services/mcp_bridge_manifest.py) + [`services/mcp_isolation_config.py`](../../autobot-backend/services/mcp_isolation_config.py) | Reconcile the two limit authorities; make the declared manifest ceiling the input to `BridgePolicy`, or drop the field |
+| [`autobot_shared/tool_sdk/base.py`](../../autobot_shared/tool_sdk/base.py) | `ToolMetadata`: add a `CommandRisk` grade + optional declared bounds. `ToolResult`: add `category` / `recovery`, filled from `classify_error` |
+| [`autobot_shared/tool_sdk/registry.py`](../../autobot_shared/tool_sdk/registry.py) | Surface the new metadata through `to_openapi_spec()` |
+| [`autobot-backend/api/self_capabilities.py`](../../autobot-backend/api/self_capabilities.py) + [`api/schemas_agent.py`](../../autobot-backend/api/schemas_agent.py) | Carry per-route risk grade alongside the endpoint inventory |
+| [`autobot-backend/services/remote_approval*.py`](../../autobot-backend/services/), [`services/slack_approval_integration.py`](../../autobot-backend/services/slack_approval_integration.py) | **Wire in** — give `approval_gate_service` an out-of-band routing path so an approval reaches a human who is not at the screen |
+| [`autobot-backend/llm_shared/hardware.py`](../../autobot-backend/llm_shared/hardware.py), [`autobot-npu-worker/workers/openvino_dispatch.py`](../../autobot-npu-worker/workers/openvino_dispatch.py) | Candidate hosts for closed-loop measured tuning in place of the static priority list |
+
+## Bottom Line
+
+MHS is not adoptable — there is no spec — and its device domain is not AutoBot's. Its
+*doctrine* is worth taking: declared limits that bind, capability descriptors that state
+their own bounds, structured failure the model can act on, and closed-loop tuning against a
+measured objective. Three of those four map onto code AutoBot already has and only
+partially finished. The single most valuable finding is not an import at all: **AutoBot's
+answer to the approval-stall problem MHS documents is already written and has no production
+caller.**
