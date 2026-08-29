@@ -82,8 +82,14 @@ jobs:
         with:
           filters: .github/filters/docs-only-paths.yml
 
+      # NOT gated, deliberately (#15299). Two ungated steps below run
+      # `python3 pipeline-scripts/...` and those scripts `import yaml`; pyyaml
+      # reaches the runner only as pre-commit's own dependency, installed here —
+      # the comment on the workflow-path-filter step below says so explicitly.
+      # Gating this step made a required check die with ModuleNotFoundError on
+      # exactly the docs-only PRs this change exists to speed up. It costs 18s
+      # against the sweep's 1008s, so ungating it forfeits almost no saving.
       - name: Set up Python
-        if: steps.filter.outputs.code == 'true'
         uses: ./.github/actions/setup-python-ci
         with:
           extra-packages: pre-commit
