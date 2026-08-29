@@ -66,6 +66,45 @@ cp "$SOURCE_DIR/block-dangerous-commands.sh" "$SOURCE_DIR/git_invocation_parse.p
   "$THIS_REPO/.claude/hooks/" || { echo "FATAL: could not stage the hook"; exit 1; }
 HOOK="$THIS_REPO/.claude/hooks/block-dangerous-commands.sh"
 
+# The suite is worthless if the environment cannot exercise the guard at all.
+# Both of these are silent failures: a parser that reports nothing, or a git
+# that cannot answer where a repository is, would turn every branch-switch case
+# into an "allowed" verdict indistinguishable from a guard that was deleted.
+# Prove them, and print what was measured, before asserting anything (#15296).
+preflight() {
+  local common gitdir records
+  echo "  env: $(git --version), $(python3 -V 2>&1), bash $BASH_VERSION"
+  common=$(git -C "$THIS_REPO" rev-parse --path-format=absolute --git-common-dir 2>&1)
+  gitdir=$(git -C "$THIS_REPO" rev-parse --path-format=absolute --git-dir 2>&1)
+  echo "  sandbox common-dir: $common"
+  echo "  sandbox git-dir:    $gitdir"
+  records=$(python3 "$THIS_REPO/.claude/hooks/git_invocation_parse.py" "git checkout some-branch" | tr '\t' '|')
+  echo "  parser records for a real branch switch: [$records]"
+  if [ -z "$records" ]; then
+    echo "FATAL: the parser reports nothing for a real invocation — the suite cannot test the guard"
+    exit 1
+  fi
+  if [ "$common" != "$gitdir" ]; then
+    echo "FATAL: git does not see the sandbox as a main working tree — the suite cannot test the guard"
+    exit 1
+  fi
+}
+
+parser_says() {
+  python3 "$THIS_REPO/.claude/hooks/git_invocation_parse.py" "$1" 2>&1 |
+    tr '\t' '|' | tr '\n' ';'
+  printf ' rc=%s' "${PIPESTATUS[0]}"
+}
+
+# A verdict is an exit code AND a payload. When they disagree — a deny message
+# on stdout with a 0 exit — the guard reached its conclusion and then failed to
+# act on it, which an exit code alone cannot tell you.
+hook_says() {
+  local input
+  input=$(echo '{}' | jq --arg c "$1" '.tool_input.command=$c')
+  (cd "$THIS_REPO" && bash "$HOOK" <<<"$input") 2>&1 | tr '\n' ' ' | cut -c1-160
+}
+
 hook_exit() {
   local input
   input=$(echo '{}' | jq --arg c "$1" '.tool_input.command=$c')
@@ -81,6 +120,8 @@ expect_allow() {
     ((PASS++))
   else
     echo "  FAIL [allow] $label — expected 0, got $code"
+    echo "        parsed: [$(parser_says "$cmd")]"
+    echo "        hook said: [$(hook_says "$cmd")]"
     ((FAIL++))
   fi
 }
@@ -93,11 +134,14 @@ expect_block() {
     ((PASS++))
   else
     echo "  FAIL [block] $label — expected 2, got $code"
+    echo "        parsed: [$(parser_says "$cmd")]"
+    echo "        hook said: [$(hook_says "$cmd")]"
     ((FAIL++))
   fi
 }
 
 echo "=== block-dangerous-commands.sh test suite ==="
+preflight
 
 echo ""
 echo "--- Checkout: must allow ---"
