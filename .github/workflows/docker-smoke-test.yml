@@ -16,7 +16,35 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Gated because the build is the whole cost: on PR #15250 (one markdown file)
+  # `smoke-test` spent 373s building images and 65s starting the stack for a
+  # change that cannot reach an image (#15299). Unlike the pre-commit sweep this
+  # cannot be scoped to changed files — an image either gets built or it does
+  # not — so the required context moves to a shim on the exact complement, the
+  # pattern #14353 established for `python-suite`.
+  changes:
+    name: Detect changed paths (docker smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - uses: actions/checkout@v7
+      # Pull requests only: on `push` the base is the previous commit and on
+      # `schedule` there is no diff at all, so the filter would be meaningless.
+      # Both of those events keep running the smoke test unconditionally below.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: .github/filters/docker-paths.yml
+
   smoke-test:
+    needs: changes
+    # Fail-closed on pull requests: if `changes` errors, `needs` skips this job
+    # rather than reporting green, and the shim's complement leaves the context
+    # unreported — which blocks the pull request, the safe direction.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.docker == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 

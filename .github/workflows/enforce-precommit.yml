@@ -70,7 +70,20 @@ jobs:
           echo "✓ All required hooks (black, isort, flake8, autoflake, mypy) are configured"
 
       # #13517: shared composite action (also upgrades pip/setuptools/wheel).
+      # Step-level, not job-level: this job publishes a required status context
+      # and carries the SPDX and symlink checks, which must cover EVERY pull
+      # request including docs-only ones (see the `on:` comment above). Gating
+      # the job would re-open that gap and wedge the context. Only the repo-wide
+      # sweep below is scoped, and it is the whole cost: measured on PR #15250
+      # (one markdown file) the sweep was 1008s of the job's 1142s, while every
+      # other step finished in 0-7s (#15299).
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: filter
+        with:
+          filters: .github/filters/docs-only-paths.yml
+
       - name: Set up Python
+        if: steps.filter.outputs.code == 'true'
         uses: ./.github/actions/setup-python-ci
         with:
           extra-packages: pre-commit
@@ -80,6 +93,7 @@ jobs:
       # duplicated both.
 
       - name: Run pre-commit on all files
+        if: steps.filter.outputs.code == 'true'
         run: |
           # #14181: this used to swallow the result entirely with
           # `|| { echo "::warning::..."; exit 0; }`. The comment said the goal was
@@ -104,6 +118,7 @@ jobs:
           cat precommit-output.txt
 
       - name: Fail when a hook could not run at all (#14181)
+        if: steps.filter.outputs.code == 'true'
         run: |
           # Tolerates exactly the hooks still on check_hook_exec_bits.py's
           # _KNOWN_DORMANT list, imported rather than duplicated -- a second copy
@@ -112,6 +127,7 @@ jobs:
           python3 pipeline-scripts/check_precommit_hooks_executed.py precommit-output.txt
 
       - name: Fail when a behavioural hook reported a finding (#14878)
+        if: steps.filter.outputs.code == 'true'
         run: |
           # The third class, between the two the steps above already handle.
           #
