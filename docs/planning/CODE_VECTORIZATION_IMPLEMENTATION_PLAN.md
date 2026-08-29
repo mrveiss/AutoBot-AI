@@ -1,4 +1,6 @@
 # Code Vectorization Implementation Plan
+
+> **Freshness:** superseded — 2026-08-30. "Ready for Implementation" is stale: the code-vectorization subsystem shipped — see `autobot-backend/api/codebase_analytics/`, `code_embedding_generator.py`, `npu_semantic_search.py`, `agents/npu_code_search_agent.py`. Kept as the historical plan of record, not a pending task list.
 **Version**: 1.0
 **Date**: 2025-10-25
 **Duration**: 8 weeks

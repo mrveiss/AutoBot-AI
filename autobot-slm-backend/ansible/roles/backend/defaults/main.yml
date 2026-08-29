@@ -8,6 +8,13 @@ backend_service_account: autobot-backend  # Phase 7: migrate service to run as t
 backend_user: autobot
 backend_group: autobot
 backend_install_dir: /opt/autobot/autobot-backend
+# Canonical git checkout on the box (#3649), matching the autobot_shared and
+# monitoring role defaults. Every code_source_dir reference in this role's
+# tasks/main.yml used to repeat the default(...) fallback with this literal inline
+# instead of relying on a role default -- nine occurrences of the same literal,
+# which is exactly what pipeline-scripts/hardcoded_values_baseline.txt exists
+# to catch (#15162). Defined here once, tasks reference the bare variable.
+code_source_dir: /opt/autobot/code_source
 backend_code_dir: "{{ backend_install_dir }}"  # Actual code location (can be overridden by playbook)
 backend_shared_standalone_dir: /opt/autobot/autobot_shared  # Standalone PYTHONPATH copy used by workers (#3649)
 backend_log_dir: /var/log/autobot
@@ -162,11 +169,14 @@ backend_health_check_delay: 5          # Seconds between retries
 # Audit log file path (#8936: ensures AUTOBOT_AUDIT_LOG_FILE is always set in prod)
 backend_audit_log_file: /opt/autobot/logs/audit.log
 
-# GPU / vLLM inference (#10288)
-# vllm moved to opt-in requirements-gpu.txt (#10251/#10287) to keep the default
-# CPU image lean (it drags the CUDA toolkit + CUDA-built torch — several GB).
-# Install requirements-gpu.txt ONLY when both an NVIDIA GPU is present AND vLLM
-# is enabled for this deployment.
+# GPU / CUDA-torch / vLLM inference (#10288, #15162)
+# Two independent decisions, deliberately not coupled (#15162):
+#   - CUDA torch/torchvision (requirements-gpu-torch.txt) installs whenever a
+#     GPU is present, vLLM or not.
+#   - vllm itself (requirements-gpu.txt) moved to opt-in (#10251/#10287) to
+#     keep the default CPU image lean (it drags the CUDA toolkit + extra
+#     wheels — several GB); it installs ONLY when both a GPU is present AND
+#     vLLM is enabled for this deployment.
 #   backend_vllm_enabled: deployment opts into in-process vLLM (llm.vllm.enabled).
 #   backend_has_gpu: "auto" runs nvidia-smi at deploy time; "true"/"false" override.
 backend_vllm_enabled: false

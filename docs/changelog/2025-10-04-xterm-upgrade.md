@@ -3,6 +3,8 @@ tags: [type/reference, status/current, component/frontend]
 date: 2025-10-04
 ---
 
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../architecture/VM_ROLES.md) for role definitions.
+
 # xterm.js Terminal Upgrade Implementation Summary
 
 **Date:** 2025-10-04
@@ -55,12 +57,12 @@ Successfully upgraded AutoBot terminal system from custom div-based rendering to
   - Store integration for global host state
   - Dark mode support
 - **Hosts:**
-  1. Main (WSL Backend) - 172.16.168.20
-  2. VM1 (Frontend) - 172.16.168.21
-  3. VM2 (NPU Worker) - 172.16.168.22
-  4. VM3 (Redis) - 172.16.168.23
-  5. VM4 (AI Stack) - 172.16.168.24
-  6. VM5 (Browser) - 172.16.168.25
+  1. Main (WSL Backend) - <backend-ip>
+  2. VM1 (Frontend) - <frontend-ip>
+  3. VM2 (NPU Worker) - <npu-ip>
+  4. VM3 (Redis) - <database-ip>
+  5. VM4 (AI Stack) - <aiml-ip>
+  6. VM5 (Browser) - <browser-ip>
 
 ### 2. Specialized Terminals
 
@@ -222,7 +224,7 @@ Update `src/router/index.ts` to import and use new components.
 
 ### 4. Test Locally First
 ```bash
-# On Frontend VM (172.16.168.21)
+# On Frontend VM (<frontend-ip>)
 cd /home/autobot/autobot-vue
 npm run dev
 

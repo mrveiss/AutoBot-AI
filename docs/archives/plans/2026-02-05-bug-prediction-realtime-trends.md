@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Bug Prediction Real-Time Trends Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -432,7 +434,7 @@ Expected: Files synced successfully
 
 **Step 2: Open dashboard in browser**
 
-Navigate to: `http://172.16.168.21:5173` and open Bug Prediction Dashboard
+Navigate to: `http://<frontend-ip>:5173` and open Bug Prediction Dashboard
 Expected: Dashboard loads
 
 **Step 3: Verify live badge appears**

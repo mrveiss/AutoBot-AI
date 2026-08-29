@@ -1,5 +1,7 @@
 # Architecture Decision Record: Industry-Standard Agent Patterns
 
+> **Freshness:** current — 2026-08-30. Records approved design decisions for #645; content not re-verified beyond location move.
+
 **Issue**: #645 - Implement Industry-Standard Agent Architecture Patterns
 **Author**: mrveiss
 **Date**: 2025-12-28
@@ -322,7 +324,7 @@ Current messages don't distinguish between:
 2. [PLANNER_MODULE_DESIGN.md](PLANNER_MODULE_DESIGN.md)
 3. [PARALLEL_TOOL_EXECUTION_DESIGN.md](PARALLEL_TOOL_EXECUTION_DESIGN.md)
 4. [KNOWLEDGE_MODULE_ENHANCEMENTS_DESIGN.md](KNOWLEDGE_MODULE_ENHANCEMENTS_DESIGN.md)
-5. [INDUSTRY_AGENT_PATTERNS_ANALYSIS.md](../INDUSTRY_AGENT_PATTERNS_ANALYSIS.md)
+5. [INDUSTRY_AGENT_PATTERNS_ANALYSIS.md](../analysis/ANA_industry-agent-patterns-2025-12-28.md)
 
 ---
 

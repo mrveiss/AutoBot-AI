@@ -1,5 +1,8 @@
 # Redis Service Management Architecture
 
+> **Freshness:** superseded (partially) — 2026-08-30. `RedisServiceManager` shipped (`autobot-backend/services/redis_service_manager.py`, used in 6 files) but `ServiceManagementRouter` was never built — no route exposes the manager. Tracked in #15198.
+
+
 **Document Version:** 1.0
 **Date:** 2025-10-10
 **Status:** Design Specification

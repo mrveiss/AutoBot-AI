@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Code Intelligence Enhancements Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -997,7 +999,7 @@ Expected: Files synced successfully
 
 **Step 2: Verify in browser**
 
-Navigate to: `http://172.16.168.21:5173/analytics/code-intelligence`
+Navigate to: `http://<frontend-ip>:5173/analytics/code-intelligence`
 Expected: Code Intelligence dashboard loads with health score gauges
 
 **Step 3: Test analysis**

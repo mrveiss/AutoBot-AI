@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Streaming Sentence-Level TTS Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -588,7 +590,7 @@ import json
 import websockets
 
 async def test():
-    async with websockets.connect("wss://172.16.168.20:8443/api/voice/stream", ssl=...) as ws:
+    async with websockets.connect("wss://<backend-ip>:8443/api/voice/stream", ssl=...) as ws:
         # Should receive initial state
         msg = await ws.recv()
         print("State:", msg)

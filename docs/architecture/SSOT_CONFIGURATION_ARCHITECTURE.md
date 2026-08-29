@@ -1,5 +1,8 @@
 # Single Source of Truth Configuration Architecture
 
+> **Freshness:** superseded — 2026-08-30. "Architecture Design" is stale: this shipped as `autobot_shared/ssot_config.py` (the actual SSOT) plus `autobot-backend/services/config_service.py`; `UnifiedConfigManager` referenced here is now a deprecated alias (`autobot-backend/config/__init__.py:148-157`), not the primary path.
+
+
 <!--
 AutoBot - AI-Powered Automation Platform
 Copyright (c) 2025 mrveiss
@@ -59,7 +62,7 @@ This document defines the Single Source of Truth (SSOT) configuration architectu
 ### 1.2 Key Problems Identified
 
 1. **No Single Authority**: 19+ files contain configuration logic with unclear precedence
-2. **Hardcoded Fallbacks**: IP addresses (172.16.168.x) hardcoded in 6+ locations
+2. **Hardcoded Fallbacks**: IP addresses (<network-subnet>) hardcoded in 6+ locations
 3. **Cross-Language Duplication**: Python `NetworkConstants` duplicated in TypeScript
 4. **Complex Precedence**: `config.yaml` -> `settings.json` -> environment variables
 5. **Nested Duplication**: `config.yaml` has 5+ levels of nested `unified` blocks (bug)

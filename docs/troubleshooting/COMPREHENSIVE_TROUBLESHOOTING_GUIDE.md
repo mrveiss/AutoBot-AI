@@ -131,9 +131,9 @@ sudo systemctl restart autobot-backend
 **Diagnostic Commands**:
 ```bash
 # Test VM-to-VM connectivity
-for vm in 21 22 23 24 25; do
-    echo "Testing VM 172.16.168.$vm"
-    nc -zv 172.16.168.$vm 22 2>&1 | head -1
+for host in <frontend-ip> <npu-ip> <database-ip> <aiml-ip> <browser-ip>; do
+    echo "Testing VM $host"
+    nc -zv $host 22 2>&1 | head -1
 done
 
 # Check firewall rules
@@ -155,8 +155,8 @@ nc -zv <browser-ip> 3000  # Browser Service
 ssh-keygen -t ed25519 -f ~/.ssh/autobot_key -N ""
 
 # Copy keys to all VMs
-for vm in 21 22 23 24 25; do
-    ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@172.16.168.$vm
+for host in <frontend-ip> <npu-ip> <database-ip> <aiml-ip> <browser-ip>; do
+    ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@$host
 done
 
 # Test SSH connectivity

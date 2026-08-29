@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # NPU Multi-Worker Load Balancing & Pool Management
 
 **Issue**: #168
@@ -11,7 +13,7 @@ Implement health-aware load balancing across multiple NPU workers for improved t
 
 ## Current State
 
-- Single `NPUWorkerClient` at `172.16.168.22:8081`
+- Single `NPUWorkerClient` at `<npu-ip>:8081`
 - Basic task queue via `NPUTaskQueue` with Redis backing
 - No load balancing or failover capabilities
 - Existing YAML configuration structure in `config/npu_workers.yaml`
@@ -61,7 +63,7 @@ NPUWorkerClient instances (existing, one per worker)
 
 **Key fields per worker**:
 - `id`: Unique worker identifier (e.g., `npu-worker-vm2`)
-- `url`: Worker endpoint (e.g., `http://172.16.168.22:8081`)
+- `url`: Worker endpoint (e.g., `http://<npu-ip>:8081`)
 - `priority`: 1-10 (higher = preferred, used for failover ordering)
 - `enabled`: Boolean to enable/disable workers
 - `max_concurrent_tasks`: Worker capacity limit
@@ -387,7 +389,7 @@ async def test_routing_accuracy():
   "workers": [
     {
       "id": "npu-worker-vm2",
-      "url": "http://172.16.168.22:8081",
+      "url": "http://<npu-ip>:8081",
       "priority": 10,
       "enabled": true,
       "healthy": true,
@@ -399,7 +401,7 @@ async def test_routing_accuracy():
     },
     {
       "id": "windows-npu-worker-main",
-      "url": "http://172.16.168.20:8082",
+      "url": "http://<backend-ip>:8082",
       "priority": 5,
       "enabled": true,
       "healthy": true,

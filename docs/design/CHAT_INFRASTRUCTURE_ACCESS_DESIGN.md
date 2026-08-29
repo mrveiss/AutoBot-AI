@@ -1,5 +1,7 @@
 # Chat Infrastructure Access Architecture
 
+> **Freshness:** superseded (partially) — 2026-08-30. `command_extraction_service` shipped; the SSH half (`ssh_connection_service`) was never built — tracked in #15199. Do not treat this design as fully implemented.
+
 > **GitHub Issue**: [#715](https://github.com/mrveiss/AutoBot-AI/issues/715)
 > **Status**: Planning
 > **Author**: mrveiss

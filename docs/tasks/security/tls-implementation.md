@@ -147,7 +147,7 @@ All certificates include:
 - Backend: FastAPI with no SSL, CORS HTTP-only
 - Frontend: ApiClient.ts uses plain HTTP
 - Redis: No TLS configuration in redis-stack.conf.j2
-- 51 files total with http://172.16.168.x references
+- 51 files total with http://<network-subnet> references
 - Environment variables configured for HTTP protocol only
 
 **Implementation Approach:**
