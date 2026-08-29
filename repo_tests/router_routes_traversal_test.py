@@ -52,11 +52,19 @@ being fixed).
   pinned by ``autobot_shared/api_routing/router_routes_test.py``, which asserts
   against a real ``APIRouter`` on whatever FastAPI is installed.
 * **An include-time ``prefix=`` or ``dependencies=``.** Neither is recoverable
-  from the deferred shape by any introspection — that is why
+  from the deferred shape through any *public* route attribute -- that is why
   ``api/terminal_tools.py`` carries its gate on its own ``APIRouter(...)``
   constructor, where ``repo_tests/router_mount_parity_test.py`` can read it, and
   why ``api/terminal_websocket_route_test.py`` proves its gate behaviourally with
-  a real request instead.
+  a real request instead. (Correction, #15126: the prefix specifically is not
+  gone -- fastapi 0.141.1's private ``_IncludedRouter.include_context.prefix``
+  carries it -- only unreachable from the stable surface anything here should
+  depend on; see ``mount_graph.py`` for the one place that says so.)
+* **Whether a reconstructed path is correct.** This guard's premise is the
+  deferred-shape *zero-routes* hazard -- a read that silently finds nothing. A
+  read that resolves and finds real routes but drops an include-time prefix,
+  producing a route that is wrong rather than absent, is a different defect
+  (#15126) and outside what this guard checks for, resolved or not.
 """
 
 from __future__ import annotations

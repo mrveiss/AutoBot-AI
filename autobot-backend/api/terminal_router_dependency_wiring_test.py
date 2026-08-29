@@ -27,6 +27,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.api_routing.mount_graph import build_graph
+
 # --- clean-interpreter route/dependency enumeration (#14998, #15087) ---
 #
 # Every structural gate assertion below reads from this, never from an
@@ -167,6 +169,37 @@ def terminal_route_spec() -> dict:
     return {r["path"]: r["dependencies"] for r in routes}
 
 
+@pytest.fixture(scope="session")
+def terminal_tools_include_prefix() -> str:
+    """The literal ``prefix=`` argument at ``api/terminal.py:198``, read from
+    source rather than guessed at (#15126).
+
+    ``_walk`` above cannot recover this: the value is consumed by
+    ``include_router`` and never lands on a public attribute of the deferred
+    wrapper it leaves behind (see ``mount_graph.py``'s module docstring for the
+    one, private, unstable place it *does* land). The static mount graph reads
+    the call site itself, so it means the same thing on every FastAPI shape.
+    """
+    backend_root = Path(__file__).resolve().parents[1]
+    graph = build_graph(backend_root)
+    edges = [
+        e for e in graph.edges if e.parent == "api.terminal:admin_router" and e.child == "api.terminal_tools:router"
+    ]
+    assert edges, (
+        "the api.terminal:admin_router -> api.terminal_tools:router mount "
+        "(api/terminal.py:198) was not found in the static mount graph -- "
+        "either the site moved or discovery regressed"
+    )
+    assert len(edges) == 1, f"expected exactly one such mount, found {len(edges)}: {edges}"
+    prefix = edges[0].prefix
+    assert prefix == "/terminal", (
+        f"api/terminal.py:198's include-time prefix resolved to {prefix!r}, not "
+        "'/terminal' -- either the literal argument at that call site changed, "
+        "or Mount.prefix extraction regressed"
+    )
+    return prefix
+
+
 class TestTerminalRouterDependencyWiring:
     """Structural proof of the fix: the admin dependency moved off the WS
     routes and stayed on the HTTP ones. This is the assertion #14998 itself
@@ -221,60 +254,63 @@ class TestTerminalRouteDumpIsComplete:
     naming only its own symptom.
     """
 
-    #: One route per nesting level: ``(needle, match_by_suffix, owner)``.
-    #:
-    #: The third is matched by **suffix**, for the reason
-    #: ``test_a_dumped_path_only_ever_loses_its_include_prefix`` below states
-    #: and pins: the dump cannot recover an include-time ``prefix=`` under a
-    #: deferring fastapi, so this route is ``/terminal/package-managers`` on
-    #: the eager local version (#15091) and ``/package-managers`` in CI (job
-    #: 98211256874). The suffix is unique within the dump and identical on
-    #: both, so the level stays pinned without this guard depending on the one
-    #: part of the dump that is version-sensitive.
+    #: One route per nesting level: ``(needle, owner)``. The third level
+    #: (``api.terminal_tools``' router) has its own test below rather than a
+    #: parametrize entry here, because it needs
+    #: ``terminal_tools_include_prefix`` to match exactly instead of by suffix
+    #: (#15126).
     _LEVELS = (
-        ("/ws/{session_id}", False, "router -- declared directly, present even without flattening"),
-        ("/", False, "admin_router -- included into router at the end of api/terminal.py"),
-        ("/package-managers", True, "api.terminal_tools' router -- included into admin_router"),
+        ("/ws/{session_id}", "router -- declared directly, present even without flattening"),
+        ("/", "admin_router -- included into router at the end of api/terminal.py"),
     )
 
-    @pytest.mark.parametrize("needle,by_suffix,owner", _LEVELS)
-    def test_the_dump_reaches_every_nesting_level(self, terminal_route_spec, needle, by_suffix, owner):
-        found = [p for p in terminal_route_spec if (p.endswith(needle) if by_suffix else p == needle)]
-        assert found, (
-            f"the dump holds no route {'ending in' if by_suffix else 'at'} {needle}. "
-            f"That route is owned by {owner}, so the walk never reached that "
-            "inclusion at all -- a dropped include prefix would still leave the "
-            "suffix, so this is absence, not truncation. Every dependency "
-            "assertion in this module sweeps that shortened surface.\n"
+    @pytest.mark.parametrize("needle,owner", _LEVELS)
+    def test_the_dump_reaches_every_nesting_level(self, terminal_route_spec, needle, owner):
+        assert needle in terminal_route_spec, (
+            f"the dump holds no route at {needle}. That route is owned by "
+            f"{owner}, so the walk never reached that inclusion at all. Every "
+            "dependency assertion in this module sweeps that shortened surface.\n"
+            f"dump held {len(terminal_route_spec)} route(s): {sorted(terminal_route_spec)}"
+        )
+
+    def test_the_dump_reaches_the_third_nesting_level(self, terminal_route_spec, terminal_tools_include_prefix):
+        """``api.terminal_tools``' router, included into ``admin_router``, three deep.
+
+        Matched exactly rather than by suffix (#15126): either the dump already
+        holds the full served path (eager fastapi, #15091), or it holds that
+        path with exactly the statically-derived include-time prefix removed
+        (deferred fastapi, #15093) -- never merely "ends with".
+        """
+        served = "/terminal/package-managers"
+        short = served[len(terminal_tools_include_prefix) :]
+        assert served in terminal_route_spec or short in terminal_route_spec, (
+            f"the dump holds neither {served!r} nor {short!r}. api.terminal_tools' "
+            "router, included into admin_router, was never reached.\n"
             f"dump held {len(terminal_route_spec)} route(s): {sorted(terminal_route_spec)}"
         )
 
 
-class TestTerminalRouteDumpPathFidelity:
-    """What the dump's paths do and do not mean (#15126).
+class TestTerminalRouteDumpPathReconstruction:
+    """The dump's path, plus the statically-derived include-time prefix, equals
+    the served path -- proven, not merely bounded as a limit (#15126).
 
     ``api/terminal.py:198`` is ``admin_router.include_router(tools_router,
     prefix="/terminal")``, and ``api.terminal_tools``' router carries no
     ``prefix`` of its own -- so that ``/terminal`` is purely the **include-time
-    ``prefix=`` argument**. #15112 separates that term from the one it was
-    being conflated with and states of it: "nothing recovers these from the
-    deferred shape". The *including router's own* ``.prefix`` is the other
-    term, and it is recoverable -- it simply is not the one in play here.
+    ``prefix=`` argument**. #15112 separated that term from the *including
+    router's own* ``.prefix`` (recoverable from the route objects on every
+    FastAPI shape) and found the include-time one unrecoverable through any
+    *public* route attribute. It is not gone -- ``mount_graph.py``'s module
+    docstring names the private, unstable attribute that does carry it, and why
+    depending on that would be a worse bet than reading the call site.
 
-    So this dump reports those four routes unprefixed in CI and prefixed on the
-    eager fastapi this repo resolves locally. Rather than let that trip a test
-    up again, it is asserted: a dumped path is never *wrong*, only ever missing
-    a leading include prefix. That holds on both versions, fails if the walk
-    ever starts inventing paths, and is the honest statement of the limit.
-
-    The stronger test -- build the expected full paths from a static mount
-    graph, which *can* see the include site, and compare -- is gated on #15112
-    (`autobot_shared/api_routing/`, open at the time of writing). It already
-    carries the piece needed: ``router_prefixes.include_router_prefixes()``
-    returns ``(router_name, prefix)`` from source, and that PR proposes
-    surfacing it as a ``prefix`` field on ``Mount``. Consume that when it
-    lands; do not write a private copy of it in the meantime (#15093). This
-    class and the suffix match above are what it replaces (#15126).
+    ``terminal_tools_include_prefix`` reads that literal from source, so it
+    means the same thing on both FastAPI shapes. Reconstructing the served path
+    from it and asserting equality is strictly stronger than the suffix-tolerant
+    check this class replaces (formerly ``TestTerminalRouteDumpPathFidelity``):
+    a suffix match cannot distinguish a correctly-recovered prefix from a
+    coincidentally-matching one, and this can, because the prefix it checks
+    against is independently derived rather than assumed.
     """
 
     #: The paths the application actually serves for the tool routes. Not an
@@ -289,15 +325,21 @@ class TestTerminalRouteDumpPathFidelity:
     )
 
     @pytest.mark.parametrize("served", _SERVED_TOOL_PATHS)
-    def test_a_dumped_path_only_ever_loses_its_include_prefix(self, terminal_route_spec, served):
-        matches = [p for p in terminal_route_spec if served.endswith(p) and p != "/"]
+    def test_dump_path_reconstructs_to_the_served_path(
+        self, terminal_route_spec, terminal_tools_include_prefix, served
+    ):
+        short = served[len(terminal_tools_include_prefix) :]
+        candidates = {served, short}
+        matches = [p for p in terminal_route_spec if p in candidates]
         assert matches, (
-            f"{served} is served by the application but nothing in the dump is "
-            "even a trailing part of it. The walk is not merely dropping the "
-            f"include prefix from api/terminal.py:198 -- it has lost the route.\n"
+            f"{served} is served by the application, but the dump holds neither "
+            f"it nor {short!r} ({terminal_tools_include_prefix!r} + {short!r} "
+            f"should equal {served!r}).\n"
             f"dump held {len(terminal_route_spec)} route(s): {sorted(terminal_route_spec)}"
         )
         assert len(matches) == 1, f"{served} matched more than one dumped path, so neither identifies it: {matches}"
+        recovered = terminal_tools_include_prefix + matches[0] if matches[0] == short else matches[0]
+        assert recovered == served, f"reconstructed {recovered!r} does not equal the served path {served!r}"
 
 
 def _dump_routes_main() -> None:
@@ -355,31 +397,38 @@ def _dump_routes_main() -> None:
 
         Under fastapi 0.141.1 neither ``include_router`` nor mounting an app
         flattens eagerly: both leave a wrapper whose ``.original_router`` holds
-        the real routes, and whose own path is ``None``. Same idiom the repo
-        already uses in ``llc/tests/test_roles_routes_registered.py``,
-        ``api/codebase_analytics/endpoints/impact_endpoint_test.py`` and
-        ``api/self_capabilities_integration_test.py`` -- copied here rather than
-        invented, though the fact that four files now carry it by hand is its
-        own problem.
+        the real routes, and whose own path is ``None``. This was one of four
+        hand-rolled copies of that idiom; #15112 replaced the other three
+        (``llc/tests/test_roles_routes_registered.py``,
+        ``api/codebase_analytics/endpoints/impact_endpoint_test.py``,
+        ``api/self_capabilities_integration_test.py``) with the shared
+        ``autobot_shared.api_routing.router_routes`` traversal and left this one
+        in place deliberately, gated on this issue (#15126).
 
-        **The reconstructed prefix is not trustworthy, and a caller must not
-        key an assertion on one.** Two different terms both read as "prefix"
-        and only one of them survives deferral (#15112): the *including
-        router's own* ``.prefix`` stays on the parent object and is
-        recoverable, while an include-time ``prefix=`` **argument** is consumed
-        at include time and left nowhere -- ``sub_prefix`` then resolves empty
-        and the path comes back short. ``api/terminal.py:198`` uses the second
-        kind, so CI job 98211256874 dumped ``/package-managers`` for a route
-        the application serves at ``/terminal/package-managers``, while the
-        eager fastapi this repo resolves locally (#15091) dumps it prefixed.
+        **This function's reconstructed prefix is still not trustworthy on its
+        own, and a caller must not key an assertion on one without the help
+        below.** Two different terms both read as "prefix" and only one of
+        them survives deferral (#15112): the *including router's own*
+        ``.prefix`` stays on the parent object and is recoverable, while an
+        include-time ``prefix=`` **argument** is consumed at include time and
+        is not exposed on any *public* attribute of the wrapper this function
+        reads -- ``sub_prefix`` then resolves empty and the path comes back
+        short. (It is not gone outright: verified against fastapi 0.141.1's own
+        ``routing.py``, the private ``_IncludedRouter.include_context.prefix``
+        carries the combined value. That is an internal, underscore-prefixed
+        pair with no cross-version stability guarantee, so nothing here reads
+        it -- see ``mount_graph.py`` for the same finding stated once, not
+        copied.) ``api/terminal.py:198`` uses the include-time kind, so CI job
+        98211256874 dumped ``/package-managers`` for a route the application
+        serves at ``/terminal/package-managers``, while the eager fastapi this
+        repo resolves locally (#15091) dumps it prefixed.
 
-        Nothing in this module reads a prefixed path -- the routes it asserts
-        on are all included without one -- and
-        ``TestTerminalRouteDumpPathFidelity`` pins the limit rather than
-        leaving the next reader to trip over it. Filed as #15126; the static
-        mount graph that *can* see the include site is #15112. Do not patch
-        this by guessing at a wrapper attribute, and do not fork a private
-        copy of that graph (#15093). Match by a unique suffix until it lands.
+        Nothing in this module reads a *raw* prefixed path from ``_walk`` alone
+        for that reason. ``TestTerminalRouteDumpPathReconstruction`` below
+        supplies the missing piece from the static mount graph
+        (``mount_graph.Mount.prefix``, read straight from
+        ``api/terminal.py:198``) instead of guessing at a wrapper attribute or
+        forking a private copy of that graph (#15093).
         """
         found = []
         for route in getattr(container, "routes", []) or []:
