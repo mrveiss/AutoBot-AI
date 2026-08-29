@@ -99,6 +99,36 @@ each is listed here so an operator can find it (#15127).
   ```bash
   bash autobot-infrastructure/shared/scripts/utilities/start-seq-forwarder.sh
   ```
+- `backup_ollama_models.sh` — copy a developer workstation's `~/.ollama/models` (plus an
+  `ollama list` manifest) to a timestamped directory before switching that machine to the shared
+  model configuration. The Ansible `backup-node-data.yml` play covers the *deployed* model
+  directory on a node; this covers the workstation copy, which nothing else does. It prints the
+  restore commands when it finishes.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/backup_ollama_models.sh
+  ```
+- `utilities/security-audit.sh` — repository hygiene sweep: tracked key/credential file patterns,
+  obvious hardcoded secrets, the `.gitignore` patterns that must be present, SSH key permissions,
+  and whether `.env` is tracked. Exits non-zero with the finding count. Run it from the repository
+  root; it reads the working tree it is run in.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/utilities/security-audit.sh
+  ```
+- `build_secure_sandbox.sh` — build `autobot/secure-sandbox:latest`, the hardened image
+  `secure_sandbox_executor.py` runs code-execution containers from. This is the only builder of
+  that image, and `tests/integration/test_codeexec_docker_smoke.py` — the gate for
+  `AUTOBOT_CODEEXEC_ENABLED` — self-skips until it exists locally. Fails closed: it will not
+  substitute an unhardened image under that tag.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/build_secure_sandbox.sh
+  ```
+- `debug_chat_system.sh` — run the whole of Scenario 3 in
+  [`docs/development/MCP_DEBUG_SCENARIOS.md`](../../../docs/development/MCP_DEBUG_SCENARIOS.md)
+  ("chat messages not sending") in one pass and print recommendations. Needs `node`, `jq` and the
+  MCP servers that document lists.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/debug_chat_system.sh
+  ```
 
 ## Usage Examples
 
