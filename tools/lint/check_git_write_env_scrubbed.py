@@ -334,7 +334,7 @@ def main(argv: List[str] | None = None) -> int:
 
     reached, findings = scan_repo(repo_root)
     if reached < TEST_FILE_FLOOR:
-        print(
+        print(  # noqa: print
             f"[git-write-env-scrubbed] only reached {reached} test files, floor is "
             f"{TEST_FILE_FLOOR} -- the walk is broken, not the tree clean",
             file=sys.stderr,
