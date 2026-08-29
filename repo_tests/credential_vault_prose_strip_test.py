@@ -82,3 +82,21 @@ def test_a_call_argument_dict_value_and_assignment_rhs_all_survive_stripping() -
     assert strip_prose(call_arg) == call_arg
     assert strip_prose(dict_value) == dict_value
     assert strip_prose(assignment_rhs) == assignment_rhs
+
+
+def test_a_paren_wrapped_concatenation_in_expression_position_survives_stripping() -> None:
+    """`_paren_wrapped_run` is the riskiest branch added for #15285 -- it exists
+    to blank a *floating* paren-wrapped literal run, but parens also appear
+    constantly in expression position, where the run must NOT be blanked. Every
+    other survival case here reaches its check with ``at_stmt_start`` already
+    ``False`` before a STRING is seen; these two put the paren-wrapped run
+    itself inside a call argument and an assignment RHS, so they are the ones
+    that actually exercise `_paren_wrapped_run`'s own guard rather than never
+    reaching it. An over-blanking regression here would erase real code
+    silently -- it would look like an ordinary false-positive cleanup, not a
+    bug -- which is the failure mode this test exists to catch.
+    """
+    call_arg = 'f(("openai_api_key" "present"))\n'
+    assignment_rhs = 'x = ("openai_api_key" "leaked")\n'
+    assert strip_prose(call_arg) == call_arg
+    assert strip_prose(assignment_rhs) == assignment_rhs
