@@ -35,7 +35,8 @@ COPY constraints/shared.txt /app/constraints/shared.txt
 # torch/torchvision are excluded from the filtered list and installed explicitly from
 # the CPU index, so the default-PyPI CUDA build (libtorch_cuda.so) is never pulled into
 # this CPU image (#10251). vLLM + its CUDA stack are no longer default deps; GPU
-# deployments add them via requirements-gpu.txt.
+# deployments add CUDA torch via requirements-gpu-torch.txt and vLLM via
+# requirements-gpu.txt, independent of each other (#15162).
 COPY autobot-backend/requirements.txt /tmp/requirements.txt
 RUN grep -v -E "(autobot.shared|^-r |^-c |^torch==|^torchvision==)" /tmp/requirements.txt \
         > /app/requirements-filtered.txt \
