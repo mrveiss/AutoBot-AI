@@ -1,0 +1,66 @@
+# Codecov configuration (#15336).
+#
+# Until now this file did not exist, so Codecov ran on its built-in defaults.
+# That is why the release PR reported "patch coverage 70.02% ... please review"
+# against a threshold nobody in this repository had chosen, on a 505-commit range
+# nobody had been measuring — the number was real, but the bar was not ours.
+#
+# WHERE COVERAGE IS MEASURED
+#
+# `.github/workflows/coverage.yml` — nightly, and on every push to Dev_new_gui.
+# Deliberately NOT on pull requests (#10691): instrumentation, not test work, was
+# the dominant cost, measured at 336s without `--cov` against 35m11s with it.
+#
+# That measurement predates PEP 669. The workflow now sets `COVERAGE_CORE=sysmon`
+# so the cost can be re-measured on the current interpreter; if it falls far
+# enough, gating pull requests becomes affordable and this file is where the
+# `patch` status would be flipped to blocking.
+#
+# STATUSES ARE INFORMATIONAL FOR NOW — deliberately.
+#
+# Coverage is only collected AFTER a merge, so a blocking status on a pull
+# request would judge it against data the pull request never produced. Making it
+# blocking before coverage runs on pull requests would fail every PR for a reason
+# its author cannot act on.
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        # Allow small dips without failing; a real regression is a trend, not a
+        # rounding difference between two shard recombinations.
+        threshold: 1%
+        informational: true
+    patch:
+      default:
+        # 70% matches the frontend's existing gate (vitest thresholds, #3285), so
+        # the two halves of the codebase are held to one number rather than two.
+        target: 70%
+        informational: true
+
+# The nightly recombines twelve shards. Without this, Codecov can post a partial
+# report as soon as the first upload lands and then revise it, which reads as a
+# coverage drop that never happened.
+codecov:
+  notify:
+    after_n_builds: 12
+    wait_for_ci: true
+
+comment:
+  layout: "condensed_header, diff, flags, components"
+  # Comment only when the patch actually moves coverage, rather than on every PR.
+  require_changes: true
+
+ignore:
+  - "**/*_test.py"
+  - "**/tests/**"
+  - "**/conftest.py"
+  - "venv/**"
+  - "**/migrations/**"
+
+# NOT ignored, deliberately: `**/__main__.py`. Excluding entry points is the easy
+# way to make a coverage number look better without any code becoming safer —
+# `autobot-backend/acp/__main__.py` alone is 24 real lines and 17 of the 256
+# missing in the release report. If an entry point is genuinely untestable, that
+# is worth fixing or arguing case by case, not hiding by glob.
