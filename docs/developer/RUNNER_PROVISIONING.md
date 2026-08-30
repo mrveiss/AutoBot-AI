@@ -44,6 +44,7 @@ The deadsnakes PPA is the narrower one, and it is what the rest of the platform 
 | `python3.14` on `PATH` | `setup-python-ci` resolves the **versioned binary by name**; a default `python3` that happens to be 3.14 does not satisfy it |
 | `python3.14-venv` | separate package on Debian/Ubuntu, and it fails at *use* time rather than install time |
 | `python3.14-dev` | headers, for packages that build native extensions |
+| `pip` inside that interpreter | Debian/Ubuntu ship `python3.x` **without** pip. CI's first step after resolving Python is `python -m pip install --upgrade pip setuptools wheel`, so a host with the interpreter but no pip fails *after* passing the interpreter check — which reads as a new problem rather than an incomplete install. There is no `python3.14-pip` apt package; `python3.14 -m ensurepip --upgrade` is the supported route, and `ensurepip` ships in `python3.14-venv` |
 
 Docker is deliberately **not** listed. Image builds stay on GitHub-hosted runners, where Docker and buildx ship preinstalled and hosted concurrency is worth more than runner locality (#15310).
 

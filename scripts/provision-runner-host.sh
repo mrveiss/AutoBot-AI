@@ -73,6 +73,21 @@ if command -v "$PY_BIN" >/dev/null 2>&1; then
   fi
 fi
 
+# pip is NOT part of a Debian/Ubuntu python3.x install: it is stripped out, and
+# the first thing CI does after resolving the interpreter is
+# `python -m pip install --upgrade pip setuptools wheel`. Without this the job
+# gets "No module named pip" AFTER passing the interpreter check — which reads
+# as a new failure rather than an incomplete install. ensurepip ships in
+# python3.x-venv, which is why that package is required above.
+if command -v "$PY_BIN" >/dev/null 2>&1; then
+  if "$PY_BIN" -m pip --version >/dev/null 2>&1; then
+    ok "$PY_BIN -m pip works ($("$PY_BIN" -m pip --version 2>&1 | cut -d' ' -f1-2))"
+  else
+    bad "$PY_BIN has no pip — 'python -m pip' fails, which breaks CI's first install step"
+    missing=1
+  fi
+fi
+
 if [ "$MODE" = check ]; then
   if [ "$missing" -eq 0 ]; then
     ok "runner host is provisioned for CI"
@@ -107,9 +122,18 @@ $SUDO apt-get update -qq
 DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq \
   "$PY_BIN" "${PY_BIN}-venv" "${PY_BIN}-dev"
 
-# Verify by the same test the check mode uses, rather than trusting apt's exit.
-if command -v "$PY_BIN" >/dev/null 2>&1 && "$PY_BIN" -m venv --help >/dev/null 2>&1; then
-  ok "$PY_BIN installed ($("$PY_BIN" --version 2>&1)), venv works"
+# Bootstrap pip into the interpreter. apt does not provide a python3.14-pip
+# package; ensurepip (from python3.14-venv) is the supported route.
+if ! "$PY_BIN" -m pip --version >/dev/null 2>&1; then
+  warn "bootstrapping pip via ensurepip"
+  "$PY_BIN" -m ensurepip --upgrade || $SUDO "$PY_BIN" -m ensurepip --upgrade
+fi
+
+# Verify by the same tests the check mode uses, rather than trusting apt's exit.
+if command -v "$PY_BIN" >/dev/null 2>&1 \
+   && "$PY_BIN" -m venv --help >/dev/null 2>&1 \
+   && "$PY_BIN" -m pip --version >/dev/null 2>&1; then
+  ok "$PY_BIN installed ($("$PY_BIN" --version 2>&1)), venv and pip work"
 else
   bad "install completed but $PY_BIN is still not usable — check apt output above"
   exit 1
