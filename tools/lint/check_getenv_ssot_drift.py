@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+r"""#13264 — a live ``os.getenv``/``os.environ.get`` default must agree with
+the ``ssot_config`` ``Field`` default it duplicates.
+
+Commit ``122793bbf`` (#7437) migrated ~675 ``os.getenv(NAME, DEFAULT)`` call
+sites onto ``ssot_config`` fields, and in ~130 cases the new field's default
+silently disagreed with the literal it replaced (``False``/``""``/``0``
+instead of the value actually shipped). That migration is done and its
+casualties are tracked as data in the #13264 issue, not by this guard — this
+guard is about what comes *after*: a call site that still reads the
+environment directly, for a name that is *also* an ``ssot_config`` alias,
+with a literal default that disagrees with the field's. That shape is either
+a second migration regression waiting to happen, or a merge that never
+happened at all; either way, one source of truth should say one thing.
+
+Scope is deliberately narrow: only ``autobot-backend/`` and
+``autobot_shared/`` are scanned, because those are the two trees
+``ssot_config`` actually governs. ``autobot-slm-backend``,
+``autobot-npu-worker`` and ``autobot-infrastructure`` are separately
+deployed services/scripts with their own environment namespace; a shared
+variable *name* there is not necessarily the same variable, and scanning
+them produced nothing but false positives when this guard was prototyped
+(#13264 comment). Test code and fixtures are excluded for the same reason:
+they deliberately construct isolated environments.
+
+Uses ``ast`` — comments and docstrings are not part of the parse tree, so
+they cannot be mistaken for a call site or a default. The repo's existing
+``# ssot-config-exempt: <reason>`` trailing-comment convention (already used
+across ~25 files for exactly this kind of deliberate divergence, but until
+now checked by nothing) is honored: a call site so annotated is skipped, not
+flagged. Discrimination tests live in ``check_getenv_ssot_drift_test.py``.
+"""
+
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+from typing import Any
+
+from tools.lint._scan_helpers import EXCLUDED_DIR_NAMES
+
+#: Trees ``ssot_config`` actually governs. A name collision outside these
+#: (a different service, an ops script) is not the same variable.
+GOVERNED_ROOTS = ("autobot-backend", "autobot_shared")
+
+#: Trailing-comment marker (already in use repo-wide) that suppresses a
+#: single call site: ``os.getenv(...)  # ssot-config-exempt: <reason>``.
+EXEMPT_MARKER = "ssot-config-exempt"
+
+#: Floor for the ``ssot_config`` field-default population this guard reads.
+#: ``ssot_config.py`` held 530+ literal-default ``Field(...)`` calls when
+#: this landed; a sweep that suddenly finds a handful has broken.
+FIELD_DEFAULT_FLOOR = 300
+
+#: Floor for the number of in-scope ``os.getenv``/``os.environ.get`` call
+#: sites this guard must find that name an existing ``ssot_config`` alias
+#: (i.e. an actually-comparable pair). Only 10 such pairs exist today — most
+#: direct env reads are for names ``ssot_config`` never migrated — so the
+#: floor is set just below that, not at the much larger raw call-site count.
+#: An empty offender list from a sweep that matched zero pairs asserts
+#: nothing.
+GETENV_CALL_FLOOR = 8
+
+
+def _call_name(node: ast.Call) -> str | None:
+    func = node.func
+    return func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+
+
+def _literal(node: ast.AST) -> Any:
+    """A plain constant, or a negative-number literal; ``None`` otherwise."""
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
+        return -node.operand.value
+    return None
+
+
+def extract_field_defaults(source: str) -> dict[str, Any]:
+    """alias -> literal ``Field(default=...)`` value, from ``ssot_config.py`` source.
+
+    Fields using ``default_factory`` (lazy/computed) or a non-literal
+    ``default`` are excluded — there is nothing to literal-compare.
+    """
+    out: dict[str, Any] = {}
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call) or _call_name(node) != "Field":
+            continue
+        default: Any = "__UNSET__"
+        alias: str | None = None
+        lazy = False
+        for kw in node.keywords:
+            if kw.arg == "default":
+                default = _literal(kw.value)
+            elif kw.arg == "default_factory":
+                lazy = True
+            elif kw.arg in ("alias", "validation_alias"):
+                value = _literal(kw.value)
+                if isinstance(value, str):
+                    alias = value
+        if alias and not lazy and default not in ("__UNSET__", None):
+            out[alias] = default
+    return out
+
+
+def _is_os_name(node: ast.AST) -> bool:
+    return isinstance(node, ast.Name) and node.id == "os"
+
+
+def _is_getenv_call(node: ast.Call) -> bool:
+    """``os.getenv(...)`` or ``os.environ.get(...)``, either spelling."""
+    fn = node.func
+    is_getenv = isinstance(fn, ast.Attribute) and fn.attr == "getenv" and _is_os_name(fn.value)
+    is_environ_get = (
+        isinstance(fn, ast.Attribute)
+        and fn.attr == "get"
+        and isinstance(fn.value, ast.Attribute)
+        and fn.value.attr == "environ"
+    )
+    return is_getenv or is_environ_get
+
+
+def _is_exempted(node: ast.Call, lines: list[str]) -> bool:
+    """Does the call's own source span carry the ``ssot-config-exempt``
+    marker on any line (``lineno``..``end_lineno``, covering a multi-line
+    call too)?"""
+    end = getattr(node, "end_lineno", node.lineno) or node.lineno
+    span_text = "\n".join(lines[node.lineno - 1 : end])
+    return EXEMPT_MARKER in span_text
+
+
+def extract_getenv_defaults(source: str) -> list[tuple[str, Any, int]]:
+    """(NAME, default, lineno) for every 2-arg literal ``os.getenv``/
+    ``os.environ.get`` call in *source*, skipping exempted ones."""
+    lines = source.splitlines()
+    out: list[tuple[str, Any, int]] = []
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return out
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or len(node.args) != 2 or not _is_getenv_call(node):
+            continue
+        name = _literal(node.args[0])
+        default = _literal(node.args[1])
+        if not isinstance(name, str) or default is None:
+            continue
+        if _is_exempted(node, lines):
+            continue
+        out.append((name, default, node.lineno))
+    return out
+
+
+def _normalize(value: Any) -> Any:
+    """Collapse spelling differences that are not behaviour differences.
+
+    ``"true"``/``"false"`` (any case) compare equal to the matching bool, a
+    numeric string compares equal to the matching int/float, and every
+    falsy value (``""``, ``False``, ``0``, ``0.0``, ``None``) compares equal
+    to every other falsy value — a field typed ``bool`` and a call site
+    still typed ``str`` frequently disagree only in spelling, not in the
+    "off" they both mean.
+    """
+    if isinstance(value, str):
+        lowered = value.lower()
+        if lowered == "true":
+            value = True
+        elif lowered == "false":
+            value = False
+        else:
+            try:
+                value = float(value) if "." in value else int(value)
+            except ValueError:
+                pass
+    return "__FALSY__" if not value else value
+
+
+def values_disagree(call_site_default: Any, field_default: Any) -> bool:
+    """True when the two literals describe a different effective default."""
+    return _normalize(call_site_default) != _normalize(field_default)
+
+
+def _in_scope(path: Path, repo_root: Path) -> bool:
+    rel = path.relative_to(repo_root)
+    parts = rel.parts
+    if not parts or parts[0] not in GOVERNED_ROOTS:
+        return False
+    if any(part in EXCLUDED_DIR_NAMES for part in parts):
+        return False
+    if "tests" in parts:
+        return False
+    if path.name in ("ssot_config.py",) or path.name.endswith("_test.py"):
+        return False
+    return True
+
+
+def find_drift(repo_root: Path) -> tuple[list[str], int]:
+    """Offender strings, and the number of in-scope call sites examined."""
+    ssot_source = (repo_root / "autobot_shared" / "ssot_config.py").read_text(encoding="utf-8")
+    field_defaults = extract_field_defaults(ssot_source)
+    assert (
+        len(field_defaults) >= FIELD_DEFAULT_FLOOR
+    ), f"only {len(field_defaults)} ssot_config field defaults reached — the sweep broke"
+
+    offenders: list[str] = []
+    calls_examined = 0
+    for path in sorted(repo_root.rglob("*.py")):
+        if not _in_scope(path, repo_root):
+            continue
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for name, default, lineno in extract_getenv_defaults(source):
+            if name not in field_defaults:
+                continue
+            calls_examined += 1
+            field_default = field_defaults[name]
+            if values_disagree(default, field_default):
+                rel = path.relative_to(repo_root)
+                offenders.append(
+                    f"{rel}:{lineno}: {name} call-site default={default!r} "
+                    f"disagrees with ssot_config default={field_default!r}"
+                )
+    return offenders, calls_examined
