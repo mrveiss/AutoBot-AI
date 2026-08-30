@@ -1,0 +1,41 @@
+# Commits exempted from the no-commit-trailers gate — a RATCHET, not an allowlist.
+#
+# Entries may only be REMOVED, never added. A new commit carrying a banned
+# trailer must be fixed before it lands, not recorded here. The gate has no
+# mechanism to add to this file, and adding one would defeat the rule.
+#
+# WHY THESE FOUR EXIST
+#
+# The repository's `.git/config` on the maintainer's workstation carried a local
+# override of `user.name = test` / `user.email = test@test`, shadowing the
+# correct global identity (`mrveiss` / martins.veiss@gmail.com). Branch commits
+# were therefore authored as `test <test@test>`, and GitHub's squash-merge
+# stamped that identity onto the resulting commit as a `Co-authored-by:` trailer.
+#
+# The gate correctly rejected them: a `Co-authored-by:` naming neither the
+# commit's own author, nor the owner, nor a bot reads as a genuine third-party
+# human co-author, which is exactly what the rule exists to prevent
+# (`no-commit-trailers.yml`, #13654).
+#
+# The trailers are not real attribution. `test <test@test>` is not a person; it
+# is a misconfigured identity, since corrected by unsetting the local override so
+# the global one applies. Nothing is being concealed by exempting them.
+#
+# WHY NOT REWRITE THEM
+#
+# Stripping the trailers means rewriting history from the earliest offender
+# (26 commits) and force-pushing `Dev_new_gui`. Roughly 32 worktrees and several
+# concurrent sessions are based on that branch; every one would need re-basing,
+# and the project's own rules forbid force-pushing a shared branch. That is a
+# real operational risk traded for a cosmetic correction.
+#
+# These surfaced only when a release PR first scanned the whole `main..Dev_new_gui`
+# range; per-PR scans never saw them, because the trailer was added BY the squash
+# merge rather than being present on the branch.
+#
+# One SHA per line. Everything after `#` is a comment.
+
+fb929491ba4d65e92e3f29c5e0790adec7bd976b  # docs(research): Model Hardware Standard (#15274)
+42c8779f8e0f28c73a2294693c5dfc000c09de50  # fix(hooks): report unlanded worktree branches (#15294, #15295)
+36a1e7d25f64f1df2fff9a9ae02428736f9d0a3f  # ci(perf): stop docs-only PRs running the sweep and image build (#15299, #15300)
+ffc37c6f9cda65783f469f92e91d4cf9978ceca5  # ci(runners): move code-quality and the pre-commit gate to self-hosted (#15310, #15311)
