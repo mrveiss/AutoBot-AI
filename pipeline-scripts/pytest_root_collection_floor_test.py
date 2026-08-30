@@ -171,22 +171,67 @@ class TestRootDerivation:
         )
         assert "autobot-backend" in derived
 
+    @staticmethod
+    def _command_tokens(run: str) -> list[str]:
+        """A step's shell, with comments removed, as whitespace tokens.
+
+        #15051: comments MUST go before tokenising. This parse used to take the
+        first bare `pytest` token in the block, which a comment mentioning
+        pytest -- and naming a step called "... infrastructure, libs and
+        frontend" -- put ahead of the real command. `libs` was then read as the
+        first root out of PROSE, and this check went red against a workflow that
+        was correct. The script it cross-checks never had the bug: it anchors on
+        the literal `python -m pytest`, which no comment produces.
+        """
+        without_comments = "\n".join(
+            line for line in run.splitlines() if not line.lstrip().startswith("#")
+        )
+        return without_comments.replace("\\\n", " ").split()
+
+    @staticmethod
+    def _invocation_starts(tokens: list[str]) -> list[int]:
+        """Index just past each `python -m pytest`, matching the script's own anchor.
+
+        The three-token sequence, not a bare `pytest`: `pip install pytest ...`
+        in the dependency step is not an invocation and names no roots.
+        """
+        return [
+            index + 3
+            for index in range(len(tokens) - 2)
+            if tokens[index : index + 3] == ["python", "-m", "pytest"]
+        ]
+
     def test_the_derivation_agrees_with_an_independent_yaml_parse(self):
         """The script reads the raw text; this reads the YAML. A regex that quietly
         stopped matching an invocation would narrow the check without any failure."""
         job = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["marker-tests"]
         expected: list[str] = []
         for step in job["steps"]:
-            run = step.get("run", "")
-            tokens = run.replace("\\\n", " ").split()
-            if "pytest" not in tokens:
-                continue
-            start = tokens.index("pytest") + 1
-            for root in roots_in(tokens[start:], REPO_ROOT):
-                if root not in expected:
-                    expected.append(root)
+            tokens = self._command_tokens(step.get("run", ""))
+            for start in self._invocation_starts(tokens):
+                for root in roots_in(tokens[start:], REPO_ROOT):
+                    if root not in expected:
+                        expected.append(root)
         assert expected, "this comparison parsed no invocation, so it compares nothing"
         assert workflow_roots(WORKFLOW) == expected
+
+    def test_a_comment_naming_pytest_does_not_become_a_root(self):
+        """The exact #15051 regression, pinned: prose must not feed the parse."""
+        run = (
+            "          # these run in no pytest invocation -- see 'infrastructure, libs\n"
+            "          # and frontend' below\n"
+            "          python -m pytest repo_tests -n auto\n"
+        )
+        tokens = self._command_tokens(run)
+        assert "libs" not in tokens, "comment text survived the strip and can still be read as a root"
+        starts = self._invocation_starts(tokens)
+        assert starts == [3], f"expected one invocation anchored at the command, got {starts}"
+        assert roots_in(tokens[starts[0]:], REPO_ROOT) == ["repo_tests"]
+
+    def test_a_pip_install_line_is_not_read_as_an_invocation(self):
+        """`pip install pytest ...` names packages, not roots."""
+        tokens = self._command_tokens("          pip install pytest pytest-asyncio libs\n")
+        assert self._invocation_starts(tokens) == []
 
 
 class TestTheGuardIsWired:
