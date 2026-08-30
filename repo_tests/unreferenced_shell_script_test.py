@@ -14,6 +14,14 @@ optional.
 
 The enumeration is asserted before it is used. A sweep that silently returns
 nothing would report a clean tree forever, which is exactly how #15087 shipped.
+
+#15127 worked the original 21-entry baseline down to zero across four batches.
+With nothing left to grandfather, the down-only baseline module and its ratchet
+assertions are gone: ``TestNoNewUnreferencedScript`` below now enforces the
+down-only end state directly -- every tracked script must be referenced, full
+stop -- instead of via a subtraction against a list that is now permanently
+empty. The regression classes for each already-landed batch stay: they are
+what stops a decision this issue made from quietly rotting.
 """
 
 from __future__ import annotations
@@ -25,7 +33,6 @@ from pathlib import Path
 import pytest
 
 from autobot_shared.paths import scrubbed_git_env
-from repo_tests.unreferenced_shell_script_baseline import KNOWN_UNREFERENCED
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_DIR = "autobot-infrastructure/shared/scripts"
@@ -36,12 +43,15 @@ RUNBOOK = "docs/runbooks/ROTATE_SSH_KEYS.md"
 #: a broken glob), not to freeze the count.
 MINIMUM_EXPECTED_SCRIPTS = 90
 
-#: This guard's own bookkeeping, as repo-relative paths.
+#: Files that must not count as a reference, as repo-relative paths.
 #:
-#: Naming a script here is NOT a reference to it. The baseline lists every known
-#: orphan by path and this module names the scripts #15079 resolved, so counting
-#: them would make each entry "referenced" the instant it was written down --
-#: the guard would then pass forever while reporting the opposite of the truth.
+#: Naming a script here is NOT a reference to it -- neither this module's own
+#: mentions nor a baseline/ledger file that records a path because something
+#: was *found* in it, not because anything calls it. Counting either would make
+#: an entry "referenced" the instant it was written down, which is how
+#: ensure-frontend-dependencies.sh sat unreferenced for a year while this guard
+#: reported it clean: its only mention was a hardcoded-value finding against it
+#: in pipeline-scripts/hardcoded_values_baseline.txt (#15127).
 #:
 #: Matched against ``git grep -l`` output, which is repo-relative by
 #: construction, so this comparison is unaffected by where the checkout lives.
@@ -50,8 +60,8 @@ MINIMUM_EXPECTED_SCRIPTS = 90
 #: differently under ``.worktrees/`` than in an ordinary CI checkout.
 NOT_A_REFERENCE = frozenset(
     {
-        "repo_tests/unreferenced_shell_script_baseline.py",
         "repo_tests/unreferenced_shell_script_test.py",
+        "pipeline-scripts/hardcoded_values_baseline.txt",
     }
 )
 
@@ -131,12 +141,12 @@ class TestEnumeration:
 class TestOwnBookkeepingIsNotAReference:
     """The guard must not count its own records as references (#15079 review).
 
-    Without this the guard is self-defeating: writing a script into the baseline
-    makes it "referenced", so the ratchet passes while asserting the opposite of
-    the truth. It failed in CI exactly that way and passed locally only because
-    both files were still untracked -- ``git grep`` reads tracked content, so an
-    uncommitted baseline is invisible to the scan. A local pass carried no
-    information, which is #15091 in miniature.
+    Without this the guard is self-defeating: naming a script somewhere that
+    is not a caller makes it "referenced", so the guard passes while asserting
+    the opposite of the truth. It failed in CI exactly that way once and passed
+    locally only because the file doing the naming was still untracked --
+    ``git grep`` reads tracked content, so an uncommitted file is invisible to
+    the scan. A local pass carried no information, which is #15091 in miniature.
     """
 
     def test_bookkeeping_files_are_tracked(self):
@@ -158,63 +168,23 @@ class TestOwnBookkeepingIsNotAReference:
         for relative in sorted(NOT_A_REFERENCE):
             assert not relative.startswith("/"), f"{relative} must be repo-relative"
 
-    def test_every_baselined_script_is_named_only_by_the_bookkeeping(self, scripts):
-        """Proves the exclusion is doing the work, for every entry.
-
-        Sampling one entry proved it for a script chosen by alphabetical
-        accident, and the subject would drift silently the moment a batch
-        removed that name (#15144 review). Iterating costs one grep per entry.
-        """
-        baselined = sorted(KNOWN_UNREFERENCED & set(scripts))
-        assert baselined, "baseline holds no script that exists; nothing to prove against"
-        offenders: dict[str, list[str]] = {}
-        for path in baselined:
-            mentioning = set(_files_mentioning([Path(path).name])) - {path}
-            assert mentioning, f"expected {path} to be named by the bookkeeping at least"
-            outside = sorted(mentioning - NOT_A_REFERENCE)
-            if outside:
-                offenders[path] = outside
-        assert not offenders, (
-            "these are named outside this guard's bookkeeping, so they are genuinely "
-            "referenced and must leave KNOWN_UNREFERENCED:\n  "
-            + "\n  ".join(f"{k} <- {v}" for k, v in sorted(offenders.items()))
-        )
-
 
 class TestNoNewUnreferencedScript:
-    def test_every_script_is_referenced_or_baselined(self, scripts):
-        offenders = sorted(set(unreferenced(scripts)) - KNOWN_UNREFERENCED)
+    """The down-only end state (#15127): every tracked script must be referenced.
+
+    The baseline module is gone -- it reached zero and was deleted alongside
+    this ratchet (AC4). There is nothing left to subtract, so this is the same
+    assertion this class made throughout #15127, now unconditional.
+    """
+
+    def test_every_script_is_referenced(self, scripts):
+        offenders = sorted(unreferenced(scripts))
         assert not offenders, (
             "these scripts have no inbound reference from any other tracked file:\n  "
             + "\n  ".join(offenders)
             + "\n\nGive each one a caller, or document it as an operator procedure where an "
-            "operator would look, or retire it. Adding it to KNOWN_UNREFERENCED is not an "
-            "option -- that list is down-only (#15079)."
+            "operator would look, or retire it."
         )
-
-
-class TestBaselineRatchetsDownOnly:
-    def test_no_baselined_script_has_gained_a_reference(self, scripts):
-        """A script that is now referenced must leave the baseline in the same change."""
-        still_unreferenced = set(unreferenced(scripts))
-        stale = sorted(KNOWN_UNREFERENCED & set(scripts) - still_unreferenced)
-        assert not stale, "these are referenced now and must be removed from KNOWN_UNREFERENCED:\n  " + "\n  ".join(
-            stale
-        )
-
-    def test_no_baselined_script_has_disappeared(self, scripts):
-        """A retired script must leave the baseline too, or the list rots."""
-        gone = sorted(KNOWN_UNREFERENCED - set(scripts))
-        assert not gone, "these no longer exist and must be removed from KNOWN_UNREFERENCED:\n  " + "\n  ".join(gone)
-
-    def test_baseline_is_not_empty_while_it_is_still_being_worked_through(self):
-        """Guards the guard: an accidentally emptied baseline would mask nothing.
-
-        This is the inverse of the usual empty-enumeration trap. If the baseline
-        is ever legitimately emptied, delete it and this assertion together --
-        that is the success condition, and it should be a deliberate change.
-        """
-        assert KNOWN_UNREFERENCED, "baseline emptied; remove the file and this test together"
 
 
 class TestTheBatchThisIssueResolved:
@@ -246,13 +216,11 @@ class TestTheBatchThisIssueResolved:
     def test_retired_script_is_gone_from_tree_and_baseline(self, scripts, name):
         path = f"{SCRIPT_DIR}/{name}"
         assert path not in scripts, f"{name} was retired but is tracked again"
-        assert path not in KNOWN_UNREFERENCED, f"{name} was retired but still sits in the baseline"
 
     @pytest.mark.parametrize("name,document", sorted(KEPT.items()))
     def test_kept_script_is_referenced_by_its_document(self, scripts, name, document):
         path = f"{SCRIPT_DIR}/{name}"
         assert path in scripts, f"{name} was kept and documented but is no longer tracked"
-        assert path not in KNOWN_UNREFERENCED
         text = (REPO_ROOT / document).read_text(encoding="utf-8")
         assert name in text, (
             f"{document} no longer names {name}. That entry is the whole reason the script is "
@@ -311,7 +279,6 @@ class TestTheSecondBatchThisIssueResolved:
     def test_retired_script_is_gone_from_tree_and_baseline(self, scripts, name):
         path = f"{SCRIPT_DIR}/{name}"
         assert path not in scripts, f"{name} was retired but is tracked again"
-        assert path not in KNOWN_UNREFERENCED, f"{name} was retired but still sits in the baseline"
 
     @pytest.mark.parametrize("path", RETIRED_COMPANIONS)
     def test_retired_companion_file_is_gone(self, path):
@@ -326,7 +293,6 @@ class TestTheSecondBatchThisIssueResolved:
     def test_kept_script_is_referenced_by_its_document(self, scripts, name, document):
         path = f"{SCRIPT_DIR}/{name}"
         assert path in scripts, f"{name} was kept and documented but is no longer tracked"
-        assert path not in KNOWN_UNREFERENCED
         text = (REPO_ROOT / document).read_text(encoding="utf-8")
         assert name in text, (
             f"{document} no longer names {name}. That entry is the whole reason the script is "
@@ -388,7 +354,6 @@ class TestTheTwoScriptsThisIssueResolved:
     def test_the_retired_script_is_gone(self, scripts):
         retired = f"{SCRIPT_DIR}/diagnose_startup_performance.sh"
         assert retired not in scripts
-        assert retired not in KNOWN_UNREFERENCED
 
     def test_the_wired_in_script_is_referenced_by_the_runbook(self, scripts):
         """The runbook entry is the wire-in. Name it, or this passes on its own mention.
@@ -405,4 +370,3 @@ class TestTheTwoScriptsThisIssueResolved:
             f"Named instead by: {sorted(mentioning) or 'nothing'}"
         )
         assert wired not in unreferenced(scripts)
-        assert wired not in KNOWN_UNREFERENCED
