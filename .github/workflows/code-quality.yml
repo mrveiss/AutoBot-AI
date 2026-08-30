@@ -123,8 +123,17 @@ jobs:
     # unlike the sharded suites which stay hosted deliberately.
     runs-on: [self-hosted, Linux, X64]
     # Fail fast on self-hosted rather than GitHub's ~360min default (#11077).
-    # Measured ~601s, so 30 minutes is generous headroom.
-    timeout-minutes: 30
+    #
+    # 60, not 30. The 30 came from a ~601s measurement taken on a GitHub-hosted
+    # runner against a small diff, and it does not generalise: this job's work
+    # scales with the number of changed files, and self-hosted hardware is slower
+    # than the hosted image. The release PR (2195 files) was CANCELLED at exactly
+    # 30m19s — a self-inflicted failure that looked like a real one.
+    #
+    # 60 still fails fast against GitHub's ~360min default, while leaving room for
+    # a full release-sized diff. Revisit from a measurement on THIS runner class
+    # and a large diff, not from a hosted small-diff number.
+    timeout-minutes: 60
 
     steps:
     - name: Checkout code

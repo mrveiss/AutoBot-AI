@@ -1472,7 +1472,7 @@ class MiscConfig(RedactedSettings):
     """Miscellaneous/unmapped environment variables.
 
     This class collects all env vars not yet migrated to structured config sections.
-    Vars default to empty string ("") when not set in environment.
+    Field defaults vary field to field -- do not assume "" / 0 / False (#13264).
     Issue: GH#7437 — Migrate 675 os.getenv/os.environ callsites
     """
 
@@ -1524,8 +1524,8 @@ class MiscConfig(RedactedSettings):
             "deployments — configure an elevation_client instead.  Issue #10799."
         ),
     )
-    cache_enabled: bool = Field(default=False, alias="AUTOBOT_CACHE_ENABLED")
-    cache_size: int = Field(default=0, alias="AUTOBOT_CACHE_SIZE")
+    cache_enabled: bool = Field(default=True, alias="AUTOBOT_CACHE_ENABLED")
+    cache_size: int = Field(default=128, alias="AUTOBOT_CACHE_SIZE")
     cache_l1_size: int = Field(
         default=100,
         alias="AUTOBOT_CACHE_L1_SIZE",
@@ -1598,7 +1598,7 @@ class MiscConfig(RedactedSettings):
     # documents for a guaranteed CPU ceiling.
     document_ocr_enabled: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_ENABLED")
     chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
-    chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
+    chat_timeout: int = Field(default=30, alias="AUTOBOT_CHAT_TIMEOUT")
     chromadb_auth_token: str = Field(
         default="",
         alias="AUTOBOT_CHROMADB_AUTH_TOKEN",
@@ -1721,8 +1721,8 @@ class MiscConfig(RedactedSettings):
     llm_key_rotation_interval_minutes: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES")
     llm_models_yaml: str = Field(default="", alias="AUTOBOT_LLM_MODELS_YAML")
     llm_temperature: str = Field(default="", alias="AUTOBOT_LLM_TEMPERATURE")
-    log_backup_count: int = Field(default=0, alias="AUTOBOT_LOG_BACKUP_COUNT")
-    log_max_bytes: int = Field(default=0, alias="AUTOBOT_LOG_MAX_BYTES")
+    log_backup_count: int = Field(default=5, alias="AUTOBOT_LOG_BACKUP_COUNT")
+    log_max_bytes: int = Field(default=52428800, alias="AUTOBOT_LOG_MAX_BYTES")
     # #13263: deliberately NO default. The pre-#7437 value was "dev", but a
     # working default credential is a vulnerability in its own right — the
     # secret is the whole check, and "dev" is published in this repo, so any
@@ -1773,9 +1773,9 @@ class MiscConfig(RedactedSettings):
         alias="AUTOBOT_VOICE_REALTIME_SESSION_TTL_DAYS",
         description="Redis TTL (days) for voice_realtime_session:* keys. Default 90 days.",
     )
-    memory_log_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
-    memory_pool_size: int = Field(default=0, alias="AUTOBOT_MEMORY_POOL_SIZE")
-    memory_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
+    memory_log_threshold_mb: int = Field(default=1, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
+    memory_pool_size: int = Field(default=100, alias="AUTOBOT_MEMORY_POOL_SIZE")
+    memory_threshold_mb: int = Field(default=500, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
     # #11834: restore pre-#7437 meta-agent defaults (see #11681 pattern);
     # llm_model default stays "" — backend falls back to its model constant.
     meta_agent_approval_threshold: float = Field(default=0.1, alias="AUTOBOT_META_AGENT_APPROVAL_THRESHOLD")
@@ -1910,12 +1910,12 @@ class MiscConfig(RedactedSettings):
     urlhaus_feed_url: str = Field(default="", alias="AUTOBOT_URLHAUS_FEED_URL")
     user_mode: str = Field(default="", alias="AUTOBOT_USER_MODE")
     vue_root: str = Field(default="", alias="AUTOBOT_VUE_ROOT")
-    vllm_async_output: bool = Field(default=False, alias="AUTOBOT_VLLM_ASYNC_OUTPUT")
+    vllm_async_output: bool = Field(default=True, alias="AUTOBOT_VLLM_ASYNC_OUTPUT")
     vllm_multi_step: str = Field(default="", alias="AUTOBOT_VLLM_MULTI_STEP")
-    vllm_prefix_caching: str = Field(default="", alias="AUTOBOT_VLLM_PREFIX_CACHING")
+    vllm_prefix_caching: str = Field(default="true", alias="AUTOBOT_VLLM_PREFIX_CACHING")
     vnc_host: str = Field(default="", alias="AUTOBOT_VNC_HOST")
     vosk_model_path: str = Field(default="", alias="AUTOBOT_VOSK_MODEL_PATH")
-    weak_cache_size: int = Field(default=0, alias="AUTOBOT_WEAK_CACHE_SIZE")
+    weak_cache_size: int = Field(default=128, alias="AUTOBOT_WEAK_CACHE_SIZE")
     web_fetch_cache_ttl: str = Field(default="", alias="AUTOBOT_WEB_FETCH_CACHE_TTL")
     web_fetch_max_bytes: int = Field(default=0, alias="AUTOBOT_WEB_FETCH_MAX_BYTES")
     # #13019: bounds redirect-hop count for the pinned-redirect SSRF fetch path
