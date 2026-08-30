@@ -62,6 +62,62 @@ assertions):
   ``False``/``""`` and never ``None``, so it read the broken default through
   unchanged. Same defect class as the MCP-registry-cache one-off fix
   (#13262). Pre-#7437: enabled / enabled / "true".
+
+Evidence for the 22 defaults restored in a follow-up #13264 PR (gateway config,
+provider base URLs/vLLM, SMTP, MCP isolation, codebase indexing — the
+"live, unguarded, unfixed" table posted on the issue, minus the batch above).
+Each pre-#7437 literal was re-verified against ``122793bbf~1`` (the migration
+commit's pre-image), not carried over from the issue table unchecked; see
+``ssot_config_defaults_13264_batch2_test.py`` for the assertions:
+
+- ``gateway_rate_limit_user``/``gateway_rate_limit_channel``/
+  ``gateway_session_timeout``/``gateway_max_message_size``:
+  ``services/gateway/config.py``'s ``GatewayConfig.from_env`` reads all four
+  as ``int(config.gateway_*)`` with no fallback; ``0`` silently zeroes the
+  rate limit, session timeout, and max message size. Pre-#7437 (then
+  ``autobot-backend/services/gateway/config.py``): 60 / 100 / 1800 /
+  ``1024*1024`` (1048576).
+- ``gateway_max_sessions_user``/``gateway_heartbeat_interval``/
+  ``gateway_message_retention_hours``: same module, but already rescued at
+  the call site by ``_int_or_default`` (#14028) because these three are
+  ``str`` fields whose ``""`` default would otherwise raise on ``int("")``.
+  Runtime behaviour is already correct via that guard; this restores the
+  SSOT default itself so it stops disagreeing with the value actually used.
+  Pre-#7437: 5 / 30 / 24.
+- ``smtp_host``/``smtp_port``/``smtp_from``/``smtp_tls``:
+  ``services/notification_service.py`` reads all four unguarded. ``""``
+  host/from and ``0`` port break outbound mail; ``smtp_tls=""`` fails the
+  ``.lower() != "false"`` check into "TLS off" instead of "TLS on"
+  (pre-#7437 default was "true"). Pre-#7437: "localhost" / 587 /
+  "autobot@localhost" / "true".
+- ``mcp_worker_log_level``: ``services/mcp_bridge_workers/worker_entrypoint.py``
+  passes it straight to ``logging.basicConfig(level=...)`` unguarded; ``""``
+  is not a valid level name. Pre-#7437: "INFO".
+- ``mcp_isolation_mode``: the live isolation-mode decision in
+  ``services/mcp_isolation_config.py`` reads ``os.environ.get`` directly
+  (marked ``# ssot-config-exempt`` for #12443 — it must re-read lazily per
+  test, not cache through the ``ssot_config`` singleton), so this field
+  itself has no live reader today; restored for SSOT self-consistency only,
+  not a behaviour fix. Pre-#7437: "inprocess".
+- ``codebase_index_embed_batch_size``: ``api/codebase_analytics/chromadb_storage.py``
+  reads it unguarded as ``int(config.codebase_index_embed_batch_size)``;
+  ``0`` means every embedding call is chunked to a zero-size batch.
+  Pre-#7437: 100.
+- ``codebase_index_parallel_files``/``codebase_scan_parallel_files``:
+  ``api/codebase_analytics/file_analyzer.py``/``scanner.py`` both already
+  guard with ``blank_to_none(config.x) or 50``, so runtime behaviour is
+  already correct; restored for SSOT self-consistency, not a live fix.
+  Pre-#7437: 50 / 50.
+- ``anthropic_api_base_url``/``vllm_host``: ``services/provider_health/providers.py``
+  assigns both straight from ``ssot_config`` unguarded; an empty base URL
+  breaks every request built from it. Pre-#7437: "https://api.anthropic.com/v1"
+  / "http://127.0.0.1:8000".
+- ``openrouter_default_model``/``vllm_dtype``/``vllm_gpu_memory_utilization``/
+  ``vllm_tensor_parallel_size``: ``llm_shared/provider_registry.py`` (moved
+  from the pre-#7437 ``llm_interface_pkg/provider_registry.py``) reads all
+  four unguarded; ``vllm_gpu_memory_utilization=""`` raises on
+  ``float("")``, ``vllm_tensor_parallel_size=0`` silently zeroes the vLLM
+  tensor-parallel degree. Pre-#7437: "gpt-3.5-turbo" / "auto" / "0.9" / 1.
 """
 
 from __future__ import annotations
