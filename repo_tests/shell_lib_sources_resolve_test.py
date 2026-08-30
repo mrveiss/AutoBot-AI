@@ -306,7 +306,13 @@ def test_the_sweep_actually_reached_the_tree() -> None:
     # assertion above it fails first and ends the function — a reminder that a
     # single red line in a multi-assert test is a floor, not a census of what
     # broke.
-    assert len(rels) >= 70, f"only {len(rels)} distinct scripts"
+    #
+    # 69, not 70: #15127's later batch retired batch-configure-vms.sh and
+    # complete-vm-sync-templates.sh. This happened again exactly as the note
+    # above predicts — CI reported only the site-count floor, and this one
+    # surfaced from the pre-push hook after that was fixed. When lowering one
+    # floor here, re-run the whole function rather than the failing line.
+    assert len(rels) >= 69, f"only {len(rels)} distinct scripts"
     assert (
         "autobot-infrastructure/shared/scripts/vm-management/status-all-vms.sh" in rels
     ), "the walk no longer reaches a known call site"
