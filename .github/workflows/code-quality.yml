@@ -105,12 +105,13 @@ jobs:
   code-quality:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
-    # Back on self-hosted (#15310). The MVA-2605 outage this was moved away from
-    # is over: both runners are online. This job is the slowest in the set at
-    # ~601s average and is a single unsharded job, so its wall-clock is one job's
-    # duration on either runner type — it gives up no parallelism by moving,
-    # unlike the sharded suites which stay hosted deliberately.
-    runs-on: [self-hosted, Linux, X64]
+    # Hosted until #15313 lands. The MVA-2605 outage that first moved this off
+    # self-hosted is over — both runners are online — but moving it back failed
+    # on PR #15311: the runners are Ubuntu 25.10, a non-LTS release for which
+    # actions/python-versions publishes no 3.14 build, so `setup-python` has
+    # nothing to fetch. This is the intended destination once the runners are on
+    # an LTS release; it is not a preference for hosted.
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
@@ -130,7 +131,7 @@ jobs:
         # PRs merged onto the base in the meantime.
         fetch-depth: 2
 
-    - name: Set up Python 3.12
+    - name: Set up Python 3.14
       uses: actions/setup-python@v7
       with:
         python-version: '3.14'

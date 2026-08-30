@@ -23,11 +23,11 @@ permissions:
 
 jobs:
   verify-precommit-config:
-    # Self-hosted (#15310). Python and shell only — no Docker, no service
-    # containers — so the runner needs nothing the hosted image uniquely
-    # provides. A single unsharded job at ~462s average, so moving it forfeits
-    # no parallelism.
-    runs-on: [self-hosted, Linux, X64]
+    # Hosted until #15313 lands — same blocker as code-quality: this job runs
+    # setup-python-ci, and the self-hosted runners have no 3.14 build available
+    # on Ubuntu 25.10. Its sibling `check-instructions` needs no Python and does
+    # run self-hosted, which is what proves the runners themselves are fine.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
