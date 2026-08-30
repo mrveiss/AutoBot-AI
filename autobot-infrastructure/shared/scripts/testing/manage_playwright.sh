@@ -5,6 +5,13 @@
 # Playwright Service Management Script for AutoBot
 # Usage: ./manage_playwright.sh [start|stop|restart|status|logs]
 
+# #15127: COMPOSE_FILE used to be the bare relative name "docker-compose.playwright.yml",
+# which only resolved from inside autobot-infrastructure/shared/docker/compose/ -- the one
+# directory this script does not live in. Resolved from this script's own location so it
+# runs from anywhere, matching container_name: autobot-playwright in that compose file.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMPOSE_FILE="${SCRIPT_DIR}/../../docker/compose/docker-compose.playwright.yml"
+
 ACTION=${1:-status}
 
 case "$ACTION" in
@@ -22,7 +29,7 @@ case "$ACTION" in
         fi
 
         # Start the service
-        $COMPOSE_CMD -f docker-compose.playwright.yml up -d
+        $COMPOSE_CMD -f "$COMPOSE_FILE" up -d
 
         # Wait for health check
         echo "⏳ Waiting for Playwright service to be ready..."
@@ -42,9 +49,9 @@ case "$ACTION" in
         echo "🛑 Stopping Playwright service..."
 
         if command -v docker-compose &> /dev/null; then
-            docker-compose -f docker-compose.playwright.yml down
+            docker-compose -f "$COMPOSE_FILE" down
         elif command -v docker &> /dev/null && docker compose version &> /dev/null; then
-            docker compose -f docker-compose.playwright.yml down
+            docker compose -f "$COMPOSE_FILE" down
         else
             # Fallback to direct docker commands
             docker stop autobot-playwright || true

@@ -129,6 +129,66 @@ each is listed here so an operator can find it (#15127).
   ```bash
   bash autobot-infrastructure/shared/scripts/debug_chat_system.sh
   ```
+- `cleanup-legacy-python.sh` — one-time-per-machine removal of stale `pyenv`/`conda`/`miniconda`/
+  `anaconda3` installs left over from the pre-#1898 toolchain, plus the shell-rc blocks that
+  activated them. Refuses to touch anything unless `python3.14` (the deadsnakes-PPA standard,
+  #1898) is already on `PATH`. The migration itself landed repo-wide (#1924); this stays as the
+  cleanup a developer or VM still carrying the old install reaches for by hand.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/cleanup-legacy-python.sh
+  ```
+- `utilities/enable-phase4-enterprise.sh` — drive the `/api/enterprise/*` admin API
+  (`autobot-backend/api/enterprise_features.py`, Issue #620) end to end: enable every registered
+  feature, run the bulk-enable path, and print the Phase 4 completion validation. Requires
+  `AUTOBOT_INTERNAL_API_KEY` in the environment — every route on that router is admin-gated, and
+  this is the same trusted-service header `autobot-slm-backend/api/voice_proxy.py` sends, not a
+  new credential path. See
+  [`docs/prd/enterprise-features-subsystems-PRD.md`](../../../docs/prd/enterprise-features-subsystems-PRD.md)
+  before relying on the numbers it prints: most `enable_feature()` paths are logger-only stubs
+  today, so a "success" here reflects the status enum flipping, not a verified capability.
+  ```bash
+  AUTOBOT_INTERNAL_API_KEY=... bash autobot-infrastructure/shared/scripts/utilities/enable-phase4-enterprise.sh
+  ```
+- `check_ai_stack_health.sh` — probe a running `autobot-ai-stack` container: prompt files,
+  knowledge base index, prompt loading inside the container, and the `/health` endpoint. Exits
+  non-zero on the first real failure instead of reporting a clean run regardless (#14867).
+  ```bash
+  bash autobot-infrastructure/shared/scripts/check_ai_stack_health.sh
+  ```
+- `environment/set-env-deepseek.sh` — export the LLM and UI-debug env vars
+  (`AUTOBOT_DEFAULT_LLM_MODEL`, `AUTOBOT_SHOW_THOUGHTS`, etc. -- all live, SSOT-recognized keys)
+  needed to run AutoBot against `deepseek-r1:14b` instead of the default model. Meant to be
+  sourced, not executed.
+  ```bash
+  source autobot-infrastructure/shared/scripts/environment/set-env-deepseek.sh
+  ```
+- `setup/setup_tier2_research.sh` — install Playwright plus browsers and system deps for the
+  Tier 2 advanced web research capability (`autobot-backend/agents/web_researcher.py`), and
+  generate a local smoke-test script and an enable/disable toggle for
+  `config/web_research.yaml`. Recently hardened to fail loudly instead of reporting success
+  with a broken import (#14867).
+  ```bash
+  bash autobot-infrastructure/shared/scripts/setup/setup_tier2_research.sh
+  ```
+- `testing/manage_playwright.sh` — start/stop/restart/status/logs/test the standalone
+  `autobot-playwright` container defined in
+  `autobot-infrastructure/shared/docker/compose/docker-compose.playwright.yml`.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/testing/manage_playwright.sh status
+  ```
+- `utilities/prevent-local-frontend.sh` — not a hook, not aliased anywhere: an operator (or an
+  operator's own shell alias over `npm`/`vite`) runs this by hand to get the
+  [Single Frontend Server mandate](../../../docs/adr/005-single-frontend-mandate.md)'s reminder
+  and the correct `sync-frontend.sh`-based workflow instead of a local dev server.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/utilities/prevent-local-frontend.sh
+  ```
+- `utilities/sync-npu-worker-to-windows.sh` — rsync the Windows NPU worker package
+  (`autobot-npu-worker/resources/windows-npu-worker`) from WSL2 to the Windows host filesystem,
+  for the `install.ps1`/`check-health.ps1` steps that follow. Supports `--dry-run`.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/utilities/sync-npu-worker-to-windows.sh --dry-run
+  ```
 
 ## Usage Examples
 

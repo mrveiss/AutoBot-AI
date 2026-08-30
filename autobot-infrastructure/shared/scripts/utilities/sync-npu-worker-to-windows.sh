@@ -30,7 +30,11 @@ NC='\033[0m' # No Color
 # Default paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
-SOURCE_PATH="${PROJECT_ROOT}/resources/windows-npu-worker"
+# #15127: was "${PROJECT_ROOT}/resources/windows-npu-worker" -- that directory has
+# never existed at the repo root. The real source tree is autobot-npu-worker/resources/
+# windows-npu-worker (the install.ps1/check-health.ps1 this script tells the operator
+# to run next both live under it).
+SOURCE_PATH="${PROJECT_ROOT}/autobot-npu-worker/resources/windows-npu-worker"
 DEST_PATH="/mnt/c/AutoBot/NPU"
 
 # Options
