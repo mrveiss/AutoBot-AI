@@ -59,6 +59,40 @@ _SECRET_KEY_FRAGMENTS = (
 
 _MASK = "***"
 
+# ---------------------------------------------------------------------------
+# Cloud-provider identifiers (#15324)
+# ---------------------------------------------------------------------------
+
+# A boto3 ``ClientError``'s message embeds the caller's identity, e.g.
+#
+#   An error occurred (AccessDeniedException) when calling the InvokeModel
+#   operation: User: arn:aws:iam::123456789012:user/svc-bedrock is not
+#   authorized to perform: bedrock:InvokeModel on resource:
+#   arn:aws:bedrock:eu-west-1:123456789012:model/anthropic...
+#
+# The account number identifies the AWS account; the trailing resource segment
+# names a principal or resource. Both are disclosure when a provider error is
+# logged or returned to a caller.
+#
+# WHY THIS LIVES HERE rather than in a new module: this file's own header says a
+# redactor is a security control with exactly ONE implementation, because two
+# divergent one-off copies are what #12242 consolidated. A stashed draft of this
+# fix (#15324) added a separate ``autobot_shared/aws_error_sanitizer`` instead,
+# which would have reintroduced precisely that split — and it imported a module
+# that was never written, so it could not have run at all.
+#
+# DELIBERATELY NARROW: only the account field and the resource tail inside a
+# well-formed ARN are masked. The partition, service and region are kept, because
+# "which service refused me, in which region" is the whole diagnostic value of
+# the error, and a redactor that removes it will be worked around. A bare
+# 12-digit number elsewhere in a message is NOT masked — matching every such
+# number would hit ports, sizes and timestamps, and a redactor with false
+# positives is one people route around.
+_ARN_RE = re.compile(
+    r"\barn:(?P<partition>aws[a-z-]*):(?P<service>[a-z0-9-]*):(?P<region>[a-z0-9-]*):"
+    r"(?P<account>\d{12}):(?P<tail>[^\s\"',;)]*)"
+)
+
 
 def redact_text(text: str) -> str:
     """Redact common secret patterns from a line/blob of *text*.
@@ -89,4 +123,34 @@ def redact_mapping(mapping: Mapping[str, str]) -> Dict[str, str]:
     return redacted
 
 
-__all__ = ["redact_text", "redact_mapping"]
+
+def redact_cloud_identifiers(text: str) -> str:
+    """Mask AWS account numbers and resource tails inside ARNs in *text* (#15324).
+
+    ``arn:aws:iam::123456789012:user/svc`` -> ``arn:aws:iam::***:***``.
+    Partition, service and region survive, so an error still says which service
+    refused the call and where. Text containing no ARN is returned unchanged.
+    """
+
+    def _mask(match: "re.Match[str]") -> str:
+        return (
+            f"arn:{match.group('partition')}:{match.group('service')}:"
+            f"{match.group('region')}:{_MASK}:{_MASK}"
+        )
+
+    return _ARN_RE.sub(_mask, text)
+
+
+def redact_provider_error(exc: BaseException) -> str:
+    """A provider exception rendered safe to log or return to a caller (#15324).
+
+    Applies both the secret patterns and the cloud-identifier patterns. Returns
+    the class name alone when the message is empty, so a caller never logs a
+    bare ``''`` that reads as "no error".
+    """
+    message = str(exc).strip()
+    if not message:
+        return type(exc).__name__
+    return redact_cloud_identifiers(redact_text(message))
+
+__all__ = ["redact_text", "redact_mapping", "redact_cloud_identifiers", "redact_provider_error"]

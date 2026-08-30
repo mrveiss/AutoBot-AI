@@ -26,7 +26,7 @@ import json
 import re
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.redaction import redact_text
+from autobot_shared.security.redaction import redact_cloud_identifiers, redact_text
 from services.secrets_audit_store import (
     REASON_LOOKUP_ERROR,
     REASON_MALFORMED_VALUE,
@@ -87,7 +87,10 @@ def scrub_credentials(text: str, credentials: tuple[str | None, str | None, str 
     Only the access key and the secret key are masked; the region is not a
     secret and removing it would cost the log line its only useful detail.
     """
-    scrubbed = redact_text(text)
+    # #15324: ARNs in a boto3 message carry the account number and the
+    # principal or resource name. Folded in here rather than applied at each
+    # call site, so every existing caller of this scrubber gains it.
+    scrubbed = redact_cloud_identifiers(redact_text(text))
     for value in credentials[:2]:
         if isinstance(value, str) and value:
             scrubbed = scrubbed.replace(value, _CREDENTIAL_MASK)
