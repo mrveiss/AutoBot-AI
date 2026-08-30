@@ -1,5 +1,7 @@
 # AutoBot Docker Architecture Documentation
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 ## Overview
 
 AutoBot has implemented a comprehensive Docker deduplication and Redis database separation strategy to eliminate code duplication, improve maintainability, and provide proper data isolation across services.

@@ -1,7 +1,7 @@
 ---
 tags:
   - index
-  - designs
+  - design
   - mockups
 aliases:
   - Mockups Index

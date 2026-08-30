@@ -6,6 +6,8 @@ issue: 2154
 
 # Causal Error Recovery — Architecture
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 The Causal Error Recovery system enhances workflow error handling by diagnosing *why* errors occur (root-cause analysis) and recommending targeted recovery strategies based on causal chains and historical resolution data.
 
 See [[causal-error-recovery-api]] for the public API and [[causal-inference-algorithms]] for scoring details.

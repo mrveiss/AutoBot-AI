@@ -1,5 +1,7 @@
 # AutoBot Communication Architecture
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 ## Overview
 
 AutoBot uses a **hybrid communication architecture** that combines API-based communication for cross-boundary interactions with direct function calls for internal operations. This document explains when and why each pattern is used.

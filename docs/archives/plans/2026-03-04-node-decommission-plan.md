@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Node Decommission Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -156,7 +158,7 @@ UI Layout:
 ## Task 8: Sync, build, and verify end-to-end
 
 **Step 1:** Sync backend to .19: `sync-to-vm.sh 19 autobot-slm-backend /opt/autobot/autobot-slm-backend`
-**Step 2:** Restart: `ssh autobot@172.16.168.19 "sudo systemctl restart autobot-slm-backend"`
+**Step 2:** Restart: `ssh autobot@<slm-manager-ip> "sudo systemctl restart autobot-slm-backend"`
 **Step 3:** Verify playbook exists on .19
 **Step 4:** Sync frontend to .21 + build
 **Step 5:** Test preflight: `curl -sk .../api/nodes/04-NPU-Worker/decommission/preflight`

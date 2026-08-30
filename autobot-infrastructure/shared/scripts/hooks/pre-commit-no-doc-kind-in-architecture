@@ -1,0 +1,104 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025-2026 mrveiss
+# Author: mrveiss
+#
+# Pre-commit Hook: No Analysis/Design/Plan Documents Under docs/architecture/
+# =============================================================================
+#
+# Issues #15190, #15192, #15206 — docs/architecture/ holds structural
+# descriptions of the system as built. Three document kinds have a settled,
+# unambiguous home elsewhere and must never land back in docs/architecture/:
+#
+#   *_ANALYSIS.md            -> docs/analysis/  (owner decision, #15190, 2026-08-28)
+#   *_DESIGN.md               -> docs/design/    (owner decision, #15190, 2026-08-28)
+#   *_IMPLEMENTATION_PLAN.md  -> docs/planning/  (owner decision, #15190, 2026-08-28)
+#
+# This intentionally does NOT enforce the ANA_/RES_/AUD_ prefix convention or
+# the docs/research, docs/audit destinations — those are still being iterated
+# on across #15190's comment thread (prefix for analysis documents is only a
+# suggestion pending confirmation as of 2026-08-28) and a guard must not freeze
+# a moving target. It also does not touch docs/superpowers/ or
+# docs/archives/plans/ — those have not been migrated yet (#15206 tracks the
+# remainder) so a guard scoped to them would immediately fail on existing,
+# untouched files.
+#
+# A document whose kind is genuinely architecture but happens to end in one of
+# these suffixes (e.g. a hypothetical *_DESIGN.md that is actually a structural
+# spec) should be renamed, not exempted — the three suffixes are reserved.
+#
+# Reach floor: docs/architecture/ has held 60+ tracked documents since #15192
+# landed (2026-08-30). If the scan sees fewer than REACH_FLOOR tracked files,
+# something is broken (wrong cwd, wrong git root, docs/architecture/ deleted)
+# and the hook fails loudly instead of silently reporting "clean".
+#
+# Suppression: none. Move the file or rename it to describe what it actually is.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/_common.sh
+source "$SCRIPT_DIR/lib/_common.sh" || {
+    echo "FATAL: cannot load lib/_common.sh — refusing to report clean" >&2
+    exit 1
+}
+
+REACH_FLOOR=50
+ARCH_DIR="docs/architecture"
+
+main() {
+    echo -e "${BOLD}${CYAN}Pre-commit: No Analysis/Design/Plan Documents Under docs/architecture/${NC}"
+    echo "Issues #15190, #15192, #15206"
+    echo "================================================"
+    echo ""
+
+    if [[ ! -d "$ARCH_DIR" ]]; then
+        echo -e "${RED}FATAL: $ARCH_DIR does not exist from cwd $(pwd) — refusing to report clean${NC}" >&2
+        exit 1
+    fi
+
+    local tracked_count
+    tracked_count=$(git ls-files -- "$ARCH_DIR/*.md" | wc -l | tr -d ' ')
+
+    if (( tracked_count < REACH_FLOOR )); then
+        echo -e "${RED}FATAL: only $tracked_count tracked .md files under $ARCH_DIR (expected >= $REACH_FLOOR).${NC}" >&2
+        echo "The scan floor exists to catch a broken path/cwd rather than silently passing." >&2
+        exit 1
+    fi
+
+    local violations=0
+    local f base
+    while IFS= read -r f; do
+        [[ -z "$f" ]] && continue
+        base=$(basename "$f")
+        case "$base" in
+            *_ANALYSIS.md)
+                echo -e "  ${RED}VIOLATION${NC} $f — *_ANALYSIS.md belongs in docs/analysis/ (#15190)"
+                violations=$((violations + 1))
+                ;;
+            *_DESIGN.md)
+                echo -e "  ${RED}VIOLATION${NC} $f — *_DESIGN.md belongs in docs/design/ (#15190)"
+                violations=$((violations + 1))
+                ;;
+            *_IMPLEMENTATION_PLAN.md)
+                echo -e "  ${RED}VIOLATION${NC} $f — *_IMPLEMENTATION_PLAN.md belongs in docs/planning/ (#15190)"
+                violations=$((violations + 1))
+                ;;
+        esac
+    done < <(git diff --cached --name-only --diff-filter=ACR -- "$ARCH_DIR/*.md")
+
+    echo ""
+    echo "================================================"
+    echo "Scanned $tracked_count tracked documents under $ARCH_DIR (reach floor: $REACH_FLOOR)."
+
+    if (( violations > 0 )); then
+        echo -e "${RED}COMMIT BLOCKED: $violations misplaced document(s).${NC}"
+        echo "Move the file to its settled home (git mv), or rename it if it is genuinely architecture."
+        exit 1
+    fi
+
+    echo -e "${GREEN}No misplaced analysis/design/plan documents staged under $ARCH_DIR.${NC}"
+    exit 0
+}
+
+main "$@"

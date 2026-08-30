@@ -1,5 +1,8 @@
 # Phase 3: Service Discovery & Agent Config Migration Design (Issue #760)
 
+> **Correction (2026-08-30, #15206):** this document names `unified_config` / `unified_config_manager` / `UnifiedConfigManager` as current or pending. That name is a **deprecated alias** (`autobot-backend/config/__init__.py:148-157`) or, for the module path specifically, never existed. The canonical configuration entry point is `autobot_shared/ssot_config.py` (infrastructure/SSOT) plus `config_manager` / `get_config_manager()` from `config.manager` (`autobot-backend/config/manager.py:51`) for everything else. See `docs/developer/SSOT_CONFIG_GUIDE.md`. Historical content below is otherwise unchanged.
+
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Create client libraries for service discovery and migrate agent LLM config from local files to SLM.

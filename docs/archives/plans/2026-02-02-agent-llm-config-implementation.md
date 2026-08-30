@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Agent LLM Configuration Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -1002,7 +1004,7 @@ from services.slm_client import init_slm_client, shutdown_slm_client
 In lifespan startup:
 ```python
 # Initialize SLM client for agent config (Issue #760)
-slm_url = os.getenv("SLM_URL", "http://172.16.168.19:8000")
+slm_url = os.getenv("SLM_URL", "http://<slm-manager-ip>:8000")
 slm_token = os.getenv("SLM_AUTH_TOKEN")
 await init_slm_client(slm_url, slm_token)
 logger.info("SLM client initialized")

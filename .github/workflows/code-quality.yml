@@ -34,7 +34,20 @@ on:
       # so the guard could not fire on the change it exists to catch.
       - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
       - '.github/actions/**'
-      - 'docs/developer/**'
+      # #15309: the watchdog inventory + systemd templates
+      # tools/lint/check_runner_watchdog_schedule.py --audit reads, so a PR
+      # touching only one of them still runs code-quality.
+      - 'scripts/runner-watchdog-inventory.yaml'
+      - 'scripts/systemd/runner-watchdog@.service'
+      - 'scripts/systemd/runner-watchdog@.timer'
+      # #15208: the documentation fleet-addressing guard reads every Markdown file
+      # under docs/ and takes its pattern from scripts/lib/hardcoded-value-rules.sh.
+      # 'docs/developer/**' (added for the guards that read that folder) is subsumed
+      # by 'docs/**'. Without the wider entry a docs-only PR -- the exact shape that
+      # reintroduces an address -- skips code-quality, and a skipped required job
+      # satisfies branch protection.
+      - 'docs/**'
+      - 'scripts/lib/**'
       - '.github/workflows/code-quality.yml'
   # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
   # required-check context ("code-quality") always reports a conclusion. A
@@ -89,7 +102,15 @@ jobs:
               - 'autobot-backend/static/error_messages.yaml'
               - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
               - '.github/actions/**'
-              - 'docs/developer/**'
+              # #15309: the watchdog inventory + systemd templates
+              # tools/lint/check_runner_watchdog_schedule.py --audit reads.
+              - 'scripts/runner-watchdog-inventory.yaml'
+              - 'scripts/systemd/runner-watchdog@.service'
+              - 'scripts/systemd/runner-watchdog@.timer'
+              # #15208: see the on.push.paths list above -- docs/ and the shared rule
+              # set are the documentation guard's inputs.
+              - 'docs/**'
+              - 'scripts/lib/**'
               - '.github/workflows/code-quality.yml'
 
   code-quality:
@@ -120,11 +141,17 @@ jobs:
         # PRs merged onto the base in the meantime.
         fetch-depth: 2
 
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v7
+    # #15313: routed through the shared composite action rather than a raw
+    # actions/setup-python step, so this job works unchanged whichever runner
+    # type it lands on -- self-hosted skips the tool-cache download that has
+    # no build for this runner OS release and uses the interpreter already on
+    # PATH instead (see .github/actions/setup-python-ci/action.yml). Also
+    # fixes this step's own name, which named 3.12 while requesting 3.14 --
+    # harmless, but sent debugging here to the wrong version first (#15313 aside).
+    - name: Set up Python 3.14
+      uses: ./.github/actions/setup-python-ci
       with:
         python-version: '3.14'
-        cache: 'pip'
         cache-dependency-path: |
           requirements*.txt
           autobot-backend/requirements*.txt
@@ -514,6 +541,24 @@ jobs:
         # cannot strand an exemption. There is no growable baseline.
         python3 tools/lint/check_no_shell_placeholder_paths.py --audit
 
+    - name: Audit documentation for fleet node addressing (#15208)
+      run: |
+        # #3315 replaced the fleet's literal node addresses in docs/architecture/ with
+        # role placeholders. Nothing watched the rest of the tree: the same addressing --
+        # role-to-host mappings and database endpoints, which together read as a network
+        # map -- survived in docs/archives/plans/ one folder across, because
+        # HV_SCAN_EXTENSIONS in `scripts/lib/hardcoded-value-rules.sh` is
+        # py|ts|vue|js|sh|yml|yaml and Markdown is not in it. This has to run in a
+        # REQUIRED check for the same directional reason as #14419/#14405/#14489: a
+        # document that stops being scanned reports fewer findings, so the failure goes
+        # greener rather than redder. It parses its pattern out of the shared rule set
+        # rather than restating it, aborts if that cannot be read, and fails below a
+        # discovery floor -- #15208 exists because a sweep that never looked at
+        # docs/archives/ reported a comfortable zero. Deliberate counter-examples are
+        # exempted by an in-document block marker, and a marker covering no address is
+        # itself a finding, so no exemption outlives its reason.
+        python3 tools/lint/check_docs_no_fleet_addressing.py --audit
+
     - name: Audit MCP tool permission coverage (#14494)
       run: |
         # The under-grant guard used to infer "this tool mutates state" from a
@@ -593,6 +638,23 @@ jobs:
         # small, stable allowed-key set directly so a push never reaches a
         # runner with an invalid composite action again.
         python3 tools/lint/check_composite_action_step_keys.py --audit
+
+    - name: Audit the runner watchdog schedule (#15309)
+      run: |
+        # Both self-hosted runners had no watchdog scheduled anywhere: the
+        # only entry was an untracked cron line on a host that no longer ran
+        # a runner, and its log redirect was unwritable there too -- a gap
+        # that produced zero signal for months. This cannot observe a live
+        # host from CI, so it verifies the half that IS in the repo: the
+        # runner inventory lists at least one runner (a reach floor -- an
+        # emptied inventory must fail, not pass having asserted nothing), each
+        # entry's systemd service name actually names its own runner rather
+        # than a stale one (#15309 fault #2's exact shape), the systemd
+        # templates operators are told to install actually exist, and no
+        # entry's last-verified date has gone stale past its floor -- forcing
+        # periodic re-confirmation against `gh api .../actions/runners`
+        # rather than trusting a doc nobody revisits.
+        python3 tools/lint/check_runner_watchdog_schedule.py --audit
 
     - name: Audit that the changes filter covers what the new guards read (#14550/#14551)
       run: |

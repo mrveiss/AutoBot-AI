@@ -79,7 +79,7 @@ backend_host: "<backend-ip>"  # eth2 only, instead of 0.0.0.0
 ```
 
 This makes local-loopback tests impossible but has no production impact since all
-legitimate clients connect via 172.16.168.x.
+legitimate clients connect via <network-subnet>.
 
 ### Option 2: nginx reverse proxy on .20 ✅ IMPLEMENTED (Issue #957)
 

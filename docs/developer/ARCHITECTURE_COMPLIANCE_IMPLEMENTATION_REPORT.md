@@ -1,5 +1,8 @@
 # Architecture Compliance Implementation Report
 
+> **Correction (2026-08-30, #15206):** this document names `unified_config` / `unified_config_manager` / `UnifiedConfigManager` as current or pending. That name is a **deprecated alias** (`autobot-backend/config/__init__.py:148-157`) or, for the module path specifically, never existed. The canonical configuration entry point is `autobot_shared/ssot_config.py` (infrastructure/SSOT) plus `config_manager` / `get_config_manager()` from `config.manager` (`autobot-backend/config/manager.py:51`) for everything else. See `docs/developer/SSOT_CONFIG_GUIDE.md`. Historical content below is otherwise unchanged.
+
+
 **Date**: 2025-10-09
 **Phase**: Phase 2 - Architecture Configuration Enforcement
 **Status**: ✅ **COMPLETE**
@@ -340,8 +343,8 @@ class TestNewService:
         service_config = services_config.get("new_service", {})
         service_host = service_config.get("host")
 
-        assert service_host == "172.16.168.XX", (
-            f"New service must run on VM X (172.16.168.XX), currently: {service_host}"
+        assert service_host == "<new-node-ip>", (
+            f"New service must run on VM X (<new-node-ip>), currently: {service_host}"
         )
 ```
 

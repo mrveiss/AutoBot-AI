@@ -1,5 +1,8 @@
 # SSOT Configuration Guide
 
+> **Correction (2026-08-30, #15206):** this guide's config.yaml example previously showed `from src.config import unified_config_manager`. `unified_config_manager` is a **deprecated alias** (`autobot-backend/config/__init__.py:148-157`); the canonical entry point is `config_manager` / `get_config_manager()` from `config.manager` (confirmed at `autobot-backend/config/manager.py:51`, used this way in `autobot-backend/desktop_streaming_manager.py:35` and `autobot-backend/worker_node.py:50`). For infrastructure values, `autobot_shared/ssot_config.py` remains the SSOT as this guide already states below. Fixed in place.
+
+
 > **Single Source of Truth (SSOT) Configuration System Developer Guide**
 >
 > Part of Issue #604 - SSOT Phase 4 Cleanup
@@ -473,10 +476,10 @@ from autobot_shared.ssot_config import config
 redis_host = config.vm.redis           # Infrastructure from .env
 backend_url = config.backend_url       # Computed URL from .env
 
-# For user preferences - use unified config manager
-from src.config import unified_config_manager
-theme = unified_config_manager.get_nested('ui.theme')  # From config.yaml
-auto_scroll = unified_config_manager.get_nested('chat.auto_scroll')
+# For user preferences - use the config manager
+from config import config_manager
+theme = config_manager.get_nested('ui.theme')  # From config.yaml
+auto_scroll = config_manager.get_nested('chat.auto_scroll')
 ```
 
 ## Related Documentation

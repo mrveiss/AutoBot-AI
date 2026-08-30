@@ -1,5 +1,7 @@
 # 📊 AutoBot Advanced Monitoring and Alerting System
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 ## Overview
 
 The AutoBot Advanced Monitoring and Alerting System provides comprehensive real-time monitoring of system performance, service health, and application metrics. This system enables proactive issue detection and performance optimization.

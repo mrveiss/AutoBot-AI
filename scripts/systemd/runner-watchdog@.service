@@ -1,0 +1,39 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# Instantiated unit: one copy per self-hosted runner (#15309). The instance
+# name (the part between @ and .service, i.e. %i) MUST be the runner's exact
+# name as registered with GitHub -- see docs/developer/RUNNER_WATCHDOG.md for
+# the current inventory and the full install steps.
+#
+# Deliberately NOT enabled/started by this file alone: `systemctl enable`
+# targets a specific instance (e.g. `runner-watchdog@Little-Slave.timer`),
+# never the bare template, so an operator cannot activate this against an
+# unnamed/wrong runner by accident.
+[Unit]
+Description=AutoBot GitHub Actions runner watchdog for %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# RUNNER_NAME derives from the instance name so it can never drift from the
+# unit that is running it (#15309 fault #2: the previous cron entry's
+# RUNNER_NAME was a literal that outlived the runner it named).
+Environment=RUNNER_NAME=%i
+# SERVICE_NAME follows GitHub's own runner-installer naming convention
+# (actions.runner.<owner>-<repo>.<runner-name>.service). If a host's runner
+# was installed with a non-default name, override via the EnvironmentFile
+# below rather than editing this template.
+Environment=SERVICE_NAME=actions.runner.mrveiss-AutoBot-AI.%i.service
+# Holds GH_TOKEN only. Never tracked in the repo -- created on the host during
+# install (see docs/developer/RUNNER_WATCHDOG.md), permissions 0600.
+EnvironmentFile=%h/.config/runner-watchdog/token.env
+ExecStart=%h/AutoBot-AI/scripts/runner-watchdog.sh
+# Home-relative, not /var/log -- #15309 fault #1: /var/log is root:syslog on
+# these hosts and unwritable by the invoking user, which failed the redirect
+# before the script ever ran.
+StandardOutput=append:%h/.local/state/runner-watchdog/%i.log
+StandardError=append:%h/.local/state/runner-watchdog/%i.log

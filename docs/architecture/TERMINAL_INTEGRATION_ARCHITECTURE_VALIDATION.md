@@ -1,5 +1,8 @@
 # Terminal Integration Architecture Validation
 
+> **Freshness:** historical — 2026-08-30. A point-in-time validation record (2025-10-04), not a living architecture description. Whether validation records belong in `docs/audit/` is unresolved (see #15190's still-open `*_ASSESSMENT.md`/validation question) — left in place rather than guessed at.
+
+
 **Version:** 1.0
 **Date:** 2025-10-04
 **Status:** Architecture Validation

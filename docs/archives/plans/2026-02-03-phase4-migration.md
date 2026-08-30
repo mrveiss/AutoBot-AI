@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Phase 4: Service Discovery Migration & Agent Management UI
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -16,7 +18,7 @@
 - Modify: `backend/services/slm_client.py`
 
 **Problem:**
-Line 38 has `DEFAULT_SLM_URL = "http://172.16.168.19:8000"` - hardcoded SLM URL.
+Line 38 has `DEFAULT_SLM_URL = "http://<slm-manager-ip>:8000"` - hardcoded SLM URL.
 
 **Solution:**
 The SLM URL is special - it's the bootstrap service that can't use discover_service() (chicken-and-egg). Use environment variable with no hardcoded fallback.
@@ -25,7 +27,7 @@ The SLM URL is special - it's the bootstrap service that can't use discover_serv
 
 Change:
 ```python
-DEFAULT_SLM_URL = "http://172.16.168.19:8000"
+DEFAULT_SLM_URL = "http://<slm-manager-ip>:8000"
 ```
 
 To:
@@ -137,13 +139,13 @@ function getEnv(key: string, defaultValue: string): string {
 }
 
 vm: {
-  main: getEnv('VITE_BACKEND_HOST', '172.16.168.20'),
-  frontend: getEnv('VITE_FRONTEND_HOST', '172.16.168.21'),
-  npu: getEnv('VITE_NPU_WORKER_HOST', '172.16.168.22'),
-  redis: getEnv('VITE_REDIS_HOST', '172.16.168.23'),
-  ai: getEnv('VITE_AI_STACK_HOST', '172.16.168.24'),
-  browser: getEnv('VITE_BROWSER_HOST', '172.16.168.25'),
-  slm: getEnv('VITE_SLM_HOST', '172.16.168.19'),
+  main: getEnv('VITE_BACKEND_HOST', '<backend-ip>'),
+  frontend: getEnv('VITE_FRONTEND_HOST', '<frontend-ip>'),
+  npu: getEnv('VITE_NPU_WORKER_HOST', '<npu-ip>'),
+  redis: getEnv('VITE_REDIS_HOST', '<database-ip>'),
+  ai: getEnv('VITE_AI_STACK_HOST', '<aiml-ip>'),
+  browser: getEnv('VITE_BROWSER_HOST', '<browser-ip>'),
+  slm: getEnv('VITE_SLM_HOST', '<slm-manager-ip>'),
 },
 ```
 

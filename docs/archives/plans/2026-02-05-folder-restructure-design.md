@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Folder Restructure Design
 
 > **HISTORICAL NOTE**: This document describes the initial flat infrastructure structure.
@@ -19,7 +21,7 @@
 │
 ├── # DEPLOYABLE COMPONENTS
 │
-├── autobot-backend/           # Deploys to 172.16.168.20 (Main)
+├── autobot-backend/           # Deploys to <backend-ip> (Main)
 │   ├── api/                        # FastAPI endpoints
 │   ├── services/                   # Business logic
 │   ├── models/                     # SQLAlchemy models
@@ -31,13 +33,13 @@
 │   ├── requirements.txt            # Python dependencies
 │   └── README.md                   # Deployment instructions
 │
-├── autobot-frontend/          # Deploys to 172.16.168.20 (Main)
+├── autobot-frontend/          # Deploys to <backend-ip> (Main)
 │   ├── src/                        # Vue source
 │   ├── public/                     # Static assets
 │   ├── package.json                # Node dependencies
 │   └── README.md
 │
-├── autobot-slm-backend/            # Deploys to 172.16.168.19 (SLM)
+├── autobot-slm-backend/            # Deploys to <slm-manager-ip> (SLM)
 │   ├── api/                        # FastAPI endpoints
 │   ├── services/                   # Sync orchestrator, etc.
 │   ├── models/                     # Fleet models
@@ -47,20 +49,20 @@
 │   ├── requirements.txt
 │   └── README.md
 │
-├── autobot-slm-frontend/           # Deploys to 172.16.168.21 (Frontend VM)
+├── autobot-slm-frontend/           # Deploys to <frontend-ip> (Frontend VM)
 │   ├── src/                        # Vue source
 │   ├── public/
 │   ├── package.json
 │   └── README.md
 │
-├── autobot-npu-worker/             # Deploys to 172.16.168.22 (NPU)
+├── autobot-npu-worker/             # Deploys to <npu-ip> (NPU)
 │   ├── workers/                    # NPU worker processes
 │   ├── models/                     # AI models
 │   ├── main.py
 │   ├── requirements.txt            # OpenVINO, torch, etc.
 │   └── README.md
 │
-├── autobot-browser-worker/         # Deploys to 172.16.168.25 (Browser)
+├── autobot-browser-worker/         # Deploys to <browser-ip> (Browser)
 │   ├── services/                   # Playwright services
 │   ├── main.py
 │   ├── requirements.txt            # Playwright, etc.
@@ -219,12 +221,12 @@ Root-level data folders to migrate:
 
 | Component | Machine | IP | Command |
 |-----------|---------|-----|---------|
-| `autobot-backend/` | Main | 172.16.168.20 | `sync-to-vm.sh main autobot-backend/` |
-| `autobot-frontend/` | Main | 172.16.168.20 | `sync-to-vm.sh main autobot-frontend/` |
-| `autobot-slm-backend/` | SLM | 172.16.168.19 | `sync-to-vm.sh slm autobot-slm-backend/` |
-| `autobot-slm-frontend/` | Frontend VM | 172.16.168.21 | `sync-to-vm.sh frontend autobot-slm-frontend/` |
-| `autobot-npu-worker/` | NPU | 172.16.168.22 | `sync-to-vm.sh npu autobot-npu-worker/` |
-| `autobot-browser-worker/` | Browser | 172.16.168.25 | `sync-to-vm.sh browser autobot-browser-worker/` |
+| `autobot-backend/` | Main | <backend-ip> | `sync-to-vm.sh main autobot-backend/` |
+| `autobot-frontend/` | Main | <backend-ip> | `sync-to-vm.sh main autobot-frontend/` |
+| `autobot-slm-backend/` | SLM | <slm-manager-ip> | `sync-to-vm.sh slm autobot-slm-backend/` |
+| `autobot-slm-frontend/` | Frontend VM | <frontend-ip> | `sync-to-vm.sh frontend autobot-slm-frontend/` |
+| `autobot-npu-worker/` | NPU | <npu-ip> | `sync-to-vm.sh npu autobot-npu-worker/` |
+| `autobot-browser-worker/` | Browser | <browser-ip> | `sync-to-vm.sh browser autobot-browser-worker/` |
 | `autobot_shared/` | (all backends) | - | Deployed with each backend |
 
 **Sync script location:** `infrastructure/shared/scripts/sync-to-vm.sh`

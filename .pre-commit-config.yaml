@@ -721,6 +721,17 @@ repos:
         stages: [pre-commit]
         description: "Warns on new module-level singletons in agent/runtime paths — use SharedRuntimeBag instead"
 
+  # No analysis/design/plan documents under docs/architecture/ (Issues #15190, #15192, #15206)
+  - repo: local
+    hooks:
+      - id: no-doc-kind-in-architecture
+        name: 'No Analysis/Design/Plan Documents Under docs/architecture/ (Issues #15190, #15192, #15206)'
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-doc-kind-in-architecture
+        language: script
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks new *_ANALYSIS.md, *_DESIGN.md, *_IMPLEMENTATION_PLAN.md files under docs/architecture/ — they belong in docs/analysis|design|planning/"
+
   # No new /health routes outside api/system_health.py (Issue #3333)
   - repo: local
     hooks:
