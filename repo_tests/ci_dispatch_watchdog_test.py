@@ -1311,7 +1311,15 @@ def test_the_real_workflow_tree_classifies_the_reported_workflows_correctly(watc
     resolved = {Path(p).name for p in paths}
     # Declares `runs-on: [self-hosted, Linux, X64]` on four jobs.
     assert "frontend-test.yml" in resolved
-    # The three workflows named in the false `no runner available` status.
+    # #15311 moved these two onto the self-hosted runners deliberately (#15310),
+    # so they belong on this side now. This pin was left behind by that change
+    # and turned `Dev_new_gui` red from the merge at 2026-08-30 09:22 onward --
+    # the classifier was right and the expectation was stale, which is the one
+    # case where correcting the assertion rather than the code is the fix.
+    assert "code-quality.yml" in resolved
+    assert "enforce-precommit.yml" in resolved
+    # Still GitHub-hosted, and still the shape the false `no runner available`
+    # status reported. Keeping both sides asserted is the point: a classifier
+    # that answered "self-hosted" for everything would satisfy the two above.
     assert "ci.yml" not in resolved
-    assert "code-quality.yml" not in resolved
     assert "frontend-required-context.yml" not in resolved
