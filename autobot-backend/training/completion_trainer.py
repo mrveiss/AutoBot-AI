@@ -305,10 +305,7 @@ class CompletionTrainer:
         # The accepted shape is exactly what save_checkpoint() writes: "best", or
         # "v" + the %Y%m%d_%H%M%S timestamp it stamps.
         if not _VERSION_RE.fullmatch(version):
-            raise ValueError(
-                f"Invalid checkpoint version {version!r}: expected 'best' or "
-                "'vYYYYMMDD_HHMMSS'"
-            )
+            raise ValueError(f"Invalid checkpoint version {version!r}: expected 'best' or " "'vYYYYMMDD_HHMMSS'")
 
         # Select the checkpoint from what the directory ACTUALLY contains, rather
         # than building a path out of `version` and then checking it.
