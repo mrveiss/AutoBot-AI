@@ -310,18 +310,27 @@ class CompletionTrainer:
                 "'vYYYYMMDD_HHMMSS'"
             )
 
-        if version == "best":
-            checkpoint_path = self.model_dir / "completion_model_best.pt"
-        else:
-            checkpoint_path = self.model_dir / f"completion_model_{version}.pt"
-
-        # Defence in depth: even a regex-passing value must not escape model_dir.
-        model_dir = self.model_dir.resolve()
-        if not checkpoint_path.resolve().is_relative_to(model_dir):
-            raise ValueError(f"Checkpoint path escapes the model directory: {version!r}")
-
-        if not checkpoint_path.exists():
-            raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+        # Select the checkpoint from what the directory ACTUALLY contains, rather
+        # than building a path out of `version` and then checking it.
+        #
+        # The earlier form validated with a regex and then asserted containment
+        # with `is_relative_to`. Both checks were correct, and CodeQL still
+        # reported py/path-injection on them — its taint model follows a
+        # user-derived string into a path expression and cannot see that the
+        # expression exists to *reject* the value. Checking harder never clears
+        # that, because the tainted string is still what builds the path.
+        #
+        # Here the path value originates from `iterdir()` — the filesystem — and
+        # `version` is only ever used as a dictionary key, which is a comparison.
+        # There is no path built from user input to flag, and the guarantee is
+        # stronger than the assertion it replaces: the result can only be a file
+        # that already exists directly inside `model_dir`, so traversal is not
+        # merely detected, it is unrepresentable.
+        wanted = "completion_model_best.pt" if version == "best" else f"completion_model_{version}.pt"
+        available = {entry.name: entry for entry in self.model_dir.iterdir() if entry.is_file()}
+        checkpoint_path = available.get(wanted)
+        if checkpoint_path is None:
+            raise FileNotFoundError(f"Checkpoint not found: {wanted} in {self.model_dir}")
 
         # `weights_only=True` restricts unpickling to tensors/plain data and refuses
         # arbitrary global/reduce execution — the PyTorch-documented mitigation against
