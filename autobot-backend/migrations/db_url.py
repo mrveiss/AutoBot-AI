@@ -33,7 +33,11 @@ def get_url() -> str:
         # Default fallback for development: assemble from AUTOBOT_POSTGRES_HOST
         # only; user/password/db are fixed to their dev values (#11466).
         return assemble_postgres_url(
-            {"AUTOBOT_POSTGRES_HOST": os.environ.get("AUTOBOT_POSTGRES_HOST", "autobot-postgres")},
+            {
+                "AUTOBOT_POSTGRES_HOST": os.environ.get(
+                    "AUTOBOT_POSTGRES_HOST", "autobot-postgres"
+                )  # ssot-config-exempt: dev-only docker-compose service-name fallback (#11466), not the SSOT default
+            },
             default_host="autobot-postgres",
             default_user="autobot",
             default_db="autobot",
