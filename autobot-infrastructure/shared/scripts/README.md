@@ -129,6 +129,26 @@ each is listed here so an operator can find it (#15127).
   ```bash
   bash autobot-infrastructure/shared/scripts/debug_chat_system.sh
   ```
+- `cleanup-legacy-python.sh` — one-time-per-machine removal of stale `pyenv`/`conda`/`miniconda`/
+  `anaconda3` installs left over from the pre-#1898 toolchain, plus the shell-rc blocks that
+  activated them. Refuses to touch anything unless `python3.14` (the deadsnakes-PPA standard,
+  #1898) is already on `PATH`. The migration itself landed repo-wide (#1924); this stays as the
+  cleanup a developer or VM still carrying the old install reaches for by hand.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/cleanup-legacy-python.sh
+  ```
+- `utilities/enable-phase4-enterprise.sh` — drive the `/api/enterprise/*` admin API
+  (`autobot-backend/api/enterprise_features.py`, Issue #620) end to end: enable every registered
+  feature, run the bulk-enable path, and print the Phase 4 completion validation. Requires
+  `AUTOBOT_INTERNAL_API_KEY` in the environment — every route on that router is admin-gated, and
+  this is the same trusted-service header `autobot-slm-backend/api/voice_proxy.py` sends, not a
+  new credential path. See
+  [`docs/prd/enterprise-features-subsystems-PRD.md`](../../../docs/prd/enterprise-features-subsystems-PRD.md)
+  before relying on the numbers it prints: most `enable_feature()` paths are logger-only stubs
+  today, so a "success" here reflects the status enum flipping, not a verified capability.
+  ```bash
+  AUTOBOT_INTERNAL_API_KEY=... bash autobot-infrastructure/shared/scripts/utilities/enable-phase4-enterprise.sh
+  ```
 
 ## Usage Examples
 
