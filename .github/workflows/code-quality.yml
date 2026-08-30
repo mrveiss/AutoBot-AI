@@ -34,6 +34,12 @@ on:
       # so the guard could not fire on the change it exists to catch.
       - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
       - '.github/actions/**'
+      # #15309: the watchdog inventory + systemd templates
+      # tools/lint/check_runner_watchdog_schedule.py --audit reads, so a PR
+      # touching only one of them still runs code-quality.
+      - 'scripts/runner-watchdog-inventory.yaml'
+      - 'scripts/systemd/runner-watchdog@.service'
+      - 'scripts/systemd/runner-watchdog@.timer'
       # #15208: the documentation fleet-addressing guard reads every Markdown file
       # under docs/ and takes its pattern from scripts/lib/hardcoded-value-rules.sh.
       # 'docs/developer/**' (added for the guards that read that folder) is subsumed
@@ -96,6 +102,11 @@ jobs:
               - 'autobot-backend/static/error_messages.yaml'
               - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
               - '.github/actions/**'
+              # #15309: the watchdog inventory + systemd templates
+              # tools/lint/check_runner_watchdog_schedule.py --audit reads.
+              - 'scripts/runner-watchdog-inventory.yaml'
+              - 'scripts/systemd/runner-watchdog@.service'
+              - 'scripts/systemd/runner-watchdog@.timer'
               # #15208: see the on.push.paths list above -- docs/ and the shared rule
               # set are the documentation guard's inputs.
               - 'docs/**'
@@ -105,13 +116,12 @@ jobs:
   code-quality:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
-    # Hosted until #15313 lands. The MVA-2605 outage that first moved this off
-    # self-hosted is over — both runners are online — but moving it back failed
-    # on PR #15311: the runners are Ubuntu 25.10, a non-LTS release for which
-    # actions/python-versions publishes no 3.14 build, so `setup-python` has
-    # nothing to fetch. This is the intended destination once the runners are on
-    # an LTS release; it is not a preference for hosted.
-    runs-on: ubuntu-latest
+    # Back on self-hosted (#15310). The MVA-2605 outage this was moved away from
+    # is over: both runners are online. This job is the slowest in the set at
+    # ~601s average and is a single unsharded job, so its wall-clock is one job's
+    # duration on either runner type — it gives up no parallelism by moving,
+    # unlike the sharded suites which stay hosted deliberately.
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
     - name: Checkout code
@@ -131,11 +141,17 @@ jobs:
         # PRs merged onto the base in the meantime.
         fetch-depth: 2
 
+    # #15313: routed through the shared composite action rather than a raw
+    # actions/setup-python step, so this job works unchanged whichever runner
+    # type it lands on -- self-hosted skips the tool-cache download that has
+    # no build for this runner OS release and uses the interpreter already on
+    # PATH instead (see .github/actions/setup-python-ci/action.yml). Also
+    # fixes this step's own name, which named 3.12 while requesting 3.14 --
+    # harmless, but sent debugging here to the wrong version first (#15313 aside).
     - name: Set up Python 3.14
-      uses: actions/setup-python@v7
+      uses: ./.github/actions/setup-python-ci
       with:
         python-version: '3.14'
-        cache: 'pip'
         cache-dependency-path: |
           requirements*.txt
           autobot-backend/requirements*.txt
@@ -622,6 +638,23 @@ jobs:
         # small, stable allowed-key set directly so a push never reaches a
         # runner with an invalid composite action again.
         python3 tools/lint/check_composite_action_step_keys.py --audit
+
+    - name: Audit the runner watchdog schedule (#15309)
+      run: |
+        # Both self-hosted runners had no watchdog scheduled anywhere: the
+        # only entry was an untracked cron line on a host that no longer ran
+        # a runner, and its log redirect was unwritable there too -- a gap
+        # that produced zero signal for months. This cannot observe a live
+        # host from CI, so it verifies the half that IS in the repo: the
+        # runner inventory lists at least one runner (a reach floor -- an
+        # emptied inventory must fail, not pass having asserted nothing), each
+        # entry's systemd service name actually names its own runner rather
+        # than a stale one (#15309 fault #2's exact shape), the systemd
+        # templates operators are told to install actually exist, and no
+        # entry's last-verified date has gone stale past its floor -- forcing
+        # periodic re-confirmation against `gh api .../actions/runners`
+        # rather than trusting a doc nobody revisits.
+        python3 tools/lint/check_runner_watchdog_schedule.py --audit
 
     - name: Audit that the changes filter covers what the new guards read (#14550/#14551)
       run: |
