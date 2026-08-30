@@ -24,6 +24,7 @@ import time
 from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import redact_provider_error
 from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
 
@@ -489,14 +490,18 @@ class BedrockProvider(BaseProvider):
 
         except Exception as exc:
             self._total_errors += 1
-            logger.error("Bedrock chat_completion error for model %s: %s", model_id, exc)
+            # #15324: a boto3 ClientError message names the caller's ARN, which
+            # carries the AWS account number. It was logged raw and returned to
+            # the caller verbatim.
+            safe = redact_provider_error(exc)
+            logger.error("Bedrock chat_completion error for model %s: %s", model_id, safe)
             return LLMResponse(
                 content="",
                 model=model_id,
                 provider=self.provider_name,
                 processing_time=time.time() - start,
                 request_id="",
-                error=str(exc),
+                error=safe,
             )
 
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
@@ -547,8 +552,13 @@ class BedrockProvider(BaseProvider):
 
         except Exception as exc:
             self._total_errors += 1
-            logger.error("Bedrock stream_completion error for model %s: %s", model_id, exc)
-            raise
+            safe = redact_provider_error(exc)
+            logger.error("Bedrock stream_completion error for model %s: %s", model_id, safe)
+            # `from None`, not `from exc`: chaining preserves the original as
+            # __cause__, so any traceback printed downstream re-exposes the raw
+            # message this redaction exists to suppress. The redacted text keeps
+            # the error class, service and region, which is the diagnostic value.
+            raise RuntimeError(safe) from None
 
     async def is_available(self) -> bool:
         """Return True if Bedrock credentials are configured and the service is reachable."""
