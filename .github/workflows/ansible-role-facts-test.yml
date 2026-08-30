@@ -69,6 +69,10 @@ on:
 # of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
 # workflows this was applied to also trigger on push to Dev_new_gui, so the guard
 # is load-bearing there and harmless where it is not.
+# Least privilege (#15331). Checks out and runs ansible assertions only.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
