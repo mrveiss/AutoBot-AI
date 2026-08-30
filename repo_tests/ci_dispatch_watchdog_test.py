@@ -1309,9 +1309,9 @@ def test_the_real_workflow_tree_classifies_the_reported_workflows_correctly(watc
 
     assert paths is not None
     resolved = {Path(p).name for p in paths}
-    # Declares `runs-on: [self-hosted, Linux, X64]` on four jobs.
+    # #15311 moved code-quality/enforce-precommit to self-hosted (#15310); both sides pinned.
     assert "frontend-test.yml" in resolved
-    # The three workflows named in the false `no runner available` status.
+    assert "code-quality.yml" in resolved
+    assert "enforce-precommit.yml" in resolved
     assert "ci.yml" not in resolved
-    assert "code-quality.yml" not in resolved
     assert "frontend-required-context.yml" not in resolved
