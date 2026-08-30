@@ -283,8 +283,17 @@ jobs:
         # verifiers; all six are fixed and all 42 pass, so this is a wiring fix, not a
         # quarantine. Named in all four carriers because they are required to agree
         # (#14917). Narrow on purpose: `.claude/` as a whole is harness territory.
+        # #15051: `autobot-infrastructure/shared/tests` and `libs` were named by no
+        # pytest invocation in any workflow and by no `pytest.ini` `testpaths` entry
+        # -- 17 of their test functions ran nowhere at all, ever (the other 11 of the
+        # 28 originally measured gained a marker since, #14979/#15166, and run in
+        # marker-tests.yml's third invocation instead). Named in all four
+        # `repo_tests`-carrying invocations together so `hook_suites_run_in_ci_test.py`'s
+        # root-set agreement (#14917) stays true; the marker selection below
+        # deselects the marker-carrying tests already covered elsewhere, so nothing
+        # here runs twice within the PR gate.
         python -m pytest \
-          autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit \
+          autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit autobot-infrastructure/shared/tests libs \
           -n auto --dist loadscope \
           -p repo_tests.stable_shard \
           --shard-splits 12 --shard-group ${{ matrix.shard }} \
@@ -345,22 +354,30 @@ jobs:
         fi
         exit "$status"
 
-    - name: Run integration tests
-      # Shard 1 only — this suite is selected by DIRECTORY, not by the split, so
-      # running it in every shard would execute it twelve times over.
-      # NOTE: `infrastructure/shared/tests/integration` does not currently exist
-      # in the tree, so this step is a no-op echo today (#734 moved the suite and
-      # the path was never updated). Left wired rather than removed so it starts
-      # working again the moment the directory reappears.
-      if: ${{ !cancelled() && matrix.shard == 1 }}
-      run: |
-        echo "Running integration tests..."
-        TEST_DIR="infrastructure/shared/tests/integration"
-        if [ -d "$TEST_DIR" ]; then
-          python -m pytest "$TEST_DIR" -v --tb=short --maxfail=5
-        else
-          echo "::warning::No integration test directory at $TEST_DIR - skipping"
-        fi
+    # RETIRED (#15051). This step named `infrastructure/shared/tests/integration`,
+    # a path #734 moved to `autobot-infrastructure/shared/tests/integration`
+    # without updating this reference — so the `if [ -d "$TEST_DIR" ]` guard
+    # never once ran the pytest inside it, and every shard-1 run since #734
+    # passed on nothing but its own `::warning::`. Quietly, not loudly: the
+    # step exited 0 either way, so a real regression here would have shipped
+    # green forever.
+    #
+    # NOT repointed at the path that exists, because doing so would not
+    # restore a check — it would duplicate one and widen the PR gate by
+    # accident. `autobot-infrastructure/shared/tests` is now a root of the
+    # "Run unit tests" step above (#15051), which already reaches
+    # `.../tests/integration` on this same shard with the correct
+    # `-m "not integration and not slow and not distributed and not
+    # performance"` filter. This step's `python -m pytest "$TEST_DIR" -v
+    # --tb=short --maxfail=5` carried no `-m` at all, so repointing it would
+    # collect that directory a second time AND select the `integration`-marked
+    # tests inside it (`test_architecture_compliance.py`,
+    # `test_distributed_system_integration.py`) into the required, blocking PR
+    # gate — the "separate decision with its own blast radius" #13286's
+    # marker-tests.yml explicitly declines to make inline, and #15051 does not
+    # make it either. Those stay where #13286 puts every marked test:
+    # marker-tests.yml, selected deliberately, not swept in by a directory
+    # check regaining its footing.
 
   # #10691: the PR gate reports one pass/fail context. The historical
   # `python-suite` job id is kept so `deployment-check` and `notify`, which both
