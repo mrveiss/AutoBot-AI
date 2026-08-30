@@ -65,6 +65,10 @@ Read "no hook ran" as "the hook runner was not found", not as a hook problem.
 
 This is now handled by the action rather than by host configuration, so it should not recur — but the diagnosis above is worth keeping, because the same swallowing pattern hides any missing binary.
 
+**Node** is also not a host requirement. A pre-commit hook shells out to `node`, which hosted images ship and self-hosted runners do not — so `enforce-precommit.yml` runs `actions/setup-node` itself. That works where `setup-python` does not, because Node publishes generic `linux-x64` tarballs rather than per-distro builds, so a non-LTS runner OS is irrelevant to it.
+
+The general rule this suggests: when a tool is missing on a runner, check whether its `setup-*` action distributes OS-agnostic binaries. If it does, add the action and leave the host alone.
+
 Docker is deliberately **not** listed. Image builds stay on GitHub-hosted runners, where Docker and buildx ship preinstalled and hosted concurrency is worth more than runner locality (#15310).
 
 ## Verifying
