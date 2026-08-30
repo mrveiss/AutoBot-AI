@@ -7,6 +7,10 @@ on:
   pull_request:
     paths: [".github/workflows/**"]
 
+# Least privilege (#15331). Lints workflow files; no token writes.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
