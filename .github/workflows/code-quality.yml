@@ -133,7 +133,30 @@ jobs:
     # 60 still fails fast against GitHub's ~360min default, while leaving room for
     # a full release-sized diff. Revisit from a measurement on THIS runner class
     # and a large diff, not from a hosted small-diff number.
-    timeout-minutes: 60
+    # 180 is a MEASUREMENT BOUND, not a considered limit — see below before
+    # lowering it to a number that feels tidier.
+    #
+    # This value has been wrong twice. 30 came from a ~601s average measured on a
+    # GitHub-hosted runner against a small diff; the release PR was cancelled at
+    # 30m19s. 60 was the same mistake with a bigger number; it was cancelled again
+    # at 60m00s. Both readings were taken from a workload that does not resemble
+    # the one that fails.
+    #
+    # What the evidence actually shows is two populations, not one:
+    #
+    #   push on Dev_new_gui, small diff    10m54s   success
+    #   pull_request into main, 2195 files >60m     cancelled (twice)
+    #
+    # This job's cost scales with the number of changed files, so normal work
+    # finishes in ~11 minutes and only a release-sized promotion is pathological.
+    # The true ceiling for that case is unknown, because the job has never been
+    # allowed to finish.
+    #
+    # 180 exists to let exactly one release run complete and produce that number.
+    # Once it does, set this from THAT measurement — on this runner class, against
+    # a release-sized diff — and record it here. Do not re-derive it from a small
+    # diff again.
+    timeout-minutes: 180
 
     steps:
     - name: Checkout code
