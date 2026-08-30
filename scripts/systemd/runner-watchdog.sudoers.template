@@ -1,0 +1,21 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# sudoers.d fragment template for runner-watchdog.sh:16's requirement
+# ("sudo passwordless for: systemctl restart <service>"). Not usable as-is --
+# fill in the two placeholders and install as a NEW file under
+# /etc/sudoers.d/ (never edit /etc/sudoers directly), then validate with
+# `visudo -cf <file>` before reloading. See docs/developer/RUNNER_WATCHDOG.md
+# for the full install sequence.
+#
+# Placeholders:
+#   RUNNER_SERVICE_USER  the local account that runs the runner's systemd
+#                         service (whoami on the runner host)
+#   RUNNER_SERVICE_NAME  actions.runner.mrveiss-AutoBot-AI.<runner-name>.service
+#                         -- THIS host's own runner only; scoping the NOPASSWD
+#                         rule to one exact unit, not a wildcard, means a
+#                         compromised watchdog invocation cannot restart any
+#                         other service on the box.
+RUNNER_SERVICE_USER ALL=(root) NOPASSWD: /bin/systemctl restart RUNNER_SERVICE_NAME
