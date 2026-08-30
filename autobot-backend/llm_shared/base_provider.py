@@ -29,7 +29,8 @@ from constants import CircuitBreakerDefaults
 from .cross_worker_rate_limiter import get_llm_rate_limiter
 from .models import LLMRequest, LLMResponse
 from .observability import registry as obs_registry
-from .provider_auth import ApiKeyAuth, ProviderAuthError, ProviderAuthStrategy
+from .provider_auth import ApiKeyAuth, ProviderAuthError, ProviderAuthStrategy, TokenExpiredError
+from .provider_degradation import DegradationCause, get_degradation_store
 from .rate_limit_backoff import extract_rate_limit_info, get_backoff_handler, raise_if_rate_limited
 from .token_budget import get_token_budget_gate
 
@@ -338,10 +339,25 @@ class BaseProvider(ABC):
 
         Raises:
             ProviderAuthError: When a vault-backed strategy cannot obtain a token.
+            TokenExpiredError: Subclass of the above — the credential is known
+                dead (no refresh token / session expired), not merely unlucky.
+                Marked ``needs_reauth`` (non-expiring) rather than the generic
+                TTL-expiring degraded path (#15022) before re-raising.
         """
         if self._auth_strategy is None:
             return None
-        return await self._auth_strategy.resolve_token(session)
+        try:
+            token = await self._auth_strategy.resolve_token(session)
+        except TokenExpiredError:
+            await get_degradation_store().mark_degraded(self.provider_name, cause=DegradationCause.NEEDS_REAUTH)
+            raise
+        if self._auth_strategy.is_vault_backed():
+            # A successful vault-backed resolve proves the credential is
+            # valid again — clear any stale needs_reauth mark (#15022).
+            # No-op when nothing was marked; skipped for ApiKeyAuth, which
+            # can never have raised TokenExpiredError in the first place.
+            await get_degradation_store().clear(self.provider_name)
+        return token
 
     def _build_provider_metadata(
         self,

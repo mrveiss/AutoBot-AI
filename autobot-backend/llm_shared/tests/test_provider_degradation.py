@@ -154,8 +154,9 @@ async def test_degraded_entries_returns_marked_keys():
     await store.mark_degraded("anthropic")
 
     entries = await store.degraded_entries()
-    assert "autobot:llm:deg:openai:gpt-4o" in entries
-    assert "autobot:llm:deg:anthropic" in entries
+    keys = [e["key"] for e in entries]
+    assert "autobot:llm:deg:openai:gpt-4o" in keys
+    assert "autobot:llm:deg:anthropic" in keys
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +183,7 @@ async def test_no_redis_fallback_mark_and_check():
 @pytest.mark.asyncio
 async def test_no_redis_fallback_expiry():
     """In-process fallback respects expiry timestamps (time-travel via monkeypatch)."""
-    from llm_shared.provider_degradation import ProviderDegradationStore
+    from llm_shared.provider_degradation import DegradationCause, ProviderDegradationStore
 
     store = ProviderDegradationStore()
 
@@ -194,8 +195,9 @@ async def test_no_redis_fallback_expiry():
     await store.mark_degraded("openai", "gpt-4o")
     assert await store.is_degraded("openai", "gpt-4o") is True
 
-    # Force expiry by back-dating the timestamp.
-    store._local["autobot:llm:deg:openai:gpt-4o"] = time.monotonic() - 1.0
+    # Force expiry by back-dating the timestamp. #15022: _local now stores
+    # (cause, expires_at) — a bare float here would no longer unpack.
+    store._local["autobot:llm:deg:openai:gpt-4o"] = (DegradationCause.TRANSIENT, time.monotonic() - 1.0)
     assert await store.is_degraded("openai", "gpt-4o") is False
 
 
@@ -213,7 +215,336 @@ async def test_no_redis_degraded_entries_fallback():
 
     await store.mark_degraded("openai", "gpt-4o")
     entries = await store.degraded_entries()
-    assert "autobot:llm:deg:openai:gpt-4o" in entries
+    assert "autobot:llm:deg:openai:gpt-4o" in [e["key"] for e in entries]
+
+
+# ---------------------------------------------------------------------------
+# #15022: needs_reauth cause — non-expiry, explicit clear, cause reporting,
+# and the alert wired through the existing AlertCooldownManager (#1948).
+# ---------------------------------------------------------------------------
+
+
+class _NoopCooldown:
+    """Alert-cooldown double for tests that mark needs_reauth incidentally.
+
+    Keeps these tests hermetic — no real ``AlertCooldownManager`` construction
+    (which would try a real sync Redis client) for tests that are not
+    themselves exercising the alert path.
+    """
+
+    def should_send(self, *_args, **_kwargs) -> bool:
+        return True
+
+    def record_sent(self, *_args, **_kwargs) -> None:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_transient_mark_has_positive_ttl():
+    """Default (transient) marks keep today's TTL — the baseline this contrasts with."""
+    _require_fakeredis()
+    server = fakeredis_async.FakeServer()
+    store = _make_store_with_fake_server(server)
+
+    await store.mark_degraded("openai", "gpt-4o")
+
+    redis = await store._get_redis()
+    ttl = await redis.ttl("autobot:llm:deg:openai:gpt-4o")
+    assert ttl > 0
+
+
+@pytest.mark.asyncio
+async def test_needs_reauth_mark_has_no_ttl():
+    """needs_reauth is non-expiring in Redis (ttl() == -1, not merely a long TTL)."""
+    _require_fakeredis()
+    server = fakeredis_async.FakeServer()
+    store = _make_store_with_fake_server(server)
+    from llm_shared.provider_degradation import DegradationCause
+
+    with _inject_globals(store.mark_degraded, _get_alert_cooldown=lambda: _NoopCooldown()):
+        await store.mark_degraded("openai", cause=DegradationCause.NEEDS_REAUTH)
+
+    redis = await store._get_redis()
+    ttl = await redis.ttl("autobot:llm:deg:openai")
+    assert ttl == -1  # Redis convention: key exists, no expiry set.
+    assert await store.is_degraded("openai") is True
+
+
+@pytest.mark.asyncio
+async def test_clear_removes_needs_reauth_mark():
+    """clear() is the only exit for a non-expiring needs_reauth mark."""
+    _require_fakeredis()
+    server = fakeredis_async.FakeServer()
+    store = _make_store_with_fake_server(server)
+    from llm_shared.provider_degradation import DegradationCause
+
+    with _inject_globals(store.mark_degraded, _get_alert_cooldown=lambda: _NoopCooldown()):
+        await store.mark_degraded("anthropic", cause=DegradationCause.NEEDS_REAUTH)
+    assert await store.is_degraded("anthropic") is True
+
+    await store.clear("anthropic")
+
+    assert await store.is_degraded("anthropic") is False
+
+
+@pytest.mark.asyncio
+async def test_clear_on_unmarked_key_is_a_noop():
+    """clear() on a key that was never marked does not raise."""
+    _require_fakeredis()
+    server = fakeredis_async.FakeServer()
+    store = _make_store_with_fake_server(server)
+
+    await store.clear("never-marked")
+
+    assert await store.is_degraded("never-marked") is False
+
+
+@pytest.mark.asyncio
+async def test_degraded_entries_reports_cause():
+    """degraded_entries() reports why each entry is degraded (#15022)."""
+    _require_fakeredis()
+    server = fakeredis_async.FakeServer()
+    store = _make_store_with_fake_server(server)
+    from llm_shared.provider_degradation import DegradationCause
+
+    await store.mark_degraded("openai", "gpt-4o")
+    with _inject_globals(store.mark_degraded, _get_alert_cooldown=lambda: _NoopCooldown()):
+        await store.mark_degraded("anthropic", cause=DegradationCause.NEEDS_REAUTH)
+
+    causes = {e["key"]: e["cause"] for e in await store.degraded_entries()}
+    assert causes["autobot:llm:deg:openai:gpt-4o"] == "transient"
+    assert causes["autobot:llm:deg:anthropic"] == "needs_reauth"
+
+
+@pytest.mark.asyncio
+async def test_no_redis_needs_reauth_fallback_has_no_expiry():
+    """In-process fallback: needs_reauth stores expires_at=None (never expires)."""
+    from llm_shared.provider_degradation import DegradationCause, ProviderDegradationStore
+
+    store = ProviderDegradationStore()
+
+    async def _raise(*_args, **_kwargs):
+        raise ConnectionError("Redis unavailable")
+
+    store._get_redis = _raise  # type: ignore[method-assign]
+
+    with _inject_globals(store.mark_degraded, _get_alert_cooldown=lambda: _NoopCooldown()):
+        await store.mark_degraded("openai", cause=DegradationCause.NEEDS_REAUTH)
+
+    cause, expires_at = store._local["autobot:llm:deg:openai"]
+    assert cause is DegradationCause.NEEDS_REAUTH
+    assert expires_at is None
+    assert await store.is_degraded("openai") is True
+
+
+@pytest.mark.asyncio
+async def test_no_redis_clear_removes_local_entry():
+    """clear() removes the in-process fallback entry too."""
+    from llm_shared.provider_degradation import DegradationCause, ProviderDegradationStore
+
+    store = ProviderDegradationStore()
+
+    async def _raise(*_args, **_kwargs):
+        raise ConnectionError("Redis unavailable")
+
+    store._get_redis = _raise  # type: ignore[method-assign]
+
+    with _inject_globals(store.mark_degraded, _get_alert_cooldown=lambda: _NoopCooldown()):
+        await store.mark_degraded("openai", cause=DegradationCause.NEEDS_REAUTH)
+    assert await store.is_degraded("openai") is True
+
+    await store.clear("openai")
+
+    assert "autobot:llm:deg:openai" not in store._local
+    assert await store.is_degraded("openai") is False
+
+
+@pytest.mark.asyncio
+async def test_needs_reauth_mark_emits_exactly_one_alert_per_cooldown():
+    """A repeated needs_reauth mark is deduped by AlertCooldownManager itself —
+    not by a second de-dup set in the degradation store (explicit AC in #15022).
+    """
+    _require_fakeredis()
+    server = fakeredis_async.FakeServer()
+    store = _make_store_with_fake_server(server)
+    from llm_shared.provider_degradation import DegradationCause
+
+    class _FakeCooldown:
+        def __init__(self):
+            self.should_send_calls = []
+            self.sent = []
+
+        def should_send(self, text, tier):
+            self.should_send_calls.append((text, tier))
+            return len(self.sent) == 0
+
+        def record_sent(self, text, tier):
+            self.sent.append((text, tier))
+
+    fake = _FakeCooldown()
+
+    with _inject_globals(store.mark_degraded, _get_alert_cooldown=lambda: fake):
+        await store.mark_degraded("openai", cause=DegradationCause.NEEDS_REAUTH)
+        await store.mark_degraded("openai", cause=DegradationCause.NEEDS_REAUTH)
+
+    # Both marks consulted alert_cooldown (no separate de-dup); it allowed
+    # exactly one of them through.
+    assert len(fake.should_send_calls) == 2
+    assert len(fake.sent) == 1
+
+
+@pytest.mark.asyncio
+async def test_transient_mark_does_not_alert():
+    """A transient mark never reaches the operator-alert path — only needs_reauth does."""
+    _require_fakeredis()
+    server = fakeredis_async.FakeServer()
+    store = _make_store_with_fake_server(server)
+
+    class _FailIfCalledCooldown:
+        def should_send(self, *_args, **_kwargs):
+            raise AssertionError("transient marks must not consult alert_cooldown")
+
+        def record_sent(self, *_args, **_kwargs):
+            raise AssertionError("transient marks must not record an alert")
+
+    with _inject_globals(store.mark_degraded, _get_alert_cooldown=lambda: _FailIfCalledCooldown()):
+        await store.mark_degraded("openai", "gpt-4o")
+
+
+# ---------------------------------------------------------------------------
+# #15022: base_provider._get_auth_token wiring — TokenExpiredError -> mark
+# needs_reauth; a subsequent successful vault-backed resolve clears it.
+# ---------------------------------------------------------------------------
+
+
+class _FakeAuthStrategy:
+    """Minimal ProviderAuthStrategy double — duck-types the two methods
+    ``_get_auth_token`` actually calls, so these tests don't need a DB
+    session or the vault machinery real OAuthAuth/SessionAuth require."""
+
+    def __init__(self, *, vault_backed, resolve):
+        self._vault_backed = vault_backed
+        self._resolve = resolve
+
+    def is_vault_backed(self) -> bool:
+        return self._vault_backed
+
+    async def resolve_token(self, session=None):
+        return await self._resolve(session)
+
+
+def _auth_probe_provider(name: str, auth_strategy):
+    """Return a minimal concrete BaseProvider for exercising _get_auth_token.
+
+    Mirrors ``base_provider_breaker_test.py``'s ``_ScriptedProvider`` — the
+    established minimal-subclass pattern in this package.
+    """
+    from typing import AsyncIterator, List
+
+    from llm_shared.base_provider import BaseProvider
+    from llm_shared.models import LLMRequest, LLMResponse
+
+    class _Provider(BaseProvider):
+        async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
+            raise NotImplementedError
+
+        async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
+            yield ""
+
+        async def is_available(self) -> bool:
+            return True
+
+        async def list_models(self) -> List[str]:
+            return []
+
+    provider = _Provider({}, auth_strategy=auth_strategy)
+    provider.provider_name = name
+    return provider
+
+
+@pytest.mark.asyncio
+async def test_get_auth_token_marks_needs_reauth_on_token_expired():
+    """TokenExpiredError from the auth strategy -> needs_reauth, not generic degraded."""
+    _require_fakeredis()
+    server = fakeredis_async.FakeServer()
+    store_instance = _make_store_with_fake_server(server)
+
+    from llm_shared.base_provider import BaseProvider
+    from llm_shared.provider_auth import TokenExpiredError
+
+    async def _raise(_session):
+        raise TokenExpiredError("dead credential")
+
+    auth = _FakeAuthStrategy(vault_backed=True, resolve=_raise)
+    provider = _auth_probe_provider("deadcred", auth)
+
+    with _inject_globals(BaseProvider._get_auth_token, get_degradation_store=lambda: store_instance):
+        with _inject_globals(store_instance.mark_degraded, _get_alert_cooldown=lambda: _NoopCooldown()):
+            with pytest.raises(TokenExpiredError):
+                await provider._get_auth_token()
+
+    assert await store_instance.is_degraded("deadcred") is True
+    causes = {e["key"]: e["cause"] for e in await store_instance.degraded_entries()}
+    assert causes["autobot:llm:deg:deadcred"] == "needs_reauth"
+
+
+@pytest.mark.asyncio
+async def test_get_auth_token_successful_vault_resolve_clears_needs_reauth():
+    """A successful vault-backed resolve is the explicit clear (#15022)."""
+    _require_fakeredis()
+    server = fakeredis_async.FakeServer()
+    store_instance = _make_store_with_fake_server(server)
+
+    from llm_shared.base_provider import BaseProvider
+    from llm_shared.provider_degradation import DegradationCause
+
+    with _inject_globals(store_instance.mark_degraded, _get_alert_cooldown=lambda: _NoopCooldown()):
+        await store_instance.mark_degraded("revived", cause=DegradationCause.NEEDS_REAUTH)
+    assert await store_instance.is_degraded("revived") is True
+
+    async def _ok(_session):
+        return "fresh-token"
+
+    auth = _FakeAuthStrategy(vault_backed=True, resolve=_ok)
+    provider = _auth_probe_provider("revived", auth)
+
+    with _inject_globals(BaseProvider._get_auth_token, get_degradation_store=lambda: store_instance):
+        token = await provider._get_auth_token()
+
+    assert token == "fresh-token"
+    assert await store_instance.is_degraded("revived") is False
+
+
+@pytest.mark.asyncio
+async def test_get_auth_token_apikey_success_does_not_touch_degradation_store():
+    """ApiKeyAuth (is_vault_backed()==False) never calls the degradation store —
+    it can never have raised TokenExpiredError, so there is nothing to clear.
+    """
+    _require_fakeredis()
+    server = fakeredis_async.FakeServer()
+    store_instance = _make_store_with_fake_server(server)
+
+    from llm_shared.base_provider import BaseProvider
+    from llm_shared.provider_degradation import DegradationCause
+
+    # Pre-mark needs_reauth for a DIFFERENT reason to prove ApiKeyAuth's
+    # success path leaves existing store state alone.
+    with _inject_globals(store_instance.mark_degraded, _get_alert_cooldown=lambda: _NoopCooldown()):
+        await store_instance.mark_degraded("static", cause=DegradationCause.NEEDS_REAUTH)
+
+    async def _ok(_session):
+        return "sk-static"
+
+    auth = _FakeAuthStrategy(vault_backed=False, resolve=_ok)
+    provider = _auth_probe_provider("static", auth)
+
+    with _inject_globals(BaseProvider._get_auth_token, get_degradation_store=lambda: store_instance):
+        token = await provider._get_auth_token()
+
+    assert token == "sk-static"
+    # is_vault_backed() is False, so _get_auth_token never calls clear() —
+    # the pre-existing mark is untouched.
+    assert await store_instance.is_degraded("static") is True
 
 
 # ---------------------------------------------------------------------------
@@ -461,7 +792,7 @@ async def test_coordinator_marks_registry_resolved_provider_when_request_has_non
     assert await store_instance.is_degraded("openai", "gpt-4o") is True
     # No junk empty-provider key was written.
     entries = await store_instance.degraded_entries()
-    assert all(":deg::" not in e for e in entries)
+    assert all(":deg::" not in e["key"] for e in entries)
 
 
 @pytest.mark.asyncio
