@@ -23,15 +23,20 @@ cause instead of trimming any assertion to fit under the cap:
   successful vault-backed resolve -> clear, ApiKeyAuth success leaves the
   store untouched.
 
-Shared fakeredis / store / global-injection helpers live in conftest.py —
-imported below, not duplicated, so the two files cannot drift apart.
+Shared store/global-injection fixtures live in conftest.py (fixtures, not
+imports — llm_shared.tests has no __init__.py, so a plain import fails
+collection; see conftest.py's docstring). This file keeps its own
+one-line guarded fakeredis import instead of sharing it.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from llm_shared.tests.conftest import _inject_globals, _make_store_with_fake_server, _require_fakeredis, fakeredis_async
+try:
+    import fakeredis.aioredis as fakeredis_async
+except ImportError:
+    fakeredis_async = None  # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
 # #15022: needs_reauth cause — non-expiry, explicit clear, cause reporting,
@@ -55,9 +60,8 @@ class _NoopCooldown:
 
 
 @pytest.mark.asyncio
-async def test_transient_mark_has_positive_ttl():
+async def test_transient_mark_has_positive_ttl(_require_fakeredis, _make_store_with_fake_server):
     """Default (transient) marks keep today's TTL — the baseline this contrasts with."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store = _make_store_with_fake_server(server)
 
@@ -69,9 +73,8 @@ async def test_transient_mark_has_positive_ttl():
 
 
 @pytest.mark.asyncio
-async def test_needs_reauth_mark_has_no_ttl():
+async def test_needs_reauth_mark_has_no_ttl(_require_fakeredis, _make_store_with_fake_server, _inject_globals):
     """needs_reauth is non-expiring in Redis (ttl() == -1, not merely a long TTL)."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store = _make_store_with_fake_server(server)
     from llm_shared.provider_degradation import DegradationCause
@@ -86,9 +89,8 @@ async def test_needs_reauth_mark_has_no_ttl():
 
 
 @pytest.mark.asyncio
-async def test_clear_removes_needs_reauth_mark():
+async def test_clear_removes_needs_reauth_mark(_require_fakeredis, _make_store_with_fake_server, _inject_globals):
     """clear() is the only exit for a non-expiring needs_reauth mark."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store = _make_store_with_fake_server(server)
     from llm_shared.provider_degradation import DegradationCause
@@ -103,9 +105,8 @@ async def test_clear_removes_needs_reauth_mark():
 
 
 @pytest.mark.asyncio
-async def test_clear_on_unmarked_key_is_a_noop():
+async def test_clear_on_unmarked_key_is_a_noop(_require_fakeredis, _make_store_with_fake_server):
     """clear() on a key that was never marked does not raise."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store = _make_store_with_fake_server(server)
 
@@ -115,9 +116,8 @@ async def test_clear_on_unmarked_key_is_a_noop():
 
 
 @pytest.mark.asyncio
-async def test_degraded_entries_reports_cause():
+async def test_degraded_entries_reports_cause(_require_fakeredis, _make_store_with_fake_server, _inject_globals):
     """degraded_entries() reports why each entry is degraded (#15022)."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store = _make_store_with_fake_server(server)
     from llm_shared.provider_degradation import DegradationCause
@@ -132,7 +132,7 @@ async def test_degraded_entries_reports_cause():
 
 
 @pytest.mark.asyncio
-async def test_no_redis_needs_reauth_fallback_has_no_expiry():
+async def test_no_redis_needs_reauth_fallback_has_no_expiry(_inject_globals):
     """In-process fallback: needs_reauth stores expires_at=None (never expires)."""
     from llm_shared.provider_degradation import DegradationCause, ProviderDegradationStore
 
@@ -153,7 +153,7 @@ async def test_no_redis_needs_reauth_fallback_has_no_expiry():
 
 
 @pytest.mark.asyncio
-async def test_no_redis_clear_removes_local_entry():
+async def test_no_redis_clear_removes_local_entry(_inject_globals):
     """clear() removes the in-process fallback entry too."""
     from llm_shared.provider_degradation import DegradationCause, ProviderDegradationStore
 
@@ -175,11 +175,14 @@ async def test_no_redis_clear_removes_local_entry():
 
 
 @pytest.mark.asyncio
-async def test_needs_reauth_mark_emits_exactly_one_alert_per_cooldown():
+async def test_needs_reauth_mark_emits_exactly_one_alert_per_cooldown(
+    _require_fakeredis,
+    _make_store_with_fake_server,
+    _inject_globals,
+):
     """A repeated needs_reauth mark is deduped by AlertCooldownManager itself —
     not by a second de-dup set in the degradation store (explicit AC in #15022).
     """
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store = _make_store_with_fake_server(server)
     from llm_shared.provider_degradation import DegradationCause
@@ -209,9 +212,8 @@ async def test_needs_reauth_mark_emits_exactly_one_alert_per_cooldown():
 
 
 @pytest.mark.asyncio
-async def test_transient_mark_does_not_alert():
+async def test_transient_mark_does_not_alert(_require_fakeredis, _make_store_with_fake_server, _inject_globals):
     """A transient mark never reaches the operator-alert path — only needs_reauth does."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store = _make_store_with_fake_server(server)
 
@@ -278,9 +280,12 @@ def _auth_probe_provider(name: str, auth_strategy):
 
 
 @pytest.mark.asyncio
-async def test_get_auth_token_marks_needs_reauth_on_token_expired():
+async def test_get_auth_token_marks_needs_reauth_on_token_expired(
+    _require_fakeredis,
+    _make_store_with_fake_server,
+    _inject_globals,
+):
     """TokenExpiredError from the auth strategy -> needs_reauth, not generic degraded."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store_instance = _make_store_with_fake_server(server)
 
@@ -304,9 +309,12 @@ async def test_get_auth_token_marks_needs_reauth_on_token_expired():
 
 
 @pytest.mark.asyncio
-async def test_get_auth_token_successful_vault_resolve_clears_needs_reauth():
+async def test_get_auth_token_successful_vault_resolve_clears_needs_reauth(
+    _require_fakeredis,
+    _make_store_with_fake_server,
+    _inject_globals,
+):
     """A successful vault-backed resolve is the explicit clear (#15022)."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store_instance = _make_store_with_fake_server(server)
 
@@ -331,11 +339,14 @@ async def test_get_auth_token_successful_vault_resolve_clears_needs_reauth():
 
 
 @pytest.mark.asyncio
-async def test_get_auth_token_apikey_success_does_not_touch_degradation_store():
+async def test_get_auth_token_apikey_success_does_not_touch_degradation_store(
+    _require_fakeredis,
+    _make_store_with_fake_server,
+    _inject_globals,
+):
     """ApiKeyAuth (is_vault_backed()==False) never calls the degradation store —
     it can never have raised TokenExpiredError, so there is nothing to clear.
     """
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store_instance = _make_store_with_fake_server(server)
 
