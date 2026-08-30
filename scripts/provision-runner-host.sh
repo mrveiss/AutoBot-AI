@@ -73,40 +73,11 @@ if command -v "$PY_BIN" >/dev/null 2>&1; then
   fi
 fi
 
-# pip is NOT part of a Debian/Ubuntu python3.x install: it is stripped out, and
-# the first thing CI does after resolving the interpreter is
-# `python -m pip install --upgrade pip setuptools wheel`. Without this the job
-# gets "No module named pip" AFTER passing the interpreter check — which reads
-# as a new failure rather than an incomplete install. ensurepip ships in
-# python3.x-venv, which is why that package is required above.
-if command -v "$PY_BIN" >/dev/null 2>&1; then
-  if "$PY_BIN" -m pip --version >/dev/null 2>&1; then
-    ok "$PY_BIN -m pip works ($("$PY_BIN" -m pip --version 2>&1 | cut -d' ' -f1-2))"
-  else
-    bad "$PY_BIN has no pip — 'python -m pip' fails, which breaks CI's first install step"
-    missing=1
-  fi
-fi
-
-# pip installs console scripts to ~/.local/bin when site-packages is not
-# writable — which is the normal case for a non-root runner user. If that
-# directory is not on PATH, every pip-installed tool is invisible: `pre-commit`,
-# `wheel`, `nodeenv`, `identify-cli`. The failure is indirect and slow to read,
-# because a step that shells out to a missing binary usually swallows the
-# "command not found" and fails a LATER step with a confusing message.
-USER_BIN="$HOME/.local/bin"
-case ":$PATH:" in
-  *":$USER_BIN:"*) ok "$USER_BIN is on PATH" ;;
-  *)
-    if [ -d "$USER_BIN" ]; then
-      bad "$USER_BIN exists but is NOT on PATH — pip-installed tools will be invisible to CI"
-      warn "  fix: echo \"\$HOME/.local/bin:\$PATH\" > <runner-dir>/.path, then restart the runner service"
-      missing=1
-    else
-      ok "$USER_BIN does not exist yet — nothing installed there"
-    fi
-    ;;
-esac
+# NOTE: pip on the host is deliberately NOT checked. setup-python-ci builds a
+# venv from this interpreter and installs into that, so the venv supplies its
+# own pip (via ensurepip) and its own script directory. A host pip would be
+# unused, and installing into it would hit PEP 668's externally-managed guard
+# anyway (#15310).
 
 if [ "$MODE" = check ]; then
   if [ "$missing" -eq 0 ]; then

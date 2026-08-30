@@ -44,9 +44,13 @@ The deadsnakes PPA is the narrower one, and it is what the rest of the platform 
 | `python3.14` on `PATH` | `setup-python-ci` resolves the **versioned binary by name**; a default `python3` that happens to be 3.14 does not satisfy it |
 | `python3.14-venv` | separate package on Debian/Ubuntu, and it fails at *use* time rather than install time |
 | `python3.14-dev` | headers, for packages that build native extensions |
-| `pip` inside that interpreter | Debian/Ubuntu ship `python3.x` **without** pip. CI's first step after resolving Python is `python -m pip install --upgrade pip setuptools wheel`, so a host with the interpreter but no pip fails *after* passing the interpreter check — which reads as a new problem rather than an incomplete install. There is no `python3.14-pip` apt package; `python3.14 -m ensurepip --upgrade` is the supported route, and `ensurepip` ships in `python3.14-venv` |
 
-| *(nothing — handled in-workflow)* | pip installs console scripts into the user script directory whenever site-packages is not writable, which is the normal case for a non-root runner user. Rather than editing the host, `setup-python-ci` asks the interpreter for `site --user-base` and appends `/bin` to `$GITHUB_PATH`. That is per-job and ephemeral, so **runners stay in their default GitHub configuration** — no `.path`, no `.env`, no unit edit |
+That is the whole list. `setup-python-ci` builds a **venv** from that interpreter inside `RUNNER_TEMP` and puts it first on `PATH`, which means the host needs no pip of its own and no `PATH` edit:
+
+- **PEP 668 does not apply.** Debian/Ubuntu mark system Python installs externally-managed, so `pip install` into system site-packages is refused. Installing into a venv is the route the error message itself recommends. This was observed as an *intermittent* failure: one runner refused, its sibling did not, because the two hosts had been provisioned differently — so a job passed or failed depending on which runner picked it up.
+- **pip comes with the venv.** `python -m venv` runs `ensurepip` internally, so the venv has pip even when the system interpreter does not.
+- **Console scripts land in `$VENV/bin`**, which is on `PATH` by construction — no user script directory to chase.
+- **Nothing is installed outside `RUNNER_TEMP`.** Runners stay in their default GitHub configuration; the venv dies with the job.
 
 ### Why this one is hard to diagnose
 
