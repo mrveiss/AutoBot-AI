@@ -17,6 +17,13 @@ endpoint returning errors.
 Three workflows are deliberately exempt, and the exemption is by name with its
 reason attached rather than a silent allowlist - a bare list of filenames is how
 an exemption outlives the thing that justified it.
+
+#15302: a required-context shim needs TWO edits - the workflow, and its entry in
+DELIBERATELY_EXEMPT - and nothing pointed the author of the first at the second.
+#15300 landed the first half only, and this guard failed on every pull request
+against the base branch until someone traced the assertion back here by hand. The
+failure message below now names the second edit directly, so the next shim's
+author reads it there instead of rediscovering it under time pressure.
 """
 
 from pathlib import Path
@@ -104,7 +111,12 @@ def test_a_pull_request_workflow_cancels_superseded_runs(path):
     assert concurrency, (
         f"{path.name} triggers on pull_request with no `concurrency:` group, so every "
         "push leaves its predecessors queued. Each redundant run still fetches its "
-        "actions (#14434, #14444)."
+        "actions (#14434, #14444). If this is deliberate -- a required-context shim "
+        "that must survive a superseded run rather than be cancelled with it, the "
+        f"same shape as {sorted(DELIBERATELY_EXEMPT)} -- the fix is a SECOND edit, "
+        f"not a maybe: add {path.name!r} to DELIBERATELY_EXEMPT above with the reason "
+        "(#15302). Adding the workflow alone is what left this guard red on every "
+        "pull request last time (#15300)."
     )
     assert concurrency.get("group"), f"{path.name}: concurrency group is empty"
 

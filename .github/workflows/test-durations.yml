@@ -91,8 +91,12 @@ jobs:
           # verifiers; all six are fixed and all 42 pass, so this is a wiring fix, not a
           # quarantine. Named in all four carriers because they are required to agree
           # (#14917). Narrow on purpose: `.claude/` as a whole is harness territory.
+          # #15051: `autobot-infrastructure/shared/tests` and `libs` were named by no
+          # pytest invocation in any workflow -- 17 of their test functions ran
+          # nowhere at all, ever. Named in all four `repo_tests`-carrying invocations
+          # together so hook_suites_run_in_ci_test.py's root-set agreement stays true.
           python -m pytest \
-            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit autobot-infrastructure/shared/tests libs \
             -n auto --dist loadscope \
             -m "not integration and not slow and not distributed and not performance" \
             --store-durations \

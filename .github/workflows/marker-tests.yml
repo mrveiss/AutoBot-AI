@@ -274,8 +274,23 @@ jobs:
           # verifiers; all six are fixed and all 42 pass, so this is a wiring fix, not a
           # quarantine. Named in all four carriers because they are required to agree
           # (#14917). Narrow on purpose: `.claude/` as a whole is harness territory.
+          # #15051: `autobot-infrastructure/shared/tests` and `libs` were named by no
+          # pytest invocation at all -- not here, not ci.yml, not coverage.yml, not
+          # test-durations.yml -- so a bare local `pytest` and every CI shard skipped
+          # them in silence. Named here to keep the four `repo_tests`-carrying root
+          # lists in agreement (#14917), which is the only reason this invocation
+          # needs them: this selects the MARKED subset, and "Run marked tests —
+          # infrastructure, libs and frontend" below already selects the same two
+          # roots under the identical `$MARKER_EXPRESSION`. That overlap is
+          # deliberate, not a bug -- splitting these two roots out into a fifth
+          # invocation just to avoid it would itself violate the four-way agreement
+          # this comment exists to preserve, for a nightly/on-demand workflow where a
+          # few dozen tests running twice costs nothing. The 17 tests these roots
+          # carry that run in NO workflow at all are the unmarked ones, picked up by
+          # this same root list in ci.yml, coverage.yml and test-durations.yml, which
+          # all deselect markers instead of selecting them.
           python -m pytest \
-            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit autobot-infrastructure/shared/tests libs \
             -n auto --dist loadscope \
             -m "$MARKER_EXPRESSION" \
             --junitxml=marker-report-backend.xml \
