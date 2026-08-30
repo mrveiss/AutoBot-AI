@@ -118,7 +118,16 @@ jobs:
 
           updated=(); conflicted=(); current=(); skipped=(); pushfail=()
 
-          while read -r branch; do
+          # Read the branch list into an array BEFORE looping, rather than
+          # feeding the loop from a process substitution. A `while read` loop
+          # fed that way hands its stdin to every command in the body, and a
+          # git command that reads stdin would consume branch names out of the
+          # list -- silently skipping them, with a green job and no evidence.
+          mapfile -t all_branches < <(git for-each-ref --format='%(refname:short)' \
+              refs/remotes/origin | sed 's|^origin/||' | sort -u)
+          echo "branches to consider: ${#all_branches[@]}"
+
+          for branch in "${all_branches[@]}"; do
               [ -n "$branch" ] || continue
 
               case " $NEVER_TARGET " in *" $branch "*) continue ;; esac
@@ -172,8 +181,7 @@ jobs:
                   echo "    CONFLICTS — skipped"
                   conflicted+=("$branch ($behind)")
               fi
-          done < <(git for-each-ref --format='%(refname:short)' refs/remotes/origin \
-                     | sed 's|^origin/||' | sort -u)
+          done
 
           git checkout --detach >/dev/null 2>&1 || true
           git branch -D __drift_work >/dev/null 2>&1 || true
