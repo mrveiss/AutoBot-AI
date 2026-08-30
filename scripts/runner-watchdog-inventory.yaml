@@ -1,0 +1,27 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# SSOT for "which self-hosted runners are expected to have
+# scripts/runner-watchdog.sh scheduled on their own host" (#15309).
+#
+# tools/lint/check_runner_watchdog_schedule.py reads this file in a REQUIRED
+# check and fails if the runner list is empty or the required systemd
+# templates/docs it points at are missing -- a "reach floor" so an inventory
+# silently emptied by a bad edit reads as red, not as "nothing to check".
+#
+# Keep in sync with the registered runners:
+#   gh api repos/mrveiss/AutoBot-AI/actions/runners
+# Update `verified` (ISO date) whenever you re-confirm an entry against that
+# command. check_runner_watchdog_schedule.py fails once any entry's
+# `verified` date is more than max_verified_age_days old, so a forgotten
+# re-check is a red required job, not a doc nobody looks at again.
+max_verified_age_days: 120
+runners:
+  - name: Little-Slave
+    service: actions.runner.mrveiss-AutoBot-AI.Little-Slave.service
+    verified: "2026-08-29"
+  - name: Second-Little-Slave
+    service: actions.runner.mrveiss-AutoBot-AI.Second-Little-Slave.service
+    verified: "2026-08-29"
