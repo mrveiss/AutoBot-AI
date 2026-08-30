@@ -149,6 +149,46 @@ each is listed here so an operator can find it (#15127).
   ```bash
   AUTOBOT_INTERNAL_API_KEY=... bash autobot-infrastructure/shared/scripts/utilities/enable-phase4-enterprise.sh
   ```
+- `check_ai_stack_health.sh` — probe a running `autobot-ai-stack` container: prompt files,
+  knowledge base index, prompt loading inside the container, and the `/health` endpoint. Exits
+  non-zero on the first real failure instead of reporting a clean run regardless (#14867).
+  ```bash
+  bash autobot-infrastructure/shared/scripts/check_ai_stack_health.sh
+  ```
+- `environment/set-env-deepseek.sh` — export the LLM and UI-debug env vars
+  (`AUTOBOT_DEFAULT_LLM_MODEL`, `AUTOBOT_SHOW_THOUGHTS`, etc. -- all live, SSOT-recognized keys)
+  needed to run AutoBot against `deepseek-r1:14b` instead of the default model. Meant to be
+  sourced, not executed.
+  ```bash
+  source autobot-infrastructure/shared/scripts/environment/set-env-deepseek.sh
+  ```
+- `setup/setup_tier2_research.sh` — install Playwright plus browsers and system deps for the
+  Tier 2 advanced web research capability (`autobot-backend/agents/web_researcher.py`), and
+  generate a local smoke-test script and an enable/disable toggle for
+  `config/web_research.yaml`. Recently hardened to fail loudly instead of reporting success
+  with a broken import (#14867).
+  ```bash
+  bash autobot-infrastructure/shared/scripts/setup/setup_tier2_research.sh
+  ```
+- `testing/manage_playwright.sh` — start/stop/restart/status/logs/test the standalone
+  `autobot-playwright` container defined in
+  `autobot-infrastructure/shared/docker/compose/docker-compose.playwright.yml`.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/testing/manage_playwright.sh status
+  ```
+- `utilities/prevent-local-frontend.sh` — not a hook, not aliased anywhere: an operator (or an
+  operator's own shell alias over `npm`/`vite`) runs this by hand to get the
+  [Single Frontend Server mandate](../../../docs/adr/005-single-frontend-mandate.md)'s reminder
+  and the correct `sync-frontend.sh`-based workflow instead of a local dev server.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/utilities/prevent-local-frontend.sh
+  ```
+- `utilities/sync-npu-worker-to-windows.sh` — rsync the Windows NPU worker package
+  (`autobot-npu-worker/resources/windows-npu-worker`) from WSL2 to the Windows host filesystem,
+  for the `install.ps1`/`check-health.ps1` steps that follow. Supports `--dry-run`.
+  ```bash
+  bash autobot-infrastructure/shared/scripts/utilities/sync-npu-worker-to-windows.sh --dry-run
+  ```
 
 ## Usage Examples
 
