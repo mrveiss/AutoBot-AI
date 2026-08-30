@@ -371,5 +371,3 @@ async def test_get_auth_token_apikey_success_does_not_touch_degradation_store(
     # is_vault_backed() is False, so _get_auth_token never calls clear() —
     # the pre-existing mark is untouched.
     assert await store_instance.is_degraded("static") is True
-
-
