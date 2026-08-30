@@ -61,6 +61,21 @@ jobs:
       # directory and combined without collision. `coverage combine` picks up
       # `.coverage.*` by convention.
       COVERAGE_FILE: .coverage.shard-${{ matrix.shard }}
+      # Use CPython's sys.monitoring backend instead of coverage.py's legacy
+      # settrace tracer (#15336).
+      #
+      # #10691 measured instrumentation as the dominant cost of this suite — 336s
+      # without `--cov` against 35m11s with it — and moved coverage off the PR gate
+      # on that basis. That number was taken with the settrace tracer, which is the
+      # only backend coverage.py had before PEP 669. This repository now runs
+      # Python 3.14, where `COVERAGE_CORE=sysmon` uses the interpreter's own
+      # monitoring hooks and costs a fraction of the old tracer.
+      #
+      # This changes nothing about WHERE coverage runs; it only makes the nightly
+      # cheaper and produces the measurement needed to revisit #10691 honestly.
+      # Whether coverage can afford to gate PRs is then a question with a current
+      # number behind it, rather than one inherited from a superseded tracer.
+      COVERAGE_CORE: sysmon
 
     steps:
       - uses: actions/checkout@v7
