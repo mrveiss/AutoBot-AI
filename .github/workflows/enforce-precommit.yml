@@ -23,7 +23,17 @@ permissions:
 
 jobs:
   verify-precommit-config:
-    runs-on: ubuntu-latest
+    # Self-hosted (#15310). Unblocked by #15314: setup-python-ci now branches on
+    # runner.environment, so on a self-hosted runner it uses the interpreter
+    # already on PATH instead of downloading a build that does not exist for
+    # this runner's OS release. Python and shell only — no Docker, no service
+    # containers — and a single unsharded job at ~462s, so moving it forfeits
+    # no parallelism.
+    runs-on: [self-hosted, Linux, X64]
+    # Fail fast on self-hosted, not GitHub's ~360min default (#11077 precedent in
+    # frontend-test.yml). This is a required, non-path-filtered context: without a
+    # bound, a runner outage queues it for hours and wedges every open PR.
+    timeout-minutes: 30
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -97,6 +107,23 @@ jobs:
       # #13517: pre-commit is installed by the composite action above via
       # extra-packages, which also upgrades pip/setuptools/wheel — this step
       # duplicated both.
+
+      # A pre-commit hook shells out to `node`
+      # (.pre-commit-config.yaml: `entry: node autobot-frontend/scripts/
+      # canonical_check.mjs`). GitHub-hosted images ship Node; self-hosted
+      # runners do not, so the hook could not execute and the #14181 gate below
+      # correctly refused to pass over it — a hook that cannot run reports
+      # nothing about the code.
+      #
+      # Unlike actions/setup-python, this works on a non-LTS runner OS: Node
+      # publishes generic linux-x64 tarballs rather than per-distro builds, so
+      # there is no missing-build problem to work around (#15313 does not apply).
+      # Version matches the rest of CI.
+      - name: Set up Node
+        if: steps.filter.outputs.code == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '22'
 
       - name: Run pre-commit on all files
         if: steps.filter.outputs.code == 'true'
@@ -242,7 +269,9 @@ jobs:
           bash autobot-infrastructure/shared/scripts/hooks/pre-commit-no-gitignore-shadow
 
   check-instructions:
-    runs-on: ubuntu-latest
+    # Self-hosted (#15310) — same reasoning as verify-precommit-config above.
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
