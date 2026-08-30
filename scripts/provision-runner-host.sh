@@ -40,7 +40,7 @@ MODE=""
 case "${1:-}" in
   --check) MODE=check ;;
   --apply) MODE=apply ;;
-  -h|--help) sed -n '9,14p' "$0"; exit 0 ;;
+  -h|--help) sed -n '8,14p' "$0"; exit 0 ;;
   *) echo "usage: $(basename "$0") {--check|--apply}" >&2; exit 2 ;;
 esac
 
@@ -62,15 +62,23 @@ else
   missing=1
 fi
 
-# `python3.14 -m venv` is a separate package on Debian/Ubuntu and fails at use
-# time, not install time, so check it explicitly rather than assuming.
+# `python3.14 -m venv` is a separate package on Debian/Ubuntu and fails at USE
+# time, not install time, so check it by actually creating one.
+#
+# NOT `-m venv --help`: that exits through argparse before `create()` runs, so
+# it proves only that the venv module imports. Debian keeps `venv` in the stdlib
+# while shipping `ensurepip` in python3.x-venv, so a host missing that package
+# answers --help happily and then fails the first real creation with
+# "ensurepip is not available" — a false pass in the one check meant to prevent it.
 if command -v "$PY_BIN" >/dev/null 2>&1; then
-  if "$PY_BIN" -m venv --help >/dev/null 2>&1; then
-    ok "$PY_BIN -m venv works"
+  _probe="$(mktemp -d)"
+  if "$PY_BIN" -m venv "$_probe/v" >/dev/null 2>&1; then
+    ok "$PY_BIN -m venv works (created and removed a throwaway venv)"
   else
-    bad "$PY_BIN present but 'python${PYTHON_VERSION}-venv' is missing"
+    bad "$PY_BIN present but creating a venv fails — install python${PYTHON_VERSION}-venv"
     missing=1
   fi
+  rm -rf "$_probe"
 fi
 
 # NOTE: pip on the host is deliberately NOT checked. setup-python-ci builds a
