@@ -11,65 +11,30 @@ Coverage:
 - No-Redis fallback (mocked _get_redis raises): in-process dict tracks marks.
 - All-degraded chain in provider_registry still proceeds (no hard failure).
 - mark_degraded in coordinator sets the Redis key after fallback exhaustion.
+
+#15022 split the needs_reauth-cause coverage (non-expiry, explicit clear,
+cause reporting, the Redis-down path, the alert-cooldown wiring, and the
+base_provider._get_auth_token wiring) into
+test_provider_degradation_reauth.py — this file plus that split module
+together exceeded the repo's 600-line cap. This file kept the pre-#15022
+baseline coverage above and the ModelFallbackCoordinator/ProviderRegistry
+integration tests below. Shared store/global-injection fixtures live in
+conftest.py (fixtures, not imports — llm_shared.tests has no __init__.py,
+so a plain import fails collection; see conftest.py's docstring). Each
+file keeps its own one-line guarded fakeredis import instead of sharing it.
 """
 
 from __future__ import annotations
 
 import time
-from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 try:
     import fakeredis.aioredis as fakeredis_async
-
-    _FAKEREDIS_AVAILABLE = True
 except ImportError:
-    _FAKEREDIS_AVAILABLE = False
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _require_fakeredis():
-    """Skip the test when fakeredis is not installed."""
-    if not _FAKEREDIS_AVAILABLE:
-        pytest.skip("fakeredis not installed — skipping Redis-backed tests")
-
-
-def _make_store_with_fake_server(server):
-    """Return a ProviderDegradationStore whose Redis calls hit *server*."""
-    from llm_shared.provider_degradation import ProviderDegradationStore
-
-    store = ProviderDegradationStore()
-
-    async def _fake_redis(*_args, **_kwargs):
-        return fakeredis_async.FakeRedis(server=server, decode_responses=True)
-
-    store._get_redis = _fake_redis  # type: ignore[method-assign]
-    return store
-
-
-@contextmanager
-def _inject_globals(func, **replacements):
-    """Swap names in *func*'s own module globals for the duration of the block.
-
-    ``unittest.mock.patch("llm_shared.X.name")`` resolves the target through
-    ``sys.modules``, which the conftest stub machinery can leave pointing at a
-    MagicMock module while the real class lives in a separately loaded module
-    object — silently patching the wrong namespace.  Injecting through
-    ``func.__globals__`` always hits the dict the executing code reads.
-    """
-    g = func.__globals__
-    saved = {k: g[k] for k in replacements}
-    g.update(replacements)
-    try:
-        yield
-    finally:
-        g.update(saved)
-
+    fakeredis_async = None  # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
 # Redis-backed tests
@@ -77,9 +42,8 @@ def _inject_globals(func, **replacements):
 
 
 @pytest.mark.asyncio
-async def test_mark_then_is_degraded_redis():
+async def test_mark_then_is_degraded_redis(_require_fakeredis, _make_store_with_fake_server):
     """mark_degraded → is_degraded returns True within TTL (Redis path)."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store = _make_store_with_fake_server(server)
 
@@ -89,9 +53,8 @@ async def test_mark_then_is_degraded_redis():
 
 
 @pytest.mark.asyncio
-async def test_not_degraded_without_mark_redis():
+async def test_not_degraded_without_mark_redis(_require_fakeredis, _make_store_with_fake_server):
     """is_degraded returns False when no mark has been set."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store = _make_store_with_fake_server(server)
 
@@ -99,9 +62,8 @@ async def test_not_degraded_without_mark_redis():
 
 
 @pytest.mark.asyncio
-async def test_provider_only_key_redis():
+async def test_provider_only_key_redis(_require_fakeredis, _make_store_with_fake_server):
     """Provider-only mark (no model) is correctly stored and retrieved."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store = _make_store_with_fake_server(server)
 
@@ -113,9 +75,8 @@ async def test_provider_only_key_redis():
 
 
 @pytest.mark.asyncio
-async def test_cross_worker_mark_visible_to_second_store():
+async def test_cross_worker_mark_visible_to_second_store(_require_fakeredis, _make_store_with_fake_server):
     """Two stores sharing a FakeServer (simulating two workers) share state."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     worker_a = _make_store_with_fake_server(server)
     worker_b = _make_store_with_fake_server(server)
@@ -127,9 +88,8 @@ async def test_cross_worker_mark_visible_to_second_store():
 
 
 @pytest.mark.asyncio
-async def test_ttl_expiry_restores_provider():
+async def test_ttl_expiry_restores_provider(_require_fakeredis, _make_store_with_fake_server):
     """After TTL expiry (simulated by deleting the key), is_degraded returns False."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store = _make_store_with_fake_server(server)
 
@@ -144,9 +104,8 @@ async def test_ttl_expiry_restores_provider():
 
 
 @pytest.mark.asyncio
-async def test_degraded_entries_returns_marked_keys():
+async def test_degraded_entries_returns_marked_keys(_require_fakeredis, _make_store_with_fake_server):
     """degraded_entries() lists all currently-marked keys."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store = _make_store_with_fake_server(server)
 
@@ -154,8 +113,9 @@ async def test_degraded_entries_returns_marked_keys():
     await store.mark_degraded("anthropic")
 
     entries = await store.degraded_entries()
-    assert "autobot:llm:deg:openai:gpt-4o" in entries
-    assert "autobot:llm:deg:anthropic" in entries
+    keys = [e["key"] for e in entries]
+    assert "autobot:llm:deg:openai:gpt-4o" in keys
+    assert "autobot:llm:deg:anthropic" in keys
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +142,7 @@ async def test_no_redis_fallback_mark_and_check():
 @pytest.mark.asyncio
 async def test_no_redis_fallback_expiry():
     """In-process fallback respects expiry timestamps (time-travel via monkeypatch)."""
-    from llm_shared.provider_degradation import ProviderDegradationStore
+    from llm_shared.provider_degradation import DegradationCause, ProviderDegradationStore
 
     store = ProviderDegradationStore()
 
@@ -194,8 +154,9 @@ async def test_no_redis_fallback_expiry():
     await store.mark_degraded("openai", "gpt-4o")
     assert await store.is_degraded("openai", "gpt-4o") is True
 
-    # Force expiry by back-dating the timestamp.
-    store._local["autobot:llm:deg:openai:gpt-4o"] = time.monotonic() - 1.0
+    # Force expiry by back-dating the timestamp. #15022: _local now stores
+    # (cause, expires_at) — a bare float here would no longer unpack.
+    store._local["autobot:llm:deg:openai:gpt-4o"] = (DegradationCause.TRANSIENT, time.monotonic() - 1.0)
     assert await store.is_degraded("openai", "gpt-4o") is False
 
 
@@ -213,7 +174,7 @@ async def test_no_redis_degraded_entries_fallback():
 
     await store.mark_degraded("openai", "gpt-4o")
     entries = await store.degraded_entries()
-    assert "autobot:llm:deg:openai:gpt-4o" in entries
+    assert "autobot:llm:deg:openai:gpt-4o" in [e["key"] for e in entries]
 
 
 # ---------------------------------------------------------------------------
@@ -222,9 +183,12 @@ async def test_no_redis_degraded_entries_fallback():
 
 
 @pytest.mark.asyncio
-async def test_coordinator_marks_degraded_on_rate_limit():
+async def test_coordinator_marks_degraded_on_rate_limit(
+    _require_fakeredis,
+    _make_store_with_fake_server,
+    _inject_globals,
+):
     """execute_with_fallback marks a provider degraded when rate-limited."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store_instance = _make_store_with_fake_server(server)
 
@@ -285,9 +249,8 @@ async def test_coordinator_marks_degraded_on_rate_limit():
 
 
 @pytest.mark.asyncio
-async def test_registry_skips_degraded_provider():
+async def test_registry_skips_degraded_provider(_require_fakeredis, _make_store_with_fake_server, _inject_globals):
     """get_provider_for_request skips a degraded provider and picks the next."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store_a = _make_store_with_fake_server(server)
 
@@ -323,9 +286,8 @@ async def test_registry_skips_degraded_provider():
 
 
 @pytest.mark.asyncio
-async def test_registry_all_degraded_proceeds():
+async def test_registry_all_degraded_proceeds(_require_fakeredis, _make_store_with_fake_server, _inject_globals):
     """When all providers are degraded, the registry still returns one (no hard fail)."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store_a = _make_store_with_fake_server(server)
 
@@ -361,9 +323,12 @@ async def test_registry_all_degraded_proceeds():
 
 
 @pytest.mark.asyncio
-async def test_coordinator_marks_final_provider_on_exhaustion():
+async def test_coordinator_marks_final_provider_on_exhaustion(
+    _require_fakeredis,
+    _make_store_with_fake_server,
+    _inject_globals,
+):
     """The provider failing on the LAST attempt is marked too (mark before break)."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store_instance = _make_store_with_fake_server(server)
 
@@ -414,9 +379,12 @@ async def test_coordinator_marks_final_provider_on_exhaustion():
 
 
 @pytest.mark.asyncio
-async def test_coordinator_marks_registry_resolved_provider_when_request_has_none():
+async def test_coordinator_marks_registry_resolved_provider_when_request_has_none(
+    _require_fakeredis,
+    _make_store_with_fake_server,
+    _inject_globals,
+):
     """A request without a provider still produces a matchable mark via selected_provider."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store_instance = _make_store_with_fake_server(server)
 
@@ -461,13 +429,16 @@ async def test_coordinator_marks_registry_resolved_provider_when_request_has_non
     assert await store_instance.is_degraded("openai", "gpt-4o") is True
     # No junk empty-provider key was written.
     entries = await store_instance.degraded_entries()
-    assert all(":deg::" not in e for e in entries)
+    assert all(":deg::" not in e["key"] for e in entries)
 
 
 @pytest.mark.asyncio
-async def test_registry_stamps_selected_provider_and_skips_model_scoped_mark():
+async def test_registry_stamps_selected_provider_and_skips_model_scoped_mark(
+    _require_fakeredis,
+    _make_store_with_fake_server,
+    _inject_globals,
+):
     """End-to-end: a model-scoped coordinator mark is honored by registry selection."""
-    _require_fakeredis()
     server = fakeredis_async.FakeServer()
     store_a = _make_store_with_fake_server(server)
 
