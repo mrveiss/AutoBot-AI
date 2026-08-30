@@ -1,0 +1,221 @@
+# Keep PR-less branches current with Dev_new_gui by MERGING base into them (#15306)
+#
+# THE HOLE THIS FILLS. Three branch states, two of them already covered:
+#
+#   has a live session  -> session-lifecycle rebases onto base at start and end
+#   has an open PR      -> auto-update-pr-branches.yml, one refresh per push (#14022)
+#   neither             -> NOTHING, until this workflow
+#
+# The third row is most branches. Measured 2026-08-30 across the 32 PR-less
+# work branches: every one is behind, from 101 to 2447 commits, and every one
+# carries unlanded commits. A branch 2447 behind cannot be reviewed and cannot
+# land without a conflict-resolution session, which is how finished work turns
+# into work nobody can afford to finish.
+#
+# WHY MERGE, NEVER REBASE. Rebasing rewrites history. Most of these branches are
+# checked out in a worktree belonging to a live session; a rebase orphans that
+# session's local HEAD and makes its next push non-fast-forward. A merge commit
+# keeps every existing commit reachable, so a session that pulls gets a clean
+# fast-forward and loses nothing. This is the opposite of the rule for a branch
+# you own, where session-lifecycle correctly rebases. The distinction is
+# ownership: rebase your own, merge someone else's.
+#
+# WHY THIS COSTS NO CI. No workflow triggers on a push to an arbitrary branch:
+# every `push:` trigger under .github/workflows/ is scoped to
+# main/Dev_new_gui/develop, except image-sign.yml which is `push: tags:`. PR
+# workflows fire on `pull_request`, and these branches have no PR by definition.
+# So this does NOT reintroduce the reset amplification #14022 fixed — that was
+# specific to branches WITH an open PR, where a push discards an in-flight check
+# set on the singleton self-hosted runner. Those branches are excluded here and
+# stay the sole property of auto-update-pr-branches.yml.
+#
+# WHY rescued/* IS EXCLUDED. A `rescued/stash-*` branch is a point-in-time
+# snapshot of a working tree someone rescued, not a line of work. Measured on
+# 2026-08-30: 18 such branches, each carrying unique commits, each 3174-3933
+# commits behind. Merging base into one does not bring it forward — it destroys
+# the thing it exists to record, and it would conflict on every run forever,
+# putting 18 permanent entries in every job summary and making this issue's
+# "no PR-less branch more than one commit behind" criterion unsatisfiable by
+# construction. They need triage (land it or drop it), which is a judgement, not
+# a merge. Raised on #15306 rather than decided silently here.
+name: Merge base into parked branches
+
+on:
+  schedule:
+    # Every 6 hours. Not more often: the drift this fixes accrues over days,
+    # and each run pushes real commits to real branches — a cadence tighter
+    # than the problem buys nothing and multiplies the blast radius of a bug.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report what would change without pushing anything'
+        type: boolean
+        default: false
+
+# One at a time. Two concurrent runs would race on the same branches and could
+# push conflicting merge commits. `cancel-in-progress: false` because a run
+# that is mid-push must finish; cancelling it could leave some branches merged
+# and others not, with no record of which.
+concurrency:
+  group: merge-base-into-parked-branches
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  merge-base:
+    # ubuntu-latest, NOT the singleton self-hosted runner (#13401): this job
+    # keeps branches mergeable, so it must not queue behind the same runner
+    # contention it would be needed to recover from. Nothing here needs the
+    # self-hosted host — git plus one `gh pr list` call.
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          # Every branch and the full commit graph: the merges below are real
+          # merges, and `rev-list --count` needs the ancestry. A shallow clone
+          # silently reports wrong behind-counts.
+          fetch-depth: 0
+          token: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Merge base into every PR-less behind branch
+        env:
+          GH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE: Dev_new_gui
+          # Never a target, whatever else changes. The base itself and the
+          # protected trunks: pushing a merge to any of these is exactly the
+          # "never push to a protected branch" rule this repo enforces.
+          NEVER_TARGET: 'Dev_new_gui main master develop HEAD'
+          # See the rescued/* rationale in the header.
+          EXCLUDED_PREFIXES: 'rescued/'
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -uo pipefail
+
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # Branches with an open PR are untouched — auto-update-pr-branches.yml
+          # keeps sole ownership of those, preserving #14022's serialization.
+          # `gh pr list` is the only API call here; if it fails we must NOT fall
+          # through with an empty set, because that would make every PR branch
+          # look eligible and hand this job the very branches it must not touch.
+          if ! pr_heads=$(gh pr list --repo "$REPO" --state open --limit 300 \
+                            --json headRefName -q '.[].headRefName' | sort -u); then
+              echo "::error::could not list open PRs; refusing to run rather than " \
+                   "treating every PR branch as parked"
+              exit 1
+          fi
+          printf '%s\n' "$pr_heads" > /tmp/pr_heads.txt
+          echo "open PR head branches: $(grep -c . /tmp/pr_heads.txt || echo 0)"
+
+          updated=(); conflicted=(); current=(); skipped=(); pushfail=()
+
+          # Read the branch list into an array BEFORE looping, rather than
+          # feeding the loop from a process substitution. A `while read` loop
+          # fed that way hands its stdin to every command in the body, and a
+          # git command that reads stdin would consume branch names out of the
+          # list -- silently skipping them, with a green job and no evidence.
+          mapfile -t all_branches < <(git for-each-ref --format='%(refname:short)' \
+              refs/remotes/origin | sed 's|^origin/||' | sort -u)
+          echo "branches to consider: ${#all_branches[@]}"
+
+          for branch in "${all_branches[@]}"; do
+              [ -n "$branch" ] || continue
+
+              case " $NEVER_TARGET " in *" $branch "*) continue ;; esac
+
+              excluded=0
+              for prefix in $EXCLUDED_PREFIXES; do
+                  case "$branch" in "$prefix"*) excluded=1 ;; esac
+              done
+              if [ "$excluded" = 1 ]; then skipped+=("$branch"); continue; fi
+
+              if grep -qxF "$branch" /tmp/pr_heads.txt; then continue; fi
+
+              behind=$(git rev-list --count "origin/$branch..origin/$BASE" 2>/dev/null || echo "")
+              if [ -z "$behind" ]; then
+                  echo "::warning::cannot compute behind-count for $branch; skipping"
+                  skipped+=("$branch")
+                  continue
+              fi
+              if [ "$behind" = "0" ]; then current+=("$branch"); continue; fi
+
+              echo "--- $branch is $behind behind $BASE"
+
+              # A detached working branch per iteration. `-B` resets it each
+              # time, so a failed merge never leaks into the next branch.
+              if ! git checkout -B __drift_work "origin/$branch" >/dev/null 2>&1; then
+                  echo "::warning::cannot check out $branch; skipping"
+                  skipped+=("$branch")
+                  continue
+              fi
+
+              # --no-rebase is explicit, not redundant: a repo- or user-level
+              # pull.rebase setting must never silently turn this into the one
+              # operation the design forbids.
+              if git merge --no-rebase --no-edit "origin/$BASE" >/dev/null 2>&1; then
+                  if [ "$DRY_RUN" = "true" ]; then
+                      echo "    would push (dry run)"
+                      updated+=("$branch ($behind)")
+                  # No --force, ever. If the branch moved under us the push is
+                  # rejected and the branch is reported, never overwritten.
+                  elif git push origin "HEAD:refs/heads/$branch" >/dev/null 2>&1; then
+                      echo "    merged and pushed"
+                      updated+=("$branch ($behind)")
+                  else
+                      echo "::warning::push rejected for $branch (moved concurrently?); not forcing"
+                      pushfail+=("$branch")
+                  fi
+              else
+                  # Skipped and named, never forced. A branch that will not
+                  # merge is information about unfinished work.
+                  git merge --abort >/dev/null 2>&1 || true
+                  echo "    CONFLICTS — skipped"
+                  conflicted+=("$branch ($behind)")
+              fi
+          done
+
+          git checkout --detach >/dev/null 2>&1 || true
+          git branch -D __drift_work >/dev/null 2>&1 || true
+
+          summary() { printf '%s\n' "$@" >> "$GITHUB_STEP_SUMMARY"; }
+          summary "## Parked-branch drift" ""
+          [ "$DRY_RUN" = "true" ] && summary "**Dry run — nothing was pushed.**" ""
+          summary "| outcome | count |" "|---|---:|" \
+                  "| updated | ${#updated[@]} |" \
+                  "| already current | ${#current[@]} |" \
+                  "| skipped for conflict | ${#conflicted[@]} |" \
+                  "| push rejected | ${#pushfail[@]} |" \
+                  "| excluded by policy | ${#skipped[@]} |" ""
+          if [ ${#conflicted[@]} -gt 0 ]; then
+              summary "### Skipped for conflict — these need a person" ""
+              summary "These will not merge cleanly. That is information about" \
+                      "unfinished work, not garbage: land it or decide against it." ""
+              for b in "${conflicted[@]}"; do summary "- \`$b\` commits behind"; done
+              summary ""
+          fi
+          if [ ${#pushfail[@]} -gt 0 ]; then
+              summary "### Push rejected (branch moved mid-run; never forced)" ""
+              for b in "${pushfail[@]}"; do summary "- \`$b\`"; done
+              summary ""
+          fi
+          if [ ${#updated[@]} -gt 0 ]; then
+              summary "### Updated" ""
+              for b in "${updated[@]}"; do summary "- \`$b\` commits behind"; done
+          fi
+
+          echo "updated=${#updated[@]} current=${#current[@]} conflicted=${#conflicted[@]}" \
+               "pushfail=${#pushfail[@]} excluded=${#skipped[@]}"
+
+          # A conflict is a reportable outcome, not a job failure: failing here
+          # would make the run red every time until a human resolved 18 parked
+          # branches, and a check that is always red stops being read.
+          exit 0
