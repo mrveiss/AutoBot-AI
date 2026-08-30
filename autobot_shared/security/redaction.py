@@ -123,7 +123,6 @@ def redact_mapping(mapping: Mapping[str, str]) -> Dict[str, str]:
     return redacted
 
 
-
 def redact_cloud_identifiers(text: str) -> str:
     """Mask AWS account numbers and resource tails inside ARNs in *text* (#15324).
 
@@ -133,10 +132,7 @@ def redact_cloud_identifiers(text: str) -> str:
     """
 
     def _mask(match: "re.Match[str]") -> str:
-        return (
-            f"arn:{match.group('partition')}:{match.group('service')}:"
-            f"{match.group('region')}:{_MASK}:{_MASK}"
-        )
+        return f"arn:{match.group('partition')}:{match.group('service')}:" f"{match.group('region')}:{_MASK}:{_MASK}"
 
     return _ARN_RE.sub(_mask, text)
 
@@ -152,5 +148,6 @@ def redact_provider_error(exc: BaseException) -> str:
     if not message:
         return type(exc).__name__
     return redact_cloud_identifiers(redact_text(message))
+
 
 __all__ = ["redact_text", "redact_mapping", "redact_cloud_identifiers", "redact_provider_error"]
