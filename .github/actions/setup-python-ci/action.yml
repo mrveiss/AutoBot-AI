@@ -115,14 +115,39 @@ runs:
         RESOLVED="$("$BIN" -c 'import platform; print(platform.python_version())')"
         echo "python-version=${RESOLVED}" >> "$GITHUB_OUTPUT"
 
-        # Prepend a shim so plain `python`/`python3` in later steps resolve
-        # to THIS interpreter, not whatever the host's default python3 is
-        # (#15313: those can be different major versions on the same host).
-        SHIM_DIR="${RUNNER_TEMP}/setup-python-ci-shim"
-        mkdir -p "$SHIM_DIR"
-        ln -sf "$(command -v "$BIN")" "$SHIM_DIR/python"
-        ln -sf "$(command -v "$BIN")" "$SHIM_DIR/python3"
-        echo "$SHIM_DIR" >> "$GITHUB_PATH"
+        # #15310: build a venv from the resolved interpreter and put it first
+        # on PATH. This replaces an earlier symlink shim, and solves three
+        # problems that the shim solved none or one of:
+        #
+        #   PEP 668. Debian/Ubuntu mark their Python installs
+        #   externally-managed, so `pip install` into system site-packages is
+        #   refused outright ("externally-managed-environment"). Observed live:
+        #   one runner refused, its sibling did not, because the two hosts had
+        #   been provisioned differently -- an intermittent failure that depends
+        #   on which runner picks the job.
+        #
+        #   Console scripts on PATH. pip puts them in the user script directory
+        #   when site-packages is not writable, which is not on a service
+        #   runner's PATH -- `pre-commit: command not found`, swallowed by a
+        #   step that then reports success.
+        #
+        #   Host cleanliness. Nothing is installed outside RUNNER_TEMP, so the
+        #   runners stay in their default GitHub configuration: no packages
+        #   added to the system interpreter, no .path or .env edits, nothing to
+        #   undo. The venv dies with the job.
+        #
+        # `python`, `python3` and `pip` all resolve here, so later steps need no
+        # knowledge of any of this.
+        VENV_DIR="${RUNNER_TEMP}/setup-python-ci-venv"
+        rm -rf "$VENV_DIR"
+        if ! "$BIN" -m venv "$VENV_DIR"; then
+          echo "::error::Could not create a venv with $BIN. Install the" \
+               "matching python venv package on this runner (#15310)."
+          exit 1
+        fi
+        echo "$VENV_DIR/bin" >> "$GITHUB_PATH"
+        echo "Built venv at $VENV_DIR from $BIN (#15310)."
+
         echo "Resolved $BIN -> $RESOLVED with no download (#15313)."
 
     # #13516: every input reaches the shell through `env:`, never inline

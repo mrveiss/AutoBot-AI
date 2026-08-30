@@ -11,6 +11,10 @@
 # templates/docs it points at are missing -- a "reach floor" so an inventory
 # silently emptied by a bad edit reads as red, not as "nothing to check".
 #
+# Provisioning for these hosts: scripts/provision-runner-host.sh, documented in
+# docs/developer/RUNNER_PROVISIONING.md (#15310). A runner missing python3.14
+# cannot run any job using setup-python-ci.
+#
 # Keep in sync with the registered runners:
 #   gh api repos/mrveiss/AutoBot-AI/actions/runners
 # Update `verified` (ISO date) whenever you re-confirm an entry against that
