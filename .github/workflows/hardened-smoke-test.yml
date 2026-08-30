@@ -31,6 +31,11 @@ on:
   schedule:
     - cron: '0 11 * * 0'  # Every Sunday at 11 AM UTC (offset from regular smoke test)
 
+# Least privilege (#15331). Builds images, runs the compose stack and uploads
+# an artifact — no write scope needed. Flagged by CodeQL actions/missing-workflow-permissions.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
