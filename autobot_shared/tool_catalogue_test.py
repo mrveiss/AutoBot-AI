@@ -250,6 +250,8 @@ class TestOutboundIsReachableThroughACategory:
             "http_delete",
             "send_request",
         )
+
+
 class TestEverySensitiveToolIsReachableThroughACategory:
     """#14903: assert the property, not the list.
 
@@ -308,8 +310,7 @@ class TestEverySensitiveToolIsReachableThroughACategory:
                 match_tool_name(tool, patterns, word_boundary=True) for patterns in APPROVAL_CATEGORY_TOOLS.values()
             )
             assert not covered, (
-                f"{tool!r} is allowlisted as uncoverable but a category now covers it; "
-                f"remove the allowlist entry"
+                f"{tool!r} is allowlisted as uncoverable but a category now covers it; " f"remove the allowlist entry"
             )
 
     def test_the_check_actually_enumerates_something(self):
