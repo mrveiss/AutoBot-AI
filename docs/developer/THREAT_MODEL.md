@@ -126,8 +126,7 @@ for service-to-service.
 - Nothing reaches a log, HTTP error body, or outward artifact without
   [`redaction.py`](../../autobot_shared/security/redaction.py) (`redact_text` (:97) /
   `redact_mapping` (:109) / `redact_cloud_identifiers` (:126) / `redact_provider_error` (:140)).
-  Exception text counts — `detail=f"...{exc}"` on a credential path leaks, and a boto3
-  `ClientError` carries the AWS account number in an ARN (#15324).
+  Exception text counts; a boto3 `ClientError` carries the account number in an ARN (#15324).
 - Keys come from SSOT config, never a literal. A default value for an encryption key is a
   finding even when production overrides it via env var.
 
