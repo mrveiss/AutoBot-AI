@@ -33,6 +33,35 @@ they cannot be mistaken for a call site or a default. The repo's existing
 across ~25 files for exactly this kind of deliberate divergence, but until
 now checked by nothing) is honored: a call site so annotated is skipped, not
 flagged. Discrimination tests live in ``check_getenv_ssot_drift_test.py``.
+
+Evidence for the ten defaults this same #13264 PR restored in
+``ssot_config.py`` (the ``ssot_config.py``/``ssot_config_test.py`` line-count
+ratchet is down-only, so the per-field reasoning lives here rather than as
+inline comments there — see ``ssot_config_defaults_13264_test.py`` for the
+assertions):
+
+- ``log_max_bytes``/``log_backup_count``: ``utils/memory_optimization.py``
+  passes both straight to ``RotatingFileHandler``/``TimedRotatingFileHandler``
+  unguarded. ``maxBytes=0`` means "never rotate"; ``backupCount=0`` means zero
+  backups retained. Pre-#7437: 52428800 and 5 (the size-based rotator) / 7
+  (the time-based one, collapsed onto one field by the migration — 5 restored
+  as the more conservative value).
+- ``memory_pool_size``/``weak_cache_size``/``cache_size``: unguarded defaults
+  for ``MemoryPool``, ``WeakCache`` and the ``memory_efficient_cache``
+  decorator in the same module. 0 collapses each to zero capacity.
+  Pre-#7437: 100 / 128 / 128.
+- ``memory_threshold_mb``/``memory_log_threshold_mb``: ``MemoryMonitor``'s
+  warning threshold, same module. 0 makes ``abs(diff) > threshold`` true for
+  almost every allocation. Pre-#7437: 500 / 1.
+- ``chat_timeout``: ``api/chat.py`` reads it unguarded; 0 timed out every
+  chat request immediately. Pre-#7437: 30.
+- ``cache_enabled``/``vllm_async_output``/``vllm_prefix_caching``:
+  ``config/defaults.py`` guards all three with
+  ``X if X is not None else True`` (or the ``"" if ... else True`` string
+  form) — a guard that can never fire for a field whose own default is
+  ``False``/``""`` and never ``None``, so it read the broken default through
+  unchanged. Same defect class as the MCP-registry-cache one-off fix
+  (#13262). Pre-#7437: enabled / enabled / "true".
 """
 
 from __future__ import annotations

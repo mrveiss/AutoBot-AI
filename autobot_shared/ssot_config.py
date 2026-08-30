@@ -1472,11 +1472,7 @@ class MiscConfig(RedactedSettings):
     """Miscellaneous/unmapped environment variables.
 
     This class collects all env vars not yet migrated to structured config sections.
-    Historically documented as "vars default to empty string when not set" —
-    that was never uniformly true and, per #13264, was often the bug: several
-    fields below carry an explicit non-empty/non-zero default restored from
-    the pre-#7437 os.getenv() call site it replaced. Check the field's own
-    default before assuming "" / 0 / False.
+    Field defaults vary field to field -- do not assume "" / 0 / False (#13264).
     Issue: GH#7437 — Migrate 675 os.getenv/os.environ callsites
     """
 
@@ -1528,11 +1524,6 @@ class MiscConfig(RedactedSettings):
             "deployments — configure an elevation_client instead.  Issue #10799."
         ),
     )
-    # #13264: restore pre-#7437 default (enabled) — response caching was
-    # silently disabled. The "is not None" guard in
-    # config/defaults.py::_get_llm_optimization_config() never protects a
-    # bool field whose own default is False (never None), so it read the
-    # broken default straight through.
     cache_enabled: bool = Field(default=True, alias="AUTOBOT_CACHE_ENABLED")
     cache_size: int = Field(default=128, alias="AUTOBOT_CACHE_SIZE")
     cache_l1_size: int = Field(
@@ -1607,8 +1598,6 @@ class MiscConfig(RedactedSettings):
     # documents for a guaranteed CPU ceiling.
     document_ocr_enabled: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_ENABLED")
     chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
-    # #13264: restore pre-#7437 default (30s) — 0 made api/chat.py:1076
-    # time every chat request out immediately.
     chat_timeout: int = Field(default=30, alias="AUTOBOT_CHAT_TIMEOUT")
     chromadb_auth_token: str = Field(
         default="",
@@ -1732,13 +1721,6 @@ class MiscConfig(RedactedSettings):
     llm_key_rotation_interval_minutes: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES")
     llm_models_yaml: str = Field(default="", alias="AUTOBOT_LLM_MODELS_YAML")
     llm_temperature: str = Field(default="", alias="AUTOBOT_LLM_TEMPERATURE")
-    # #13264: restore pre-#7437 log-rotation defaults, read unguarded by
-    # utils/memory_optimization.py. log_max_bytes=0 passed straight to
-    # RotatingFileHandler(maxBytes=0), which means "never rotate";
-    # log_backup_count=0 means zero backups are retained on rotation.
-    # The pre-migration code used two different backup_count literals (5 for
-    # the size-based rotator, 7 for the time-based one) that #7437 collapsed
-    # onto a single field; 5 is restored here as the more conservative value.
     log_backup_count: int = Field(default=5, alias="AUTOBOT_LOG_BACKUP_COUNT")
     log_max_bytes: int = Field(default=52428800, alias="AUTOBOT_LOG_MAX_BYTES")
     # #13263: deliberately NO default. The pre-#7437 value was "dev", but a
@@ -1791,12 +1773,6 @@ class MiscConfig(RedactedSettings):
         alias="AUTOBOT_VOICE_REALTIME_SESSION_TTL_DAYS",
         description="Redis TTL (days) for voice_realtime_session:* keys. Default 90 days.",
     )
-    # #13264: restore pre-#7437 memory-management defaults, all read
-    # unguarded by utils/memory_optimization.py. memory_pool_size=0 collapses
-    # MemoryPool's factory-object pool to zero capacity; memory_threshold_mb
-    # and memory_log_threshold_mb=0 make MemoryMonitor treat any positive
-    # RSS delta as over-threshold, since ``abs(diff) > 0`` is true for almost
-    # every allocation.
     memory_log_threshold_mb: int = Field(default=1, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
     memory_pool_size: int = Field(default=100, alias="AUTOBOT_MEMORY_POOL_SIZE")
     memory_threshold_mb: int = Field(default=500, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
@@ -1934,20 +1910,11 @@ class MiscConfig(RedactedSettings):
     urlhaus_feed_url: str = Field(default="", alias="AUTOBOT_URLHAUS_FEED_URL")
     user_mode: str = Field(default="", alias="AUTOBOT_USER_MODE")
     vue_root: str = Field(default="", alias="AUTOBOT_VUE_ROOT")
-    # #13264: restore pre-#7437 default (enabled) — same broken "is not
-    # None" guard shape as cache_enabled above: config/defaults.py reads
-    # this straight through since a bool field defaulting False is never
-    # None, so the guard clause it sits behind never fires.
     vllm_async_output: bool = Field(default=True, alias="AUTOBOT_VLLM_ASYNC_OUTPUT")
     vllm_multi_step: str = Field(default="", alias="AUTOBOT_VLLM_MULTI_STEP")
-    # #13264: restore pre-#7437 default ("true") — same broken guard shape;
-    # config/defaults.py's "is not None" check never fires for this
-    # never-None str field, so the empty default reached the API response.
     vllm_prefix_caching: str = Field(default="true", alias="AUTOBOT_VLLM_PREFIX_CACHING")
     vnc_host: str = Field(default="", alias="AUTOBOT_VNC_HOST")
     vosk_model_path: str = Field(default="", alias="AUTOBOT_VOSK_MODEL_PATH")
-    # #13264: restore pre-#7437 default (128) — 0 collapsed WeakCache's
-    # maxsize to zero, read unguarded by utils/memory_optimization.py.
     weak_cache_size: int = Field(default=128, alias="AUTOBOT_WEAK_CACHE_SIZE")
     web_fetch_cache_ttl: str = Field(default="", alias="AUTOBOT_WEB_FETCH_CACHE_TTL")
     web_fetch_max_bytes: int = Field(default=0, alias="AUTOBOT_WEB_FETCH_MAX_BYTES")
