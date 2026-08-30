@@ -88,6 +88,26 @@ if command -v "$PY_BIN" >/dev/null 2>&1; then
   fi
 fi
 
+# pip installs console scripts to ~/.local/bin when site-packages is not
+# writable — which is the normal case for a non-root runner user. If that
+# directory is not on PATH, every pip-installed tool is invisible: `pre-commit`,
+# `wheel`, `nodeenv`, `identify-cli`. The failure is indirect and slow to read,
+# because a step that shells out to a missing binary usually swallows the
+# "command not found" and fails a LATER step with a confusing message.
+USER_BIN="$HOME/.local/bin"
+case ":$PATH:" in
+  *":$USER_BIN:"*) ok "$USER_BIN is on PATH" ;;
+  *)
+    if [ -d "$USER_BIN" ]; then
+      bad "$USER_BIN exists but is NOT on PATH — pip-installed tools will be invisible to CI"
+      warn "  fix: echo \"\$HOME/.local/bin:\$PATH\" > <runner-dir>/.path, then restart the runner service"
+      missing=1
+    else
+      ok "$USER_BIN does not exist yet — nothing installed there"
+    fi
+    ;;
+esac
+
 if [ "$MODE" = check ]; then
   if [ "$missing" -eq 0 ]; then
     ok "runner host is provisioned for CI"

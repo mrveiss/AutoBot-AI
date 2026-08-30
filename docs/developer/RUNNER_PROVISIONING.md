@@ -46,6 +46,19 @@ The deadsnakes PPA is the narrower one, and it is what the rest of the platform 
 | `python3.14-dev` | headers, for packages that build native extensions |
 | `pip` inside that interpreter | Debian/Ubuntu ship `python3.x` **without** pip. CI's first step after resolving Python is `python -m pip install --upgrade pip setuptools wheel`, so a host with the interpreter but no pip fails *after* passing the interpreter check — which reads as a new problem rather than an incomplete install. There is no `python3.14-pip` apt package; `python3.14 -m ensurepip --upgrade` is the supported route, and `ensurepip` ships in `python3.14-venv` |
 
+| `~/.local/bin` on the runner's `PATH` | pip installs console scripts there whenever site-packages is not writable, which is the normal case for a non-root runner user. Without it every pip-installed tool is invisible — `pre-commit`, `wheel`, `nodeenv`, `identify-cli`. Set it in the runner's `.path` file (or `.env` / systemd `Environment=`) and restart the service; a login shell's `.profile` does **not** apply, because the runner is a service |
+
+### Why this one is hard to diagnose
+
+A step that shells out to a missing binary often swallows the `command not found` — `enforce-precommit.yml` routes it into a warning branch and still reports success. The failure then surfaces in a *later* step as something unrelated:
+
+```
+line 17: pre-commit: command not found          <- the real cause, in a step that PASSED
+check-precommit-hooks-executed: FATAL -- no hook result line in the captured output.
+```
+
+Read "no hook ran" as "the hook runner was not found", not as a hook problem.
+
 Docker is deliberately **not** listed. Image builds stay on GitHub-hosted runners, where Docker and buildx ship preinstalled and hosted concurrency is worth more than runner locality (#15310).
 
 ## Verifying
