@@ -1,5 +1,7 @@
 # AutoBot Docker Architecture - Quick Start Guide
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 ## 🚀 Overview
 
 AutoBot now features a comprehensive Docker architecture with three deployment modes:
@@ -193,12 +195,12 @@ print(redis_db_manager.validate_database_separation())
 - Ready for Kubernetes migration
 - Horizontal scaling of agent containers
 - Load balancing between agent replicas
-- See `docs/Kubernetes_Migration_Strategy.md` for details
+- See `docs/planning/Kubernetes_Migration_Strategy.md` for details
 
 ## 📚 Additional Documentation
 
 - **Complete setup**: See `scripts/setu# Deploy with Ansible: cd autobot-slm-backend/ansible && ansible-playbook playbooks/deploy-full.yml`
-- **Kubernetes migration**: See `docs/Kubernetes_Migration_Strategy.md`
+- **Kubernetes migration**: See `docs/planning/Kubernetes_Migration_Strategy.md`
 - **API documentation**: See `docs/API_Duplication_Analysis.md`
 - **Redis configuration**: See `docker/volumes/config/redis-databases.yaml`
 - **Codebase analytics**: Frontend Analytics tab

@@ -1,5 +1,7 @@
 # Async System Migration Documentation
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 ## Overview
 
 This document details the comprehensive migration from synchronous to asynchronous operations throughout the AutoBot system, addressing critical timeout issues and improving overall performance.

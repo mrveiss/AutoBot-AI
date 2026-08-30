@@ -1,5 +1,7 @@
 # AutoBot Kubernetes Migration Strategy
 
+> **Freshness:** current — 2026-08-30. Self-declared `Status: Future Planning`; no Kubernetes migration has shipped.
+
 **GitHub Issue:** [#256](https://github.com/mrveiss/AutoBot-AI/issues/256)
 **Status:** Future Planning
 

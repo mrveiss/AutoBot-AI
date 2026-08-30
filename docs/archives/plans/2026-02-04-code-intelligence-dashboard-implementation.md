@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Code Intelligence Dashboard Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -1738,7 +1740,7 @@ git commit -m "feat(frontend): add tabbed interface and file scan to CodeIntelli
 
 **Step 2: Test in browser**
 
-1. Navigate to `http://172.16.168.21:5173/analytics/code-intelligence`
+1. Navigate to `http://<frontend-ip>:5173/analytics/code-intelligence`
 2. Verify score cards display after clicking Analyze
 3. Verify tabs switch correctly
 4. Verify findings display in table with expandable rows

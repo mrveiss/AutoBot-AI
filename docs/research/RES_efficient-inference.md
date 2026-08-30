@@ -1,5 +1,7 @@
 # LLM Inference Optimization Architecture
 
+> **Freshness:** current — 2026-08-30. Front matter self-declares `Status: Research & Design`; last updated 2026-01-13.
+
 > **Issue:** [#717](https://github.com/mrveiss/AutoBot-AI/issues/717)
 > **Status:** Research & Design
 > **Author:** mrveiss

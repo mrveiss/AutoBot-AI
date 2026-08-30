@@ -256,7 +256,7 @@ claude -p "Read REFACTOR_PLAN.md and execute the next 3 batches of function refa
 Read GitHub issue #[NUMBER]. Follow this exact workflow autonomously:
 
 1. INVESTIGATE: Read all referenced files, understand current architecture. Do NOT start coding yet.
-2. DESIGN: Write concise design to /docs/designs/issue-[NUMBER].md. Include affected files, approach, edge cases. Wait for approval only if change touches >10 files.
+2. DESIGN: Write concise design to /docs/design/issue-[NUMBER].md. Include affected files, approach, edge cases. Wait for approval only if change touches >10 files.
 3. PLAN: Create implementation plan as TodoWrite checklist with discrete, testable tasks.
 4. IMPLEMENT: For each task, create implementation in git worktree at ../worktrees/issue-[NUMBER]. After each task, run relevant test suite. If tests fail, fix before proceeding. Commit each completed task with 'Issue #[NUMBER]: <description>'.
 5. VALIDATE: Run full linting (flake8, mypy) and fix all violations. Run complete test suite.

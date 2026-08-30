@@ -1,5 +1,7 @@
 # Industry Agent Architecture Patterns Analysis
 
+> **Freshness:** current — 2026-08-30. External industry-pattern survey; not time-sensitive against this codebase's internals.
+
 **Issue**: #645 - Implement Industry-Standard Agent Architecture Patterns
 **Author**: mrveiss
 **Date**: 2025-12-28

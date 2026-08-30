@@ -448,9 +448,9 @@ grep "Service auth failed" logs/backend.log | grep -v "Missing headers" | wc -l
 grep "401 Unauthorized" logs/backend.log | tail -20
 
 # Service health checks
-for vm in 22 24 25; do
-  echo "VM $vm:"
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.$vm "curl -s localhost:8080/health 2>/dev/null || echo 'failed'"
+for host in <npu-ip> <aiml-ip> <browser-ip>; do
+  echo "$host:"
+  ssh -i ~/.ssh/autobot_key autobot@$host "curl -s localhost:8080/health 2>/dev/null || echo 'failed'"
 done
 ```
 

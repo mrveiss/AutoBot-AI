@@ -1,5 +1,8 @@
 # Frontend Architecture Assessment - Vue.js to MVC Analysis
 
+> **Freshness:** historical — 2026-08-30. Dated 2025-08-22 (Vue.js MVC evaluation); whether `*_ASSESSMENT.md` documents belong in `docs/architecture/`, `docs/audit/` or elsewhere is an open decision recorded on #15190 (not yet settled) — left in place rather than guessed at.
+
+
 **Date**: August 22, 2025
 **Scope**: AutoBot Vue.js Frontend Architecture Evaluation
 **Purpose**: Assess current structure and identify MVC implementation opportunities

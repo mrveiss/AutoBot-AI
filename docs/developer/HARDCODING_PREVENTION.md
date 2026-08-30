@@ -47,6 +47,8 @@ GITHUB_BASE_REF=Dev_new_gui bash pipeline-scripts/check-hardcoded-values-pr.sh
 
 **What it blocks** (by category, see hook source for full patterns):
 
+<!-- fleet-addressing-exempt: states the address range this hook detects; the range is the rule -->
+
 - Hardcoded VM IPs (`172.16.168.19-25`)
 - Hardcoded infrastructure ports in URL context
 - Magic numbers that should use constants from `threshold_constants.py`
@@ -65,8 +67,10 @@ GITHUB_BASE_REF=Dev_new_gui bash pipeline-scripts/check-hardcoded-values-pr.sh
 - Any file under `repo_tests/` (#15273) — that directory is test-support code by construction, so a non-test-named helper module living there (e.g. one holding fixture constants shared by several `*_test.py` siblings) gets the same exemption on the strength of its DIRECTORY rather than its filename. The same file outside `repo_tests/` is still scanned.
 - Lines containing `config.`, `getenv`, `CONFIG[`, or `AUTOBOT_` (already routed through SSOT)
 - Comments (any line starting with `#` / `//` / ` *`)
-- File types other than `.py` / `.ts` / `.vue` (Markdown, YAML, JSON, etc. are not scanned at all — Ansible inventories and docs are explicitly out of scope)
+- File types other than `.py` / `.ts` / `.vue` (YAML, JSON, etc. are not scanned at all — Ansible inventories are explicitly out of scope). Markdown is not scanned by *this* hook; since #15208 `docs/**/*.md` is gated by `tools/lint/check_docs_no_fleet_addressing.py`, which looks for fleet node addresses only and reads its pattern from the same `HV_VM_IP` rule this hook uses.
 - `192.168.x.x` and `127.0.0.x` literals (RFC 1918 example space and loopback — used in SSRF guards, network-tooling examples, test fixtures, i18n placeholders)
+
+<!-- fleet-addressing-exempt: quotes the exact call the hook's `getenv` filter lets through, which is the false negative being described -->
 
 **Known limitation (tracked in #6725 follow-up):** the hook's line filter currently skips any line containing the substring `getenv`, so a literal IP fallback inside `os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")` is *not* flagged. This is the false-negative an AST-aware Python rewrite would close. The locked-in test `test_allows_code_using_ssot_config` documents this behavior so any future tightening has a clear regression target.
 
@@ -83,6 +87,8 @@ GITHUB_BASE_REF=Dev_new_gui bash pipeline-scripts/check-hardcoded-values-pr.sh
 - `Literal[value=/^(https?:\/\/)?172\.16\.168\.\d+/]` — bare IP literals or HTTP(S) URLs containing them
 - `TemplateElement[value.cooked=/172\.16\.168\.\d+/]` — IP inside a template literal
 
+<!-- fleet-addressing-exempt: quotes the literals the ESLint selectors above match; a counter-example without them demonstrates nothing -->
+
 Catches:
 - `const x = '172.16.168.20'`
 - `const x = 'http://172.16.168.21:5173'`
@@ -92,9 +98,53 @@ Catches:
 Doesn't trigger on:
 - `127.0.0.1` (loopback — single-host install default)
 - `192.168.x.x` (RFC 1918 example space — used in tests, SSRF guards, i18n placeholders)
-- IPs in `.json` locale files, `.md` docs, generated types (not in lint scope)
+- IPs in `.json` locale files, generated types (not in lint scope). Markdown under `docs/` is gated separately by `tools/lint/check_docs_no_fleet_addressing.py` (#15208).
 
 Test fixtures live in `autobot-frontend/eslint-tests/` (excluded from production lint by design — see `eslint-tests/README.md`).
+
+### Documentation fleet-addressing guard (Issue #15208)
+
+`tools/lint/check_docs_no_fleet_addressing.py` gates `docs/**/*.md`, which none of the
+detectors above reach: `HV_SCAN_EXTENSIONS` in `scripts/lib/hardcoded-value-rules.sh` is
+`py|ts|vue|js|sh|yml|yaml`, and Markdown is not in it. #3315 redacted
+`docs/architecture/` by hand; with nothing watching, the same addressing survived in
+`docs/archives/plans/` until #15208.
+
+It carries no copy of the range. It parses the `HV_VM_IP` assignment out of
+`scripts/lib/hardcoded-value-rules.sh`, so code and documentation share one definition of
+"a fleet address" and a renumbered fleet updates both at once. A missing or unparseable
+rule set aborts the run rather than reporting clean.
+
+```bash
+# Sweep every Markdown file under docs/
+python3 tools/lint/check_docs_no_fleet_addressing.py --audit
+
+# Check specific files (the pre-commit entry point takes argv)
+python3 tools/lint/check_docs_no_fleet_addressing.py docs/runbooks/CODE_UPDATE.md
+```
+
+Replace a finding with the role placeholder for its node — see
+[VM_ROLES.md](../architecture/VM_ROLES.md) — matching the form #3315 established
+(`<backend-ip>`, `<database-ip>`, `<network-subnet>`, and so on).
+
+**Deliberate counter-examples** are exempted by a Markdown comment introducing the block
+that needs it, not by a filename in a list:
+
+```markdown
+<!-- fleet-addressing-exempt: why this block must keep the literal -->
+
+- the block the marker introduces
+```
+
+`fleet-addressing-exempt-file` exempts a whole document. Either marker is a finding when
+the text it covers carries no address, so an exemption cannot outlive its reason. This
+page uses three block markers, for the sections that document the detection patterns
+themselves.
+
+The audit reports how many files it reached and fails below a floor, because a sweep
+whose glob stops matching reports "no offenders" over nothing at all — which is exactly
+how the gap #15208 names went unnoticed for months.
+
 
 ### Generic CI wrapper for any pre-commit hook (Issue #6785)
 
