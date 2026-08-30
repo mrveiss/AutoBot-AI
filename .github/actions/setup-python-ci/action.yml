@@ -123,6 +123,28 @@ runs:
         ln -sf "$(command -v "$BIN")" "$SHIM_DIR/python"
         ln -sf "$(command -v "$BIN")" "$SHIM_DIR/python3"
         echo "$SHIM_DIR" >> "$GITHUB_PATH"
+
+        # #15310: pip installs console scripts into the USER script directory
+        # whenever site-packages is not writable -- the normal case for a
+        # non-root runner user. Without this on PATH, every pip-installed tool
+        # is invisible: `pre-commit`, `wheel`, `nodeenv`, `identify-cli`.
+        #
+        # The failure is indirect and expensive to read. A step that shells out
+        # to a missing binary can swallow the "command not found" -- in
+        # enforce-precommit.yml it lands in a warning branch and the step still
+        # reports success -- so a LATER step fails with something unrelated:
+        #
+        #   line 17: pre-commit: command not found        <- in a step that PASSED
+        #   check-precommit-hooks-executed: FATAL -- no hook result line
+        #
+        # Asked of the interpreter rather than hardcoding ~/.local/bin, because
+        # the user base moves with PYTHONUSERBASE and the platform.
+        USER_BIN="$("$BIN" -m site --user-base)/bin"
+        if [ -n "$USER_BIN" ]; then
+          echo "$USER_BIN" >> "$GITHUB_PATH"
+          echo "Added pip's user script directory to PATH: $USER_BIN (#15310)."
+        fi
+
         echo "Resolved $BIN -> $RESOLVED with no download (#15313)."
 
     # #13516: every input reaches the shell through `env:`, never inline
