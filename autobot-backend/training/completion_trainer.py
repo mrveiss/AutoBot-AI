@@ -10,6 +10,7 @@ Training orchestration for code completion model.
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Dict
 
@@ -26,6 +27,11 @@ from training.data_loader import create_dataloaders
 from training.evaluator import CompletionEvaluator
 
 logger = get_logger(__name__)
+
+# Exactly the shapes save_checkpoint() produces: the literal "best", or "v"
+# followed by its "%Y%m%d_%H%M%S" timestamp. Anything else — separators, "..",
+# absolute paths — is rejected before it reaches a filename.
+_VERSION_RE = re.compile(r"best|v\d{8}_\d{6}")
 
 
 class CompletionTrainer:
@@ -291,10 +297,28 @@ class CompletionTrainer:
         Args:
             version: Model version to load (e.g., 'v20260216_123456' or 'best')
         """
+        # `version` is interpolated into a filename, so it must be constrained
+        # HERE rather than relying on the caller. The only caller today
+        # (routers/model_management.py) looks the version up in MLModel first and
+        # 404s when absent, which does prevent traversal — but that guarantee sits
+        # in a distant module and silently disappears if a second caller appears.
+        # The accepted shape is exactly what save_checkpoint() writes: "best", or
+        # "v" + the %Y%m%d_%H%M%S timestamp it stamps.
+        if not _VERSION_RE.fullmatch(version):
+            raise ValueError(
+                f"Invalid checkpoint version {version!r}: expected 'best' or "
+                "'vYYYYMMDD_HHMMSS'"
+            )
+
         if version == "best":
             checkpoint_path = self.model_dir / "completion_model_best.pt"
         else:
             checkpoint_path = self.model_dir / f"completion_model_{version}.pt"
+
+        # Defence in depth: even a regex-passing value must not escape model_dir.
+        model_dir = self.model_dir.resolve()
+        if not checkpoint_path.resolve().is_relative_to(model_dir):
+            raise ValueError(f"Checkpoint path escapes the model directory: {version!r}")
 
         if not checkpoint_path.exists():
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
