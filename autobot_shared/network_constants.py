@@ -432,13 +432,11 @@ class NetworkConfig:
         self._deployment_mode = _get_config_value(
             "deployment.mode", os.getenv("AUTOBOT_DEPLOYMENT_MODE", "distributed")
         )
-        self._is_development = (
-            _get_config_value(
-                "deployment.environment",
-                os.getenv("AUTOBOT_ENV", "production"),
-            )
-            == "development"
-        )
+        # ssot-config-exempt: deliberately conservative — assume "production"
+        # (not ssot_config's "" default) when unset, so an unconfigured
+        # deployment never silently behaves as dev.
+        env_default = os.getenv("AUTOBOT_ENV", "production")  # ssot-config-exempt: see comment above
+        self._is_development = _get_config_value("deployment.environment", env_default) == "development"
 
     @property
     def backend_url(self) -> str:
