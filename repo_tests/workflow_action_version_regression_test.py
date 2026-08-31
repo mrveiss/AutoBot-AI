@@ -87,6 +87,17 @@ def test_the_scan_actually_finds_action_pins():
     """A glob or regex that matched nothing would make both guards below vacuous."""
     uses = _extract_uses(_workflow_files())
     assert len(uses) >= 100, f"Only found {len(uses)} 'uses:' pins — the scan is broken, not the repository."
+    # A raw total does not protect the coverage this guard was built for:
+    # .github/workflows/*.yml alone clears 100 on its own, so dropping the
+    # ACTIONS_DIR glob from _workflow_files() would keep this green while
+    # silently removing composite actions -- where two of the three drifted
+    # pins that motivated #15332 actually lived.
+    from_actions = [use for use in uses if use.path.is_relative_to(ACTIONS_DIR)]
+    assert from_actions, (
+        "no 'uses:' pins found under .github/actions — composite actions have dropped out "
+        "of the sweep. The total above stays green without them, which is why this is checked "
+        "separately (#15332)."
+    )
 
 
 def test_every_sha_pinned_action_carries_a_readable_version_comment():
@@ -105,6 +116,26 @@ def test_every_sha_pinned_action_carries_a_readable_version_comment():
     assert not violations, "SHA-pinned action(s) with no readable version:\n" + "\n".join(violations)
 
 
+def _version_regressions(uses: list[ActionUse]) -> list[str]:
+    """Every tag pin older than the best version of the same action, reported together."""
+    best_by_action: dict[str, tuple[int, int, int]] = {}
+    for use in uses:
+        version = _version_tuple(use.ref)
+        if version is not None and version > best_by_action.get(use.action, (0, 0, 0)):
+            best_by_action[use.action] = version
+    violations = []
+    for use in uses:
+        version = _version_tuple(use.ref)
+        if version is None or version >= best_by_action[use.action]:
+            continue
+        best = ".".join(map(str, best_by_action[use.action]))
+        violations.append(
+            f"{use.path}:{use.line_no} pins {use.action}@{use.ref}, "
+            f"older than v{best} already used elsewhere in the repository"
+        )
+    return violations
+
+
 def test_no_tag_pinned_action_is_older_than_the_repo_standard():
     """#15332 AC4: a new file cannot reintroduce a tag version older than one already in use.
 
@@ -112,22 +143,34 @@ def test_no_tag_pinned_action_is_older_than_the_repo_standard():
     docstring) grouped by the exact action string, including any subpath.
     """
     uses = [use for use in _extract_uses(_workflow_files()) if not SHA_PATTERN.match(use.ref)]
-    best_by_action: dict[str, tuple[int, int, int]] = {}
-    for use in uses:
-        version = _version_tuple(use.ref)
-        if version is None:
-            continue
-        if version > best_by_action.get(use.action, (0, 0, 0)):
-            best_by_action[use.action] = version
-    violations = []
-    for use in uses:
-        version = _version_tuple(use.ref)
-        if version is None:
-            continue
-        best = best_by_action[use.action]
-        if version < best:
-            violations.append(
-                f"{use.path.relative_to(REPO_ROOT)}:{use.line_no} pins {use.action}@{use.ref}, "
-                f"older than v{'.'.join(map(str, best))} already used elsewhere in the repository"
-            )
+    violations = _version_regressions(uses)
     assert not violations, "Action version(s) older than the repo standard:\n" + "\n".join(violations)
+
+
+def _fake(action: str, ref: str, line_no: int = 1) -> ActionUse:
+    return ActionUse(
+        path=Path(f"synthetic/{action.replace('/', '_')}.yml"),
+        line_no=line_no,
+        action=action,
+        ref=ref,
+        comment_version=None,
+    )
+
+
+def test_the_comparison_flags_a_planted_regression():
+    """The repo currently has zero tag drift, so the check above passes whatever it does.
+
+    With one version per action, `version < best` is never true and an inverted
+    operator would look identical. These fixtures are what actually pin the
+    comparison's direction and its grouping by exact action string.
+    """
+    regressions = _version_regressions([_fake("actions/cache", "v6"), _fake("actions/cache", "v4", 2)])
+    assert len(regressions) == 1, f"a v4 pin beside a v6 pin must be flagged, got: {regressions}"
+    assert "actions/cache@v4" in regressions[0]
+
+    assert _version_regressions([_fake("actions/cache", "v6"), _fake("actions/cache", "v6", 2)]) == []
+    # Grouping is by the exact action string, subpath included -- two different
+    # actions are not each other's standard.
+    assert _version_regressions([_fake("actions/cache", "v6"), _fake("actions/checkout", "v4", 2)]) == []
+    # Minor and patch components participate, not just the major.
+    assert len(_version_regressions([_fake("a/b", "v1.2.3"), _fake("a/b", "v1.2.2", 2)])) == 1
