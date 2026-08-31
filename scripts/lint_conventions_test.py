@@ -9,6 +9,7 @@ mode: a check that cannot run must never report clean. Each test that pins a
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -17,10 +18,26 @@ import pytest
 from autobot_shared.paths import scrubbed_git_env
 
 SCRIPT = Path(__file__).resolve().parent / "lint-conventions.sh"
-# #13984: the script now sources the canonical base/head resolver instead of
-# carrying its own copy, so the throwaway repo has to ship the library too --
-# the fixture models a checkout, and a checkout has scripts/lib/ in it.
-LIB = Path(__file__).resolve().parent / "lib" / "git-scope.sh"
+LIB_DIR = Path(__file__).resolve().parent / "lib"
+# #13984: the script sources canonical libraries instead of carrying its own
+# copies, so the throwaway repo has to ship them too -- the fixture models a
+# checkout, and a checkout has scripts/lib/ in it.
+#
+# Derived from the script rather than listed here (#15245). A hardcoded name
+# went stale the moment the script gained a second library: the source failed,
+# the script aborted before printing anything, and five assertions read the
+# empty output as a missing message rather than as a dead script. The fixture
+# now ships whatever the script actually sources, so the next library added
+# cannot silently empty this file's output again.
+_SOURCED_LIB = re.compile(r"lib/([A-Za-z0-9_.-]+\.sh)")
+
+
+def _required_libs() -> list[str]:
+    names = sorted(set(_SOURCED_LIB.findall(SCRIPT.read_text(encoding="utf-8"))))
+    assert names, "lint-conventions.sh sources no scripts/lib/*.sh -- the pattern has drifted"
+    missing = [n for n in names if not (LIB_DIR / n).is_file()]
+    assert not missing, f"lint-conventions.sh sources libraries that do not exist: {missing}"
+    return names
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -38,7 +55,8 @@ def repo(tmp_path: Path) -> Path:
     (r / "scripts" / "lint-conventions.sh").write_bytes(SCRIPT.read_bytes())
     (r / "scripts" / "lint-conventions.sh").chmod(0o755)
     (r / "scripts" / "lib").mkdir(parents=True)
-    (r / "scripts" / "lib" / "git-scope.sh").write_bytes(LIB.read_bytes())
+    for name in _required_libs():
+        (r / "scripts" / "lib" / name).write_bytes((LIB_DIR / name).read_bytes())
     _git(r.parent, "init", "-q", "-b", "main", str(r))
     _git(r, "config", "user.email", "t@example.invalid")
     _git(r, "config", "user.name", "t")
