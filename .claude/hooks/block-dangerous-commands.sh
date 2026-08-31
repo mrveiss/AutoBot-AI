@@ -156,7 +156,17 @@ targets_this_main_tree() {
 }
 
 # Cheap pre-filter so the parser only runs for commands that could contain one.
-if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch; then
+# A literal "checkout"/"switch" catches the ordinary case; "git" alongside a
+# "$" or a backtick catches the #15303 shape too -- a subcommand that arrives
+# through a variable or substitution and so never spells the word "switch" or
+# "checkout" anywhere in the command text (`git ${SUB} main` is the case that
+# slips past a literal-only filter; `SUB=switch; git $SUB main` happens to
+# still contain the word, by coincidence of the assignment, not by design).
+# Broader than strictly necessary, on purpose: this only decides whether the
+# already-safe parser runs, never whether a command is denied, so widening it
+# costs a python3 start on more commands, not a new false denial.
+if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch ||
+  { printf '%s' "$COMMAND" | grep -qF git && printf '%s' "$COMMAND" | grep -qE '[$`]'; }; then
   if ! command -v python3 >/dev/null 2>&1; then
     deny "Blocked: the branch-switch guard needs python3 to tell a real invocation from the same words quoted inside an argument (#15296), and python3 is not installed. Install python3 rather than removing the guard."
   fi
@@ -178,6 +188,17 @@ if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch; then
   while IFS=$'\x1f' read -r WT_DIR WT_GIT_DIR SWITCH_FLAGS BRANCH_ARG; do
     [ -n "$WT_DIR$WT_GIT_DIR$SWITCH_FLAGS$BRANCH_ARG" ] || continue
     targets_this_main_tree "$WT_DIR" "$WT_GIT_DIR" || continue
+
+    # A subcommand position the parser could not read as a literal --
+    # `SUB=switch; git $SUB main` and the like (#15303). Denied rather than
+    # skipped: an invocation this guard cannot classify is treated the same
+    # way an unresolved directory already is (targets_this_main_tree above),
+    # not as "nothing to judge".
+    case ",$SWITCH_FLAGS," in
+      *,ambiguous,*)
+        deny "Blocked: this git invocation's checkout/switch subcommand arrives through a variable or command substitution the guard cannot evaluate (#15303), e.g. \`SUB=switch; git \$SUB main\`. Rewrite the command with a literal 'checkout' or 'switch' so it can be judged, or use a worktree: git worktree add .worktrees/<name> <branch>"
+        ;;
+    esac
 
     # Forking a new branch, or restoring files, never moves HEAD onto a shared
     # branch. Allowed on the main tree, exactly as before.
@@ -214,7 +235,7 @@ if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+c
   # If NOT in a worktree, warn about parallel work isolation
   if [ "$IN_WORKTREE" -eq 0 ]; then
     # Check if any issue-specific worktrees exist
-    REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+    REPO_ROOT=$(git_query "" "" --show-toplevel)
     if [ -d "$REPO_ROOT/.worktrees" ] && ls "$REPO_ROOT/.worktrees"/issue-* >/dev/null 2>&1; then
       # Worktrees exist—you should be using one
       AVAILABLE=$(ls -d "$REPO_ROOT/.worktrees"/issue-* 2>/dev/null | xargs basename -a | paste -sd "," -)

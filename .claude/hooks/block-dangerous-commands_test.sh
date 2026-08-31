@@ -206,6 +206,29 @@ expect_block "cd to this repo's main tree, then switch" "cd $THIS_REPO && git sw
 # A directory only the shell could resolve is treated as this tree, not waved through.
 expect_block "cd through a variable, then switch"    'cd $SOMEWHERE && git switch release'
 
+# ── #15303: the subcommand itself arrives through a variable or substitution,
+# not just an argument. The parser used to match only a literal "switch"/
+# "checkout" token, so `SUB=switch; git $SUB main` produced no invocation at
+# all and was allowed. Denied now: a command position this tool cannot read
+# is treated the same as an unresolved directory above, not as "nothing here".
+echo ""
+echo "--- #15303: a subcommand hidden behind a variable ---"
+expect_block "variable subcommand on this repo's main tree"      "SUB=switch; git \$SUB main"
+expect_block "braced-variable subcommand"                        'git ${SUB} main'
+expect_block "command-substitution subcommand"                   'git $(echo switch) main'
+expect_block "backtick subcommand"                                'git `echo switch` main'
+# The gating this shape shares with every other invocation still applies: an
+# unreadable subcommand in an unrelated repo, or a linked worktree, is not
+# this guard's business.
+expect_allow "variable subcommand in an unrelated repo"          "git -C $OTHER_REPO switch \$SUB main"
+expect_allow "variable subcommand inside a linked worktree"      "git -C $LINKED_WORKTREE switch \$SUB main"
+# A variable used for an ordinary ARGUMENT, not the subcommand, is unaffected
+# by this change -- it was already denied via the branch-arg check (#15296).
+expect_block "variable branch arg (subcommand still literal)"    'git switch $BRANCH'
+# Commands with no subcommand at that position at all must stay unreported.
+expect_allow "git status (ordinary, no subcommand match)"        "git status"
+expect_allow "bare git (no subcommand at all)"                   "git"
+
 # ── #15296 defect 3: the pattern matched anywhere in the command string, so
 # prose that merely quoted a branch switch was denied. Filing #15296 itself was
 # blocked on the first attempt for exactly this reason.
