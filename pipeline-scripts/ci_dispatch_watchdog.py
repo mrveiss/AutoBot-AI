@@ -790,6 +790,39 @@ class GitHubApi:
             message = str(body.get("message", ""))
         return status, message
 
+    def rerun_run(self, run_id: int) -> Tuple[int, str]:
+        """
+        Re-dispatch a run (#15139).
+
+        ``rerun-failed-jobs`` rather than ``rerun``: a run that never dispatched
+        has exactly one failed job and nothing worth repeating, and on a run that
+        partly succeeded this avoids paying for the jobs that already passed.
+        GitHub rejects the request on state grounds if the run is not in a
+        re-runnable state, which is reported rather than raised.
+        """
+        status, body = self.request(
+            "POST", f"/repos/{self.repository}/actions/runs/{run_id}/rerun-failed-jobs"
+        )
+        message = ""
+        if isinstance(body, dict):
+            message = str(body.get("message", ""))
+        return status, message
+
+    def rate_limit_remaining(self) -> int:
+        """Remaining core REST budget, or -1 when it cannot be read.
+
+        Inside Actions the GITHUB_TOKEN budget is 1,000/hour per repository, not
+        the 5,000 a PAT gets, and this sweep already spends against it. -1 means
+        "unknown", which callers must treat as "do not spend" rather than as
+        headroom.
+        """
+        status, body = self.request("GET", "/rate_limit")
+        if status != 200 or not isinstance(body, dict):
+            return -1
+        core = (body.get("resources") or {}).get("core") or {}
+        remaining = core.get("remaining")
+        return int(remaining) if isinstance(remaining, int) else -1
+
     def set_status(
         self, sha: str, state: str, context: str, description: str, target_url: str
     ) -> int:
