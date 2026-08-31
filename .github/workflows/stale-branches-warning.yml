@@ -1,14 +1,24 @@
 # Detect and warn about stale branches
 #
-# This workflow identifies branches with no commits for 30+ days
-# and creates/updates a GitHub Issue to track stale work.
+# This workflow identifies branches with no commits for 30+ days AND no
+# evidence that their work reached the base branch, then creates/updates a
+# GitHub Issue to track them.
 #
-# Stale branches indicate:
-# - Work abandoned mid-phase
-# - Branches forgotten and need manual review
-# - Potential technical debt
+# WHY AGE ALONE IS NOT ENOUGH (#15036). Age says nothing about whether the work
+# landed. Reporting every 30-day-old ref named every merged branch the
+# repository has ever had -- #11703, #13603 and #4324 each closed with no
+# action because there was none to take. A detector with a ~100% false-positive
+# rate trains its readers to ignore the next report, including the one that is
+# right. Ancestry is no better here: this repository squash-merges, so
+# `git branch --merged` and `--is-ancestor` are false for every branch it has
+# ever merged.
 #
-# See: https://github.com/mrveiss/AutoBot-AI/issues/4110
+# So each stale branch is put through `branch_landing_evidence` from
+# scripts/lib/branch-guards.sh, and only `unproven` branches are reported --
+# with their per-file numbers attached, so triage does not have to re-derive
+# them.
+#
+# See: https://github.com/mrveiss/AutoBot-AI/issues/4110, #15036
 
 name: Stale branches warning
 
@@ -28,6 +38,8 @@ jobs:
     permissions:
       contents: read
       issues: write
+      # branch_landing_evidence asks whether a merged PR had this branch as its head.
+      pull-requests: read
 
     steps:
       - name: Checkout repository
@@ -39,42 +51,83 @@ jobs:
         run: |
           git fetch --all
 
-      - name: Find stale branches
+      - name: Find stale branches with unproven landing
         id: stale
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # Relative to the checkout, as branch-cleanup.yml does: asking git for
+          # the toplevel is the unscrubbed-GIT_DIR hazard of #15176/#15245.
+          # shellcheck source=scripts/lib/branch-guards.sh
+          source scripts/lib/branch-guards.sh
+
+          # The PR base for this repository, which is not the GitHub default branch.
+          BASE_REF=origin/Dev_new_gui
           DAYS_STALE=30
           CUTOFF_DATE=$(date -d "$DAYS_STALE days ago" +%s)
           stale_branches=""
           count=0
+          candidates=0
+          scanned=0
+          suppressed=0
 
-          echo "Looking for branches with no commits for $DAYS_STALE+ days..."
+          echo "Looking for branches with no commits for $DAYS_STALE+ days and no landing evidence..."
 
           # Get all remote branches
-          all_branches=$(git branch -r \
-            | sed 's|^ *origin/||' \
-            | grep -v "HEAD\|main\|master\|Dev_new_gui" || true)
+          # ONLY refs/remotes/origin. `git branch -r` spans every configured
+          # remote, and stripping just the `origin/` prefix left another
+          # remote's branch named `<remote>/<branch>`, which the sweep then
+          # re-prefixed to the unresolvable `origin/<remote>/<branch>`. Every
+          # git question about it failed, and the branch was classified from
+          # those failures rather than skipped.
+          all_branches=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
+            | sed 's|^origin/||' \
+            | grep -vx "HEAD\|main\|master\|Dev_new_gui" || true)
 
           if [ -z "$all_branches" ]; then
             echo "No candidate branches found."
           else
             while IFS= read -r branch; do
               [ -z "$branch" ] && continue
+              candidates=$((candidates + 1))
 
               # Get last commit timestamp
               last_commit_ts=$(git log -1 --format=%ct "origin/$branch" 2>/dev/null || echo "0")
               last_commit_date=$(git log -1 --format=%ai "origin/$branch" 2>/dev/null || echo "unknown")
 
-              if [ "$last_commit_ts" -lt "$CUTOFF_DATE" ]; then
-                stale_branches="${stale_branches}| ${branch} | ${last_commit_date} |\n"
-                count=$((count + 1))
+              [ "$last_commit_ts" -lt "$CUTOFF_DATE" ] || continue
+              scanned=$((scanned + 1))
+
+              # Age is not a verdict -- ask whether the work landed (#15036).
+              evidence=$(branch_landing_evidence "$BASE_REF" "$branch" "origin/$branch")
+              status=${evidence%%|*}
+              detail=${evidence#*|}
+              if [ "$status" != "unproven" ]; then
+                echo "  SUPPRESSED ($status): $branch -- $detail"
+                suppressed=$((suppressed + 1))
+                continue
               fi
+
+              stale_branches="${stale_branches}| ${branch} | ${last_commit_date} | ${detail} |\n"
+              count=$((count + 1))
             done <<< "$all_branches"
           fi
 
+          echo "enumerated: $candidates | stale-by-age: $scanned |" \
+               "suppressed as landed/archival: $suppressed | reported: $count"
+
+          # VACUITY FLOOR, and it FAILS rather than warns. A sweep whose
+          # enumeration broke reports zero stale branches, which is exactly what
+          # a healthy repository reports -- the run then closes the tracking
+          # issue as resolved, having inspected nothing. A warning does not stop
+          # that; only a non-zero exit does. `set -e` is on, so this aborts.
+          branch_sweep_assert_reach "$candidates" "stale-branches-warning"
+
           # Output formatted for issue body
           echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "suppressed=$suppressed" >> "$GITHUB_OUTPUT"
           if [ "$count" -gt 0 ]; then
             {
               echo "stale_branches<<EOF"
@@ -89,29 +142,42 @@ jobs:
         env:
           STALE_COUNT: ${{ steps.stale.outputs.count }}
           STALE_LIST: ${{ steps.stale.outputs.stale_branches }}
+          SUPPRESSED: ${{ steps.stale.outputs.suppressed }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const staleCount = process.env.STALE_COUNT;
             const staleList = process.env.STALE_LIST || '';
+            const suppressed = process.env.SUPPRESSED || '0';
             const issueTitle = 'Stale branches detected';
 
             const issueBody = [
               '## Stale Branches Warning',
               '',
-              staleCount + ' branch(es) have not received commits for 30+ days:',
+              staleCount + ' branch(es) have not received commits for 30+ days AND carry no',
+              'evidence that their work reached `Dev_new_gui`. A further ' + suppressed + ' stale',
+              'branch(es) were suppressed as landed or archival (#15036).',
               '',
-              '| Branch | Last Commit |',
-              '|--------|-------------|',
+              '| Branch | Last Commit | Landing evidence |',
+              '|--------|-------------|------------------|',
               staleList,
               '',
-              '### Action Items',
-              '- Review each branch for abandoned work',
-              '- Delete if work was completed on another branch',
-              '- Commit progress or document blockers if work is ongoing',
-              '- Close associated GitHub issues if work is no longer needed',
+              '### How to read the evidence column',
               '',
-              'See: https://github.com/mrveiss/AutoBot-AI/issues/4110'
+              'It counts the lines the branch adds, relative to its merge-base, that are present',
+              'in the base branch\'s own copy of each file. It is a SCREEN, not a verdict:',
+              'calibrated on #14078, confirmed-landed changes scored as low as 53% and',
+              'confirmed-unlanded scored 47-48%. A low count means "read this branch", not',
+              '"this branch is stranded". `path(s) gone` means the file no longer exists in base,',
+              'which is usually a move or a retirement -- also a landing outcome.',
+              '',
+              '### Action Items',
+              '- Read each branch against base and record a verdict with evidence',
+              '- Where the work is absent: rebase it, open a PR, land it',
+              '- Where the work is present: say so on its issue, then dispose deliberately',
+              '- Cleanup means finishing the work, never deleting it unproven',
+              '',
+              'See: https://github.com/mrveiss/AutoBot-AI/issues/4110, #15036'
             ].join('\n');
 
             // Find existing stale branches issue
