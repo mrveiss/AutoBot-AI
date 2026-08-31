@@ -136,10 +136,13 @@ def check_no_false_byte_identity_claims() -> bool:
     """Return True (and print) if a header claims whole-file byte-identity
     the actual file contents do not back.
 
-    Scoped to exactly the three files in `_ROLE_FACTS_FILES` -- a
-    regression guard for this specific, known trio (#14201), not a
-    general repo-wide scanner for the phrase. A different pair of files
-    making the same mistake elsewhere would not be caught here.
+    Scoped to exactly the files in `_ROLE_FACTS_FILES` -- a regression
+    guard for this specific, known set (#14201), not a general repo-wide
+    scanner for the phrase. A different pair of files making the same
+    mistake elsewhere would not be caught here. The set was three copies
+    until #14679 dropped one and #14678 confirmed the remaining two; the
+    guard is written over the mapping, so it does not need updating when
+    the set changes size.
     """
     contents = {label: path.read_bytes() for label, path in _ROLE_FACTS_FILES.items()}
     found_false_claim = False
@@ -151,7 +154,7 @@ def check_no_false_byte_identity_claims() -> bool:
         if not matches_a_sibling:
             print(
                 f"HEADER CLAIM ERROR: {label}'s header claims byte-identity to a sibling, "
-                "but no two of the three role-facts files are a whole-file byte match. "
+                "but no two of the role-facts files are a whole-file byte match. "
                 "Only the role_*_active fragment (+ chromadb_service_owner) is kept in "
                 "sync, by this script — correct the header instead of restoring the "
                 "claim (#14201)."
