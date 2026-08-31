@@ -11,7 +11,7 @@ pydantic>=2.13.4
 # 2024.6.0 with no release compatible with openvino 2026.x, so a resolve
 # against this file backtracked into a numpy with no cp314 wheel and died in
 # an sdist build (the same defect fixed in the npu-worker role by #14449).
-openvino>=2026.3.0
+openvino>=2026.3.1
 
 # Model and Tokenization (lightweight)
 tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
@@ -20,8 +20,8 @@ tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a f
                           # ai-stack + npu-worker installs have failed to resolve ever since.
                           # scripts/tokenizers_transformers_range_test.py now fails on a floor
                           # that excludes 0.23.0.
-transformers>=5.15.1
-huggingface-hub>=1.28.0
+transformers>=5.16.1
+huggingface-hub>=1.29.0
 
 # Tensor Operations (NPU optimized)
 -c ../../../constraints/shared.txt  # single source of truth for shared versions (#10524)
