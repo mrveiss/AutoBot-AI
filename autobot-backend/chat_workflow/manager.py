@@ -37,7 +37,7 @@ from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
 from llm_shared.providers.reasoning_effort import map_effort_to_provider_params
-from services.tool_output_filter import get_tool_output_filter
+from services.tool_output_filter import cap_unmatched_output, get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
 from .conversation import ConversationHandlerMixin
@@ -50,6 +50,7 @@ from .models import (
     filter_internal_prompts,
 )
 from .session_handler import SessionHandlerMixin
+from .session_role import resolve_auth_role
 from .tool_handler import ToolHandlerMixin
 
 logger = get_logger(__name__)
@@ -164,6 +165,69 @@ def _model_supports_vision(model_name: str) -> bool:
     """
     name = (model_name or "").lower()
     return any(pattern in name for pattern in VISION_MODEL_NAME_PATTERNS)
+
+
+def _filter_step_output(cmd: str, output_text: str, *, is_shell: bool) -> str:
+    """Cap a step's output, applying shell heuristics only to shell output (#14120).
+
+    `prepare_and_filter` exists for **stdout**. Two of its behaviours are actively
+    wrong once real tool content flows through it:
+
+    * `apply_no_op_detection` matches on the *output*, not the command, against
+      `_NO_OP_PATTERNS` (``Already up to date``, ``nothing to commit``, ``working
+      tree clean``…). A `web_search` result about a git question legitimately
+      contains those words, and the whole result would be replaced by a short
+      no-op string under ``Status: success`` — the exact silent-drop this issue
+      exists to remove, reintroduced one layer down.
+    * Two rules in ``config/tool_output_filters.yaml`` have no separator after the
+      verb (``^(eslint|flake8|mypy|black)``, ``^(python -m )?pytest``). MCP tool
+      names are bridge-supplied and unconstrained, so a bridge exposing a tool
+      called ``pytest`` or ``black_format`` would have its output run through a
+      five-state parser built for a test runner.
+
+    Shell entries keep the full pipeline. Everything else gets only the shared
+    hard cap, so there is still exactly one truncation path and one
+    ``_MAX_UNMATCHED_OUTPUT_CHARS``.
+    """
+    filt = get_tool_output_filter()
+    if is_shell:
+        return filt.prepare_and_filter(cmd, output_text)
+    return cap_unmatched_output(cmd, output_text, 0)
+
+
+def _as_output_text(value: Any) -> str:
+    """Render an execution-result field as prompt text (#14120).
+
+    ``stdout``/``stderr`` are strings, but the tool vocabularies are not. A
+    **dict** is reachable — the MCP bridge records one under ``result`` — and a
+    list is reachable only if an ``AFTER_TOOL_EXECUTE`` hook returns one. (
+    ``_handle_llc_tool`` used to store a dict under ``output`` too; #14284
+    serialises it at the producer instead, so the envelope's payload fields stay
+    a uniform str — this dict branch now exists for the MCP bridge and any
+    future producer, not for that one.) Web search records a ``str``. A bare
+    ``.strip()`` raised on every non-string case.
+
+    Dicts go through ``json.dumps`` rather than ``str()``, matching the
+    convention the adjacent producer already uses, so the model reads JSON
+    instead of a Python repr with single quotes.
+
+    ``None`` and the empty string both render empty, so the caller's ``or``
+    chain falls through to the next candidate.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (list, tuple)):
+        rendered = (_as_output_text(item) for item in value)
+        return "\n".join(item for item in rendered if item)
+    if isinstance(value, dict):
+        try:
+            return json.dumps(value, default=str, ensure_ascii=False)
+        except (TypeError, ValueError):
+            # A value json cannot render is still better shown than dropped.
+            return str(value).strip()
+    return str(value).strip()
 
 
 def _extract_latest_tool_screenshot(execution_history: List[Dict[str, Any]]) -> str | None:
@@ -1821,17 +1885,44 @@ class ChatWorkflowManager(
 
         Issue #650: Increased output limit from 500 to 2000 chars for better LLM context.
         Truncated output is clearly marked to help LLM understand when data is incomplete.
+
+        #14120: this reads several field vocabularies, because several exist.
+        Only shell execution (``_create_execution_result``) records
+        ``command``/``stdout``. Tool handlers record ``tool`` plus one of
+        ``output`` (web search, web research, browser success, extract-content,
+        the LLC handler, the spill reader), ``result`` (the MCP bridge, delegate
+        success) or ``error``/``reason`` (every failure and approval hold).
+
+        Reading only ``command``/``stdout`` rendered all of them as
+        ``Step N: `unknown` — Status: success — (no output)``: the model was not
+        told the result was unavailable, it was told the tool ran fine and
+        returned nothing, which makes answering from memory the rational next
+        move. Very likely #12508's mechanism.
+
+        Handler names rather than line numbers on purpose — the numbers in the
+        first version of this docstring were already wrong when it was written.
         """
-        cmd = result.get("command", "unknown")
-        stdout = result.get("stdout", "").strip()
-        stderr = result.get("stderr", "").strip()
+        cmd = result.get("command") or result.get("tool") or "unknown"
+        stdout = _as_output_text(result.get("stdout"))
+        stderr = _as_output_text(result.get("stderr"))
         status = result.get("status", "unknown")
 
-        output_text = stdout if stdout else "(no output)"
+        # `stdout` first so a shell result is unchanged; the others only fill a
+        # gap, never override it. `error`/`reason` last: a failure that says
+        # only *that* it failed and never *why* is barely better than silence,
+        # and the spill reader's miss advice is written for the model to read.
+        output_text = (
+            stdout
+            or _as_output_text(result.get("output"))
+            or _as_output_text(result.get("result"))
+            or _as_output_text(result.get("error"))
+            or _as_output_text(result.get("reason"))
+            or "(no output)"
+        )
         if stderr:
             output_text += f"\nStderr: {stderr}"
 
-        output_text = get_tool_output_filter().prepare_and_filter(cmd, output_text)
+        output_text = _filter_step_output(cmd, output_text, is_shell=bool(result.get("command")))
 
         return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:\n```\n{output_text}\n```"
 
@@ -2207,7 +2298,88 @@ before summarizing.
 
         return True
 
-    def _handle_execution_summary(
+    def _bind_spill_run(self, session_id: str) -> None:
+        """Declare which conversation the current Task is serving (#13997).
+
+        Never fatal: if the agent-loop package cannot be imported, the spill
+        simply does not fire and output passes through whole.
+        """
+        try:
+            from agent_loop.tool_output_spill import bind_task
+
+            bind_task(session_id)
+        except Exception:  # pragma: no cover - the turn must not fail over this
+            logger.warning("Could not bind the tool-output spill run", exc_info=True)
+
+    def _spill_run_id(self) -> str | None:
+        """The conversation this Task is bound to, or None when unbound.
+
+        Read rather than passed: `_handle_execution_summary` has no session_id in
+        scope, and threading one through four call layers to reach it would be a
+        worse coupling than a ContextVar the dispatch already relies on.
+        """
+        try:
+            from agent_loop.tool_output_spill import current_task_id
+
+            return current_task_id()
+        except Exception:  # pragma: no cover
+            return None
+
+    async def _offload_oversized_output(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Write oversized tool output aside before it enters the model's context (#13997).
+
+        #13692 built this and wired it only into ``AgentLoop``, which is
+        documented as never instantiated in production — so on the live chat path
+        it never fired, and its re-read tool could never resolve an anchor. This
+        is the seam that actually assembles what the model sees.
+
+        Worth knowing what it replaces: the chat path has **no general cap** on
+        tool output today. ``execute_command`` — the likeliest source of a
+        window-consuming result — is unbounded, and the per-tool caps that do
+        exist (``web_search`` at 3000 chars, subagent results at 1000) discard
+        the remainder permanently. The spill is non-lossy: the excerpt carries an
+        anchor and the full output stays retrievable.
+
+        Off by default and non-fatal: with the flag unset this returns *results*
+        unchanged, so a turn is byte-identical to one without this call.
+        """
+        try:
+            from agent_loop.tool_output_spill import _EXECUTION_RESULT_TEXT_KEYS as _SPILL_PAYLOAD_KEYS
+            from agent_loop.tool_output_spill import (
+                spill_execution_results_async,
+            )
+
+            run_id = self._spill_run_id()
+            if not run_id:
+                # No run bound: an artifact written now could never be re-read,
+                # so writing it would be pure cost. The agent loop makes the
+                # same call for the same reason.
+                return results
+            rewritten, spilled = await spill_execution_results_async(run_id, results)
+        except Exception:
+            # Losing the offload is always better than losing the observation.
+            logger.warning("Tool-output offload failed; keeping full output", exc_info=True)
+            return results
+
+        if spilled:
+            # Summed over the SAME keys the adapter offloads, not just `output`.
+            # Reading only `output` reported 0 -> 0 for every shell result, since
+            # those carry `stdout`/`stderr` — so the one measurement this change
+            # exists to produce was blind to its most common case.
+            def _payload_chars(entries: List[Dict[str, Any]]) -> int:
+                return sum(len(v) for e in entries for k in _SPILL_PAYLOAD_KEYS if isinstance((v := e.get(k)), str))
+
+            before = _payload_chars(results)
+            after = _payload_chars(rewritten)
+            logger.info(
+                "Offloaded %d oversized tool result(s): %d -> %d chars (#13997)",
+                spilled,
+                before,
+                after,
+            )
+        return rewritten
+
+    async def _handle_execution_summary(
         self,
         tool_msg: WorkflowMessage,
         new_execution_results: List[Dict[str, Any]],
@@ -2222,6 +2394,7 @@ before summarizing.
         """
         if tool_msg.type == "execution_summary":
             new_results = tool_msg.metadata.get("execution_results", [])
+            new_results = await self._offload_oversized_output(new_results)
             new_execution_results.extend(new_results)
             execution_history.extend(new_results)
             logger.info(
@@ -2311,7 +2484,7 @@ before summarizing.
             if not self._validate_tool_message(tool_msg):
                 continue
 
-            if self._handle_execution_summary(tool_msg, new_execution_results, execution_history):
+            if await self._handle_execution_summary(tool_msg, new_execution_results, execution_history):
                 continue
 
             if tool_msg.metadata is not None:
@@ -2717,6 +2890,13 @@ before summarizing.
         # MVA-1993 / #11216 / #11612: store lightweight_mode_used in a task-local
         # ContextVar (not on the shared singleton) for the response-metadata badge.
         _lw_token = _current_lightweight_mode.set(ctx.context.get("lightweight_mode_used", False))
+        # #13997: bind the spill run at the SAME seam, and for the same reason
+        # #11612 gives above — the LangGraph path (the production default) calls
+        # this method directly and bypasses `_run_llm_iterations` entirely. A
+        # bind in that outer wrapper never runs in production, which is how the
+        # cost badge came to always read False. Both are ContextVars, so both
+        # must be set here or not at all.
+        self._bind_spill_run(ctx.session_id)
         try:
             llm_response = None
             should_continue = False
@@ -3432,6 +3612,7 @@ before summarizing.
             agent_context=agent_context,
             work_item_id=work_item_id,
             requires_approval_before=approval_cats,
+            auth_role=resolve_auth_role(merged_context),
         )
 
     async def _execute_llm_workflow(
@@ -3557,11 +3738,15 @@ before summarizing.
 
     @error_boundary(component="chat_workflow_manager", function="process_message")
     async def process_message(
-        self, session_id: str, message: str, context: Dict[str, Any] | None = None
+        self,
+        session_id: str,
+        message: str,
+        context: Dict[str, Any] | None = None,
+        auth_role: str | None = None,
     ) -> List[WorkflowMessage]:
         """Process a message through the workflow system and return all messages."""
         messages = []
-        async for msg in self.process_message_stream(session_id, message, context):
+        async for msg in self.process_message_stream(session_id, message, context, auth_role):
             messages.append(msg)
         return messages
 
@@ -3623,7 +3808,9 @@ before summarizing.
         workflow_messages.append(error_msg)
         return error_msg
 
-    async def _apply_session_role(self, session_id: str, context: Dict[str, Any] | None) -> Dict[str, Any] | None:
+    async def _apply_session_role(
+        self, session_id: str, context: Dict[str, Any] | None, auth_role: str | None = None
+    ) -> Dict[str, Any] | None:
         """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202).
 
         A server-set session role overrides any client-supplied ``agent_id`` so the
@@ -3634,10 +3821,19 @@ before summarizing.
         seam gate holds matching tools BEFORE they execute — the correct
         pre-execution stage. Backend decides; the frontend only calls the endpoints.
         """
-        from chat_workflow.session_role import CHAT_APPROVAL_GATE_ENABLED, SessionRoleService, apply_role
+        from chat_workflow.session_role import (
+            CHAT_APPROVAL_GATE_ENABLED,
+            SessionRoleService,
+            apply_auth_role,
+            apply_role,
+        )
         from chat_workflow.session_work_item import SessionWorkItemService, apply_work_item
 
         svc = SessionRoleService()
+        # #13821: the authenticated caller's RBAC role, from the endpoint's
+        # server-side identity. Applied unconditionally (it strips on a missing
+        # role) so a client-supplied auth_role can never reach the tool seam.
+        context = apply_auth_role(context, auth_role)
         context = apply_role(context, await svc.get_role(session_id))
         # #13704: same trust model for the work-item binding. A server-set value
         # overrides any client-supplied work_item_id, and an unbound session has
@@ -3650,7 +3846,13 @@ before summarizing.
                 context = {**(context or {}), "requires_approval_before": categories}
         return context
 
-    async def process_message_stream(self, session_id: str, message: str, context: Dict[str, Any] | None = None):
+    async def process_message_stream(
+        self,
+        session_id: str,
+        message: str,
+        context: Dict[str, Any] | None = None,
+        auth_role: str | None = None,
+    ):
         """Process a message via LangGraph StateGraph.
 
         Issue #1043: Replaced hand-rolled async generator with LangGraph graph
@@ -3661,7 +3863,7 @@ before summarizing.
         """
         # GH#11186: apply the trusted per-session role once here, so both the graph
         # and legacy paths carry the governed identity into the tool seam.
-        context = await self._apply_session_role(session_id, context)
+        context = await self._apply_session_role(session_id, context, auth_role)
         try:
             async for msg in self._process_via_graph(session_id, message, context):
                 yield msg

@@ -15,6 +15,7 @@ import asyncio
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from memory import TaskPriority  # canonical enum (#10626)
 from task_execution_tracker import get_task_tracker
 
@@ -199,7 +200,7 @@ class ContextCollector:
                 {
                     "type": "high_cpu_usage",
                     "description": f"CPU usage at {cpu_percent}%",
-                    "severity": "medium",
+                    "severity": Severity.MEDIUM.value,
                     "affects": ["resource_intensive_tasks"],
                 }
             )
@@ -210,7 +211,7 @@ class ContextCollector:
                 {
                     "type": "high_memory_usage",
                     "description": f"Memory usage at {memory_percent}%",
-                    "severity": "high",
+                    "severity": Severity.HIGH.value,
                     "affects": ["memory_intensive_operations"],
                 }
             )
@@ -238,7 +239,7 @@ class ContextCollector:
                 {
                     "type": "human_takeover_active",
                     "description": "Human operator has taken control",
-                    "severity": "high",
+                    "severity": Severity.HIGH.value,
                     "affects": ["automation_action", "navigation_choice"],
                 }
             )
@@ -255,7 +256,7 @@ class ContextCollector:
                     {
                         "type": "outside_business_hours",
                         "description": "Current time is outside business hours",
-                        "severity": "low",
+                        "severity": Severity.LOW.value,
                         "affects": ["external_communications", "user_interactions"],
                     }
                 )
@@ -353,7 +354,7 @@ class ContextCollector:
         if len(low_confidence_elements) > len(context_elements) * 0.3:
             return {
                 "risk_type": "low_context_confidence",
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
                 "probability": 0.7,
                 "description": (f"{len(low_confidence_elements)} context elements have low confidence"),
                 "mitigation": ("Gather additional context or request human verification"),
@@ -370,7 +371,7 @@ class ContextCollector:
                 risks.append(
                     {
                         "risk_type": "system_overload",
-                        "severity": "high",
+                        "severity": Severity.HIGH.value,
                         "probability": 0.9,
                         "description": "System CPU usage critically high",
                         "mitigation": "Defer non-critical operations",
@@ -383,7 +384,7 @@ class ContextCollector:
         if len(context_elements) > 50:
             return {
                 "risk_type": "information_overload",
-                "severity": "low",
+                "severity": Severity.LOW.value,
                 "probability": 0.4,
                 "description": "Large amount of context data may contain conflicts",
                 "mitigation": "Prioritize most relevant context elements",

@@ -4,7 +4,7 @@
 
 import re
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from .base import (
@@ -31,8 +31,13 @@ class CodeVerifier(BaseVerifier):
         text = claim.get("text", "")
         category = claim.get("category", "")
 
-        # Check if it's explicitly categorized as code
-        if category in ("feature", "architecture"):
+        # Check if it's explicitly categorized as code. `infrastructure` is one
+        # of these: "Uses ChromaDB client" names a dependency that either is
+        # wired or is not, and with the category left out no verifier claimed
+        # it and it went to MANUAL unread (#14986). CodeVerifier runs last in
+        # ClaimsVerifier's chain, so this only picks up what Endpoint, Test and
+        # Config declined.
+        if category in ("feature", "architecture", "infrastructure"):
             return True
 
         # Check if text mentions code-like entities
@@ -49,7 +54,7 @@ class CodeVerifier(BaseVerifier):
                 status=VerificationStatus.MANUAL,
                 confidence=VerificationConfidence.LOW,
                 notes="Could not extract code entities from claim",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
 
         # Search for first entity in codebase
@@ -65,7 +70,7 @@ class CodeVerifier(BaseVerifier):
                 evidence_content=f"Found {search_results['count']} reference(s)",
                 method=f"grep -r '{entity}' in codebase",
                 notes=f"Code entity '{entity}' found",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
         else:
             # Entity not found
@@ -74,7 +79,7 @@ class CodeVerifier(BaseVerifier):
                 confidence=VerificationConfidence.MEDIUM,
                 method=f"grep -r '{entity}' in codebase",
                 notes=f"Code entity '{entity}' not found",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
 
     def _extract_code_entities(self, text: str) -> list[str]:

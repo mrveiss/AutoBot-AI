@@ -257,6 +257,98 @@ class TestExtension:
         result = await ext.on_hook(HookPoint.BEFORE_MESSAGE_PROCESS, ctx)
         assert result is None
 
+    # ------------------------------------------------------------------
+    # #14420: a raised denial must not be flattened to allow, and an
+    # extension deciding permission must fail closed on unexpected errors.
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_permission_error_is_not_swallowed_to_none(self):
+        """A `fail_closed` extension's PermissionError denial reaches the
+        caller as `False`, not `None`.
+
+        `None` reads as "no opinion" to callers like
+        `not any(result is False for result in results)` - flattening a
+        denial to `None` there is indistinguishable from allow.
+        """
+
+        class DenyingExtension(Extension):
+            name = "denying"
+            fail_closed = True
+
+            async def on_before_tool_execute(self, ctx: HookContext):
+                raise PermissionError("caller lacks the required permission")
+
+        ext = DenyingExtension()
+        ctx = HookContext()
+
+        result = await ext.on_hook(HookPoint.BEFORE_TOOL_EXECUTE, ctx)
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_an_unrelated_permission_error_does_not_cancel_a_non_fail_closed_extension(self):
+        """Review of #14420: `PermissionError` is a bare built-in this
+        codebase already raises for unrelated reasons (secrets storage,
+        credential stores, container backends, skills). An extension that
+        does NOT opt into `fail_closed` must not have one of those, reached
+        transitively from inside its hook body, silently read as a deny."""
+
+        class UnrelatedFileExtension(Extension):
+            name = "unrelated_file_access"
+            # fail_closed defaults to False - this extension is not a
+            # permission decision, it just happens to touch a path that
+            # raises the same built-in exception type for a different reason.
+
+            async def on_before_llm_call(self, ctx: HookContext):
+                raise PermissionError("os.chmod: operation not permitted")
+
+        ext = UnrelatedFileExtension()
+        ctx = HookContext()
+
+        result = await ext.on_hook(HookPoint.BEFORE_LLM_CALL, ctx)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_fail_closed_extension_unexpected_error_denies(self):
+        """An extension marked `fail_closed` must not have an unexpected
+        error (not a deliberate PermissionError) read as allow either."""
+
+        class FlakyPermissionExtension(Extension):
+            name = "flaky_permission"
+            fail_closed = True
+
+            async def on_before_tool_execute(self, ctx: HookContext):
+                raise ValueError("permission backend unreachable")
+
+        ext = FlakyPermissionExtension()
+        ctx = HookContext()
+
+        result = await ext.on_hook(HookPoint.BEFORE_TOOL_EXECUTE, ctx)
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_non_fail_closed_extension_unexpected_error_still_swallows(self):
+        """Scope boundary: extensions that do NOT opt into fail_closed keep
+        the pre-#14420 swallow-and-continue behaviour - a logging extension
+        throwing must not take down (or silently cancel) a request."""
+
+        class FlakyLoggingExtension(Extension):
+            name = "flaky_logging"
+            # fail_closed defaults to False - unchanged from before #14420
+
+            async def on_before_tool_execute(self, ctx: HookContext):
+                raise ValueError("log sink unreachable")
+
+        ext = FlakyLoggingExtension()
+        ctx = HookContext()
+
+        result = await ext.on_hook(HookPoint.BEFORE_TOOL_EXECUTE, ctx)
+
+        assert result is None
+
 
 class TestExtensionManager:
     """Test ExtensionManager functionality."""
@@ -404,6 +496,26 @@ class TestExtensionManager:
 
         # Should stop at ext2 (first handler)
         assert result is True
+
+    @pytest.mark.asyncio
+    async def test_invoke_hook_propagates_a_raised_denial(self):
+        """#14420: invoke_hook's collected results must contain the `False`
+        denial signal, not silently drop it because it looks like `None`."""
+
+        class DenyingExtension(Extension):
+            name = "denying"
+            fail_closed = True
+
+            async def on_before_tool_execute(self, ctx: HookContext):
+                raise PermissionError("denied")
+
+        manager = ExtensionManager()
+        manager.register(DenyingExtension())
+
+        ctx = HookContext()
+        results = await manager.invoke_hook(HookPoint.BEFORE_TOOL_EXECUTE, ctx)
+
+        assert results == [False]
 
     @pytest.mark.asyncio
     async def test_invoke_cancellable(self):

@@ -117,7 +117,6 @@ class ChatResetData(BaseModel):
     session_id: str
     reset: bool
     clear_context: bool
-    keep_system_prompt: bool
 
 
 class ActivityAddData(BaseModel):
@@ -477,12 +476,20 @@ class SharedLinkSessionData(BaseModel):
     has_password: bool
 
 
+# #14359: previously also carried `keep_system_prompt`. Nothing ever persists
+# a system prompt into a session — it is composed per turn by
+# `ChatWorkflowManager._get_system_prompt()` and sent straight to the
+# provider — so the flag could not change any observable outcome. Removed
+# rather than given a real meaning; see the issue for the audit of every
+# writer that persists under the "system" speaker and the owner's decision not
+# to add session-scoped prompt persistence to make the flag load-bearing. Kept
+# as a plain comment (not the docstring) so it does not leak into the
+# generated OpenAPI schema / api.ts.
 class ChatResetRequest(BaseModel):
     """Request model for chat reset"""
 
     session_id: str | None = Field(None, description="Session ID to reset (optional)")
     clear_context: bool = Field(True, description="Clear conversation context")
-    keep_system_prompt: bool = Field(True, description="Keep system prompt after reset")
 
 
 class ChatMessage(BaseModel):

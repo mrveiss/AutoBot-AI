@@ -3,14 +3,21 @@ name: Stylelint Token Guard
 # Tokenisation enforcement scaffold (#11515 Task 1). Reports hardcoded hex colors
 # in CHANGED frontend CSS/Vue files so new hardcoded values are visible in review.
 #
-# NON-BLOCKING for now (continue-on-error): the ~6k pre-existing violations mean a
-# hard gate would block every frontend PR until migration completes. This job
-# surfaces new offenders without failing the queue. Once the worst offenders are
-# migrated (#11515 Task 4) and the config is validated, flip continue-on-error off
-# and add this to branch protection (#11515 Task 1.3).
+# NON-BLOCKING for now (continue-on-error): #14554 measured the full-tree backlog
+# at 386 violations in autobot-frontend and 23 in autobot-slm-frontend (409 total,
+# color-no-hex only) once the gate could actually run — that debt predates this
+# workflow and belongs to the tokenisation umbrella (#11515), not to this scoped
+# "make the gate runnable" fix. This job stays scoped to CHANGED files only (never
+# the full tree) and continue-on-error, so it surfaces new offenders in review
+# without blocking a PR on debt it did not introduce. Once #11515 clears the
+# existing backlog, flip continue-on-error off and add this to branch protection
+# (#11515 Task 1.3).
 #
-# stylelint is installed ad-hoc with --no-save so no package.json / package-lock
-# change is required (the repo lockfiles are not regenerable in the dev env).
+# #14554: stylelint + postcss-html are real devDependencies of both
+# autobot-frontend/package.json and autobot-slm-frontend/package.json (not an
+# ad-hoc `npm install --no-save` here), so `npx stylelint <file>` resolves the
+# same way in this job, in CI's other frontend jobs, and in a developer's fresh
+# `npm ci` — no drift between what CI pins and what a checkout gets.
 
 on:
   pull_request:
@@ -23,6 +30,21 @@ on:
       - "autobot-frontend/.stylelintrc.json"
       - "autobot-slm-frontend/.stylelintrc.json"
       - ".github/workflows/stylelint-tokens.yml"
+
+# #14434: without this, every push left its predecessors queued. 42 of a 271-run
+# sample were for commits no longer at their branch tip - work nothing would ever
+# read, each still fetching its actions. During GitHub's 2026-08-17 archive-download
+# degradation that wasted load became failures on unrelated pull requests (#14444).
+#
+# cancel-in-progress is guarded on the event rather than set to a bare `true`:
+# #13432 found that cancelling base-branch runs meant each merge cancelled the
+# previous merge's verification, and merges arrive faster than a suite completes -
+# of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
+# workflows this was applied to also trigger on push to Dev_new_gui, so the guard
+# is load-bearing there and harmless where it is not.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -38,7 +60,11 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: |
+            autobot-frontend/package-lock.json
+            autobot-slm-frontend/package-lock.json
       - name: Determine changed frontend CSS/Vue files
         id: changed
         env:
@@ -47,18 +73,39 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           git fetch origin "$BASE_REF" --depth=1 || true
+          # Split by project: each has its own node_modules/.stylelintrc, and
+          # `npx stylelint` needs to run from inside the matching project so it
+          # resolves the customSyntax (postcss-html) that project installed.
           git diff --name-only "origin/${BASE_REF}...HEAD" -- \
             'autobot-frontend/**/*.vue' 'autobot-frontend/**/*.css' \
-            'autobot-slm-frontend/**/*.vue' 'autobot-slm-frontend/**/*.css' > changed-css.txt || true
-          count=$(wc -l < changed-css.txt | tr -d ' ')
-          echo "count=${count:-0}" >> "$GITHUB_OUTPUT"
-          echo "Changed CSS/Vue files: ${count:-0}"
-          cat changed-css.txt || true
-      - name: Run stylelint on changed files (report-only)
-        if: steps.changed.outputs.count != '0'
+            | sed -e 's|^autobot-frontend/||' > changed-frontend.txt || true
+          git diff --name-only "origin/${BASE_REF}...HEAD" -- \
+            'autobot-slm-frontend/**/*.vue' 'autobot-slm-frontend/**/*.css' \
+            | sed -e 's|^autobot-slm-frontend/||' > changed-slm.txt || true
+          frontend_count=$(wc -l < changed-frontend.txt | tr -d ' ')
+          slm_count=$(wc -l < changed-slm.txt | tr -d ' ')
+          echo "frontend_count=${frontend_count:-0}" >> "$GITHUB_OUTPUT"
+          echo "slm_count=${slm_count:-0}" >> "$GITHUB_OUTPUT"
+          echo "Changed autobot-frontend CSS/Vue files: ${frontend_count:-0}"
+          cat changed-frontend.txt || true
+          echo "Changed autobot-slm-frontend CSS/Vue files: ${slm_count:-0}"
+          cat changed-slm.txt || true
+      - name: Run stylelint on changed autobot-frontend files (report-only)
+        if: steps.changed.outputs.frontend_count != '0'
+        working-directory: autobot-frontend
+        env:
+          # #13410: no job here needs the Cypress binary; skip the ~100MB CDN
+          # download so a Cypress CDN outage can never red out this job.
+          CYPRESS_INSTALL_BINARY: "0"
         run: |
-          npm install --no-save --no-package-lock stylelint@^16 postcss-html@^1.6 >/dev/null 2>&1
+          npm ci
           # Read the file list from disk (not interpolated) and pass via xargs so
-          # filenames can't inject shell. No --config: stylelint auto-resolves each
-          # file's nearest .stylelintrc (autobot-frontend/ or autobot-slm-frontend/).
-          xargs -a changed-css.txt npx stylelint
+          # filenames can't inject shell. No --config: stylelint auto-resolves
+          # autobot-frontend/.stylelintrc.json for every file below this directory.
+          xargs -a ../changed-frontend.txt npx stylelint
+      - name: Run stylelint on changed autobot-slm-frontend files (report-only)
+        if: steps.changed.outputs.slm_count != '0'
+        working-directory: autobot-slm-frontend
+        run: |
+          npm ci
+          xargs -a ../changed-slm.txt npx stylelint

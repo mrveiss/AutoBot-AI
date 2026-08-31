@@ -30,6 +30,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import utc_timestamp
 
 # ---------------------------------------------------------------------------
@@ -590,7 +591,7 @@ class TestDispatchProposalDisabled:
                 "file": f"f{i}.py",
                 "line": i,
                 "pattern_type": f"pat_{i}",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "runtime_risk": 0.1,
                 "suggestion": f"Fix {i}",
             }
@@ -663,7 +664,7 @@ class TestDispatchProposalEnabled:
                 "file": f"{file_prefix}{i}.py",
                 "line": i,
                 "pattern_type": f"pat_{i}",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "runtime_risk": 0.2,
                 "suggestion": f"Fix {i}",
             }
@@ -710,7 +711,7 @@ class TestDispatchProposalEnabled:
                     "file": "dup.py",
                     "line": 1,
                     "pattern_type": "god_class",
-                    "severity": "high",
+                    "severity": Severity.HIGH.value,
                     "runtime_risk": 0.3,
                     "suggestion": "Extract A",
                 },
@@ -718,7 +719,7 @@ class TestDispatchProposalEnabled:
                     "file": "dup.py",
                     "line": 2,
                     "pattern_type": "god_class",
-                    "severity": "high",
+                    "severity": Severity.HIGH.value,
                     "runtime_risk": 0.4,
                     "suggestion": "Extract B",
                 },
@@ -726,7 +727,7 @@ class TestDispatchProposalEnabled:
                     "file": "unique.py",
                     "line": 5,
                     "pattern_type": "long_method",
-                    "severity": "medium",
+                    "severity": Severity.MEDIUM.value,
                     "runtime_risk": 0.1,
                     "suggestion": "Split it",
                 },
@@ -780,7 +781,7 @@ class TestDispatchReadOnlyContract(ReadOnlyCapabilityChecks):
                 "file": f"x{i}.py",
                 "line": i,
                 "pattern_type": "god_class",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "runtime_risk": 0.5,
                 "suggestion": "Refactor",
             }

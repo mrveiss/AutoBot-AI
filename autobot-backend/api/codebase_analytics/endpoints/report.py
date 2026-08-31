@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Set, Tuple
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
@@ -35,6 +35,7 @@ from code_intelligence.pattern_analysis import (
 )
 from constants.path_constants import PATH
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
+from utils.cancel_tokens import new_cancel_token, run_cancellable
 from utils.chromadb_client import get_all_paginated
 from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
@@ -47,12 +48,17 @@ from utils.file_categorization import (
     FILE_CATEGORY_LOGS,
     FILE_CATEGORY_TEST,
 )
-from utils.io_executor import get_analytics_executor, run_in_analytics_executor
+from utils.io_executor import get_analytics_executor
 
 from ..api_endpoint_scanner import APIEndpointChecker
-from ..duplicate_detector import DuplicateAnalysis, DuplicateCodeDetector  # noqa: F401
+from ..duplicate_detector import (  # noqa: F401
+    LOW_SIMILARITY_THRESHOLD,
+    DuplicateAnalysis,
+    DuplicateCodeDetector,
+)
 from ..models import APIEndpointAnalysis
 from ..storage import get_code_collection
+from .duplicates import _run_standard_analysis
 from .shared import (
     filter_problems_by_file_existence,
     resolve_project_root,
@@ -481,6 +487,13 @@ BUG_PREDICTION_TIMEOUT = AnalyticsConfig.BUG_PREDICTION_TIMEOUT
 TOP_HIGH_RISK_FILES_LIMIT = AnalyticsConfig.TOP_HIGH_RISK_FILES_LIMIT
 # Maximum items to show in API endpoint section - from SSOT
 API_ENDPOINT_LIST_LIMIT = AnalyticsConfig.API_ENDPOINT_LIST_LIMIT
+# Issue #13602: deadlines for the /report fan-out. The grace margin lets an
+# analysis that bounds itself report its own, better-named timeout first; the
+# outer bound is the backstop for one that does not.
+ANALYSIS_DEADLINE_GRACE = 15.0
+# api_endpoint had no self-imposed timeout at all, which is the reported hang.
+API_ENDPOINT_ANALYSIS_TIMEOUT = TIMEOUT_HTTP_LONG
+PATTERN_ANALYSIS_TIMEOUT = 180.0
 
 
 # =============================================================================
@@ -1299,14 +1312,26 @@ def _build_analysis_task_list(
     use_semantic: bool,
     source_id: str | None = None,
     scan_root: Path | None = None,
-) -> List[Tuple[str, Any]]:
+) -> List[Tuple[str, Any, float]]:
     """
-    Build list of analysis tasks to run based on flags.
+    Build list of analysis tasks to run, each with its own deadline.
 
     Issue #620: Extracted from _run_parallel_analyses.
     Issue #12372: Thread source_id/scan_root into every sub-analysis so a
     report requested for one source never scans or caches another project's
     (or AutoBot's own) tree -- mirrors the #12356/#12374 cross-language fix.
+
+    Issue #13602: every entry carries a deadline as its third element. Four of
+    the five analyses wrapped themselves in ``asyncio.wait_for``; the fifth,
+    api_endpoint, did not, and that omission is the reported hang. The shared
+    analytics executor has 8 workers, so once slower analyses occupy them all,
+    an unbounded submission queues and never starts -- ``gather`` never returns
+    and the socket stays open with nothing logged. Carrying the deadline in the
+    tuple makes a task without one a type error rather than an oversight.
+
+    These are OUTER deadlines with a grace margin: an analysis that reports its
+    own timeout produces a better message naming the analysis, so it should win
+    the race. The outer bound only fires where there is no inner one.
     """
     tasks = []
     if include_bug_prediction:
@@ -1318,21 +1343,41 @@ def _build_analysis_task_list(
                     use_semantic=use_semantic,
                     source_id=source_id,
                 ),
+                BUG_PREDICTION_TIMEOUT + ANALYSIS_DEADLINE_GRACE,
             )
         )
     if include_api_analysis:
-        tasks.append(("api_endpoint", _get_api_endpoint_analysis(project_root=scan_root)))
+        tasks.append(
+            (
+                "api_endpoint",
+                _get_api_endpoint_analysis(project_root=scan_root),
+                API_ENDPOINT_ANALYSIS_TIMEOUT,
+            )
+        )
     if include_duplicate_analysis:
-        tasks.append(("duplicate", _get_duplicate_analysis(project_root=scan_root)))
+        tasks.append(
+            (
+                "duplicate",
+                _get_duplicate_analysis(project_root=scan_root),
+                TIMEOUT_HTTP_LONG + ANALYSIS_DEADLINE_GRACE,
+            )
+        )
     if include_cross_language_analysis:
         tasks.append(
             (
                 "cross_language",
                 _get_cross_language_analysis(source_id=source_id, project_root=scan_root),
+                TIMEOUT_HTTP_LONG + ANALYSIS_DEADLINE_GRACE,
             )
         )
     if include_pattern_analysis:
-        tasks.append(("pattern_analysis", _get_pattern_analysis(project_root=scan_root)))
+        tasks.append(
+            (
+                "pattern_analysis",
+                _get_pattern_analysis(project_root=scan_root),
+                PATTERN_ANALYSIS_TIMEOUT + ANALYSIS_DEADLINE_GRACE,
+            )
+        )
     return tasks
 
 
@@ -1382,12 +1427,25 @@ async def _run_parallel_analyses(
     if not analysis_tasks:
         return result
 
-    # Run all analyses in parallel with individual error handling
-    results = await asyncio.gather(*[task for _, task in analysis_tasks], return_exceptions=True)
+    # #13602: every analysis is bounded here, not by remembering to wrap it at
+    # its own definition. gather() cannot outlast the slowest deadline.
+    results = await asyncio.gather(
+        *[asyncio.wait_for(task, timeout=deadline) for _, task, deadline in analysis_tasks],
+        return_exceptions=True,
+    )
 
     # Map results back to dict
-    for i, (task_name, _) in enumerate(analysis_tasks):
+    for i, (task_name, _, deadline) in enumerate(analysis_tasks):
         task_result = results[i]
+        if isinstance(task_result, asyncio.TimeoutError):
+            # Was silent before: an unbounded analysis produced no result and no
+            # log, so the report simply omitted the section with no explanation.
+            logger.warning(
+                "Analysis %s exceeded its %.0fs deadline and was abandoned",
+                task_name,
+                deadline,
+            )
+            continue
         if isinstance(task_result, Exception):
             logger.warning("Analysis %s failed: %s", task_name, task_result)
             continue
@@ -1616,17 +1674,23 @@ async def _get_duplicate_analysis(
     try:
         scan_target = str(project_root) if project_root else str(Path(__file__).resolve().parents[4])
 
-        # Issue #1233: Use dedicated analytics executor to prevent
-        # default thread pool starvation
-        # Issue #2655: Increased timeout from 60s to 120s — large codebases
-        # need more time for duplicate hash comparison across all Python/TS files.
-        analysis = await asyncio.wait_for(
-            asyncio.get_running_loop().run_in_executor(
-                get_analytics_executor(),
-                lambda: DuplicateCodeDetector(project_root=scan_target).run_analysis(),
-            ),
-            timeout=TIMEOUT_HTTP_LONG,  # 120 second timeout for duplicate detection
-        )
+        # #13602: delegate to the guarded scan in `duplicates`. This submitted
+        # straight to the executor with neither the single-flight lock nor the
+        # cancel token, so /report re-created the accumulation #12779 fixed:
+        # each report queued a full walk regardless of one already running, and
+        # its orphan could not be told to stop. Same executor, same 8 workers.
+        # LOW_SIMILARITY_THRESHOLD is the detector's own default, which is what
+        # this call site relied on implicitly — behaviour unchanged.
+        analysis = await _run_standard_analysis(scan_target, LOW_SIMILARITY_THRESHOLD)
+        if analysis is None:
+            # #13602: say so. The GUI polls /duplicates while loading /report and
+            # they now share one lock, so this is the common case — and a report
+            # that omits the section without comment reads as "no duplicates".
+            logger.warning(
+                "Duplicate section omitted from the report: the scan was "
+                "unavailable (already in flight, or it exceeded its deadline)"
+            )
+            return None
 
         logger.info(
             "Duplicate analysis: %d duplicates (%d high, %d medium, %d low)",
@@ -1662,11 +1726,26 @@ async def _get_api_endpoint_analysis(
 
     Returns:
         APIEndpointAnalysis or None if analysis fails
+
+    Issue #14256/#14244: run_full_analysis() used to be submitted to the
+    analytics executor with nothing to stop it -- the reported hang, and the
+    one call in this fan-out with no cancellation of any kind. A cancel token
+    is now created here and registered in bounded()'s active scope (via
+    run_cancellable), so a route deadline -- this call's own outer
+    ``asyncio.wait_for`` in ``_run_parallel_analyses``, or ``/report``'s
+    ``bounded()`` itself if that fires first -- stops the scan instead of
+    just the wait.
     """
+    cancel_token = new_cancel_token()
     try:
-        checker = APIEndpointChecker(project_root=project_root)
+        checker = APIEndpointChecker(project_root=project_root, cancel_token=cancel_token)
         # Issue #1233: Use dedicated analytics executor
-        analysis = await run_in_analytics_executor(checker.run_full_analysis)
+        analysis = await run_cancellable(
+            get_analytics_executor(),
+            checker.run_full_analysis,
+            operation="api_endpoint_analysis",
+            cancel_token=cancel_token,
+        )
         logger.info(
             "API endpoint analysis: %d endpoints, %d calls, %.1f%% coverage",
             analysis.backend_endpoints,
@@ -1674,6 +1753,8 @@ async def _get_api_endpoint_analysis(
             analysis.coverage_percentage,
         )
         return analysis
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         logger.error("API endpoint analysis failed: %s", e, exc_info=True)
         return None
@@ -2108,6 +2189,7 @@ def _render_report(problems: list, analyses: dict) -> str:
 
 
 @router.get("/report")
+@bounded(PATTERN_ANALYSIS_TIMEOUT + ANALYSIS_DEADLINE_GRACE + ROUTE_DEADLINE_GRACE)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_report",

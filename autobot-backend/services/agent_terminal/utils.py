@@ -11,11 +11,26 @@ Helper functions for agent terminal operations.
 import re
 from typing import TYPE_CHECKING
 
+from autobot_shared.status_enums import CommandRisk
 from models.command_execution import CommandExecution, CommandState, RiskLevel
-from secure_command_executor import CommandRisk
 
 if TYPE_CHECKING:
+    from autobot_logging.terminal_logger import TerminalLogger
+    from type_defs.common import Metadata
+
     from .models import AgentTerminalSession
+
+
+# Boundary table: canonical CommandRisk -> the deliberate #7258 RiskLevel fork.
+# Every CommandRisk member must appear; see map_risk_to_level for why.
+_COMMAND_RISK_TO_RISK_LEVEL: dict[CommandRisk, RiskLevel] = {
+    CommandRisk.SAFE: RiskLevel.LOW,  # Safe commands -> Low risk
+    CommandRisk.MODERATE: RiskLevel.MEDIUM,  # Moderate commands -> Medium risk
+    CommandRisk.HIGH: RiskLevel.HIGH,  # High risk commands -> High risk
+    CommandRisk.CRITICAL: RiskLevel.CRITICAL,  # Critical commands -> Critical risk
+    CommandRisk.DANGEROUS: RiskLevel.CRITICAL,  # Destructive pattern -> blocked
+    CommandRisk.FORBIDDEN: RiskLevel.CRITICAL,  # Deny-listed command -> blocked
+}
 
 
 def map_risk_to_level(risk: CommandRisk) -> RiskLevel:
@@ -24,8 +39,13 @@ def map_risk_to_level(risk: CommandRisk) -> RiskLevel:
 
     REUSABLE PRINCIPLE: Single function, clear responsibility, reusable across codebase.
 
-    CommandRisk enum values: SAFE, MODERATE, HIGH, CRITICAL, FORBIDDEN
-    RiskLevel enum values: LOW, MEDIUM, HIGH, CRITICAL
+    ``RiskLevel`` here is ``models.command_execution.RiskLevel`` — the
+    deliberate fork documented in #7258 (uppercase wire format, already
+    serialized by legacy Redis/SQLite records). It is NOT converged, and this
+    function is the boundary that converts into it.
+
+    CommandRisk members: SAFE, MODERATE, HIGH, CRITICAL, DANGEROUS, FORBIDDEN
+    RiskLevel members: LOW, MEDIUM, HIGH, CRITICAL
 
     Args:
         risk: CommandRisk from security assessment
@@ -33,14 +53,12 @@ def map_risk_to_level(risk: CommandRisk) -> RiskLevel:
     Returns:
         Corresponding RiskLevel enum
     """
-    risk_mapping = {
-        CommandRisk.SAFE: RiskLevel.LOW,  # Safe commands → Low risk
-        CommandRisk.MODERATE: RiskLevel.MEDIUM,  # Moderate commands → Medium risk
-        CommandRisk.HIGH: RiskLevel.HIGH,  # High risk commands → High risk
-        CommandRisk.CRITICAL: RiskLevel.CRITICAL,  # Critical commands → Critical risk
-        CommandRisk.FORBIDDEN: (RiskLevel.CRITICAL),  # Forbidden commands → Critical risk (blocked)
-    }
-    return risk_mapping.get(risk, RiskLevel.MEDIUM)
+    # #13845: the fallback is CRITICAL, not MEDIUM. The table used to omit
+    # DANGEROUS (it lived in the other fork), and an unmapped member fell
+    # through to MEDIUM — a blocking verdict silently downgraded to the middle
+    # of the scale. An unrecognised risk now fails closed. Totality of this
+    # table is asserted by ``repo_tests/enum_union_guard_test.py``.
+    return _COMMAND_RISK_TO_RISK_LEVEL.get(risk, RiskLevel.CRITICAL)
 
 
 def extract_terminal_and_chat_ids(session: "AgentTerminalSession") -> tuple[str, str]:
@@ -188,3 +206,78 @@ def is_interactive_command(command: str) -> tuple[bool, list[str]]:
             matched_patterns.append(description)
 
     return (len(matched_patterns) > 0, matched_patterns)
+
+
+async def log_command_approval(
+    terminal_logger: "TerminalLogger",
+    session: "AgentTerminalSession",
+    command: str,
+    user_id: str | None,
+) -> None:
+    """Record an approved command against the session's conversation transcript.
+
+    Issue #665 extracted this from ``_execute_approved_command``; #14959 moved it
+    off ``AgentTerminalService`` — it reads no service state beyond the logger it
+    is handed, and the service had reached its recorded size ceiling.
+
+    A session with no conversation has nowhere to write, and logs nothing.
+    """
+    if session.has_conversation():
+        await terminal_logger.log_command(
+            session_id=session.conversation_id,
+            command=command,
+            run_type="manual",
+            status="approved",
+            user_id=user_id,
+        )
+
+
+async def log_command_result(
+    terminal_logger: "TerminalLogger",
+    session: "AgentTerminalSession",
+    command: str,
+    result: "Metadata",
+    user_id: str | None,
+) -> None:
+    """Record the outcome of an approved command (#665, moved in #14959).
+
+    Anything other than a ``success`` status is written as ``error`` — the
+    transcript records what happened, not what was attempted.
+    """
+    if session.has_conversation():
+        await terminal_logger.log_command(
+            session_id=session.conversation_id,
+            command=command,
+            run_type="manual",
+            status="success" if result.get("status") == "success" else "error",
+            result=result,
+            user_id=user_id,
+        )
+
+
+async def log_autobot_command(
+    terminal_logger: "TerminalLogger",
+    session: "AgentTerminalSession",
+    command: str,
+    status: str,
+    result: "Metadata | None" = None,
+) -> None:
+    """Record an auto-approved (``autobot`` run type) command against the transcript.
+
+    The same six-argument call was spelled out twice in
+    ``_execute_auto_approved_command`` — once before the command ran, once with
+    its result — inside a service already at its recorded size ceiling. Same
+    reason ``log_command_approval`` moved here in #14959; kept together with it
+    so the two run types stay one edit apart (#15073).
+
+    A session with no conversation has nowhere to write, and logs nothing.
+    """
+    if session.has_conversation():
+        await terminal_logger.log_command(
+            session_id=session.conversation_id,
+            command=command,
+            run_type="autobot",
+            status=status,
+            result=result,
+            user_id=None,
+        )

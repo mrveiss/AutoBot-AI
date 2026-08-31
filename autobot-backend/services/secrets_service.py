@@ -19,7 +19,23 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from config.manager import get_config_manager as _get_config_manager
+from services.secrets_audit_store import (
+    ACTION_ACCESSED,
+    REASON_EXPIRED,
+    REASON_NOT_FOUND,
+    AuditLookup,
+    ensure_audit_schema,
+    fetch_audit_log,
+    record_action,
+    record_failed_access,
+    record_standalone_failed_access,
+)
 from type_defs.common import Metadata
+from utils.secrets_store_migration import (
+    ALL_SECRETS_STORE_FILES,
+    ensure_and_read_shared_key,
+    migrate_legacy_secrets_store,
+)
 
 logger = get_logger(__name__)
 
@@ -40,11 +56,28 @@ class SecretsService:
     def __init__(self, db_path: str = None, encryption_key: str | None = None) -> None:
         """Initialize the secrets service with encryption"""
         if db_path is None:
-            # Use centralized path management for default path
-            from utils.paths_manager import ensure_data_directory, get_data_path
+            # Canonical data directory (#14081): resolve through ssot_config
+            # directly rather than the legacy utils.paths_manager, which
+            # reads an unset config.yaml "paths" key and silently falls
+            # back to a CWD-relative "data/" -- landing the live secrets DB
+            # outside the subtree the filesystem MCP bridge excludes in
+            # production.
+            data_dir = config.path.data_path
+            data_dir.mkdir(parents=True, exist_ok=True)
 
-            ensure_data_directory()
-            db_path = str(get_data_path("secrets.db"))
+            # One-time migration off the legacy CWD-relative resolver
+            # (#14081 review, #14113): must run before _init_database()
+            # creates a fresh, empty database, or an existing deployment's
+            # real store is silently orphaned. Migrates the FULL
+            # secrets-store file set, not just this class's own db (#14081
+            # review round 5, finding 2): a process that constructs
+            # SecretsService alone (a celery worker, with no SecretsManager
+            # ever running) must still get the shared key moved here, or
+            # _init_encryption below finds no key file and silently mints
+            # an unpersisted one nothing else can ever decrypt.
+            migrate_legacy_secrets_store(data_dir, ALL_SECRETS_STORE_FILES, "secrets store")
+
+            db_path = str(data_dir / "secrets.db")
 
         self.db_path = db_path
         self._ensure_db_directory()
@@ -68,29 +101,24 @@ class SecretsService:
             # Check multiple sources for the encryption key
             # 1. Environment variable (direct)
             # 2. Config manager (may map from env)
-            # 3. Key file in data directory
-            pass
-
+            # 3. Shared canonical key file (#14081 review round 5): minted
+            #    and persisted if it doesn't exist yet via the same helper
+            #    SecretsManager uses, cross-process-locked, so the two
+            #    classes can never disagree about the key and two processes
+            #    racing a genuine first boot can't each mint their own.
+            #    Replaces the previous fallback here, which generated a key
+            #    on a WARNING and never wrote it to disk -- indistinguishable
+            #    from first boot even with a real store present, and
+            #    undecryptable by any other process or the next restart.
             env_key = config.secrets_key
             if not env_key:
                 env_key = config_manager.get("security.secrets_key", None)
-            if not env_key:
-                # Try loading from key file
-                key_file = Path(self.db_path).parent / "secrets.key"
-                if key_file.exists():
-                    env_key = key_file.read_text().strip()
-                    logger.info("Loaded encryption key from %s", key_file)
 
             if env_key:
                 self.cipher = Fernet(env_key.encode())
                 logger.info("Secrets encryption initialized with configured key")
             else:
-                # Generate and save a new key
-                key = Fernet.generate_key()
-                self.cipher = Fernet(key)
-                logger.warning(
-                    "Generated new encryption key. Set AUTOBOT_SECRETS_KEY environment variable for persistence."
-                )
+                self.cipher = Fernet(ensure_and_read_shared_key(Path(self.db_path).parent))
 
     def _init_database(self) -> None:
         """Initialize the SQLite database with secrets table"""
@@ -99,7 +127,7 @@ class SecretsService:
 
         self._create_secrets_table(cursor)
         self._create_secrets_indexes(cursor)
-        self._create_audit_table(cursor)
+        ensure_audit_schema(cursor)
 
         conn.commit()
         conn.close()
@@ -132,20 +160,6 @@ class SecretsService:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_secrets_scope ON secrets(scope)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_secrets_chat_id ON secrets(chat_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_secrets_name ON secrets(name)")
-
-    def _create_audit_table(self, cursor: sqlite3.Cursor) -> None:
-        """Create the audit log table if it doesn't exist"""
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS secrets_audit (
-                id TEXT PRIMARY KEY,
-                secret_id TEXT NOT NULL,
-                action TEXT NOT NULL,
-                performed_by TEXT,
-                performed_at TEXT NOT NULL,
-                details TEXT,
-                FOREIGN KEY (secret_id) REFERENCES secrets(id)
-            )
-        """)
 
     def _encrypt_value(self, value: str) -> str:
         """Encrypt a secret value"""
@@ -210,7 +224,7 @@ class SecretsService:
         """,
             (now_utc().isoformat(), secret_id),
         )
-        self._audit_action(cursor, secret_id, "accessed", accessed_by)
+        self._audit_action(cursor, secret_id, ACTION_ACCESSED, accessed_by)
 
     def _build_secret_result(
         self,
@@ -338,6 +352,8 @@ class SecretsService:
         if query is None:
             return None
 
+        lookup = AuditLookup(name=name, secret_id=secret_id, scope=scope, chat_id=chat_id, performed_by=accessed_by)
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
@@ -346,12 +362,14 @@ class SecretsService:
             row = cursor.fetchone()
 
             if not row:
+                record_failed_access(cursor, lookup, REASON_NOT_FOUND)
                 return None
 
             secret = self._row_to_secret_dict(row, include_encrypted=True)
 
             # Check expiration
             if self._is_secret_expired(secret["expires_at"]):
+                record_failed_access(cursor, lookup, REASON_EXPIRED, secret["id"])
                 return None
 
             # Handle value decryption and access tracking
@@ -365,6 +383,29 @@ class SecretsService:
             return secret
         finally:
             conn.close()
+
+    def record_access_failure(
+        self,
+        reason: str,
+        name: str | None = None,
+        scope: str = "general",
+        chat_id: str | None = None,
+        accessed_by: str | None = None,
+        secret_id: str | None = None,
+    ) -> None:
+        """Record a failed access that the *caller* rejected, not the lookup.
+
+        A row can be found, unexpired, and still unusable -- the wrong
+        ``secret_type``, a value that will not parse, or a lookup that raised.
+        Those verdicts are reached after ``get_secret()`` has returned, so only
+        the caller can report them (#15023 AC3).
+        """
+        record_standalone_failed_access(
+            self.db_path,
+            AuditLookup(name=name, scope=scope, chat_id=chat_id, performed_by=accessed_by),
+            reason,
+            secret_id,
+        )
 
     def _build_list_secrets_query(
         self,
@@ -610,52 +651,11 @@ class SecretsService:
         details: Dict | None = None,
     ) -> None:
         """Add an audit log entry"""
-        cursor.execute(
-            """
-            INSERT INTO secrets_audit (id, secret_id, action, performed_by, performed_at, details)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """,
-            (
-                str(uuid4()),
-                secret_id,
-                action,
-                performed_by,
-                now_utc().isoformat(),
-                json.dumps(details) if details else None,
-            ),
-        )
+        record_action(cursor, secret_id, action, performed_by, details)
 
     def get_audit_log(self, secret_id: str | None = None, limit: int = 100) -> List[Metadata]:
         """Get audit log entries"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        if secret_id:
-            cursor.execute(
-                "SELECT * FROM secrets_audit WHERE secret_id = ? ORDER BY performed_at DESC LIMIT ?",
-                (secret_id, limit),
-            )
-        else:
-            cursor.execute(
-                "SELECT * FROM secrets_audit ORDER BY performed_at DESC LIMIT ?",
-                (limit,),
-            )
-
-        audit_entries = []
-        for row in cursor.fetchall():
-            audit_entries.append(
-                {
-                    "id": row[0],
-                    "secret_id": row[1],
-                    "action": row[2],
-                    "performed_by": row[3],
-                    "performed_at": row[4],
-                    "details": json.loads(row[5]) if row[5] else {},
-                }
-            )
-
-        conn.close()
-        return audit_entries
+        return fetch_audit_log(self.db_path, secret_id, limit)
 
 
 # Singleton instance getter (thread-safe)

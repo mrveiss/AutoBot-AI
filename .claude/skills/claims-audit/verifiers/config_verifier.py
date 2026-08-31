@@ -4,7 +4,7 @@
 
 import re
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -32,8 +32,14 @@ class ConfigVerifier(BaseVerifier):
         "*.conf",
     ]
 
+    #: An intervening qualifier is the normal way to write these -- "4 uvicorn
+    #: workers", "2 gunicorn processes". Requiring the noun to follow the
+    #: number immediately made can_verify say False, so ConfigVerifier never
+    #: saw the claim at all and it fell through to MANUAL (#14986).
+    _COUNTED = r"(workers?|ports?|processes?|threads?)"
+
     CONFIG_PATTERNS = [
-        r"\d+\s+(workers|port|processes)",  # Numeric config values
+        rf"\d+\s+(?:[a-z]+\s+){{0,2}}{_COUNTED}",  # Numeric config values
         r"(workers|port|timeout|limit|size)[=:\s]+\d+",
         r"(redis|postgres|database|db).*port",
         r"(enable|disable|use).*\b(redis|celery|docker)",
@@ -55,7 +61,7 @@ class ConfigVerifier(BaseVerifier):
                 status=VerificationStatus.MANUAL,
                 confidence=VerificationConfidence.LOW,
                 notes="Could not extract config value from claim",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
 
         key, value = config_info
@@ -72,7 +78,7 @@ class ConfigVerifier(BaseVerifier):
                 evidence_content=search_results.get("match"),
                 method=f"grep -r '{key}' in config files",
                 notes=f"Config {key}={value} found",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
         else:
             # Config not found
@@ -81,18 +87,27 @@ class ConfigVerifier(BaseVerifier):
                 confidence=VerificationConfidence.MEDIUM,
                 method=f"grep -r '{key}' in config files",
                 notes=f"Config {key}={value} not found",
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
             )
 
     def _extract_config_value(self, text: str) -> Optional[tuple[str, str]]:
         """Extract config key and value from claim text."""
-        # Pattern: "X workers", "X port", etc.
-        number_pattern = r"(\d+)\s+(workers?|ports?|processes?|threads?)"
+        # Pattern: "X workers", "4 uvicorn workers", etc. -- number first.
+        number_pattern = rf"(\d+)\s+(?:[a-z]+\s+){{0,2}}{self._COUNTED}"
         match = re.search(number_pattern, text, re.IGNORECASE)
         if match:
             value = match.group(1)
-            key = match.group(2).rstrip("s")  # Remove plural
+            key = match.group(2).rstrip("s").lower()  # Remove plural
             return (key, value)
+
+        # Pattern: "port 8100", "timeout 30" -- the same fact with the noun
+        # first, which is the commoner phrasing and returned None until #14986,
+        # sending every claim written that way to MANUAL.
+        named_pattern = rf"\b(?:{self._COUNTED}|(timeouts?|limits?))\s+(\d+)"
+        match = re.search(named_pattern, text, re.IGNORECASE)
+        if match:
+            key = (match.group(1) or match.group(2)).rstrip("s").lower()
+            return (key, match.group(3))
 
         # Pattern: "key=value" or "key: value"
         kv_pattern = r"(\w+)[=:]\s*(\S+)"
@@ -104,7 +119,10 @@ class ConfigVerifier(BaseVerifier):
         service_pattern = r"\b(redis|postgres|postgresql|mysql|celery|docker|nginx)\b"
         match = re.search(service_pattern, text, re.IGNORECASE)
         if match:
-            return (match.group(1), match.group(1))
+            # Lowercased: the key is used to grep config files, which spell
+            # service names in lower case whatever the prose does.
+            service = match.group(1).lower()
+            return (service, service)
 
         return None
 

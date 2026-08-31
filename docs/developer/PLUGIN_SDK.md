@@ -123,7 +123,8 @@ Pydantic model defining plugin metadata:
     "description": "What this plugin does",
     "author": "Author Name",
     "entry_point": "python.module.path",
-    "dependencies": ["other-plugin"],  # Load order
+    "dependencies": ["other-plugin"],  # Plugin slugs — load order, NOT pip names
+    "python_dependencies": ["aiohttp"], # Importable MODULE names (Pillow -> "PIL")
     "config_schema": {...},            # JSON schema
     "hooks": ["hook_name"]             # Hooks provided
 }

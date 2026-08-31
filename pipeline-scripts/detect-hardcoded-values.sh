@@ -4,129 +4,229 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 #
-# Detect hardcoded values that should use SSOT config.
+# Detect hardcoded values that should use SSOT config — TREE SCAN entry point.
 # Used by: .github/workflows/ssot-coverage.yml
 # Reference: docs/developer/HARDCODING_PREVENTION.md
+#
+# #14371: this is now a thin entry point. Every rule lives in
+# scripts/lib/hardcoded-value-rules.sh, which carries the UNION of what the
+# three former detectors implemented — this one, the dormant
+# autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh, and the
+# pre-commit hook. The hook is the other entry point onto the same rules.
+#
+# This one differs from the hook in exactly two ways, and both are entry-point
+# policy rather than rule content:
+#   * it scans a tree rather than the staged file list;
+#   * it always exits 0 on a completed scan, pass or fail. The verdict travels
+#     in the `status` field, which ssot-coverage.yml enforces as-is (#14914);
+#     a non-zero exit from here therefore means the scan did NOT complete, and
+#     that workflow treats it as a failure rather than as a clean result.
+#     Keep those two facts together: making this script exit 1 on violations
+#     would make a real verdict indistinguishable from a crashed run.
+#
+# Usage: detect-hardcoded-values.sh [--json|--report|--audit-baseline|--prune-baseline|--help]
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib/hardcoded-value-rules.sh
+source "${REPO_ROOT}/scripts/lib/hardcoded-value-rules.sh" || {
+    echo "FATAL: cannot load scripts/lib/hardcoded-value-rules.sh — refusing to report clean" >&2
+    exit 1
+}
 
-# Patterns that indicate hardcoded IPs/ports that belong in SSOT config
-IP_PATTERN='172\.16\.168\.[0-9]+'
-PORT_PATTERN='(8443|6379|3000|5432|8080|9090|11434)'
+BASELINE="${REPO_ROOT}/pipeline-scripts/hardcoded_values_baseline.txt"
 
 OUTPUT_FORMAT="text"
 REPORT_MODE=false
+AUDIT_BASELINE=false
+PRUNE_BASELINE=false
 
 for arg in "$@"; do
     case "$arg" in
-        --json)   OUTPUT_FORMAT="json" ;;
-        --report) REPORT_MODE=true ;;
+        --json)            OUTPUT_FORMAT="json" ;;
+        --report)          REPORT_MODE=true ;;
+        --audit-baseline)  AUDIT_BASELINE=true ;;
+        --prune-baseline)  PRUNE_BASELINE=true ;;
         --help)
-            echo "Usage: $0 [--json|--report|--help]"
-            echo "  --json    Output results as JSON"
-            echo "  --report  Show detailed violation report"
+            echo "Usage: $0 [--json|--report|--audit-baseline|--prune-baseline|--help]"
+            echo "  --json            Output results as JSON"
+            echo "  --report          Show the detailed violation report"
+            echo "  --audit-baseline  Fail on baseline entries that match nothing"
+            echo "  --prune-baseline  Rewrite the baseline to what is actually found (REMOVES only)"
             exit 0
             ;;
     esac
 done
 
-TOTAL_VIOLATIONS=0
-SSOT_VIOLATIONS=0
-OTHER_VIOLATIONS=0
-VIOLATION_DETAILS=""
-
-# Directories to scan
+# Directories to scan. autobot-infrastructure (#14316) is in the list because
+# the deployment/ops scripts that actually touch hosts, paths and accounts have
+# no type system or linter enforcing indirection on them.
 SCAN_DIRS=(
     "autobot-backend"
     "autobot-frontend/src"
     "autobot_shared"
     "autobot-slm-backend"
     "autobot-slm-frontend/src"
+    "autobot-infrastructure"
 )
 
-# Files/patterns to exclude from scanning
-EXCLUDE_PATTERNS=(
-    "*.pyc"
-    "node_modules"
-    "dist"
-    "__pycache__"
-    ".git"
-    "pipeline-scripts"
-    "ssot_config.py"
-    "ssot-config.ts"
-    "config.yaml"
-    "*.md"
-    "*.lock"
-    "*.json"
-    "network_constants.py"
-    "AUTOBOT_REFERENCE.md"
-    # SSOT definition files (they ARE the config source)
-    "registry_defaults.py"
-    "ssot_mappings.py"
-    # Test files (assertions verify known config values) — cover both pytest
-    # conventions (test_*.py prefix AND *_test.py suffix) and both TS conventions
-    # (*.spec.ts AND *.test.ts). NOTE: this deliberately stops the design-value
-    # scanner from flagging test files; hardcoded prod values in tests (e.g. an
-    # IP address, GH#11589) are a separate concern for a dedicated check, not a
-    # side-effect of this design-token scanner.
-    "*_test.py"
-    "test_*.py"
-    "*.spec.ts"
-    "*_test.ts"
-    "*.test.ts"
-)
-
-build_exclude_args() {
-    local args=""
-    for pat in "${EXCLUDE_PATTERNS[@]}"; do
-        args="$args --exclude=$pat --exclude-dir=$pat"
-    done
-    echo "$args"
-}
-
-EXCLUDE_ARGS=$(build_exclude_args)
-
-scan_directory() {
-    local dir="$1"
-    local full_path="$REPO_ROOT/$dir"
-
-    if [ ! -d "$full_path" ]; then
-        return
-    fi
-
-    # Scan for hardcoded IPs (SSOT violations)
-    while IFS= read -r line; do
-        if [ -n "$line" ]; then
-            SSOT_VIOLATIONS=$((SSOT_VIOLATIONS + 1))
-            TOTAL_VIOLATIONS=$((TOTAL_VIOLATIONS + 1))
-            VIOLATION_DETAILS="${VIOLATION_DETAILS}SSOT|${line}\n"
-        fi
-    done < <(grep -rn --include="*.py" --include="*.ts" --include="*.vue" \
-        $EXCLUDE_ARGS -E "$IP_PATTERN" "$full_path" 2>/dev/null \
-        | grep -v '#.*noqa' | grep -v '//.*noqa' || true)
-
-    # Scan for hardcoded /home/kali or /opt/autobot paths (other violations)
-    while IFS= read -r line; do
-        if [ -n "$line" ]; then
-            OTHER_VIOLATIONS=$((OTHER_VIOLATIONS + 1))
-            TOTAL_VIOLATIONS=$((TOTAL_VIOLATIONS + 1))
-            VIOLATION_DETAILS="${VIOLATION_DETAILS}OTHER|${line}\n"
-        fi
-    done < <(grep -rn --include="*.py" --include="*.ts" --include="*.vue" \
-        $EXCLUDE_ARGS -E '(/home/kali|/home/autobot)' "$full_path" 2>/dev/null \
-        | grep -v '#.*noqa' | grep -v '//.*noqa' \
-        | grep -v 'AUTOBOT_BASE_DIR' || true)
-}
-
+# Every scan directory must exist before anything is scanned (#14912 review).
+#
+# hv_scan_tree treats a missing directory as a silent no-op (`[ -d "$root" ] ||
+# return 0`), so one moved or renamed entry in SCAN_DIRS yields nothing while
+# the other five still yield hundreds. Reproduced: with autobot-slm-backend
+# absent, a prune run dropped every baseline key under it, exited 0, and printed
+# the same success line a legitimate one-entry cleanup prints — and the audit
+# then passed, because every surviving entry still matched. The empty-scan
+# refusal below never fired, because the scan was not empty.
+#
+# Checked here rather than only in the prune branch, because a partial scan
+# corrupts EVERY mode: --json under-reports the violation counts that
+# ssot-coverage.yml decides pass/fail from, and --audit-baseline reports the
+# unreached directory's entries as STALE, which is a false accusation that
+# sends an author to prune away real records.
 for dir in "${SCAN_DIRS[@]}"; do
-    scan_directory "$dir"
+    [ -d "$REPO_ROOT/$dir" ] && continue
+    echo "FATAL: scan directory '${dir}' does not exist under ${REPO_ROOT}." >&2
+    echo "  Refusing to scan a partial tree: findings under it would be missing," >&2
+    echo "  its baseline entries would look stale, and a prune would delete them." >&2
+    echo "  If the layout changed on purpose, update SCAN_DIRS in this script." >&2
+    exit 1
 done
 
+hv_load_baseline "$BASELINE" || exit 1
+
+RAW=$(mktemp); NEWFILE=$(mktemp)
+trap 'rm -f "$RAW" "$NEWFILE"' EXIT
+(
+    cd "$REPO_ROOT" || exit 1
+    for dir in "${SCAN_DIRS[@]}"; do hv_scan_tree "$dir"; done
+) > "$RAW"
+
+# Redirection, not a pipe: through a pipe hv_partition runs in a subshell and
+# its counters die with it — see the note on the function.
+hv_partition < "$RAW" > "$NEWFILE"
+SUPPRESSED="$HV_SUPPRESSED"
+NEW=$(cat "$NEWFILE")
+
+count_of() { grep -c "$1" "$NEWFILE" || true; }
+TOTAL_VIOLATIONS=$(count_of '^VIOLATION|')
+SSOT_VIOLATIONS=$(count_of '^VIOLATION|ssot|')
+OTHER_VIOLATIONS=$(count_of '^VIOLATION|other|')
+WARNINGS=$(count_of '^WARNING|')
+
+# The verdict, and the ONE place that decides it (#14914).
+#
+# This used to read `[ "$SSOT_VIOLATIONS" -gt 0 ]`, which meant the eight
+# `other`-class rules — AutoBot paths, DB DSNs, URLs, account identities, roles,
+# categories, timeouts, magic numbers — were detected, counted, written into the
+# JSON, printed to the report, and gated on by nothing. Two thirds of the merged
+# rule set was surface with no sink. The merged base carried nine `other`
+# findings under a green `SSOT Configuration Compliance` while that was true.
+#
+# The enforcement axis is SEVERITY, not class:
+#
+#   VIOLATION  blocks. Both classes. `ssot` and `other` differ in what the fix
+#              LOOKS like — an `ssot` finding names the exact config key that
+#              replaces it, an `other` one names the family — not in whether the
+#              value belongs in the source. A hardcoded DSN is not less wrong
+#              for having no `config.vm.*` entry to point at.
+#   WARNING    is advisory and deliberately does not block. There is exactly one
+#              (`offset=0`, _hv_rule_magic_number), and that carve-out predates
+#              this change: detector 3 chose it because the shape is common
+#              enough to be noise. WARNINGS are counted separately and are not
+#              part of TOTAL_VIOLATIONS, so the intent is expressed by the
+#              severity a rule emits, in the rule, rather than by which counter
+#              this line happens to read.
+#
+# Adding an advisory rule therefore means emitting WARNING from it. It does not
+# mean parking a class outside the gate, because that is indistinguishable from
+# the bug above.
 STATUS="pass"
-if [ "$SSOT_VIOLATIONS" -gt 0 ]; then
-    STATUS="fail"
+[ "$TOTAL_VIOLATIONS" -gt 0 ] && STATUS="fail"
+
+if [ "$AUDIT_BASELINE" = true ]; then
+    STALE=$(hv_stale_baseline_entries)
+    if [ -n "$STALE" ]; then
+        STALE_COUNT=$(printf '%s\n' "$STALE" | grep -c . || true)
+        echo "${STALE_COUNT} baseline entr(ies) in ${BASELINE#"$REPO_ROOT"/} no longer match anything:"
+        echo
+        printf '%s\n' "$STALE" | sed 's/^/  STALE  /'
+        echo
+        # #14912: this used to stop at "here is what is wrong". Most of the cost
+        # of this check was never the rule, it was that the person who hit it --
+        # usually the person who just FIXED a hardcoded value -- was not told how
+        # to recover, and the file to edit has nothing to do with their change.
+        echo "You almost certainly just fixed or moved these. Recover with one command:"
+        echo
+        echo "    ./pipeline-scripts/detect-hardcoded-values.sh --prune-baseline"
+        echo
+        echo "then commit the changed baseline. Prune only ever REMOVES entries — it"
+        echo "cannot add a key or raise a count — so it cannot be used to silence a new"
+        echo "finding. That direction is blocked independently by"
+        echo "pipeline-scripts/check_baseline_no_growth.sh."
+        echo
+        echo "Why this blocks rather than warns: an entry naming a path that has moved"
+        echo "exempts nothing today, but silently re-permits the value the moment that"
+        echo "path comes back."
+        exit 1
+    fi
+    echo "hardcoded-values: every baseline entry still matches something"
+    exit 0
+fi
+
+if [ "$PRUNE_BASELINE" = true ]; then
+    # Refuse to write the result of a scan that found nothing. An empty result
+    # and a broken detector are indistinguishable here, and this path REWRITES
+    # the record; the no-growth guard will not object either, because shrinking
+    # is allowed by design.
+    #
+    # The PARTIAL-scan case -- far more dangerous, because the total stays
+    # non-zero and this check never fires -- is handled by the SCAN_DIRS
+    # existence assertion near the top, not here.
+    #
+    # No proportional-loss guard, deliberately: a percentage threshold has no
+    # non-arbitrary value, and it would block the one legitimate large prune
+    # (a genuine sweep that fixes many violations at once) while still passing
+    # any loss that happened to fall under it. The existence check removes the
+    # cause rather than rationing the symptom.
+    TOTAL_FOUND=$(grep -c . "$RAW" || true)
+    if [ "$TOTAL_FOUND" -eq 0 ]; then
+        echo "FATAL: the scan found 0 findings, so pruning would empty the baseline." >&2
+        echo "  A tree carrying ${#HV_BASELINE[@]} baselined findings does not legitimately" >&2
+        echo "  drop to zero. This looks like a broken scan, not a fixed repository —" >&2
+        echo "  refusing to rewrite the baseline from it." >&2
+        exit 1
+    fi
+    PRUNED=$(mktemp)
+    trap 'rm -f "$RAW" "$NEWFILE" "$PRUNED" "${BASELINE}.tmp"' EXIT
+    # LC_ALL=C pins the collation. Nothing is broken today -- the committed
+    # baseline is byte-identical under this runner's C.UTF-8 -- but an unpinned
+    # locale means a different shell or CI image could reorder every line on a
+    # legitimate no-op prune, turning a zero-change run into a whole-file diff.
+    hv_pruned_baseline | LC_ALL=C sort -t'|' -k3,3 -k2,2 -k4,4 > "$PRUNED"
+    KEPT=$(grep -c . "$PRUNED" || true)
+    BEFORE=${#HV_BASELINE[@]}
+    # Header first, then the pruned body. The leading comment block carries the
+    # rules governing this file -- including "this file only ever shrinks" --
+    # and a rewrite that dropped it would delete the reason the file exists.
+    # Taken as the run of leading `#` lines, so it stays correct if the header
+    # is edited later.
+    { awk '/^#/ { print; next } { exit }' "$BASELINE"; cat "$PRUNED"; } > "${BASELINE}.tmp"
+    HEADER_LINES=$(awk '/^#/ { c++; next } { exit } END { print c + 0 }' "${BASELINE}.tmp")
+    if [ "$HEADER_LINES" -eq 0 ]; then
+        rm -f "${BASELINE}.tmp"
+        echo "FATAL: refusing to write a baseline with no header — the rules governing" >&2
+        echo "  this file live in it." >&2
+        exit 1
+    fi
+    mv "${BASELINE}.tmp" "$BASELINE"
+    echo "hardcoded-values: baseline pruned — ${BEFORE} key(s) -> ${KEPT} key(s), $((BEFORE - KEPT)) removed"
+    echo "  Removal-only: no key was added and no count raised (hv_pruned_baseline"
+    echo "  iterates existing keys and emits min(baseline, found))."
+    echo "  Review the diff and commit it with the change that fixed the violations."
+    exit 0
 fi
 
 if [ "$OUTPUT_FORMAT" = "json" ]; then
@@ -135,29 +235,32 @@ if [ "$OUTPUT_FORMAT" = "json" ]; then
   "status": "$STATUS",
   "total_violations": $TOTAL_VIOLATIONS,
   "ssot_violations": $SSOT_VIOLATIONS,
-  "other_violations": $OTHER_VIOLATIONS
+  "other_violations": $OTHER_VIOLATIONS,
+  "warnings": $WARNINGS,
+  "baselined": $SUPPRESSED
 }
 ENDJSON
 elif [ "$REPORT_MODE" = true ]; then
     echo "========================================"
     echo " SSOT Hardcoded Value Detection Report"
     echo "========================================"
-    echo ""
+    echo
+    echo "Rules applied:    ${#HV_RULES[@]} (${HV_RULES[*]})"
     echo "Status:           $STATUS"
-    echo "Total violations: $TOTAL_VIOLATIONS"
-    echo "SSOT violations:  $SSOT_VIOLATIONS (have config equivalent)"
-    echo "Other violations: $OTHER_VIOLATIONS"
-    echo ""
-    if [ "$TOTAL_VIOLATIONS" -gt 0 ]; then
-        echo "--- Violations ---"
-        echo -e "$VIOLATION_DETAILS" | while IFS='|' read -r type detail; do
-            if [ -n "$type" ]; then
-                echo "[$type] $detail"
-            fi
+    echo "New violations:   $TOTAL_VIOLATIONS (ssot=$SSOT_VIOLATIONS, other=$OTHER_VIOLATIONS)"
+    echo "New warnings:     $WARNINGS"
+    # Printed on every run, pass or fail: a backlog nobody is reminded of is
+    # indistinguishable from no backlog.
+    echo "Known backlog:    $SUPPRESSED finding(s) baselined, tracked in $HV_BASELINE_ISSUE"
+    echo
+    if [ -n "$NEW" ]; then
+        echo "--- New findings ---"
+        printf '%s\n' "$NEW" | while IFS='|' read -r sev class file lineno value; do
+            [ -n "$sev" ] && echo "[$sev/$class] $file:$lineno  $value"
         done
     fi
 else
-    echo "SSOT Coverage: $STATUS (total=$TOTAL_VIOLATIONS, ssot=$SSOT_VIOLATIONS, other=$OTHER_VIOLATIONS)"
+    echo "SSOT Coverage: $STATUS (new=$TOTAL_VIOLATIONS, ssot=$SSOT_VIOLATIONS, other=$OTHER_VIOLATIONS, baselined=$SUPPRESSED, rules=${#HV_RULES[@]})"
 fi
 
 exit 0

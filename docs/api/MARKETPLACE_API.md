@@ -81,28 +81,18 @@ Authorization: Bearer <token>
       "downloads": 203,
       "rating": 4.7,
       "source_url": "https://github.com/mrveiss/AutoBot-AI/tree/Dev_new_gui/plugins/core-plugins/logger-plugin"
-    },
-    {
-      "name": "telemetry-prompt-middleware",
-      "version": "1.0.0",
-      "display_name": "Telemetry Prompt Middleware",
-      "description": "Injects telemetry context into prompts and tracks token usage across sessions.",
-      "author": "mrveiss",
-      "category": "observability",
-      "tags": ["telemetry", "prompts", "token-tracking"],
-      "entry_point": "plugins.core_plugins.telemetry_prompt_middleware.main",
-      "dependencies": [],
-      "hooks": ["on_prompt_build", "on_completion"],
-      "downloads": 119,
-      "rating": 4.1,
-      "source_url": "https://github.com/mrveiss/AutoBot-AI/tree/Dev_new_gui/plugins/core-plugins/telemetry-prompt-middleware"
     }
   ],
-  "total": 2,
+  "total": 1,
   "category": "observability",
   "sort_by": "rating"
 }
 ```
+
+> `telemetry-prompt-middleware` is not in the catalog. It is built-in
+> middleware (`autobot-backend/middleware/builtin/telemetry_prompt_middleware.py`),
+> unconditionally registered by `initialization.lifespan._init_builtin_extensions`
+> — not a plugin a user installs or uninstalls (#14280).
 
 **Response fields**
 

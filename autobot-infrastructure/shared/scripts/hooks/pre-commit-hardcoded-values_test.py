@@ -17,13 +17,27 @@ on exit code + output.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-hardcoded-values"
+
+
+def _test_git_env() -> dict[str, str]:
+    """#15273/#15246: env for every git subprocess this suite spawns.
+
+    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    GIT_DIR pointing at the worktree it is pushing (every checkout here is
+    one), and an unscrubbed `git init`/`git add`/`git diff --cached` in a
+    fixture then operates on THAT repository instead of tmp_path's --
+    reproduced: it staged ~20 bogus entries into the real worktree and
+    overwrote two tracked files' index blobs with 1-line test content.
+    """
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
 
 
 def _run_hook_with_staged(tmp_path: Path, files: dict[str, str]) -> subprocess.CompletedProcess:
@@ -32,20 +46,25 @@ def _run_hook_with_staged(tmp_path: Path, files: dict[str, str]) -> subprocess.C
 
     files: relative path -> file content
     """
-    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.email", "test@test"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
+    env = _test_git_env()
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True, env=env)
+    subprocess.run(["git", "config", "user.email", "test@test"], cwd=tmp_path, check=True, env=env)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True, env=env)
     for rel, content in files.items():
         path = tmp_path / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-        subprocess.run(["git", "add", rel], cwd=tmp_path, check=True)
+        subprocess.run(["git", "add", rel], cwd=tmp_path, check=True, env=env)
 
+    # Same scrub: the hook itself runs `git diff --cached` against
+    # tmp_path, and an inherited GIT_DIR would point it at the real
+    # worktree's staged set instead.
     return subprocess.run(
         ["bash", str(HOOK_PATH)],
         cwd=tmp_path,
         capture_output=True,
         text=True,
+        env=env,
     )
 
 
@@ -151,13 +170,26 @@ class TestAllowlistedContexts:
         # has a clear regression to flip.
         assert result.returncode == 0
 
-    def test_allows_yaml_files(self, tmp_path: Path) -> None:
-        # Hook only filters .py/.ts/.vue — YAML/JSON pass through untouched
+    def test_blocks_yaml_files_since_the_rule_sets_merged(self, tmp_path: Path) -> None:
+        """#14371: YAML is in scope now, and this is the gap that closed.
+
+        This hook used to filter to .py/.ts/.vue/.js, so an Ansible playbook or
+        a deployment manifest carrying a raw fleet address passed untouched.
+        The CI tree scanner had covered .sh/.yml/.yaml since #14316 —
+        specifically because that is where hardcoded hosts, paths and accounts
+        actually get typed — and that coverage is part of the merged rule set
+        rather than something traded away for it.
+
+        The assertion is inverted from the version that pinned the gap: a
+        merge that keeps every rule has to change the outcome here, and a test
+        still asserting the old outcome would hide the merge failing to.
+        """
         result = _run_hook_with_staged(
             tmp_path,
             {"deploy.yaml": 'host: "172.16.168.23"\n'},
         )
-        assert result.returncode == 0
+        assert result.returncode != 0
+        assert "172.16.168.23" in result.stdout
 
     def test_allows_markdown_files(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
@@ -167,6 +199,47 @@ class TestAllowlistedContexts:
             },
         )
         assert result.returncode == 0
+
+
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
+class TestRepoTestsSupportModuleExemption:
+    """#15273: a test-SUPPORT module under repo_tests/ (not itself named
+    *_test.py) gets the same exemption the filename rule already grants its
+    siblings -- scoped to the DIRECTORY so production code keeps exactly the
+    exemption it had before and no more."""
+
+    _URL = 'http://backend.test:9999'
+
+    def test_allows_literal_in_repo_tests_support_module(self, tmp_path: Path) -> None:
+        # repo_tests/sdk_request_shared.py (#15265): a non-test-named helper
+        # module, collected by nothing, imported only by *_test.py siblings.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"repo_tests/sdk_request_shared.py": f'_BASE = "{self._URL}"\n'},
+        )
+        assert result.returncode == 0, f"repo_tests/ support module should be exempt:\n{result.stdout}"
+
+    def test_blocks_same_literal_in_production_code(self, tmp_path: Path) -> None:
+        # The identical literal, in a non-test-named file OUTSIDE repo_tests/,
+        # must still be flagged -- proves the new exemption is scoped to the
+        # directory and did not loosen the filename rule generally.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"autobot-backend/sdk_request_shared.py": f'_BASE = "{self._URL}"\n'},
+        )
+        assert result.returncode != 0
+        assert self._URL in result.stdout
+
+    def test_does_not_match_a_directory_merely_containing_the_substring(self, tmp_path: Path) -> None:
+        # `not_repo_tests/` and `repo_tests_archive/` must NOT be swept in by
+        # a loose substring match -- the exemption is anchored on the exact
+        # path segment `repo_tests/`.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"not_repo_tests/sdk_request_shared.py": f'_BASE = "{self._URL}"\n'},
+        )
+        assert result.returncode != 0
+        assert self._URL in result.stdout
 
 
 @pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
@@ -289,10 +362,78 @@ class TestMagicNumbers:
         )
         assert result.returncode == 0
 
+    # Issue #14048: same call-argument blind spot fixed for
+    # check_hardcoded_categories in #14005 — `d.get("limit", 10)` has no
+    # `=`/`:` between the field name and the default, so the keyword-style
+    # regex alone never matches. One test per magic-number pattern the
+    # call-argument alternative was added to.
+
+    def test_blocks_call_argument_limit_10(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def c(d):\n    return d.get("limit", 10)\n'},
+        )
+        assert result.returncode != 0
+        assert "10" in result.stdout
+
+    def test_blocks_call_argument_page_size_50(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def e(d):\n    return d.get("page_size", 50)\n'},
+        )
+        assert result.returncode != 0
+        assert "50" in result.stdout
+
+    def test_blocks_call_argument_limit_100(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def f(d):\n    return d.get("limit", 100)\n'},
+        )
+        assert result.returncode != 0
+        assert "100" in result.stdout
+
+    def test_blocks_call_argument_max_results_5(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def g(d):\n    return d.get("max_results", 5)\n'},
+        )
+        assert result.returncode != 0
+        assert "5" in result.stdout
+
+    def test_allows_call_argument_unrelated_key(self, tmp_path: Path) -> None:
+        # Ordinary code: neither the key nor the default is one of the
+        # limit/page_size/max_results/batch literals the rule targets.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def h(d):\n    return d.get("count", 10)\n'},
+        )
+        assert result.returncode == 0
+
+    def test_allows_call_argument_using_query_defaults(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/q.py": (
+                    "from constants import QueryDefaults\n"
+                    'def i(d):\n    return d.get("limit", QueryDefaults.DEFAULT_SEARCH_LIMIT)\n'
+                ),
+            },
+        )
+        assert result.returncode == 0
+
 
 @pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestHardcodedRoles:
-    """check_hardcoded_roles: blocks `role="user"` literals."""
+    """check_hardcoded_roles: blocks `role="user"` literals.
+
+    Issue #14048: shares the same two bugs #14005 fixed for
+    check_hardcoded_categories — the keyword-style regex is blind to the
+    call-argument shape (`d.get("role", "user")`, no `=`/`:` between key and
+    default), and the quote class `["\\x27]` is not "double or single quote"
+    inside a POSIX bracket expression (backslash has no special meaning
+    there), so it never matched an apostrophe and every single-quoted role
+    literal silently passed.
+    """
 
     def test_blocks_hardcoded_role_string(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
@@ -313,15 +454,134 @@ class TestHardcodedRoles:
         )
         assert result.returncode == 0
 
+    def test_blocks_call_argument(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/chat.py": 'def a(msg):\n    return msg.get("role", "user")\n'},
+        )
+        assert result.returncode != 0
+        assert "user" in result.stdout
+
+    def test_blocks_single_quoted_keyword_style(self, tmp_path: Path) -> None:
+        # Regression for the quote-class bug: `["\x27]` matched one of the
+        # five literal characters ", \, x, 2, 7 — never an apostrophe.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/chat.py": "msg = {'role': 'user', 'content': 'hi'}\n"},
+        )
+        assert result.returncode != 0
+        assert "user" in result.stdout
+
+    def test_blocks_single_quoted_call_argument(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/chat.py": "def a(msg):\n    return msg.get('role', 'user')\n"},
+        )
+        assert result.returncode != 0
+        assert "user" in result.stdout
+
+    def test_allows_unrelated_key_in_call_argument(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/chat.py": 'ids = [doc.get("id", "unknown_id") for doc in docs]\n'},
+        )
+        assert result.returncode == 0
+
+    def test_allows_jsdoc_block_comment_continuation(self, tmp_path: Path) -> None:
+        # Same false-positive class caught for categories in review of
+        # #14005: fixing the quote class surfaces `*`-prefixed JSDoc
+        # continuation lines unless the comment skip also covers them.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/q.ts": ("/**\n" " * role: 'user'\n" " */\n" "export const x = 1\n"),
+            },
+        )
+        assert result.returncode == 0
+
+    def test_allows_typescript_string_literal_union_type(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/types.ts": ("export interface Options {\n" "  role?: 'user' | 'assistant' | 'system'\n" "}\n"),
+            },
+        )
+        assert result.returncode == 0
+
 
 @pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestHardcodedCategories:
-    """check_hardcoded_categories: blocks `category="general"` literals."""
+    """check_hardcoded_categories: blocks `category="general"` literals.
 
-    def test_blocks_hardcoded_category_string(self, tmp_path: Path) -> None:
+    Issue #14005: the rule catches "keyword-style" shapes (an identifier bound
+    to the literal with `=`/`:`) but was blind to the "call-argument" shape —
+    a STRING-LITERAL key followed by a positional default, e.g.
+    ``doc.get("category", "general")`` — because there is no `=`/`:` between
+    the field name and the value in that shape. It doesn't matter whether that
+    call sits inside a comprehension or not; the missing operator is the gap,
+    not the comprehension. One test per shape the rule intends to catch.
+    """
+
+    def test_blocks_plain_assignment(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'category = "general"\n'},
+        )
+        assert result.returncode != 0
+        assert "general" in result.stdout
+
+    def test_blocks_dict_literal_value(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
             {"src/q.py": 'q = {"category": "general"}\n'},
+        )
+        assert result.returncode != 0
+        assert "general" in result.stdout
+
+    def test_blocks_function_default(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def search(category="general"):\n    pass\n'},
+        )
+        assert result.returncode != 0
+        assert "general" in result.stdout
+
+    def test_blocks_call_argument(self, tmp_path: Path) -> None:
+        # #14005 reproduction, line 4 of the issue — already caught before the
+        # fix because of the surrounding `category = ` assignment. Kept as a
+        # standalone call-argument case with no assignment wrapper at all.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'def b(req):\n    return req.get("category", "general")\n'},
+        )
+        assert result.returncode != 0
+        assert "general" in result.stdout
+
+    def test_blocks_literal_inside_comprehension(self, tmp_path: Path) -> None:
+        # #14005 reproduction, line 2 of the issue — the exact case that was
+        # missed: same literal, same meaning, invisible only because it sits
+        # inside a `set(... for ...)` comprehension rather than a plain
+        # assignment.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/q.py": ("def a(docs):\n" '    return len(set(doc.get("category", "general") for doc in docs))\n'),
+            },
+        )
+        assert result.returncode != 0
+        assert "general" in result.stdout
+
+    def test_blocks_single_quoted_call_argument(self, tmp_path: Path) -> None:
+        # Regression for review of #14005: `["\x27]` in a POSIX bracket
+        # expression is NOT "double or single quote" — backslash has no
+        # special meaning inside `[...]` under GNU grep, so that class only
+        # ever matched one of the five literal characters ", \, x, 2, 7 and
+        # never an apostrophe. Every single-quoted literal silently passed
+        # both alternatives. Shape taken verbatim from the real miss found by
+        # the repo-wide audit: autobot-backend/agents/kb_librarian/librarian.py:50.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": "def c(tool_info):\n    return f\"- Category: {tool_info.get('category', 'general')}\"\n"},
         )
         assert result.returncode != 0
         assert "general" in result.stdout
@@ -331,6 +591,73 @@ class TestHardcodedCategories:
             tmp_path,
             {
                 "src/q.py": ("from constants import CategoryDefaults\n" 'q = {"category": CategoryDefaults.GENERAL}\n'),
+            },
+        )
+        assert result.returncode == 0
+
+    def test_allows_unrelated_key_in_comprehension(self, tmp_path: Path) -> None:
+        # Ordinary code: neither the key nor the default is one of the
+        # category/mode literals the rule targets — must stay unflagged so
+        # the widened call-argument pattern doesn't turn into a blanket
+        # "any .get() with two string args" false positive.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'ids = [doc.get("id", "unknown_id") for doc in docs]\n'},
+        )
+        assert result.returncode == 0
+
+    def test_allows_matching_pair_outside_a_get_call(self, tmp_path: Path) -> None:
+        # The call-argument alternative is anchored to `.get(` so a
+        # comma-joined pair of matching string literals elsewhere — a tuple
+        # literal, an assertion — doesn't false-positive just because the
+        # vocabulary happens to line up.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/q.py": 'CATEGORIES = ("category", "general")\n'},
+        )
+        assert result.returncode == 0
+
+    def test_allows_jsdoc_block_comment_continuation(self, tmp_path: Path) -> None:
+        # Regression from the repo-wide audit (review of #14005): fixing the
+        # quote class to actually match single-quoted literals surfaced
+        # `*`-prefixed JSDoc continuation lines — the hook's comment skip
+        # only recognized `#`/`//` prefixes, not `*` block-comment
+        # continuations. Deliberately a SINGLE quoted value (no ` | `) so
+        # this test exercises the comment skip alone, not the union-type
+        # skip below — a mutation dropping the `\*` comment skip must fail
+        # THIS test independent of the union-type one.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/q.ts": ("/**\n" " * mode: 'general'\n" " */\n" "export const x = 1\n"),
+            },
+        )
+        assert result.returncode == 0
+
+    def test_allows_typescript_string_literal_union_type(self, tmp_path: Path) -> None:
+        # Same audit finding: `mode?: 'semantic' | 'keyword' | 'hybrid' |
+        # 'auto'` is a TS union-type annotation enumerating accepted values,
+        # not a hardcoded default assignment — must stay unflagged.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/types.ts": (
+                    "export interface Options {\n" "  mode?: 'semantic' | 'keyword' | 'hybrid' | 'auto'\n" "}\n"
+                ),
+            },
+        )
+        assert result.returncode == 0
+
+    def test_allows_comprehension_using_category_defaults(self, tmp_path: Path) -> None:
+        # Same call-argument shape as the reproduction, but the default is
+        # already the SSOT constant — must stay unflagged.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {
+                "src/q.py": (
+                    "from constants import CategoryDefaults\n"
+                    'cats = [doc.get("category", CategoryDefaults.GENERAL) for doc in docs]\n'
+                ),
             },
         )
         assert result.returncode == 0
@@ -366,9 +693,11 @@ class TestHardcodedModelNames:
     ``qwen3.5:9b``, ``nomic-embed-text:latest``, ``gemma2:2b``, ``phi3:mini``,
     ``mistral:7b-instruct``, ``dolphin-llama3:8b``.
 
-    Anything outside that list is silently allowed — including current-gen
-    models like ``qwen3:8b`` (no ``.5`` suffix). Documented false-negative;
-    keep the deny list in sync with whatever models are actively used.
+    #14371: the table is no longer the whole rule. It still supplies the
+    precise config-key suggestion for a known model, but the merged rule set
+    also carries the generic ``(llama3|dolphin|openchat|gemma|phi|deepseek|
+    qwen)…:<N>b`` regex from the dormant third detector, so a model the table
+    has not heard of is caught too.
     """
 
     def test_blocks_hardcoded_qwen35_model_string(self, tmp_path: Path) -> None:
@@ -380,15 +709,23 @@ class TestHardcodedModelNames:
         assert result.returncode != 0
         assert "qwen3.5:9b" in result.stdout
 
-    def test_allows_unlisted_model_documented_false_negative(self, tmp_path: Path) -> None:
-        # #6786 regression target: the model_pattern is a hardcoded allowlist
-        # (model names that get fenced); models added later (qwen3:8b, etc.)
-        # silently pass. Flip the assertion when the model_pattern is generalized.
+    def test_blocks_an_unlisted_model_now_that_the_generic_rule_is_in(self, tmp_path: Path) -> None:
+        """#6786's regression target, flipped by #14371 exactly as it asked.
+
+        The explicit deny list is an allowlist by another name: a model added
+        after it was written (``qwen3:8b``, no ``.5``) passed silently. The
+        dormant third detector carried a GENERIC tag regex that would have
+        caught it, and nothing ever invoked that detector. Merging the rule
+        sets brings the generic rule in alongside the explicit table, so the
+        table still supplies the precise config-key suggestion and the regex
+        catches what the table has not heard of yet.
+        """
         result = _run_hook_with_staged(
             tmp_path,
             {"src/llm.py": 'MODEL = "qwen3:8b"\n'},
         )
-        assert result.returncode == 0
+        assert result.returncode != 0
+        assert "qwen3:8b" in result.stdout
 
     def test_allows_model_via_config_llm(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
@@ -438,6 +775,24 @@ class TestHardcodedTimeouts:
         # rather than the test being deleted.
         assert result.returncode in (0, 1), "Hook should produce either pass or violation, not error"
 
+    def test_blocks_call_argument(self, tmp_path: Path) -> None:
+        # Issue #14048: same call-argument blind spot fixed for
+        # check_hardcoded_categories in #14005 — `d.get("timeout", 30)` has
+        # no `=`/`:` between the field name and the default.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/api.py": 'def b(d):\n    return d.get("timeout", 30)\n'},
+        )
+        assert result.returncode != 0
+        assert "30" in result.stdout
+
+    def test_allows_call_argument_unrelated_key(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"src/api.py": 'def c(d):\n    return d.get("retry_count", 30)\n'},
+        )
+        assert result.returncode == 0
+
     def test_allows_timeout_via_config(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
@@ -450,3 +805,41 @@ class TestHardcodedTimeouts:
             },
         )
         assert result.returncode == 0
+
+
+# === GH#14151: fails closed when git itself cannot answer ===
+
+
+def _git(repo, *args):
+    return subprocess.run(
+        ["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env()
+    )
+
+
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
+class TestFailsClosedOnGitFailure:
+    """GH#14151: get_staged_files()'s former blanket `|| true` masked BOTH
+    "the filters matched nothing" (normal) and "git diff --cached itself
+    failed" (e.g. a corrupted index) identically — this hook's own opening
+    banner already referenced an unbound color variable under `set -u`
+    (independently closing the missing-lib case pre-fix), but a git
+    failure produced no such reference and reported clean with a
+    genuinely staged violation present. Reproduced with a corrupted
+    .git/index, mirroring #14150's fixed hooks.
+    """
+
+    def test_a_git_failure_does_not_report_clean(self, tmp_path: Path) -> None:
+        _git(tmp_path, "init", "--quiet")
+        _git(tmp_path, "config", "user.email", "test@test")
+        _git(tmp_path, "config", "user.name", "test")
+        bad = tmp_path / "src" / "bad.py"
+        bad.parent.mkdir(parents=True, exist_ok=True)
+        bad.write_text('IP = "172.16.168.21"\n', encoding="utf-8")
+        _git(tmp_path, "add", "src/bad.py")
+        # Corrupt the index so git errors rather than returning an empty answer.
+        (tmp_path / ".git" / "index").write_text("garbage", encoding="utf-8")
+
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH)], cwd=tmp_path, capture_output=True, text=True, env=_test_git_env()
+        )
+        assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"

@@ -1,6 +1,7 @@
 ---
 name: conversation-compacter
 description: Compacts long conversations into ~300 token summaries preserving critical context, todos, file paths, and decisions. Use when approaching 150k+ tokens.
+model: haiku
 tools: Read, Bash
 ---
 

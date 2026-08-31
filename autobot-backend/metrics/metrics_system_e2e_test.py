@@ -93,7 +93,7 @@ async def test_workflow_metrics():
         print(f"  Success rate: {final_stats.success_rate:.1f}%")  # noqa: print
         print(f"  Steps completed: {final_stats.completed_steps}/{final_stats.total_steps}")  # noqa: print
 
-    return True
+    return
 
 
 async def test_system_monitoring():
@@ -162,7 +162,7 @@ async def test_system_monitoring():
         print(f"  Memory avg: {summary['system']['memory']['avg_percent']:.1f}%")  # noqa: print  # noqa: print
         print(f"  Data points: {summary['data_points']}")  # noqa: print
 
-    return True
+    return
 
 
 async def test_metrics_api_integration():
@@ -199,7 +199,7 @@ async def test_metrics_api_integration():
     except Exception as e:
         print(f"⚠️  API test failed: {e}")  # noqa: print
 
-    return True
+    return
 
 
 async def main():

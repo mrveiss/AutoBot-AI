@@ -7,6 +7,7 @@ Test suite for threat_detection.py refactoring
 Verifies backward compatibility and Feature Envy fixes
 """
 
+import json
 import tempfile
 from collections import deque
 from datetime import datetime, timedelta
@@ -19,6 +20,7 @@ import pytest
 pytest.importorskip("sklearn", reason="scikit-learn not installed — optional ML dep")
 
 from autobot_shared.time_utils import now_utc, utc_timestamp  # noqa: E402
+from constants.path_constants import PathConstants  # noqa: E402
 from security.enterprise.threat_detection import (  # noqa: E402
     AnalysisContext,
     EventHistory,
@@ -669,3 +671,210 @@ class TestAnalyzerPositiveDetection:
         context = self._context(file_signatures=[{"extension": [".exe"]}])
 
         assert await MaliciousFileAnalyzer().analyze(event, context) is None
+
+
+# ---------------------------------------------------------------------------
+# #14159: UserProfile storage moved from pickle.load()/dump() to a
+# schema-validated JSON format. Pickle on a bridge-writable file is arbitrary
+# code execution; these tests pin the JSON round trip, the validate-or-skip
+# behavior, and the security property that the legacy .pkl is never read.
+# ---------------------------------------------------------------------------
+
+
+class TestUserProfileJsonSerialization:
+    """UserProfile.to_dict()/from_dict() replace pickle for this dataclass."""
+
+    def test_round_trip_preserves_set_and_datetime_types(self):
+        """A ``set`` stays a ``set`` and a ``datetime`` stays a ``datetime``.
+
+        JSON has no set type -- a naive ``json.dumps``/``json.loads`` round
+        trip would silently turn ``typical_ips`` into a list. That silent
+        type change is exactly the defect ``from_dict`` exists to prevent.
+        """
+        original = UserProfile(
+            user_id="alice",
+            typical_ips={"10.0.0.1", "10.0.0.2", "10.0.0.3"},
+            last_updated=now_utc().replace(microsecond=0),
+        )
+
+        # Simulate an actual save->load through the JSON store.
+        payload = json.loads(json.dumps(original.to_dict()))
+        restored = UserProfile.from_dict(payload)
+
+        assert restored is not None
+        assert isinstance(restored.typical_ips, set)
+        assert restored.typical_ips == original.typical_ips
+        assert isinstance(restored.last_updated, datetime)
+        assert restored.last_updated == original.last_updated
+        assert restored.user_id == original.user_id
+
+    def test_from_dict_skips_malformed_entries_without_raising(self):
+        """A hand-edited/corrupt entry degrades to ``None``, never an exception."""
+        assert UserProfile.from_dict({"user_id": "bob", "typical_ips": "not-a-list"}) is None
+        assert UserProfile.from_dict({"user_id": ""}) is None
+        assert UserProfile.from_dict({}) is None
+        assert UserProfile.from_dict("not-a-dict") is None
+        assert UserProfile.from_dict(["also", "not", "a", "dict"]) is None
+        assert UserProfile.from_dict({"user_id": "carol", "last_updated": "not-a-timestamp"}) is None
+
+    def test_from_dict_accepts_a_minimal_valid_entry(self):
+        """Only ``user_id`` is required; the rest fall back to field defaults."""
+        profile = UserProfile.from_dict({"user_id": "dave"})
+
+        assert profile is not None
+        assert profile.user_id == "dave"
+        assert profile.typical_ips == set()
+        assert isinstance(profile.last_updated, datetime)
+
+
+class TestEngineModuleDoesNotImportPickle:
+    """#14159 AC: the ``# nosec B301`` suppression is gone with pickle.load()."""
+
+    def test_pickle_is_not_imported_by_the_engine_module(self):
+        from security.enterprise.threat_detection import engine as engine_module
+
+        assert not hasattr(engine_module, "pickle")
+
+
+class TestThreatDetectionEngineProfileStorageJson:
+    """#14159: the engine's profile load/save path is JSON-only."""
+
+    @pytest.fixture
+    def engine_with_isolated_storage(self, tmp_path, monkeypatch):
+        """A ThreatDetectionEngine with profile storage under ``tmp_path``.
+
+        ``PathConstants.DATA_DIR`` is a class attribute that
+        ``_initialize_profile_storage`` resolves through
+        ``PATH.get_data_path(...)`` -- patching it here (restored
+        automatically by ``monkeypatch``) isolates the engine's profile
+        store from the real repo data directory for the duration of the
+        test.
+        """
+        monkeypatch.setattr(PathConstants, "DATA_DIR", tmp_path)
+        config_path = str(tmp_path / "threat_detection.yaml")
+        return ThreatDetectionEngine(config_path=config_path)
+
+    def test_profile_storage_path_is_json_not_pickle(self, engine_with_isolated_storage):
+        engine = engine_with_isolated_storage
+
+        assert engine.profile_storage_path.suffix == ".json"
+        assert engine.profile_storage_path.name == "user_profiles.json"
+
+    def test_loader_does_not_read_a_pkl_file_even_when_present_next_to_the_json(self, engine_with_isolated_storage):
+        """The security property under test: no pickle deserialization, ever.
+
+        Writes bytes to the legacy ``.pkl`` path that are not a valid pickle
+        stream. If the loader still called ``pickle.load()`` on that path,
+        this would raise ``pickle.UnpicklingError`` (or similar). It must
+        not, because the loader reads the JSON path exclusively and never
+        opens the ``.pkl`` at all.
+        """
+        engine = engine_with_isolated_storage
+        engine._legacy_profile_storage_path.write_bytes(b"not-a-valid-pickle-stream-at-all")
+
+        valid_profile = UserProfile(user_id="carol", typical_ips={"10.0.0.5"})
+        engine.profile_storage_path.write_text(json.dumps({"carol": valid_profile.to_dict()}), encoding="utf-8")
+
+        engine._load_user_profiles()  # must not raise
+
+        assert set(engine.user_profiles) == {"carol"}
+        assert engine.user_profiles["carol"].typical_ips == {"10.0.0.5"}
+        # Never deleted -- no data loss on update.
+        assert engine._legacy_profile_storage_path.exists()
+        assert engine._legacy_profile_storage_path.read_bytes() == b"not-a-valid-pickle-stream-at-all"
+
+    def test_loader_skips_a_malformed_entry_and_loads_the_rest(self, engine_with_isolated_storage):
+        engine = engine_with_isolated_storage
+        valid_profile = UserProfile(user_id="dave", typical_ips={"10.0.0.9"})
+        store = {
+            "dave": valid_profile.to_dict(),
+            "corrupt": {"user_id": "corrupt", "typical_ips": "not-a-list"},
+        }
+        engine.profile_storage_path.write_text(json.dumps(store), encoding="utf-8")
+
+        engine._load_user_profiles()  # must not raise
+
+        assert set(engine.user_profiles) == {"dave"}
+
+    def test_loader_starts_empty_when_no_store_exists(self, engine_with_isolated_storage):
+        engine = engine_with_isolated_storage
+
+        assert not engine.profile_storage_path.exists()
+        assert engine.user_profiles == {}
+
+    def test_save_then_load_round_trips_through_the_real_engine_methods(self, engine_with_isolated_storage):
+        """End-to-end through ``_save_user_profiles``/``_load_user_profiles``."""
+        engine = engine_with_isolated_storage
+        engine.user_profiles = {
+            "erin": UserProfile(user_id="erin", typical_ips={"192.168.0.1"}, risk_score=0.9),
+        }
+
+        engine._save_user_profiles()
+        assert engine.profile_storage_path.exists()
+
+        engine.user_profiles = {}
+        engine._load_user_profiles()
+
+        assert set(engine.user_profiles) == {"erin"}
+        restored = engine.user_profiles["erin"]
+        assert restored.typical_ips == {"192.168.0.1"}
+        assert restored.risk_score == pytest.approx(0.9)
+
+
+# --- #14159 review follow-ups -------------------------------------------------
+
+
+def _profile_payload(**overrides):
+    """A minimal valid to_dict() payload, with fields overridden per test."""
+    from security.enterprise.threat_detection.models import UserProfile
+
+    payload = UserProfile(user_id="u1").to_dict()
+    payload.update(overrides)
+    return payload
+
+
+@pytest.mark.parametrize("token", ["NaN", "Infinity", "-Infinity"])
+def test_a_non_finite_risk_score_is_rejected(token):
+    """`json.load` accepts NaN/Infinity by default; the validator must not.
+
+    A NaN risk score makes `is_high_risk()` (`risk_score > 0.7`) evaluate
+    False forever -- a profile that can never be flagged -- and re-saving
+    re-emits the non-standard token, so the store stops being readable by a
+    strict JSON parser. `isinstance(x, float)` is True for NaN, so the type
+    check alone does not catch it.
+    """
+    import json
+
+    from security.enterprise.threat_detection.models import UserProfile
+
+    raw = json.loads('{"user_id": "u1", "risk_score": %s}' % token)
+    assert isinstance(raw["risk_score"], float), "precondition: json parsed it as a float"
+
+    assert UserProfile.from_dict(_profile_payload(risk_score=raw["risk_score"])) is None
+
+
+@pytest.mark.parametrize("field_name", ["baseline_actions", "api_usage_patterns"])
+def test_a_non_finite_metric_value_is_rejected(field_name):
+    """Same trap, in the two float-valued mappings."""
+    import json
+
+    from security.enterprise.threat_detection.models import UserProfile
+
+    nan = json.loads("NaN")
+    assert UserProfile.from_dict(_profile_payload(**{field_name: {"a": nan}})) is None
+
+
+def test_a_whitespace_only_user_id_is_rejected():
+    """A non-empty string is truthy, so `not user_id` lets `"   "` through."""
+    from security.enterprise.threat_detection.models import UserProfile
+
+    assert UserProfile.from_dict(_profile_payload(user_id="   ")) is None
+
+
+def test_a_finite_risk_score_still_loads():
+    """The rejections above must not take ordinary values with them."""
+    from security.enterprise.threat_detection.models import UserProfile
+
+    profile = UserProfile.from_dict(_profile_payload(risk_score=0.9))
+    assert profile is not None and profile.risk_score == 0.9
+    assert profile.is_high_risk()

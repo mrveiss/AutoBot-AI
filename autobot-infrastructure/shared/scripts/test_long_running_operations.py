@@ -27,11 +27,12 @@ import argparse
 import asyncio
 import logging
 import sys
-import os
 from datetime import datetime
 
+from autobot_shared.paths import project_root
+
 # Add AutoBot paths
-sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.append(str(project_root()))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -310,7 +311,9 @@ class LongRunningOperationsDemo:
 
         # Quick indexing operation
         indexing_op = await execute_codebase_indexing(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/src/utils",
+            # #14517: both demo targets were shell placeholders in plain string
+            # literals, so the operations walked directories that cannot exist.
+            str(project_root() / "autobot_shared"),
             self.manager,
             ["*.py"],
         )
@@ -318,7 +321,7 @@ class LongRunningOperationsDemo:
 
         # Test suite operation
         test_op = await execute_comprehensive_test_suite(
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/unit",
+            str(project_root() / "repo_tests"),
             self.manager,
             ["test_*.py"],
         )

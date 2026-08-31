@@ -17,6 +17,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
+import aiohttp
+import numpy as np
+
 logger = logging.getLogger(__name__)
 
 # Add AutoBot to path
@@ -25,7 +28,9 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 from ai_hardware_accelerator import HardwareDevice
 from constants.network_constants import NetworkConstants
 from npu_semantic_search import get_npu_search_engine
-from utils.logging_manager import get_llm_logger
+# #14518: there is no `utils.logging_manager` on this script's path or
+# anywhere in the repo; the canonical logger factory is the shared one.
+from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("npu_performance_measurement")
 

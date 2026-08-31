@@ -1,6 +1,7 @@
 ---
 name: testing-engineer
 description: Testing specialist for AutoBot platform. Use for test strategy, automated testing, E2E workflows, multi-modal testing, NPU validation, and comprehensive quality assurance. Proactively engage for testing complex multi-agent workflows and AutoBot system integration.
+model: sonnet
 tools: Read, Write, Bash, Grep, Glob, mcp__ide__getDiagnostics
 ---
 

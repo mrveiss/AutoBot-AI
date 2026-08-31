@@ -21,6 +21,7 @@ from datetime import timedelta
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.status_enums import SecretType
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from services.credential_read import load_imported_credential
 from services.credential_write import delete_credential_from_vault, mirror_credential_to_vault
@@ -96,9 +97,67 @@ def _token_timeout_s() -> float:
         return 30.0
 
 
-# Lease must outlive the slowest possible refresh, with headroom for the
-# surrounding read/decrypt/write.
-_REFRESH_LOCK_TTL_MS = int(os.getenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", str(int(_token_timeout_s() * 3 * 1000))))
+def _derived_lock_ttl_ms() -> int:
+    """Three token timeouts: the slowest refresh, plus headroom for the
+    surrounding read/decrypt/write."""
+    return int(_token_timeout_s() * 3 * 1000)
+
+
+def _configured_lock_ttl_ms() -> int:
+    """The lease TTL, floored so no environment value can disarm the lock (#14238).
+
+    `os.getenv`'s fallback only applies when the variable is UNSET, so an explicit
+    ``AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS=0`` reached ``LeaderLease(ttl_ms=0)`` — a
+    lease that has already expired, so a losing caller's takeover succeeds
+    immediately and two workers refresh the same token at once. That is the race
+    #13627 added this lock to prevent, and a second refresh can invalidate the
+    token the first just rotated.
+
+    The floor is the **derived** TTL, not the token timeout alone. The lease is
+    held across more than the HTTP call: the response is serialised, written
+    through ``run_in_executor`` to the secrets store, and optionally mirrored to
+    the vault. A provider answering in 29s -- inside the 30s client timeout, so
+    no error and no retry -- would leave a one-timeout lease with nothing left
+    for the write, and it could expire before the commit lands. The losing
+    caller's takeover would then succeed and both would refresh: the #13627 race
+    again, reached through provider latency instead of a hostile config value.
+
+    Consequence, stated plainly: this variable can only ever RAISE the TTL.
+    Lowering it below the derivation is the unsafe direction, and that is the
+    whole point.
+
+    The poll interval below has been floored against the same class of input
+    since it was written; this is the knob where zero has a correctness
+    consequence rather than a performance one.
+    """
+    derived = _derived_lock_ttl_ms()
+    raw = os.getenv("AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS", "").strip()
+    if not raw:
+        return derived
+    try:
+        configured = int(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS=%r is not an integer; using the derived %dms",
+            raw,
+            derived,
+        )
+        return derived
+
+    floor = derived
+    if configured < floor:
+        logger.warning(
+            "AUTOBOT_OAUTH_REFRESH_LOCK_TTL_MS=%d is below the %dms a refresh needs "
+            "(token request timeout plus the store write it is held across). Using %dms.",
+            configured,
+            floor,
+            floor,
+        )
+        return floor
+    return configured
+
+
+_REFRESH_LOCK_TTL_MS = _configured_lock_ttl_ms()
 # A loser must outwait the lease, or it gives up on a refresh still in progress.
 _REFRESH_WAIT_S = max(float(os.getenv("AUTOBOT_OAUTH_REFRESH_WAIT_S", "0")), (_REFRESH_LOCK_TTL_MS / 1000.0) + 5.0)
 # Guarded against 0 from the environment, which would busy-loop the executor.
@@ -285,7 +344,7 @@ class ConnectorCredentialStore:
             None,
             lambda: self._svc.create_secret(
                 name=name,
-                secret_type="connector_oauth_token",  # nosec B106  # SecretType label, not a credential
+                secret_type=SecretType.CONNECTOR_OAUTH_TOKEN.value,
                 value=value,
                 scope="user",
                 created_by=owner_id,
@@ -298,7 +357,7 @@ class ConnectorCredentialStore:
                 owner_id,
                 value,
                 name=name,
-                secret_type="connector_oauth_token",  # nosec B106  # SecretType label, not a credential
+                secret_type=SecretType.CONNECTOR_OAUTH_TOKEN.value,
             )
         return result["id"]
 

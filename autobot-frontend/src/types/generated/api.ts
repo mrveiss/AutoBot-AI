@@ -1004,7 +1004,10 @@ export interface paths {
          * @description Reset the current chat session.
          *
          *     Issue #549: Created to match frontend POST /api/chat/reset
-         *     Issue #665: Refactored to use extracted helpers for message preservation.
+         *     Issue #665: Refactored to use an extracted helper for session clearing.
+         *     Issue #14359: dropped ``keep_system_prompt`` — nothing ever persisted a
+         *     system prompt into a session, so the flag could not change any observable
+         *     outcome. Reset now always clears unconditionally when ``clear_context``.
          */
         post: operations["reset_chat_api_chat_reset_post"];
         delete?: never;
@@ -1494,6 +1497,7 @@ export interface paths {
          * @description Send direct user response to chat (Issue #398: refactored).
          *
          *     Issue #744: Requires authenticated user.
+         *     Issue #13982: and must own the chat — see the ownership check below.
          */
         post: operations["send_direct_chat_response_api_chat_direct_post"];
         delete?: never;
@@ -1586,7 +1590,7 @@ export interface paths {
         };
         /**
          * Dynamic endpoint capability discovery
-         * @description Returns a dynamically derived list of all registered API endpoints, grouped by OpenAPI tag and operation type.  The result is derived from the live FastAPI OpenAPI schema (not hardcoded) and is cached with a 5-minute TTL that resets on route changes.
+         * @description Returns a dynamically derived list of all registered API endpoints, grouped by OpenAPI tag and operation type.  The result is derived from the live FastAPI OpenAPI schema (not hardcoded) and is cached with a 5-minute TTL that resets when the served route table changes.
          */
         get: operations["get_capabilities_api_capabilities_get"];
         put?: never;
@@ -3718,6 +3722,40 @@ export interface paths {
         get: operations["get_device_identity_api_devices_me_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/devices/{device_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Device
+         * @description Soft-revoke one paired device (#14964).
+         *
+         *     Distinct from ``DELETE /{device_id}``, which unpairs by deleting the row.
+         *     Revocation keeps the record — the pairing history and anything referencing
+         *     the device survive — while denying the credential every capability and
+         *     every future authentication. Scoped to one row, so the user's other
+         *     devices are untouched.
+         *
+         *     Takes effect on the **next** handshake: ``validate_device_jwt`` reads this
+         *     per authentication, and the existence cache is invalidated here so there is
+         *     no TTL to wait out. A session already established stays up until it closes;
+         *     a running socket is never re-authenticated.
+         *
+         *     Idempotent — revoking an already-revoked device keeps the original
+         *     ``revoked_at`` rather than moving the recorded time.
+         */
+        post: operations["revoke_device_api_devices__device_id__revoke_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13595,12 +13633,31 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Manual Mcp Tools
-         * @description List available MCP tools provided by the manual bridge.
+         * List All Mcp Tools
+         * @description List all available MCP tools from all bridges (with caching)
          *
-         *     Issue #3287: Man page and documentation lookup tools.
+         *     Returns aggregated list of tools from:
+         *     - knowledge_mcp (knowledge base operations)
+         *     - vnc_mcp (VNC observation)
+         *     - sequential_thinking_mcp (dynamic problem-solving)
+         *     - structured_thinking_mcp (5-stage cognitive framework)
+         *     - filesystem_mcp (secure file operations)
+         *
+         *     Caching (Issue #50):
+         *     - First request fetches from all bridges (~5 HTTP calls)
+         *     - Subsequent requests return cached data (0 HTTP calls)
+         *     - Cache expires after TTL (default: 60 seconds)
+         *
+         *     Response format:
+         *     {
+         *         "total_tools": 25,
+         *         "bridges": 5,
+         *         "tools": [...],
+         *         "cached": true/false,
+         *         "last_updated": "..."
+         *     }
          */
-        get: operations["get_manual_mcp_tools_api_mcp_tools_get"];
+        get: operations["list_all_mcp_tools_api_mcp_tools_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -15845,6 +15902,9 @@ export interface paths {
          * @description List available MCP tools provided by the manual bridge.
          *
          *     Issue #3287: Man page and documentation lookup tools.
+         *     Issue #14586: schemas are ``MCPTool`` instances (the shape every other
+         *     governed bridge uses) so ``mcp_bridge_scan`` can parse them; ``.model_dump()``
+         *     keeps the wire response an unchanged list of dicts.
          */
         get: operations["get_manual_mcp_tools_api_manual_mcp_tools_get"];
         put?: never;
@@ -21920,6 +21980,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/analytics/codebase/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Analyze Impact
+         * @description Return what transitively calls *node_id*.
+         *
+         *     A 200 with ``indexed: false`` rather than a 404 when the graph is missing:
+         *     "the code graph has not been built" is a different answer from "that node
+         *     does not exist", and collapsing them would send an operator hunting for a
+         *     typo in their node id.
+         */
+        get: operations["analyze_impact_api_analytics_codebase_impact_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reporting/report": {
         parameters: {
             query?: never;
@@ -26834,6 +26919,149 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent-terminal/host-selection/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Host Selection
+         * @description Agent requests host selection for SSH action.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     This endpoint creates a pending host selection request that the frontend
+         *     will display to the user. The user selects from available infrastructure
+         *     hosts, and the selection is returned via the /host-selection/{request_id}
+         *     endpoint.
+         *
+         *     Flow:
+         *     1. Agent calls POST /host-selection/request with command/purpose
+         *     2. Backend returns request_id with status="pending_selection"
+         *     3. Frontend shows HostSelectionDialog to user
+         *     4. User selects host and calls POST /host-selection/{request_id}/select
+         *     5. Agent polls GET /host-selection/{request_id} to get selection result
+         */
+        post: operations["request_host_selection_api_agent_terminal_host_selection_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/host-selection/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Host Selection
+         * @description Get the status/result of a host selection request.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     Agent polls this endpoint to check if user has made a selection.
+         *
+         *     Returns:
+         *     - status: "pending_selection", "selected", or "cancelled"
+         *     - If selected: includes host details and connection info
+         */
+        get: operations["get_host_selection_api_agent_terminal_host_selection__request_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/host-selection/{request_id}/select": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Host Selection
+         * @description User submits their host selection.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     Called by frontend when user selects a host from the dialog.
+         *
+         *     Args:
+         *         request_id: The pending selection request ID
+         *         host_id: Selected host ID from secrets
+         *         host_name: Display name of the host
+         *         host: Hostname or IP address
+         *         ssh_port: SSH port number
+         *         username: SSH username
+         *         remember_choice: Whether to use this host for future SSH commands
+         */
+        post: operations["submit_host_selection_api_agent_terminal_host_selection__request_id__select_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/host-selection/{request_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Host Selection
+         * @description User cancels host selection.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     Called by frontend when user closes the dialog without selecting.
+         */
+        post: operations["cancel_host_selection_api_agent_terminal_host_selection__request_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/host-selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Pending Host Selections
+         * @description List all pending host selection requests.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     Frontend uses this to show any pending selection dialogs on page load.
+         */
+        get: operations["list_pending_host_selections_api_agent_terminal_host_selection_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent-terminal/sessions": {
         parameters: {
             query?: never;
@@ -27150,149 +27378,6 @@ export interface paths {
          *     Issue #744: Requires authenticated user.
          */
         get: operations["agent_terminal_info_api_agent_terminal__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection/request": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Request Host Selection
-         * @description Agent requests host selection for SSH action.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     This endpoint creates a pending host selection request that the frontend
-         *     will display to the user. The user selects from available infrastructure
-         *     hosts, and the selection is returned via the /host-selection/{request_id}
-         *     endpoint.
-         *
-         *     Flow:
-         *     1. Agent calls POST /host-selection/request with command/purpose
-         *     2. Backend returns request_id with status="pending_selection"
-         *     3. Frontend shows HostSelectionDialog to user
-         *     4. User selects host and calls POST /host-selection/{request_id}/select
-         *     5. Agent polls GET /host-selection/{request_id} to get selection result
-         */
-        post: operations["request_host_selection_api_agent_terminal_host_selection_request_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection/{request_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Host Selection
-         * @description Get the status/result of a host selection request.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     Agent polls this endpoint to check if user has made a selection.
-         *
-         *     Returns:
-         *     - status: "pending_selection", "selected", or "cancelled"
-         *     - If selected: includes host details and connection info
-         */
-        get: operations["get_host_selection_api_agent_terminal_host_selection__request_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection/{request_id}/select": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Submit Host Selection
-         * @description User submits their host selection.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     Called by frontend when user selects a host from the dialog.
-         *
-         *     Args:
-         *         request_id: The pending selection request ID
-         *         host_id: Selected host ID from secrets
-         *         host_name: Display name of the host
-         *         host: Hostname or IP address
-         *         ssh_port: SSH port number
-         *         username: SSH username
-         *         remember_choice: Whether to use this host for future SSH commands
-         */
-        post: operations["submit_host_selection_api_agent_terminal_host_selection__request_id__select_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection/{request_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Cancel Host Selection
-         * @description User cancels host selection.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     Called by frontend when user closes the dialog without selecting.
-         */
-        post: operations["cancel_host_selection_api_agent_terminal_host_selection__request_id__cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Pending Host Selections
-         * @description List all pending host selection requests.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     Frontend uses this to show any pending selection dialogs on page load.
-         */
-        get: operations["list_pending_host_selections_api_agent_terminal_host_selection_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -27939,6 +28024,26 @@ export interface paths {
          *     p95 latency.  Extracted from monitoring_compat.py (Issue #1283).
          */
         get: operations["get_github_status_api_monitoring_github_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/lifecycle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Memory Lifecycle
+         * @description Read-only view of the memory lifecycle. Never mutates, never 500s.
+         */
+        get: operations["get_memory_lifecycle_api_memory_lifecycle_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -49185,11 +49290,33 @@ export interface paths {
         };
         /**
          * List Cost Events
-         * @description Return per-agent budget spend summary as cost events (GH#8551).
+         * @description Return per-agent budget spend summaries (GH#8551, GH#13617).
          *
-         *     Returns one entry per agent with non-zero spend in the given company.
-         *     A dedicated cost-event store is not yet implemented; this derives the
-         *     data from LLCAgentBudget rows.
+         *     Returns one entry per agent in the given company. A dedicated cost-event
+         *     store is not yet implemented, so this derives from ``LLCAgentBudget``
+         *     rows — which are running totals, not a per-event log.
+         *
+         *     The field names are the ones the client's ``CostEvent`` already declares.
+         *     They previously were not (``ts`` vs ``created_at``, ``cost_usd`` vs
+         *     ``cost``, ``tokens_in``/``tokens_out`` vs ``input_tokens``/
+         *     ``output_tokens``), so every field the dashboard read came back
+         *     ``undefined`` and the view crashed on the first row (GH#13617).
+         *
+         *     What has no source is sent as ``None`` rather than a plausible-looking
+         *     stand-in:
+         *
+         *     * ``created_at`` — ``LLCAgentBudget`` carries no timestamp at all, so
+         *       there is no date to report. Sending "now" would turn a running total
+         *       into a fake event dated today.
+         *     * ``model`` / ``provider`` — a total spans every model an agent used;
+         *       naming one would be wrong. The previous literal ``"unknown"`` read as
+         *       a real model name in the table.
+         *     * ``input_tokens`` / ``output_tokens`` — the split is not stored. The
+         *       previous hardcoded ``0`` claimed an agent had used no tokens; the
+         *       total that *is* known is sent as ``tokens_spent`` instead.
+         *
+         *     ``source`` names what each row actually is, so the client can say so
+         *     rather than presenting totals as a per-event history.
          */
         get: operations["list_cost_events_api_llc_cost_events_get"];
         put?: never;
@@ -49571,6 +49698,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/work-items/executor-rollup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Work Item Executor Rollup
+         * @description Company-wide work-item counts by executor class and status (#13942, #14222).
+         *
+         *     Executor class is derived from the *item's own assignee* — ``assignee_type``
+         *     (typed via ``AssigneeType``, #13937) plus the matching id column, plus (#14222)
+         *     whether that id still resolves to a live member/agent of this company —
+         *     never a new discriminator. There is no ``PersonKind``-style provenance
+         *     derivation here (unlike ``composables/llc/orgPeople.ts``): ``assignee_type``
+         *     is already a backend-typed value, not something only knowable from the
+         *     frontend, so counting it server-side introduces no honesty gap.
+         *
+         *     Grouped in SQL rather than paginated to the frontend and counted there:
+         *     ``GET /work-items`` caps at 500 rows per page, and a company can hold far
+         *     more than that — a client-side count over one page would silently be
+         *     a lie about companies past the cap. ``COUNT(*) ... GROUP BY`` has no such
+         *     ceiling.
+         */
+        get: operations["get_work_item_executor_rollup_api_llc_companies__company_id__work_items_executor_rollup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/process-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Process Nodes
+         * @description Return the workflows this company's roles run (#13963).
+         *
+         *     Company-scoped through the same shared :func:`assert_company_access` guard
+         *     the rest of this router uses, and pinned again in the query itself — the
+         *     role must belong to this company *and* the attachment must, so losing
+         *     either predicate cannot widen the result.
+         *
+         *     Read-only: this composes existing rows and creates nothing.
+         */
+        get: operations["get_process_nodes_api_llc_companies__company_id__process_nodes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/tool-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tool Nodes
+         * @description Return the tools this company's roles carry (#14597).
+         *
+         *     Company-scoped through the same shared :func:`assert_company_access` guard
+         *     the rest of this router uses, and pinned again in the query itself — the
+         *     role must belong to this company *and* the attachment must, so losing
+         *     either predicate cannot widen the result. Mirrors ``get_process_nodes``
+         *     above exactly, for the sibling attachment (tools rather than workflows).
+         *
+         *     Read-only: this composes existing rows and creates nothing.
+         */
+        get: operations["get_tool_nodes_api_llc_companies__company_id__tool_nodes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Company Teams
+         * @description Return the company's teams and their member user ids (#13938).
+         *
+         *     Company-scoped by path parameter through the same shared
+         *     :func:`assert_company_access` guard the rest of the LLC router uses, rather
+         *     than by the ambient org context that ``/teams`` relies on — a platform
+         *     admin viewing another company's Org Chart must see that company's teams,
+         *     not their own.
+         *
+         *     Two queries, both bounded by the company: teams, then the memberships of
+         *     those teams. Soft-deleted teams are excluded, matching every other team
+         *     listing.
+         */
+        get: operations["get_company_teams_api_llc_companies__company_id__teams_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/agents/search": {
         parameters: {
             query?: never;
@@ -49647,6 +49893,172 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/llc/contacts/directory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Directory
+         * @description The shared people directory (#13998).
+         *
+         *     Company OS companies are departments of one real company, and people belong
+         *     to the business rather than to a department — so this takes no company id.
+         *     Authentication is still required; a shared directory is not a public one.
+         */
+        get: operations["list_directory_api_llc_contacts_directory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/contacts/directory/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Duplicate Candidates
+         * @description Groups of contacts sharing a mailbox — suggestions for a human to review.
+         *
+         *     Ids only, and nothing is changed: two people can legitimately share
+         *     ``info@supplier``, so merging is always an explicit act (see below).
+         */
+        get: operations["list_duplicate_candidates_api_llc_contacts_directory_duplicates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/contacts/{company_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Contacts
+         * @description Fold one contact into another, moving its role tenures.
+         *
+         *     Company-scoped because the *authority* to merge is a department admin's,
+         *     even though the directory itself is shared.
+         */
+        post: operations["merge_contacts_api_llc_contacts__company_id__merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/contacts/{company_id}/directory/{contact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete From Directory
+         * @description Remove a person from the shared directory.
+         *
+         *     409, not 400, when they still hold a role: the request is valid and the
+         *     caller is authorised — the obstacle is state elsewhere, and the response
+         *     names which departments still depend on them.
+         */
+        delete: operations["delete_from_directory_api_llc_contacts__company_id__directory__contact_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/contacts/{company_id}/involved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Involved Contacts
+         * @description Contacts on this department's org chart (#13998).
+         *
+         *     Two groups rather than one list: people whose presence a role explains, and
+         *     people carrying the legacy per-company stamp with no role yet. Merging them
+         *     would assert involvement nobody recorded; hiding the second group would make
+         *     people vanish from a department already using them.
+         */
+        get: operations["list_involved_contacts_api_llc_contacts__company_id__involved_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/contacts/{company_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Contacts */
+        get: operations["list_contacts_api_llc_contacts__company_id__get"];
+        put?: never;
+        /** Create Contact */
+        post: operations["create_contact_api_llc_contacts__company_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/contacts/{company_id}/{contact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Contact */
+        get: operations["get_contact_api_llc_contacts__company_id___contact_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Contact
+         * @description Permanently delete the contact — its PII no longer exists at rest afterward.
+         *
+         *     Delegates to :meth:`ContactDirectoryService.delete` (#14464 review) rather
+         *     than ``ContactService.delete``. The directory is shared across companies, so
+         *     a delete here is global — routing it through the same guard as
+         *     ``/{company_id}/directory/{contact_id}`` is what stops a plain member of the
+         *     contact's legacy company from hard-deleting someone who still holds a role
+         *     (and therefore permissions) in a company they were never a member of.
+         */
+        delete: operations["delete_contact_api_llc_contacts__company_id___contact_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Contact */
+        patch: operations["update_contact_api_llc_contacts__company_id___contact_id__patch"];
         trace?: never;
     };
     "/api/llc/agent-hires": {
@@ -49983,6 +50395,281 @@ export interface paths {
          */
         post: operations["dismiss_proposal_api_llc_findings_proposals__proposal_id__dismiss_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Roles */
+        get: operations["list_roles_api_llc_roles__company_id__get"];
+        put?: never;
+        /** Create Role */
+        post: operations["create_role_api_llc_roles__company_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Role */
+        delete: operations["delete_role_api_llc_roles__company_id___role_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Role */
+        patch: operations["update_role_api_llc_roles__company_id___role_id__patch"];
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/holders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Holders
+         * @description Current holders, or the full tenure history when ``include_past`` is set.
+         */
+        get: operations["list_holders_api_llc_roles__company_id___role_id__holders_get"];
+        put?: never;
+        /** Assign Holder */
+        post: operations["assign_holder_api_llc_roles__company_id___role_id__holders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/holders/{assignment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * End Tenure
+         * @description Ends the tenure. The row survives — a DELETE here is not a row deletion.
+         */
+        delete: operations["end_tenure_api_llc_roles__company_id___role_id__holders__assignment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Permissions */
+        get: operations["list_permissions_api_llc_roles__company_id___role_id__permissions_get"];
+        put?: never;
+        /**
+         * Grant Permission
+         * @description Admin-only — the service enforces it, so this route cannot forget to.
+         */
+        post: operations["grant_permission_api_llc_roles__company_id___role_id__permissions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/permissions/{permission}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Permission */
+        delete: operations["revoke_permission_api_llc_roles__company_id___role_id__permissions__permission__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Role Workflows */
+        get: operations["list_role_workflows_api_llc_roles__company_id___role_id__workflows_get"];
+        put?: never;
+        /** Attach Workflow */
+        post: operations["attach_workflow_api_llc_roles__company_id___role_id__workflows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/workflows/{workflow_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Detach Workflow */
+        delete: operations["detach_workflow_api_llc_roles__company_id___role_id__workflows__workflow_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Role Tools */
+        get: operations["list_role_tools_api_llc_roles__company_id___role_id__tools_get"];
+        put?: never;
+        /** Attach Tool */
+        post: operations["attach_tool_api_llc_roles__company_id___role_id__tools_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/tools/{tool_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Detach Tool */
+        delete: operations["detach_tool_api_llc_roles__company_id___role_id__tools__tool_name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Role Credentials
+         * @description Secret ids only — never values. Revoked ones are excluded by default.
+         */
+        get: operations["list_role_credentials_api_llc_roles__company_id___role_id__credentials_get"];
+        put?: never;
+        /** Attach Credential */
+        post: operations["attach_credential_api_llc_roles__company_id___role_id__credentials_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/credentials/{secret_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Detach Credential */
+        delete: operations["detach_credential_api_llc_roles__company_id___role_id__credentials__secret_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/workflows/{workflow_id}/cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Step Cost
+         * @description What this step costs to run, or why it cannot be costed.
+         */
+        get: operations["get_step_cost_api_llc_roles__company_id___role_id__workflows__workflow_id__cost_get"];
+        /**
+         * Set Step Cost Inputs
+         * @description Record how long the step takes and how often it runs.
+         */
+        put: operations["set_step_cost_inputs_api_llc_roles__company_id___role_id__workflows__workflow_id__cost_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/roles/{company_id}/{role_id}/rate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Role Rate
+         * @description The role's hourly rate, or ``null`` when nobody has set one.
+         *
+         *     ``null`` rather than a zero-rate object: a role with no rate cannot have
+         *     its steps costed, which is not the same as its work being free.
+         */
+        get: operations["get_role_rate_api_llc_roles__company_id___role_id__rate_get"];
+        /** Set Role Rate */
+        put: operations["set_role_rate_api_llc_roles__company_id___role_id__rate_put"];
+        post?: never;
+        /**
+         * Clear Role Rate
+         * @description Remove the rate. Every step of this role becomes not costable again.
+         */
+        delete: operations["clear_role_rate_api_llc_roles__company_id___role_id__rate_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -50595,14 +51282,24 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Set Or Clear Coworker
-         * @description Set or clear co-worker on a work item (GH#8230, GH#8516).
+         * Set Coworker
+         * @description Set or clear co-worker fields for a work item (GH#8230, GH#8517, GH#8583, #14168).
          *
-         *     Omit or null co_worker_type to clear the co-worker.
-         *     caller_role is resolved server-side; it is no longer accepted from the
-         *     client (GH#8516: removed to prevent privilege escalation).
+         *     Omit ``co_worker_type`` (or send null) to clear the co-worker.
+         *
+         *     Returns 404 when the work item is not found or belongs to a different
+         *     org (#14168 IDOR guard — checked against the caller's authenticated org,
+         *     never client input), 403 when the caller lacks permission, and 422 for
+         *     invalid co-worker identity values.
+         *
+         *     This used to be two separate routes registered on the same path/method
+         *     (the second, unauthenticated one — ``set_or_clear_coworker`` — was
+         *     unreachable dead code shadowed by this one, but a live landmine: it
+         *     hard-coded ``caller_role="owner"`` and trusted a client-supplied
+         *     ``company_id`` with zero tenant check). Consolidated into one canonical,
+         *     authenticated, tenant-scoped handler (#14168).
          */
-        post: operations["set_or_clear_coworker_api_llc_work_items__work_item_id__coworker_post"];
+        post: operations["set_coworker_api_llc_work_items__work_item_id__coworker_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -52046,6 +52743,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/costs/step-rollup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Step Rollup
+         * @description Monthly cost of the company's process steps, by role and by tool.
+         *
+         *     A sum over what the canvas already shows, from the same
+         *     ``derive_step_cost`` the per-step panel uses — so the two can never
+         *     disagree. Read-only; composes existing rows and creates nothing.
+         *
+         *     A step whose role carries several tools contributes its full cost to each
+         *     of those tools, because "what does this tool cost us to operate" is the
+         *     question being answered. The tool totals therefore do not sum to the role
+         *     totals, by design.
+         */
+        get: operations["step_rollup_api_llc_costs_step_rollup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/workflows/{company_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflows */
+        get: operations["list_workflows_api_llc_workflows__company_id__get"];
+        put?: never;
+        /** Create Workflow */
+        post: operations["create_workflow_api_llc_workflows__company_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/workflows/{company_id}/{workflow_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workflow */
+        get: operations["get_workflow_api_llc_workflows__company_id___workflow_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Workflow */
+        delete: operations["delete_workflow_api_llc_workflows__company_id___workflow_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Workflow Status */
+        patch: operations["update_workflow_status_api_llc_workflows__company_id___workflow_id__patch"];
+        trace?: never;
+    };
     "/api/llc/health": {
         parameters: {
             query?: never;
@@ -52343,81 +53106,6 @@ export interface paths {
         get: operations["export_memory_api_memory_privacy_export_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/mcp/lookup_man_page": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Mcp Lookup Man Page
-         * @description MCP tool: Fetch a man page for a command.
-         *
-         *     Results are cached in Redis (knowledge database) with a 24-hour TTL.
-         *     When MCP / man is unavailable the response includes success=False and
-         *     a human-readable error rather than raising HTTP 500.
-         *
-         *     Issue #3287.
-         */
-        post: operations["mcp_lookup_man_page_api_mcp_lookup_man_page_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/mcp/search_man_pages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Mcp Search Man Pages
-         * @description MCP tool: Search the system documentation index.
-         *
-         *     Delegates to `man -k <query>` and returns structured results.
-         *     Gracefully returns an empty list when `man` is not available.
-         *
-         *     Issue #3287.
-         */
-        post: operations["mcp_search_man_pages_api_mcp_search_man_pages_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/mcp/get_doc_index": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Mcp Get Doc Index
-         * @description MCP tool: Query the cached documentation index.
-         *
-         *     First checks Redis; falls back to man -k when cache is cold.
-         *
-         *     Issue #3287.
-         */
-        post: operations["mcp_get_doc_index_api_mcp_get_doc_index_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -56457,9 +57145,44 @@ export interface components {
         };
         /**
          * AnalyticsPerformanceMetricsResponse
-         * @description Response for GET /analytics/performance/metrics — opaque collector result.
+         * @description Response for GET /analytics/performance/metrics.
+         *
+         *     Every block is written by ``AnalyticsController.collect_performance_metrics``
+         *     except ``historical_context``, which the route appends, and ``error``, which
+         *     replaces the rest when collection raises.
          */
         AnalyticsPerformanceMetricsResponse: {
+            /** System Performance */
+            system_performance?: {
+                [key: string]: unknown;
+            } | null;
+            /** Api Performance */
+            api_performance?: {
+                [key: string]: unknown;
+            } | null;
+            /** Advanced Metrics */
+            advanced_metrics?: {
+                [key: string]: unknown;
+            } | null;
+            /** Detailed Metrics */
+            detailed_metrics?: {
+                [key: string]: unknown;
+            } | null;
+            /** Hardware Performance */
+            hardware_performance?: {
+                [key: string]: unknown;
+            } | null;
+            /** Network Io */
+            network_io?: {
+                [key: string]: unknown;
+            } | null;
+            /** Historical Context */
+            historical_context?: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error?: string | null;
+        } & {
             [key: string]: unknown;
         };
         /**
@@ -56608,9 +57331,36 @@ export interface components {
         };
         /**
          * AnalyticsUsageStatisticsResponse
-         * @description Response for GET /analytics/usage/statistics — opaque controller result.
+         * @description Response for GET /analytics/usage/statistics.
+         *
+         *     Blocks come from ``AnalyticsController.get_usage_statistics``;
+         *     ``analysis_period`` is appended by the route and ``error`` replaces the rest
+         *     when collection raises.
          */
         AnalyticsUsageStatisticsResponse: {
+            /** Api Usage */
+            api_usage?: {
+                [key: string]: unknown;
+            } | null;
+            /** Websocket Usage */
+            websocket_usage?: {
+                [key: string]: unknown;
+            } | null;
+            /** System Usage */
+            system_usage?: {
+                [key: string]: unknown;
+            } | null;
+            /** Knowledge Base Usage */
+            knowledge_base_usage?: {
+                [key: string]: unknown;
+            } | null;
+            /** Analysis Period */
+            analysis_period?: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error?: string | null;
+        } & {
             [key: string]: unknown;
         };
         /** AnthropicContentBlock */
@@ -61235,8 +61985,6 @@ export interface components {
             reset: boolean;
             /** Clear Context */
             clear_context: boolean;
-            /** Keep System Prompt */
-            keep_system_prompt: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -61256,12 +62004,6 @@ export interface components {
              * @default true
              */
             clear_context: boolean;
-            /**
-             * Keep System Prompt
-             * @description Keep system prompt after reset
-             * @default true
-             */
-            keep_system_prompt: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -61816,27 +62558,6 @@ export interface components {
          * @description Response for GET /{provider}/storage — opaque storage resource list.
          */
         CloudStorageResponse: {
-            [key: string]: unknown;
-        };
-        /**
-         * CoWorkerSetRequest
-         * @description Set co-worker on a work item (GH#8230).
-         *
-         *     caller_role is resolved server-side from auth context — not supplied
-         *     by the client (GH#8583: removed client-supplied caller_role to prevent privilege escalation).
-         */
-        CoWorkerSetRequest: {
-            /** Co Worker Type */
-            co_worker_type: string;
-            /** Company Id */
-            company_id: string;
-            /** Co Worker Agent Id */
-            co_worker_agent_id?: string | null;
-            /** Co Worker User Id */
-            co_worker_user_id?: string | null;
-            /** Actor Id */
-            actor_id?: string | null;
-        } & {
             [key: string]: unknown;
         };
         /**
@@ -63155,6 +63876,39 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * CompanyTeam
+         * @description One team of a company, with the user ids that belong to it.
+         *
+         *     Read-only projection of ``teams`` / ``team_memberships`` — the team data
+         *     plane that already exists (#6042). No new table, no migration, and no new
+         *     vocabulary: a company inside AutoBot *is* an ``Organization`` (see
+         *     ``CompanyService.delete``, which soft-deletes ``Organization.deleted_at``),
+         *     so ``Team.org_id == company_id`` is the company's own team list.
+         *
+         *     Only ``member_user_ids`` is returned because teams cover exactly one of the
+         *     three person kinds the Org Chart shows: account holders. Hired agents
+         *     (``agent_org_nodes``) and contacts (``llc_contacts``) carry no team column,
+         *     so inventing a team for them would be fabricated grouping. The frontend
+         *     renders them under an explicit "not in a team" bucket instead.
+         */
+        CompanyTeam: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Member User Ids */
+            member_user_ids: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** CompanyTeamsResponse */
+        CompanyTeamsResponse: {
+            /** Teams */
+            teams: components["schemas"]["CompanyTeam"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * CompanyTreeNode
          * @description Recursive node for GET /companies/{id}/tree.
          */
@@ -63930,6 +64684,89 @@ export interface components {
          * @enum {string}
          */
         ConsistencyLevel: "consistent" | "mostly_consistent" | "inconsistent" | "unknown";
+        /** ContactCreate */
+        ContactCreate: {
+            /** Full Name */
+            full_name: string;
+            /** Email */
+            email?: string | null;
+            /** Phone */
+            phone?: string | null;
+            /** Role Title */
+            role_title?: string | null;
+            /** Notes */
+            notes?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ContactMergeRequest
+         * @description Which duplicate folds into which survivor. Both named explicitly.
+         */
+        ContactMergeRequest: {
+            /**
+             * Keep Id
+             * Format: uuid
+             */
+            keep_id: string;
+            /**
+             * Merge Id
+             * Format: uuid
+             */
+            merge_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContactResponse */
+        ContactResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** Full Name */
+            full_name: string;
+            /** Email */
+            email: string | null;
+            /** Phone */
+            phone: string | null;
+            /** Role Title */
+            role_title: string | null;
+            /** Notes */
+            notes: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ContactUpdate */
+        ContactUpdate: {
+            /** Full Name */
+            full_name?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Phone */
+            phone?: string | null;
+            /** Role Title */
+            role_title?: string | null;
+            /** Notes */
+            notes?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** ContentClassificationRequest */
         ContentClassificationRequest: {
             /** Content */
@@ -64700,24 +65537,26 @@ export interface components {
         };
         /**
          * CoworkerRequest
-         * @description Set or clear a co-worker on a work item (GH#8230).
-         *     To clear the co-worker, omit co_worker_type (or send null).
-         *     The caller's role is resolved server-side from the auth context — not supplied
-         *     by the client (GH#8516: removed client-supplied caller_role to prevent privilege escalation).
+         * @description Set or clear a co-worker on a work item (GH#8230, GH#8516, GH#8583, #14168).
+         *
+         *     To clear the co-worker, omit co_worker_type (or send null). Both the
+         *     caller's role and the company scope are resolved server-side from the
+         *     authenticated org context — never supplied by the client. GH#8516/
+         *     GH#8583 removed client-supplied ``caller_role`` to prevent privilege
+         *     escalation; #14168 removed client-supplied ``company_id`` for the same
+         *     reason — it was used unvalidated to resolve the caller's role, letting a
+         *     caller impersonate a role held in a company other than the one owning
+         *     the work item. ``actor_agent_id``/``actor_user_id`` were likewise
+         *     removed — the acting identity comes from the authenticated session, not
+         *     the request body, so the audit trail cannot be spoofed.
          */
         CoworkerRequest: {
-            /** Company Id */
-            company_id: string;
             /** Co Worker Type */
             co_worker_type?: string | null;
             /** Co Worker Agent Id */
             co_worker_agent_id?: string | null;
             /** Co Worker User Id */
             co_worker_user_id?: string | null;
-            /** Actor Agent Id */
-            actor_agent_id?: string | null;
-            /** Actor User Id */
-            actor_user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -65249,6 +66088,16 @@ export interface components {
             scopes: string[];
             /** Label */
             label: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** CredentialAttach */
+        CredentialAttach: {
+            /**
+             * Secret Id
+             * Format: uuid
+             */
+            secret_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -69525,6 +70374,18 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * DepartmentContacts
+         * @description A department's people, split by whether a role explains their presence.
+         */
+        DepartmentContacts: {
+            /** With Role */
+            with_role: components["schemas"]["ContactResponse"][];
+            /** Unassigned */
+            unassigned: components["schemas"]["ContactResponse"][];
+        } & {
+            [key: string]: unknown;
+        };
         /** DependentOut */
         DependentOut: {
             /** Dependent Kind */
@@ -72081,6 +72942,32 @@ export interface components {
             task_id: string;
             /** Security Blocked */
             security_blocked: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ExecutorRollupCell
+         * @description One (executor_class, status) count — one bar of the rollup panel.
+         *
+         *     ``executor_class`` is one of ``AssigneeType.USER.value`` / ``.AGENT.value``
+         *     / ``_UNASSIGNED_EXECUTOR_CLASS`` / ``_ORPHANED_EXECUTOR_CLASS`` — never a
+         *     value invented for this endpoint (#13942's "no parallel executor enum"
+         *     constraint). ``status`` is a ``WorkItemStatus`` value.
+         */
+        ExecutorRollupCell: {
+            /** Executor Class */
+            executor_class: string;
+            /** Status */
+            status: string;
+            /** Count */
+            count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ExecutorRollupResponse */
+        ExecutorRollupResponse: {
+            /** Cells */
+            cells: components["schemas"]["ExecutorRollupCell"][];
         } & {
             [key: string]: unknown;
         };
@@ -75282,6 +76169,40 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** HolderCreate */
+        HolderCreate: {
+            holder_type: components["schemas"]["RoleHolderType"];
+            /**
+             * Holder Id
+             * Format: uuid
+             */
+            holder_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** HolderResponse */
+        HolderResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Role Id
+             * Format: uuid
+             */
+            role_id: string;
+            /** Holder Type */
+            holder_type: string;
+            /** Holder Id */
+            holder_id?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Ended At */
+            ended_at?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * HookConfig
          * @description Configuration for pre-commit hooks.
@@ -75699,6 +76620,13 @@ export interface components {
             skipped: {
                 [key: string]: string[];
             };
+            /**
+             * Dropped Reporting Lines
+             * @default []
+             */
+            dropped_reporting_lines: {
+                [key: string]: string;
+            }[];
             /** Warnings */
             warnings: string[];
         } & {
@@ -81816,6 +82744,18 @@ export interface components {
          * MembershipRole
          * @description Role of a human user within an LLC company (GH#8223).
          *
+         *     NOT the platform RBAC vocabulary. Three unrelated enums use the word "role"
+         *     and share string values with nothing at the type level keeping them apart
+         *     (#14024) — this one answers "what is this person within this company?",
+         *     ``autobot_shared.auth.permissions.Role`` answers "what may this account do
+         *     on the platform?", and ``CategoryDefaults.ROLE_*`` answers "who wrote this
+         *     chat message?".
+         *
+         *     ``"admin"`` is in this vocabulary AND in ``auth.permissions.Role``, so a
+         *     company admin and a platform admin are the same string and different
+         *     authority. Never pass one where the other is expected; the overlap is
+         *     asserted in ``security/roles_do_not_collide_test.py``.
+         *
          *     Member order matches the deployed (migration-built) enum label order so a
          *     create_all-built ``membershiprole`` sorts identically to a migration-built
          *     one (GH#10076): migration 031 created ('owner','admin','member','guest') and
@@ -84255,6 +85195,8 @@ export interface components {
             adapter_type: string;
             /** Is Human */
             is_human: boolean;
+            /** Is Active */
+            is_active?: boolean | null;
             /** Last Heartbeat */
             last_heartbeat: string | null;
             /** Budget Spent */
@@ -85651,6 +86593,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** PermissionCreate */
+        PermissionCreate: {
+            /** Permission */
+            permission: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * PermissionLevel
          * @description Collaboration permission levels.
@@ -86738,6 +87687,40 @@ export interface components {
              * @default 0
              */
             cache_write_per_1m: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ProcessNode
+         * @description One workflow a role runs, as an org-chart-adjacent node.
+         *
+         *     Owner decision on #13963, option 3: automation is entered from inside
+         *     Company OS **contextually**, through the org chart, rather than by a
+         *     sidebar entry. A process node is the link between the two surfaces — the
+         *     role that owns the work, and the workflow that performs it.
+         *
+         *     Derived read-only from ``llc_role_workflows`` (#14221 step 5). No new
+         *     table and no new vocabulary: the attachment binding a role to a workflow
+         *     already exists, so a process node is a projection of it rather than a
+         *     second place to record the same fact.
+         *
+         *     ``role_id`` is included so the canvas can draw the node against the role it
+         *     belongs to; ``workflow_id`` is what the automation route opens.
+         */
+        ProcessNode: {
+            /** Role Id */
+            role_id: string;
+            /** Role Name */
+            role_name: string;
+            /** Workflow Id */
+            workflow_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ProcessNodesResponse */
+        ProcessNodesResponse: {
+            /** Nodes */
+            nodes: components["schemas"]["ProcessNode"][];
         } & {
             [key: string]: unknown;
         };
@@ -89323,25 +90306,80 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * RoleResponse
-         * @description Role information in responses.
-         */
-        RoleResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
+        /** RoleCreate */
+        RoleCreate: {
             /** Name */
             name: string;
             /** Description */
             description?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RoleHolderType
+         * @description Who currently holds a role (#14221 step 2).
+         *
+         *     A **different axis** from :class:`AssigneeType`, not a wider version of it.
+         *     ``AssigneeType`` answers "who is working this work item"; this answers "who
+         *     occupies this role". They overlap on two members and diverge on the third,
+         *     which is exactly the shape that has bitten this module before — so:
+         *
+         *     **Never compare a member of this enum with a member of another.** Both are
+         *     ``str``-mixin enums, so ``RoleHolderType.AGENT == AssigneeType.AGENT`` is
+         *     silently ``True`` while a ``CONTACT`` holder compares equal to nothing at
+         *     all. That silent-True/silent-False pair is #13954's defect exactly.
+         *
+         *     ``CONTACT`` is why this is a separate enum rather than a new member on
+         *     ``AssigneeType``. Owner framing:
+         *
+         *         user = human, but not all humans are users — they could be part of a
+         *         process, like a contact person you send email to or call
+         *
+         *     A contact can therefore *hold a role* ("external accountant", "supplier
+         *     escalation contact") without ever being a user. Adding ``CONTACT`` to
+         *     ``AssigneeType`` instead would silently widen what a **work item** may be
+         *     assigned to, since assignment validates by enum membership — a data-model
+         *     change smuggled in as a vocabulary edit.
+         *
+         *     Minting a new vocabulary is deliberate and was checked first: no enum in
+         *     this codebase declares a ``contact`` member at all, so there was nothing to
+         *     reuse. Registered in #14263's inventory rather than left to become another
+         *     unowned status vocabulary.
+         * @enum {string}
+         */
+        RoleHolderType: "user" | "agent" | "contact";
+        /** RoleRateResponse */
+        RoleRateResponse: {
             /**
-             * Is System
-             * @default false
+             * Role Id
+             * Format: uuid
              */
-            is_system: boolean;
+            role_id: string;
+            /** Hourly Rate */
+            hourly_rate: string;
+            /** Currency */
+            currency: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RoleRateSet
+         * @description The hourly cost of a role, with its unit (#14607).
+         */
+        RoleRateSet: {
+            /** Hourly Rate */
+            hourly_rate: number | string;
+            /** Currency */
+            currency: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RoleUpdate */
+        RoleUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -89368,6 +90406,36 @@ export interface components {
             username: string;
             /** Role */
             role: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollupBucketOut
+         * @description One grouping's monthly total, with the coverage behind it.
+         *
+         *     ``per_month`` is the sum of the steps that could be costed. It is reported
+         *     beside ``costed`` / ``not_costable`` rather than alone, because a partial
+         *     total presented as a complete one is indistinguishable from a complete one
+         *     by looking at it — the arithmetic form of the failure #14064, #13617 and
+         *     #14556 each produced in this area.
+         */
+        RollupBucketOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Per Month */
+            per_month: string;
+            /** Costed */
+            costed: number;
+            /** Not Costable */
+            not_costable: number;
+            /** Total Steps */
+            total_steps: number;
+            /** Is Complete */
+            is_complete: boolean;
+            /** Currencies */
+            currencies: string[];
         } & {
             [key: string]: unknown;
         };
@@ -91089,7 +92157,12 @@ export interface components {
         SecretCreateRequest: {
             /** Name */
             name: string;
-            type: components["schemas"]["SecretType"];
+            /**
+             * StorableSecretType
+             * @description A single credential kind. The canonical SecretType taxonomy without its 'any' wildcard, which quantifies over the taxonomy in agent requirements and is never a secret's own kind.
+             * @enum {string}
+             */
+            type: "ssh_key" | "password" | "api_key" | "token" | "oauth_refresh_token" | "connector_oauth_token" | "certificate" | "database_url" | "infrastructure_host" | "other";
             scope: components["schemas"]["ChatSecretScope"];
             /** Value */
             value: string;
@@ -91253,10 +92326,35 @@ export interface components {
         };
         /**
          * SecretType
-         * @description Secret type enumeration.
+         * @description What kind of credential a secret is (#13846).
+         *
+         *     Canonical union of three definitions that classified the same thing under
+         *     two names, in three layers:
+         *
+         *     * ``models.secret.SecretType`` — the persisted classification on the
+         *       ``secrets`` row. Had all nine concrete kinds.
+         *     * ``api.schemas_system.SecretType`` — the request/response vocabulary.
+         *       Had eight: no ``OAUTH_REFRESH_TOKEN``, so ``POST /secrets`` could not
+         *       accept the one kind the row could already store.
+         *     * ``services.agent_secrets_integration.SecretRequirement`` — what an agent
+         *       type may request. Had six of the nine, duplicated verbatim down to the
+         *       identical ``# nosec B105`` / ``# nosemgrep`` comments, plus ``ANY``.
+         *       With no ``OAUTH_REFRESH_TOKEN`` member, an ``AgentSecretMapping`` could
+         *       only describe an OAuth-authenticating agent as ``ANY`` — the blanket
+         *       "every available secret" grant standing in for the most specific one.
+         *
+         *     Every member of every side is here. ``str`` subclass so the persisted
+         *     ``secrets.type`` column, which stores these values, keeps comparing and
+         *     serializing exactly as before.
+         *
+         *     ``ANY`` is the odd one out: a wildcard *quantifier* over the taxonomy, not
+         *     a kind of credential. It is legal in a requirement (an agent that may use
+         *     any secret) and illegal at rest — nothing may be stored with type "any".
+         *     Use :meth:`concrete` for every persistence or presentation surface, and
+         *     :meth:`expand` to resolve a requirement set into concrete kinds.
          * @enum {string}
          */
-        SecretType: "ssh_key" | "password" | "api_key" | "token" | "certificate" | "database_url" | "infrastructure_host" | "other";
+        SecretType: "ssh_key" | "password" | "api_key" | "token" | "oauth_refresh_token" | "connector_oauth_token" | "certificate" | "database_url" | "infrastructure_host" | "other" | "any";
         /**
          * SecretTypesData
          * @description Response data for get_secret_types.
@@ -92598,9 +93696,26 @@ export interface components {
          *     "unknown", "info", "minimal") and consolidates 10+ duplicate enums
          *     (#6689): Severity, IssueSeverity, DFASeverity, ImpactLevel, CostLevel,
          *     DebtSeverity, RiskLevel — all collapse to this enum.
+         *
+         *     #14956 added WARNING, DEGRADED and ERROR. They are not synonyms of an
+         *     existing rung and were NOT folded into one, because each is a value the
+         *     platform already emits across a boundary that would change if it moved:
+         *
+         *     * ``warning`` is a Prometheus label value — ``PerformanceMonitor``
+         *       publishes ``update_active_alerts("warning", ...)`` and the shipped
+         *       alert rules carry ``severity: warning``. Mapping it to ``medium``
+         *       would rename a scraped label.
+         *     * ``degraded`` is serialised into the causal-analysis API response and
+         *       grades partial impact between ``warning`` and ``critical``.
+         *     * ``error`` is the rung the capability audit grades findings at, kept
+         *       distinct from ``warning`` because the two are counted separately.
+         *
+         *     So this enum is the severity *vocabulary*. Numeric risk grading uses the
+         *     narrower ``score_ladder()`` — see that method for why the distinction is
+         *     load-bearing rather than cosmetic.
          * @enum {string}
          */
-        Severity: "unknown" | "info" | "minimal" | "low" | "medium" | "high" | "critical";
+        Severity: "unknown" | "info" | "minimal" | "low" | "warning" | "medium" | "degraded" | "high" | "error" | "critical";
         /**
          * SeveritySummary
          * @description Summary of issues by severity.
@@ -94083,6 +95198,60 @@ export interface components {
             status: string;
             /** Comment */
             comment?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StepCostInputs
+         * @description How long a step takes and how often it runs (#14598).
+         *
+         *     Both optional and both meaning *not recorded* when absent — never zero, and
+         *     never "leave unchanged". Sending ``null`` clears a number someone entered
+         *     by mistake, which a partial-update idiom would make impossible.
+         */
+        StepCostInputs: {
+            /** Estimated Minutes */
+            estimated_minutes?: number | null;
+            /** Runs Per Month */
+            runs_per_month?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * StepCostResponse
+         * @description A step's recorded inputs and the cost derived from them (#14598, #14607).
+         *
+         *     The derived figures are nullable and accompanied by ``missing``: a step
+         *     nobody measured, or a role with no rate, is *not costable* rather than
+         *     free. A zero here would understate every total it feeds and would be
+         *     indistinguishable from a genuinely free step.
+         */
+        StepCostResponse: {
+            /** Workflow Id */
+            workflow_id: string;
+            /** Estimated Minutes */
+            estimated_minutes: number | null;
+            /** Runs Per Month */
+            runs_per_month: number | null;
+            /** Per Run */
+            per_run: string | null;
+            /** Per Month */
+            per_month: string | null;
+            /** Per Year */
+            per_year: string | null;
+            /** Currency */
+            currency: string | null;
+            /** Missing */
+            missing: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** StepRollupResponse */
+        StepRollupResponse: {
+            /** By Role */
+            by_role: components["schemas"]["RollupBucketOut"][];
+            /** By Tool */
+            by_tool: components["schemas"]["RollupBucketOut"][];
         } & {
             [key: string]: unknown;
         };
@@ -96903,6 +98072,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ToolAttach */
+        ToolAttach: {
+            /** Tool Name */
+            tool_name: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** ToolCallRequest */
         ToolCallRequest: {
             /** Call Id */
@@ -96936,6 +98112,37 @@ export interface components {
              * @default true
              */
             update_first: boolean | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ToolNode
+         * @description One tool made available to one role, as an org-chart-adjacent node.
+         *
+         *     Derived read-only from ``llc_role_tools`` (#14221 step 4) — the same
+         *     projection shape ``ProcessNode`` above uses for ``llc_role_workflows``. A
+         *     tool attached to several roles produces one row per role here; the canvas
+         *     (``buildToolCanvasNodes``) folds the rows that share a ``tool_name`` into
+         *     a single node, so "one tool used by several roles" stays one node rather
+         *     than one per role.
+         *
+         *     ``role_id``/``role_name`` are included so the canvas can draw which roles
+         *     a tool belongs to; ``tool_name`` is the tool's registry identity.
+         */
+        ToolNode: {
+            /** Role Id */
+            role_id: string;
+            /** Role Name */
+            role_name: string;
+            /** Tool Name */
+            tool_name: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ToolNodesResponse */
+        ToolNodesResponse: {
+            /** Nodes */
+            nodes: components["schemas"]["ToolNode"][];
         } & {
             [key: string]: unknown;
         };
@@ -98153,7 +99360,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Roles */
-            roles?: components["schemas"]["RoleResponse"][];
+            roles?: components["schemas"]["autobot_shared__user_management__schemas__user__RoleResponse"][];
             /** Last Login At */
             last_login_at?: string | null;
             /**
@@ -100585,6 +101792,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** WorkflowAttach */
+        WorkflowAttach: {
+            /** Workflow Id */
+            workflow_id: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * WorkflowAuditLogEntry
          * @description Serialised workflow audit log entry.
@@ -100632,6 +101846,24 @@ export interface components {
             step_id?: string | null;
             /** User Input */
             user_input?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** WorkflowCreate */
+        WorkflowCreate: {
+            /** Workflow Id */
+            workflow_id: string;
+            /** Name */
+            name?: string | null;
+            /**
+             * Status
+             * @default planned
+             */
+            status: string;
+            /** Definition */
+            definition?: {
+                [key: string]: unknown;
+            };
         } & {
             [key: string]: unknown;
         };
@@ -100794,6 +102026,38 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** WorkflowResponse */
+        WorkflowResponse: {
+            /** Workflow Id */
+            workflow_id: string;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** Name */
+            name: string | null;
+            /** Status */
+            status: string;
+            /** Source */
+            source: string;
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * WorkflowSecretCreateRequest
          * @description Request body for creating a workflow secret. Issue #2303: owner_id derived from auth.
@@ -100901,6 +102165,13 @@ export interface components {
             } | null;
             /** Estimated Remaining */
             estimated_remaining?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** WorkflowStatusUpdate */
+        WorkflowStatusUpdate: {
+            /** Status */
+            status: string;
         } & {
             [key: string]: unknown;
         };
@@ -101585,6 +102856,28 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * RoleResponse
+         * @description Role information in responses.
+         */
+        autobot_shared__user_management__schemas__user__RoleResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Is System
+             * @default false
+             */
+            is_system: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * ClearAllResponse
          * @description Shape of ``POST /api/knowledge_base/clear_all``.
          *
@@ -101668,6 +102961,30 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** RoleResponse */
+        llc__api__roles__RoleResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Is System
+             * @default false
+             */
+            is_system: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -107407,6 +108724,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeviceIdentityResponse"];
+                };
+            };
+        };
+    };
+    revoke_device_api_devices__device_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -119618,7 +120964,7 @@ export interface operations {
             };
         };
     };
-    get_manual_mcp_tools_api_mcp_tools_get: {
+    list_all_mcp_tools_api_mcp_tools_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -119633,7 +120979,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ManualMCPToolItem"][];
+                    "application/json": components["schemas"]["MCPRegistryToolsResponse"];
                 };
             };
         };
@@ -130497,6 +131843,40 @@ export interface operations {
             };
         };
     };
+    analyze_impact_api_analytics_codebase_impact_get: {
+        parameters: {
+            query: {
+                /** @description Graph node id to walk back from */
+                node_id: string;
+                /** @description Override the configured hop limit. Omit to use impact_analysis_max_depth. */
+                max_depth?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_analytics_report_api_reporting_report_get: {
         parameters: {
             query?: never;
@@ -136699,6 +138079,159 @@ export interface operations {
             };
         };
     };
+    request_host_selection_api_agent_terminal_host_selection_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TerminalHostSelectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalHostSelectionRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_host_selection_api_agent_terminal_host_selection__request_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalHostSelectionGetResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_host_selection_api_agent_terminal_host_selection__request_id__select_post: {
+        parameters: {
+            query?: {
+                host_id?: string;
+                host_name?: string;
+                host?: string;
+                ssh_port?: number;
+                username?: string;
+                remember_choice?: boolean;
+            };
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalHostSelectionSubmitResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_host_selection_api_agent_terminal_host_selection__request_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalHostSelectionCancelResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_pending_host_selections_api_agent_terminal_host_selection_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalPendingSelectionsResponse"];
+                };
+            };
+        };
+    };
     list_agent_terminal_sessions_api_agent_terminal_sessions_get: {
         parameters: {
             query?: {
@@ -137140,159 +138673,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentTerminalInfoResponse"];
-                };
-            };
-        };
-    };
-    request_host_selection_api_agent_terminal_host_selection_request_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["TerminalHostSelectionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalHostSelectionRequestResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_host_selection_api_agent_terminal_host_selection__request_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                request_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalHostSelectionGetResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    submit_host_selection_api_agent_terminal_host_selection__request_id__select_post: {
-        parameters: {
-            query?: {
-                host_id?: string;
-                host_name?: string;
-                host?: string;
-                ssh_port?: number;
-                username?: string;
-                remember_choice?: boolean;
-            };
-            header?: never;
-            path: {
-                request_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalHostSelectionSubmitResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cancel_host_selection_api_agent_terminal_host_selection__request_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                request_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalHostSelectionCancelResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_pending_host_selections_api_agent_terminal_host_selection_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalPendingSelectionsResponse"];
                 };
             };
         };
@@ -138047,6 +139427,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GitHubStatusResponse"];
+                };
+            };
+        };
+    };
+    get_memory_lifecycle_api_memory_lifecycle_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -167612,6 +169025,130 @@ export interface operations {
             };
         };
     };
+    get_work_item_executor_rollup_api_llc_companies__company_id__work_items_executor_rollup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutorRollupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_process_nodes_api_llc_companies__company_id__process_nodes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessNodesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tool_nodes_api_llc_companies__company_id__tool_nodes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolNodesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_company_teams_api_llc_companies__company_id__teams_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyTeamsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     search_agents_api_llc_companies__company_id__agents_search_get: {
         parameters: {
             query: {
@@ -167699,6 +169236,306 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_directory_api_llc_contacts_directory_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactResponse"][];
+                };
+            };
+        };
+    };
+    list_duplicate_candidates_api_llc_contacts_directory_duplicates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[][];
+                };
+            };
+        };
+    };
+    merge_contacts_api_llc_contacts__company_id__merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_from_directory_api_llc_contacts__company_id__directory__contact_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_involved_contacts_api_llc_contacts__company_id__involved_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentContacts"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_contacts_api_llc_contacts__company_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_contact_api_llc_contacts__company_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_contact_api_llc_contacts__company_id___contact_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_contact_api_llc_contacts__company_id___contact_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_contact_api_llc_contacts__company_id___contact_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContactResponse"];
                 };
             };
             /** @description Validation Error */
@@ -168380,6 +170217,797 @@ export interface operations {
                         [key: string]: unknown;
                     };
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_roles_api_llc_roles__company_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["llc__api__roles__RoleResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_role_api_llc_roles__company_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["llc__api__roles__RoleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_role_api_llc_roles__company_id___role_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_role_api_llc_roles__company_id___role_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["llc__api__roles__RoleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_holders_api_llc_roles__company_id___role_id__holders_get: {
+        parameters: {
+            query?: {
+                include_past?: boolean;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolderResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_holder_api_llc_roles__company_id___role_id__holders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HolderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    end_tenure_api_llc_roles__company_id___role_id__holders__assignment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                assignment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_permissions_api_llc_roles__company_id___role_id__permissions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grant_permission_api_llc_roles__company_id___role_id__permissions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermissionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_permission_api_llc_roles__company_id___role_id__permissions__permission__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                permission: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_role_workflows_api_llc_roles__company_id___role_id__workflows_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_workflow_api_llc_roles__company_id___role_id__workflows_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowAttach"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_workflow_api_llc_roles__company_id___role_id__workflows__workflow_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_role_tools_api_llc_roles__company_id___role_id__tools_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_tool_api_llc_roles__company_id___role_id__tools_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolAttach"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_tool_api_llc_roles__company_id___role_id__tools__tool_name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                tool_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_role_credentials_api_llc_roles__company_id___role_id__credentials_get: {
+        parameters: {
+            query?: {
+                include_revoked?: boolean;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_credential_api_llc_roles__company_id___role_id__credentials_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialAttach"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_credential_api_llc_roles__company_id___role_id__credentials__secret_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_step_cost_api_llc_roles__company_id___role_id__workflows__workflow_id__cost_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepCostResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_step_cost_inputs_api_llc_roles__company_id___role_id__workflows__workflow_id__cost_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepCostInputs"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepCostResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_role_rate_api_llc_roles__company_id___role_id__rate_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleRateResponse"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_role_rate_api_llc_roles__company_id___role_id__rate_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleRateSet"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleRateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_role_rate_api_llc_roles__company_id___role_id__rate_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -169524,6 +172152,7 @@ export interface operations {
                 type?: components["schemas"]["WorkItemType"] | null;
                 status?: components["schemas"]["WorkItemStatus"] | null;
                 assignee?: string | null;
+                assignee_user_id?: string | null;
                 reviewer?: string | null;
                 sprint_id?: string | null;
                 parent_id?: string | null;
@@ -169918,7 +172547,7 @@ export interface operations {
             };
         };
     };
-    set_or_clear_coworker_api_llc_work_items__work_item_id__coworker_post: {
+    set_coworker_api_llc_work_items__work_item_id__coworker_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -172870,6 +175499,202 @@ export interface operations {
             };
         };
     };
+    step_rollup_api_llc_costs_step_rollup_get: {
+        parameters: {
+            query: {
+                /** @description Company UUID */
+                company_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepRollupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflows_api_llc_workflows__company_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workflow_api_llc_workflows__company_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_api_llc_workflows__company_id___workflow_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_workflow_api_llc_workflows__company_id___workflow_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_workflow_status_api_llc_workflows__company_id___workflow_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowStatusUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     health_api_llc_health_get: {
         parameters: {
             query?: never;
@@ -173339,105 +176164,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mcp_lookup_man_page_api_mcp_lookup_man_page_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ManPageRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ManPageLookupData"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mcp_search_man_pages_api_mcp_search_man_pages_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ManPageSearchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ManPageSearchData"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mcp_get_doc_index_api_mcp_get_doc_index_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ManPageSearchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */

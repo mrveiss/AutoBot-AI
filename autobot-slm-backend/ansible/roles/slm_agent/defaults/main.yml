@@ -25,12 +25,21 @@ slm_agent_group: autobot
 
 # Installation directories (#1121/#1129: role-centric layout under /opt/autobot/)
 slm_agent_dir: /opt/autobot/autobot-slm-agent
+# #14278: the agent's dependencies live in their own venv. Installing them into
+# system Python with --break-system-packages fails on any node whose distro owns
+# a transitive dependency: pip may write to the system environment but cannot
+# uninstall what dpkg installed, so an upgrade of e.g. typing_extensions aborts
+# provisioning with "RECORD file not found. The package was installed by debian."
+slm_agent_venv: "{{ slm_agent_dir }}/venv"
 slm_agent_data_dir: /var/lib/slm-agent
 
 # Python dependencies for the agent (#11508)
-# The agent runs on the system interpreter (/usr/bin/python3, see the service
-# unit's ExecStart) and MUST have every module it + autobot_shared import on ONE
-# interpreter — it can no longer borrow modules from the SLM backend venv.
+# #14278: the agent runs on its OWN venv (slm_agent_venv, see the unit's
+# ExecStart), and MUST have every module it + autobot_shared import on that ONE
+# interpreter — it borrows from neither the SLM backend venv nor system Python.
+# A clean venv inherits nothing, so anything the import chain touches has to be
+# listed here explicitly; under system Python some of it was satisfied by
+# whatever apt happened to have installed.
 #   - aiohttp: agent.py HTTP client/server
 #   - psutil:  health_collector resource metrics
 #   - redis:   autobot_shared.redis_client (health_collector.py imports it at
@@ -46,6 +55,14 @@ slm_agent_python_packages:
   - redis
   - pydantic-settings
   - sqlalchemy
+  # #14278: required by the agent's own import chain, and previously satisfied by
+  # accident because system Python usually has the distro's python3-yaml. A clean
+  # venv has nothing, so without this the unit crash-loops on
+  # ModuleNotFoundError before SLMAgent.run() is reached:
+  #   slm/agent/__init__.py -> health_collector -> autobot_shared.redis_client
+  #   -> autobot_shared.redis_management.config -> import yaml
+  # autobot_shared/pyproject.toml declares pyyaml>=6.0.3 for exactly this reason.
+  - pyyaml
 
 # Services to monitor (systemd service names)
 # Override per-host in inventory, e.g.:

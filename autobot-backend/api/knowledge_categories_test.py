@@ -20,6 +20,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from autobot_shared.ssot_constants import TTL_5_MINUTES
+
 # ============================================================================
 # TEST FIXTURES
 # ============================================================================
@@ -298,7 +300,7 @@ class TestCacheBehavior:
             assert len(result["categories"]) == 4
 
             # Cache the result
-            await mock_redis_client.set(cache_key, json.dumps(result).encode("utf-8"), ex=300)  # 5 minutes
+            await mock_redis_client.set(cache_key, json.dumps(result).encode("utf-8"), ex=TTL_5_MINUTES)
 
         mock_redis_client.set.assert_called_once()
 
@@ -320,12 +322,12 @@ class TestCacheBehavior:
         data = {"categories": []}
 
         # Set with expiration
-        await mock_redis_client.set(cache_key, json.dumps(data).encode("utf-8"), ex=300)  # 5 minutes
+        await mock_redis_client.set(cache_key, json.dumps(data).encode("utf-8"), ex=TTL_5_MINUTES)
 
         # Verify set was called with expiration
         mock_redis_client.set.assert_called_once()
         call_args = mock_redis_client.set.call_args
-        assert call_args[1]["ex"] == 300
+        assert call_args[1]["ex"] == TTL_5_MINUTES
 
 
 # ============================================================================

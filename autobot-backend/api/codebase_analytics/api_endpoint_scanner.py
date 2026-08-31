@@ -11,6 +11,7 @@ frontend TypeScript/Vue files for API calls.
 
 import ast
 import re
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Set
@@ -29,6 +30,14 @@ from .models import (
 
 logger = get_logger(__name__)
 
+# #14256: how often the per-file scan loops consult the cancel token, matching
+# duplicate_detector.py's CANCEL_CHECK_INTERVAL precedent. run_full_analysis()
+# used to be a single call submitted to the analytics executor with no way to
+# stop once running -- exactly the #12779 shape, just for API-endpoint
+# scanning instead of duplicate detection: a route timeout cancelled the
+# AWAIT, not the thread walking every backend/frontend file to completion.
+CANCEL_CHECK_INTERVAL = 200
+
 
 # =============================================================================
 # Pre-compiled Regex Patterns for Performance (Issue #527)
@@ -40,14 +49,12 @@ _ROUTER_DECORATOR_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Pattern for router variable names to detect prefix
-# NOTE (#12985): currently unreferenced — it was already dead before this
-# convergence, so it is left in place rather than removed as a drive-by.
-# Kept pointing at the shared grammar so it cannot drift while unused.
-_ROUTER_INCLUDE_RE = _routing.INCLUDE_ROUTER_RE
-
-# Pattern for router prefix in APIRouter() initialization
-_APIROUTER_PREFIX_RE = _routing.APIROUTER_PREFIX_RE
+# The router prefix declared by ``APIRouter(prefix=...)``, trailing slash
+# normalised away (#14355). This module used to read it verbatim via
+# ``apirouter_prefix`` while the api-wiring gate stripped the slash, so the two
+# disagreed on any prefix written ``"/x/"`` — the report showing ``/x//y`` for a
+# path nothing serves. See ``file_router_prefix`` for why stripping wins.
+_file_router_prefix = _routing.file_router_prefix
 
 # Frontend patterns for API calls
 _API_CALL_PATTERNS = [
@@ -113,12 +120,6 @@ _FOUR_ELEMENT_TUPLE_RE = re.compile(
     re.MULTILINE,
 )
 # Issue #552: Dynamic router loading pattern
-# #12956: names actually passed to include_router(), and the relative imports
-# that bind them to a submodule -- `from .costs import router as costs_router`.
-_INCLUDE_ROUTER_NAME_RE = _routing.INCLUDE_ROUTER_NAME_RE
-_RELATIVE_ROUTER_IMPORT_RE = _routing.RELATIVE_ROUTER_IMPORT_RE
-
-
 _DYNAMIC_ROUTER_TUPLE_RE = re.compile(
     r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\'],' r'\s*\[[^\]]*\]\s*,\s*["\'](\w+)["\']',
     re.MULTILINE,
@@ -189,7 +190,11 @@ class BackendEndpointScanner:
     # Global API prefix applied to all routers in app_factory.py
     API_PREFIX = "/api"
 
-    def __init__(self, project_root: Path | None = None):
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        cancel_token: threading.Event | None = None,
+    ):
         # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
         # #10730) rather than get_project_root() (hardcoded parents[4], which
         # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
@@ -207,6 +212,14 @@ class BackendEndpointScanner:
         self._module_prefix_map: Dict[str, str] = {}
         # #12945: resolved file -> prefix for registry-mounted routers outside api/
         self._external_router_prefixes: Dict[Path, str] = {}
+        # #14256: set by the caller when it stops waiting -- the run_full_analysis()
+        # call this scan is part of used to run to completion in its executor
+        # thread regardless, matching #12779's original duplicate-scan shape.
+        self._cancel_token = cancel_token
+
+    def _cancelled(self) -> bool:
+        """True once the caller has stopped waiting for this scan (#14256)."""
+        return self._cancel_token is not None and self._cancel_token.is_set()
 
     def scan_all_endpoints(self) -> List[APIEndpointItem]:
         """
@@ -230,7 +243,17 @@ class BackendEndpointScanner:
 
         # Second pass: scan all Python files
         scan_targets = list(self.backend_path.rglob("*.py")) + list(self._external_router_prefixes)
-        for py_file in scan_targets:
+        for index, py_file in enumerate(scan_targets):
+            # #14256: checked every CANCEL_CHECK_INTERVAL files, not every file --
+            # matches duplicate_detector.py's own cadence: cheap enough that the
+            # check itself never dominates, while bounding the abandonment window.
+            if index % CANCEL_CHECK_INTERVAL == 0 and self._cancelled():
+                logger.info(
+                    "Backend endpoint scan cancelled after %d/%d files",
+                    index,
+                    len(scan_targets),
+                )
+                break
             if py_file.name.startswith("__"):
                 continue
             if "archive" in str(py_file).lower():
@@ -740,55 +763,12 @@ class BackendEndpointScanner:
             if module_file.is_file():
                 files[module_file] = prefix
             elif (target / "__init__.py").is_file():
-                files.update(self._package_router_files(target, prefix))
-        return files
-
-    def _package_router_files(self, package: Path, registry_prefix: str) -> Dict[Path, str]:
-        """Map a registry-mounted package's submodules to their served prefix.
-
-        The package's own ``APIRouter(prefix=...)`` sits between the registry
-        prefix and each submodule's router prefix, and ``_scan_file`` applies
-        the submodule's own prefix separately -- so only the package-level part
-        belongs here.
-
-        A submodule is included only when the package imports its router under
-        an alias AND mounts that exact alias via ``include_router``. #12956: the
-        previous check only confirmed the package mounted *something*, then
-        included every router-declaring module -- so a declared-but-unmounted
-        router still contributed routes, which the docstring already claimed it
-        would not.
-
-        Nested router subpackages recurse, so their modules resolve under their
-        own prefix rather than the parent's.
-        """
-        init_file = package / "__init__.py"
-        init_content = init_file.read_text(encoding="utf-8", errors="ignore")
-        package_prefix = self._get_file_router_prefix(init_content) or ""
-        if not _INCLUDE_ROUTER_RE.search(init_content):
-            return {}
-
-        served_prefix = f"{registry_prefix}{package_prefix}"
-        mounted = set(_INCLUDE_ROUTER_NAME_RE.findall(init_content))
-        if not mounted:
-            return {}
-
-        files: Dict[Path, str] = {}
-        # #12956: walk one level and recurse, rather than rglob'ing the tree.
-        # rglob descended into nested router subpackages while the "__" filter
-        # removed the very __init__.py carrying their own prefix, so their
-        # modules were emitted under the PARENT's prefix -- inventing endpoints,
-        # the failure this whole change set exists to avoid.
-        for module_name, alias in _RELATIVE_ROUTER_IMPORT_RE.findall(init_content):
-            if alias not in mounted:
-                # Declared but never mounted: it serves nothing.
-                continue
-            module_file = (package / module_name).with_suffix(".py")
-            if module_file.is_file():
-                files[module_file] = served_prefix
-                continue
-            subpackage = package / module_name
-            if (subpackage / "__init__.py").is_file():
-                files.update(self._package_router_files(subpackage, served_prefix))
+                # #14355: called through the module rather than a hoisted alias,
+                # so there is exactly one place this resolution can come from.
+                # This scanner carried its own copy of the algorithm until then;
+                # the gate and this report each owned one, and a divergence
+                # between them left no way to tell which described the real API.
+                files.update(_routing.package_router_files(target, prefix))
         return files
 
     def _get_module_prefix(self, file_path: Path) -> str:
@@ -955,12 +935,18 @@ class BackendEndpointScanner:
 
         return endpoints
 
-    def _get_file_router_prefix(self, content: str) -> str | None:
-        """Extract router prefix from file content."""
-        match = _APIROUTER_PREFIX_RE.search(content)
-        if match:
-            return match.group(1)
-        return None
+    def _get_file_router_prefix(self, content: str) -> str:
+        """The router prefix a file declares, or ``""`` when it declares none.
+
+        #14355: returns the normalised form. It used to return the raw prefix
+        (and ``None`` for absent), which differed from the api-wiring gate for a
+        prefix written ``"/x/"``: concatenation then produced ``/x//y``, an
+        endpoint reported at a path nothing answers on. Callers only ever asked
+        "is there a prefix, and what is it", so absent and empty were never
+        distinguished here — ``apirouter_prefix`` still keeps them apart for
+        anything that needs to.
+        """
+        return _file_router_prefix(content)
 
 
 # =============================================================================
@@ -971,13 +957,23 @@ class BackendEndpointScanner:
 class FrontendAPICallScanner:
     """Scans frontend TypeScript/Vue files for API calls."""
 
-    def __init__(self, project_root: Path | None = None):
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        cancel_token: threading.Event | None = None,
+    ):
         # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
         # #10730) rather than get_project_root() (hardcoded parents[4], which
         # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
         # standalone rsync layout).
         self.project_root = project_root or Path(resolve_project_root())
         self.frontend_path = self.project_root / "autobot-frontend" / "src"
+        # #14256: see BackendEndpointScanner._cancel_token.
+        self._cancel_token = cancel_token
+
+    def _cancelled(self) -> bool:
+        """True once the caller has stopped waiting for this scan (#14256)."""
+        return self._cancel_token is not None and self._cancel_token.is_set()
 
     def scan_all_calls(self) -> List[FrontendAPICallItem]:
         """
@@ -993,8 +989,17 @@ class FrontendAPICallScanner:
             return calls
 
         # Scan TypeScript and Vue files
+        index = 0
         for pattern in ("*.ts", "*.vue", "*.tsx", "*.js"):
             for file in self.frontend_path.rglob(pattern):
+                # #14256: same cadence as BackendEndpointScanner -- a route
+                # timeout used to cancel only the AWAIT, leaving this loop
+                # running to completion in its executor thread.
+                if index % CANCEL_CHECK_INTERVAL == 0 and self._cancelled():
+                    logger.info("Frontend API call scan cancelled after %d calls found", len(calls))
+                    return calls
+                index += 1
+
                 if "node_modules" in str(file):
                     continue
                 if file.name.endswith(".d.ts"):
@@ -1386,14 +1391,22 @@ class APIEndpointChecker:
         analysis = checker.run_full_analysis()
     """
 
-    def __init__(self, project_root: Path | None = None):
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        cancel_token: threading.Event | None = None,
+    ):
         # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
         # #10730) rather than get_project_root() (hardcoded parents[4], which
         # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
         # standalone rsync layout).
         self.project_root = project_root or Path(resolve_project_root())
-        self.backend_scanner = BackendEndpointScanner(self.project_root)
-        self.frontend_scanner = FrontendAPICallScanner(self.project_root)
+        # #14256: run_full_analysis() dispatches straight to the analytics
+        # executor with nothing checking whether the caller is still waiting --
+        # the exact #12779 shape. Threaded into both scanners so cancellation
+        # reaches whichever one is running when the deadline fires.
+        self.backend_scanner = BackendEndpointScanner(self.project_root, cancel_token=cancel_token)
+        self.frontend_scanner = FrontendAPICallScanner(self.project_root, cancel_token=cancel_token)
 
     def run_full_analysis(self) -> APIEndpointAnalysis:
         """

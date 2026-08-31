@@ -142,7 +142,11 @@ async def test_development_speedup():
                 logger.info(f"         - {loc[0]}:{loc[1]}")
 
     except Exception as e:
-        logger.error(f"   ❌ Duplicate detection failed: {e}")
+        # #14931: this logged and continued, so a failure of duplicate detection left the
+        # function reaching `return True` and the driver counting the whole test as
+        # passed. Only the fourth handler was converted by #14929; three quarters of
+        # what this test exercises could still fail silently.
+        raise AssertionError(f"duplicate detection failed: {e}") from e
 
     # Test 2: Pattern analysis
     logger.info("\n2. Testing code pattern analysis...")
@@ -162,7 +166,11 @@ async def test_development_speedup():
             logger.info(f"      💡 Suggestion: {pattern['suggestion']}")
 
     except Exception as e:
-        logger.error(f"   ❌ Pattern analysis failed: {e}")
+        # #14931: this logged and continued, so a failure of pattern analysis left the
+        # function reaching `return True` and the driver counting the whole test as
+        # passed. Only the fourth handler was converted by #14929; three quarters of
+        # what this test exercises could still fail silently.
+        raise AssertionError(f"pattern analysis failed: {e}") from e
 
     # Test 3: Import analysis
     logger.info("\n3. Testing import analysis...")
@@ -182,7 +190,11 @@ async def test_development_speedup():
                 print(f"      - {unused_import['file']}:{unused_import['line']} - {unused_import['import']}")
 
     except Exception as e:
-        logger.error(f"   ❌ Import analysis failed: {e}")
+        # #14931: this logged and continued, so a failure of import analysis left the
+        # function reaching `return True` and the driver counting the whole test as
+        # passed. Only the fourth handler was converted by #14929; three quarters of
+        # what this test exercises could still fail silently.
+        raise AssertionError(f"import analysis failed: {e}") from e
 
     # Test 4: Quick comprehensive analysis
     logger.info("\n4. Testing comprehensive analysis...")
@@ -210,8 +222,13 @@ async def test_development_speedup():
         logger.info(f"      🔧 Refactoring opportunities: {refactoring_ops}")
 
     except Exception as e:
-        logger.error(f"   ❌ Comprehensive analysis failed: {e}")
-
+        # #14920: this logged and continued, then returned True, so a total failure
+        # of the analysis reported success. Re-raise: the driver reads the outcome,
+        # and a swallowed exception is what made it lie.
+        raise AssertionError(f"comprehensive analysis failed: {e}") from e
+    # The driver sums truthiness (`if result`), so a bare assert would leave a
+    # passing test counted as failed. The assert makes it able to fail; this
+    # keeps the driver's verdict honest. Both are required (#14920).
     return True
 
 
@@ -260,6 +277,13 @@ async def test_performance_comparison():
     logger.info(f"   🚀 NPU acceleration used: {npu_used_count}/{len(test_queries)} queries")
     logger.info("   💾 Redis indexing: ✅ Active")
 
+    # #14920: logged and returned True regardless. If every query raised, the
+    # per-query handler swallowed it and total_time stayed 0 — that is the
+    # difference between "fast" and "never ran".
+    assert total_time > 0, f"no query completed: {len(test_queries)} attempted, total_time=0"
+    # The driver sums truthiness (`if result`), so a bare assert would leave a
+    # passing test counted as failed. The assert makes it able to fail; this
+    # keeps the driver's verdict honest. Both are required (#14920).
     return True
 
 
@@ -303,11 +327,15 @@ async def test_cache_performance():
         logger.info(f"   🚀 Cache speedup: {speedup:.1f}x faster")
 
     # Verify results are identical
-    if len(results1) == len(results2):
-        logger.info(f"   ✅ Results consistent: {len(results1)} items")
-    else:
-        logger.warning(f"   ⚠️  Result mismatch: {len(results1)} vs {len(results2)}")
-
+    # #14920: a mismatch logged a warning and still returned True, so the one
+    # invariant this test exists to check could not fail it.
+    assert len(results1) == len(results2), (
+        f"cached and uncached searches disagreed: {len(results1)} vs {len(results2)} items"
+    )
+    logger.info(f"   Results consistent: {len(results1)} items")
+    # The driver sums truthiness (`if result`), so a bare assert would leave a
+    # passing test counted as failed. The assert makes it able to fail; this
+    # keeps the driver's verdict honest. Both are required (#14920).
     return True
 
 

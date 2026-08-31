@@ -134,14 +134,53 @@
     HOME: "{{ ai_data_dir }}"
   timeout: 120  # Issue #2835: prevent indefinite hang on network issues
 
+# #14809: the requirements file must be delivered BEFORE anything filters or
+# installs from it. It used to be copied further down, in the application-source
+# loop, which runs AFTER the pip install below -- so a bad requirements file was
+# self-perpetuating: the failing install aborted the play before the copy that
+# would have replaced it. The node kept installing spacy long after #14279
+# removed it precisely because no stable spacy supports 3.14, and the fix could
+# never arrive. Delivery of a fix must not be gated behind the step the fix
+# exists to unbreak.
+- name: "AI Stack | Deploy requirements-ai.txt before installing from it (#14809)"
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt"
+    dest: "{{ ai_install_dir }}/requirements-ai.txt"
+    owner: "{{ ai_user }}"
+    group: "{{ ai_group }}"
+    mode: "0644"
+  become: true
+  tags: ['ai', 'deploy']
+
 - name: Check if requirements-ai.txt exists
   ansible.builtin.stat:
     path: "{{ ai_install_dir }}/requirements-ai.txt"
   register: _ai_requirements_file
 
+# #14272: requirements-ai.txt carries `-c ../../../../constraints/shared.txt`,
+# correct where the file LIVES in the repo and wrong where it is DEPLOYED — four
+# levels up from /opt/autobot/autobot-ai-stack/ is `/`, so pip looked for
+# /constraints/shared.txt and aborted provisioning.
+#
+# Rewritten through the canonical scripts/build-filtered-requirements.sh rather
+# than with a second sed here: the backend role and services/role_registry.py
+# already share that script for exactly this, and it says so in its own header
+# (#11117). It was never wired in here, which is the whole bug.
+- name: Create filtered AI-stack requirements file (#14272)
+  ansible.builtin.shell:
+    cmd: >-
+      bash {{ code_source_dir | default('/opt/autobot/code_source') }}/scripts/build-filtered-requirements.sh
+      {{ ai_install_dir }}/requirements-ai.txt
+      {{ code_source_dir | default('/opt/autobot/code_source') }}
+      > {{ ai_install_dir }}/requirements-ai-filtered.txt
+  become_user: "{{ ai_user }}"
+  changed_when: true
+  when: _ai_requirements_file.stat.exists
+  tags: ['ai', 'deploy']
+
 - name: Install AI Python packages from requirements-ai.txt
   ansible.builtin.pip:
-    requirements: "{{ ai_install_dir }}/requirements-ai.txt"
+    requirements: "{{ ai_install_dir }}/requirements-ai-filtered.txt"
     virtualenv: "{{ ai_install_dir }}/venv"
     state: present
     extra_args: "--timeout 300"
@@ -203,7 +242,6 @@
   loop:
     - "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py"
     - "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/ai_container_main.py"
-    - "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt"
   notify: restart ai-stack
   tags: ['ai', 'deploy']
 

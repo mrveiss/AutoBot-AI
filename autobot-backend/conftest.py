@@ -127,9 +127,21 @@ for _chromadb_mod in [
     "chromadb.config",
     "chromadb.telemetry",
     "chromadb.telemetry.opentelemetry",
+    # #13920: production code catches chromadb.errors.NotFoundError to tell
+    # "this collection does not exist" from every other failure. Without this
+    # entry the stub has no such submodule and the import raises inside the
+    # method under test.
+    "chromadb.errors",
 ]:
     if _chromadb_mod not in sys.modules:
         sys.modules[_chromadb_mod] = _make_pkg_stub(_chromadb_mod)
+
+# The exceptions on the stub must be REAL classes: a MagicMock attribute is not
+# a valid `except` target, so a stubbed-out error type turns a handled absence
+# into a TypeError at the catch site (#13920). Named to match chromadb's own.
+if not isinstance(getattr(sys.modules["chromadb.errors"], "NotFoundError", None), type):
+    _stub_not_found = type("NotFoundError", (Exception,), {})
+    sys.modules["chromadb.errors"].NotFoundError = _stub_not_found
 
 # Stub optional heavy dependencies that may not be installed in the dev venv.
 # These are only needed at runtime on the target VM; tests use mocks.
@@ -856,6 +868,43 @@ if "auth_middleware" not in sys.modules:
         return _device_jwt_dep
 
     _auth_stub.require_device_jwt = _require_device_jwt_stub  # type: ignore[attr-defined]
+
+    # get_auth_middleware must yield a middleware whose get_user_from_request()
+    # returns a REAL dict -- #13253's rule applied to this module's sibling
+    # accessor, which it missed (#14944).
+    #
+    # Without this, the catch-all below hands out a bare MagicMock, so
+    # ``get_auth_middleware().get_user_from_request(request)`` auto-vivifies a
+    # mock "user", and ``user.get("role")`` auto-vivifies another. Nothing
+    # errored, because everything downstream stringified it: the old
+    # ``is_admin_role`` computed ``str(<MagicMock ...>).lower()``, matched
+    # nothing, and returned False. Twelve tests across three shards asserted
+    # non-admin behaviour and passed for that reason rather than on the auth
+    # logic they name. Typing ``role_value`` strictly (#14944) turned that
+    # silent wrong answer into a TypeError, which is how the gap surfaced.
+    #
+    # Only get_user_from_request is pinned. The middleware carries a dozen other
+    # attributes (create_jwt_token, security_layer, enable_auth, ...) that tests
+    # legitimately auto-mock, so the object stays a MagicMock and only the value
+    # whose *shape* is load-bearing is made real -- a fresh dict per call, so a
+    # test mutating it cannot leak into the next.
+    _auth_middleware_stub_instance = MagicMock()
+    _auth_middleware_stub_instance.get_user_from_request.side_effect = (
+        lambda *_args, **_kwargs: _get_current_user_stub()
+    )
+
+    def _get_auth_middleware_stub():  # noqa: E301
+        return _auth_middleware_stub_instance
+
+    _auth_stub.get_auth_middleware = _get_auth_middleware_stub  # type: ignore[attr-defined]
+
+    # NOTE: this catch-all is why the gap above was silent -- a name nobody
+    # stubbed becomes a MagicMock that answers every call rather than an
+    # AttributeError that names the missing stub. It is deliberately left in
+    # place here: `authenticate_websocket`, `verify_internal_api_key` and
+    # `AuthenticationMiddleware` still reach it, and several tests configure
+    # them as mocks, so removing it belongs in its own change with its own CI
+    # run rather than riding along inside an auth fix (#14982).
     _auth_stub.__getattr__ = lambda attr: MagicMock()  # type: ignore[attr-defined]
     sys.modules["auth_middleware"] = _auth_stub
 
@@ -974,6 +1023,39 @@ _real_load_and_bind(
     backend_root / "code_intelligence" / "shared" / "scoring.py",
 )
 
+# code_intelligence.fingerprinting.* real-load (#13509) — services/knowledge/code_indexer.py
+# imports compute_graph_shape_fingerprint/shape_matches to decide whether a changed file
+# produced the same graph nodes/edges (skip re-embedding) or a different shape (rebuild).
+#
+# Real-loaded rather than stubbed, and the distinction is the whole point: a MagicMock
+# compute_graph_shape_fingerprint returns a Mock, shape_matches rejects it as a non-str,
+# and every file re-embeds. That is the correct fail-open, so the stub produces a GREEN
+# test suite for a feature that never once ran — the saving under test is invisible.
+#
+# graph_shape is stdlib-only (hashlib, typing) plus logging_manager, so this bypasses
+# code_intelligence/__init__ exactly like diff and scoring above.
+# NOTE: a `_make_pkg_stub` here would be wrong — its ``__path__`` is empty, so the package
+# would stop resolving its OTHER submodules and code_fingerprinting's real-load would die on
+# `code_intelligence.fingerprinting.detector`. The real directory is used instead, which keeps
+# every sibling importable while graph_shape is the only leaf executed eagerly.
+if "code_intelligence.fingerprinting" not in sys.modules:
+    _fp_pkg = types.ModuleType("code_intelligence.fingerprinting")
+    _fp_pkg.__path__ = [str(backend_root / "code_intelligence" / "fingerprinting")]
+    _fp_pkg.__package__ = "code_intelligence.fingerprinting"
+    sys.modules["code_intelligence.fingerprinting"] = _fp_pkg
+    # The namespace bind is load-bearing, same as in code_intelligence/conftest.py:
+    # `import code_intelligence.fingerprinting.X as m` binds via getattr on the PARENT,
+    # not via sys.modules. Without this, that walks the code_intelligence stub's catch-all
+    # __getattr__ and hands back a MagicMock, while `from ... import f` in the same file
+    # resolves through sys.modules to the real function — two different objects, so
+    # monkeypatching the module has no effect on the function under test.
+    if "code_intelligence" in sys.modules:
+        sys.modules["code_intelligence"].fingerprinting = _fp_pkg
+_real_load_and_bind(
+    "code_intelligence.fingerprinting.graph_shape",
+    backend_root / "code_intelligence" / "fingerprinting" / "graph_shape.py",
+)
+
 # code_intelligence.shared.process_offload real-load (#12866) — api/code_intelligence.py
 # imports run_directory_scan/run_isolated at module level to run whole-tree scans in a
 # separate process instead of a GIL-bound thread. Same situation as scoring above: the
@@ -1029,17 +1111,17 @@ _real_load_and_bind(
 # new colocated test file is added for a stubbed submodule — otherwise that test
 # silently asserts against MagicMock attributes instead of real behaviour.
 #
-# NOTE: "code_intelligence.test_pattern_analyzer" is intentionally NOT in this
-# list (#12437). Stubbing it here would poison sys.modules before pytest ever
-# collects code_intelligence/test_pattern_analyzer.py itself: with
-# --import-mode=importlib, pytest's import_path() returns whatever is already
-# in sys.modules[module_name] rather than re-importing, so the real test file
-# would never execute — pytest would instead try to treat the MagicMock-backed
-# stub module as the test module, and accessing its (mocked) `pytestmark`
-# attribute raises TypeError during collection. Nothing else in the codebase
-# imports this submodule (code_intelligence/__init__.py does, but that package
-# is itself fully stubbed above and never executes its real __init__), so
-# leaving it unstubbed is safe.
+# NOTE: "code_intelligence.testing_pattern_analyzer" is intentionally NOT in this
+# list (#12437, #14127). It was named test_pattern_analyzer.py until #14127, which
+# made pytest collect the production module itself; stubbing it here would then
+# poison sys.modules before that collection (with --import-mode=importlib,
+# pytest's import_path() returns whatever is already in sys.modules[module_name]
+# rather than re-importing, and accessing the MagicMock stub's `pytestmark`
+# raises TypeError during collection). The rename ends the collection, but the
+# entry still does not belong here: nothing else in the codebase imports this
+# submodule (code_intelligence/__init__.py does, but that package is itself fully
+# stubbed above and never executes its real __init__), so leaving it unstubbed
+# keeps the stub list to modules that actually need one.
 for _ci_sub in [
     "code_intelligence.performance_analyzer",
     "code_intelligence.redis_optimizer",
@@ -1297,12 +1379,6 @@ def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
-
-
-@pytest.fixture
-def test_data_dir() -> Path:
-    """Get test data directory."""
-    return Path(__file__).parent / "tests" / "fixtures" / "data"
 
 
 @pytest.fixture

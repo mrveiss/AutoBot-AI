@@ -7,7 +7,11 @@
 
 # Load SSOT configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" || {
+    echo "FATAL: ${SCRIPT_DIR}/../lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
 
 # Backend API (Main Machine - WSL)
 export BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"
@@ -35,7 +39,7 @@ export AI_STACK_URL="http://${AI_STACK_HOST}:${AI_STACK_PORT}"
 
 # Browser Service (VM5)
 export BROWSER_HOST="${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}"
-export BROWSER_PORT="${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
+export BROWSER_PORT="${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
 export BROWSER_URL="http://${BROWSER_HOST}:${BROWSER_PORT}"
 
 # VNC Services (Main Machine - WSL)
@@ -43,8 +47,10 @@ export VNC_WEB_HOST="${AUTOBOT_VNC_WEB_HOST:-localhost}"
 export VNC_WEB_PORT="${AUTOBOT_VNC_WEB_PORT:-6080}"
 export VNC_WEB_URL="http://${VNC_WEB_HOST}:${VNC_WEB_PORT}"
 
+# 5901, not 5902 (#14173 review) -- matches ssot-config.sh/ssot_config.py's
+# PortConfig.vnc_server: 5900 + vnc_display, vnc_display default 1.
 export VNC_SERVER_HOST="${AUTOBOT_VNC_SERVER_HOST:-localhost}"
-export VNC_SERVER_PORT="${AUTOBOT_VNC_SERVER_PORT:-5902}"
+export VNC_SERVER_PORT="${AUTOBOT_VNC_SERVER_PORT:-5901}"
 
 # Log configuration loaded
 echo "✅ Network configuration loaded:"

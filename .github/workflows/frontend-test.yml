@@ -52,7 +52,7 @@ on:
 # correct block — the tests genuinely have not run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   NODE_VERSION: '22'
@@ -129,11 +129,28 @@ jobs:
 
       - name: Run type checking
         working-directory: autobot-frontend
-        run: npm run type-check
-
+        # #14481: this step used to be followed by `check-ts-delta`, which ran
+        # this exact vue-tsc project a SECOND time in the same job — the first
+        # compile took 215s, the second exceeded its 600s budget and was killed
+        # under runner load, reddening the required "Unit & Integration Tests"
+        # context with no failing test and no error output. `set -eo pipefail`
+        # keeps this step's pass/fail identical to a bare `npm run type-check`:
+        # any nonzero exit from vue-tsc still fails this step immediately, teeing
+        # its output to a file does not change that. `check-ts-delta` below
+        # reads that file instead of recompiling.
+        run: |
+          set -eo pipefail
+          npm run type-check 2>&1 | tee vue-tsc-output.log
+          echo 0 > vue-tsc-status.txt
 
       - name: Check TypeScript error delta
         working-directory: autobot-frontend
+        # #14481: reuse the compile `type-check` just captured (vue-tsc-output.log
+        # / vue-tsc-status.txt) instead of running the same vue-tsc project a
+        # second time — see scripts/check-ts-delta.sh for the reuse contract.
+        # If either file were unexpectedly missing the script falls back to
+        # compiling itself, so this step still gates even then.
+        #
         # #13341: bound the STEP, not just the job. GitHub enforces
         # `timeout-minutes` from the RUNNER side, so when the runner process
         # stops making progress the job-level cancellation may never be issued
@@ -143,17 +160,22 @@ jobs:
         # `timeout` runs inside this step's own process tree, so it fires at a
         # known point whether or not GitHub's cancellation ever arrives, and the
         # step fails with a diagnosable "timed out" instead of hanging silently.
-        # 600s is roughly seven times the ~89s this step took on its last clean
-        # run; TERM first so vue-tsc can flush, KILL 60s later if it will not.
         # `--verbose` matters: without it `timeout` prints NOTHING, so the log
         # ends at "Process completed with exit code 124" and the operator is
         # left to know that 124 means a timeout. With it the step says
         # "timeout: sending signal TERM to command 'npm'", which is the
         # diagnosable failure this bound exists to produce.
-        # The hang itself is fixed at the root in scripts/check-ts-delta.sh
-        # (npx removed) — this bound is the guard for the NEXT unknown cause,
-        # not the fix for the known one.
-        run: timeout --verbose --kill-after=60s 600 npm run check-ts-delta
+        # 60s (was 600s) because this step no longer compiles anything (#14481)
+        # — it only reads the two files above and does a `grep`/arithmetic
+        # comparison, sub-second work on any runner. 60s keeps the same
+        # defense-in-depth this bound has always provided against an unknown
+        # future hang, rightsized to the much smaller job that remains; it is
+        # not a budget for a compile, because there is no longer a compile here
+        # to budget for.
+        run: timeout --verbose --kill-after=15s 60 npm run check-ts-delta
+        env:
+          TSC_OUTPUT_FILE: vue-tsc-output.log
+          TSC_STATUS_FILE: vue-tsc-status.txt
 
       - name: Run linting
         working-directory: autobot-frontend

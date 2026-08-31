@@ -57,6 +57,10 @@ class NoteTakingSkill(BaseSkill):
             tags=["notes", "knowledge", "organization", "productivity"],
         )
 
+    def get_trigger_actions(self) -> Dict[str, str]:
+        """Bind the declared trigger to the action that handles it (#14406)."""
+        return {"note_requested": "create_note"}
+
     async def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute note taking action."""
         handlers = {

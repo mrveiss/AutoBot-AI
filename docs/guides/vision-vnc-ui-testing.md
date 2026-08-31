@@ -893,11 +893,18 @@ Proxies VNC traffic through the backend for agent observation.
 #### WebSocket Proxy
 
 ```
-WebSocket /api/vnc-proxy/{vnc_type}/websockify
+WebSocket /api/vnc-proxy/{vnc_type}/websockify?token=<jwt>
 ```
 
 Bidirectional WebSocket proxy. Traffic is logged and forwarded to the VNC
 MCP observation cache for agent access.
+
+**Authentication (#14959):** the handshake is authenticated before it is
+accepted -- a JWT in the `token` query parameter (the only credential a
+browser client can present on a WebSocket handshake), an `Authorization`
+header, an `X-Session-ID` session header, or the internal-service key.
+An unauthenticated handshake is rejected with close code `1008` before any
+RFB frame is forwarded.
 
 #### Check VNC Accessibility
 
@@ -2317,7 +2324,7 @@ vncserver :1 -localhost no -SecurityTypes VncAuth,TLSVnc -rfbport 5901 \
     -geometry 1920x1080 -depth 24
 
 # Start websockify
-websockify --web /usr/share/novnc 0.0.0.0:6080 localhost:5901
+websockify --web /opt/novnc 0.0.0.0:6080 localhost:5901
 ```
 
 **Problem: VNC accessible locally but not remotely**

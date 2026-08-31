@@ -194,6 +194,17 @@ export const PERMISSION_ACTIONS = ['allow', 'ask', 'deny'] as const;
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
 
 /**
+ * Category/mode default values matching backend `CategoryDefaults`
+ * (`autobot_shared/ssot_constants.py`). Only the values consumed on the
+ * frontend today are mirrored here — asserted value-for-value against the
+ * Python source by `src/config/__tests__/ssot-parity.spec.ts` (#14047).
+ */
+export const CATEGORY_DEFAULTS = {
+  GENERAL: 'general',
+  SEARCH_MODE_HYBRID: 'hybrid',
+} as const;
+
+/**
  * Permission rule interface.
  */
 export interface PermissionRule {
@@ -279,7 +290,10 @@ export interface AutoBotConfig {
   readonly frontendUrl: string;
   readonly redisUrl: string;
   readonly ollamaUrl: string;
+  /** @deprecated #14822 — legacy broadcast socket base; use `liveEventsUrl`. */
   readonly websocketUrl: string;
+  /** Canonical channel event socket (#14822): `/api/ws/live`. */
+  readonly liveEventsUrl: string;
   readonly aistackUrl: string;
   readonly npuWorkerUrl: string;
   readonly browserServiceUrl: string;
@@ -509,6 +523,13 @@ function buildConfig(): AutoBotConfig {
       return `${runtimeHttpProto()}://${vm.ollama}:${port.ollama}`;
     },
 
+    /**
+     * @deprecated #14822 — this is the base of the legacy `/api/ws` endpoint,
+     * which broadcasts every event to every client with no channel scoping.
+     * Use {@link liveEventsUrl} instead. Retained because it is still the base
+     * other callers append to, and because removing it would silently change
+     * every URL derived from it.
+     */
     get websocketUrl(): string {
       if (runtimeHttpProto() === 'https') {
         const host =
@@ -516,6 +537,27 @@ function buildConfig(): AutoBotConfig {
         return `wss://${host}/api/ws`;
       }
       return `ws://${vm.main}:${port.backend}/api/ws`;
+    },
+
+    /**
+     * Canonical event socket (#14822): `/api/ws/live`.
+     *
+     * Channel-scoped and fanned out per subscriber, unlike {@link websocketUrl}.
+     * Derived from the same base so protocol and host resolution stay in one
+     * place — a second hand-built URL is how the two sockets drifted apart in
+     * the first place.
+     */
+    get liveEventsUrl(): string {
+      // Host/protocol resolution is duplicated from `websocketUrl` rather than
+      // read through `this`: a getter on a contextually-typed object literal
+      // makes `this` awkward to type, and the two must not silently disagree —
+      // so they are kept adjacent and identical apart from the `/live` suffix.
+      if (runtimeHttpProto() === 'https') {
+        const host =
+          typeof window !== 'undefined' ? window.location.host : vm.main;
+        return `wss://${host}/api/ws/live`;
+      }
+      return `ws://${vm.main}:${port.backend}/api/ws/live`;
     },
 
     get aistackUrl(): string {

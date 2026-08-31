@@ -9,6 +9,8 @@
 #   - Forgotten group-membership check
 #   - Drift between provision-fleet-roles.yml gates and group_vars facts
 #   - Cleanup-gate regressions of the #7031 class
+#   - The test inventory's group_vars/all.yml silently resolving to nothing
+#     (#14149) — see the "Assert test inventory resolves group_vars" step
 #
 # Security note: this workflow does NOT interpolate any untrusted GitHub
 # event data (no issue titles, PR bodies, commit messages, head_ref, etc.)
@@ -56,6 +58,25 @@ on:
       - 'autobot-slm-backend/ansible/tests/**'
       - 'autobot-slm-backend/ansible/tests/**'
 
+# #14434: without this, every push left its predecessors queued. 42 of a 271-run
+# sample were for commits no longer at their branch tip - work nothing would ever
+# read, each still fetching its actions. During GitHub's 2026-08-17 archive-download
+# degradation that wasted load became failures on unrelated pull requests (#14444).
+#
+# cancel-in-progress is guarded on the event rather than set to a bare `true`:
+# #13432 found that cancelling base-branch runs meant each merge cancelled the
+# previous merge's verification, and merges arrive faster than a suite completes -
+# of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
+# workflows this was applied to also trigger on push to Dev_new_gui, so the guard
+# is load-bearing there and harmless where it is not.
+# Least privilege (#15331). Checks out and runs ansible assertions only.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -68,21 +89,51 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y ansible-core
 
+      # #14678: tests/inventory/group_vars/all.yml is GENERATED, not tracked.
+      # It was a third tracked copy of the role-active facts kept byte-equal by
+      # a diff guard. Copied rather than symlinked: #14149 -- a tracked symlink
+      # is materialised as a plain-text path string on core.symlinks=false
+      # checkouts, and the playbook then resolves zero variables.
+      - name: "Generate the test inventory's group_vars from the single source (#14678)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          mkdir -p tests/inventory/group_vars
+          cp inventory/group_vars/all.yml tests/inventory/group_vars/all.yml
+
+      - name: "Assert that copy is fresh and is a real file (#14678)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          python3 tests/check_test_inventory_is_generated.py
+
       - name: Run role_*_active facts test (group_vars codepath)
         working-directory: autobot-slm-backend/ansible
         run: |
           ansible-playbook -i tests/inventory/test_role_facts.yml tests/playbooks/test_role_active_facts.yml
 
-      - name: Run role_*_active facts test (vars_files codepath, #7094)
+      # #14149: tests/inventory/group_vars/all.yml used to be a symlink to the
+      # canonical inventory/group_vars/all.yml. GitHub-hosted Linux runners keep
+      # core.symlinks=true, so the playbook run above passed here even while it
+      # silently resolved to zero variables on core.symlinks=false checkouts.
+      # This asserts the test inventory actually resolves a known group_vars key.
+      - name: "Assert test inventory resolves group_vars (#14149)"
         working-directory: autobot-slm-backend/ansible
-        # #7094: tests/inventory_dynamic/ is a copy of tests/inventory/ WITHOUT
-        # the group_vars/all.yml symlink. Mimics the SLM-triggered provision
-        # path where the temp inventory in /tmp/ has no sibling group_vars/.
-        # The playbook MUST succeed loading facts via vars_files alone.
+        run: |
+          python3 tests/check_test_inventory_group_vars.py
+
+      - name: Run role_*_active facts test (deploy.yml's vars_files codepath, #14678)
+        working-directory: autobot-slm-backend/ansible
+        # #7094 named this the SLM-triggered provision path; that shape no longer
+        # exists (#11781, #14286 link group_vars/ beside every dynamic inventory).
+        # It now stands in for deploy.yml's actual callers (services/deployment.py,
+        # services/blue_green.py), which invoke deploy.yml with a bare `-i "<host>,"`
+        # string -- not a directory, so no group_vars discovery either (#14678).
+        # tests/inventory_dynamic/ is a copy of tests/inventory/ WITHOUT the
+        # group_vars/all.yml symlink, so the playbook MUST succeed loading facts
+        # via vars_files alone.
         run: |
           ansible-playbook -i tests/inventory_dynamic/test_role_facts.yml tests/playbooks/test_role_active_facts_no_group_vars.yml
 
-      - name: "Diff guard: ensure both fact-file copies stay byte-equal (#7095)"
+      - name: "Diff guard: the two tracked role_*_active copies stay in sync (#14678)"
         working-directory: autobot-slm-backend/ansible
         run: |
           python3 tests/check_role_facts_synced.py
@@ -103,10 +154,21 @@ jobs:
         run: |
           ansible-playbook --check --connection=local -i 'localhost,' tests/playbooks/test_clean_yml_loops.yml
 
+      # #13747 AC4: "verified by deliberate failure: the guard rejects a venv
+      # left at the old version." Runs for real (not --check) against a
+      # fabricated venv, so it needs no NPU hardware and no python3.14 binary
+      # on the runner — see the playbook header for what it proves.
+      - name: "Run ensure_venv_version deliberate-failure test (#13747)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          ansible-playbook --connection=local -i 'localhost,' tests/playbooks/test_ensure_venv_version.yml
+
       - name: Lint test playbook + inventory YAML
         working-directory: autobot-slm-backend/ansible
         run: |
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts_no_group_vars.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_clean_yml_loops.yml'))"
+          python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_ensure_venv_version.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/inventory/test_role_facts.yml'))"
+          python3 -c "import yaml; yaml.safe_load(open('tests/inventory/group_vars/all.yml'))"

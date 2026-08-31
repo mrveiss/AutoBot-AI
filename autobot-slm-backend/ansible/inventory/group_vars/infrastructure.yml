@@ -15,7 +15,7 @@
 # Service discovery variables (backend_host, frontend_host, redis_host, etc.)
 # are derived from inventory ansible_host values in production.yml.
 #
-# Shell scripts use: infrastructure/shared/scripts/lib/ssot-config.sh
+# Shell scripts use: autobot-infrastructure/shared/scripts/lib/ssot-config.sh
 # Python code uses:  config/complete.yaml via autobot_shared.ssot_config
 # Environment vars:  .env.network (generated from config/complete.yaml)
 

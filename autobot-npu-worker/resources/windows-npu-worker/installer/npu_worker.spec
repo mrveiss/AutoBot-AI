@@ -178,7 +178,7 @@ Size Optimization Tips:
 - Consider using PyInstaller's --onefile option for single executable
 
 Troubleshooting:
-- If OpenVINO fails to bundle, check openvino-dev is installed
+- If OpenVINO fails to bundle, check openvino is installed and its DLLs are on PATH
 - For missing DLL errors, add to binaries manually
 - Check PyInstaller warnings for missing modules
 """

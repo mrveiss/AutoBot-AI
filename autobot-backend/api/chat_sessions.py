@@ -13,7 +13,7 @@ storage to the chat_history subsystem.
 import json
 from typing import Dict, List
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 from api.schemas_chat import (
@@ -37,6 +37,11 @@ from api.schemas_chat import (
     SessionUpdateData,
 )
 from api.schemas_common import DataResponse
+from api.session_events import (
+    publish_session_created,
+    publish_session_deleted,
+    publish_session_updated,
+)
 from auth_middleware import get_auth_middleware, get_current_user
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -49,7 +54,7 @@ from chat_workflow.session_handler import _emit_session_create, _emit_session_de
 from exceptions import get_exceptions_lazy
 
 # CRITICAL SECURITY FIX: Import session ownership validation
-from security.session_ownership import validate_session_ownership
+from security.session_ownership import build_owner_metadata, validate_session_ownership
 
 # Issue #6559: Wire audit_record into session create/delete/export endpoints
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
@@ -73,6 +78,7 @@ from utils.response_helpers import create_success_response
 
 router = APIRouter(tags=["chat-sessions"])
 logger = get_logger(__name__)
+
 
 # Performance optimization: O(1) lookup for valid export formats (Issue #326)
 VALID_EXPORT_FORMATS = {"json", "txt", "csv"}
@@ -413,8 +419,14 @@ async def list_sessions(
     if scope in ("org", "team"):
         return await _list_scoped_sessions(request, request_id, chat_history_manager, scope, team_id)
 
-    # Default: list all sessions (fast mode, no decryption)
+    # Default: list all sessions (fast mode)
     sessions = await chat_history_manager.list_sessions_fast()
+
+    # #12685: exclude company/agent-scoped conversations (e.g. LLC CEO chat)
+    # from the ordinary user list — first-class scoping fields, not a title
+    # parse. See _is_agent_scoped_session for the migration story on sessions
+    # created before this fix.
+    sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
 
     # Filter to authenticated user's own sessions
     username = current_user.get("username")
@@ -433,6 +445,34 @@ async def list_sessions(
         message="Sessions retrieved successfully",
         request_id=request_id,
     )
+
+
+def _is_agent_scoped_session(session: dict) -> bool:
+    """A company/agent conversation (e.g. LLC CEO chat), not an ordinary user chat.
+
+    #12685: the leak this closes — LLC agent heartbeat/CEO-chat conversations
+    were registered in the same session store as ordinary chats and returned by
+    the default ``GET /api/chat/sessions`` list with no company scoping. The
+    only thing distinguishing them was a display title ("CEO · <company_id>"),
+    which is exactly the fragility that let two companies' agent chats pile
+    into one flat list.
+
+    ``companyId`` / ``sessionKind`` are first-class metadata fields written at
+    session creation (``CeoChatView.vue`` -> ``POST /chat/sessions`` ->
+    ``create_session`` here) and surfaced by ``list_sessions_fast`` /
+    ``list_sessions`` (``chat_history/session_listing.py``). Either field being
+    set is sufficient — a session can carry a ``company_id`` without an
+    explicit ``session_kind`` (or vice versa for a future non-company agent).
+
+    Migration: sessions created before this fix have neither field. They are
+    NOT retroactively reclassified — there is no reliable non-title signal to
+    do that with, and title-matching is the bug this closes, not the fix for
+    it. Such legacy sessions keep showing in the general list exactly as they
+    did before (no data loss, no silent re-scoping). A backfill/admin cleanup
+    for pre-existing "CEO · <company_id>" sessions is a separate, explicit,
+    one-time operation — #14756, not folded into this filter.
+    """
+    return bool(session.get("companyId")) or session.get("sessionKind") == "agent"
 
 
 async def _filter_user_sessions(sessions: list, username: str) -> list:
@@ -734,6 +774,49 @@ async def _track_session_in_memory_graph(
         )
 
 
+async def _reject_session_id_collision(chat_history_manager, session_id: str, user_data: dict | None) -> None:
+    """Refuse to create over an existing session the caller does not own (#14012).
+
+    The caller-supplied id (#6746) is validated for shape only, so without this a
+    request naming someone else's session id would overwrite their messages and
+    reassign ownership. Re-creating one's *own* session id is left alone — that
+    is a client retry, and the #6746 round-trip depends on it.
+
+    A lookup failure refuses rather than proceeding: not being able to tell
+    whether a session exists is not a reason to overwrite it.
+    """
+    try:
+        existing = await chat_history_manager.get_session(session_id)
+    except Exception as exc:
+        logger.warning("Could not check session %s for collision, refusing create: %s", session_id, exc)
+        raise _session_id_taken_error()
+    if existing is None:
+        return
+
+    owner = ((existing.get("metadata") or {}) if isinstance(existing, dict) else {}).get("owner")
+    caller = (user_data or {}).get("username")
+    if owner and caller and owner == caller:
+        return  # the caller's own session — a retry, not a takeover
+
+    logger.warning("Refusing create over existing session %s (owner=%s, caller=%s)", session_id, owner, caller)
+    raise _session_id_taken_error()
+
+
+def _session_id_taken_error() -> HTTPException:
+    """409 for a create that collides with an existing session id (#14012).
+
+    Deliberately an ``HTTPException`` rather than the domain ``AuthorizationError``:
+    ``@with_error_handling`` re-raises ``HTTPException`` untouched but converts
+    anything else into a generic 500 ("The operation failed"), so the domain
+    exception refused the request while telling the client the server broke.
+
+    Deliberately 409 and identical for both refusal cases — a session owned by
+    someone else and one with no recorded owner. A 403 on the first would confirm
+    who does own it; the caller only needs to know the id is not theirs to take.
+    """
+    return HTTPException(status_code=409, detail="A session with this id already exists")
+
+
 @router.post("/chat/sessions", response_model=DataResponse[SessionCreateData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -754,25 +837,25 @@ async def create_session(session_data: SessionCreate, request: Request):
     # so the frontend's locally-minted UUID survives the round-trip and
     # frontend/backend stay aligned. Falls back to server-mint when absent
     # (legacy callers, CLI, tests).
+    # SECURITY: Extract authenticated user and add to metadata as owner
+    user_data = get_auth_middleware().get_user_from_request(request)
+
     if session_data.id and validate_chat_session_id(session_data.id):
         session_id = session_data.id
+        # #14012: the id above is caller-supplied and only its FORMAT was
+        # checked. Without this, creating over an existing id replaced the
+        # stored messages with [] and reassigned ownership — one request that
+        # destroyed a conversation and took the session over.
+        await _reject_session_id_collision(chat_history_manager, session_id, user_data)
     else:
         session_id = generate_chat_session_id()
     session_title = session_data.title or DEFAULT_SESSION_TITLE
 
-    # SECURITY: Extract authenticated user and add to metadata as owner
-    user_data = get_auth_middleware().get_user_from_request(request)
     metadata = session_data.metadata or {}
+    # #14020: one builder for every path that stamps ownership (#684 org/team
+    # hierarchy included), so create and backfill cannot drift apart.
+    metadata.update(build_owner_metadata(user_data, session_data.team_id))
     if user_data and user_data.get("username"):
-        metadata["owner"] = user_data["username"]
-        metadata["username"] = user_data["username"]  # For backward compatibility
-        # Issue #684: Capture org/team hierarchy in session metadata
-        if user_data.get("user_id"):
-            metadata["user_id"] = user_data["user_id"]
-        if user_data.get("org_id"):
-            metadata["org_id"] = user_data["org_id"]
-        if session_data.team_id:
-            metadata["team_id"] = session_data.team_id
         logger.info(
             "Session %s created with owner: %s (org: %s)",
             session_id,
@@ -817,6 +900,10 @@ async def create_session(session_data: SessionCreate, request: Request):
         },
         outcome="success",
     )
+
+    # #14820: tell every other client this session now exists.  The backend is
+    # the authority for session state; observers render from what it publishes.
+    await publish_session_created(session_id, session if isinstance(session, dict) else {})
 
     return create_chat_response(
         data=session,
@@ -878,6 +965,9 @@ async def update_session(
         session_id,
         {"title": session_data.title, "request_id": request_id},
     )
+
+    # #14820: a title change made in one client must show up in the others.
+    await publish_session_updated(session_id, {"title": session_data.title})
 
     return create_chat_response(
         data=updated_session,
@@ -1365,6 +1455,10 @@ async def delete_session(
         outcome="success",
     )
 
+    # #14820: other clients must drop this session from their list rather than
+    # holding a reference to something the backend no longer has.
+    await publish_session_deleted(session_id)
+
     return _build_delete_session_response(
         session_id,
         request_id,
@@ -1381,7 +1475,12 @@ async def delete_session(
     operation="export_session",
     error_code_prefix="CHAT_SESSIONS",
 )
-async def export_session(session_id: str, request: Request, format: str = "json"):
+async def export_session(
+    session_id: str,
+    request: Request,
+    format: str = "json",
+    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership (#14011)
+):
     """
     Export a chat session in various formats.
 
@@ -1428,63 +1527,23 @@ async def export_session(session_id: str, request: Request, format: str = "json"
 # =============================================================================
 
 
-def _preserve_system_messages(chat_manager, session_id: str) -> List[Dict]:
+async def _clear_session_messages(chat_manager, session_id: str) -> None:
     """
-    Extract system messages from session for preservation.
+    Clear all messages from a session.
 
-    Issue #665: Extracted helper for system message preservation during reset.
+    Issue #665: Extracted helper for session clearing.
+    Issue #7025: previously called ``add_message(session_id, dict)`` to
+    restore preserved messages — the same wrong-signature pattern #6744 fixed
+    in api/chat.py. Python silently accepted UUID as ``sender`` and dict as
+    ``text``, leaving ``session_id=None`` so messages landed in the default
+    in-memory bucket instead of disk.
+
+    #14359: the restore path this used to support (``keep_system_prompt`` /
+    ``_preserve_system_messages`` / ``_to_persisted_system_message``) is
+    removed — nothing ever persists a system prompt into a session, so there
+    was never anything for it to restore. See the issue for the full audit.
     """
-    try:
-        existing_data = chat_manager.get_session(session_id)
-        if existing_data and "messages" in existing_data:
-            return [m for m in existing_data["messages"] if m.get("role") == "system"]
-    except Exception as e:
-        logger.warning("Could not preserve system prompt: %s", e)
-    return []
-
-
-def _to_persisted_system_message(msg: Dict) -> Dict:
-    """Translate api-shape (role/content) to disk-shape (sender/content/type).
-
-    #7025: ``_preserve_system_messages`` returns messages with ``role`` keys
-    (filtered by ``role == "system"``). The disk schema (used by
-    ``add_messages_batch`` and the JSON files in ``data/chats/``) expects
-    ``sender``/``content``/``type``/``metadata``/``sources`` instead. Mirrors
-    ``api/chat.py:_to_persisted_message`` for the system-message subset.
-    """
-    return {
-        "id": msg.get("id", ""),
-        "sender": msg.get("role") or msg.get("sender") or "system",
-        "content": msg.get("content", ""),
-        "timestamp": msg.get("timestamp"),
-        "type": msg.get("type", "message"),
-        "metadata": msg.get("metadata") or {},
-        "sources": msg.get("sources", []),
-    }
-
-
-async def _clear_and_restore_session(chat_manager, session_id: str, messages_to_restore: List[Dict]) -> int:
-    """
-    Clear session and restore specified messages.
-
-    Issue #665: Extracted helper for session clearing with message restoration.
-    Issue #7025: previously called ``add_message(session_id, dict)`` — the
-    same wrong-signature pattern that #6744 fixed in api/chat.py. Python
-    silently accepted UUID as ``sender`` and dict as ``text``, leaving
-    ``session_id=None`` so messages landed in the default in-memory
-    bucket — restored messages were never written to disk. Now uses
-    ``add_messages_batch(session_id, [...])`` (correct signature) with
-    disk-shape conversion.
-
-    Returns number of messages restored.
-    """
-    chat_manager.clear_session(session_id)
-    if not messages_to_restore:
-        return 0
-    if hasattr(chat_manager, "add_messages_batch"):
-        persisted = [_to_persisted_system_message(m) for m in messages_to_restore]
-        await chat_manager.add_messages_batch(session_id, persisted)
-    return len(messages_to_restore)
+    await chat_manager.update_session(session_id, {"messages": []})
 
 
 @router.post("/chat/reset", response_model=DataResponse[ChatResetData])
@@ -1498,7 +1557,10 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
     Reset the current chat session.
 
     Issue #549: Created to match frontend POST /api/chat/reset
-    Issue #665: Refactored to use extracted helpers for message preservation.
+    Issue #665: Refactored to use an extracted helper for session clearing.
+    Issue #14359: dropped ``keep_system_prompt`` — nothing ever persisted a
+    system prompt into a session, so the flag could not change any observable
+    outcome. Reset now always clears unconditionally when ``clear_context``.
     """
     request_id = generate_request_id()
     chat_history_manager = get_chat_history_manager(request)
@@ -1508,18 +1570,22 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
 
     session_id = reset_request.session_id
     clear_context = reset_request.clear_context
-    keep_system_prompt = reset_request.keep_system_prompt
 
     if not session_id:
         session_id = generate_chat_session_id()
         logger.info("Creating new session for reset: %s", session_id)
     else:
         _validate_session_id_or_raise(session_id)
+        # #14011: session_id arrives in the request body, so the file's
+        # `Depends(validate_session_ownership)` pattern cannot be used — it
+        # resolves a path parameter. Reset clears another user's conversation,
+        # so the caller must own it. Only reachable when an id was supplied; an
+        # absent one mints a new session above, which has no owner to check.
+        await validate_session_ownership(session_id, request)  # SECURITY: caller must own the session
 
         if clear_context:
-            messages_to_keep = _preserve_system_messages(chat_history_manager, session_id) if keep_system_prompt else []
-            restored = await _clear_and_restore_session(chat_history_manager, session_id, messages_to_keep)
-            logger.info("Reset chat session: %s, kept %d system messages", session_id, restored)
+            await _clear_session_messages(chat_history_manager, session_id)
+            logger.info("Reset chat session: %s", session_id)
 
     log_chat_event(
         "session_reset",
@@ -1527,7 +1593,6 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
         {
             "request_id": request_id,
             "clear_context": clear_context,
-            "keep_system_prompt": keep_system_prompt,
         },
     )
 
@@ -1536,7 +1601,6 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
             "session_id": session_id,
             "reset": True,
             "clear_context": clear_context,
-            "keep_system_prompt": keep_system_prompt,
         },
         message="Chat session reset successfully",
         request_id=request_id,

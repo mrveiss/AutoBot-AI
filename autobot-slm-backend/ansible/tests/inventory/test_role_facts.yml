@@ -77,6 +77,30 @@ all:
       expected_role_slm_active: false
 
     # 5. AI Stack + LLM (co-located).
+    # #14682: chromadb grants ai_stack but is a vector database, not an LLM
+    # runtime. Gating role_llm_active on ai_stack meant declaring this ran the
+    # ollama installer under a root shell on that host.
+    test-chromadb-only-no-llm:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - chromadb
+      expected_role_ai_stack_active: true
+      expected_role_llm_active: false
+      expected_role_backend_active: false
+      expected_role_slm_active: false
+
+    # #14682: same shape via tts-worker — speech synthesis, not an LLM.
+    test-tts-worker-only-no-llm:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - tts-worker
+      expected_role_ai_stack_active: true
+      expected_role_llm_active: false
+      expected_role_backend_active: false
+      expected_role_slm_active: false
+
     test-ai-stack-and-llm:
       ansible_host: 127.0.0.1
       ansible_connection: local
@@ -138,11 +162,55 @@ all:
       expected_role_llm_active: false
       expected_role_tts_worker_active: false
 
+    # 10. #14560 reproduction: privileged roles DETECTED but never DECLARED
+    #     (node_roles carries them, node_roles_declared does not — this is
+    #     what inventory_builder.py stamps for a node whose heartbeat
+    #     reports a role the operator never assigned). The five privileged
+    #     facts must stay false; tts-worker (deliberately-union, #9965) must
+    #     still activate off the raw node_roles branch.
+    test-detected-only-privileged:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - frontend
+        - backend
+        - ai-stack
+        - npu-worker
+        - browser-service
+        - tts-worker
+      node_roles_declared: []
+      expected_role_backend_active: false
+      expected_role_frontend_active: false
+      expected_role_ai_stack_active: false
+      expected_role_npu_worker_active: false
+      expected_role_browser_active: false
+      expected_role_tts_worker_active: true
+
+    # 11. #14560 over-tight check: a role the operator actually DECLARED
+    #     (present in both node_roles and node_roles_declared) must keep
+    #     activating — mirrors #14552's test_ordinary_groups_are_not_swept_in.
+    test-declared-frontend-still-activates:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - frontend
+      node_roles_declared:
+        - frontend
+      expected_role_frontend_active: true
+      expected_role_backend_active: false
+
   children:
     # Group-membership-only test for #8 (test-empty-roles-via-group).
     main:
       hosts:
         test-empty-roles-via-group: {}
+    # #14682: chromadb and tts-worker both GRANT ai_stack, so this is the real
+    # shape — a node legitimately in ai_stack that must not run an LLM. Before
+    # the fix, role_llm_active gated on ai_stack membership and fired here.
+    ai_stack:
+      hosts:
+        test-chromadb-only-no-llm: {}
+        test-tts-worker-only-no-llm: {}
     # SLM Manager hosts must be in slm_server group (matches install.sh
     # localhost.yml + seed-fleet-nodes.yml inventory layout).
     slm_server:

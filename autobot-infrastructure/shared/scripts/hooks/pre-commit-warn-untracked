@@ -30,7 +30,32 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/_common.sh
-source "$SCRIPT_DIR/lib/_common.sh"
+# GH#14161: this hook's own contract is "warning only, never blocks a commit"
+# (see header above). The old unguarded `source` let a missing/broken
+# lib/_common.sh fall through silently under `set -uo pipefail` (no `-e`,
+# so a failed source did not itself stop the script) — but the very next
+# reference to ${BOLD}/${YELLOW}/${NC} below is an unbound-variable error
+# under `set -u`, which DOES abort the script regardless of `-e`. At the
+# prepare-commit-msg stage that non-zero exit aborts the commit — the exact
+# opposite of this hook's documented contract. A missing dependency must
+# degrade to "skip the warning silently" (still exit 0), never to a hard
+# stop; #14151's fail-CLOSED direction is deliberately not applied here.
+#
+# Review follow-up on this PR: "exit 0 silently" would satisfy the contract
+# while reintroducing the very defect this hook family is fixing — a broken
+# dependency and "nothing to warn about" would be byte-identical. So it says
+# so on stderr first. That keeps "never blocks a commit" (still exit 0) while
+# refusing to report clean about a check that never ran.
+# GH#14891: the decisive attempt used to be written `if ! source ... 2>/dev/null`,
+# which threw away the library's OWN stderr — the developer was told the load
+# failed but never why. The redirect is gone; the exit 0 stays, because it is
+# this hook's contract rather than an oversight, and the marker below is what
+# the guard reads instead of an allowlist of filenames.
+source "$SCRIPT_DIR/lib/_common.sh" || {
+    # lib-source-contract: non-blocking
+    echo "warn-untracked: cannot load lib/_common.sh — untracked-file check SKIPPED (not clean)" >&2
+    exit 0
+}
 
 SOURCE_PATTERN='\.py$|\.ts$|\.vue$|\.js$'
 

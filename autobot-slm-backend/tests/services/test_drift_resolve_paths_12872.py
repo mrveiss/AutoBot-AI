@@ -16,6 +16,7 @@ So detection honoured the override while resolution did not, and those
 components reported drift that could never be cleared.
 """
 
+import ast
 import importlib.util
 import re
 import sys
@@ -138,14 +139,54 @@ def test_rsync_helper_accepts_explicit_paths():
     assert "dest_dir or" in builder, "destination must prefer the explicit path"
 
 
-def test_drift_resolve_passes_the_resolved_paths():
-    """The resolve caller must hand over the override-aware paths."""
-    src = _code_sync_src()
-    call_start = src.index("ok, msg = await _rsync_component_local(\n        source_root,\n        request.component")
-    call = src[call_start : call_start + 400]
+def _rsync_calls_in(src: str, func_name: str) -> list:
+    """Every ``_rsync_component_local(...)`` call written inside ``func_name``.
 
-    assert "source_dir=source_dir" in call, "resolve still rebuilds the source path"
-    assert "dest_dir=deployed_dir" in call, "resolve still rebuilds the destination path"
+    Parsing beats reading the text: an argument list is laid out by the
+    formatter, so any literal rendering of a call is only as stable as the
+    surrounding line lengths.
+    """
+    tree = ast.parse(src)
+    owners = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == func_name
+    ]
+
+    assert owners, f"api/code_sync.py no longer defines {func_name}()"
+    return [
+        node
+        for owner in owners
+        for node in ast.walk(owner)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_rsync_component_local"
+    ]
+
+
+def test_drift_resolve_passes_the_resolved_paths():
+    """The resolve caller must hand over the override-aware paths, in order.
+
+    #15063: this used to locate the call by an exact source substring and then
+    assert against a fixed byte window after it. That broke when black joined
+    the argument list onto one line — the guarded property was untouched, the
+    transcription was not. Matching the AST instead binds each argument to *its
+    own* call, which is stronger than the old proximity window (a sibling
+    caller's keywords can no longer satisfy it), and states the positional
+    order as an assertion rather than smuggling it into a string literal.
+    """
+    src = _code_sync_src()
+    calls = _rsync_calls_in(src, "_drift_resolve_rsync_or_fail")
+
+    assert len(calls) == 1, f"expected exactly one rsync call in the resolve helper, found {len(calls)}"
+    positional = [ast.unparse(arg) for arg in calls[0].args]
+    keywords = {kw.arg: ast.unparse(kw.value) for kw in calls[0].keywords}
+
+    assert positional == ["source_root", "request.component", "excludes"], (
+        f"resolve passes {positional} positionally; _rsync_component_local takes "
+        "(source_path, component, excludes) in that order, so a reordering here "
+        "would rsync the wrong tree"
+    )
+    assert keywords.get("source_dir") == "source_dir", "resolve still rebuilds the source path"
+    assert keywords.get("dest_dir") == "deployed_dir", "resolve still rebuilds the destination path"
 
 
 def test_every_resolve_caller_passes_the_resolved_paths():

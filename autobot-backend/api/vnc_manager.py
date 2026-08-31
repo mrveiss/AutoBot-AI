@@ -64,6 +64,7 @@ from api.vnc_humanization import (
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.temp_files import temporary_file_path
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
@@ -94,14 +95,19 @@ def is_vnc_running() -> bool:
 
 
 def _launch_websockify() -> None:
-    """Start websockify daemon for noVNC access (TLS-only, proxied by nginx). Ref: #2735."""
+    """Start websockify daemon for noVNC access (TLS-only, proxied by nginx). Ref: #2735.
+
+    #13076: web root is config.path.novnc_path (default /opt/novnc), not the
+    distro /usr/share/novnc — roles/vnc removes that package (#13069) and it
+    otherwise serves a stale pre-VeNCrypt client (#13060).
+    """
     websockify_bind = f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}"
     vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:5901"
     subprocess.Popen(  # nosec B603 B607  # fixed argv, no user input
         [
             "/usr/bin/websockify",
             "--web",
-            "/usr/share/novnc",
+            config.path.novnc_path,
             "--cert=/etc/autobot/certs/server-cert.pem",
             "--key=/etc/autobot/certs/server-key.pem",
             "--ssl-only",

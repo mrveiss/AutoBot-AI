@@ -30,10 +30,15 @@ on:
     # run that never starts cannot block a merge. Mirrors the `reviewable` filter
     # in `changes` below exactly; previously every docs-only pull request paid a
     # checkout and a queue slot only to skip `review`. Keep the two lists in sync.
+    #
+    # #12986: the backend-Python entries are the canonical `backend-python` set
+    # from .github/filters/backend-python-paths.yml; GitHub cannot include a file here, so
+    # pipeline-scripts/check_workflow_path_filters.py enforces the match.
     paths:
       - 'autobot-backend/**/*.py'
       - 'autobot-slm-backend/**/*.py'
       - 'autobot_shared/**/*.py'
+      - '.github/filters/backend-python-paths.yml'
       - 'ansible/**'
       - '.github/workflows/ai-security-review.yml'
 
@@ -57,13 +62,8 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
-          filters: |
-            reviewable:
-              - 'autobot-backend/**/*.py'
-              - 'autobot-slm-backend/**/*.py'
-              - 'autobot_shared/**/*.py'
-              - 'ansible/**'
-              - '.github/workflows/ai-security-review.yml'
+          # #12986: `reviewable` is defined in the canonical filter file.
+          filters: .github/filters/backend-python-paths.yml
 
   review:
     name: Security Review
@@ -147,10 +147,30 @@ jobs:
             echo "_Anything worth keeping should be filed as an issue — a PR comment is not tracking._"
           } > /tmp/comment.md
 
+      # #14155 review (finding D): the PR comment was the ONLY place these
+      # findings ever surfaced — no job summary, no artifact. Making the post
+      # non-fatal above therefore traded a false failure for *no signal*: on a
+      # fork PR the analysis runs, the 403 is swallowed, the job reports green,
+      # and a real finding sits in raw Actions logs nobody opens for a job
+      # documented as advisory and always-green.
+      #
+      # The step summary is written BEFORE the post attempt and is not
+      # conditional on it, so the findings survive whether or not the comment
+      # lands. It renders on the run page, which is reachable from the check
+      # regardless of who owns the head repo.
+      - name: Publish findings to the run summary
+        if: steps.key.outputs.configured == 'true' && steps.review.outputs.ok == 'true'
+        run: cat /tmp/comment.md >> "$GITHUB_STEP_SUMMARY"
+
       # Upsert by marker so repeated pushes update one comment instead of
       # appending a new one per run.
+      # #14153: same fork-hostile shape as ssot-coverage.yml — GITHUB_TOKEN
+      # is read-only on pull_request events from a fork, so this call 403s
+      # and would otherwise mark the (already advisory, never-required) job
+      # "fail" for a reason that has nothing to do with the review itself.
       - name: Post or update PR comment
         if: steps.key.outputs.configured == 'true' && steps.review.outputs.ok == 'true'
+        continue-on-error: true
         uses: actions/github-script@v9
         with:
           script: |

@@ -32,7 +32,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -73,11 +73,37 @@ jobs:
       - name: Install migration dependencies
         # Deliberately minimal — what runner.py and migration modules import.
         # psycopg2-binary: sync driver used by the custom runner.
+        # sqlalchemy: models/database.py (Base + all table definitions), used
+        # by the schema-bootstrap step below to replicate production's
+        # create_all() (#14326 review).
+        # pydantic / pydantic-settings: autobot_shared.ssot_config, imported by
+        # migrations.seed_agents (#14326 — see PYTHONPATH below for the other
+        # half of that fix).
+        # pyyaml: NOT a migration dependency. The pytest step below loads
+        # autobot-slm-backend/conftest.py, which since #14307 real-loads
+        # services/inventory_builder.py (that module imports yaml). The
+        # conftest now degrades per-module rather than dying, so this is no
+        # longer load-bearing — kept because inventory_builder is the one
+        # listed module a migration test could plausibly want real, and one
+        # line is cheaper than discovering it is absent.
+        # bcrypt / PyJWT[crypto]: NOT a migration dependency either, but the
+        # user_management schema-bootstrap step (#14300) imports
+        # user_management.models to register every table on Base.metadata,
+        # and one of those (role.py) imports
+        # autobot_shared.user_management.models.role ->
+        # autobot_shared.auth.permissions. Importing any submodule of
+        # autobot_shared.auth runs autobot_shared/auth/__init__.py, which
+        # eagerly imports jwt_core (bcrypt + PyJWT) regardless of which
+        # submodule was actually requested. Same versions as
+        # autobot-slm-backend/requirements.txt.
         run: |
           python -m pip install --upgrade pip
           python -m pip install \
             psycopg2-binary \
+            "sqlalchemy>=2.0.51" \
             pydantic pydantic-settings \
+            pyyaml \
+            "bcrypt>=5.0.0" "PyJWT[crypto]>=2.13.0" \
             pytest "pytest-asyncio>=0.24"
 
       - name: Create slm and slm_users databases
@@ -89,30 +115,359 @@ jobs:
             -c "CREATE DATABASE slm;" \
             -c "CREATE DATABASE slm_users;"
 
-      - name: (a) Apply all migrations on a fresh DB
+      - name: Create base SLM schema (matches production's create_all)
+        # #14326 review: main.py's lifespan calls db_service.initialize()
+        # (services/database.py), which runs SQLAlchemy
+        # `Base.metadata.create_all()` BEFORE migrations ever run — so `nodes`
+        # and every other SLM-side table already exist by the time the real
+        # runner starts. This bare-CLI harness skipped that step entirely, so
+        # `nodes` never existed here and every migration that targets it
+        # (add_ssh_columns, add_code_version_columns,
+        # add_ansible_name_unique_constraint, widen_code_status_column, ...)
+        # deferred or failed for a harness reason, not a migration bug.
+        # Replicated with the SAME model layer production uses
+        # (models/database.py), loaded by file path rather than
+        # `from models.database import Base`: `models` is also a top-level
+        # package name under autobot-backend/, and the static import-smoke
+        # guard (repo_tests/test_ci_import_smoke_paths_14252.py) checks
+        # first-party import paths against a fixed root list that does not
+        # include autobot-slm-backend, so it cannot tell the two apart.
         env:
           DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
         working-directory: autobot-slm-backend
         run: |
-          python -m migrations.runner
-          echo "Exit code: $?"
+          python3 - <<'PY'
+          import importlib.util
+          import os
+          from pathlib import Path
+
+          from sqlalchemy import create_engine
+
+          spec = importlib.util.spec_from_file_location("_slm_models_database_14326", Path("models/database.py"))
+          slm_models_database = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(slm_models_database)
+
+          engine = create_engine(os.environ["DATABASE_URL"])
+          try:
+              slm_models_database.Base.metadata.create_all(engine)
+          finally:
+              engine.dispose()
+
+          print(f"Created {len(slm_models_database.Base.metadata.tables)} SLM table(s) (matches production create_all)")
+          PY
+
+      # SLM_POSTGRES_* below are the discrete-component fallback
+      # user_management/config.py::get_slm_db_config() already reads when
+      # SLM_USERS_DATABASE_URL itself isn't set -- same mechanism, so this
+      # step exercises exactly the code path production falls back to,
+      # rather than a connection-string literal invented for the gate.
+      - name: Create user_management schema in slm_users (matches production's create_all)
+        # #14300: main.py's lifespan calls _init_user_management_tables()
+        # BEFORE _run_migrations() — user_management's Base.metadata
+        # (role_permissions, audit_logs, users, ...) already exists in the
+        # SEPARATE slm_users database by the time the real runner starts.
+        # This step replicates that with the same model layer production
+        # uses (user_management/models) and the same config source
+        # (user_management.config.get_slm_db_config) that
+        # migrations.runner.get_user_management_db_url() now resolves
+        # TARGET_DB_USER_MANAGEMENT migrations against
+        # (add_role_permission_audit_log_timestamps is the first).
+        #
+        # Imported by package name, not by file path: unlike `models` and
+        # `migrations`, `user_management` resolving under `autobot-backend/`
+        # too does not create an ambiguity the static import-smoke guard
+        # (repo_tests/test_ci_import_smoke_paths_14252.py) can be fooled by
+        # — that guard only checks a dotted path exists *somewhere* under
+        # its fixed root list, which `autobot-backend/user_management/`
+        # already satisfies, while the interpreter here (working-directory:
+        # autobot-slm-backend) resolves the real, intended package from its
+        # own cwd on sys.path regardless.
+        env:
+          SLM_POSTGRES_HOST: 127.0.0.1
+          SLM_POSTGRES_PORT: "5432"
+          SLM_POSTGRES_DB: slm_users
+          SLM_POSTGRES_USER: slmtest
+          SLM_POSTGRES_PASSWORD: slmtest
+          PYTHONPATH: ${{ github.workspace }}
+        working-directory: autobot-slm-backend
+        run: |
+          python3 - <<'PY'
+          from sqlalchemy import create_engine
+
+          import user_management.models as um_models
+          from user_management.config import get_slm_db_config
+
+          engine = create_engine(get_slm_db_config().sync_url)
+          try:
+              um_models.Base.metadata.create_all(engine)
+          finally:
+              engine.dispose()
+
+          print(
+              f"Created {len(um_models.Base.metadata.tables)} user_management "
+              "table(s) in slm_users (matches production create_all)"
+          )
+          PY
+
+      - name: (a) Apply all migrations on a fresh DB
+        env:
+          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+          # #14300: role_permissions/audit_logs live in the separate
+          # slm_users database. migrations.runner.get_user_management_db_url()
+          # resolves it via user_management.config.get_slm_db_config(), which
+          # reads SLM_USERS_DATABASE_URL or -- as configured here -- these
+          # discrete SLM_POSTGRES_* components (its documented fallback,
+          # same mechanism the schema-bootstrap step above uses).
+          SLM_POSTGRES_HOST: 127.0.0.1
+          SLM_POSTGRES_PORT: "5432"
+          SLM_POSTGRES_DB: slm_users
+          SLM_POSTGRES_USER: slmtest
+          SLM_POSTGRES_PASSWORD: slmtest
+          # #14326: migrations.seed_agents imports autobot_shared.ssot_config
+          # at module level. autobot_shared lives at the repo root, one level
+          # above working-directory below, so it is invisible to the
+          # interpreter without this. Without it every run died on
+          # "No module named 'autobot_shared'" applying seed_agents — the
+          # 12th of 27 entries in MIGRATIONS — so nothing after it, including
+          # add_role_permission_audit_log_timestamps (the last entry), was
+          # ever exercised by this gate.
+          PYTHONPATH: ${{ github.workspace }}
+        working-directory: autobot-slm-backend
+        run: |
+          if ! python -m migrations.runner; then
+            echo "::error::migration runner exited non-zero on the fresh-DB pass (a) - see the FAIL entry above for which migration failed"
+            exit 1
+          fi
 
       - name: (b) Idempotency — re-run migrations on already-migrated DB
         # The runner tracks applied migrations in migrations_applied.
         # A second run must succeed with 'No migrations to run' (no failures).
         env:
           DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+          SLM_POSTGRES_HOST: 127.0.0.1
+          SLM_POSTGRES_PORT: "5432"
+          SLM_POSTGRES_DB: slm_users
+          SLM_POSTGRES_USER: slmtest
+          SLM_POSTGRES_PASSWORD: slmtest
+          PYTHONPATH: ${{ github.workspace }}
         working-directory: autobot-slm-backend
         run: |
-          python -m migrations.runner
-          echo "Exit code: $?"
+          if ! python -m migrations.runner; then
+            echo "::error::migration runner exited non-zero on the idempotency pass (b) - a second run must be a no-op"
+            exit 1
+          fi
 
-      - name: Verify migrations_applied table is populated
-        # Assert every migration in MIGRATIONS was recorded exactly once.
+      - name: Verify audit_logs.updated_at and role_permissions timestamps actually exist (#14300)
+        # #14321's lesson: a migration recorded as applied while doing
+        # nothing is the exact defect class this repo keeps hitting.
+        # "Applied migration: add_role_permission_audit_log_timestamps" in
+        # the runner's own log, and its row in migrations_applied, are both
+        # the runner's self-report -- neither queries the database it
+        # claims to have changed. This step does, independently, against
+        # slm_users (not slm): the same real Postgres 16 instance, a fresh
+        # cursor, and a live information_schema.columns query -- proof the
+        # columns exist, not merely that migrate() returned without
+        # raising.
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGDATABASE: slm_users
+          PGUSER: slmtest
+          PGPASSWORD: slmtest
+        working-directory: autobot-slm-backend
         run: |
-          PGPASSWORD=slmtest psql -h 127.0.0.1 -U slmtest -d slm \
-            -c "SELECT name FROM migrations_applied ORDER BY id;" \
-            -c "SELECT COUNT(*) AS total_applied FROM migrations_applied;"
+          python3 - <<'PY'
+          import sys
+
+          import psycopg2
+
+          expected = {
+              ("role_permissions", "created_at"),
+              ("role_permissions", "updated_at"),
+              ("audit_logs", "updated_at"),
+          }
+
+          conn = psycopg2.connect()
+          try:
+              with conn.cursor() as cur:
+                  cur.execute(
+                      """
+                      SELECT table_name, column_name
+                      FROM information_schema.columns
+                      WHERE table_schema = 'public'
+                        AND table_name IN ('role_permissions', 'audit_logs')
+                      """
+                  )
+                  present = {(row[0], row[1]) for row in cur.fetchall()}
+          finally:
+              conn.close()
+
+          missing = expected - present
+          print(f"Expected columns: {sorted(expected)}")
+          print(f"Present in slm_users: {sorted(present)}")
+
+          if missing:
+              print(f"::error::columns missing from slm_users despite the migration reporting applied: {sorted(missing)}")
+              sys.exit(1)
+          PY
+
+      - name: Verify migrations_applied matches the full migration list
+        # #14326: this used to be two psql SELECTs that printed rows and
+        # compared nothing, so the step was green regardless of what the
+        # table held. It now asserts every entry in migrations.runner.MIGRATIONS
+        # was recorded. #14300 closed out the one migration that used to be a
+        # documented permanent exception (ALLOWED_DEFERRED is empty below) --
+        # every entry is now required.
+        #
+        # MIGRATIONS is loaded from runner.py by file path, not
+        # `from migrations.runner import MIGRATIONS`: `migrations` is also a
+        # top-level package name under autobot-backend/ (a *different*
+        # migrations package, see #13084), and the static import-smoke guard
+        # (repo_tests/test_ci_import_smoke_paths_14252.py) checks first-party
+        # import paths against a fixed root list that does not include
+        # autobot-slm-backend, so a literal `from migrations.runner import
+        # ...` here reads as "autobot-backend/migrations/runner.py", which
+        # does not exist, and fails that guard.
+        env:
+          DATABASE_URL: postgresql://slmtest:slmtest@127.0.0.1:5432/slm
+          PYTHONPATH: ${{ github.workspace }}
+        working-directory: autobot-slm-backend
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          import os
+          import sys
+          from pathlib import Path
+
+          import psycopg2
+
+          spec = importlib.util.spec_from_file_location("_slm_migrations_runner_14326", Path("migrations/runner.py"))
+          slm_runner = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(slm_runner)
+          MIGRATIONS = slm_runner.MIGRATIONS
+
+          # #14300 CLOSED: add_role_permission_audit_log_timestamps used to be
+          # allow-listed here because it alters role_permissions/audit_logs —
+          # user_management tables in the SEPARATE slm_users database — while
+          # the runner connected only to DATABASE_URL and had no way to reach
+          # them. migrations.runner now resolves a migration's db_url from a
+          # module-level TARGET_DB constant (see runner.get_user_management_db_url
+          # and this migration's own TARGET_DB = TARGET_DB_USER_MANAGEMENT),
+          # so it applies cleanly like every other migration. `stale_allowlist`
+          # below would have failed the gate the moment that became true, so
+          # the entry is removed here rather than left to rot into a permanent
+          # exemption nobody re-checks.
+          ALLOWED_DEFERRED = set()
+
+          conn = psycopg2.connect(os.environ["DATABASE_URL"])
+          try:
+              with conn.cursor() as cur:
+                  cur.execute("SELECT name FROM migrations_applied ORDER BY id")
+                  applied = {row[0] for row in cur.fetchall()}
+          finally:
+              conn.close()
+
+          expected = set(MIGRATIONS) - ALLOWED_DEFERRED
+          missing = expected - applied
+          unexpected_extra = applied - set(MIGRATIONS)
+          stale_allowlist = ALLOWED_DEFERRED - (set(MIGRATIONS) - applied)
+
+          print(f"MIGRATIONS in runner: {len(MIGRATIONS)}")
+          print(f"Applied in migrations_applied: {len(applied)}")
+          print(f"Allow-listed permanent deferral: {sorted(ALLOWED_DEFERRED)}")
+
+          failed = False
+          if missing:
+              print(f"::error::migrations NOT applied and not allow-listed: {sorted(missing)}")
+              failed = True
+          if unexpected_extra:
+              print(f"::error::migrations_applied has entries runner.MIGRATIONS does not know: {sorted(unexpected_extra)}")
+              failed = True
+          if stale_allowlist:
+              print(
+                  "::error::allow-listed deferral actually applied cleanly, "
+                  f"remove from ALLOWED_DEFERRED: {sorted(stale_allowlist)}"
+              )
+              failed = True
+
+          sys.exit(1 if failed else 0)
+          PY
+
+      - name: Verify seed_agents actually seeded the canonical agent roster (#14321)
+        # #14321: seed_agents was recorded applied purely because
+        # migrations.runner.run_migration treats a module with neither
+        # migrate() nor run() as a success — it never seeded a row. The step
+        # above only asserts migrations_applied bookkeeping, which cannot
+        # tell that phantom success apart from a real one (that gap is
+        # exactly this bug, one layer up). This asserts the actual effect:
+        # every agent_id services.agent_seeder.SEED_AGENT_CONFIGS defines —
+        # the same roster main.py's startup lifespan seeds on every boot —
+        # must be a row in `agents` once the runner claims seed_agents ran.
+        #
+        # Connects via discrete PG* libpq env vars (psycopg2.connect() reads
+        # them with no args) rather than a DATABASE_URL literal, matching
+        # this step's own credential-free style.
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGDATABASE: slm
+          PGUSER: slmtest
+          PGPASSWORD: slmtest
+          # services/agent_seeder.py imports autobot_shared.ssot_config at
+          # module level; autobot_shared lives at the repo root, one level
+          # above working-directory below (same reason the (a)/(b) steps set
+          # this — see their comments).
+          PYTHONPATH: ${{ github.workspace }}
+        working-directory: autobot-slm-backend
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          import sys
+          import types
+          from pathlib import Path
+
+          import psycopg2
+
+          # Stub the `models` package so `from models.database import Agent`
+          # inside services/agent_seeder.py resolves to the real
+          # models/database.py without executing models/__init__.py (which
+          # pulls in user_management schemas this gate does not install) —
+          # same technique autobot-slm-backend/conftest.py uses for the same
+          # reason.
+          models_pkg = types.ModuleType("models")
+          models_pkg.__path__ = [str(Path("models").resolve())]
+          sys.modules["models"] = models_pkg
+
+          spec = importlib.util.spec_from_file_location("models.database", Path("models/database.py"))
+          slm_models_database = importlib.util.module_from_spec(spec)
+          sys.modules["models.database"] = slm_models_database
+          spec.loader.exec_module(slm_models_database)
+          models_pkg.database = slm_models_database
+
+          spec = importlib.util.spec_from_file_location("services.agent_seeder", Path("services/agent_seeder.py"))
+          agent_seeder = importlib.util.module_from_spec(spec)
+          sys.modules["services.agent_seeder"] = agent_seeder
+          spec.loader.exec_module(agent_seeder)
+
+          expected = {cfg["agent_id"] for cfg in agent_seeder.SEED_AGENT_CONFIGS}
+
+          conn = psycopg2.connect()
+          try:
+              with conn.cursor() as cur:
+                  cur.execute("SELECT agent_id FROM agents")
+                  present = {row[0] for row in cur.fetchall()}
+          finally:
+              conn.close()
+
+          missing = expected - present
+
+          print(f"SEED_AGENT_CONFIGS roster size: {len(expected)}")
+          print(f"agents rows present: {len(present)}")
+
+          if missing:
+              print(f"::error::seed_agents did not seed: {sorted(missing)}")
+              sys.exit(1)
+          PY
 
       - name: Run tablename-collision unit tests
         # Also exercise the validator that now RAISES on unallowlisted collisions

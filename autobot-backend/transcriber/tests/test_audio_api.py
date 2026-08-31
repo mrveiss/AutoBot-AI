@@ -65,8 +65,16 @@ async def client(tmp_path):
     app.include_router(projects_router, prefix="/api/transcriber")
     app.include_router(recordings_router, prefix="/api/transcriber")
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            yield c
+    finally:
+        # #13861: aiosqlite's connection runs on a NON-daemon worker thread, so a
+        # fixture that connects and never closes keeps the interpreter alive after
+        # the suite has passed. Under xdist the execnet worker exits hard and hides
+        # it; in a serial invocation — co-located-smoke is exactly that — the job
+        # hangs until CI cancels it, with no failure to look at.
+        await db.close()
 
 
 async def _create_project_and_recording(client, user: str, upload_dir: Path) -> tuple[int, int, Path]:

@@ -30,7 +30,9 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Optional, Tuple
+
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -107,8 +109,38 @@ FACT_ATTRS = frozenset(
 
 # `{{ ansible_X.Y }}`, `{{ ansible_X[0] }}`, `{{ ansible_X|filter }}`, `{{ ansible_X }}`
 # Captures the attribute name; we filter against FACT_ATTRS to avoid false
-# positives on inventory vars (host, user, become_*, etc.).
+# positives on inventory vars (host, user, become_*, etc.). Used for scalar
+# values that only run through Jinja *inside* `{{ }}` (the common case, and
+# the only case for `.j2` templates, which are not YAML).
 PATTERN = re.compile(r"\{\{[^}]*?\bansible_([a-z][a-z0-9_]*)\b")
+
+# Bare `ansible_X` with no requirement for surrounding `{{ }}`. Ansible
+# evaluates `when:`/`failed_when:`/etc. as Jinja without braces, so a plain
+# `ansible_hostname` inside one of those keys is a live reference even
+# though it never matches PATTERN.
+ATTR_PATTERN = re.compile(r"\bansible_([a-z][a-z0-9_]*)\b")
+
+# #14181: Ansible evaluates `when:` and friends as Jinja **without** `{{ }}`, so
+# a pattern anchored on `{{ }}` cannot see them. That is not academic --
+# `deploy-base.yml` carried the same fact on the same task in all three forms,
+# two inside `{{ }}` and one in a `when:`. Fixing only the reported two would
+# have moved the ansible-core 2.24 breakage from the template to the
+# conditional while the hook reported the file clean.
+#
+# #14196: line-based scanning of `when:` (and friends) is itself blind to two
+# common shapes: a folded/literal block scalar (`when: >-`, `until: |`) whose
+# value spans several physical lines, and the list-style condition form
+# (`when:` on its own line followed by `- cond_a` / `- cond_b`, all ANDed).
+# Both shapes are invisible to a per-line regex but are ordinary YAML, so
+# `.yml`/`.yaml` files are now parsed with PyYAML and walked structurally
+# instead (see `_iter_scalar_nodes`/`_yaml_violations` below). `.j2` templates
+# are not YAML at all and keep the line-based path.
+_BARE_EXPR_KEYS = frozenset({"when", "failed_when", "changed_when", "until", "that"})
+
+# Retained for the .j2 (line-based) path only.
+BARE_EXPR_PATTERN = re.compile(
+    r"^\s*-?\s*(?:" + "|".join(sorted(_BARE_EXPR_KEYS)) + r")\s*:.*?\bansible_([a-z][a-z0-9_]*)\b"
+)
 
 # Files allowed to contain the banned patterns (the hook itself + tests).
 ALLOWLIST = frozenset(
@@ -132,6 +164,101 @@ def iter_ansible_files(root: Path) -> Iterable[Path]:
         yield path
 
 
+def _iter_scalar_nodes(
+    node: "yaml.Node", key_context: Optional[str]
+) -> Iterable[Tuple[Optional[str], "yaml.ScalarNode"]]:
+    """Walk a composed YAML node tree, yielding (key_context, scalar_node).
+
+    `key_context` is the name of the mapping key whose value this scalar is,
+    propagated through sequences (a list-style `when:` condition list is
+    still "under" `when`) but reset to the new key on every nested mapping —
+    a task nested inside a `block:` gets its own `when:`/`vars:`/etc.
+
+    Mapping KEYS are scalars too (`{{ ansible_hostname }}_status: ok` is a
+    dynamically-named var) and are yielded here as well -- a walk that only
+    descended into `value_node` would silently drop them, which is exactly
+    the coverage the line-based scanner had and this rewrite must not lose.
+    A key is never itself a bare-expr value (Ansible templates a mapping key
+    the same `{{ }}`-wrapped way as any other string, never bare), so it is
+    always yielded with `key_context=None`, regardless of what key the
+    enclosing mapping is nested under.
+
+    PyYAML's `Composer` has no separate node type for an alias (`*anchor`):
+    resolving one returns the *same* node object as its anchor definition
+    (`yaml.AliasNode` does not exist), so a node reachable through more than
+    one anchor/alias/merge-key site is revisited once per reachable path and
+    yielded once per visit. That is a duplicate report for one physical
+    scalar, not a missed one -- harmless for `.pre-commit` output, and there
+    are currently zero YAML anchors in the tracked ansible tree. Not
+    de-duplicated on purpose: a shared node can sit under different keys at
+    different reachable paths (e.g. one alias site under `when:`, another
+    not), and de-duplicating on node identity would silently drop whichever
+    context-dependent check ran second.
+    """
+    if isinstance(node, yaml.ScalarNode):
+        yield key_context, node
+    elif isinstance(node, yaml.SequenceNode):
+        for item in node.value:
+            yield from _iter_scalar_nodes(item, key_context)
+    elif isinstance(node, yaml.MappingNode):
+        for key_node, value_node in node.value:
+            if isinstance(key_node, yaml.ScalarNode):
+                yield None, key_node
+            new_key = key_node.value if isinstance(key_node, yaml.ScalarNode) else None
+            yield from _iter_scalar_nodes(value_node, new_key)
+
+
+def _snippet(lines: List[str], node: "yaml.ScalarNode") -> str:
+    lineno0 = node.start_mark.line
+    if 0 <= lineno0 < len(lines):
+        return lines[lineno0].strip()[:120]
+    return node.value.strip()[:120]
+
+
+def _yaml_violations(text: str) -> List[Tuple[int, str, str]]:
+    """Structural scan for `.yml`/`.yaml`: parses the document(s) and
+    evaluates each scalar's *value*, so folded/literal blocks and
+    list-style `when:` conditions are visible regardless of how they are
+    laid out across physical lines.
+    """
+    try:
+        documents = list(yaml.compose_all(text, Loader=yaml.SafeLoader))
+    except yaml.YAMLError:
+        # Malformed YAML is another hook's job (check-yaml); do not crash
+        # pre-commit over a file this hook cannot parse.
+        return []
+
+    lines = text.splitlines()
+    violations: List[Tuple[int, str, str]] = []
+    for doc in documents:
+        if doc is None:
+            continue
+        for key_context, node in _iter_scalar_nodes(doc, None):
+            value = node.value
+            pattern = ATTR_PATTERN if key_context in _BARE_EXPR_KEYS else PATTERN
+            seen: set = set()
+            for match in pattern.finditer(value):
+                attr = match.group(1)
+                if attr in FACT_ATTRS and attr not in seen:
+                    seen.add(attr)
+                    violations.append((node.start_mark.line + 1, attr, _snippet(lines, node)))
+    return violations
+
+
+def _line_based_violations(text: str) -> List[Tuple[int, str, str]]:
+    """Line-by-line scan, used only for `.j2` templates (not valid YAML)."""
+    violations: List[Tuple[int, str, str]] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        seen_on_line: set = set()
+        for pattern in (PATTERN, BARE_EXPR_PATTERN):
+            for match in pattern.finditer(line):
+                attr = match.group(1)
+                if attr in FACT_ATTRS and attr not in seen_on_line:
+                    seen_on_line.add(attr)
+                    violations.append((lineno, attr, line.strip()[:120]))
+    return violations
+
+
 def find_violations(path: Path) -> List[Tuple[int, str, str]]:
     """Return (line_number, attribute, snippet) tuples for each violation."""
     try:
@@ -145,13 +272,9 @@ def find_violations(path: Path) -> List[Tuple[int, str, str]]:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return []
-    violations: List[Tuple[int, str, str]] = []
-    for lineno, line in enumerate(text.splitlines(), start=1):
-        for match in PATTERN.finditer(line):
-            attr = match.group(1)
-            if attr in FACT_ATTRS:
-                violations.append((lineno, attr, line.strip()[:120]))
-    return violations
+    if path.suffix == ".j2":
+        return _line_based_violations(text)
+    return _yaml_violations(text)
 
 
 def main(paths: List[str]) -> int:

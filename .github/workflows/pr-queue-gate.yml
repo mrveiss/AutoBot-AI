@@ -4,12 +4,41 @@ on:
   pull_request:
     types: [opened, reopened]
 
+# #14434: without this, every push left its predecessors queued. 42 of a 271-run
+# sample were for commits no longer at their branch tip - work nothing would ever
+# read, each still fetching its actions. During GitHub's 2026-08-17 archive-download
+# degradation that wasted load became failures on unrelated pull requests (#14444).
+#
+# cancel-in-progress is guarded on the event rather than set to a bare `true`:
+# #13432 found that cancelling base-branch runs meant each merge cancelled the
+# previous merge's verification, and merges arrive faster than a suite completes -
+# of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
+# workflows this was applied to also trigger on push to Dev_new_gui, so the guard
+# is load-bearing there and harmless where it is not.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check-pr-limit:
     runs-on: ubuntu-latest
     permissions:
+      # Declaring any `permissions:` sets every unlisted scope to `none`, so the
+      # checkout below needs `contents` named explicitly (#14718).
+      contents: read
       pull-requests: write
     steps:
+      # #14718: the notice's open-PR list is built by a script in the repo, so
+      # this job needs the tree. Without a checkout the script is absent, the
+      # fallback fires, and the notice degrades silently — the exact fail-open
+      # shape this fix exists to remove.
+      - uses: actions/checkout@v7
+        # A warn-only job must not go red because a checkout blipped. The run
+        # block below already degrades gracefully when the script is absent,
+        # so tolerating this step keeps the never-blocks contract whole
+        # (#14718) — same idiom as ssot-coverage.yml and trajectory-eval.yml.
+        continue-on-error: true
+
       - name: Warn only on a runaway PR queue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -33,8 +62,11 @@ jobs:
           # rather than tune it.
           RUNAWAY_THRESHOLD=25
 
-          # Count open PRs excluding the one just opened
-          TOTAL=$(gh pr list --repo "$REPO" --state open --json number --jq 'length')
+          # Count open PRs excluding the one just opened. #14718: if the count
+          # itself fails there is no runaway to report, and a warn-only gate
+          # must not turn that into a red check — fall back to the quiet path.
+          TOTAL=$(gh pr list --repo "$REPO" --state open --json number --jq 'length') \
+            || { echo "Could not count open PRs — continuing, this gate never blocks."; TOTAL=0; }
           EXISTING=$(( TOTAL - 1 ))
 
           echo "Open PRs excluding this one: $EXISTING (runaway threshold $RUNAWAY_THRESHOLD)"
@@ -42,13 +74,12 @@ jobs:
           if [ "$EXISTING" -ge "$RUNAWAY_THRESHOLD" ]; then
             echo "Runaway threshold reached — posting a notice on PR #$PR_NUMBER"
 
-            # shellcheck disable=SC2016  # $skip is a jq variable, not a shell variable
-            OPEN_LIST=$(gh pr list \
-              --repo "$REPO" \
-              --state open \
-              --json number,title \
-              --jq --argjson skip "$PR_NUMBER" \
-              '[.[] | select(.number != $skip) | "- #\(.number) \(.title)"] | join("\n")')
+            # #14718: this used to pass `--argjson` to `gh pr list`, which has no
+            # such flag — gh took it as the VALUE of `--jq` and errored on the
+            # leftovers, killing the step under `set -e` before it could post.
+            # The list building now lives in a script so a test can execute it.
+            OPEN_LIST=$(bash pipeline-scripts/pr-queue-open-list.sh "$REPO" "$PR_NUMBER") \
+              || OPEN_LIST="_(could not list the open PRs — see this job's log)_"
 
             # Build the comment with an indented printf rather than a column-0
             # heredoc: an unindented heredoc body breaks out of the `run: |` YAML
@@ -71,7 +102,11 @@ jobs:
               "" \
               '> Warn-only runaway detector — `.github/workflows/pr-queue-gate.yml`. It never blocks a merge.')
 
-            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$BODY"
+            # Warn-only is a contract, so enforce it in code rather than only
+            # asserting it in prose: a detector whose own failure can redden a
+            # required check is worse than no detector at all (#14718).
+            gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$BODY" \
+              || echo "Could not post the runaway notice — continuing, this gate never blocks."
           else
             echo "No runaway — $EXISTING open PRs, below the $RUNAWAY_THRESHOLD threshold"
           fi

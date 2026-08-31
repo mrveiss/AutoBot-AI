@@ -1542,16 +1542,15 @@
         "type": "object"
       },
       "BackupCreate": {
-        "description": "Backup request.",
+        "description": "Backup request.\n\n#13578: ``service_type`` is the enum, not a bare string, so FastAPI rejects\nan unknown engine with 422 *before* ``_run_backup`` writes a ``Backup`` row\nthat would otherwise sit there as a FAILED record for a typo.",
         "properties": {
           "node_id": {
             "title": "Node Id",
             "type": "string"
           },
           "service_type": {
-            "default": "redis",
-            "title": "Service Type",
-            "type": "string"
+            "$ref": "#/components/schemas/BackupServiceType",
+            "default": "redis"
           }
         },
         "required": [
@@ -1713,6 +1712,15 @@
         ],
         "title": "BackupRestoreResponse",
         "type": "object"
+      },
+      "BackupServiceType": {
+        "description": "Data service a backup, replication or verification targets (#13578).\n\n``service_type`` was the outlier among the eight sibling enums in this\nmodule: a bare ``String(32)`` with no constraint anywhere. The cost landed\nthe moment a second engine arrived — the dispatch table in\n``api/stateful.py`` had to accept two spellings of the same engine, and an\nunknown value was not rejected at the API boundary at all. It reached\n``_run_backup``, wrote a ``Backup`` row, and only then failed, leaving a\n``BackupStatus.FAILED`` row for a typo that is indistinguishable from one\nfor a real failure.\n\nThe column stays a string at rest (#13578: existing rows keep working);\nthis enum is the boundary that decides what may enter.",
+        "enum": [
+          "redis",
+          "postgres"
+        ],
+        "title": "BackupServiceType",
+        "type": "string"
       },
       "BlueGreenActionResponse": {
         "description": "Blue-green action response.",
@@ -3249,16 +3257,15 @@
         "type": "object"
       },
       "DataVerifyRequest": {
-        "description": "Data verification request.",
+        "description": "Data verification request (#13578: enum-constrained service_type).",
         "properties": {
           "node_id": {
             "title": "Node Id",
             "type": "string"
           },
           "service_type": {
-            "default": "redis",
-            "title": "Service Type",
-            "type": "string"
+            "$ref": "#/components/schemas/BackupServiceType",
+            "default": "redis"
           }
         },
         "required": [
@@ -4084,6 +4091,28 @@
             "title": "Checked At",
             "type": "string"
           },
+          "deploy_in_progress": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deploy In Progress"
+          },
+          "deploy_state_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deploy State Reason"
+          },
           "deployed_dir": {
             "title": "Deployed Dir",
             "type": "string"
@@ -4098,6 +4127,17 @@
             },
             "title": "Drifted Files",
             "type": "array"
+          },
+          "last_completed_play_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Completed Play At"
           },
           "source_dir": {
             "title": "Source Dir",
@@ -4573,6 +4613,10 @@
             "title": "Nodes Total",
             "type": "integer"
           },
+          "redis": {
+            "title": "Redis",
+            "type": "string"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -4591,6 +4635,7 @@
           "version",
           "uptime_seconds",
           "database",
+          "redis",
           "nodes_online",
           "nodes_total"
         ],
@@ -6882,6 +6927,13 @@
             "title": "Status",
             "type": "string"
           },
+          "unreachable_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unreachable Roles",
+            "type": "array"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -6972,6 +7024,13 @@
             "default": "not_installed",
             "title": "Status",
             "type": "string"
+          },
+          "unreachable_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unreachable Roles",
+            "type": "array"
           }
         },
         "required": [
@@ -8254,12 +8313,11 @@
         "type": "object"
       },
       "ReplicationCreate": {
-        "description": "Replication request.",
+        "description": "Replication request (#13578: enum-constrained service_type).",
         "properties": {
           "service_type": {
-            "default": "redis",
-            "title": "Service Type",
-            "type": "string"
+            "$ref": "#/components/schemas/BackupServiceType",
+            "default": "redis"
           },
           "source_node_id": {
             "title": "Source Node Id",
@@ -12780,6 +12838,17 @@
           "job_id": {
             "title": "Job Id",
             "type": "string"
+          },
+          "last_progress_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Progress At"
           },
           "skipped_fleet_nodes": {
             "default": 0,
@@ -22032,6 +22101,59 @@
         ]
       }
     },
+    "/api/memory/lifecycle": {
+      "get": {
+        "description": "Aggregate the fleet's memory lifecycle views. Never raises to the client.",
+        "operationId": "get_memory_lifecycle_api_memory_lifecycle_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Memory Lifecycle Api Memory Lifecycle Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Memory Lifecycle",
+        "tags": [
+          "memory-lifecycle"
+        ]
+      }
+    },
     "/api/metrics": {
       "get": {
         "description": "Get system metrics (authenticated).",
@@ -28197,7 +28319,7 @@
     },
     "/api/performance/metrics/prometheus": {
       "get": {
-        "description": "Export metrics in Prometheus text format.",
+        "description": "Export metrics in Prometheus text format.\n\n#14362: the trace-duration histogram is a SQL-side aggregate over the\nfull window (no row LIMIT — `_count`/`_sum` are exact totals, not a\nsample), plus a short TTL cache so a scrape inside the TTL skips both\nqueries entirely. #14361: no per-request label is emitted — see\n`_generate_prometheus_metrics`.",
         "operationId": "get_prometheus_metrics_api_performance_metrics_prometheus_get",
         "responses": {
           "200": {
@@ -28209,11 +28331,6 @@
             "description": "Successful Response"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Get Prometheus Metrics",
         "tags": [
           "performance"
@@ -32802,7 +32919,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "$ref": "#/components/schemas/BackupServiceType"
                 },
                 {
                   "type": "null"

@@ -15,7 +15,7 @@
 
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useApiClient } from '@/plugins/api'
-import { getApiBase } from '@/config/ssot-config'
+import { getApiBase, CATEGORY_DEFAULTS } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useDocumentationSearch')
@@ -122,7 +122,7 @@ export function useDocumentationSearch(): UseDocumentationSearchReturn {
       contentHash: r.metadata?.content_hash,
       title: r.metadata?.title || 'Untitled',
       content: r.content || '',
-      category: r.metadata?.category || 'general',
+      category: r.metadata?.category || CATEGORY_DEFAULTS.GENERAL,
       section: r.metadata?.section,
       filePath: r.metadata?.file_path || '',
       score: r.score || r.rrf_score,
@@ -157,7 +157,7 @@ export function useDocumentationSearch(): UseDocumentationSearchReturn {
       id: d.content_hash,
       title: d.title || 'Untitled',
       content: '',
-      category: d.category || 'general',
+      category: d.category || CATEGORY_DEFAULTS.GENERAL,
       filePath: d.file_path || '',
     }))
   }

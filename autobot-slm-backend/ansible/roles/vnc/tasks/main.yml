@@ -70,13 +70,99 @@
   become: true
   notify: restart websockify
 
+# #14319: fail fast, before any account is touched, rather than silently
+# provisioning VNC under the emergency admin safety-net account.
+- name: "VNC | Reject the emergency admin account (#14319)"
+  ansible.builtin.assert:
+    that:
+      - vnc_user != vnc_forbidden_user
+    fail_msg: >-
+      vnc_user is set to '{{ vnc_forbidden_user }}', the emergency admin
+      safety-net account (see roles/common/vars/main.yml
+      emergency_admin_user and playbooks/rotate-ssh-keys.yml). VNC must not
+      run under it — see #14319. Set VNC_USER (or AUTOBOT_VNC_USER) to a
+      different account, or leave it unset to use the default
+      (autobot-vnc).
+    success_msg: "VNC will run as '{{ vnc_user }}'"
+
+# #14319: VNC needs a real HOME directory (~/.vnc/passwd, xstartup, config)
+# that the other per-service accounts (roles/backend, roles/npu-worker,
+# roles/tts-worker, roles/browser) do not — that is the one dimension it
+# deviates from their pattern on. It does NOT need a login shell:
+# vnc-server.service.j2 starts vncserver via systemd's User=, which execs
+# the process directly and never consults /etc/passwd's shell field, and
+# templates/xstartup.j2 carries its own #!/bin/bash shebang, so the kernel
+# resolves its interpreter from the script itself when vncserver execs it.
+# nologin, same as every other per-service account, closes off a standing
+# interactive-login foothold on a compromised account; `su -s /bin/bash -
+# {{ vnc_user }}` still works for interactive debugging as root. See
+# docs/developer/ARCHITECTURE_EXCEPTIONS.md.
+#
+# The group is created explicitly (matching roles/npu-worker,
+# roles/tts-worker) rather than left to the user module's implicit
+# same-named-group behaviour, which depends on the host's
+# USERGROUPS_ENAB default -- the file/TLS-key ownership tasks below depend
+# on vnc_group existing regardless of that default.
+- name: "VNC | Create autobot-vnc system group (#14319)"
+  ansible.builtin.group:
+    name: "{{ vnc_group }}"
+    system: true
+    state: present
+
 - name: Create VNC user if not exists
   ansible.builtin.user:
     name: "{{ vnc_user }}"
-    shell: /bin/bash
+    system: true
+    shell: /usr/sbin/nologin
     create_home: true
+    group: "{{ vnc_group }}"
+    comment: "AutoBot VNC service account"
     state: present
   become: true
+
+# --- Migrate an existing host's VNC state (#14319) ---
+# Before this change, vnc_user defaulted to vnc_legacy_user ('autobot'). A
+# host provisioned under that default has its VNC state — password file,
+# xstartup, TLS keypair — under vnc_legacy_user's home. Move it rather than
+# leaving a working install pointing at a directory the new account can no
+# longer read. No-ops when vnc_user was already something other than
+# vnc_legacy_user, or once the migration has already run once.
+- name: "VNC | Stat legacy VNC state (#14319)"
+  ansible.builtin.stat:
+    path: "/home/{{ vnc_legacy_user }}/.vnc"
+  register: _vnc_legacy_state
+  become: true
+  when: vnc_user != vnc_legacy_user
+
+- name: "VNC | Stat VNC state under the dedicated account (#14319)"
+  ansible.builtin.stat:
+    path: "/home/{{ vnc_user }}/.vnc"
+  register: _vnc_new_state
+  become: true
+  when: vnc_user != vnc_legacy_user
+
+- name: "VNC | Migrate legacy VNC state to the dedicated account (#14319)"
+  ansible.builtin.command:
+    cmd: "mv /home/{{ vnc_legacy_user }}/.vnc /home/{{ vnc_user }}/.vnc"
+  become: true
+  when:
+    - vnc_user != vnc_legacy_user
+    - _vnc_legacy_state.stat.exists | default(false)
+    - not (_vnc_new_state.stat.exists | default(false))
+  notify: restart vnc-server
+
+- name: "VNC | Own migrated VNC state (#14319)"
+  ansible.builtin.file:
+    path: "/home/{{ vnc_user }}/.vnc"
+    owner: "{{ vnc_user }}"
+    group: "{{ vnc_group }}"
+    recurse: true
+    state: directory
+  become: true
+  when:
+    - vnc_user != vnc_legacy_user
+    - _vnc_legacy_state.stat.exists | default(false)
+    - not (_vnc_new_state.stat.exists | default(false))
 
 - name: Create VNC configuration directory
   ansible.builtin.file:

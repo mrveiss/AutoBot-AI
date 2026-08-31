@@ -10,12 +10,12 @@
 prometheus-client>=0.26.0
 
 # Web framework
-fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=1.4.1
-starlette>=1.4.1              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
-uvicorn[standard]>=0.52.1
+fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=1.6.0
+starlette>=1.6.0              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
+uvicorn[standard]>=0.52.4
 
 # Database - PostgreSQL (Issue #786)
-sqlalchemy>=2.0.51
+sqlalchemy>=2.0.52
 asyncpg>=0.31.0  # Async PostgreSQL driver for SQLAlchemy
 psycopg2-binary>=2.9.12  # Sync PostgreSQL driver for migrations
 

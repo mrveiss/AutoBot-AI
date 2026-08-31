@@ -64,7 +64,7 @@ ansible-playbook playbooks/deploy-slm-manager.yml --tags backend,nginx
 
 # Service restart
 ansible-playbook playbooks/slm-service-control.yml \
-  -e "service=autobot-slm-backend action=restart"
+  -e "target=<group-or-host> service=autobot-slm-backend action=restart"
 
 # Manual sync
 ./infrastructure/shared/scripts/utilities/sync-to-slm.sh

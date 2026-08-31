@@ -25,14 +25,14 @@
         </label>
         <label class="gantt-field">
           <span class="gantt-field-label">{{ $t('llc.gantt.zoom') }}</span>
-          <select v-model="zoom" class="gantt-select">
+          <select v-model="zoom" data-testid="gantt-zoom" class="gantt-select">
             <option value="day">{{ $t('llc.gantt.zoomDay') }}</option>
             <option value="week">{{ $t('llc.gantt.zoomWeek') }}</option>
             <option value="month">{{ $t('llc.gantt.zoomMonth') }}</option>
             <option value="quarter">{{ $t('llc.gantt.zoomQuarter') }}</option>
           </select>
         </label>
-        <button class="gantt-btn" :disabled="!items.length" @click="exportPng">{{ $t('llc.gantt.exportPng') }}</button>
+        <button class="gantt-btn" data-testid="gantt-export-png" :disabled="!items.length" @click="exportPng">{{ $t('llc.gantt.exportPng') }}</button>
       </div>
     </header>
 
@@ -40,7 +40,7 @@
     <div v-else-if="!projects.length" class="gantt-state">{{ $t('llc.gantt.noProjects') }}</div>
     <div v-else-if="!items.length" class="gantt-state">{{ $t('llc.gantt.noItems') }}</div>
 
-    <div v-else class="gantt-scroll">
+    <div v-else ref="scrollEl" class="gantt-scroll" @scroll.passive="syncViewport">
       <svg
         ref="svgEl"
         class="gantt-svg"
@@ -66,8 +66,8 @@
         <!-- Time axis -->
         <g class="gantt-axis">
           <line
-            v-for="(t, i) in axisTicks"
-            :key="'tick' + i"
+            v-for="t in axisTicks"
+            :key="'tick' + t.ms"
             :x1="LABEL_W + t.x"
             :y1="HEADER_H"
             :x2="LABEL_W + t.x"
@@ -75,8 +75,8 @@
             class="gantt-gridline"
           />
           <text
-            v-for="(t, i) in axisTicks"
-            :key="'lbl' + i"
+            v-for="t in axisTicks"
+            :key="'lbl' + t.ms"
             :x="LABEL_W + t.x + 4"
             :y="HEADER_H - 6"
             class="gantt-axis-label"
@@ -138,7 +138,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -228,6 +228,11 @@ function xForMs(ms: number): number {
   return ((ms - rangeStart.value) / DAY_MS) * pxPerDay.value
 }
 
+/** Inverse of `xForMs`. Kept adjacent to it so the pair cannot drift (#14769). */
+function msForX(x: number): number {
+  return rangeStart.value + (x / pxPerDay.value) * DAY_MS
+}
+
 const chartWidth = computed(() => Math.max(xForMs(rangeEnd.value) + 40, 320))
 const chartHeight = computed(() => Math.max(items.value.length * ROW_H, ROW_H))
 
@@ -280,11 +285,123 @@ const dependencyArrows = computed<string[]>(() => {
   return out
 })
 
+// --- viewport (#14769) ----------------------------------------------------
+/**
+ * Horizontal window of `.gantt-scroll` that is actually on screen.
+ *
+ * `axisTicks` used to emit one tick for the whole data range regardless of
+ * what was visible. At `zoom: 'day'` the step is one day and `pxPerDay` is 40,
+ * so a multi-year range produced thousands of `<line>` + `<text>` pairs — each
+ * with its own `toLocaleDateString` call — nearly all of them scrolled far out
+ * of view.
+ */
+const scrollEl = ref<HTMLElement | null>(null)
+const viewLeft = ref(0)
+const viewWidth = ref(0)
+
+function syncViewport(): void {
+  const el = scrollEl.value
+  if (!el) return
+  viewLeft.value = el.scrollLeft
+  viewWidth.value = el.clientWidth
+}
+
+let viewportObserver: ResizeObserver | null = null
+
+/**
+ * `.gantt-scroll` sits behind `v-else`, so it does not exist until a timeline
+ * has loaded — an `onMounted`-only hookup would observe nothing and leave
+ * `viewWidth` at 0 forever, permanently taking the no-culling fallback.
+ * Watching the ref attaches whenever the element appears and detaches when it
+ * goes away (a project switch re-renders it).
+ */
+watch(scrollEl, (el) => {
+  viewportObserver?.disconnect()
+  viewportObserver = null
+  if (!el) {
+    viewWidth.value = 0
+    return
+  }
+  syncViewport()
+  if (typeof ResizeObserver !== 'undefined') {
+    viewportObserver = new ResizeObserver(syncViewport)
+    viewportObserver.observe(el)
+  }
+})
+
+/**
+ * #14799: resync when the pixel-to-date mapping changes without the container
+ * changing size.
+ *
+ * `syncViewport` was driven only by the scroll handler and the
+ * `ResizeObserver`. Changing zoom alters `pxPerDay` — so the SAME `scrollLeft`
+ * now names a different date — but does not resize `.gantt-scroll`, so neither
+ * driver fires and the cached `viewLeft`/`viewWidth` are reinterpreted against
+ * the new scale. Switching project does the same when the DOM node, and with
+ * it `scrollLeft`, survives the change.
+ *
+ * `nextTick` matters: the chart's width changes with zoom, and the browser
+ * clamps `scrollLeft` against the new width as part of that re-layout. Reading
+ * before the repaint would just re-cache the stale value.
+ */
+watch([zoom, selectedProjectId], async () => {
+  await nextTick()
+  syncViewport()
+})
+
+/**
+ * Suspends culling while a PNG is being produced.
+ *
+ * An export must contain the WHOLE chart, not the slice that happened to be
+ * on screen — culling the ticks and then serialising would silently ship a
+ * PNG missing most of its gridlines and every date label outside the viewport.
+ */
+const exporting = ref(false)
+
+/** One screenful of ticks kept either side, so a scroll is never bare. */
+const TICK_OVERSCAN_PX = 400
+
 // --- axis ticks -----------------------------------------------------------
 const axisTicks = computed(() => {
-  const ticks: { x: number; label: string }[] = []
+  const ticks: { ms: number; x: number; label: string }[] = []
   const step = zoom.value === 'day' ? 1 : zoom.value === 'week' ? 7 : zoom.value === 'month' ? 30 : 91
-  for (let ms = rangeStart.value; ms <= rangeEnd.value; ms += step * DAY_MS) {
+
+  // #14769: cull to the visible window, converted back through `xForMs`'s own
+  // inverse so the two can never disagree about where a millisecond lands.
+  //
+  // The fallback matters more than the fast path: when the viewport has not
+  // been measured yet (before mount, or in a headless environment where
+  // `clientWidth` is 0) we render the FULL range rather than an empty axis.
+  // An unmeasurable viewport must not read as "nothing is visible" — that
+  // failure mode looks identical to a chart with no data.
+  const culling = !exporting.value && viewWidth.value > 0
+  let from = rangeStart.value
+  let to = rangeEnd.value
+  if (culling) {
+    const x0 = viewLeft.value - LABEL_W - TICK_OVERSCAN_PX
+    const x1 = viewLeft.value + viewWidth.value - LABEL_W + TICK_OVERSCAN_PX
+    from = Math.max(rangeStart.value, msForX(x0))
+    to = Math.min(rangeEnd.value, msForX(x1))
+    // #14799: a window that comes out EMPTY must not render an empty axis.
+    // The `viewWidth > 0` predicate above only covers a viewport that was
+    // never measured; a viewport measured under a *previous* `pxPerDay`
+    // reaches the same outcome by a different route — `msForX` reinterprets
+    // the stale pixel offset against the new scale and can push `from` past
+    // `to`, at which point the loop below runs zero times. Whatever the
+    // cause, "computed an empty window" falls back to the full range, because
+    // an axis with no ticks is indistinguishable from a chart with no data.
+    if (from > to) {
+      from = rangeStart.value
+      to = rangeEnd.value
+    } else {
+      // Land on the same step lattice the unculled loop walks, so a tick sits
+      // at the same date whether or not culling is on.
+      const stepMs = step * DAY_MS
+      from = rangeStart.value + Math.floor((from - rangeStart.value) / stepMs) * stepMs
+    }
+  }
+
+  for (let ms = from; ms <= to; ms += step * DAY_MS) {
     const d = new Date(ms)
     const label =
       zoom.value === 'quarter'
@@ -292,7 +409,7 @@ const axisTicks = computed(() => {
         : zoom.value === 'month'
           ? d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
           : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    ticks.push({ x: xForMs(ms), label })
+    ticks.push({ ms, x: xForMs(ms), label })
   }
   return ticks
 })
@@ -362,34 +479,77 @@ async function onDragEnd() {
 }
 
 // --- PNG export -----------------------------------------------------------
+
+/**
+ * Oversampling applied on top of the display's own pixel ratio.
+ *
+ * #14767: the export used to size its canvas in CSS pixels, so it was 1x —
+ * soft on every retina screen and unusable for print or a slide. Unlike a
+ * raster pipeline there is no source-resolution ceiling to respect here: the
+ * source is vector SVG, so it renders at whatever scale we are willing to pay
+ * for, and the only real limit is the canvas cap below.
+ */
+const EXPORT_OVERSAMPLE = 2
+/** Hard ceiling on either exported dimension — browsers refuse larger canvases. */
+const MAX_EXPORT_PX = 8192
+
+/** The scale an export can actually use for a chart of `w` x `h` CSS px. */
+function exportScale(w: number, h: number): number {
+  const wanted = Math.max(1, window.devicePixelRatio || 1) * EXPORT_OVERSAMPLE
+  // Never below 1x: a wide timeline should export whole and soft rather than
+  // sharp and cropped.
+  return Math.max(1, Math.min(wanted, MAX_EXPORT_PX / w, MAX_EXPORT_PX / h))
+}
+
 async function exportPng() {
   const svg = svgEl.value
   if (!svg) return
+  let url: string | null = null
+  // #14769 culls axis ticks to the visible window. An export must contain the
+  // WHOLE chart, so culling is suspended and Vue given a tick to repaint
+  // before the SVG is serialised — otherwise the PNG would silently ship
+  // missing every gridline and date label outside the viewport.
+  exporting.value = true
   try {
+    await nextTick()
     const xml = new XMLSerializer().serializeToString(svg)
     const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
+    url = URL.createObjectURL(blob)
     const img = new Image()
     await new Promise<void>((resolve, reject) => {
       img.onload = () => resolve()
       img.onerror = () => reject(new Error('SVG render failed'))
-      img.src = url
+      img.src = url as string
     })
+    const cssW = svg.width.baseVal.value
+    const cssH = svg.height.baseVal.value
+    const scale = exportScale(cssW, cssH)
     const canvas = document.createElement('canvas')
-    canvas.width = svg.width.baseVal.value
-    canvas.height = svg.height.baseVal.value
+    canvas.width = Math.round(cssW * scale)
+    canvas.height = Math.round(cssH * scale)
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
-    ctx.drawImage(img, 0, 0)
-    URL.revokeObjectURL(url)
+    ctx.scale(scale, scale)
+    // #14767: the backdrop follows the active theme instead of a hardcoded
+    // white, which exported dark-theme chrome onto a light field. Read from
+    // the live element so it tracks whatever theme is applied, and fall back
+    // only if the token resolves to nothing.
+    ctx.fillStyle =
+      getComputedStyle(svg).getPropertyValue('--bg-surface').trim() || '#ffffff'
+    ctx.fillRect(0, 0, cssW, cssH)
+    ctx.drawImage(img, 0, 0, cssW, cssH)
     const link = document.createElement('a')
     link.download = `timeline-${selectedProjectId.value}.png`
     link.href = canvas.toDataURL('image/png')
     link.click()
   } catch (err) {
     logger.error('PNG export failed', err)
+  } finally {
+    // #14767: both of these leaked on the failure path before — the revoke sat
+    // after the `await`, so an `img.onerror` rejection jumped straight to the
+    // catch and the object URL was never released.
+    if (url) URL.revokeObjectURL(url)
+    exporting.value = false
   }
 }
 
@@ -417,9 +577,13 @@ async function loadBoardScope() {
   try {
     const [board, boardItems] = await Promise.all([
       api.get<{ project_id: string | null; name: string }>(`/api/llc/boards/${scopeBoardId.value}`),
-      api.get<{ items: { id: string }[] }>(`/api/llc/boards/${scopeBoardId.value}/items`),
+      // GH#13993: the board-items endpoint nests items inside each column —
+      // there is no top-level `items` key. Flatten before collecting the ids.
+      api.get<{ columns: Array<{ items: { id: string }[] }> }>(`/api/llc/boards/${scopeBoardId.value}/items`),
     ])
-    scopedItemIds.value = new Set((boardItems.items ?? []).map((i) => i.id))
+    scopedItemIds.value = new Set(
+      (boardItems.columns ?? []).flatMap((col) => col.items ?? []).map((i) => i.id),
+    )
     scopeLabel.value = board.name
     if (board.project_id) selectedProjectId.value = board.project_id
   } catch (err) {
@@ -473,6 +637,10 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('mousemove', onDragMove)
   window.removeEventListener('mouseup', onDragEnd)
+  // #14769: the watcher detaches on element change, but a straight unmount
+  // never fires it with `null`, so the observer is released here too.
+  viewportObserver?.disconnect()
+  viewportObserver = null
 })
 </script>
 

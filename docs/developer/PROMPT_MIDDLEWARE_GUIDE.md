@@ -150,7 +150,7 @@ CPU_THRESHOLD_PCT = float(os.getenv("PROMPT_CPU_THRESHOLD_PCT", "80"))
 class TelemetryPromptMiddleware(Extension):
     """Append a concise-response hint when CPU load is high."""
 
-    name     = "telemetry-prompt-middleware"
+    name     = "telemetry_prompt_middleware"
     priority = 50
 
     async def on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
@@ -259,30 +259,36 @@ Multiple extensions with the same priority execute in registration order.
 
 ## Registering your extension
 
-### Via `plugin.json` (recommended for production)
+**There is no manifest-driven loader for middleware.** `plugins/**/plugin.json`
+is the **Plugin** system's contract
+(`autobot_shared/plugin_sdk/loader.py`, `kind: "plugin"`) and that loader is
+never consulted when `HookPoint.SYSTEM_PROMPT_READY` /
+`HookPoint.FULL_PROMPT_READY` fire — both are dispatched exclusively by
+`middleware.manager.ExtensionManager`. Shipping a `plugin.json` next to an
+`Extension` subclass reproduces #14280: `PluginLoader` discovers the
+manifest, finds no `BasePlugin` subclass in the module, logs "No plugin
+class found in module", and the middleware never runs.
 
-Create `plugins/my-middleware/plugin.json`:
+### Built-in middleware (recommended for anything shipped in this repo)
 
-```json
-{
-  "name": "my-prompt-middleware",
-  "version": "1.0.0",
-  "description": "Modify LLM prompts based on infrastructure telemetry",
-  "entry_point": "plugin.MyPromptMiddleware",
-  "hooks": ["on_system_prompt_ready", "on_full_prompt_ready"],
-  "enabled": true,
-  "config": {
-    "cpu_threshold_pct": 80,
-    "prometheus_url": ""
-  }
-}
+Add the class under `autobot-backend/middleware/builtin/`, export it from
+`middleware/builtin/__init__.py`, and register it in
+`initialization/lifespan.py`'s `_init_builtin_extensions` — the function every
+real hook call site's manager (`get_extension_manager()`) is populated from:
+
+```python
+# autobot-backend/initialization/lifespan.py, inside _init_builtin_extensions
+from middleware.builtin import MyPromptMiddleware
+from middleware.manager import get_extension_manager
+
+get_extension_manager().register(MyPromptMiddleware())
 ```
 
-### Programmatically at startup
+### Programmatically at startup (third-party or one-off)
 
 ```python
 from middleware.manager import get_extension_manager
-from plugins.my_middleware.plugin import MyPromptMiddleware
+from my_module import MyPromptMiddleware
 
 get_extension_manager().register(MyPromptMiddleware())
 ```
@@ -292,7 +298,7 @@ get_extension_manager().register(MyPromptMiddleware())
 ```python
 mgr = get_extension_manager()
 
-mgr.list_extensions()                    # ["telemetry-prompt-middleware", ...]
+mgr.list_extensions()                    # ["telemetry_prompt_middleware", ...]
 mgr.disable_extension("my-middleware")   # pause without removing
 mgr.enable_extension("my-middleware")    # resume
 mgr.unregister("my-middleware")          # remove permanently
@@ -318,7 +324,7 @@ def clean_manager():
 
 @pytest.mark.asyncio
 async def test_hint_injected_when_cpu_high():
-    from plugins.core_plugins.telemetry_prompt_middleware.plugin import (
+    from middleware.builtin.telemetry_prompt_middleware import (
         TelemetryPromptMiddleware,
     )
 
@@ -332,7 +338,7 @@ async def test_hint_injected_when_cpu_high():
 
 @pytest.mark.asyncio
 async def test_no_modification_when_cpu_low():
-    from plugins.core_plugins.telemetry_prompt_middleware.plugin import (
+    from middleware.builtin.telemetry_prompt_middleware import (
         TelemetryPromptMiddleware,
     )
 
@@ -455,5 +461,5 @@ async def test_system_prompt_hook_receives_session():
 | `autobot-backend/middleware/manager.py` | `ExtensionManager` singleton + `invoke_with_transform`, `invoke_hook`, `invoke_until_handled`, `invoke_cancellable` |
 | `autobot-backend/chat_workflow/llm_handler.py` | `_emit_system_prompt_ready()` and `_emit_full_prompt_ready()` call sites |
 | `autobot-backend/chat_workflow/prompt_hooks_test.py` | Unit tests for both prompt hooks |
-| `plugins/core-plugins/telemetry-prompt-middleware/plugin.py` | Reference implementation using Prometheus telemetry |
-| `plugins/core-plugins/telemetry-prompt-middleware/plugin.json` | Plugin registration manifest |
+| `autobot-backend/middleware/builtin/telemetry_prompt_middleware.py` | Reference implementation using Prometheus telemetry (moved from `plugins/core-plugins/telemetry-prompt-middleware/plugin.py` by #14280 — that manifest.py never loaded) |
+| `plugins/core-plugins/telemetry-prompt-middleware/plugin.json` | `kind: "extension"` manifest — capability/config-schema documentation only; excluded from `PluginLoader.discover_plugins` |

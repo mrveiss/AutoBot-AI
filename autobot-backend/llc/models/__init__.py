@@ -16,10 +16,12 @@ from .company import (
     CompanyTreeNode,
     CompanyUpdate,
 )
+from .contact import LLCContact
 from .enums import (
     ActivityEventType,
     ApprovalStatus,
     ApprovalType,
+    AssigneeType,
     AssignmentType,
     BoardType,
     ContextMode,
@@ -45,6 +47,11 @@ from .heartbeat_run import LLCHeartbeatRun
 from .membership import LLCCompanyMembership
 from .replay_log import LLCRunReplayLog
 from .review_gate import LLCReviewGatePolicy
+from .role_assignment import LLCRoleAssignment
+from .role_credential import LLCRoleCredential
+from .role_rate import LLCRoleRate
+from .role_tool import LLCRoleTool
+from .role_workflow import LLCRoleWorkflow
 from .secret import LLCSecret
 from .sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from .template import TemplateCategory
@@ -56,11 +63,13 @@ __all__ = [
     "ActorType",
     "ApprovalStatus",
     "ApprovalType",
+    "AssigneeType",
     "AssignmentType",
     "BoardType",
     "ContextMode",
     "CoWorkerType",
     "CompanyAncestor",
+    "LLCContact",
     "FindingProposalStatus",
     "LLCFindingProposal",
     "CompanyCreate",
@@ -87,6 +96,11 @@ __all__ = [
     "LLCProgram",
     "LLCProject",
     "LLCRunStatus",
+    "LLCRoleAssignment",
+    "LLCRoleCredential",
+    "LLCRoleTool",
+    "LLCRoleRate",
+    "LLCRoleWorkflow",
     "LLCSprint",
     "RoutineProduces",
     "LLCSecret",

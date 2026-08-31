@@ -12,6 +12,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.sandbox_health import probe_sandbox
 from api.schemas_code import (
     SandboxExamplesResponse,
     SandboxExecutionResponse,
@@ -316,18 +317,27 @@ async def get_sandbox_stats(
             )
 
         stats = await sandbox.get_sandbox_stats()
+        health = await probe_sandbox()
+        containerised = bool((health.data or {}).get("containerised"))
 
         return success_response(
             data={
-                "status": "operational",
+                # #14872: "operational" said nothing about whether a
+                # container was involved. A sandbox that is up and not
+                # containerised is the state this endpoint used to hide.
+                "status": "operational" if containerised else "degraded_uncontainerised",
+                "containerised": containerised,
                 "statistics": stats,
                 "capabilities": {
                     "security_levels": ["low", "medium", "high"],
                     "execution_modes": ["command", "script", "batch", "interactive"],
                     "supported_languages": ["bash", "sh", "python", "python3"],
                     "monitoring_enabled": True,
-                    "network_isolation": True,
-                    "resource_limits": True,
+                    # #14872: this was the literal `True`, reported whether or
+                    # not anything was isolating anything. It now comes from the
+                    # same measurement the `sandbox` health probe publishes.
+                    "network_isolation": containerised,
+                    "resource_limits": containerised,
                 },
             },
             message="Sandbox stats retrieved",

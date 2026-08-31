@@ -8,6 +8,13 @@ backend_service_account: autobot-backend  # Phase 7: migrate service to run as t
 backend_user: autobot
 backend_group: autobot
 backend_install_dir: /opt/autobot/autobot-backend
+# Canonical git checkout on the box (#3649), matching the autobot_shared and
+# monitoring role defaults. Every code_source_dir reference in this role's
+# tasks/main.yml used to repeat the default(...) fallback with this literal inline
+# instead of relying on a role default -- nine occurrences of the same literal,
+# which is exactly what pipeline-scripts/hardcoded_values_baseline.txt exists
+# to catch (#15162). Defined here once, tasks reference the bare variable.
+code_source_dir: /opt/autobot/code_source
 backend_code_dir: "{{ backend_install_dir }}"  # Actual code location (can be overridden by playbook)
 backend_shared_standalone_dir: /opt/autobot/autobot_shared  # Standalone PYTHONPATH copy used by workers (#3649)
 backend_log_dir: /var/log/autobot
@@ -51,6 +58,27 @@ backend_core_dir: /var/lib/autobot/cores
 # backend_core_capture is true; the unit omits LimitCORE entirely otherwise.
 backend_core_limit: infinity
 
+# #13765: backend memory limits, DERIVED from detected host memory by
+# autobot-backend.service.j2. Percentages, never byte counts — the owner's
+# decision was explicitly that the number is a property of the box, not a
+# policy, so a literal here would ship one machine's hardware fleet-wide.
+#
+# 50/75 is not arbitrary: the ratio between them is 1.5x, which reproduces the
+# hand-applied MemoryHigh=8G / MemoryMax=12G on the 16 GiB host this issue was
+# filed from. MemoryHigh throttles (escalating reclaim pressure, no kill),
+# MemoryMax kills — so the gap between them is the warning band, and it is
+# derived along with the limits rather than being a second literal.
+backend_memory_high_pct: 50
+backend_memory_max_pct: 75
+
+# Floor below which NO limits are emitted at all, rather than a smaller cap.
+# The backend's observed steady state is ~4.3 GiB, so any watermark near or
+# below that throttles it at idle — the exact failure #13765 documents, which a
+# template would then reproduce on every small install. 6 GiB leaves real
+# headroom above the observed working set; hosts under ~12 GiB total therefore
+# run unlimited, which is the honest answer for a box that cannot afford a cap.
+backend_memory_floor_mb: 6144
+
 # Celery worker settings (Issue #863)
 celery_concurrency: 4  # Number of worker processes
 celery_max_tasks_per_child: 1000  # Restart worker after N tasks (prevents memory leaks)
@@ -83,6 +111,18 @@ backend_cors_origins: "*"
 # Internal API key shared with SLM backend for proxy authentication (#1779, #3512).
 # REQUIRED for personality and voice proxies — set via Ansible Vault or inventory.
 autobot_internal_api_key: ""
+
+# #14758: root key for the canonical envelope secret store. Read back from
+# slm-secrets.env at deploy time so the backend and the SLM derive the same vault
+# keys. Empty here on purpose — never commit a real value; an empty render leaves
+# the store exactly as dark as it is today rather than sealing secrets under a
+# key the SLM does not share.
+autobot_secrets_root_key: ""
+
+# #12681: pin an exact claude-code package version (e.g. "2.1.89") for a
+# reproducible provision. Empty takes the current stable-channel build, matching
+# the CLAUDE_CLI_VERSION build arg the backend image already exposes.
+backend_claude_cli_version: ""
 # SLM WebSocket auth bearer value — populated from /etc/autobot/slm-secrets.env at deploy time (#7689).
 backend_slm_auth_tok: ""
 
@@ -129,11 +169,14 @@ backend_health_check_delay: 5          # Seconds between retries
 # Audit log file path (#8936: ensures AUTOBOT_AUDIT_LOG_FILE is always set in prod)
 backend_audit_log_file: /opt/autobot/logs/audit.log
 
-# GPU / vLLM inference (#10288)
-# vllm moved to opt-in requirements-gpu.txt (#10251/#10287) to keep the default
-# CPU image lean (it drags the CUDA toolkit + CUDA-built torch — several GB).
-# Install requirements-gpu.txt ONLY when both an NVIDIA GPU is present AND vLLM
-# is enabled for this deployment.
+# GPU / CUDA-torch / vLLM inference (#10288, #15162)
+# Two independent decisions, deliberately not coupled (#15162):
+#   - CUDA torch/torchvision (requirements-gpu-torch.txt) installs whenever a
+#     GPU is present, vLLM or not.
+#   - vllm itself (requirements-gpu.txt) moved to opt-in (#10251/#10287) to
+#     keep the default CPU image lean (it drags the CUDA toolkit + extra
+#     wheels — several GB); it installs ONLY when both a GPU is present AND
+#     vLLM is enabled for this deployment.
 #   backend_vllm_enabled: deployment opts into in-process vLLM (llm.vllm.enabled).
 #   backend_has_gpu: "auto" runs nvidia-smi at deploy time; "true"/"false" override.
 backend_vllm_enabled: false

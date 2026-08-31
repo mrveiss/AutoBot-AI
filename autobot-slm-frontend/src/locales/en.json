@@ -381,6 +381,7 @@
   },
   "common": {
     "codeSyncBadge": {},
+    "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
       "admin": "Admin",
       "agents": "Agents",
@@ -3083,12 +3084,20 @@
         "clickStartBrowserTo": "Click \"Start Browser\" to begin a new browser session",
         "closeBrowser": "Close Browser",
         "enterURL": "Enter URL...",
+        "fleetDegraded": "fleet list degraded",
         "forward": "Forward",
         "go": "Go",
         "loading": "Loading...",
         "noScreenshotAvailable": "No screenshot available",
         "refresh": "Refresh",
         "startBrowser": "Start Browser",
+        "status": {
+          "connected": "connected",
+          "connecting": "connecting",
+          "degraded": "degraded",
+          "disconnected": "disconnected",
+          "unknown": "unknown"
+        },
         "takeScreenshot": "Take Screenshot"
       },
       "fileBrowserTool": {
@@ -3163,6 +3172,11 @@
       "terminalTool": {
         "connected": "Connected",
         "disconnected": "Disconnected",
+        "loadingNodes": "Loading nodes…",
+        "noNodesEnrolled": "No nodes are enrolled in the fleet.",
+        "nodeListStale": "Showing the last known node list — the fleet registry could not be reached, so a recently enrolled node may be missing.",
+        "nodeListUnavailable": "The fleet registry could not be reached, so no nodes can be listed. This is not an empty fleet.",
+        "retryNodeList": "Retry",
         "selectAHostAboveToStart": "Select a host above to start an SSH session.",
         "systemTerminal": "System Terminal"
       },

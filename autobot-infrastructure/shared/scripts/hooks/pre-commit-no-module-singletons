@@ -102,12 +102,47 @@ def _is_test_file(path: str) -> bool:
 
 
 def _get_staged_files() -> list[str]:
+    # GH#14167: no `check=True` and no returncode inspection meant a git
+    # failure (corrupted index, missing .git, permissions problem) produced
+    # empty stdout — indistinguishable from "nothing staged" — so the hook
+    # scanned nothing and exited 0 reporting clean. Mirrors the bash-hook
+    # fix in GH#14151/#14160: inspect the return code and fail closed
+    # instead of reading a broken git as an empty, valid answer. Checked
+    # here rather than relying on a caller-side `if not files: ...` because
+    # an *empty but successful* diff must still read as "0 staged files",
+    # not as an error — the two have to be told apart at the source.
     result = subprocess.run(
         ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
         capture_output=True,
         text=True,
     )
-    return [f for f in result.stdout.splitlines() if f.endswith(".py")]
+    if result.returncode != 0:
+        print(
+            "FATAL: git diff --cached failed — cannot determine staged files, "
+            "refusing to report clean",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return _python_only(result.stdout.splitlines())
+
+
+def _python_only(paths: list[str]) -> list[str]:
+    """Keep only .py paths.
+
+    GH#14034: this filter used to live *inside* ``_get_staged_files`` only, so
+    it applied to the git branch and not to the argv branch — the identical
+    asymmetry the bash helper ``get_staged_files`` had, and for the identical
+    reason: pre-commit passes no arguments and CI wrappers pass an explicit
+    file list. ``pipeline-scripts/check-pre-commit-hook-pr.sh`` deliberately
+    casts a wide net across every source extension and lets each hook apply its
+    own allowlist, so in CI this hook received .ts/.vue/.yml paths and fed them
+    to ``ast.parse``. It survives that only because ``check_file`` swallows
+    ``SyntaxError`` — a silent mis-scan rather than a loud one, which is worse.
+
+    Applying it to both branches makes the two documented invocation paths
+    agree, which is the property that was actually broken.
+    """
+    return [f for f in paths if f.endswith(".py")]
 
 
 def _callee_name(node: ast.expr) -> str:
@@ -187,7 +222,8 @@ def main() -> int:
     strict = "--strict" in sys.argv
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
 
-    files = args if args else _get_staged_files()
+    # _python_only on the argv branch too (#14034) — see its docstring.
+    files = _python_only(args) if args else _get_staged_files()
     files = [f for f in files if _is_agent_runtime_path(f) and not _is_test_file(f)]
 
     total_violations = 0

@@ -380,7 +380,66 @@ SKIP_DIRS: Set[str] = {
     "obj",  # .NET build output
     ".gradle",
     ".m2",  # Java build caches
+    # #13602: git worktrees are near-complete copies of the repo. Measured on a
+    # working checkout, 160,105 of 167,072 code files (96%) lived under these two
+    # directories — every analytics walk was scanning the repo ~26 times over.
+    # `duplicate_detector._get_files_to_scan` already documented `.worktrees/` as
+    # pruned; it never was, because the name was missing from this set.
+    ".worktrees",
+    "worktrees",  # .claude/worktrees — same content, different parent
 }
+
+
+def is_skipped_path(path: Path, root: Path) -> bool:
+    """True if ``path`` lies inside a SKIP_DIRS directory *below* ``root``.
+
+    The root-relative check is the whole point (#7128b, #13602). Testing
+    ``SKIP_DIRS & set(path.parts)`` on an absolute path asks whether the skip
+    name appears ANYWHERE in it — including in the root itself. So a scan whose
+    root is `/repo/.worktrees/issue-X` classified every file under it as
+    skippable and reported an empty codebase: not an error, not a log line, just
+    zero results, which reads exactly like a clean repo.
+
+    That trap is why `.worktrees` could not simply be added to SKIP_DIRS — CI and
+    development both run from inside a worktree.
+
+    A skip directory *nested* under the root is still skipped, which is the
+    behaviour we actually want.
+    """
+    # Three tiers, because this runs once per GLOBBED path — 214k of them on
+    # this repo, not the 6,967 surviving files. An earlier version of this
+    # comment used the wrong denominator and understated the cost by ~30x.
+    #
+    # 1. Lexically inside a skip dir -> skipped. A symlink cannot change that,
+    #    so no stat at all. 96% of paths land here.
+    # 2. Lexically clean and not a symlink -> kept. glob/rglob do not recurse
+    #    symlinked directories, so only a symlinked LEAF can escape, and
+    #    is_symlink() is one lstat where resolve() is a full realpath walk.
+    # 3. Anything else -> resolve and place it properly.
+    #
+    # Tuple slicing rather than relative_to(): same answer, and relative_to was
+    # measured at ~28us of the ~29us total.
+    root_parts = root.parts
+    path_parts = path.parts
+    if path_parts[: len(root_parts)] == root_parts:
+        if set(path_parts[len(root_parts) :]) & SKIP_DIRS:
+            # Already inside a skipped directory lexically. A symlink cannot
+            # change that answer, so skip the lstat — and this is the hot case:
+            # 96% of globbed paths on a working checkout land here.
+            return True
+        if not path.is_symlink():
+            return False
+    try:
+        relative = path.resolve().relative_to(root.resolve())
+    except (ValueError, OSError):
+        # A path that cannot be placed under the scan root is not in the scan.
+        # Falling back to the absolute check here would consult SKIP_DIRS
+        # against the ROOT's own ancestry — the precise bug this function exists
+        # to remove — so it would reintroduce it on exactly the inputs that are
+        # hardest to reason about (symlink escapes).
+        return True
+    return bool(set(relative.parts) & SKIP_DIRS)
+
 
 # Directory-based categories (not skipped, but categorized)
 BACKUP_DIRS: Set[str] = {"backup", "backups", "bak", ".backup"}

@@ -12,20 +12,20 @@ Issue #378: Added threading locks for file operations to prevent race conditions
 """
 
 import asyncio
-import pickle  # nosec B403  # internal profile storage only
+import json
 import threading
 from collections import defaultdict, deque
 from datetime import timedelta
-from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
-import yaml
 from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
+from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
@@ -88,9 +88,16 @@ class ThreatDetectionEngine:
         self.clustering_model = DBSCAN(eps=0.5, min_samples=5)
 
     def _initialize_profile_storage(self) -> None:
-        """Initialize user profile storage paths. Issue #620."""
+        """Initialize user profile storage paths. Issue #620.
+
+        Issue #14159: storage moved from pickle to schema-validated JSON.
+        ``_legacy_profile_storage_path`` is the old ``.pkl`` location -- kept
+        only so ``_load_user_profiles`` can report it exists; it is never
+        read or deleted (no data loss on update).
+        """
         self.user_profiles: Dict[str, UserProfile] = {}
-        self.profile_storage_path = PATH.get_data_path("security", "user_profiles.pkl")
+        self.profile_storage_path = PATH.get_data_path("security", "user_profiles.json")
+        self._legacy_profile_storage_path = PATH.get_data_path("security", "user_profiles.pkl")
         self.profile_storage_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _initialize_threat_patterns(self) -> None:
@@ -141,18 +148,17 @@ class ThreatDetectionEngine:
             self.learner = None
 
     def _load_config(self) -> Dict:
-        """Load threat detection configuration"""
-        try:
-            if Path(self.config_path).exists():
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    return yaml.safe_load(f)
-            else:
-                default_config = self._get_default_config()
-                self._save_config(default_config)
-                return default_config
-        except Exception as e:
-            logger.error("Failed to load threat detection config: %s", e)
-            return self._get_default_config()
+        """Load threat detection configuration, recording whether the file was actually found.
+
+        #14892: the miss branch used to write these defaults back to the path it
+        had just failed to read, so the next boot loaded the decoy and reported
+        success. It now warns and writes nothing; ``self.config_source`` carries
+        the same fact for callers.
+        """
+        loaded = load_config_file(self.config_path, self._get_default_config, "threat detection")
+        self.config_source = loaded.source
+        self.config_searched_path = loaded.searched_path
+        return loaded.values
 
     def _get_default_config(self) -> Dict:
         """Return default threat detection configuration"""
@@ -196,59 +202,49 @@ class ThreatDetectionEngine:
             },
         }
 
-    def _save_config(self, config: Dict):
-        """Save configuration to file (thread-safe, Issue #378)"""
-        with self._file_lock:
-            try:
-                Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
-                with open(self.config_path, "w", encoding="utf-8") as f:
-                    yaml.dump(config, f, default_flow_style=False)
-            except Exception as e:
-                logger.error("Failed to save threat detection config: %s", e)
-
     def _load_injection_patterns(self) -> List[Dict]:
         """Load command injection detection patterns"""
         return [
             {
                 "pattern": r"[;&|`$(){}[\]\\]",
                 "description": "Shell metacharacters",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "category": "shell_injection",
             },
             {
                 "pattern": r"(rm\s+-rf|del\s+/[sf]|format\s+c:)",
                 "description": "Destructive file operations",
-                "severity": "critical",
+                "severity": Severity.CRITICAL.value,
                 "category": "destructive_commands",
             },
             {
                 "pattern": r"(wget|curl|nc|netcat)\s+",
                 "description": "Network tools for data exfiltration",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "category": "network_tools",
             },
             {
                 "pattern": r"(base64|xxd|hexdump)\s+",
                 "description": "Encoding tools for obfuscation",
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
                 "category": "encoding_tools",
             },
             {
                 "pattern": r"(sudo|su|chmod\s+777|chown)",
                 "description": "Privilege escalation attempts",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "category": "privilege_escalation",
             },
             {
                 "pattern": r"(/etc/passwd|/etc/shadow|/etc/hosts)",
                 "description": "System file access",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "category": "system_file_access",
             },
             {
                 "pattern": r"(python\s+-c|perl\s+-e|ruby\s+-e)",
                 "description": "Inline script execution",
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
                 "category": "script_injection",
             },
         ]
@@ -285,46 +281,100 @@ class ThreatDetectionEngine:
                 "pattern": "rapid_sequential_requests",
                 "description": "Rapid API requests indicating automation",
                 "threshold": 50,  # requests per minute
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
             },
             {
                 "pattern": "unusual_endpoint_access",
                 "description": "Access to rarely used endpoints",
                 "threshold": 0.05,  # 5% of normal usage
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
             },
             {
                 "pattern": "bulk_data_download",
                 "description": "Large data download operations",
                 "threshold": 1000,  # MB downloaded
-                "severity": "high",
+                "severity": Severity.HIGH.value,
             },
             {
                 "pattern": "privilege_boundary_crossing",
                 "description": "Accessing resources beyond normal permissions",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
             },
         ]
 
     def _load_user_profiles(self):
-        """Load existing user behavioral profiles"""
+        """Load existing user behavioral profiles from the JSON store.
+
+        Issue #14159: the store previously round-tripped through
+        ``pickle.load()``, an arbitrary-code-execution sink reachable by any
+        writable path to the file. The profile store is a derived,
+        rebuildable behavioral cache -- never a system of record -- so this
+        reads ONLY the new JSON path. It deliberately does NOT migrate a
+        legacy ``.pkl`` file: doing so would keep the exact ``pickle.load()``
+        call this issue removes, just on a one-time code path. A legacy
+        ``.pkl`` left on disk is reported (filename only) and otherwise
+        ignored -- it is never read or deleted (no data loss on update).
+        """
+        if self._legacy_profile_storage_path.exists():
+            logger.info(
+                "Legacy pickle profile store found (%s); ignoring it -- profiles "
+                "rebuild from the JSON store instead of being migrated (#14159)",
+                self._legacy_profile_storage_path.name,
+            )
+
+        if not self.profile_storage_path.exists():
+            logger.info("No user profile store found; profiles will rebuild from scratch")
+            self.user_profiles = {}
+            return
+
         try:
-            if self.profile_storage_path.exists():
-                with open(self.profile_storage_path, "rb") as f:
-                    self.user_profiles = pickle.load(f)  # nosec B301
-                self.stats["users_monitored"] = len(self.user_profiles)
-                logger.info("Loaded %s user profiles", len(self.user_profiles))
-        except Exception as e:
+            with self._file_lock:
+                with open(self.profile_storage_path, "r", encoding="utf-8") as f:
+                    raw = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
             logger.error("Failed to load user profiles: %s", e)
             self.user_profiles = {}
+            return
+
+        if not isinstance(raw, dict):
+            logger.error(
+                "User profile store is not a JSON object (got %s); starting with an empty profile set",
+                type(raw).__name__,
+            )
+            self.user_profiles = {}
+            return
+
+        profiles: Dict[str, UserProfile] = {}
+        for key, entry in raw.items():
+            profile = UserProfile.from_dict(entry)
+            if profile is None:
+                logger.warning("Dropping invalid user profile entry for key %s", key)
+                continue
+            profiles[profile.user_id] = profile
+
+        self.user_profiles = profiles
+        self.stats["users_monitored"] = len(self.user_profiles)
+        logger.info("Loaded %s user profiles", len(self.user_profiles))
 
     def _save_user_profiles(self):
-        """Save user behavioral profiles"""
-        try:
-            with open(self.profile_storage_path, "wb") as f:
-                pickle.dump(self.user_profiles, f)
-        except Exception as e:
-            logger.error("Failed to save user profiles: %s", e)
+        """Save user behavioral profiles as schema-validated JSON (#14159).
+
+        Writes to a temp file and renames it into place so a concurrent
+        reader never observes a partially-written file (`os.replace` is
+        atomic on the same filesystem). Wrapped in ``self._file_lock`` --
+        the same lock already used for config writes (#378) -- because the
+        periodic profile-update task and any future caller could otherwise
+        interleave writes to this file from different threads.
+        """
+        with self._file_lock:
+            try:
+                payload = {user_id: profile.to_dict() for user_id, profile in self.user_profiles.items()}
+                tmp_path = self.profile_storage_path.with_suffix(".json.tmp")
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    json.dump(payload, f)
+                tmp_path.replace(self.profile_storage_path)
+            except Exception as e:
+                logger.error("Failed to save user profiles: %s", e)
 
     def _start_background_tasks(self):
         """Start background monitoring and maintenance tasks"""

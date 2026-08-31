@@ -6,21 +6,65 @@
 
 set -e
 
+# #14036: resolve the VNC user ONCE, here, in the shell.
+#
+# The unit heredocs below are quoted (<< 'EOF'), which disables parameter
+# expansion, so a ${...} written inside one lands in the unit file verbatim.
+# systemd has no bash-style :- default syntax, so `User=${VNC_USER}`
+# is not a valid directive value and the unit is broken on every run.
+#
+# $USER is not usable here either: this script is run with sudo, so $USER is
+# root and the paths resolved to /home/root.
+#
+# #14314: VNC_USER is canonical — the ansible vnc role
+# (autobot-slm-backend/ansible/roles/vnc/defaults/main.yml) resolves the same
+# name. AUTOBOT_VNC_USER remains a deprecated alias for one release, since an
+# existing host may already have only it set; VNC_USER wins when both are set.
+#
+# #14319: default changed from 'autobot' (the SSH/ansible operational
+# identity) to 'autobot-vnc' (VNC's own dedicated service account). The
+# emergency admin safety-net account is rejected outright below, whatever
+# the default is — see autobot-slm-backend/ansible/roles/vnc/tasks/main.yml
+# for why it must never run VNC.
+if [ -n "${VNC_USER:-}" ]; then
+    : # already set by the caller — keep it
+elif [ -n "${AUTOBOT_VNC_USER:-}" ]; then
+    VNC_USER="$AUTOBOT_VNC_USER"
+else
+    VNC_USER="autobot-vnc"
+fi
+
+if [ "${VNC_USER}" = "autobot_admin" ]; then
+    echo "ERROR: VNC_USER=autobot_admin — the emergency admin safety-net account is rejected (#14319)." >&2
+    echo "Set VNC_USER to a different account, or unset it to use the default (autobot-vnc)." >&2
+    exit 1
+fi
+
+VNC_HOME="/home/${VNC_USER}"
+
+if ! id "${VNC_USER}" &>/dev/null; then
+    echo "ERROR: account '${VNC_USER}' does not exist." >&2
+    echo "Run the ansible vnc role first (autobot-slm-backend/ansible/roles/vnc) —" >&2
+    echo "it creates the dedicated VNC service account — or set VNC_USER to an" >&2
+    echo "existing account." >&2
+    exit 1
+fi
+
 echo "Setting up VNC for WSL environment..."
 
 # Stop existing services
 systemctl stop x11vnc.service novnc.service 2>/dev/null || true
 
 # Create Xvfb service (virtual framebuffer)
-cat > /etc/systemd/system/xvfb.service << 'EOF'
+cat > /etc/systemd/system/xvfb.service << EOF
 [Unit]
 Description=X Virtual Framebuffer
 After=network.target
 
 [Service]
 Type=simple
-User=kali
-Group=kali
+User=${VNC_USER}
+Group=${VNC_USER}
 ExecStart=/usr/bin/Xvfb :1 -screen 0 1920x1080x24
 Restart=always
 RestartSec=5
@@ -30,7 +74,7 @@ WantedBy=multi-user.target
 EOF
 
 # Create x11vnc service that connects to Xvfb
-cat > /etc/systemd/system/x11vnc.service << 'EOF'
+cat > /etc/systemd/system/x11vnc.service << EOF
 [Unit]
 Description=x11vnc VNC Server for Xvfb
 After=xvfb.service
@@ -38,10 +82,10 @@ Requires=xvfb.service
 
 [Service]
 Type=simple
-User=kali
-Group=kali
+User=${VNC_USER}
+Group=${VNC_USER}
 Environment=DISPLAY=:1
-ExecStart=/usr/bin/x11vnc -display :1 -forever -shared -rfbauth /home/${USER:-autobot}/.vnc/passwd -rfbport 5900 -noxdamage -noxfixes
+ExecStart=/usr/bin/x11vnc -display :1 -forever -shared -rfbauth ${VNC_HOME}/.vnc/passwd -rfbport 5900 -noxdamage -noxfixes
 Restart=always
 RestartSec=5
 
@@ -50,7 +94,12 @@ WantedBy=multi-user.target
 EOF
 
 # Update noVNC service
-cat > /etc/systemd/system/novnc.service << 'EOF'
+# #13076: /opt/novnc, matching autobot-slm-backend/ansible/roles/vnc/defaults/
+# main.yml novnc_path — NOT the distro /usr/share/novnc, which roles/vnc
+# removes (#13069) and which otherwise serves a stale pre-VeNCrypt client
+# (#13060). This script does not install noVNC itself; run the vnc role (or
+# an equivalent pinned install) first so /opt/novnc exists.
+cat > /etc/systemd/system/novnc.service << EOF
 [Unit]
 Description=noVNC Web Interface
 After=x11vnc.service
@@ -58,13 +107,13 @@ Requires=x11vnc.service
 
 [Service]
 Type=simple
-User=kali
-Group=kali
-WorkingDirectory=/usr/share/novnc
-ExecStart=/usr/bin/websockify --web /usr/share/novnc \
-    --cert=/etc/autobot/certs/server-cert.pem \
-    --key=/etc/autobot/certs/server-key.pem \
-    --ssl-only \
+User=${VNC_USER}
+Group=${VNC_USER}
+WorkingDirectory=/opt/novnc
+ExecStart=/usr/bin/websockify --web /opt/novnc \\
+    --cert=/etc/autobot/certs/server-cert.pem \\
+    --key=/etc/autobot/certs/server-key.pem \\
+    --ssl-only \\
     localhost:6080 localhost:5900
 Restart=always
 RestartSec=5
@@ -74,13 +123,13 @@ WantedBy=multi-user.target
 EOF
 
 # Ensure password file exists
-mkdir -p /home/${USER:-autobot}/.vnc
-if [ ! -f /home/${USER:-autobot}/.vnc/passwd ]; then
+mkdir -p ${VNC_HOME}/.vnc
+if [ ! -f ${VNC_HOME}/.vnc/passwd ]; then
     VNC_PASS=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c 16)
-    x11vnc -storepasswd "$VNC_PASS" /home/${USER:-autobot}/.vnc/passwd
+    x11vnc -storepasswd "$VNC_PASS" ${VNC_HOME}/.vnc/passwd
     echo "Generated VNC password: $VNC_PASS"
 fi
-chown -R kali:kali /home/${USER:-autobot}/.vnc
+chown -R "${VNC_USER}:${VNC_USER}" "${VNC_HOME}/.vnc"
 
 echo "Reloading systemd..."
 systemctl daemon-reload

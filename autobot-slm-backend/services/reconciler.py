@@ -20,8 +20,10 @@ from typing import Dict, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.http_client import get_http_client
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.service_discovery import SERVICE_DISCOVERY_TTL_S
+from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from config import settings
 from models.database import (
     Deployment,
@@ -37,7 +39,7 @@ from models.database import (
     Setting,
 )
 from services.service_categorizer import categorize_service
-from services.service_extra_data import engine_degraded_fields
+from services.service_extra_data import engine_degraded_fields, is_managed_autobot_service
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +62,394 @@ MANIFEST_HEALTH_INTERVAL = 60
 CERT_EXPIRY_CHECK_INTERVAL = 86_400
 # Cooldown between remediation attempts (seconds)
 REMEDIATION_COOLDOWN = 300  # 5 minutes
+
+# #14344: how long to wait for a heartbeat after restarting the agent before
+# calling the remediation a failure. Remediation exists to restore the
+# heartbeat, so the heartbeat is what "success" has to mean — the restart
+# exiting 0 only says the command ran. Env-backed rather than hardcoded: the
+# right window depends on the agent's own heartbeat interval on that fleet.
+# min_v=1, not 0: a 0 window makes the poll body unreachable, so every
+# remediation would report failure and march healthy nodes to `exhausted`.
+REMEDIATION_HEARTBEAT_WAIT_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_WAIT_S", 90, min_v=1)
+# Clamped, not bare: env_int accepts 0 and negatives, and a 0 here turns the
+# verification poll into a tight open/close-session loop for the whole window.
+REMEDIATION_HEARTBEAT_POLL_S = env_int_clamped("AUTOBOT_REMEDIATION_HEARTBEAT_POLL_S", 5, min_v=1)
+
+# #14524: wall-clock ceiling on the ansible-playbook subprocess launched by
+# `_restart_service_via_ansible` for the slm-agent restart (see
+# SERVICE_RESTART_PLAYBOOK_TIMEOUT_S below for the OTHER call path -- review,
+# round 2, found this constant applied to both and only the slm-agent side
+# was ever analysed). Previously unbounded -- a genuinely hung SSH connection
+# or stuck remote task blocked `_remediate_node`, and therefore that node's
+# slot in `_attempt_remediation`'s serial pass, indefinitely.
+#
+# `manage-service.yml` is the only playbook this call path ever runs: one
+# host, one systemd service action, no package installs or long-running
+# polling -- a legitimate run completes in seconds. 180s gives roughly two
+# orders of magnitude of headroom over that, while staying comfortably below
+# REMEDIATION_COOLDOWN (300s).
+#
+# Review, round 2, corrected the original justification here: a host that
+# cleanly REFUSES the connection is not actually a ~240s risk -- ansible
+# marks it UNREACHABLE and drops it from the rest of the play after the
+# FIRST connecting task fails, so only one task pays `timeout = 30` (ssh
+# ConnectTimeout) x up to 4 attempts (`ANSIBLE_SSH_RETRIES=3` retries + the
+# initial try) =~ 124s, not two tasks =~ 240s. That case was never this
+# timeout's real target anyway -- it already fails cleanly on its own well
+# inside 180s. The genuine unbounded risk `timeout = 30` does NOT cover is a
+# host that ACCEPTS the TCP connection (so ConnectTimeout never fires) and
+# then stops responding -- including a hung `ControlPersist=60s`
+# (ssh_connection.ssh_args, ansible.cfg) multiplexed session, which is
+# exactly the "genuinely hung SSH connection" this constant exists to bound
+# from the OUTSIDE, since nothing in ansible.cfg bounds it from the inside.
+# See `_effective_tracker_expiry_s` for how this now feeds the escalation
+# floor.
+REMEDIATION_PLAYBOOK_TIMEOUT_S = env_int_clamped("AUTOBOT_REMEDIATION_PLAYBOOK_TIMEOUT_S", 180, min_v=1)
+
+# Review on #14524 (round 2): the 180s bound above is sized for
+# `manage-service.yml` restarting `slm-agent` -- a single, lightweight
+# systemd action. `_restart_service_via_ansible` is ALSO the restart path for
+# `_remediate_failed_service`, which restarts ANY `ServiceCategory.AUTOBOT`
+# unit -- and `AUTOBOT_SERVICE_PATTERNS` (services/service_categorizer.py)
+# matches that category by NAME PREFIX (autobot-*, postgresql*, redis*,
+# docker*, ollama*, kafka*, ...), an open-ended set, not just AutoBot's own
+# units. `systemctl restart` on a `Type=oneshot` unit blocks for the WHOLE
+# ExecStart -- two AutoBot-owned units alone declare
+# `TimeoutStartSec=600`/`=1800` (autobot-key-rotation.service.j2,
+# autobot-pg-backup.service.j2; the repo's longest found) -- a value sized
+# for that case would be the semantically correct fix.
+#
+# round 3 tried exactly that (2100s) and, separately, tried decoupling
+# `_remediate_failed_services()` into a background task so its duration could
+# no longer affect the node pass's timing at all. Review (round 3 re-review)
+# found the decoupling unsafe for reasons independent of timing: (a)
+# `_restart_service_via_ansible` goes through the SINGLETON
+# `get_playbook_executor()`, and `execute_playbook` always runs
+# `_update_code_source()` first -- a `git checkout`/`fetch`/`reset --hard` in
+# the ONE shared `code_source` working tree, with nothing to serialise a
+# concurrent node-pass call against a concurrent sweep call; worst case one
+# run rewrites roles/templates under a live `ansible-playbook` whose `cwd` is
+# that same tree. (b) `AUTOBOT_SERVICE_PATTERNS` includes `^slm-`, so the
+# sweep (which skips only OFFLINE nodes) can restart the SAME `slm-agent`
+# unit `_remediate_node` is independently restarting on a DEGRADED node --
+# `_heartbeat_returned` cannot attribute a resulting heartbeat to either
+# restart, so the node attempt can read `success=True` on the strength of
+# the SWEEP's restart and reset `count` to 0 -- "56 restarts / 0
+# escalations" again, through a third door. Both are reverted; `_run_loop`
+# is fully serial again (`_check_node_health` -> `_attempt_remediation` ->
+# `_remediate_failed_services` -> ...).
+#
+# With the sweep serial again, this budget directly extends the SAME
+# node-pass gap `_effective_tracker_expiry_s()` bounds (see there) -- a
+# single service run at the full 2100s this constant used to allow would, by
+# itself, exceed even the 1800s DEFAULT `AUTOBOT_REMEDIATION_TRACKER_
+# EXPIRY_S`. Capped instead at the SAME 180s as `REMEDIATION_PLAYBOOK_
+# TIMEOUT_S` above -- reintroducing round 2's own finding (a legitimate
+# multi-minute backup/rotation restart is killed early and eventually
+# escalates for human review, rather than running to completion) is the
+# lesser, and currently only SAFE, of the two known bad outcomes. The real
+# fix -- concurrency safe against the singleton executor (a per-executor
+# lock, a per-host lock, or a redesign) or a per-unit budget derived from
+# the unit's own `TimeoutStartSec` -- is a design decision with a real cost,
+# tracked separately rather than guessed at here: #14570.
+SERVICE_RESTART_PLAYBOOK_TIMEOUT_S = env_int_clamped(
+    "AUTOBOT_SERVICE_RESTART_PLAYBOOK_TIMEOUT_S", REMEDIATION_PLAYBOOK_TIMEOUT_S, min_v=1
+)
+# #14465 review: this does NOT read any heartbeat/streak signal, which closes
+# the specific way the prior two designs were fakeable by a flap -- but it is
+# not, on its own, a general fix for escalation reachability. The dominant
+# gate for a node whose agent keeps heartbeating is `_heartbeat_returned`'s
+# own success semantics a few lines below in `_remediate_node`: ANY beat that
+# lands within `REMEDIATION_HEARTBEAT_WAIT_S` of a restart resets `count` to 0
+# through that path, every attempt, regardless of this mechanism. This is
+# genuinely inert for that shape -- it only matters once `_heartbeat_returned`
+# has ALREADY failed repeatedly (an ansible restart that cannot run, or one
+# that runs but never gets a heartbeat accepted), where it stops those
+# failures from being silently forgiven by nothing at all. Whether/how to
+# widen "recovered" beyond that is a posted, unresolved decision on #14465 --
+# out of scope here.
+#
+# How long a non-exhausted tracker may sit with no NEW attempt before its
+# count is forgiven, in the cases above where it does apply. `last_attempt`
+# only advances when `_remediate_node` actually runs an attempt, which
+# happens every `REMEDIATION_COOLDOWN` for as long as the node keeps being
+# selected DEGRADED -- so it can only go this stale if the reconciler
+# genuinely stopped re-selecting the node for the whole window.
+#
+# This value alone is NOT what `_forgive_if_expired` enforces -- see
+# `_effective_tracker_expiry_s()`. It must be strictly greater than
+# REMEDIATION_COOLDOWN plus a reconcile-tick margin, not merely >=: at exactly
+# REMEDIATION_COOLDOWN, the cooldown check and the forgive check flip at the
+# identical elapsed time, and forgive runs first -- so a tracker is forgiven
+# back to 0 in the same instant an attempt becomes due, every time, and count
+# can never exceed 1. That reconcile-tick margin depends on `settings.
+# reconcile_interval`, a per-process pydantic setting -- deliberately NOT read
+# here at import time. A review-caught regression: one test module stubs
+# `config.settings` as a bare `SimpleNamespace` lacking `reconcile_interval`,
+# and reading it here raised `AttributeError` at module-exec time, which
+# aborted collection for that entire file, not just this constant. `min_v=1`
+# is a cheap sanity floor only; the real, reconcile-interval-aware floor is
+# computed fresh on every call, from the LIVE `settings` object, exactly where
+# it is used.
+REMEDIATION_TRACKER_EXPIRY_S = env_int_clamped("AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S", 1800, min_v=1)
+
+# #14465 review: how often `_handle_max_attempts_refusal` re-broadcasts "still
+# exhausted" for a node parked at MAX_REMEDIATION_ATTEMPTS. Once exhausted,
+# `last_attempt` freezes, so this branch runs on every reconcile pass for as
+# long as the node stays selected DEGRADED -- unthrottled, that is once per
+# `reconcile_interval` forever (~1400/day at the 60s default). An hour is
+# frequent enough that a human watching the UI sees the node is still stuck
+# without needing to have caught the one original event, and infrequent
+# enough not to be noise.
+MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S = env_int_clamped(
+    "AUTOBOT_MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S", 3600, min_v=1
+)
+
+# #14465 review, round 7: one-shot latches for _effective_tracker_expiry_s's
+# "log once, not every call" warnings -- that function runs on every
+# _forgive_if_expired, up to once per reconcile pass per degraded node.
+_expiry_floor_override_logged = False
+_reconcile_interval_type_warning_logged = False
+
+
+def _effective_tracker_expiry_s() -> int:
+    """The expiry window actually enforced by `_forgive_if_expired` (#14465 review).
+
+    Reads `settings.reconcile_interval` fresh on every call rather than once
+    at import time -- see `REMEDIATION_TRACKER_EXPIRY_S` for why. `getattr`
+    with a default cannot raise for a genuinely missing attribute, unlike a
+    `try/except` around a narrower guess at which exception a stub might
+    raise; the `isinstance` check below additionally covers a stub where the
+    attribute IS present but is not a real int (e.g. an auto-vivified
+    `MagicMock` child under the root conftest's `config.settings = MagicMock()`
+    stub) -- `int + MagicMock` does not raise either, it silently produces
+    another `MagicMock`, which `max()` against would raise `TypeError` one
+    call later instead of never.
+
+    The margin is NOT `reconcile_interval` alone (review, round 6):
+    `_attempt_remediation` processes every currently-degraded node SERIALLY
+    within one pass, and `_heartbeat_returned` blocks that pass for up to
+    `REMEDIATION_HEARTBEAT_WAIT_S` for EACH node that gets an actual attempt.
+    With more than one such node in the same pass, the real gap between two
+    `_remediate_node` calls for a GIVEN node can run well beyond `reconcile_
+    interval` -- a margin of `reconcile_interval` alone was measured
+    defeated for realistic real-world pass durations. This does NOT bound
+    the case of many nodes degraded simultaneously, which needs either a
+    known fleet-size ceiling or restructuring `_attempt_remediation` to
+    process nodes concurrently (each with its own DB session -- sharing one
+    `AsyncSession` across concurrent coroutines is unsafe, so that is a real
+    change, not a one-line fix). Tracked as #14515.
+
+    #14524 (round 8): `execute_playbook`'s own runtime is now bounded too
+    (`REMEDIATION_PLAYBOOK_TIMEOUT_S`, wired through `_restart_service_via_
+    ansible`), and the margin folds that in. Within ONE `_remediate_node`
+    call the two waits are SEQUENTIAL, not alternatives -- the ansible run
+    happens, then, only if it succeeded, `_heartbeat_returned` polls for up
+    to `REMEDIATION_HEARTBEAT_WAIT_S` more -- so the worst-case duration of a
+    single node's own attempt is their SUM, not either alone (`ceiling`
+    below). Still scoped to ONE node; #14515's many-nodes gap is unchanged
+    by this. A round-3 attempt to also fold in `_update_code_source`'s own
+    worst case, and to run the service-restart sweep off the node pass
+    entirely, was reverted (review round 3 re-review): the sweep change
+    introduced two Criticals of its own -- a singleton `PlaybookExecutor`
+    left with two concurrent callers racing `git reset --hard` in the one
+    shared `code_source` tree, and a sweep that can restart the SAME
+    `slm-agent` unit `_remediate_node` is independently restarting (`^slm-`
+    is itself one of `AUTOBOT_SERVICE_PATTERNS`), letting the sweep's
+    restart silently reset the NODE tracker's own count. See
+    `SERVICE_RESTART_PLAYBOOK_TIMEOUT_S`'s own comment and #14570.
+
+    #14524 (review round 3 re-review): the margin's SHAPE was also wrong.
+    `floor = REMEDIATION_COOLDOWN + max(reconcile_interval, ceiling) + 1`
+    reads as "deliberately looser than necessary" in an earlier version of
+    this docstring -- backwards. `max(a, b) <= a + b` always, so that form
+    is TIGHTER than adding the two, not looser. At the SHIPPED `ceiling`
+    (270, <= REMEDIATION_COOLDOWN) the two forms happen to agree for every
+    `reconcile_interval >= ceiling`, and the old form is only ever the
+    LARGER (safer) one otherwise -- so this specific bug is latent at
+    today's defaults. It stops being latent the moment `ceiling` alone
+    exceeds `REMEDIATION_COOLDOWN` (e.g. an operator raising
+    `REMEDIATION_PLAYBOOK_TIMEOUT_S` past ~210s -- exactly the scenario
+    `reconciler_playbook_timeout_14524_test.py`'s own
+    `test_floor_extension_matters_more_...` test already exercises, at
+    `ceiling=370`) AND `reconcile_interval` exceeds `ceiling` too -- e.g.
+    `ceiling=370, reconcile_interval=400` gives the old form 701 against a
+    real gap of 771, a 70s undercount, not merely a pathological corner.
+    The sound form follows directly from how the gap is actually produced:
+    `last_attempt` is stamped at attempt START, so `ceiling`'s own work runs
+    concurrently with (i.e. inside) the cooldown window, and exactly ONE
+    more `reconcile_interval` poll follows once cooldown clears --
+    `max(REMEDIATION_COOLDOWN, ceiling) + reconcile_interval + 1`. This is
+    the identical expression the test suite's own `_gap_after_one_attempt`
+    helper already used (`reconciler_playbook_timeout_14524_test.py`); only
+    the SHIPPED formula here had the bug.
+
+    Two conditions are logged once (not on every call -- this runs on every
+    `_forgive_if_expired`, up to once per reconcile pass per degraded node)
+    rather than silently: an operator's `AUTOBOT_REMEDIATION_TRACKER_
+    EXPIRY_S` being below the enforced floor (round 7 -- setting 60 expecting
+    a short window silently gets 361+ instead at the current defaults, which
+    is ALSO shorter than the 1800s default, so the operator ends up less
+    protected than doing nothing while believing they configured something
+    specific -- and, at that same 1800s default, this floor is inert either
+    way: `max(1800, 361) == 1800`, so its exact value only matters for an
+    operator who has lowered the raw constant below it, or raised `reconcile_
+    interval` far enough to matter), and `settings.reconcile_interval` being
+    present but not a real int (an auto-vivified `MagicMock` child, dormant
+    today but would otherwise silently collapse a legitimately large
+    configured interval down to the 60s fallback with no warning).
+    """
+    global _expiry_floor_override_logged, _reconcile_interval_type_warning_logged
+
+    reconcile_interval = getattr(settings, "reconcile_interval", 60)
+    if not isinstance(reconcile_interval, int):
+        if not _reconcile_interval_type_warning_logged:
+            logger.warning(
+                "settings.reconcile_interval is %r, not an int -- falling back to 60s for the "
+                "remediation-tracker expiry floor margin",
+                reconcile_interval,
+            )
+            _reconcile_interval_type_warning_logged = True
+        reconcile_interval = 60
+
+    single_node_attempt_ceiling_s = REMEDIATION_HEARTBEAT_WAIT_S + REMEDIATION_PLAYBOOK_TIMEOUT_S
+    floor = max(REMEDIATION_COOLDOWN, single_node_attempt_ceiling_s) + reconcile_interval + 1
+    effective = max(REMEDIATION_TRACKER_EXPIRY_S, floor)
+
+    if effective != REMEDIATION_TRACKER_EXPIRY_S and not _expiry_floor_override_logged:
+        logger.warning(
+            "AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S=%ds is below the enforced floor -- using %ds instead "
+            "(max(REMEDIATION_COOLDOWN=%ds, ceiling=%ds) + reconcile_interval=%ds + 1)",
+            REMEDIATION_TRACKER_EXPIRY_S,
+            effective,
+            REMEDIATION_COOLDOWN,
+            single_node_attempt_ceiling_s,
+            reconcile_interval,
+        )
+        _expiry_floor_override_logged = True
+
+    return effective
+
+
 # Default rollback window (seconds) - deployments older than this won't be auto-rolled back
 DEFAULT_ROLLBACK_WINDOW = 600  # 10 minutes
 # Service remediation cooldown (shorter than node remediation)
 SERVICE_REMEDIATION_COOLDOWN = 120  # 2 minutes
 # Maximum service restart attempts before requiring human intervention
 MAX_SERVICE_RESTART_ATTEMPTS = 3
+
+# #14465 review: how long a service is reported as CHURNING after its last
+# observed `n_restarts` increase. Must be comfortably larger than health_
+# collector's own `discover_all_services()` cache TTL
+# (`autobot_shared.service_discovery.SERVICE_DISCOVERY_TTL_S`) -- against a
+# 30s heartbeat, 9 of every 10 beats otherwise carry a byte-identical cached
+# snapshot, so a bare "did it change since the immediately preceding
+# heartbeat" pulse only fires on the ~1 beat in 10 where the cache actually
+# refreshed (measured: 1 of 20 degraded across continuous churn, vs 20 of 20
+# on the absolute threshold this replaced -- the node flapped ONLINE/DEGRADED
+# every 5 minutes instead of staying DEGRADED). A level -- degrade while
+# `now - last_increase < window` -- reports whether the node is CURRENTLY
+# churning, which is what a status field means, instead of whether THIS
+# SPECIFIC sample happened to land on a cache refresh.
+#
+# min_v is DERIVED from SERVICE_DISCOVERY_TTL_S, not a second hardcoded
+# literal: an earlier version of this fix hardcoded `min_v=1`, and measured
+# with the TTL at its own default, every window from 1 to 271 seconds
+# restored the pulse-flapping regression this replaces -- a bare literal
+# gives no warning when the agent-side TTL changes out from under it (raising
+# the TTL to 900 would make the unrelated 600s DEFAULT flap too). Twice the
+# TTL guarantees the window spans at least one full cache-refresh cycle, so a
+# service that is genuinely still churning re-arms the window (a fresh
+# increase observed within it) before the earlier arming closes, keeping
+# DEGRADED continuous throughout sustained churn. The trade-off this makes
+# explicit: a single benign restart (one OOM kill, one dependency flap) now
+# degrades the node for the whole window and stands a real chance of
+# triggering one ansible restart via remediation, where the absolute
+# threshold it replaced made that same trade unboundedly (forever, once
+# n_restarts crossed 3) rather than for one bounded window.
+RESTART_CHURN_WINDOW_S = env_int_clamped("AUTOBOT_RESTART_CHURN_WINDOW_S", 600, min_v=SERVICE_DISCOVERY_TTL_S * 2 + 1)
+
+
+def _restart_count_increased(svc_data: dict, previous_extra: dict) -> bool:
+    """Did a managed service's `n_restarts` rise since the last heartbeat?
+
+    Helper for `_restart_churn_active`. Compares against the immediately
+    preceding heartbeat's stored value, never an absolute threshold --
+    `NRestarts` is lifetime-cumulative for as long as a unit keeps failing
+    (systemd resets it on the next clean manual start once a unit settles,
+    not merely with the passage of time), so a static gate on it can never
+    self-heal on its own (see `_calculate_node_status`'s docstring). A
+    decrease (e.g. that reset, or a reboot) is deliberately not itself a
+    signal here -- only a rise arms the churn window; `_update_existing_
+    service` still rewrites the stored baseline to the new, lower value
+    either way, so a later rise compares against the post-reset count.
+    """
+    if not is_managed_autobot_service(svc_data):
+        return False
+    current = svc_data.get("n_restarts")
+    previous = previous_extra.get("n_restarts")
+    if current is None or previous is None:
+        return False
+    return current > previous
+
+
+def _restart_churn_active(svc_data: dict, previous_extra: dict, now: datetime) -> tuple[bool, str | None]:
+    """Is a managed service CURRENTLY churning, and what timestamp to persist for it?
+
+    Helper for `ReconcilerService._update_existing_service` (#14465 review: a
+    pulse -- "did it change since the immediately preceding heartbeat" -- is
+    the wrong shape for a status field; see `RESTART_CHURN_WINDOW_S`). Tracks
+    the timestamp of the last OBSERVED increase and reports "churning" for
+    `RESTART_CHURN_WINDOW_S` afterward -- a level.
+
+    First-ever observation (no previous `n_restarts` to compare against, the
+    `_create_new_service` path) is honestly `(False, None)`: there is no rate
+    information yet on a service just discovered, or a row `_remove_stale_
+    services` deleted and the agent re-reported. The next observed increase
+    arms the window. Acceptable rather than a regression here specifically
+    because the signal is a level: a service that is GENUINELY still
+    churning will produce that next increase within one heartbeat interval,
+    not eventually -- unlike the absolute threshold this replaced, which had
+    no such excuse for missing an already-churning service on first sight.
+
+    Returns `(is_churning_now, last_increase_iso_to_persist)`.
+    """
+    if not is_managed_autobot_service(svc_data):
+        return False, previous_extra.get("n_restarts_increased_at")
+
+    last_increase_iso = previous_extra.get("n_restarts_increased_at")
+    if _restart_count_increased(svc_data, previous_extra):
+        last_increase_iso = now.isoformat()
+
+    if last_increase_iso is None:
+        return False, None
+
+    try:
+        last_increase_at = parse_utc_iso(last_increase_iso)
+    except (TypeError, ValueError):
+        return False, None
+
+    is_churning = (now - last_increase_at).total_seconds() < RESTART_CHURN_WINDOW_S
+    return is_churning, last_increase_iso
+
+
+def _service_health_degraded(extra_data: dict | None, restart_churn_active: bool) -> bool:
+    """The two current-state service signals `_calculate_node_status` acts on.
+
+    Module-level and pure: `restart_churn_active` is computed elsewhere
+    (against the OLD `Service` row this function does not have); this only
+    combines it with the current-heartbeat status scan.
+    """
+    if restart_churn_active:
+        return True
+    if not extra_data:
+        return False
+    for svc in extra_data.get("discovered_services", []):
+        if not is_managed_autobot_service(svc):
+            continue
+        if svc.get("status") in ("crash-loop", "failed"):
+            return True
+    return False
 
 
 class ReconcilerService:
@@ -308,6 +692,37 @@ class ReconcilerService:
 
                 await self._remediate_node(db, node)
 
+    def _forgive_if_expired(self, node_id: str, tracker: dict, now: datetime) -> dict:
+        """Reset a stale, non-exhausted tracker's count to zero, once genuinely idle (#14465).
+
+        Helper for _check_remediation_limits; see REMEDIATION_TRACKER_EXPIRY_S
+        and `_effective_tracker_expiry_s` for what this does and does not fix
+        -- it is scoped to time since the last ATTEMPT, not any heartbeat-side
+        signal, but it is not the gate that decides whether count accumulates
+        in the first place for a node whose agent keeps heartbeating;
+        `_heartbeat_returned`, below, is.
+
+        `exhausted` trackers are deliberately excluded: that flag means human
+        intervention was already required, and forgiving it on a timer alone
+        would be a silent, unbounded auto-retry -- a scope change this issue
+        does not ask for, not a bug fix.
+        """
+        if tracker.get("exhausted") or not tracker.get("count"):
+            return tracker
+        last_attempt = tracker.get("last_attempt")
+        effective_expiry_s = _effective_tracker_expiry_s()
+        if last_attempt is None or (now - last_attempt).total_seconds() < effective_expiry_s:
+            return tracker
+
+        forgiven = {"count": 0, "last_attempt": last_attempt}
+        self._remediation_tracker[node_id] = forgiven
+        logger.info(
+            "Node %s remediation history expired after %ds with no further attempts - forgiving",
+            node_id,
+            effective_expiry_s,
+        )
+        return forgiven
+
     def _check_remediation_limits(self, node_id: str, now: datetime) -> tuple[bool, str | None, dict]:
         """Check if remediation can proceed based on cooldown and attempt limits.
 
@@ -320,6 +735,7 @@ class ReconcilerService:
             - tracker: The remediation tracker dict for this node
         """
         tracker = self._remediation_tracker.get(node_id, {"count": 0, "last_attempt": None})
+        tracker = self._forgive_if_expired(node_id, tracker, now)
 
         # Check cooldown
         if tracker["last_attempt"]:
@@ -365,10 +781,114 @@ class ReconcilerService:
         db.add(event)
         await db.commit()
 
-    async def _record_remediation_result(self, db: AsyncSession, node: Node, success: bool, tracker: dict) -> None:
+    async def _handle_max_attempts_refusal(self, db: AsyncSession, node: Node, tracker: dict) -> None:
+        """React to a DEGRADED node being refused a remediation attempt at the limit.
+
+        Helper for _remediate_node (#14465 review). Base's recovery reset
+        dropped `exhausted` whenever it fired, so a recovered node became
+        remediable again -- rarely reachable, per this issue's own root-cause
+        finding, but a real path. `_forgive_if_expired` deliberately excludes
+        `exhausted` trackers (see its docstring), so with no other path back
+        this refusal now repeats silently: `_create_max_attempts_event` fired
+        once and every later pass was only a `logger.warning` inside
+        `_check_remediation_limits` -- no event, no broadcast, no UI signal
+        that the node is still stuck. An automatic un-exhaust path is a
+        design decision, tracked on #14465, not built here.
+
+        `exhausted` is set and stored BEFORE `_create_max_attempts_event`'s
+        `db.commit()` is even attempted, not after: `last_attempt` is now
+        frozen (nothing advances it once exhausted), so this branch runs on
+        EVERY future reconcile pass for as long as the node stays selected
+        DEGRADED. If the flag were only set after a successful commit, a
+        commit failure would leave it unset and every subsequent pass would
+        retry the same DB write -- unbounded for a sustained outage. Setting
+        it first means at worst one informational event is lost to a
+        transient failure, never a retry loop.
+
+        The follow-up visibility fix is throttled
+        (`MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S`) and does two things,
+        not one (#14465 review round 7 -- a live-only broadcast reaches
+        nobody who is not watching at that exact moment, and was found
+        emitted onto a wire nothing renders):
+
+        - Persists a throttled `NodeEvent` (`_create_still_exhausted_event`)
+          so the DB-backed timeline shows the node is STILL stuck, not just
+          the one original exhaustion event -- reusing the same generic,
+          already-rendered `EventType.REMEDIATION_COMPLETED` shape rather
+          than inventing a new one, so this needs no new frontend work.
+        - Broadcasts over the websocket for anyone watching live, with
+          `event_type="still_exhausted"` -- deliberately NOT `"completed"`:
+          `FleetOverview.vue`'s `onRemediationEvent` handler calls
+          `fleetStore.refreshNode(nodeId)`, a real API request, for exactly
+          that `event_type`. Broadcasting `"completed"` on every refusal
+          would have turned "make the lockout visible" into a refresh storm
+          once per reconcile tick, forever, for every exhausted node.
+        """
+        if not tracker.get("exhausted"):
+            tracker["exhausted"] = True
+            self._remediation_tracker[node.node_id] = tracker
+            await self._create_max_attempts_event(db, node, tracker)
+            return
+
+        now = datetime.now(timezone.utc)
+        last_broadcast = tracker.get("last_refusal_broadcast")
+        if last_broadcast is not None and (now - last_broadcast).total_seconds() < (
+            MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S
+        ):
+            return
+
+        tracker["last_refusal_broadcast"] = now
+        self._remediation_tracker[node.node_id] = tracker
+        await self._create_still_exhausted_event(db, node, tracker)
+        await self._broadcast_remediation_event(
+            node.node_id,
+            "still_exhausted",
+            success=False,
+            message=f"Node {node.hostname} remains at max remediation attempts - human intervention required",
+        )
+
+    async def _create_still_exhausted_event(self, db: AsyncSession, node: Node, tracker: dict) -> None:
+        """Persist a throttled record of an ONGOING refusal, distinct from the first (#14465).
+
+        Helper for _handle_max_attempts_refusal. Reusing `_create_max_attempts_
+        event`'s exact message would misrepresent every later refusal as a
+        fresh exhaustion; this is the same `event_type`/`severity` (so the
+        existing generic events timeline, which renders by message and
+        severity rather than a fixed per-event_type template, shows it with
+        no new frontend work) with wording that says "still", and the
+        attempt count is unchanged from the first event by design -- it is
+        frozen along with `last_attempt` once exhausted.
+        """
+        event = NodeEvent(
+            event_id=str(uuid.uuid4())[:16],
+            node_id=node.node_id,
+            event_type=EventType.REMEDIATION_COMPLETED.value,
+            severity=EventSeverity.WARNING.value,
+            message=(
+                f"Node {node.hostname} still requires human intervention "
+                f"({tracker['count']} failed remediation attempts)"
+            ),
+            details={
+                "attempts": tracker["count"],
+                "action_required": "manual_review",
+                "still_exhausted": True,
+            },
+        )
+        db.add(event)
+        await db.commit()
+
+    async def _record_remediation_result(
+        self, db: AsyncSession, node: Node, success: bool, tracker: dict, restarted: bool = True
+    ) -> None:
         """Create completion event and broadcast for remediation result.
 
         Helper for _remediate_node (Issue #665).
+
+        #14344: failure now has two distinct causes and they call for different
+        responses. ``restarted=False`` is an unreachable or broken node. A
+        successful restart with no heartbeat is an agent that runs but is
+        rejected -- the #14350 signature -- and telling an operator the restart
+        "failed" would send them to look at the wrong layer entirely.
         """
         node_id = node.node_id
 
@@ -378,35 +898,45 @@ class ReconcilerService:
                 node_id=node_id,
                 event_type=EventType.REMEDIATION_COMPLETED.value,
                 severity=EventSeverity.INFO.value,
-                message=f"Successfully restarted SLM agent on {node.hostname}",
-                details={"action": "restart_agent", "success": True},
+                message=f"SLM agent on {node.hostname} restarted and resumed heartbeating",
+                details={"action": "restart_agent", "success": True, "verified_by": "heartbeat"},
             )
-            logger.info("Remediation successful for node %s", node_id)
+            logger.info("Remediation verified for node %s - heartbeat resumed", node_id)
             await self._broadcast_remediation_event(
                 node_id,
                 "completed",
                 success=True,
-                message=f"Successfully restarted SLM agent on {node.hostname}",
+                message=f"SLM agent on {node.hostname} restarted and resumed heartbeating",
             )
         else:
+            # One message for the event, the log and the UI. Built once so the
+            # three cannot drift: the broadcast previously kept saying "failed
+            # to restart" after the event learned to distinguish the stages.
+            stage = "restart" if not restarted else "heartbeat"
+            failure_message = (
+                f"Failed to restart SLM agent on {node.hostname}"
+                if not restarted
+                else f"SLM agent on {node.hostname} restarted but did not resume heartbeating"
+            )
             event = NodeEvent(
                 event_id=str(uuid.uuid4())[:16],
                 node_id=node_id,
                 event_type=EventType.REMEDIATION_COMPLETED.value,
                 severity=EventSeverity.WARNING.value,
-                message=f"Failed to restart SLM agent on {node.hostname}",
+                message=failure_message,
                 details={
                     "action": "restart_agent",
                     "success": False,
+                    "failed_at": stage,
                     "attempts_remaining": MAX_REMEDIATION_ATTEMPTS - tracker["count"] - 1,
                 },
             )
-            logger.warning("Remediation failed for node %s", node_id)
+            logger.warning("Remediation failed for node %s at the %s stage", node_id, stage)
             await self._broadcast_remediation_event(
                 node_id,
                 "completed",
                 success=False,
-                message=f"Failed to restart SLM agent on {node.hostname}",
+                message=failure_message,
             )
 
         db.add(event)
@@ -420,14 +950,38 @@ class ReconcilerService:
         node_id = node.node_id
         now = datetime.now(timezone.utc)
 
+        # #14344 review: verification makes `exhausted` reachable for the first
+        # time -- before this change a restart's exit code always reset the
+        # counter, so a node effectively never ran out of attempts. That turns a
+        # dormant gap into a live trap: nothing clears the tracker when a node
+        # recovers outside remediation (an operator fixes the auth problem and
+        # the agent starts heartbeating again), so an exhausted node would be
+        # refused remediation for the life of the process on every future
+        # degradation, until someone called the manual reset endpoint.
+        #
+        # #14465: the recovery reset formerly lived here (a heartbeat newer
+        # than the last attempt), then inside update_node_heartbeat's ONLINE
+        # transition, then behind a dwell window there. All three cleared on a
+        # POSITIVE observation of health that a later flap does not retract,
+        # which made each one fakeable by a flap in a different way. Replaced
+        # with `_forgive_if_expired`, inside `_check_remediation_limits` --
+        # gated on elapsed time since the last ATTEMPT rather than any
+        # heartbeat/streak signal, but NOT a complete fix on its own: see
+        # `_effective_tracker_expiry_s` for what its margin does and does not
+        # bound (`execute_playbook`'s own runtime IS now bounded --
+        # REMEDIATION_PLAYBOOK_TIMEOUT_S, #14524 -- and folded into that
+        # margin; the margin's own N-nodes coverage gap at this floor is
+        # still #14515). It is also not the reason `count` stays low for a
+        # node whose agent keeps heartbeating;
+        # `success = restarted and await self._heartbeat_returned(...)`, a
+        # few lines below, is.
+
         # Check remediation limits (cooldown and max attempts)
         can_proceed, skip_reason, tracker = self._check_remediation_limits(node_id, now)
 
         if not can_proceed:
-            if skip_reason == "max_attempts" and not tracker.get("exhausted"):
-                await self._create_max_attempts_event(db, node, tracker)
-                tracker["exhausted"] = True
-                self._remediation_tracker[node_id] = tracker
+            if skip_reason == "max_attempts":
+                await self._handle_max_attempts_refusal(db, node, tracker)
             return False
 
         # Log remediation attempt
@@ -459,10 +1013,19 @@ class ReconcilerService:
 
         # Try to restart the SLM agent via Ansible (#1814: prefer ansible_name)
         ansible_target = node.ansible_target
-        success = await self._restart_service_via_ansible(
+        restarted = await self._restart_service_via_ansible(
             ansible_target,
             "slm-agent",
+            timeout_s=REMEDIATION_PLAYBOOK_TIMEOUT_S,
         )
+
+        # #14344: the restart exiting 0 is not remediation. A node whose agent
+        # starts cleanly but cannot authenticate (#14350) restarts forever,
+        # reports success every time, and — because success RESETS the attempt
+        # counter below — never reaches MAX_REMEDIATION_ATTEMPTS and never
+        # escalates. Observed live: ten consecutive "Remediation successful"
+        # over fifty minutes, with the node never heartbeating once.
+        success = restarted and await self._heartbeat_returned(node, now)
 
         # Update tracker (reset on success, increment on failure)
         self._remediation_tracker[node_id] = {
@@ -471,17 +1034,85 @@ class ReconcilerService:
         }
 
         # Record result and broadcast
-        await self._record_remediation_result(db, node, success, tracker)
+        await self._record_remediation_result(db, node, success, tracker, restarted=restarted)
         return True
+
+    async def _heartbeat_returned(self, node: Node, restarted_at: datetime) -> bool:
+        """Did a heartbeat arrive after the restart, within the wait window?
+
+        This is what remediation is for, so this is what its success means
+        (#14344). Polls the node row rather than trusting the restart's exit
+        code, because an agent can start perfectly and still be rejected.
+
+        Returns False on timeout, which lets the attempt counter advance toward
+        escalation instead of resetting.
+        """
+        from services.database import db_service
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + REMEDIATION_HEARTBEAT_WAIT_S
+        while True:
+            # Check first, sleep second: an agent that comes back immediately
+            # should not cost a full poll interval of reconciler time.
+            async with db_service.session() as check_db:
+                result = await check_db.execute(select(Node).where(Node.node_id == node.node_id))
+                fresh = result.scalar_one_or_none()
+            beat = getattr(fresh, "last_heartbeat", None)
+            if beat is not None and beat > restarted_at:
+                return True
+            if loop.time() >= deadline:
+                break
+            await asyncio.sleep(REMEDIATION_HEARTBEAT_POLL_S)
+        logger.warning(
+            "Remediation: agent on %s restarted but sent no heartbeat within %ss — "
+            "not counting this as success (#14344)",
+            node.node_id,
+            REMEDIATION_HEARTBEAT_WAIT_S,
+        )
+        return False
+
+    @staticmethod
+    def _log_restart_result(service_name: str, hostname: str, timeout_s: int, result: dict) -> bool:
+        """Log and interpret one execute_playbook result. Helper for _restart_service_via_ansible.
+
+        A timeout must read as a failure, never a silent success (#14524) --
+        `result["success"]` already reflects that (execute_playbook's
+        `returncode == 0` check), this only chooses which message to log.
+        `result.get("output", ...)`, not `.get("error", ...)`: execute_playbook
+        never returns an "error" key, only "output" -- the previous
+        `.get("error", ...)` here always fell through to its generic default.
+        """
+        if result.get("success"):
+            logger.info("Successfully restarted %s on %s", service_name, hostname)
+            return True
+        if result.get("timed_out"):
+            logger.warning(
+                "Restart of %s on %s timed out after %ds -- killed (#14524)", service_name, hostname, timeout_s
+            )
+            return False
+        logger.warning("Failed to restart %s on %s: %s", service_name, hostname, result.get("output", "Unknown error"))
+        return False
 
     async def _restart_service_via_ansible(
         self,
         hostname: str,
         service_name: str,
+        timeout_s: int,
     ) -> bool:
         """Restart a systemd service on a remote node via Ansible playbook.
 
-        Returns True if successful, False otherwise.
+        A timed-out run comes back `success=False` (#14524), so this always
+        returns False for it too -- what makes the timeout safe for both
+        callers (`_remediate_node`, `_remediate_failed_service`) to advance
+        their attempt counters toward escalation instead of resetting.
+
+        `timeout_s` is REQUIRED, not defaulted (review, round 2): the two
+        callers restart very different shapes of unit -- `_remediate_node`
+        always the lightweight `slm-agent` (`REMEDIATION_PLAYBOOK_TIMEOUT_S`),
+        `_remediate_failed_service` an arbitrary `ServiceCategory.AUTOBOT`
+        unit that can be a `Type=oneshot` job with `TimeoutStartSec` up to
+        1800s (`SERVICE_RESTART_PLAYBOOK_TIMEOUT_S`, see its own comment). A
+        default here would silently reapply one caller's budget onto the other.
         """
         try:
             from services.playbook_executor import get_playbook_executor
@@ -494,20 +1125,9 @@ class ReconcilerService:
                     "service_name": service_name,
                     "service_action": "restarted",
                 },
+                timeout_s=timeout_s,
             )
-
-            if result.get("success"):
-                logger.info("Successfully restarted %s on %s", service_name, hostname)
-                return True
-            else:
-                error_msg = result.get("error", "Unknown error")
-                logger.warning(
-                    "Failed to restart %s on %s: %s",
-                    service_name,
-                    hostname,
-                    error_msg,
-                )
-                return False
+            return self._log_restart_result(service_name, hostname, timeout_s, result)
 
         except Exception as e:
             logger.warning("Error restarting %s on %s: %s", service_name, hostname, e)
@@ -723,11 +1343,17 @@ class ReconcilerService:
             message=f"Attempting to restart {service.service_name} on {node.hostname}",
         )
 
-        # Try to restart via Ansible (#1814: prefer ansible_name)
+        # Try to restart via Ansible (#1814: prefer ansible_name). Review, round
+        # 2: this can be ANY ServiceCategory.AUTOBOT unit, including a
+        # Type=oneshot job with a multi-minute TimeoutStartSec -- the
+        # slm-agent-sized REMEDIATION_PLAYBOOK_TIMEOUT_S would SIGKILL a
+        # legitimate long-running restart, so this path gets its own, much
+        # larger budget (see SERVICE_RESTART_PLAYBOOK_TIMEOUT_S).
         ansible_target = node.ansible_target
         success = await self._restart_service_via_ansible(
             ansible_target,
             service.service_name,
+            timeout_s=SERVICE_RESTART_PLAYBOOK_TIMEOUT_S,
         )
 
         # Update tracker
@@ -1050,10 +1676,13 @@ class ReconcilerService:
         agent_version: str | None = None,
         os_info: str | None = None,
         extra_data: dict | None = None,
-    ) -> None:
+    ) -> bool:
         """Update basic metrics and optional fields.
 
         Helper for update_node_heartbeat (Issue #665).
+
+        Returns whether a managed service is CURRENTLY churning (#14465), for
+        `_calculate_node_status` to act on.
         """
         node.cpu_percent = cpu_percent
         node.memory_percent = memory_percent
@@ -1064,12 +1693,14 @@ class ReconcilerService:
             node.agent_version = agent_version
         if os_info:
             node.os_info = os_info
-        if extra_data:
-            node.extra_data = {**(node.extra_data or {}), **extra_data}
+        if not extra_data:
+            return False
 
-            services_data = extra_data.get("discovered_services") or extra_data.get("services")
-            if services_data:
-                await self._sync_discovered_services(db, node.node_id, services_data)
+        node.extra_data = {**(node.extra_data or {}), **extra_data}
+        services_data = extra_data.get("discovered_services") or extra_data.get("services")
+        if not services_data:
+            return False
+        return await self._sync_discovered_services(db, node.node_id, services_data)
 
     async def _handle_node_status_change(
         self,
@@ -1154,7 +1785,7 @@ class ReconcilerService:
         if not node:
             return None
 
-        await self._update_node_metrics(
+        restart_churn_active = await self._update_node_metrics(
             db,
             node,
             cpu_percent,
@@ -1166,7 +1797,9 @@ class ReconcilerService:
         )
 
         old_status = node.status
-        new_status = self._calculate_node_status(cpu_percent, memory_percent, disk_percent, extra_data)
+        new_status = self._calculate_node_status(
+            cpu_percent, memory_percent, disk_percent, extra_data, restart_churn_active
+        )
 
         await self._handle_node_status_change(
             db, node, old_status, new_status, cpu_percent, memory_percent, disk_percent
@@ -1188,11 +1821,19 @@ class ReconcilerService:
         status: str,
         error_msg: str,
         now: datetime,
-    ) -> None:
+    ) -> bool:
         """Apply heartbeat data to an existing Service row.
 
         Helper for _upsert_service. Ref: #1088.
+
+        Returns whether this managed service is CURRENTLY churning -- its
+        restart count rose within the last `RESTART_CHURN_WINDOW_S` (#14465),
+        a level rather than a pulse. Computed here, not in
+        `_calculate_node_status`, because only this call site holds the OLD
+        `Service` row before it gets overwritten.
         """
+        is_churning, last_increase_iso = _restart_churn_active(svc_data, service.extra_data or {}, now)
+
         service.status = status
         service.active_state = svc_data.get("active_state")
         service.sub_state = svc_data.get("sub_state")
@@ -1201,13 +1842,23 @@ class ReconcilerService:
         service.enabled = svc_data.get("enabled", False)
         service.description = svc_data.get("description")
         service.last_checked = now
-        existing_extra = service.extra_data or {}
+        # #14465 review: a genuine COPY, not `service.extra_data or {}` handed
+        # straight back. SQLAlchemy's Column(JSON) does not reliably flag a
+        # reassignment dirty when it is the SAME object mutated in place and
+        # written back to itself -- silently dropping every field this method
+        # sets, `n_restarts`/`n_restarts_increased_at` included. Load-bearing
+        # for the delta: do not "simplify" this back to the old form.
+        existing_extra = dict(service.extra_data or {})
         if error_msg:
             existing_extra["error_message"] = error_msg
         else:
             existing_extra.pop("error_message", None)
         existing_extra.update(engine_degraded_fields(svc_data))
+        if "n_restarts" in svc_data:
+            existing_extra["n_restarts"] = svc_data["n_restarts"]
+        existing_extra["n_restarts_increased_at"] = last_increase_iso
         service.extra_data = existing_extra
+        return is_churning
 
     def _create_new_service(
         self,
@@ -1221,8 +1872,16 @@ class ReconcilerService:
         """Construct a new Service ORM object from heartbeat data.
 
         Helper for _upsert_service. Ref: #1088.
+
+        Stores `n_restarts` so the NEXT heartbeat has something to compare
+        against (#14465) -- a first observation genuinely has no rate
+        information yet, so `n_restarts_increased_at` is deliberately left
+        unset here rather than backfilled; the next observed increase arms
+        the churn window (see `_restart_churn_active`).
         """
         category = categorize_service(service_name)
+        if "n_restarts" in svc_data:
+            svc_extra = {**svc_extra, "n_restarts": svc_data["n_restarts"]}
         return Service(
             node_id=node_id,
             service_name=service_name,
@@ -1244,14 +1903,28 @@ class ReconcilerService:
         node_id: str,
         svc_data: dict,
         now: datetime,
-    ) -> None:
+    ) -> bool:
         """Upsert a single discovered service record into the database.
 
         Helper for _sync_discovered_services. Ref: #1088.
+
+        Returns whether this service is managed and CURRENTLY churning --
+        see `_restart_churn_active` (#14465).
+
+        #14465 review: the broad `except Exception` below (pre-existing --
+        Ref #1088 -- kept broad so one service's sync failure never aborts
+        the whole heartbeat) also swallows a transient failure of the row
+        SELECT itself, not just the upsert logic after it. On that beat this
+        returns `False` ("not churning") regardless of the service's real
+        state -- the churn signal is a function of DB availability for that
+        one heartbeat, not just of the service. Self-healing (the next
+        heartbeat tries again, and the level design means one missed beat
+        does not by itself end an already-armed window), but not something
+        this fix eliminates.
         """
         service_name = svc_data.get("name")
         if not service_name:
-            return
+            return False
 
         try:
             result = await db.execute(
@@ -1272,10 +1945,10 @@ class ReconcilerService:
             svc_extra.update(engine_degraded_fields(svc_data))
 
             if service:
-                self._update_existing_service(service, svc_data, status, error_msg, now)
-            else:
-                service = self._create_new_service(node_id, service_name, svc_data, status, svc_extra, now)
-                db.add(service)
+                return self._update_existing_service(service, svc_data, status, error_msg, now)
+            service = self._create_new_service(node_id, service_name, svc_data, status, svc_extra, now)
+            db.add(service)
+            return False
         except Exception as exc:
             logger.warning(
                 "service sync failed node=%s service=%s error=%s",
@@ -1283,6 +1956,7 @@ class ReconcilerService:
                 service_name,
                 exc,
             )
+            return False
 
     async def _remove_stale_services(
         self,
@@ -1312,24 +1986,29 @@ class ReconcilerService:
         db: AsyncSession,
         node_id: str,
         discovered_services: list,
-    ) -> None:
+    ) -> bool:
         """
         Sync discovered services from agent heartbeat to database.
 
         Related to Issue #728.
+
+        Returns whether ANY managed service is CURRENTLY churning (#14465).
         """
         if not discovered_services:
-            return
+            return False
 
         now = datetime.now(timezone.utc)
 
+        any_churning = False
         for svc_data in discovered_services:
-            await self._upsert_service(db, node_id, svc_data, now)
+            if await self._upsert_service(db, node_id, svc_data, now):
+                any_churning = True
 
         # Remove stale services no longer reported by the agent (#1018)
         await self._remove_stale_services(db, node_id, discovered_services)
 
         # Note: commit happens in the calling method (update_node_heartbeat)
+        return any_churning
 
     def _calculate_node_status(
         self,
@@ -1337,25 +2016,60 @@ class ReconcilerService:
         memory_percent: float,
         disk_percent: float,
         extra_data: dict | None = None,
+        restart_churn_active: bool = False,
     ) -> str:
         """Calculate node status based on health metrics and services.
 
         Issue #1604: Also degrade if any autobot service is crash-looping.
+
+        #14465: this used to degrade on `n_restarts > 3` -- systemd's
+        `NRestarts` read as a static absolute threshold. `NRestarts` climbs
+        for as long as a unit keeps failing (systemd resets it on the next
+        clean manual start once a unit settles, not merely with the passage
+        of time), so a static gate on it can climb past 3 and never come back
+        down on its own: once any managed service anywhere in the node's
+        uptime crossed 3 restarts -- one redeploy, one operator restart, one
+        long-resolved crash-loop -- every future heartbeat was forced
+        DEGRADED regardless of current state, with no path back to ONLINE.
+
+        Replaced with two signals over the SAME field, each answering a
+        different question a static threshold cannot:
+
+        - `restart_churn_active` (computed in `_update_existing_service` via
+          `_restart_churn_active`) catches a service CHURNING -- restarting
+          faster than it settles. This is a LEVEL, not a pulse: it reports
+          "an increase was observed within the last `RESTART_CHURN_WINDOW_S`",
+          not "did it increase since the immediately-preceding heartbeat".
+          The latter was tried first and found to regress: health_collector's
+          own service-discovery sweep is cached for 300s
+          (`_SERVICE_DISCOVERY_TTL`) against a 30s heartbeat, so 9 of every 10
+          beats carry a byte-identical cached snapshot and a bare pulse only
+          fires on the ~1 in 10 that lands on a cache refresh -- measured, 1
+          of 20 beats degraded across continuous churn, and the node flapped
+          ONLINE/DEGRADED every 5 minutes instead of staying DEGRADED. See
+          `RESTART_CHURN_WINDOW_S` for the window and its own trade-offs.
+        - `status == "failed"` (below) catches a service that has SETTLED --
+          every unit template sets `StartLimitBurst`/`StartLimitIntervalSec`
+          (#4090), so a real, ongoing crash loop eventually reaches systemd's
+          designed end state and stops restarting altogether. Neither a pulse
+          nor the level above catches this alone: both go quiet once
+          `NRestarts` stops climbing, exactly when a settled service needs
+          catching most.
+
+        Both are scoped by `is_managed_autobot_service` (autobot*-prefixed
+        service names, or `slm-agent` itself, NOT explicitly disabled in
+        systemd on THIS node) rather than `extra_data["services"]`
+        (`slm_services_to_monitor`) -- that operator-declared set is `[]` by
+        role default, is `[]` on at least one real inventory node, and never
+        contains `slm-agent`, the one unit remediation actually restarts, so
+        scoping to it left this whole class of signal dark for most of the
+        fleet on the one service that matters most.
         """
         if cpu_percent > 95 or memory_percent > 95 or disk_percent > 95:
             return NodeStatus.ERROR.value
 
-        # Issue #1604: Check for crash-looping services
-        if extra_data:
-            for svc in extra_data.get("discovered_services", []):
-                svc_name = svc.get("name", "")
-                if not svc_name.startswith("autobot"):
-                    continue
-                if svc.get("status") == "crash-loop":
-                    return NodeStatus.DEGRADED.value
-                n_restarts = svc.get("n_restarts", 0)
-                if n_restarts > 3:
-                    return NodeStatus.DEGRADED.value
+        if _service_health_degraded(extra_data, restart_churn_active):
+            return NodeStatus.DEGRADED.value
 
         if cpu_percent > 80 or memory_percent > 80 or disk_percent > 80:
             return NodeStatus.DEGRADED.value

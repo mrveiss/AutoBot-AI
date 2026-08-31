@@ -16,11 +16,14 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
 # SSOT Configuration - Issue #694
 # =============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../lib/ssot-config.sh" 2>/dev/null || source "$SCRIPT_DIR/lib/ssot-config.sh" 2>/dev/null || {
-    # Fallback if lib not found
-    # PROJECT_ROOT is exported by scripts/lib/project_root.sh, sourced above,
-    # so the pre-#13149 fallback assignment here is redundant (#13149).
-    [ -f "$PROJECT_ROOT/.env" ] && { set -a; source "$PROJECT_ROOT/.env"; set +a; }
+# #14172: the first path is an expected miss (callers sit at two different
+# depths), so only its stderr is discarded. The LAST attempt keeps its stderr
+# and a failure is fatal -- the old fallback re-read .env and carried on with
+# every ${VAR:-literal} silently taking its hardcoded right-hand side.
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/../lib/ssot-config.sh" 2>/dev/null || source "$SCRIPT_DIR/lib/ssot-config.sh" || {
+    echo "FATAL: ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
 }
 
 echo "AutoBot Distributed Services Health Check"
@@ -33,7 +36,7 @@ declare -A SERVICES=(
     ["NPU Worker VM"]="${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health"
     ["Frontend VM"]="${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_PORT:-5173}"
     ["AI Stack VM"]="${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}/health"
-    ["Browser VM"]="${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health"
+    ["Browser VM"]="${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health"
     ["Ollama (Local)"]="${AUTOBOT_OLLAMA_HOST:-127.0.0.1}:${AUTOBOT_OLLAMA_PORT:-11434}/api/tags"
 )
 
@@ -66,7 +69,7 @@ echo "  Frontend: http://${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_
 echo "  Redis Insight: http://${AUTOBOT_REDIS_HOST:-localhost}:8002"
 echo "  AI Stack: http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}"
 echo "  NPU Worker: http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}"
-echo "  Browser Service: http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
+echo "  Browser Service: http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
 echo "  Ollama: http://${AUTOBOT_OLLAMA_HOST:-127.0.0.1}:${AUTOBOT_OLLAMA_PORT:-11434}"
 echo "  VNC Desktop: http://${AUTOBOT_BACKEND_HOST:-127.0.0.1}:${AUTOBOT_VNC_PORT:-6080}"
 

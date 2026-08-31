@@ -20,11 +20,42 @@ import uuid
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.auth.mcp_tool_permissions import required_permission
+from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
-from chat_workflow.code_exec.tool_policy import CODEEXEC_READONLY_TOOLS
+from chat_workflow.browser_tool_handler import (
+    extract_browser_image,
+    format_browser_action_text,
+    format_browser_result,
+    format_page_state_block,
+    handle_browser_tool,
+    record_browser_success,
+    validate_browser_params,
+)
+from chat_workflow.compose_tool_handler import (
+    build_compose_dispatch,
+    compose_auto_approvable,
+    compose_gate_refusal_msg,
+    compose_gate_request_msg,
+    compose_result_message,
+    compose_shim_snapshot,
+    execute_compose,
+    guard_compose,
+    persist_compose_approval,
+    poll_compose_approval,
+    reject_delegated_compose,
+)
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
+from chat_workflow.tool_dispatch_guards import (
+    enforce_config_protection,
+    enforce_fact_forcing,
+    enforce_forbidden_work,
+    enforce_pre_action_verifier,
+    enforce_repetition,
+    enforce_work_item_approval,
+)
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
@@ -45,28 +76,11 @@ from chat_workflow.session_handler import (
 
 logger = get_logger(__name__)
 
-# GH#11568: compose tool feature flag and tuning constants.
+# GH#11568: compose tool feature flag. The auto-approve/poll-interval tuning
+# constants and CODEEXEC_READONLY_TOOLS moved to compose_tool_handler.py
+# (#14491) with the functions that are their only readers.
 CODEEXEC_ENABLED: bool = env_flag("AUTOBOT_CODEEXEC_ENABLED", default=False)
-CODEEXEC_AUTOAPPROVE_READONLY: bool = env_flag("AUTOBOT_CODEEXEC_AUTOAPPROVE_READONLY", default=True)
 CODEEXEC_MAX_SCRIPT_RETRIES: int = env_int("AUTOBOT_CODEEXEC_MAX_SCRIPT_RETRIES", default=1)
-# GH#11568 BLOCKER-4 / GH#11662: the read-only tool set eligible for auto-approval
-# (design §3.1) is CODEEXEC_READONLY_TOOLS, imported above from the single
-# tool-policy classification source (readonly ⊆ injectable; sensitive excluded).
-# Approval-wait polling knobs (mirrors terminal-command approval loop).
-#
-# #13481: this is how long THIS TURN waits, not how long the approval lives.
-# The distinction was invisible before and is the whole of #13216's confusion:
-# the approval is persisted, and approving after this budget still executes the
-# command. Exhausting it means "stop holding the request/generator open", never
-# "the command failed" and never "the approval expired".
-#
-# There is deliberately NO approval-expiry knob here. The reported expectation —
-# that approval should not expire — is the behaviour, so nothing discards a
-# pending approval on a timer. A real expiry policy, if ever wanted, belongs
-# next to the approval's own storage with its own message ("this approval
-# expired, re-request it"), not as a side effect of how long a coroutine lives.
-CODEEXEC_APPROVAL_WAIT_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_WAIT_SECONDS", default=1800)
-CODEEXEC_APPROVAL_POLL_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_POLL_SECONDS", default=2)
 
 # Issue #4482: Default retry count for schema self-correction loop.
 _DEFAULT_SCHEMA_RETRIES = 3
@@ -137,6 +151,53 @@ EXECUTE_COMMAND_SCHEMA: dict = {
     },
     "required": ["command"],
 }
+
+READ_SPILLED_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "anchor": {
+            "type": "string",
+            "description": (
+                "The anchor from a spilled tool result's note, e.g. " "'autobot:spill:<run>:<tool>:<digest>'."
+            ),
+        },
+        "offset": {
+            "type": "integer",
+            "description": "Character offset to read from. Page forward while the reply reports has_more.",
+        },
+        "limit": {
+            "type": "integer",
+            "description": ("Characters to return. Capped server-side — a window, not the whole artifact."),
+        },
+    },
+    "required": ["anchor"],
+}
+
+#: What to tell the model when an anchor does not resolve, by reason.
+#: Module-level rather than rebuilt per call.
+_SPILL_MISS_ADVICE: dict[str, str] = {
+    # Bad offset/limit — the model can fix this itself, so mirror the
+    # self-correction hint the schema gate gives.
+    "invalid_window": "offset and limit must be integers. Retry this anchor with valid values.",
+    # No run is bound to this context: an anchor cannot resolve here at all,
+    # and a different anchor would fare no better.
+    "no_run_bound": "No run is bound to this context, so no spilled output is readable. Do not retry.",
+    # The artifact is genuinely gone or never existed.
+    "not_found": "Do not retry this anchor.",
+}
+
+#: The default, for a miss whose cause the reader could not determine.
+#:
+#: `read_spilled` swallows every exception into `None`, and a cross-run refusal
+#: returns `None` too, so an unknown reason covers a truncated artifact mid-write
+#: (spill_if_oversized writes with a bare write_text, no temp+rename, to a
+#: content-addressed path a re-spill rewrites), a transient OSError, a
+#: PermissionError, and a run-scope refusal. In every one of those the output is
+#: still on disk. Telling the model "do not retry" there is a permanent verdict
+#: on a cause nobody established — the shape this whole issue is about.
+_SPILL_MISS_UNKNOWN_ADVICE = (
+    "The read did not report why it failed. This may be transient — retrying once is reasonable."
+)
 
 WEB_SEARCH_SCHEMA: dict = {
     "type": "object",
@@ -466,27 +527,6 @@ BROWSER_STATE_SCHEMA: dict = {
     "properties": {},
 }
 
-# Issue #11537: how many numbered elements to render in the LLM-visible state
-# block per browser tool result (the browser-worker itself caps the raw list
-# via BROWSER_STATE_MAX_ELEMENTS; this bounds the prompt-text rendering).
-BROWSER_STATE_PROMPT_MAX_ELEMENTS = env_int("AUTOBOT_BROWSER_STATE_PROMPT_MAX_ELEMENTS", default=30)
-
-# Issue #11537: text formatters for the four indexed-element tool results,
-# keyed by tool name so _format_browser_action_text stays a flat dispatch.
-_INDEXED_ELEMENT_TOOL_TEXT: dict[str, Any] = {
-    "click_index": lambda params, inner: (
-        f"Clicked element [{params.get('index')}]: "
-        f"{(inner.get('resolved') or {}).get('name') or (inner.get('resolved') or {}).get('role', 'element')}"
-    ),
-    "fill_index": lambda params, inner: (
-        f"Filled element [{params.get('index')}] "
-        f"({(inner.get('resolved') or {}).get('name') or (inner.get('resolved') or {}).get('role', 'element')}) "
-        "with value"
-    ),
-    "select_index": lambda params, inner: (f"Selected '{params.get('value', '')}' in element [{params.get('index')}]"),
-    "hover_index": lambda params, inner: f"Hovered over element [{params.get('index')}]",
-}
-
 # Issue #4529: JSON Schema definitions for built-in tools dispatched directly
 # (not via MCP).  Used by _validate_builtin_tool_arguments() so every dispatch
 # path passes through validate_tool_arguments() before execution.
@@ -494,6 +534,7 @@ _INDEXED_ELEMENT_TOOL_TEXT: dict[str, Any] = {
 # is unchanged.
 _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     "execute_command": EXECUTE_COMMAND_SCHEMA,
+    "read_spilled_output": READ_SPILLED_OUTPUT_SCHEMA,
     "web_search": WEB_SEARCH_SCHEMA,
     "navigate": NAVIGATE_SCHEMA,
     "click": CLICK_SCHEMA,
@@ -627,7 +668,18 @@ _UNIFORM_BUILTIN_TOOLS: frozenset[str] = (
     BROWSER_TOOL_NAMES
     | WEB_RESEARCH_TOOL_NAMES
     | LIVE_PAGE_EXTRACT_TOOL_NAMES
-    | frozenset({"web_search", "execute_command"})
+    # #13919: read_spilled_output is dispatchable unconditionally, so a run that
+    # spilled before AUTOBOT_TOOL_OUTPUT_SPILL was turned off can still resolve
+    # its anchors — `read_spilled_window` does not consult the flag.
+    #
+    # This DOES leak into prompt content, contrary to an earlier version of this
+    # comment: `_build_unknown_tool_error` derives `known_tools` from this set,
+    # so a model that fumbles any tool name is told this one exists even with the
+    # feature off. Accepted deliberately — the alternative is a flag-dependent
+    # membership set, which would make routing depend on import-time env state
+    # and is a worse trade than one extra name in an error hint. With the flag
+    # off nothing spills, so following the hint reports not-found.
+    | frozenset({"web_search", "execute_command", "read_spilled_output"})
 )
 
 # GH#11160: maps a declared approval category (a work item's
@@ -809,6 +861,39 @@ def _match_repairable_error(combined: str, command: str, error: str) -> Repairab
     return None
 
 
+def _record_failed_step(
+    execution_results: list[dict[str, Any]] | None,
+    command: str,
+    result: dict[str, Any],
+    error: str,
+    stderr: str,
+) -> None:
+    """Record a failed command as a step the model can read (#14141).
+
+    Without this a failing command was **absent** from the continuation prompt
+    entirely: `_handle_command_error` never touched `execution_results`, and the
+    `additional_response_parts` entry it does append is created locally in
+    `execute_tool_calls` and never yielded. The model saw the steps before the
+    failure, then nothing — no status, no output, no sign a command had run.
+
+    `stdout` matters most here. The motivating case is a test runner writing its
+    report to stdout and exiting non-zero, so the report is the one thing worth
+    carrying and was the one thing being dropped.
+    """
+    if execution_results is None:
+        return
+    execution_results.append(
+        {
+            "command": command,
+            "stdout": result.get("stdout", ""),
+            "stderr": stderr,
+            "return_code": result.get("return_code", 1),
+            "status": "error",
+            "error": error,
+        }
+    )
+
+
 def _create_execution_result(command: str, host: str, result: dict[str, Any], approved: bool = False) -> dict[str, Any]:
     """Create standardized execution result record (Issue #315: extracted).
 
@@ -821,15 +906,51 @@ def _create_execution_result(command: str, host: str, result: dict[str, Any], ap
     Returns:
         Standardized execution result dict for continuation loop
     """
+    # #14141: `status` is derived from the exit code, not hardcoded. It used to
+    # be the literal "success" regardless of `return_code`, and this dict feeds
+    # `_format_execution_step`, which prints `- Status: {status}` straight into
+    # the model's continuation prompt. So a command that failed was reported to
+    # the model as having succeeded, with stderr as the only hint — and a test
+    # runner writes its failure report to *stdout*, so the model saw a
+    # full-looking report under "success" and no signal that the suite failed.
+    #
+    # Reachability, so nobody mistakes this for the protection: both call sites
+    # are gated on ``status == "success"`` upstream (`_handle_approved_command`
+    # at the approval branch, `_handle_successful_command` in
+    # `_dispatch_command_by_status`), so this mapping cannot currently observe a
+    # non-zero code. It is kept as a correct restatement of the invariant for
+    # the day a caller stops gating -- not deleted, because a dict feeding the
+    # model's prompt with a hardcoded "success" is exactly the defect that got
+    # filed. The single *reachable* decision is
+    # `command_executor._build_pty_result`, which every layer here propagates
+    # rather than re-derives; that is where the invariant is asserted.
+    return_code = result.get("return_code", 0)
     return {
         "command": command,
         "host": host,
         "stdout": result.get("stdout", ""),
         "stderr": result.get("stderr", ""),
-        "return_code": result.get("return_code", 0),
-        "status": "success",
+        "return_code": return_code,
+        "status": _status_for_return_code(return_code),
         "approved": approved,
     }
+
+
+def _status_for_return_code(return_code: Any) -> str:
+    """Map an exit code to the status the model is shown (#14141).
+
+    Only an exit code that is *known* to be 0 reports success. `None` — the
+    shape an execution path produces when it never captured one — and anything
+    unparseable both report ``error``, because "we do not know whether that
+    worked" is far closer to failure than to success as far as the next turn is
+    concerned. Reporting an unknown outcome as success is the defect this
+    function exists to remove, and defaulting it would reintroduce it.
+    """
+    try:
+        return "success" if int(return_code) == 0 else "error"
+    except (TypeError, ValueError):
+        logger.warning("[#14141] unusable return_code %r — reporting the step as error, not success", return_code)
+        return "error"
 
 
 def _build_mcp_approval_message(
@@ -946,16 +1067,34 @@ async def _try_mcp_dispatch(
             )
 
     # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for MCP tools
-    should_execute = await _emit_before_tool_execute(tool_name, arguments, session_id)
+    # Issue #14420: forward the tool's declared permission requirement
+    # (#13228 stage 1, resolved onto the registry entry as
+    # `required_permission`) and the caller's RBAC role so
+    # PermissionEnforcementExtension has something real to decide against.
+    should_execute = await _emit_before_tool_execute(
+        tool_name,
+        arguments,
+        session_id,
+        tool_permission=tool.get("required_permission"),
+        user_role=role,
+    )
     if not should_execute:
         logger.info(
             "[Issue #4261] Tool execution cancelled by BEFORE_TOOL_EXECUTE hook: %s",
             tool_name,
         )
+        cancellation_metadata = {"tool_name": tool_name, "cancelled_by_hook": True}
+        # Issue #14420 (review): the agent loop cannot otherwise tell a
+        # permission denial from any other hook veto and may retry the same
+        # call forever. A declared permission requirement is the only signal
+        # available at this call site without deeper hook introspection - the
+        # PermissionError detail itself correctly stays server-side.
+        if tool.get("required_permission") is not None:
+            cancellation_metadata["reason"] = "permission_denied"
         return WorkflowMessage(
             type="error",
             content=f"Tool execution cancelled: {tool_name}",
-            metadata={"tool_name": tool_name, "cancelled_by_hook": True},
+            metadata=cancellation_metadata,
         )
 
     try:
@@ -1669,7 +1808,7 @@ class ToolHandlerMixin:
             Tuple of (WorkflowMessage, additional_text)
         """
         if approval_result:
-            error = approval_result.get("error", "Command was denied or failed")
+            error = approval_result.get("error") or "Command was denied or failed"
             return (
                 WorkflowMessage(
                     type="error",
@@ -1908,7 +2047,9 @@ class ToolHandlerMixin:
             ):
                 yield msg
         elif status == "error":
-            async for msg in self._handle_command_error(command, result, additional_response_parts, session_id):
+            async for msg in self._handle_command_error(
+                command, result, additional_response_parts, session_id, execution_results
+            ):
                 yield msg
 
     async def _process_single_command(
@@ -1920,11 +2061,16 @@ class ToolHandlerMixin:
         selected_model: str,
         execution_results: list,
         additional_response_parts: list,
+        role: str = "user",
     ):
         """Process a single execute_command tool call. Issue #620.
 
         Issue #655: Wraps common errors as RepairableException for retry.
         Issue #4261: Wires BEFORE/AFTER_TOOL_EXECUTE and TOOL_ERROR hooks.
+        Issue #14469: forwards the caller's RBAC role and the tool's declared
+        `Permission.SHELL_EXECUTE` requirement so PermissionEnforcementExtension
+        (#14420) has something to deny against — this call site previously
+        omitted both, so every role reached the shell unconditionally.
 
         Yields:
             WorkflowMessage items
@@ -1932,9 +2078,16 @@ class ToolHandlerMixin:
         command, host, description = self._extract_command_params(tool_call)
         logger.info("[ChatWorkflowManager] Executing command: %s on %s", command, host)
 
-        # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for execute_command
+        # Issue #4261/#14469: Wire BEFORE_TOOL_EXECUTE hook for execute_command,
+        # declaring the shell-execution permission it requires.
         params = {"command": command, "host": host}
-        should_execute = await _emit_before_tool_execute("execute_command", params, session_id)
+        should_execute = await _emit_before_tool_execute(
+            "execute_command",
+            params,
+            session_id,
+            tool_permission=Permission.SHELL_EXECUTE.value,
+            user_role=role,
+        )
         if not should_execute:
             logger.info(
                 "[Issue #4261] Execute command cancelled by BEFORE_TOOL_EXECUTE hook: %s on %s",
@@ -1944,7 +2097,12 @@ class ToolHandlerMixin:
             yield WorkflowMessage(
                 type="error",
                 content=f"Command execution cancelled: {command}",
-                metadata={"command": command, "host": host, "cancelled_by_hook": True},
+                metadata={
+                    "command": command,
+                    "host": host,
+                    "cancelled_by_hook": True,
+                    "reason": "permission_denied",
+                },
             )
             return
 
@@ -1985,6 +2143,7 @@ class ToolHandlerMixin:
         result: dict[str, Any],
         additional_response_parts: list,
         session_id: str = "",
+        execution_results: list[dict[str, Any]] | None = None,
     ):
         """Handle command execution error (Issue #665: extracted helper).
 
@@ -2002,8 +2161,14 @@ class ToolHandlerMixin:
         """
         from chat_workflow.llm_handler import _emit_critical_error, _emit_repairable_error
 
-        error = result.get("error", "Unknown error")
+        # #14148: `.get(key, default)` does NOT apply the default when the key
+        # exists holding None — and `terminal_tool._format_execution_result`
+        # constructs exactly that. `or` coalesces both shapes.
+        error = result.get("error") or "Unknown error"
         stderr = result.get("stderr", "")
+
+        _record_failed_step(execution_results, command, result, error, stderr)
+
         repairable_error = self._classify_command_error(command, error, stderr)
 
         if repairable_error:
@@ -2056,7 +2221,11 @@ class ToolHandlerMixin:
         Returns:
             RepairableException if error is recoverable, None if critical
         """
-        combined = f"{error.lower()} {stderr.lower()}"
+        # #14148: a classifier crashing the turn is never the right answer to an
+        # unexpected value. `None` reached here through a `.get()` default that
+        # did not apply, and the bare `raise` upstream propagated the
+        # AttributeError out of the tool-call generator.
+        combined = f"{str(error or '').lower()} {str(stderr or '').lower()}"
 
         # Check for critical (non-repairable) errors first
         if any(p in combined for p in _CRITICAL_ERROR_PATTERNS):
@@ -2167,6 +2336,8 @@ class ToolHandlerMixin:
         engine = params.get("engine", "claude_code")
         depth = int(ctx_dict.get("delegation_depth", 0))
         parent_agent_id = ctx.agent_context.agent_id if ctx and ctx.agent_context else None
+        from chat_workflow.session_role import DEFAULT_AUTH_ROLE  # noqa: PLC0415
+
         try:
             result = await run_delegated_subtask(
                 task,
@@ -2174,6 +2345,7 @@ class ToolHandlerMixin:
                 depth=depth,
                 engine=engine,
                 parent_agent_id=parent_agent_id,
+                auth_role=ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE,
             )
             execution_results.append(
                 {
@@ -2199,114 +2371,36 @@ class ToolHandlerMixin:
                 metadata={"message_type": "delegate_tool", "error": True},
             )
 
+    # #14469: the browser-tool handling below moved to browser_tool_handler.py
+    # to bring this file under its file-size ceiling (see that module's
+    # docstring for the extraction rationale — none of them touched `self`
+    # beyond calling one another). These stay as thin delegating methods, not
+    # a straight `= module.func` rebind, so existing test monkey-patches
+    # (`handler._handle_browser_tool = ...`, `ToolHandlerMixin._validate_browser_params`)
+    # and the `_dispatch_tool_call` call sites are unaffected.
     async def _validate_browser_params(self, tool_name: str, params: dict[str, Any]) -> str | None:
         """Validate browser tool params. Returns a user-friendly block notice or None.
 
-        #1368 / #10914: a disallowed URL or unsafe script is an *expected* policy
-        outcome, so the returned text reads as a friendly notice (rendered as a
-        normal assistant message, not a scary error banner — see _handle_browser_tool).
-
-        #13236 step 5: ``is_url_allowed`` became async when it stopped matching
-        URL prefixes with a regex and started resolving the host, so this is
-        async too. The caller already awaits inside an async method.
+        See ``browser_tool_handler.validate_browser_params`` for the full behavior.
         """
-        from api.browser_mcp import is_script_safe, is_url_allowed
-
-        if tool_name == "navigate" and not await is_url_allowed(params.get("url", "")):
-            url = params.get("url", "")
-            return f"I can't open that link ({url}) — it isn't on the list of sites I'm allowed to browse."
-        if tool_name == "evaluate" and not is_script_safe(params.get("script", "")):
-            return "I can't run that browser action — it was blocked by the security policy."
-        return None
+        return await validate_browser_params(tool_name, params)
 
     async def _handle_browser_tool(
         self,
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
         session_id: str = "",
+        role: str = "user",
     ):
         """Execute a browser tool call via browser_mcp. Issue #1368.
 
-        Routes navigate/click/screenshot/etc. to the Browser VM through
-        the existing browser_mcp.send_to_browser_vm() function.
-        Issue #4261: Wires BEFORE/AFTER_TOOL_EXECUTE and TOOL_ERROR hooks.
+        See ``browser_tool_handler.handle_browser_tool`` for the full behavior.
 
         Yields:
             WorkflowMessage for browser tool execution stages
         """
-        tool_name = tool_call["name"]
-        params = tool_call.get("params", {})
-        description = tool_call.get("description", f"Browser: {tool_name}")
-
-        logger.info("[Issue #1368] Browser tool: %s params=%s", tool_name, params)
-
-        yield WorkflowMessage(
-            type="tool_execution",
-            content=f"Executing browser action: {description}",
-            metadata={"tool": tool_name, "params": params},
-        )
-
-        try:
-            validation_error = await self._validate_browser_params(tool_name, params)
-            if validation_error:
-                # Keep status="error" so the agent loop still knows the tool didn't run.
-                execution_results.append({"tool": tool_name, "status": "error", "error": validation_error})
-                # #10914: a disallowed URL / unsafe script is an expected policy block,
-                # not a system failure — surface it to the user as a normal assistant
-                # notice (tool_result) so the UI doesn't render a scary red "Error:" banner.
-                yield WorkflowMessage(
-                    type="tool_result",
-                    content=validation_error,
-                    metadata={"tool": tool_name, "blocked": True},
-                )
-                return
-
-            # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for browser tools
-            should_execute = await _emit_before_tool_execute(tool_name, params, session_id)
-            if not should_execute:
-                logger.info(
-                    "[Issue #4261] Browser tool execution cancelled by hook: %s",
-                    tool_name,
-                )
-                yield WorkflowMessage(
-                    type="error",
-                    content=f"Browser tool execution cancelled: {tool_name}",
-                    metadata={"tool": tool_name, "cancelled_by_hook": True},
-                )
-                return
-
-            from api.browser_mcp import DEFAULT_BROWSER_SESSION_ID, send_to_browser_vm
-
-            # #11539: route this call to the BrowserContext dedicated to this
-            # conversation so cookies/login state never bleed into another one.
-            result = await send_to_browser_vm(
-                tool_name,
-                params,
-                session_id=session_id or DEFAULT_BROWSER_SESSION_ID,
-            )
-
-            # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for browser tools
-            result_text = str(result)
-            result_text = await _emit_after_tool_execute(tool_name, result_text, session_id, {})
-
-            yield self._record_browser_success(tool_name, params, result, execution_results)
-
-        except Exception as e:
-            # Issue #4261: Wire TOOL_ERROR hook for browser tools
-            await _emit_tool_error(tool_name, e, session_id, {})
-            logger.error("[Issue #1368] Browser tool '%s' failed: %s", tool_name, e)
-            execution_results.append(
-                {
-                    "tool": tool_name,
-                    "status": "error",
-                    "error": "Browser tool execution failed",
-                }
-            )
-            yield WorkflowMessage(
-                type="error",
-                content=f"Browser tool '{tool_name}' execution failed",
-                metadata={"tool": tool_name, "error": True},
-            )
+        async for msg in handle_browser_tool(tool_call, execution_results, session_id, role):
+            yield msg
 
     def _record_browser_success(
         self,
@@ -2317,56 +2411,23 @@ class ToolHandlerMixin:
     ) -> "WorkflowMessage":
         """Record a successful browser tool execution and return its WorkflowMessage. Issue #2735.
 
-        Extracted from _handle_browser_tool to keep parent under 65 lines.
-        Issue #11538: also carries the raw screenshot (if any) into
-        execution_results so the vision-in-the-loop continuation can find it.
+        See ``browser_tool_handler.record_browser_success`` for the full behavior.
         """
-        summary = self._format_browser_result(tool_name, params, result)
-        entry: dict[str, Any] = {"tool": tool_name, "status": "success", "output": summary}
-        base64_image = self._extract_browser_image(result)
-        if base64_image:
-            entry["base64_image"] = base64_image
-        execution_results.append(entry)
-        return WorkflowMessage(
-            type="command_output",
-            content=summary,
-            metadata={
-                "tool": tool_name,
-                "params": params,
-                "result": result,
-                "status": "success",
-            },
-        )
+        return record_browser_success(tool_name, params, result, execution_results)
 
     def _extract_browser_image(self, result: dict[str, Any]) -> str | None:
         """Pull the base64 PNG out of a browser tool result, if present. Issue #11538.
 
-        Only the ``screenshot`` action returns image bytes today; kept
-        tool-name-agnostic (checks common keys) so a future browser/VNC
-        action that starts returning images is picked up automatically.
+        See ``browser_tool_handler.extract_browser_image`` for the full behavior.
         """
-        inner = result.get("result", result)
-        return inner.get("image") or inner.get("screenshot")
+        return extract_browser_image(result)
 
     def _format_page_state_block(self, page_state: dict[str, Any] | None) -> str:
         """Render the numbered interactive-element menu for LLM consumption. Issue #11537.
 
-        OpenManus-style: the model picks click_index/fill_index targets from
-        this menu instead of guessing a CSS selector. Appended to every
-        browser tool result so the menu is always current (task 4).
+        See ``browser_tool_handler.format_page_state_block`` for the full behavior.
         """
-        if not page_state:
-            return ""
-        elements = page_state.get("elements") or []
-        if not elements:
-            return ""
-        lines = [f"\nInteractive elements ({len(elements)}):"]
-        for el in elements[:BROWSER_STATE_PROMPT_MAX_ELEMENTS]:
-            role = el.get("role", el.get("tag", "element"))
-            name = (el.get("name") or "").strip()
-            label = f' "{name}"' if name else ""
-            lines.append(f"  [{el.get('index')}] {role}{label}")
-        return "\n".join(lines)
+        return format_page_state_block(page_state)
 
     def _format_browser_result(
         self,
@@ -2376,17 +2437,9 @@ class ToolHandlerMixin:
     ) -> str:
         """Format browser tool result as text for LLM context. Issue #1368.
 
-        Browser VM returns: {"success": bool, "action": str, "result": {...}}
-        The inner 'result' dict contains tool-specific data. Issue #11537:
-        appends the numbered interactive-element menu when present.
+        See ``browser_tool_handler.format_browser_result`` for the full behavior.
         """
-        inner = result.get("result", result)
-        summary = self._format_browser_action_text(tool_name, params, inner, result)
-        # browser_state's payload *is* the page state; every other action
-        # carries it nested under "page_state" (attached post-action).
-        page_state = inner if tool_name == "browser_state" else inner.get("page_state")
-        state_block = self._format_page_state_block(page_state)
-        return summary + state_block if state_block else summary
+        return format_browser_result(tool_name, params, result)
 
     def _format_browser_action_text(
         self,
@@ -2395,77 +2448,28 @@ class ToolHandlerMixin:
         inner: dict[str, Any],
         result: dict[str, Any],
     ) -> str:
-        """Build the tool-specific summary line for _format_browser_result. Issue #1368/#11537."""
-        if tool_name == "navigate":
-            url = inner.get("url", params.get("url", ""))
-            title = inner.get("title", "")
-            return f"Navigated to: {url}\nPage title: {title}"
+        """Build the tool-specific summary line for _format_browser_result. Issue #1368/#11537.
 
-        if tool_name == "screenshot":
-            has_image = bool(inner.get("image") or inner.get("screenshot"))
-            if has_image:
-                return "Screenshot captured successfully."
-            return "Screenshot failed."
-
-        if tool_name == "get_text":
-            text = inner.get("text", "")
-            if text:
-                # #12757: browser page text is untrusted third-party content —
-                # sanitize and put it behind a trust boundary before it lands in
-                # the agent's context as if it were operator input.
-                from knowledge.query_sanitizer import sanitize_and_wrap_web_content
-
-                return "Text content: " + sanitize_and_wrap_web_content(text[:2000], params.get("url", ""))
-            return "No text found."
-
-        if tool_name == "get_attribute":
-            value = inner.get("value", "")
-            attr = params.get("attribute", "")
-            return f"Attribute '{attr}': {value}"
-
-        if tool_name == "evaluate":
-            js_result = inner.get("result", "")
-            return f"JavaScript result: {js_result}"
-
-        if tool_name == "click":
-            return f"Clicked: {params.get('selector', '')}"
-
-        if tool_name == "fill":
-            sel = params.get("selector", "")
-            return f"Filled '{sel}' with value"
-
-        if tool_name == "select":
-            val = params.get("value", "")
-            sel = params.get("selector", "")
-            return f"Selected '{val}' in {sel}"
-
-        if tool_name == "hover":
-            return f"Hovered over: {params.get('selector', '')}"
-
-        if tool_name == "wait_for_selector":
-            sel = params.get("selector", "")
-            return f"Element found: {sel}"
-
-        if tool_name in _INDEXED_ELEMENT_TOOL_TEXT:
-            return _INDEXED_ELEMENT_TOOL_TEXT[tool_name](params, inner)
-
-        if tool_name == "browser_state":
-            elements = inner.get("elements") or []
-            return f"Page state: {inner.get('url', '')} — {len(elements)} interactive element(s)"
-
-        return json.dumps(result, default=str)[:1000]
+        See ``browser_tool_handler.format_browser_action_text`` for the full behavior.
+        """
+        return format_browser_action_text(tool_name, params, inner, result)
 
     async def _handle_web_search_tool(
         self,
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
         session_id: str = "",
+        role: str = "user",
     ):
         """Execute a web search via browser VM. Issue #2306.
 
         Abstracts the multi-step browser flow (navigate → fill → click → get_text)
         into a single tool call so small models don't need to orchestrate it.
         Issue #4261: Wires BEFORE/AFTER_TOOL_EXECUTE and TOOL_ERROR hooks.
+        Issue #14469: declares the same ``MCP_BROWSER_READ`` baseline the
+        ``browser_mcp`` bridge grants an undeclared tool — this abstracts
+        read-only browser navigation (search + read results), never drives
+        arbitrary page state, so it does not need ``MCP_BROWSER_CONTROL``.
 
         Yields:
             WorkflowMessage for search execution stages
@@ -2494,14 +2498,21 @@ class ToolHandlerMixin:
             metadata={"tool": "web_search", "query": query},
         )
 
-        # Issue #4261: Wire BEFORE_TOOL_EXECUTE hook for web_search
-        should_execute = await _emit_before_tool_execute("web_search", params, session_id)
+        # Issue #4261/#14469: Wire BEFORE_TOOL_EXECUTE hook for web_search,
+        # declaring the browser-read permission it requires.
+        should_execute = await _emit_before_tool_execute(
+            "web_search",
+            params,
+            session_id,
+            tool_permission=Permission.MCP_BROWSER_READ.value,
+            user_role=role,
+        )
         if not should_execute:
             logger.info("[Issue #4261] Web search cancelled by hook")
             yield WorkflowMessage(
                 type="error",
                 content="Web search execution cancelled",
-                metadata={"tool": "web_search", "cancelled_by_hook": True},
+                metadata={"tool": "web_search", "cancelled_by_hook": True, "reason": "permission_denied"},
             )
             return
 
@@ -2549,15 +2560,45 @@ class ToolHandlerMixin:
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
         session_id: str = "",
+        role: str = "user",
     ):
         """Dispatch one of the 4 web research tools. Issue #7509.
 
         Routes to _exec_scrape_url, _exec_crawl_site, _exec_map_site, or
         _exec_extract_structured_data based on tool_name.  Yields WorkflowMessages
         for execution stages and final output.
+
+        #14491: this builtin dispatch path never called BEFORE_TOOL_EXECUTE at
+        all, so the KNOWLEDGE_READ/KNOWLEDGE_WRITE declarations these same
+        tool names already carry in ``mcp_tool_permissions.TOOL_PERMISSIONS``
+        (for the separate MCP-registry path) were never consulted here.
+        ``crawl_site``/``map_site`` can ingest into the knowledge base
+        (``ingest=True``); reusing the existing declaration rather than
+        inventing a second one.
         """
         params = tool_call.get("params", {})
         logger.info("[Issue #7509] Web research tool: %s params=%s", tool_name, list(params.keys()))
+
+        # #14491: reuses the exact TOOL_PERMISSIONS entry already declared for
+        # this tool name on the MCP-registry path — no bridge_name here (this
+        # is the builtin path), so only the exact-name lookup can hit.
+        declared_permission = required_permission(tool_name)
+        should_execute = await _emit_before_tool_execute(
+            tool_name,
+            params,
+            session_id,
+            tool_permission=declared_permission.value if declared_permission else None,
+            user_role=role,
+        )
+        if not should_execute:
+            logger.info("[#14491] Web research tool %s cancelled by permission hook (role=%s)", tool_name, role)
+            execution_results.append({"tool": tool_name, "status": "error", "error": "permission_denied"})
+            yield WorkflowMessage(
+                type="error",
+                content=f"{tool_name} execution cancelled",
+                metadata={"tool": tool_name, "cancelled_by_hook": True, "reason": "permission_denied"},
+            )
+            return
 
         yield WorkflowMessage(
             type="tool_execution",
@@ -2588,12 +2629,25 @@ class ToolHandlerMixin:
                 metadata={"tool": tool_name, "error": True},
             )
 
-    async def _handle_llc_tool(self, tool_name, tool_call, execution_results, ctx):
+    async def _handle_llc_tool(
+        self, tool_name, tool_call, execution_results, ctx, session_id: str = "", role: str = "user"
+    ):
         """Dispatch an LLC work-object tool company-scoped (#11501).
 
         company_id comes from the chat request context (set by the CEO-chat
         endpoint, T2). A missing/invalid context surfaces as a tool error the
         LLM can react to, rather than a crash.
+
+        #14491: every LLC tool mutates company-scoped work objects
+        (``dispatch_llc_tool`` has no RBAC check of its own — only the
+        company/tenant scoping above and the cross-tenant IDOR guard inside
+        ``_update_goal``) and this was the highest-risk of the seven branches
+        never reaching ``BEFORE_TOOL_EXECUTE`` at all. ``Permission.WORKFLOW_CREATE``
+        is the closest existing declaration: it is the permission this system
+        already uses for "create/mutate a unit of work", held by
+        admin/operator/editor and withheld from analyst/user/readonly — the
+        same tier a company board operation should require. Denial returns
+        before ``dispatch_llc_tool`` is ever awaited.
         """
         params = tool_call.get("params", {}) or {}
         _cctx = ctx.context if ctx is not None and ctx.context else {}
@@ -2601,9 +2655,32 @@ class ToolHandlerMixin:
         # #11501 review: actor for audit/authz comes from the authenticated chat
         # context, never from LLM-supplied params.
         user_id = _cctx.get("user_id")
+
+        should_execute = await _emit_before_tool_execute(
+            tool_name,
+            params,
+            session_id,
+            tool_permission=Permission.WORKFLOW_CREATE.value,
+            user_role=role,
+        )
+        if not should_execute:
+            logger.info("[#14491] LLC tool %s cancelled by permission hook (role=%s)", tool_name, role)
+            execution_results.append({"tool": tool_name, "status": "error", "error": "permission_denied"})
+            yield WorkflowMessage(
+                type="error",
+                content=f"{tool_name} execution cancelled",
+                metadata={"tool": tool_name, "cancelled_by_hook": True, "reason": "permission_denied"},
+            )
+            return
+
         try:
             result = await dispatch_llc_tool(tool_name, params, company_id, user_id)
-            execution_results.append({"tool": tool_name, "status": "success", "output": result})
+            # #14284: `output` must stay a str — the offload adapter
+            # (spill_execution_results) type-guards on str before it looks at a
+            # key, so a raw dict here silently defeated it. Serialise at the
+            # producer, matching every other handler's envelope.
+            output_text = json.dumps(result, default=str, ensure_ascii=False)
+            execution_results.append({"tool": tool_name, "status": "success", "output": output_text})
             entity = result.get("entity_type", "item")
             entity_id = result.get("entity_id")
             summary = f"Done ({entity})" + (f" [{entity_id}]" if entity_id else "")
@@ -2755,6 +2832,81 @@ class ToolHandlerMixin:
                 content=f"extract_content failed: {exc}",
                 metadata={"tool": "extract_content", "error": True},
             )
+
+    async def _handle_read_spilled_output(
+        self,
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+    ):
+        """Re-read a window of a tool result that was spilled out of context (#13919).
+
+        #13692 writes oversized tool output aside and leaves a bounded excerpt
+        plus an anchor, and the excerpt's note tells the model to call this tool.
+        #13754 made it dispatchable through ``ToolRegistry.execute_tool`` — which
+        has no production callers, so at this seam, the one every real tool call
+        funnels through, the instruction still named something unreachable. An
+        agent following it landed in ``_build_unknown_tool_error`` and burned its
+        invalid-call budget.
+
+        The run is bound server-side by the agent loop, never taken from
+        arguments: the anchor carries its owning run id in plaintext, so a
+        ``task_id`` parameter would let any holder of an anchor read the run it
+        came from by echoing the id back.
+
+        Yields:
+            WorkflowMessage for the read result.
+        """
+        params = tool_call.get("params", {})
+        anchor = str(params.get("anchor", ""))
+
+        try:
+            from agent_loop.tool_output_spill import read_spilled_window
+
+            # Off the event loop. read_spilled reads and json-parses the WHOLE
+            # artifact (up to SPILL_MAX_ARTIFACT_CHARS, 5,000,000) before
+            # slicing out at most 8,000 chars, so paging a large artifact means
+            # re-reading and re-parsing it once per call. The write side already
+            # took this decision — spill_results_async exists because a blocking
+            # write_text stalls every other coroutine in the process.
+            window = await asyncio.to_thread(
+                read_spilled_window, anchor, offset=params.get("offset", 0), limit=params.get("limit")
+            )
+        except Exception as exc:
+            logger.error("[#13919] read_spilled_output failed: %s", exc)
+            execution_results.append({"tool": "read_spilled_output", "status": "error", "error": str(exc)})
+            yield WorkflowMessage(
+                type="error",
+                content=f"read_spilled_output failed: {exc}",
+                metadata={"tool": "read_spilled_output", "error": True},
+            )
+            return
+
+        if not window.get("found"):
+            # The miss reasons need different responses. Flattening them into
+            # "do not retry" tells a model to abandon an anchor over a
+            # self-correctable argument error, or over a transient one.
+            reason = window.get("reason", "unknown")
+            advice = _SPILL_MISS_ADVICE.get(reason, _SPILL_MISS_UNKNOWN_ADVICE)
+            execution_results.append({"tool": "read_spilled_output", "status": reason, "anchor": anchor})
+            yield WorkflowMessage(
+                type="command_output",
+                content=f"No spilled output for anchor {anchor!r} ({reason}). {advice}",
+                metadata={"tool": "read_spilled_output", "status": reason},
+            )
+            return
+
+        execution_results.append({"tool": "read_spilled_output", "status": "success", "output": window["content"]})
+        yield WorkflowMessage(
+            type="command_output",
+            content=window["content"],
+            metadata={
+                "tool": "read_spilled_output",
+                "status": "success",
+                "offset": window["offset"],
+                "total_chars": window["total_chars"],
+                "has_more": window["has_more"],
+            },
+        )
 
     async def _capture_live_page_snapshot(self, session_id: str) -> tuple[str, str]:
         """Read (html, url) off the browser session's *current* page. Issue #11540.
@@ -3013,6 +3165,12 @@ class ToolHandlerMixin:
             metadata={"message_type": "unknown_tool", "tool_name": tool_name},
         )
 
+    # #14495: the six seam enforcers below moved to tool_dispatch_guards.py to
+    # bring this file under its file-size ceiling (see that module's docstring
+    # for the extraction rationale — none of them touched `self`). These stay
+    # as thin delegating methods, not a straight `= module.func` rebind, so
+    # existing test monkey-patches (`mixin._enforce_forbidden_work = ...`) and
+    # the `_dispatch_tool_call` call sites are unaffected.
     def _enforce_forbidden_work(
         self,
         tool_call: dict[str, Any],
@@ -3021,39 +3179,9 @@ class ToolHandlerMixin:
     ) -> WorkflowMessage | None:
         """Hard-block a tool the acting agent's forbidden_work manifest forbids (GH#11145).
 
-        Resolves the acting agent id from ``ctx.agent_context`` and matches the tool
-        against that agent's manifest via the shared ``match_forbidden_tool`` matcher.
-        Records the failure in ``execution_results`` and returns an error
-        ``WorkflowMessage`` when the tool is forbidden, else ``None``.
-
-        An empty manifest here means exactly one thing (GH#13588): there is no agent
-        identity on the ctx, i.e. the plain ungoverned chat agent, or the id names a
-        declared executor. An id the registry does not recognise resolves to the
-        default boundary rather than to nothing, so a typo cannot buy free rein.
+        See ``tool_dispatch_guards.enforce_forbidden_work`` for the full behavior.
         """
-        from orchestration.agent_registry import match_forbidden_tool, resolve_forbidden_tools
-
-        agent_id = ctx.agent_context.agent_id if (ctx is not None and ctx.agent_context is not None) else None
-        forbidden = resolve_forbidden_tools(agent_id)
-        if not forbidden:
-            return None
-        tool_name = tool_call.get("name", "")
-        matched = match_forbidden_tool(tool_name, forbidden)
-        if matched is None:
-            return None
-        error = f"Tool '{tool_name}' is forbidden by agent '{agent_id}' capability manifest (matched '{matched}')"
-        logger.warning(
-            "[GH#11145] Blocked forbidden tool '%s' for agent '%s' (matched '%s')",
-            tool_name,
-            agent_id,
-            matched,
-        )
-        execution_results.append({"tool": tool_name, "status": "error", "error": error, "forbidden_by_manifest": True})
-        return WorkflowMessage(
-            type="error",
-            content=error,
-            metadata={"tool": tool_name, "error": True, "forbidden_by_manifest": True},
-        )
+        return enforce_forbidden_work(tool_call, ctx, execution_results)
 
     def _enforce_config_protection(
         self,
@@ -3062,33 +3190,9 @@ class ToolHandlerMixin:
     ) -> WorkflowMessage | None:
         """Block a write that would weaken a linter/formatter config (GH#11177).
 
-        Reuses the dependency-free ``autobot_shared.config_guard`` matcher against
-        the tool's target path (``params`` for built-in tools, ``arguments`` for
-        MCP). Records the failure and returns an error ``WorkflowMessage`` when the
-        target is a protected config, else ``None``. ``AUTOBOT_ALLOW_CONFIG_EDITS``
-        opts out.
+        See ``tool_dispatch_guards.enforce_config_protection`` for the full behavior.
         """
-        from autobot_shared.config_guard import config_edits_allowed, protected_config_for
-
-        if config_edits_allowed():
-            return None
-        args = tool_call.get("params") or tool_call.get("arguments") or {}
-        matched = protected_config_for(tool_call.get("name", ""), args)
-        if matched is None:
-            return None
-        tool_name = tool_call.get("name", "")
-        error = (
-            f"Editing linter/formatter config '{matched}' is blocked (config-protection): "
-            f"fix the code to satisfy the gate instead of weakening it. "
-            f"Set AUTOBOT_ALLOW_CONFIG_EDITS=1 for an intentional change."
-        )
-        logger.warning("[GH#11177] Blocked config-protection write to '%s' (tool '%s')", matched, tool_name)
-        execution_results.append({"tool": tool_name, "status": "error", "error": error, "config_protection": True})
-        return WorkflowMessage(
-            type="error",
-            content=error,
-            metadata={"tool": tool_name, "error": True, "config_protection": True},
-        )
+        return enforce_config_protection(tool_call, execution_results)
 
     def _enforce_fact_forcing(
         self,
@@ -3098,38 +3202,21 @@ class ToolHandlerMixin:
     ) -> WorkflowMessage | None:
         """Block the first edit to an existing, uninvestigated file (GH#11178).
 
-        Records this call's read/grep target on the turn-scoped investigated set
-        (``ctx.context``), then blocks an edit to an existing file not yet read
-        this turn. New files are never blocked; the block self-clears once the
-        agent reads the file. Off unless ``AUTOBOT_FACT_FORCING`` is set, and a
-        no-op without a ``ctx`` to carry the per-turn state.
+        See ``tool_dispatch_guards.enforce_fact_forcing`` for the full behavior.
         """
-        from autobot_shared.fact_forcing_guard import (
-            fact_forcing_env_enabled,
-            record_investigation,
-            uninvestigated_edit_path,
-        )
+        return enforce_fact_forcing(tool_call, ctx, execution_results)
 
-        if not fact_forcing_env_enabled() or ctx is None:
-            return None
-        investigated: set[str] = ctx.context.setdefault("_fact_forcing_investigated", set())
-        name = tool_call.get("name", "")
-        args = tool_call.get("params") or tool_call.get("arguments") or {}
-        record_investigation(name, args, investigated)
-        path = uninvestigated_edit_path(name, args, investigated)
-        if path is None:
-            return None
-        error = (
-            f"Editing '{path}' is blocked (fact-forcing): read the file and its "
-            f"importers/call-sites first so the change is grounded, then retry."
-        )
-        logger.warning("[GH#11178] Blocked fact-forcing edit to '%s' (tool '%s')", path, name)
-        execution_results.append({"tool": name, "status": "error", "error": error, "fact_forcing": True})
-        return WorkflowMessage(
-            type="error",
-            content=error,
-            metadata={"tool": name, "error": True, "fact_forcing": True},
-        )
+    async def _enforce_pre_action_verifier(
+        self,
+        tool_call: dict[str, Any],
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Run the adversarial pre-action verifier on a sensitive tool call (#14031).
+
+        See ``tool_dispatch_guards.enforce_pre_action_verifier`` for the full behavior.
+        """
+        return await enforce_pre_action_verifier(tool_call, ctx, execution_results)
 
     def _enforce_repetition(
         self,
@@ -3139,49 +3226,9 @@ class ToolHandlerMixin:
     ) -> WorkflowMessage | None:
         """Halt a looping or stagnating agent at the live seam (#13590).
 
-        The guard existed in ``agent_loop/`` and ran nowhere; the live path had
-        only a prompt sentence and a counter for *malformed* calls. Counting is
-        keyed on ``(call fingerprint, result hash)``, so a polling loop whose
-        result moves is never halted — only a call reproducing a result it
-        already has.
-
-        State lives on ``ctx.context``, which is per-turn and per-session; the
-        seam is concurrent across sessions, so nothing here may be module-global.
-        A missing ``ctx`` is a no-op, matching the other enforcers.
+        See ``tool_dispatch_guards.enforce_repetition`` for the full behavior.
         """
-        from autobot_shared.repetition_guard import (  # noqa: PLC0415
-            REPETITION_STATE_KEY,
-            STAGNATION_STATE_KEY,
-            repetition_halt_reason,
-            stagnation_halt_reason,
-        )
-
-        if ctx is None:
-            return None
-
-        rep_state = ctx.context.setdefault(REPETITION_STATE_KEY, {})
-        reason = repetition_halt_reason(tool_call, execution_results, rep_state)
-        halt_kind = "repetition_halt"
-
-        if reason is None:
-            # Repetition catches one call re-issued; stagnation catches a run of
-            # different calls whose results say nothing new. Distinct reasons,
-            # because "you are repeating a call" and "you are learning nothing"
-            # ask the agent for different corrections.
-            stag_state = ctx.context.setdefault(STAGNATION_STATE_KEY, {})
-            reason = stagnation_halt_reason(execution_results, stag_state)
-            halt_kind = "stagnation_halt"
-
-        if reason is None:
-            return None
-
-        name = tool_call.get("name", "")
-        execution_results.append({"tool": name, "status": "error", "error": reason, halt_kind: True})
-        return WorkflowMessage(
-            type="error",
-            content=reason,
-            metadata={"tool": name, "error": True, halt_kind: True},
-        )
+        return enforce_repetition(tool_call, ctx, execution_results)
 
     def _enforce_work_item_approval(
         self,
@@ -3191,43 +3238,9 @@ class ToolHandlerMixin:
     ) -> WorkflowMessage | None:
         """Hold a tool the work item declared as approval-gated (GH#11160).
 
-        When the run carries a work item whose ``requires_approval_before`` names
-        the action category of this tool, the action is held pending approval — the
-        declared gate is honored at the production seam. No work item / no matching
-        category → ``None``. Categories are resolved onto the context upstream, so
-        this needs no DB round-trip.
+        See ``tool_dispatch_guards.enforce_work_item_approval`` for the full behavior.
         """
-        if ctx is None or not getattr(ctx, "requires_approval_before", None):
-            return None
-        tool_name = tool_call.get("name", "")
-        category = _approval_category_for(tool_name, ctx.requires_approval_before)
-        if category is None:
-            return None
-        work_item_id = getattr(ctx, "work_item_id", None)
-        msg = (
-            f"Action '{tool_name}' requires approval before proceeding — the work item "
-            f"declares '{category}' as approval-gated (requires_approval_before)."
-        )
-        logger.warning("[GH#11160] Held tool '%s' pending approval — declared category '%s'", tool_name, category)
-        execution_results.append(
-            {
-                "tool": tool_name,
-                "status": "pending_approval",
-                "reason": msg,
-                "approval_category": category,
-                "work_item_id": work_item_id,
-            }
-        )
-        return WorkflowMessage(
-            type="approval_required",
-            content=msg,
-            metadata={
-                "tool": tool_name,
-                "approval_required": True,
-                "category": category,
-                "work_item_id": work_item_id,
-            },
-        )
+        return enforce_work_item_approval(tool_call, ctx, execution_results)
 
     async def _dispatch_tool_call(
         self,
@@ -3272,6 +3285,16 @@ class ToolHandlerMixin:
         fact_msg = self._enforce_fact_forcing(tool_call, ctx, execution_results)
         if fact_msg is not None:
             yield fact_msg
+            return
+
+        # #14031: adversarial pre-action verifier — an independent, differently
+        # prompted model tries to REFUTE a sensitive action before it executes.
+        # Runs before the approval hold below so a HARD_BLOCK verdict short-circuits
+        # without ever reaching the human approval step, matching the original
+        # AgentLoop._check_approvals ordering.
+        verifier_msg = await self._enforce_pre_action_verifier(tool_call, ctx, execution_results)
+        if verifier_msg is not None:
+            yield verifier_msg
             return
 
         # GH#11160: hold a tool the work item declared as approval-gated
@@ -3333,7 +3356,10 @@ class ToolHandlerMixin:
                 )
                 yield validation_msg
                 return
-            async for msg in self._handle_llc_tool(tool_name, tool_call, execution_results, ctx):
+            # #14491: forward session_id/role so _handle_llc_tool can declare
+            # Permission.WORKFLOW_CREATE at BEFORE_TOOL_EXECUTE — this branch
+            # never reached the hook before.
+            async for msg in self._handle_llc_tool(tool_name, tool_call, execution_results, ctx, session_id, role):
                 yield msg
             return
 
@@ -3364,6 +3390,7 @@ class ToolHandlerMixin:
                 selected_model,
                 execution_results,
                 additional_response_parts,
+                role=role,
             ):
                 yield msg
             return
@@ -3381,21 +3408,29 @@ class ToolHandlerMixin:
         selected_model: str,
         execution_results: list[dict[str, Any]],
         additional_response_parts: list[str],
+        role: str = "user",
     ) -> AsyncIterator[Any]:
         """Return the handler async-generator for a uniform builtin tool (GH#11489).
 
         Membership SSOT is ``_UNIFORM_BUILTIN_TOOLS``; the caller has already run
         the shared gate. Adding a builtin that follows the standard gate takes a
         schema entry plus one row here — no new branch at the dispatch seam.
+
+        Issue #14469/#14491: ``role`` is forwarded to every handler that
+        declares a ``tool_permission`` (browser, web_search, execute_command,
+        web research) — live-page-extract/read_spilled_output remain
+        undeclared, tracked separately (#14491's per-branch table).
         """
         if tool_name in BROWSER_TOOL_NAMES:  # Issue #1368: route to browser VM
-            return self._handle_browser_tool(tool_call, execution_results, session_id)
+            return self._handle_browser_tool(tool_call, execution_results, session_id, role=role)
         if tool_name == "web_search":  # Issue #2306: multi-step browser flow
-            return self._handle_web_search_tool(tool_call, execution_results, session_id)
+            return self._handle_web_search_tool(tool_call, execution_results, session_id, role=role)
         if tool_name in WEB_RESEARCH_TOOL_NAMES:  # Issue #7509
-            return self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id)
+            return self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id, role=role)
         if tool_name in LIVE_PAGE_EXTRACT_TOOL_NAMES:  # Issue #11540
             return self._handle_extract_content_tool(tool_call, execution_results, session_id)
+        if tool_name == "read_spilled_output":  # #13919: the excerpt's note names this
+            return self._handle_read_spilled_output(tool_call, execution_results)
         if tool_name == "execute_command":
             return self._dispatch_execute_command(
                 tool_call,
@@ -3405,6 +3440,7 @@ class ToolHandlerMixin:
                 selected_model,
                 execution_results,
                 additional_response_parts,
+                role=role,
             )
         # A member of _UNIFORM_BUILTIN_TOOLS without a route row is a wiring bug —
         # fail loudly rather than falling through to a high-blast-radius handler.
@@ -3443,10 +3479,12 @@ class ToolHandlerMixin:
         selected_model: str,
         execution_results: list[dict[str, Any]],
         additional_response_parts: list[str],
+        role: str = "user",
     ):
         """Delegate execute_command tool call to _process_single_command. Issue #2735.
 
         Extracted from _dispatch_tool_call to keep parent under 65 lines.
+        Issue #14469: forwards `role` — see _process_single_command.
         """
         async for msg in self._process_single_command(
             tool_call,
@@ -3456,35 +3494,36 @@ class ToolHandlerMixin:
             selected_model,
             execution_results,
             additional_response_parts,
+            role=role,
         ):
             yield msg
 
     # ------------------------------------------------------------------ #
     # GH#11568: compose tool handlers                                     #
     # ------------------------------------------------------------------ #
+    #
+    # Bodies moved to compose_tool_handler.py (#14491) to offset that PR's
+    # additions and keep this module under its file-size ceiling. These stay
+    # as thin delegating methods (same names) rather than a straight rebind
+    # because test_code_exec.py replaces several of them wholesale with a
+    # mock (``handler._persist_compose_approval = AsyncMock(...)``) and
+    # ``_handle_compose_tool`` below must keep dispatching through
+    # ``self.<method>`` for that to still take effect.
 
     def _guard_compose(self, program: str, agent_id: "str | None") -> "WorkflowMessage | None":
-        """Run AST guard; return error WorkflowMessage on violation, else None."""
-        from chat_workflow.code_exec.ast_guard import check_script
-        from chat_workflow.code_exec.shim_codegen import injectable_tool_set
-        from orchestration.agent_registry import resolve_forbidden_tools
+        """Run AST guard; return error WorkflowMessage on violation, else None.
 
-        forbidden = resolve_forbidden_tools(agent_id)
-        injected = frozenset(injectable_tool_set([], forbidden))
-        verdict = check_script(program, frozenset(forbidden), injected_tools=injected)
-        if verdict.ok:
-            return None
-        lines = "; ".join(f"line {v['line']}: {v['message']}" for v in verdict.violations)
-        return WorkflowMessage(
-            type="tool_result",
-            content=f"compose script rejected by AST guard: {lines}",
-            metadata={"tool_name": "compose", "ast_violations": verdict.violations},
-        )
+        See ``compose_tool_handler.guard_compose`` for the full behavior.
+        """
+        return guard_compose(program, agent_id)
 
     @staticmethod
     def _compose_auto_approvable(shim_snapshot: list[str]) -> bool:
-        """Auto-approve only when the flag is on AND all shims are read-only (design §3.1)."""
-        return CODEEXEC_AUTOAPPROVE_READONLY and set(shim_snapshot) <= CODEEXEC_READONLY_TOOLS
+        """Auto-approve only when the flag is on AND all shims are read-only (design §3.1).
+
+        See ``compose_tool_handler.compose_auto_approvable`` for the full behavior.
+        """
+        return compose_auto_approvable(shim_snapshot)
 
     async def _approve_compose(self, program: str, shim_snapshot: list[str], session_id: str) -> "str | None":
         """Return an approval id requiring a gate, or ``None`` to auto-approve (GH#11568).
@@ -3499,144 +3538,67 @@ class ToolHandlerMixin:
     async def _poll_compose_approval(self, approval_id: str) -> str:
         """Poll the WORKFLOW_GATE until decided; return its terminal status (GH#11568 MINOR-2).
 
-        Mirrors the terminal-command approval loop: a bounded poll on the persisted
-        gate. Returns ``approved``/``rejected``/``revision_requested``, or
-        ``timeout`` when no decision lands within the wait budget.
+        See ``compose_tool_handler.poll_compose_approval`` for the full behavior.
         """
-        import uuid as _uuid
-
-        from services.approval_gate_service import ApprovalGateService
-        from user_management.database import get_async_session_factory
-
-        elapsed = 0
-        session_factory = get_async_session_factory()
-        while elapsed < CODEEXEC_APPROVAL_WAIT_SECONDS:
-            async with session_factory() as db:
-                approval = await ApprovalGateService(db).get(_uuid.UUID(approval_id))
-            status = getattr(approval, "status", None)
-            if status and status != "pending":
-                return status
-            await asyncio.sleep(CODEEXEC_APPROVAL_POLL_SECONDS)
-            elapsed += CODEEXEC_APPROVAL_POLL_SECONDS
-        return "timeout"
+        return await poll_compose_approval(approval_id)
 
     async def _persist_compose_approval(self, program: str, shim_snapshot: list[str], session_id: str) -> "str | None":
-        """Persist a WORKFLOW_GATE Approval carrying program + shims + budgets (GH#11568)."""
-        from chat_workflow.code_exec.broker import CODEEXEC_MAX_TOOL_CALLS
-        from models.approval import ApprovalType
-        from secure_sandbox_executor import CODEEXEC_TIMEOUT_SECONDS
-        from services.approval_gate_service import ApprovalGateService
-        from user_management.database import get_async_session_factory
+        """Persist a WORKFLOW_GATE Approval carrying program + shims + budgets (GH#11568).
 
-        context = {
-            "program": program,
-            "shim_snapshot": shim_snapshot,
-            "budgets": {"max_tool_calls": CODEEXEC_MAX_TOOL_CALLS, "timeout_seconds": CODEEXEC_TIMEOUT_SECONDS},
-        }
-        session_factory = get_async_session_factory()
-        async with session_factory() as db:
-            approval = await ApprovalGateService(db).create_approval(
-                title="compose script execution",
-                approval_type=ApprovalType.WORKFLOW_GATE.value,
-                requested_by_agent="chat_agent",
-                description="Sandboxed Python compose script awaiting approval.",
-                workflow_id=session_id,
-                workflow_step="compose",
-                context=context,
-            )
-            return str(approval.id)
+        See ``compose_tool_handler.persist_compose_approval`` for the full behavior.
+        """
+        return await persist_compose_approval(program, shim_snapshot, session_id)
 
     def _build_compose_dispatch(self, session_id: str, ctx: "LLMIterationContext | None"):
-        """Return an async dispatch callable routing shim calls through the seam (GH#11568)."""
+        """Return an async dispatch callable routing shim calls through the seam (GH#11568).
 
-        async def _dispatch(tool: str, params: dict) -> Any:
-            sub_results: list[dict[str, Any]] = []
-            sub_call = {"name": tool, "params": params}
-            async for _ in self._dispatch_tool_call(sub_call, session_id, session_id, "", "", sub_results, [], ctx=ctx):
-                pass
-            last = sub_results[-1] if sub_results else {}
-            if last.get("status") == "error":
-                raise RepairableException(last.get("error", "tool dispatch failed"))
-            return last.get("output", last)
-
-        return _dispatch
+        See ``compose_tool_handler.build_compose_dispatch`` for the full behavior.
+        """
+        return build_compose_dispatch(session_id, ctx, self._dispatch_tool_call)
 
     async def _execute_compose(
         self, program: str, agent_id: "str | None", run_id: str, session_id: str, ctx: "LLMIterationContext | None"
     ) -> "WorkflowMessage":
-        """Run the script inside the sandbox via a live broker; return result msg."""
-        from chat_workflow.code_exec.broker import CodeExecBroker
-        from chat_workflow.code_exec.shim_codegen import generate_shim_module, injectable_tool_set
-        from orchestration.agent_registry import resolve_forbidden_tools
-        from secure_sandbox_executor import CODEEXEC_TIMEOUT_SECONDS, SecureSandboxExecutor  # lazy
+        """Run the script inside the sandbox via a live broker; return result msg.
 
-        forbidden = resolve_forbidden_tools(agent_id)
-        tools = injectable_tool_set([], forbidden)
-        shim_src = generate_shim_module(tools)
-        broker = CodeExecBroker(
-            self._build_compose_dispatch(session_id, ctx),
-            tools,
-            forbidden,
-            run_id,
-            f"autobot:codeexec:security:events:{run_id}",
-            progress_channel=f"workflow:{session_id}",
-        )
-        executor = SecureSandboxExecutor()
-        result = await executor.execute_with_stdio_broker(program, shim_src, broker, CODEEXEC_TIMEOUT_SECONDS, run_id)
-        return self._compose_result_message(result, run_id)
+        See ``compose_tool_handler.execute_compose`` for the full behavior.
+        """
+        return await execute_compose(program, agent_id, run_id, session_id, ctx, self._dispatch_tool_call)
 
     def _compose_result_message(self, result: Any, run_id: str) -> "WorkflowMessage":
-        """Build the tool_result WorkflowMessage from a SandboxResult (GH#11568)."""
-        if result.success:
-            return WorkflowMessage(
-                type="tool_result",
-                content=result.stdout or "(no output)",
-                metadata={"tool_name": "compose", "run_id": run_id},
-            )
-        content = f"compose execution failed (exit {result.exit_code}): {result.stderr or result.stdout}"
-        return WorkflowMessage(
-            type="tool_result",
-            content=content,
-            metadata={"tool_name": "compose", "run_id": run_id, "failed": True},
-        )
+        """Build the tool_result WorkflowMessage from a SandboxResult (GH#11568).
+
+        See ``compose_tool_handler.compose_result_message`` for the full behavior.
+        """
+        return compose_result_message(result, run_id)
 
     def _compose_shim_snapshot(self, agent_id: "str | None") -> list[str]:
-        """Injectable-tool snapshot for this agent (allowlist ∩ allowed − forbidden)."""
-        from chat_workflow.code_exec.shim_codegen import injectable_tool_set
-        from orchestration.agent_registry import resolve_forbidden_tools
+        """Injectable-tool snapshot for this agent (allowlist ∩ allowed − forbidden).
 
-        return injectable_tool_set([], resolve_forbidden_tools(agent_id))
+        See ``compose_tool_handler.compose_shim_snapshot`` for the full behavior.
+        """
+        return compose_shim_snapshot(agent_id)
 
     def _reject_delegated_compose(self, agent_id: "str | None") -> "WorkflowMessage | None":
-        """Main-chat-only: reject compose for any profile-bound (delegated) agent (GH#11568)."""
-        if agent_id is None:
-            return None
-        return WorkflowMessage(
-            type="tool_result",
-            content="compose is not available for delegated subagents",
-            metadata={"tool_name": "compose"},
-        )
+        """Main-chat-only: reject compose for any profile-bound (delegated) agent (GH#11568).
+
+        See ``compose_tool_handler.reject_delegated_compose`` for the full behavior.
+        """
+        return reject_delegated_compose(agent_id)
 
     def _compose_gate_request_msg(self, approval_id: str, shim_snapshot: list[str]) -> "WorkflowMessage":
-        """Build the WORKFLOW_GATE approval-required notification (GH#11568)."""
-        return WorkflowMessage(
-            type="approval_required",
-            content="compose script requires approval before execution",
-            metadata={
-                "tool": "compose",
-                "approval_required": True,
-                "approval_id": approval_id,
-                "shim_snapshot": shim_snapshot,
-            },
-        )
+        """Build the WORKFLOW_GATE approval-required notification (GH#11568).
+
+        See ``compose_tool_handler.compose_gate_request_msg`` for the full behavior.
+        """
+        return compose_gate_request_msg(approval_id, shim_snapshot)
 
     def _compose_gate_refusal_msg(self, status: str) -> "WorkflowMessage":
-        """Terminal refusal message for a non-approved gate (GH#11568)."""
-        return WorkflowMessage(
-            type="tool_result",
-            content=f"compose execution not approved (gate status: {status}).",
-            metadata={"tool_name": "compose", "approval_status": status, "denied": True},
-        )
+        """Terminal refusal message for a non-approved gate (GH#11568).
+
+        See ``compose_tool_handler.compose_gate_refusal_msg`` for the full behavior.
+        """
+        return compose_gate_refusal_msg(status)
 
     async def _handle_compose_tool(
         self,
@@ -3700,6 +3662,15 @@ class ToolHandlerMixin:
         break_loop_requested = False
         respond_content = None
 
+        # #13821: forward the authenticated role. #2629 wired `role` as far as
+        # _dispatch_tool_call's signature and stopped here, so the `role="user"`
+        # default won every call and MCPDispatcher never saw who was signed in —
+        # an admin was denied the admin-only tools they are entitled to, and the
+        # #13228 shadow inventory could only ever contain user rows.
+        from chat_workflow.session_role import DEFAULT_AUTH_ROLE  # noqa: PLC0415
+
+        role = ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE
+
         for tool_call in tool_calls:
             async for result in self._dispatch_tool_call(
                 tool_call,
@@ -3710,6 +3681,7 @@ class ToolHandlerMixin:
                 execution_results,
                 additional_response_parts,
                 ctx=ctx,
+                role=role,
             ):
                 if isinstance(result, tuple):
                     break_loop_requested, respond_content = result

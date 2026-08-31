@@ -42,19 +42,24 @@ sys.path.insert(0, str(_ROOT))
 # fastapi; exec'ing api/auth.py against real FastAPI decorators + MagicMock
 # response models raises FastAPIError at collection time).  Everything is
 # rolled back after the bootstrap so nothing leaks into later test files.
+#
+# #14535: the rollback below MUST be scoped to the modules THIS bootstrap
+# manages (_BOOTSTRAP_MANAGED_MODULES), not "every sys.modules key that
+# appeared during the bootstrap" — token_denylist.py and auth.py transitively
+# import real, unrelated modules (e.g. autobot_shared.redis_client) as a side
+# effect of loading for real.  Deleting those from sys.modules leaves a
+# dangling reference: the parent package (autobot_shared) keeps a stale
+# `.redis_client` attribute pointing at the now-orphaned module, so a later
+# monkeypatch.setattr("autobot_shared.redis_client.X", ...) — which resolves
+# via getattr on the package before falling back to import — silently patches
+# that orphan instead of the module Python creates fresh on the next
+# `from autobot_shared.redis_client import X`, and the patch has no effect.
 _PRE_BOOTSTRAP_MODULES = dict(sys.modules)
 
 _SECRET_KEY = "test-logout-secret-key-32characters"
 _EXPIRE_MINUTES = 30
 
-_cfg_mod = MagicMock()
-_cfg_mod.settings = MagicMock()
-_cfg_mod.settings.secret_key = _SECRET_KEY
-_cfg_mod.settings.access_token_expire_minutes = _EXPIRE_MINUTES
-_cfg_mod.settings.trusted_proxies = []
-sys.modules["config"] = _cfg_mod
-
-for _mod_name in [
+_STUB_MODULE_NAMES = (
     "models.schemas",
     "user_management",
     "user_management.models",
@@ -74,7 +79,21 @@ for _mod_name in [
     "models",
     "models.database",
     "api.security",
-]:
+)
+# Loaded for REAL during this bootstrap (see below) — also bootstrap-managed,
+# so the rollback still resets them rather than leaving this file's private
+# copies cached under their real names for other test files to trip over.
+_REAL_LOADED_MODULE_NAMES = ("services.token_denylist", "services.auth")
+_BOOTSTRAP_MANAGED_MODULES = frozenset(("config", *_STUB_MODULE_NAMES, *_REAL_LOADED_MODULE_NAMES))
+
+_cfg_mod = MagicMock()
+_cfg_mod.settings = MagicMock()
+_cfg_mod.settings.secret_key = _SECRET_KEY
+_cfg_mod.settings.access_token_expire_minutes = _EXPIRE_MINUTES
+_cfg_mod.settings.trusted_proxies = []
+sys.modules["config"] = _cfg_mod
+
+for _mod_name in _STUB_MODULE_NAMES:
     sys.modules[_mod_name] = MagicMock()
 
 # Ensure real jwt_core is reachable (decode_jwt_no_verify_exp used in logout impl)
@@ -124,10 +143,15 @@ _build_end_session_url = _router_ns["_build_end_session_url"]
 _get_user_sso_link = _router_ns["_get_user_sso_link"]
 
 # #11478/#11794: restore the pre-bootstrap sys.modules state (see snapshot
-# above).  Tests only use the module references extracted here (_dl_mod,
-# _auth_mod, _router_ns values), so none of the forced stubs may outlive this
-# module's import.
+# above) for exactly the modules this bootstrap stubbed or privately reloaded
+# (see #14535 note above for why the scope is deliberate).  Tests only use
+# the module references extracted here (_dl_mod, _auth_mod, _router_ns
+# values), so none of the forced stubs may outlive this module's import —
+# but real modules pulled in as a transitive side effect are left exactly as
+# a normal import would have left them.
 for _k in list(sys.modules):
+    if _k not in _BOOTSTRAP_MANAGED_MODULES:
+        continue
     if _k not in _PRE_BOOTSTRAP_MODULES:
         del sys.modules[_k]
     elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:

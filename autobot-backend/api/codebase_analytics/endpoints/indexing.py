@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from constants.path_constants import PATH
 
 
@@ -33,7 +33,7 @@ class IndexCodebaseRequest(BaseModel):
     )
 
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 
 from ..scanner import (
     _active_tasks,
@@ -130,7 +130,7 @@ async def _validate_and_get_path(
         return source.clone_path
     if request and request.root_path:
         try:
-            safe_path_str = validate_path(request.root_path, must_exist=True)
+            safe_path_str = validate_path(request.root_path, must_exist=True, allowed_roots=PROJECT_ALLOWED_ROOTS)
             target_path = Path(safe_path_str)
         except (ValueError, PermissionError):
             raise HTTPException(
@@ -188,6 +188,7 @@ def _create_cleanup_callback(task_id: str):
 
 
 @router.post("/index")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="index_codebase",
@@ -265,6 +266,7 @@ async def index_codebase(http_request: Request, request: IndexCodebaseRequest | 
 
 
 @router.get("/index/status/{task_id}")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_indexing_status",
@@ -312,6 +314,7 @@ async def get_indexing_status(task_id: str):
 
 
 @router.get("/index/current")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_current_indexing_job",
@@ -418,6 +421,7 @@ def _cancel_active_task(task_id: str, existing_task) -> JSONResponse:
 
 
 @router.post("/index/cancel")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cancel_indexing_job",

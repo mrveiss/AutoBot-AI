@@ -46,6 +46,7 @@ from dotenv import load_dotenv
 load_dotenv(PROJECT_ROOT / ".env")
 
 from knowledge_base import KnowledgeBase
+from autobot_shared.ssot_constants import TTL_30_DAYS
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -288,7 +289,7 @@ def _store_document_hash(kb, content_hash: str, file_path: Path, title: str, chu
     """
     kb.redis_client.setex(
         f"doc_hash:{content_hash}",
-        86400 * 30,  # 30 days TTL
+        TTL_30_DAYS,
         json.dumps(
             {
                 "file_path": str(file_path),

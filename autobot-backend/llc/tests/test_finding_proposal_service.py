@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.status_enums import Severity
 from llc.models.enums import FindingProposalStatus
 from llc.services.finding_proposal_service import (
     FindingsDisabledError,
@@ -104,7 +105,7 @@ async def test_scan_queues_only_real_and_skips_promoted():
     # Three distinct findings (different file_path → distinct finding_keys)
     finding_real = {
         "type": "bug",
-        "severity": "high",
+        "severity": Severity.HIGH.value,
         "file_path": "a.py",
         "line_number": 1,
         "description": "D1",
@@ -112,7 +113,7 @@ async def test_scan_queues_only_real_and_skips_promoted():
     }
     finding_fake = {
         "type": "style",
-        "severity": "high",
+        "severity": Severity.HIGH.value,
         "file_path": "b.py",
         "line_number": 2,
         "description": "D2",
@@ -120,7 +121,7 @@ async def test_scan_queues_only_real_and_skips_promoted():
     }
     finding_promoted = {
         "type": "bug",
-        "severity": "high",
+        "severity": Severity.HIGH.value,
         "file_path": "c.py",
         "line_number": 3,
         "description": "D3",

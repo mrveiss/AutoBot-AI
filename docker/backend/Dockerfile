@@ -35,7 +35,8 @@ COPY constraints/shared.txt /app/constraints/shared.txt
 # torch/torchvision are excluded from the filtered list and installed explicitly from
 # the CPU index, so the default-PyPI CUDA build (libtorch_cuda.so) is never pulled into
 # this CPU image (#10251). vLLM + its CUDA stack are no longer default deps; GPU
-# deployments add them via requirements-gpu.txt.
+# deployments add CUDA torch via requirements-gpu-torch.txt and vLLM via
+# requirements-gpu.txt, independent of each other (#15162).
 COPY autobot-backend/requirements.txt /tmp/requirements.txt
 RUN grep -v -E "(autobot.shared|^-r |^-c |^torch==|^torchvision==)" /tmp/requirements.txt \
         > /app/requirements-filtered.txt \
@@ -141,6 +142,12 @@ USER autobot
 
 # Environment
 ENV PYTHONPATH=/app:/app/autobot-backend:/app/autobot_shared
+# #14544/#14575: the image has no .git and no .env, so
+# autobot_shared.paths.project_root() cannot infer the root by walking up
+# from /app/autobot_shared/paths.py and raises ProjectRootUndeterminable
+# rather than silently guessing /opt/autobot (the live install this image is
+# NOT). Tell it explicitly instead of letting it guess.
+ENV AUTOBOT_PROJECT_ROOT=/app
 ENV AUTOBOT_ENVIRONMENT=production
 ENV AUTOBOT_LOG_LEVEL=INFO
 ENV AUTOBOT_DEPLOYMENT_MODE=local

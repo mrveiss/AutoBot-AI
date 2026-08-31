@@ -345,6 +345,14 @@ _BRIDGE_MODULE_REGISTRY: List[Tuple[str, str, str, List[str]]] = [
         "/api/redis/mcp/tools",
         ["data_access", "vector_search", "hybrid_search", "ops_intelligence", "stream_health", "rbac_filtering"],
     ),
+    # #14586: was reachable via the router but absent here, so its tools never
+    # entered MCPDispatcher._tool_cache and required_permission() never saw them.
+    (
+        "api.manual_mcp",
+        "manual_mcp",
+        "/api/manual/mcp/tools",
+        ["man_pages", "documentation_index"],
+    ),
 ]
 
 # Registry mapping name -> (manifest, module_path) for hot-reload support
@@ -437,9 +445,11 @@ def _build_tool_entry(tool: dict, bridge_name: str, bridge_desc: str, endpoint: 
     and ``get_tool_definitions`` both read the cache this populates, so one
     declaration governs execution and advertisement alike.
 
-    ``None`` means the tool is undeclared. Stage 1 records that without acting
-    on it; enforcement (denying the undeclared) is a later, separately
-    revertible step, so this change cannot break a working agent flow.
+    ``None`` means the tool is undeclared. Stage 1 only recorded that value;
+    stage 3 (#14523) is what acts on it — ``PermissionEnforcementExtension``
+    refuses a ``None`` ``tool_permission`` and ``MCPDispatcher.dispatch``/
+    ``get_tool_definitions`` both deny/hide a tool this resolves to ``None``
+    for, via the same canonical check.
     """
     from autobot_shared.auth.mcp_tool_permissions import required_permission  # noqa: PLC0415
 

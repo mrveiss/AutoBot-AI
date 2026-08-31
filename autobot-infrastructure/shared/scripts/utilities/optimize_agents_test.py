@@ -14,17 +14,24 @@ The ``AgentOptimizer`` optimizes agent markdown files *in place* (a single
 modified and ``False`` when it was unchanged/skipped.
 """
 
-# Add the infrastructure ``shared/`` root to the path so the
-# ``scripts.utilities.optimize_agents`` namespace package resolves.
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-shared_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(shared_root))
+# Add the infrastructure ``shared/scripts`` root to the path so
+# ``utilities.optimize_agents`` (a PEP 420 namespace package portion) resolves
+# (#14518). The previous ``shared/`` insert made the import read
+# ``scripts.utilities.optimize_agents``, a path that does not exist from that
+# root. The module is addressed through ``utilities.`` rather than imported
+# bare because ``scripts/optimize_agents_test.py`` binds the *sibling*
+# ``scripts/optimize_agents.py`` to ``sys.modules["optimize_agents"]``; a bare
+# name would collide with it inside a shared pytest process.
+_SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
+if str(_SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-from scripts.utilities.optimize_agents import AgentOptimizer
+from utilities.optimize_agents import AgentOptimizer  # noqa: E402 - must follow the sys.path setup above
 
 
 class TestAgentOptimizer(unittest.TestCase):

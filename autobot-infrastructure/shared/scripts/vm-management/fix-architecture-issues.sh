@@ -8,7 +8,11 @@ set -e
 
 # Load SSOT configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" || {
+    echo "FATAL: ${SCRIPT_DIR}/../lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
 
 # Colors for output
 RED='\033[0;31m'
@@ -97,7 +101,7 @@ fi
 # Issue 4: Check Browser service on VM5
 log "Checking Browser service..."
 echo -n "Browser service health check... "
-if timeout 5 curl -s "http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health" >/dev/null 2>&1; then
+if timeout 5 curl -s "http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health" >/dev/null 2>&1; then
     echo -e "${GREEN}✅ Healthy${NC}"
 else
     echo -e "${RED}❌ Unhealthy${NC}"
@@ -132,7 +136,7 @@ $(timeout 3 redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" -p "${AUTOBOT_REDIS_
 $(timeout 3 curl -s "http://${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_PORT:-5173}" >/dev/null 2>&1 && echo "✅" || echo "❌") Frontend: Running on VM1 (${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_PORT:-5173})
 $(timeout 3 curl -s "http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health" >/dev/null 2>&1 && echo "✅" || echo "❌") NPU Worker: Running on VM2 (${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081})
 $(timeout 3 curl -s "http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}/health" >/dev/null 2>&1 && echo "✅" || echo "❌") AI Stack: Running on VM4 (${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080})
-$(timeout 3 curl -s "http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health" >/dev/null 2>&1 && echo "✅" || echo "❌") Browser: Running on VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000})
+$(timeout 3 curl -s "http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health" >/dev/null 2>&1 && echo "✅" || echo "❌") Browser: Running on VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001})
 
 ARCHITECTURE VIOLATIONS:
 - Local Redis instances: $(pgrep redis-server >/dev/null && echo "VIOLATION: Found local Redis" || echo "None detected")
@@ -169,8 +173,8 @@ curl -s "http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:
 echo -n "  AI Stack (${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}): "
 curl -s "http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}/health" >/dev/null 2>&1 && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
 
-echo -n "  Browser (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}): "
-curl -s "http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health" >/dev/null 2>&1 && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
+echo -n "  Browser (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}): "
+curl -s "http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health" >/dev/null 2>&1 && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
 
 echo ""
 success "AutoBot architecture issues addressed!"

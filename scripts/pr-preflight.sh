@@ -34,7 +34,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-REPO_ROOT=$(git rev-parse --show-toplevel) || exit 2
+# shellcheck source=scripts/lib/git-root.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh" || exit 2
+REPO_ROOT=$(git_repo_root) || exit 2
 cd "$REPO_ROOT" || exit 2
 
 BASE="${PREFLIGHT_BASE:-origin/Dev_new_gui}"
@@ -81,11 +83,44 @@ section() { printf '\n%s\n' "$1"; }
 section "interpreter"
 
 if [ "$PY_SOURCE" = "CI-parity venv" ]; then
-  pass "python $PY_VERSION from the CI-parity venv"
+  # "from the CI-parity venv" is a claim about the PACKAGES, not the path. The
+  # venv reconciles on every setup run now, but it can still go stale between
+  # those runs, and an unqualified ok next to a floor report listing
+  # 21 shortfalls said two contradictory things at once (#15130). Ask that
+  # script -- in --check mode, so preflight never installs anything -- and let
+  # the answer decide which of the two lines this is.
+  #
+  # Reported, not gated -- the same call #15091 made. A stale venv is still a
+  # far better interpreter than the system one, and failing preflight for a
+  # condition unrelated to the diff teaches people to ignore preflight. The
+  # detail is left to the floor report immediately below; this line only has
+  # to stop claiming parity it does not have.
+  if scripts/setup-ci-parity-env.sh --check >/dev/null 2>&1; then
+    pass "python $PY_VERSION from the CI-parity venv"
+  else
+    note "python $PY_VERSION from the CI-parity venv -- but the venv is STALE (#15130)"
+    note "it no longer matches requirements-ci.txt / requirements-ci-test.txt"
+    note "reconcile it: scripts/setup-ci-parity-env.sh"
+  fi
 else
   note "python $PY_VERSION from the system python3 -- CI runs 3.14 (#13573)"
   note "black skips its AST safety check on an older interpreter; build parity with:"
   note "    scripts/setup-ci-parity-env.sh"
+fi
+
+# The interpreter is only half of it. An environment whose PACKAGES are older
+# than the repo declares passes every gate below and still disagrees with CI,
+# because CI installs the declared set. #14998 spent a diagnosis cycle on a
+# guard that read 26 routes here and 3 there, purely from a fastapi delta.
+# Reported, never fatal (#15091) -- exit 2 means the check itself broke.
+if ! FLOOR_REPORT=$("$PY" pipeline-scripts/check_dependency_floors.py 2>&1); then
+  fail "dependency floor check did not run: $FLOOR_REPORT"
+elif printf '%s' "$FLOOR_REPORT" | grep -q 'all satisfied'; then
+  pass "$(printf '%s' "$FLOOR_REPORT" | head -1)"
+else
+  while IFS= read -r line; do note "$line"; done <<EOF_FLOORS
+$FLOOR_REPORT
+EOF_FLOORS
 fi
 
 # ---------------------------------------------------------------- branch
@@ -98,7 +133,7 @@ case "$BRANCH" in
   *) pass "branch '$BRANCH' is not protected" ;;
 esac
 
-if [ "$(git rev-parse --show-toplevel)" = "$(git rev-parse --git-common-dir | xargs dirname 2>/dev/null)" ]; then
+if [ "$(git_repo_root)" = "$(git rev-parse --git-common-dir | xargs dirname 2>/dev/null)" ]; then
   note "this looks like the main checkout, not a worktree"
 fi
 
@@ -176,7 +211,12 @@ if [ -n "$BODY_FILE" ]; then
       fi
     done
 
-    # Mirrors .github/workflows/pr-issue-validation.yml.
+    # Mirrors .github/workflows/pr-issue-validation.yml, with one deliberate
+    # difference: #14241 lets a FORK PR override the branch-derived issue with an
+    # explicit `Closes #N` in the body. This script takes --issue explicitly, so
+    # it has no branch to derive from and no fork/same-repo distinction to make.
+    # A fork contributor relying on that relaxation therefore sees a FAIL here for
+    # a check CI will pass -- a false negative, not a false accept.
     if printf '%s' "$BODY" \
       | grep -iqE "(resolves|closes|fixes|refs|references|part of)[[:space:]]+(#?[0-9]+|MVA-[0-9]+)"; then
       pass "carries a close/refs keyword"
@@ -248,10 +288,28 @@ else
     # That produced failures on pre-existing findings in excluded trees
     # (code_analysis, tools, scripts, tests...) that CI never sees. Drop the same
     # directories here so the gate matches the gate it is meant to predict.
-    FLAKE_EXCLUDES=$(awk '/^exclude *=/{f=1;next} /^[a-z_-]+ *=/{f=0} f' .flake8 \
-                     | sed 's/#.*//' | tr -d ' ,' | grep -vE '^\*|^$' | tr '\n' '|' | sed 's/|$//')
-    mapfile -t PY_LINT < <(printf '%s\n' "${PY[@]}" \
-                           | grep -vE "(^|/)(${FLAKE_EXCLUDES})(/|$)" || true)
+    # #14419: the list now carries two shapes and they are dropped differently.
+    # A bare name (build/runtime artifact directories only) is matched by flake8
+    # against a path's basename, so it prunes at any depth. An anchored entry
+    # ends in `/` and prunes only that path. Treating an anchored entry as a
+    # bare component would drop nothing and make this gate stricter than CI
+    # again -- the exact #13521 regression the block exists to prevent.
+    FLAKE_ENTRIES=$(awk '/^exclude *=/{f=1;next} /^[a-z_-]+ *=/{f=0} f' .flake8 \
+                    | sed 's/#.*//' | tr ',' '\n' | tr -d ' ' | grep -vE '^\*|^$')
+    FLAKE_BARE=$(printf '%s\n' "$FLAKE_ENTRIES" | grep -v '/' | tr '\n' '|' | sed 's/|$//')
+    FLAKE_ANCHORED=$(printf '%s\n' "$FLAKE_ENTRIES" | grep '/' | tr '\n' '|' | sed 's/|$//')
+    mapfile -t PY_LINT < <(printf '%s\n' "${PY[@]}")
+    if [ -n "$FLAKE_BARE" ]; then
+      mapfile -t PY_LINT < <(printf '%s\n' "${PY_LINT[@]}" | grep -vE "(^|/)(${FLAKE_BARE})(/|$)" || true)
+    fi
+    if [ -n "$FLAKE_ANCHORED" ]; then
+      mapfile -t PY_LINT < <(printf '%s\n' "${PY_LINT[@]}" | grep -vE "^(${FLAKE_ANCHORED})" || true)
+    fi
+    # An empty array round-trips through printf as one empty line; drop it so
+    # the count below means "nothing to lint" rather than "one blank path".
+    if [ "${#PY_LINT[@]}" -eq 1 ] && [ -z "${PY_LINT[0]}" ]; then
+      PY_LINT=()
+    fi
 
     if [ "${#PY_LINT[@]}" -eq 0 ]; then
       note "flake8 -- every changed Python file is in .flake8's exclude list"

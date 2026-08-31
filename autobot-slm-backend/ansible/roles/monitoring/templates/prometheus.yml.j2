@@ -42,7 +42,15 @@ scrape_configs:
     metrics_path: /metrics
     scheme: http
 
-  # Node exporters on all managed fleet nodes (auto-populated from inventory)
+  # Node exporters on all managed fleet nodes (auto-populated from inventory).
+  #
+  # #14212: this is standard node_exporter (CPU/mem/disk/network) — it does NOT
+  # carry autobot_cgroup_memory_* (autobot_shared/monitoring/metrics/
+  # cgroup_memory.py registers only into the autobot-backend and slm-backend
+  # jobs below). So ServiceMemoryThrottled/ServiceMemoryHeadroomLow
+  # (autobot-monitoring/alerts-cgroup-memory.yml) can only ever fire for units
+  # on THOSE two hosts, never for a service that runs only on one of these
+  # fleet nodes.
   - job_name: "node"
     static_configs:
       - targets:
@@ -53,14 +61,46 @@ scrape_configs:
           - "localhost:{{ node_exporter_port }}"
 {% endif %}
 
-  # AutoBot backend metrics (HTTPS with self-signed cert, issue #944)
+  # AutoBot backend metrics — the target depends on TOPOLOGY (#14315).
+  #
+  # uvicorn is hard-bound to 127.0.0.1 (roles/backend/defaults/main.yml:24), so
+  # its port is reachable only from the same host. nginx on backend_nginx_port
+  # is the only LAN-facing entry — EXCEPT when co-located, where #2829 tears
+  # that standalone vhost down because SLM's own nginx proxies to uvicorn
+  # directly.
+  #
+  # So neither target is universally right, and picking one breaks the other
+  # topology with an identical "connection refused". The original :8443 was
+  # correct for a distributed fleet and wrong on this co-located host; scraping
+  # 8001 unconditionally would have inverted that.
+  #
+  # The branch reads a fact this role resolves for ITSELF, in tasks/prometheus.yml.
+  # Branching directly on `slm_colocated_frontend` — the variable the backend
+  # role uses for the same reachability decision — would have been wrong here:
+  # it is `set_fact`-ed by the slm_manager role, so it is in scope only when a
+  # full provisioning play runs both roles on this host. A monitoring-only
+  # redeploy (deploy-monitoring.yml, which is what the role registry runs for a
+  # per-role push) never executes slm_manager, so the variable would be
+  # undefined, `default(false)` would fire, and a co-located host would silently
+  # regress to the unreachable target on every targeted update.
+{% if _backend_metrics_on_loopback | default(false) | bool %}
+  # Co-located: the standalone nginx vhost is gone; uvicorn is on loopback.
   - job_name: "autobot-backend"
     static_configs:
-      - targets: ["{{ backend_host | default(infrastructure.hosts.backend if infrastructure is defined else '127.0.0.1') }}:8443"]
+      - targets: ["localhost:{{ backend_port }}"]
+    metrics_path: /api/metrics/prometheus
+    scheme: http
+{% else %}
+  # Distributed: uvicorn is loopback-only on a remote host, so the TLS front is
+  # the only reachable entry. Self-signed, hence insecure_skip_verify (#944).
+  - job_name: "autobot-backend"
+    static_configs:
+      - targets: ["{{ backend_host | default(infrastructure.hosts.backend if infrastructure is defined else '127.0.0.1') }}:{{ backend_nginx_port }}"]
     metrics_path: /api/metrics/prometheus
     scheme: https
     tls_config:
       insecure_skip_verify: true
+{% endif %}
 
   # Redis exporter (if available)
   - job_name: "redis"

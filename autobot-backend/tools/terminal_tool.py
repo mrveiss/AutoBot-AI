@@ -15,10 +15,20 @@ Security Integration:
 - User interrupt capability
 """
 
+import threading
 from typing import Any, Dict
 
-from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from services.agent_terminal.errors import (
+    POST_EXECUTION_FAILED_CODE,
+    POST_EXECUTION_FAILED_STATUS,
+    SESSION_SETUP_FAILED_CODE,
+    PostExecutionError,
+    execution_failed_response,
+    post_execution_failed_response,
+    post_execution_guard,
+)
+from tools import terminal_backend_client, terminal_tool_schema
 
 logger = get_logger(__name__)
 
@@ -162,54 +172,162 @@ class TerminalTool:
         return session_id
 
     def _format_execution_result(self, result: Dict[str, Any], command: str, description: str | None) -> Dict[str, Any]:
-        """Format command execution result for agent response."""
-        if result.get("status") == "pending_approval":
-            return {
-                "status": "pending_approval",
-                "message": "Command requires user approval before execution",
-                "command": command,
-                "risk": result.get("risk"),
-                "reasons": result.get("reasons"),
-                "description": description,
-                "approval_ui_message": (
-                    f"Agent wants to execute: `{command}`\n"
-                    f"Risk level: {result.get('risk')}\n"
-                    f"Reasons: {', '.join(result.get('reasons', []))}\n"
-                    f"Approve execution?"
-                ),
-            }
-        elif result.get("status") == "error":
-            return {"status": "error", "error": result.get("error"), "command": command}
-        else:
-            return {
-                "status": "success",
-                "command": command,
-                "stdout": result.get("stdout", ""),
-                "stderr": result.get("stderr", ""),
-                "return_code": result.get("return_code", 0),
-                "security": result.get("security", {}),
-            }
+        """Format command execution result for agent response.
+
+        A dispatcher over the four outcomes the service can report. Each branch
+        is its own helper so that adding an outcome cannot be done by widening
+        an existing one -- which is how ``completed_with_errors`` came to be
+        reported as a clean success (#15110).
+        """
+        status = result.get("status")
+        if status == "pending_approval":
+            return self._format_pending_approval(result, command, description)
+        elif status == "error":
+            return self._format_command_failure(result, command)
+        elif status == POST_EXECUTION_FAILED_STATUS:
+            return self._format_post_execution_failure(result, command)
+        return {
+            "status": "success",
+            "command": command,
+            "stdout": result.get("stdout", ""),
+            "stderr": result.get("stderr", ""),
+            "return_code": result.get("return_code", 0),
+            "security": result.get("security", {}),
+        }
+
+    @staticmethod
+    def _format_pending_approval(result: Dict[str, Any], command: str, description: str | None) -> Dict[str, Any]:
+        """The command has not run: a human has to allow it first."""
+        return {
+            "status": "pending_approval",
+            "message": "Command requires user approval before execution",
+            "command": command,
+            "risk": result.get("risk"),
+            "reasons": result.get("reasons"),
+            "description": description,
+            "approval_ui_message": (
+                f"Agent wants to execute: `{command}`\n"
+                f"Risk level: {result.get('risk')}\n"
+                f"Reasons: {', '.join(result.get('reasons', []))}\n"
+                f"Approve execution?"
+            ),
+        }
+
+    @staticmethod
+    def _format_command_failure(result: Dict[str, Any], command: str) -> Dict[str, Any]:
+        """The command ran and failed. What it printed is the failure report.
+
+        #14148: never emit a ``None`` under a key callers read with a
+        ``.get(key, default)`` -- the default will not apply and the ``None``
+        travels onward. Fall back through the fields the PTY result actually
+        carries before giving up.
+
+        #14141: carry stdout/stderr/return_code through, mirroring the success
+        branch. This used to return only status, error and command, so every
+        field describing WHAT the command did was discarded -- and
+        ``_build_pty_result`` sets ``stderr: ""`` (the PTY combines the streams)
+        and no ``error`` key at all, so the message always degraded to the
+        literal fallback and the failure report itself never reached the model.
+        A test runner writing "47 failed, 200 passed" to stdout and exiting 1
+        arrived at the continuation prompt as a generic placeholder.
+        """
+        return {
+            "status": "error",
+            "error": result.get("error") or result.get("stderr") or "Command failed with no error detail",
+            "command": command,
+            "stdout": result.get("stdout", ""),
+            "stderr": result.get("stderr", ""),
+            "return_code": result.get("return_code", 1),
+        }
+
+    @staticmethod
+    def _format_post_execution_failure(result: Dict[str, Any], command: str) -> Dict[str, Any]:
+        """A command that ran, and a step after it that did not (#15110).
+
+        This status had no branch and fell through to the success branch above.
+        That was right about the output -- stdout, stderr and return code were
+        carried -- and silent about the failure, so the model was told the run
+        was clean while ``post_execution_error`` was dropped.
+
+        Per #14148 no key here may carry a ``None``: every fallback resolves to
+        a value a caller's ``.get(key, default)`` would otherwise not replace.
+        """
+        detail = result.get("post_execution_error") or result.get("error") or "post-execution step failed"
+        return {
+            "status": POST_EXECUTION_FAILED_STATUS,
+            "error_code": POST_EXECUTION_FAILED_CODE,
+            "command": command,
+            "command_status": result.get("command_status") or "success",
+            "stdout": result.get("stdout", ""),
+            "stderr": result.get("stderr", ""),
+            "return_code": result.get("return_code", 0),
+            "security": result.get("security", {}),
+            "post_execution_error": detail,
+            "error": f"Command ran; a post-execution step failed: {detail}",
+        }
 
     async def execute_command(
         self, conversation_id: str, command: str, description: str | None = None
     ) -> Dict[str, Any]:
-        """Execute a command in the agent's terminal session with auto-session recovery."""
+        """Execute a command in the agent's terminal session with auto-session recovery.
+
+        #15110: one ``except Exception`` used to wrap session recovery, the
+        service call *and* the formatting after it, so "no terminal session
+        could be created", "the command failed" and "the formatter raised" all
+        reached the model as the same four words. Each stage now closes on its
+        own outcome, and the `TypeError` / `AttributeError` the service
+        deliberately re-raises (#15073) travels on rather than being relabelled
+        a failed command.
+        """
         if not self.agent_terminal_service:
             return {"status": "error", "error": "Agent terminal service not available"}
 
         try:
             session_id = await self._ensure_active_session(conversation_id)
+        except Exception as exc:
+            logger.error("No terminal session for conversation %s", conversation_id, exc_info=True)
+            return self._session_setup_failed(command, exc)
+
+        return await self._run_and_format(session_id, command, description)
+
+    @staticmethod
+    def _session_setup_failed(command: str, exc: BaseException) -> Dict[str, Any]:
+        """The command never ran: there was nowhere to run it.
+
+        Named separately from an execution failure because the two send whoever
+        reads them to different places -- the session store and the PTY, versus
+        the command itself.
+        """
+        return {
+            "status": "error",
+            "error": f"No terminal session could be established: {type(exc).__name__}: {exc}",
+            "error_code": SESSION_SETUP_FAILED_CODE,
+            "command": command,
+        }
+
+    async def _run_and_format(self, session_id: str, command: str, description: str | None) -> Dict[str, Any]:
+        """Execute, then format, distinguishing a failed command from failed bookkeeping.
+
+        ``post_execution_guard`` opens only once the service has returned, so
+        anything it catches is by construction a defect in what happens after
+        the command ran -- the same split ``services/agent_terminal/service.py``
+        makes one layer down, through the same helper rather than a third copy
+        of it.
+        """
+        try:
             result = await self.agent_terminal_service.execute_command(
                 session_id=session_id, command=command, description=description
             )
-            return self._format_execution_result(result, command, description)
-        except Exception as e:
-            logger.error("Error executing command: %s", e, exc_info=True)
-            return {
-                "status": "error",
-                "error": "Command execution failed",
-                "command": command,
-            }
+            with post_execution_guard(result):
+                return self._format_execution_result(result, command, description)
+        except PostExecutionError as exc:
+            logger.error("Command ran; formatting its result failed: %s", exc, exc_info=True)
+            return post_execution_failed_response(command, exc)
+        except (TypeError, AttributeError):
+            raise
+        except Exception:
+            logger.error("Terminal command execution error", exc_info=True)
+            return execution_failed_response(command)
 
     async def get_session_info(self, conversation_id: str) -> Dict[str, Any]:
         """
@@ -255,47 +373,10 @@ class TerminalTool:
                 "error": "Failed to retrieve session info",
             }
 
-    async def _list_terminal_sessions(self, backend_url: str) -> tuple:
-        """List terminal sessions from backend. Returns (sessions_list, error_dict or None)."""
-        import aiohttp
-
-        http_client = get_http_client()
-        async with await http_client.get(
-            f"{backend_url}/api/terminal/sessions",
-            timeout=aiohttp.ClientTimeout(total=5.0),
-        ) as response:
-            if response.status != 200:
-                return [], {
-                    "status": "error",
-                    "error": "Failed to list terminal sessions",
-                }
-            sessions_data = await response.json()
-            return sessions_data.get("sessions", []), None
-
-    async def _fetch_session_history(self, backend_url: str, session_id: str) -> tuple:
-        """Fetch command history for a session. Returns (history_data, error_dict or None)."""
-        import aiohttp
-
-        http_client = get_http_client()
-        async with await http_client.get(
-            f"{backend_url}/api/terminal/sessions/{session_id}/history",
-            timeout=aiohttp.ClientTimeout(total=5.0),
-        ) as response:
-            if response.status != 200:
-                return None, {
-                    "status": "error",
-                    "error": "Failed to retrieve command history",
-                }
-            return await response.json(), None
-
     async def get_user_command_history(self, conversation_id: str) -> Dict[str, Any]:
         """Get command history from user's interactive terminal session (Issue #281 refactor)."""
         try:
-            from constants.network_constants import NetworkConstants
-
-            backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-
-            sessions, error = await self._list_terminal_sessions(backend_url)
+            sessions, error = await terminal_backend_client.list_terminal_sessions()
             if error:
                 return error
 
@@ -310,7 +391,7 @@ class TerminalTool:
                 }
 
             user_session_id = user_sessions[0]["session_id"]
-            history_data, error = await self._fetch_session_history(backend_url, user_session_id)
+            history_data, error = await terminal_backend_client.fetch_session_history(user_session_id)
             if error:
                 return error
 
@@ -374,30 +455,10 @@ class TerminalTool:
                 "error": "Failed to close session",
             }
 
-    async def _query_agent_terminal_sessions(self, conversation_id: str) -> list:
-        """Query agent terminal API for sessions linked to conversation. Returns empty list on error."""
-        import aiohttp
-
-        from constants.network_constants import NetworkConstants
-
-        # CRITICAL: Use /api/agent-terminal/sessions (not /api/terminal/sessions)
-        backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-
-        http_client = get_http_client()
-        async with await http_client.get(
-            f"{backend_url}/api/agent-terminal/sessions",
-            params={"conversation_id": conversation_id},
-            timeout=aiohttp.ClientTimeout(total=5.0),
-        ) as response:
-            if response.status == 200:
-                data = await response.json()
-                return data.get("sessions", [])
-        return []
-
     async def _restore_session_mapping_from_db(self, conversation_id: str) -> str | None:
         """Restore session ID from database when active_sessions dict is empty (Issue #281 refactor)."""
         try:
-            sessions = await self._query_agent_terminal_sessions(conversation_id)
+            sessions = await terminal_backend_client.query_agent_terminal_sessions(conversation_id)
 
             if sessions:
                 session_id = sessions[0].get("session_id")
@@ -414,33 +475,6 @@ class TerminalTool:
             logger.debug("Failed to query database for session: %s", e)
 
         return None
-
-    async def _fetch_command_messages(self, conversation_id: str) -> list:
-        """Fetch command-related messages from chat history. Returns empty list on error."""
-        import aiohttp
-
-        from constants.network_constants import NetworkConstants
-
-        backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-
-        http_client = get_http_client()
-        async with await http_client.get(
-            f"{backend_url}/api/chats/{conversation_id}/messages",
-            timeout=aiohttp.ClientTimeout(total=10.0),
-        ) as response:
-            if response.status != 200:
-                logger.warning("Failed to fetch chat history for restoration: %s", response.status)
-                return []
-
-            data = await response.json()
-            messages = data.get("messages", [])
-
-        # Filter for command-related messages
-        return [
-            msg
-            for msg in messages
-            if msg.get("metadata", {}).get("type") == "command" or "command" in msg.get("content", "").lower()[:50]
-        ]
 
     def _build_restoration_header(self, conversation_id: str, command_count: int) -> str:
         """Build the restoration header string for terminal display."""
@@ -475,7 +509,7 @@ class TerminalTool:
     async def _restore_terminal_history(self, conversation_id: str, session_id: str) -> None:
         """Restore command history to terminal for persistent log (Issue #281 refactor)."""
         try:
-            command_messages = await self._fetch_command_messages(conversation_id)
+            command_messages = await terminal_backend_client.fetch_command_messages(conversation_id)
 
             if not command_messages:
                 logger.info("No command history to restore for %s", conversation_id)
@@ -498,69 +532,14 @@ class TerminalTool:
         except Exception as e:
             logger.error("Error restoring terminal history: %s", e, exc_info=True)
 
-    def _get_method_descriptions(self) -> Dict[str, Any]:
-        """Get method descriptions for tool documentation."""
-        return {
-            "create_session": {
-                "description": "Create a new terminal session for this conversation",
-                "parameters": {
-                    "agent_id": "Unique identifier for the agent",
-                    "conversation_id": "Chat conversation ID",
-                    "agent_role": "Role (chat_agent, automation_agent, system_agent, admin_agent)",
-                    "host": "Target host (main, frontend, npu-worker, redis, ai-stack, browser)",
-                },
-                "returns": "Session creation result",
-            },
-            "execute_command": {
-                "description": "Execute a command in the terminal session",
-                "parameters": {
-                    "conversation_id": "Chat conversation ID",
-                    "command": "Command to execute",
-                    "description": "Optional description of command purpose",
-                },
-                "returns": "Execution result or pending approval status",
-            },
-            "get_session_info": {
-                "description": "Get information about the terminal session",
-                "parameters": {"conversation_id": "Chat conversation ID"},
-                "returns": "Session information",
-            },
-            "close_session": {
-                "description": "Close the terminal session",
-                "parameters": {"conversation_id": "Chat conversation ID"},
-                "returns": "Close result",
-            },
-        }
-
-    def _get_security_features(self) -> Dict[str, str]:
-        """Get security features documentation."""
-        return {
-            "risk_assessment": "All commands assessed for security risk",
-            "approval_workflow": "MODERATE+ risk commands require user approval",
-            "user_control": "Users can interrupt and take control at any time",
-            "audit_logging": "All commands logged with security metadata",
-        }
-
     def get_tool_description(self) -> Dict[str, Any]:
         """Get tool description for agent use (Issue #281 refactor)."""
-        return {
-            "name": "terminal_tool",
-            "description": "Secure terminal access for command execution with approval workflow",
-            "methods": self._get_method_descriptions(),
-            "security_features": self._get_security_features(),
-            "usage_example": {
-                "step1": "create_session(agent_id='chat_agent_1', conversation_id='abc123')",
-                "step2": "execute_command(conversation_id='abc123', command='ls -la')",
-                "step3": "close_session(conversation_id='abc123')",
-            },
-        }
+        return terminal_tool_schema.tool_description()
 
 
 # Global instance (will be initialized with service)
-import threading as _threading_terminal
-
 _terminal_tool_instance: TerminalTool | None = None
-_terminal_tool_lock = _threading_terminal.Lock()
+_terminal_tool_lock = threading.Lock()
 
 
 def get_terminal_tool(agent_terminal_service=None) -> TerminalTool:

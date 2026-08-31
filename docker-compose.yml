@@ -223,6 +223,16 @@ services:
     environment:
       - AUTOBOT_ENVIRONMENT=production
       - AUTOBOT_DEPLOYMENT_MODE=local
+      # #14081/#14110 security review: with no AUTOBOT_BASE_DIR set, the
+      # canonical secrets-store/JWT-key/project-state location
+      # (ssot_config.path.data_path) resolved to /opt/autobot/data — the
+      # container's ephemeral writable layer, NOT the persistent
+      # backend_data volume mounted at /app/data below. The one-time
+      # migration was moving real secrets OFF the volume and deleting the
+      # source, so the next recreate destroyed them. Pinning this to the
+      # volume's mount point makes canonical == legacy for this service, so
+      # the migration correctly no-ops instead of relocating anything.
+      - AUTOBOT_DATA_DIR=${AUTOBOT_DATA_DIR:-/app/data}
       # No AI Stack VM ships with compose — disable the poll to stop the per-boot
       # connection-error warning flood (#9782). Set to true if you run an AI Stack.
       - AUTOBOT_AI_STACK_ENABLED=${AUTOBOT_AI_STACK_ENABLED:-false}
@@ -364,6 +374,13 @@ services:
     environment:
       - AUTOBOT_ENVIRONMENT=production
       - AUTOBOT_DEPLOYMENT_MODE=local
+      # #14081/#14110 security review: this service's working_dir differs
+      # from autobot-backend's, so its own legacy CWD-relative resolver
+      # would disagree with the backend's — pinning canonical here too
+      # means both converge on the same persistent backend_data volume
+      # (see autobot-backend's AUTOBOT_DATA_DIR comment above for the full
+      # data-loss mechanism this closes).
+      - AUTOBOT_DATA_DIR=${AUTOBOT_DATA_DIR:-/app/data}
       # No AI Stack VM ships with compose — disable the poll to stop the per-boot
       # connection-error warning flood (#9782). Set to true if you run an AI Stack.
       - AUTOBOT_AI_STACK_ENABLED=${AUTOBOT_AI_STACK_ENABLED:-false}
@@ -469,6 +486,12 @@ services:
     environment:
       - AUTOBOT_ENVIRONMENT=production
       - AUTOBOT_DEPLOYMENT_MODE=local
+      # #14081/#14110 security review: kept consistent with autobot-backend
+      # and autobot-worker so any secrets-store access this process makes
+      # (task modules it loads may import services.secrets_service)
+      # resolves to the same persistent backend_data volume, not the
+      # container's ephemeral writable layer.
+      - AUTOBOT_DATA_DIR=${AUTOBOT_DATA_DIR:-/app/data}
       # No AI Stack VM ships with compose — disable the poll to stop the per-boot
       # connection-error warning flood (#9782). Set to true if you run an AI Stack.
       - AUTOBOT_AI_STACK_ENABLED=${AUTOBOT_AI_STACK_ENABLED:-false}

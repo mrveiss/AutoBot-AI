@@ -14,7 +14,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
 
 # Load SSOT configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" || {
+    echo "FATAL: ${SCRIPT_DIR}/../lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
 
 # Colors for output
 RED='\033[0;31m'
@@ -56,7 +60,7 @@ echo "  Redis VM: ${AUTOBOT_REDIS_HOST}:${AUTOBOT_REDIS_PORT:-6379}"
 echo "  Frontend VM: ${AUTOBOT_FRONTEND_HOST}:${AUTOBOT_FRONTEND_PORT:-5173}"
 echo "  NPU Worker VM: ${AUTOBOT_NPU_WORKER_HOST}:${AUTOBOT_NPU_WORKER_PORT:-8081}"
 echo "  AI Stack VM: ${AUTOBOT_AI_STACK_HOST}:${AUTOBOT_AI_STACK_PORT:-8080}"
-echo "  Browser VM: ${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
+echo "  Browser VM: ${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
 
 # Test connectivity to remote VMs
 echo ""
@@ -75,7 +79,7 @@ VMS_TO_TEST=(
     "Frontend:${AUTOBOT_FRONTEND_HOST}:${AUTOBOT_FRONTEND_PORT:-5173}"
     "NPU Worker:${AUTOBOT_NPU_WORKER_HOST}:${AUTOBOT_NPU_WORKER_PORT:-8081}"
     "AI Stack:${AUTOBOT_AI_STACK_HOST}:${AUTOBOT_AI_STACK_PORT:-8080}"
-    "Browser:${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
+    "Browser:${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
 )
 
 for vm_test in "${VMS_TO_TEST[@]}"; do
@@ -157,7 +161,7 @@ echo "  Frontend: http://${AUTOBOT_FRONTEND_HOST}:${AUTOBOT_FRONTEND_PORT:-5173}
 echo "  Redis Insight: http://${AUTOBOT_REDIS_HOST}:8002"
 echo "  NPU Worker: http://${AUTOBOT_NPU_WORKER_HOST}:${AUTOBOT_NPU_WORKER_PORT:-8081}"
 echo "  AI Stack: http://${AUTOBOT_AI_STACK_HOST}:${AUTOBOT_AI_STACK_PORT:-8080}"
-echo "  Browser Service: http://${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
+echo "  Browser Service: http://${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
 echo "  Ollama: http://${AUTOBOT_OLLAMA_HOST:-127.0.0.1}:${AUTOBOT_OLLAMA_PORT:-11434}"
 echo "  VNC Desktop: http://127.0.0.1:${AUTOBOT_VNC_PORT:-6080}"
 echo ""

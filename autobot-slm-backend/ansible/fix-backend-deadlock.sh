@@ -103,9 +103,11 @@ else
     echo "⚠ Health check timeout (backend may still be initializing)"
 fi
 
-# Check for deadlock
+# Check for deadlock. Routed through the fixed root-owned wrapper (#14412
+# review) -- sudoers names only this exact, read-only diagnostic
+# invocation, never a bare lsof enumerating every process on the host.
 echo "Checking for deadlock (SYN_SENT connections)..."
-SYN_SENT=$(sudo lsof -i :8443 -n 2>/dev/null | grep SYN_SENT || true)
+SYN_SENT=$(sudo /opt/autobot/bin/autobot-cleanup-port diagnose-port backend-tls 2>/dev/null | grep SYN_SENT || true)
 if [ -z "$SYN_SENT" ]; then
     echo "✓ No deadlock detected"
 else

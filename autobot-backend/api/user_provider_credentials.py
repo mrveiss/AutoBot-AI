@@ -21,7 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user_id, get_db_session
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from models.secret import Secret, SecretScope, SecretType
+from autobot_shared.status_enums import SecretType
+from models.secret import Secret, SecretScope
 from services.secrets_service import SecretsService
 
 logger = get_logger(__name__)

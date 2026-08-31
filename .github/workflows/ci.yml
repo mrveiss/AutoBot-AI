@@ -11,30 +11,31 @@ on:
     # regressions were only discovered once already on the shared branch
     # (#10691). main kept for promotion PRs.
     branches: [ main, Dev_new_gui ]
-    # #13388: SAFE because this workflow publishes NO required status context.
-    # Branch protection on Dev_new_gui requires exactly ten contexts and none of
-    # them is produced here (`python-suite` is explicitly not one of them —
-    # #13162), so a run that is never created cannot leave a pull request waiting
-    # on a context that never reports. Any workflow here that DOES publish one of
-    # the ten deliberately has no `pull_request.paths` filter.
     #
-    # This list is the exact UNION of the `python` and `frontend` filters in the
-    # `changes` job below, which together gate every job that does real work
-    # (`python-shard`, `python-suite`, `frontend-tests`; `deployment-check` is
-    # branch-gated to push and `notify` only summarises). So a pull request whose
-    # files match none of these already ran nothing but `changes` and `notify` —
-    # this filter removes the empty run itself, not any test coverage.
+    # NO `pull_request.paths` FILTER — REMOVED BY #14353, DELIBERATE.
     #
-    # Keep in sync with the `changes` job filters below: a pattern added there
-    # must be added here too, or the run that would evaluate it never starts.
-    paths:
-      - '**/*.py'
-      - '**/requirements*.txt'
-      - 'requirements-ci/**'
-      - 'pyproject.toml'
-      - 'autobot_shared/pyproject.toml'
-      - 'autobot-frontend/**'
-      - '.github/workflows/ci.yml'
+    # #13388 added one, and its safety argument was explicit: "SAFE because this
+    # workflow publishes NO required status context ... Any workflow here that
+    # DOES publish one of the ten deliberately has no `pull_request.paths`
+    # filter." That premise is exactly what this change retires — `python-suite`
+    # is produced by this workflow and is being promoted to a required context,
+    # so #13388's own rule now mandates removing the filter.
+    #
+    # The failure it prevents is a deadlock, not a missed test. The filter and
+    # `.github/filters/python-paths.yml` were not identical: a pull request
+    # touching only the filter file or the shim workflow matched the filter but
+    # not this trigger, so ci.yml never started, while the shim read the filter,
+    # computed `python == 'true'` and skipped. NEITHER workflow reported
+    # `python-suite` and the pull request waited forever on a context nobody
+    # could produce.
+    #
+    # Keeping the two lists as a maintained superset was the alternative and is
+    # the weaker option: it re-arms the same trap on every future edit to the
+    # path set. `frontend-test.yml` and `code-quality.yml` both already dropped
+    # their pull_request.paths for this precise reason, and both say so inline.
+    #
+    # Cost is one `changes` job on pull requests that touch no gated path; every
+    # job doing real work stays gated on `changes` below and self-skips.
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -68,21 +69,23 @@ jobs:
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
-      python: ${{ steps.filter.outputs.python }}
+      python: ${{ steps.filter-python.outputs.python }}
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
       - uses: actions/checkout@v7
+      # #14353: the Python set moved to a shared file so the shim in
+      # python-required-context.yml evaluates the identical patterns. The two
+      # `if:` conditions are exact complements; a second inline copy here could
+      # drift, and the direction that matters is silent — the shim reporting the
+      # required context green while the real suite never ran.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: filter-python
+        with:
+          filters: .github/filters/python-paths.yml
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
           filters: |
-            python:
-              - '**/*.py'
-              - '**/requirements*.txt'
-              - 'requirements-ci/**'
-              - 'pyproject.toml'
-              - 'autobot_shared/pyproject.toml'
-              - '.github/workflows/ci.yml'
             frontend:
               - 'autobot-frontend/**'
               - '.github/workflows/ci.yml'
@@ -147,6 +150,57 @@ jobs:
 
     - uses: ./.github/actions/setup-python-suite
 
+    # #13927: repo_tests/promtool_rules_test.py runs `promtool check rules` over
+    # every deployed rule file and `promtool test rules` over every behavioural
+    # suite — and on a GitHub-hosted runner it did NONE of that, because nothing
+    # installed the binary. Four of its ten collected checks skipped, so rule behaviour
+    # was verified by nothing in CI.
+    #
+    # That is not hypothetical: #13909 shipped a recording rule whose `and`
+    # operands were reversed, so ServiceMemoryHeadroomLow compared a byte count
+    # against 0.15 and could never fire. Every Python test passed, because they
+    # asserted substrings of the expr strings. The promtool suite catches it.
+    #
+    # Version pinned to match install-prometheus-stack.sh, so CI validates rules
+    # with the same binary the hosts run.
+    # Cached: the tarball is ~95.7 MB and this job runs 12 shards, so an
+    # uncached download is ~1.15 GB per run of which ~1.05 GB is waste — the
+    # promtool tests collect into exactly one shard. Not gated on the shard
+    # number: which shard they land in is a function of .test_durations and
+    # moves silently.
+    - name: Cache promtool
+      id: promtool-cache
+      uses: actions/cache@v6
+      with:
+        path: /usr/local/bin/promtool
+        key: promtool-${{ runner.os }}-2.47.0
+
+    - name: Install promtool (Prometheus rule validation, #13927)
+      if: steps.promtool-cache.outputs.cache-hit != 'true'
+      run: |
+        set -euo pipefail
+        PROM_VERSION=2.47.0
+        TARBALL="prometheus-${PROM_VERSION}.linux-amd64"
+        # --retry: this step sits in front of the entire Python suite. One
+        # transient CDN 5xx would redden python-shard -> python-suite ->
+        # deployment-check with a message about Prometheus, 12 times over. A PR
+        # about indicators whose red carries no information must not add that.
+        curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 \
+          -o "/tmp/${TARBALL}.tar.gz" \
+          "https://github.com/prometheus/prometheus/releases/download/v${PROM_VERSION}/${TARBALL}.tar.gz"
+        tar xzf "/tmp/${TARBALL}.tar.gz" -C /tmp
+        sudo install -m 0755 "/tmp/${TARBALL}/promtool" /usr/local/bin/promtool
+
+    - name: Require promtool in the rule tests (#13927)
+      # Explicit, rather than keying on the generic CI var: repo_tests also runs
+      # in coverage.yml and test-durations.yml, which are equally "CI" and never
+      # promised the binary. Keying on CI made those emit a fixture error
+      # asserting "a regression in the install step" — a false diagnosis, and
+      # swallowed anyway because both steps end in `|| echo ::warning::`.
+      run: |
+        echo "AUTOBOT_REQUIRE_PROMTOOL=1" >> "$GITHUB_ENV"
+        promtool --version
+
     # Static checks (black / isort / flake8 / bandit) deliberately live in
     # code-quality.yml, NOT here (#13162). They were duplicated across both
     # workflows over the same three trees; code-quality.yml's bandit has no
@@ -185,11 +239,30 @@ jobs:
         # everything outside this shard's group at collection time, and xdist
         # then distributes what remains by scope exactly as before.
         #
-        # pytest-split's default `duration_based_chunks` algorithm cuts the
-        # collected list into CONTIGUOUS chunks, which keeps whole modules
-        # inside one shard. The alternative `least_duration` would scatter
-        # individual tests across shards and split modules — the same
-        # fixture-sharing hazard that made worksteal worse. Do not switch it.
+        # #14111: assignment is `repo_tests/stable_shard.py`, not pytest-split.
+        #
+        # The rule the old note protected still holds and is now enforced by a
+        # test rather than a comment: whole modules stay inside one shard, so
+        # --dist loadscope keeps behaving as it did. `least_duration`, which
+        # scatters individual tests and splits modules, remains the thing not
+        # to do — it is the same fixture-sharing hazard that made worksteal
+        # worse.
+        #
+        # What changed is *stability*, not that rule. pytest-split cut the
+        # COLLECTED LIST into contiguous chunks, so a shard's membership was a
+        # function of that list's order and membership: adding one test file
+        # shifted every downstream boundary and re-dealt every later shard,
+        # reddening PRs on failures nowhere near their diff. It also meant a
+        # checkout missing optional dependencies collected a different set and
+        # so named different tests for the same --group, which is why a shard
+        # failure could not be reproduced locally.
+        #
+        # The replacement hashes each module into one of 512 buckets and maps
+        # buckets to shards from the DURATIONS FILE — an input a PR adding
+        # tests does not touch. Measured on the real file: 1.18x spread by test
+        # count, and zero modules move when one is added, grown or removed.
+        # Regenerating durations is the one operation that legitimately
+        # re-deals, and a test names it so.
         #
         # #13084: two SEPARATE pytest invocations, not one combined session.
         # autobot-backend/ and autobot-slm-backend/ each define top-level
@@ -204,11 +277,27 @@ jobs:
         # They pass — measured at 118 passed — so this is a wiring fix, not a
         # quarantine. scripts/lib/*_test.sh are bash and are covered separately
         # by repo_tests/shell_lib_test.py.
+        # #14986: `.claude/skills/claims-audit` -- 42 tests of the claims-audit skill
+        # that no workflow collected, because pytest.ini's testpaths is an allowlist
+        # and `.claude` was not on it. Six were red against real defects in the
+        # verifiers; all six are fixed and all 42 pass, so this is a wiring fix, not a
+        # quarantine. Named in all four carriers because they are required to agree
+        # (#14917). Narrow on purpose: `.claude/` as a whole is harness territory.
+        # #15051: `autobot-infrastructure/shared/tests` and `libs` were named by no
+        # pytest invocation in any workflow and by no `pytest.ini` `testpaths` entry
+        # -- 17 of their test functions ran nowhere at all, ever (the other 11 of the
+        # 28 originally measured gained a marker since, #14979/#15166, and run in
+        # marker-tests.yml's third invocation instead). Named in all four
+        # `repo_tests`-carrying invocations together so `hook_suites_run_in_ci_test.py`'s
+        # root-set agreement (#14917) stays true; the marker selection below
+        # deselects the marker-carrying tests already covered elsewhere, so nothing
+        # here runs twice within the PR gate.
         python -m pytest \
-          autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts \
+          autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit autobot-infrastructure/shared/tests libs \
           -n auto --dist loadscope \
-          --splits 12 --group ${{ matrix.shard }} \
-          --durations-path .test_durations \
+          -p repo_tests.stable_shard \
+          --shard-splits 12 --shard-group ${{ matrix.shard }} \
+          --shard-durations .test_durations \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
           --durations=25 \
@@ -230,21 +319,28 @@ jobs:
         # trees run in 336s without it and 35m11s with it, while pytest's own
         # --durations reported every one of the 25 slowest tests under 10s. It
         # is the wrong thing to pay for on every PR.
-        # #13637: pytest exits 5 for "no tests collected". Under --splits 12
-        # that is a scheduling artefact rather than a result — .test_durations_slm
-        # describes 1501 tests against 1644 collected, so pytest-split packs
-        # unevenly and the later groups come out empty. Measured: group 1 took
-        # 497 of 1644 while groups 8-12 took none, and `bash -e` then failed the
-        # step, reddening the base branch on runs with zero test failures.
+        # #13637: pytest exits 5 for "no tests collected", which under the old
+        # contiguous packing was a scheduling artefact rather than a result —
+        # .test_durations_slm describes 1501 tests against 1644 collected, so
+        # group 1 took 497 while groups 8-12 took none, and `bash -e` failed the
+        # step on runs with zero test failures.
         #
-        # The empty shard is announced rather than silently swallowed, and 5 is
-        # the only tolerated code. Fixing the packing is the real repair.
+        # #14111 is the repair that note asked for. Measured against the real
+        # .test_durations_slm under the new assignment: 106 modules across all
+        # twelve shards, none empty, 1.22x spread by test count.
+        #
+        # The tolerance is kept anyway, deliberately. It costs nothing, and the
+        # condition it guards is a property of the *module set*, not of the
+        # algorithm: a target that genuinely has fewer modules than shards still
+        # empties one, and that must stay announced rather than red. The empty
+        # shard is printed, and 5 remains the only tolerated code.
         set +e
         python -m pytest \
           autobot-slm-backend \
           -n auto --dist loadscope \
-          --splits 12 --group ${{ matrix.shard }} \
-          --durations-path .test_durations_slm \
+          -p repo_tests.stable_shard \
+          --shard-splits 12 --shard-group ${{ matrix.shard }} \
+          --shard-durations .test_durations_slm \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
           --durations=25 \
@@ -258,22 +354,30 @@ jobs:
         fi
         exit "$status"
 
-    - name: Run integration tests
-      # Shard 1 only — this suite is selected by DIRECTORY, not by the split, so
-      # running it in every shard would execute it twelve times over.
-      # NOTE: `infrastructure/shared/tests/integration` does not currently exist
-      # in the tree, so this step is a no-op echo today (#734 moved the suite and
-      # the path was never updated). Left wired rather than removed so it starts
-      # working again the moment the directory reappears.
-      if: ${{ !cancelled() && matrix.shard == 1 }}
-      run: |
-        echo "Running integration tests..."
-        TEST_DIR="infrastructure/shared/tests/integration"
-        if [ -d "$TEST_DIR" ]; then
-          python -m pytest "$TEST_DIR" -v --tb=short --maxfail=5
-        else
-          echo "::warning::No integration test directory at $TEST_DIR - skipping"
-        fi
+    # RETIRED (#15051). This step named `infrastructure/shared/tests/integration`,
+    # a path #734 moved to `autobot-infrastructure/shared/tests/integration`
+    # without updating this reference — so the `if [ -d "$TEST_DIR" ]` guard
+    # never once ran the pytest inside it, and every shard-1 run since #734
+    # passed on nothing but its own `::warning::`. Quietly, not loudly: the
+    # step exited 0 either way, so a real regression here would have shipped
+    # green forever.
+    #
+    # NOT repointed at the path that exists, because doing so would not
+    # restore a check — it would duplicate one and widen the PR gate by
+    # accident. `autobot-infrastructure/shared/tests` is now a root of the
+    # "Run unit tests" step above (#15051), which already reaches
+    # `.../tests/integration` on this same shard with the correct
+    # `-m "not integration and not slow and not distributed and not
+    # performance"` filter. This step's `python -m pytest "$TEST_DIR" -v
+    # --tb=short --maxfail=5` carried no `-m` at all, so repointing it would
+    # collect that directory a second time AND select the `integration`-marked
+    # tests inside it (`test_architecture_compliance.py`,
+    # `test_distributed_system_integration.py`) into the required, blocking PR
+    # gate — the "separate decision with its own blast radius" #13286's
+    # marker-tests.yml explicitly declines to make inline, and #15051 does not
+    # make it either. Those stay where #13286 puts every marked test:
+    # marker-tests.yml, selected deliberately, not swept in by a directory
+    # check regaining its footing.
 
   # #10691: the PR gate reports one pass/fail context. The historical
   # `python-suite` job id is kept so `deployment-check` and `notify`, which both
@@ -382,7 +486,10 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
-    - name: Set up Python 3.12
+    # #13162: the step was named "Set up Python 3.12" while pinning 3.14. The
+    # version lives in `python-version:` and nowhere else, so the name carries
+    # no version at all rather than a second copy to drift.
+    - name: Set up Python
       uses: actions/setup-python@v7
       with:
         python-version: '3.14'
@@ -448,9 +555,15 @@ jobs:
         PYTHONPATH="autobot-backend:autobot_shared:$PYTHONPATH" \
           python3 -c 'from config import config; print("Configuration system working")'
 
-        # Test core imports
+        # Test core imports.
+        # #14252: this named `security.secure_command_executor`, which has never
+        # existed -- the module is at autobot-backend/secure_command_executor.py,
+        # top level, not inside the `security` package. The step therefore raised
+        # ModuleNotFoundError on every run since #798, so this job was red
+        # continuously and could not report a real import break. It is not a
+        # required context, which is why nothing blocked on it.
         PYTHONPATH="autobot-backend:autobot_shared:$PYTHONPATH" \
-          python3 -c 'from security_layer import SecurityLayer; from security.secure_command_executor import SecureCommandExecutor; from app_factory import create_app; print("Core imports working")'
+          python3 -c 'from security_layer import SecurityLayer; from secure_command_executor import SecureCommandExecutor; from app_factory import create_app; print("Core imports working")'
 
     - name: Generate deployment artifact
       run: |

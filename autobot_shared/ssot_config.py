@@ -62,6 +62,14 @@ from autobot_shared.secret_redaction import RedactedReprMixin
 # isolation twice (#4945, #13092) and both times failed to propagate.
 PROJECT_ROOT = project_root()
 
+
+def default_audit_log_file() -> str:
+    """The ONE definition of the audit-log default (#14070): was ALSO spelled out
+    as ``security_layer._AUDIT_LOG_FILE_DEFAULT``, kept in step by an equality
+    test -- agreement today, not derivation. A function, so it stays lazy."""
+    return str(project_root() / "logs" / "audit.log")
+
+
 # Default model constants - single source of truth for fallback values (#2553)
 # These are used when .env doesn't specify a value.
 # All agent/tier model assignments MUST reference these constants — never hardcode
@@ -198,6 +206,15 @@ class PortConfig(RedactedSettings):
     redis: int = Field(default=6379, alias="AUTOBOT_REDIS_PORT")
     ollama: int = Field(default=11434, alias="AUTOBOT_OLLAMA_PORT")
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
+    # Raw VNC protocol port (x11vnc via vncserver), NOT the noVNC web port
+    # above (#14173). autobot-slm-backend/ansible/roles/vnc/defaults/main.yml
+    # computes this as 5900 + vnc_display, and vnc_display defaults to 1 ->
+    # 5901; vm-management/status-all-vms.sh independently hardcodes the same
+    # "VNC Client: localhost:5901" line. network/network-config.sh's own
+    # AUTOBOT_VNC_SERVER_PORT literal was 5902 -- one off from every other
+    # source of truth in the repo -- so 5901 here is a correction, not a
+    # preserved literal.
+    vnc_server: int = Field(default=5901, alias="AUTOBOT_VNC_SERVER_PORT")
     browser: int = Field(default=9001, alias="AUTOBOT_BROWSER_SERVICE_PORT")  # Issue #4052: 9001; 3000 is Grafana
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
     chromadb: int = Field(default=8100, alias="AUTOBOT_CHROMADB_PORT")  # Issue #3094: 8100 matches Ansible deploy
@@ -1303,8 +1320,14 @@ class PathConfig(RedactedSettings):
     )
 
     # Installation root — all derived paths use this as their base.
-    # Default matches the standard Ansible deployment target.
-    base_dir: str = Field(default="/opt/autobot", alias="AUTOBOT_BASE_DIR")
+    #
+    # Default is lazily resolved via the canonical ``project_root()`` (#13149,
+    # #14050) rather than frozen at import time to a hardcoded literal: a real
+    # Ansible deployment always sets AUTOBOT_BASE_DIR explicitly (see
+    # ansible/roles/backend/templates/backend.env.j2), so this default only
+    # governs the *unset* case — a developer running from a checkout, who must
+    # resolve into the checkout rather than into the live install.
+    base_dir: str = Field(default_factory=lambda: str(project_root()), alias="AUTOBOT_BASE_DIR")
 
     # Well-known sub-directories (all relative to base_dir unless absolute).
     # Override individual paths via AUTOBOT_PLUGINS_DIR etc. when needed.
@@ -1313,14 +1336,35 @@ class PathConfig(RedactedSettings):
     logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
     models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
     docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
-    # code_source lives at /opt/autobot/code_source, a sibling of autobot-backend/ —
-    # NOT inside base_dir. Absolute default ensures correct resolution regardless
-    # of what AUTOBOT_BASE_DIR is set to.
-    code_source_dir: str = Field(default="/opt/autobot/code_source", alias="AUTOBOT_CODE_SOURCE")
+    # On a real deployment, code_source lives at /opt/autobot/code_source, a
+    # sibling of autobot-backend/ (NOT inside base_dir) — and the Ansible
+    # template always sets AUTOBOT_CODE_SOURCE explicitly, so this default
+    # only governs the unset case. In a checkout there is no separate
+    # code_source sibling: the checkout root *is* the git repo root, so the
+    # default resolves lazily via project_root() (#13149, #14050) to that
+    # same checkout instead of the live install.
+    code_source_dir: str = Field(default_factory=lambda: str(project_root()), alias="AUTOBOT_CODE_SOURCE")
 
     # VNC password file — absolute path, not relative to base_dir.
-    # Override via AUTOBOT_VNC_PASSWD_FILE env var.
-    vnc_passwd_file: str = Field(default="/home/autobot/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE")
+    # Override via AUTOBOT_VNC_PASSWD_FILE env var (always set explicitly by
+    # roles/backend/templates/backend.env.j2 on a real deployment — this
+    # default only governs the unset case, e.g. local dev/tests).
+    #
+    # #14319: VNC runs under its own dedicated service account
+    # (roles/vnc/defaults/main.yml vnc_user), not the shared 'autobot'
+    # operational identity — this default follows that account.
+    vnc_passwd_file: str = Field(default="/home/autobot-vnc/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE")
+
+    # noVNC web root — absolute path, not relative to base_dir.
+    #
+    # #13069: pinned to /opt/novnc, NOT the distro /usr/share/novnc package.
+    # roles/vnc removes that package (state: absent) and installs a checksummed
+    # upstream release at this path instead, because the distro build
+    # (novnc 1:1.0.0-5 on Ubuntu 22.04) predates VeNCrypt support and was the
+    # cause of the handshake failure in #13060. Keep in sync with
+    # autobot-slm-backend/ansible/roles/vnc/defaults/main.yml novnc_path.
+    # Override via AUTOBOT_NOVNC_PATH env var.
+    novnc_path: str = Field(default="/opt/novnc", alias="AUTOBOT_NOVNC_PATH")
 
     # Canonical inter-node SSH private key (#12429). SINGLE source of truth for
     # every consumer that SSHes to fleet nodes (SLM -> fleet, deploy, code-sync,
@@ -1331,6 +1375,31 @@ class PathConfig(RedactedSettings):
         default="/etc/autobot/ssh/autobot_key",
         validation_alias=AliasChoices("AUTOBOT_SSH_KEY_PATH", "SLM_SSH_KEY"),
     )
+
+    # Management-plane SSH key (#14173) — DISTINCT from ssh_key_path above, not
+    # an alias of it. autobot-infrastructure/shared/scripts/utilities/setup-ssh-keys.sh
+    # generates and deploys THIS key under the operator's own $HOME the first
+    # time a human runs the vm-management/utilities scripts from their own
+    # workstation; ssh_key_path is the service account's key, deployed by
+    # Ansible to /etc/autobot/ssh for automated fleet orchestration (SLM
+    # backend, code-sync agents). The two are provably different files with
+    # different owners and different consumers — #14173's audit found ~24
+    # scripts reading AUTOBOT_SSH_KEY with a $HOME-relative fallback and
+    # confirmed collapsing it onto ssh_key_path's /etc default would silently
+    # break the human-operator flow, so this stays a second field rather than
+    # a rename or an alias.
+    management_ssh_key_path: str = Field(
+        default_factory=lambda: str(Path.home() / ".ssh" / "autobot_key"),
+        alias="AUTOBOT_SSH_KEY",
+    )
+
+    # SSH user for inter-node connections from management scripts (#14173).
+    # Not a path, but belongs beside the two SSH key fields above — same
+    # feature (fleet SSH identity). Matches the 'autobot' operational account
+    # (autobot-slm-backend/ansible/ansible.cfg remote_user,
+    # inventory/*.yml ansible_user, inventory/group_vars/all.yml
+    # autobot_ssh_key_path's owning account).
+    ssh_user: str = Field(default="autobot", alias="AUTOBOT_SSH_USER")
 
     # Explicit override for the `claude` CLI binary used by the LLC claude_code
     # adapter (GH#12478). Empty string means "not configured" — the adapter falls
@@ -1393,12 +1462,17 @@ class PathConfig(RedactedSettings):
         """Path to the canonical inter-node SSH public key (private key + .pub)."""
         return f"{self.ssh_key_path}.pub"
 
+    @property
+    def management_ssh_key(self) -> Path:
+        """Absolute path to the management-plane SSH key (#14173, distinct from ssh_key)."""
+        return Path(self.management_ssh_key_path)
+
 
 class MiscConfig(RedactedSettings):
     """Miscellaneous/unmapped environment variables.
 
     This class collects all env vars not yet migrated to structured config sections.
-    Vars default to empty string ("") when not set in environment.
+    Field defaults vary field to field -- do not assume "" / 0 / False (#13264).
     Issue: GH#7437 — Migrate 675 os.getenv/os.environ callsites
     """
 
@@ -1421,7 +1495,8 @@ class MiscConfig(RedactedSettings):
     api_key: str = Field(default="", alias="API_KEY")
     # #11681: restore pre-#7437 default (1000) — 0 silently disabled the AST cache
     ast_cache_max_size: int = Field(default=1000, alias="AST_CACHE_MAX_SIZE")
-    audit_log_file: str = Field(default="/opt/autobot/logs/audit.log", alias="AUTOBOT_AUDIT_LOG_FILE")
+    # #14050 lazy, not a live-install literal frozen at import; #14070 via the module global.
+    audit_log_file: str = Field(default_factory=lambda: default_audit_log_file(), alias="AUTOBOT_AUDIT_LOG_FILE")
     # #11834: restore pre-#7437 autoresearch defaults — ""/0 defaults made
     # AutoResearchConfig() crash on int("")/float("") and silently zeroed
     # timeouts/thresholds (same class as #11681).
@@ -1449,8 +1524,8 @@ class MiscConfig(RedactedSettings):
             "deployments — configure an elevation_client instead.  Issue #10799."
         ),
     )
-    cache_enabled: bool = Field(default=False, alias="AUTOBOT_CACHE_ENABLED")
-    cache_size: int = Field(default=0, alias="AUTOBOT_CACHE_SIZE")
+    cache_enabled: bool = Field(default=True, alias="AUTOBOT_CACHE_ENABLED")
+    cache_size: int = Field(default=128, alias="AUTOBOT_CACHE_SIZE")
     cache_l1_size: int = Field(
         default=100,
         alias="AUTOBOT_CACHE_L1_SIZE",
@@ -1486,8 +1561,44 @@ class MiscConfig(RedactedSettings):
         default="",
         alias="AUTOBOT_CONTRADICTION_SURFACE_THRESHOLD",
     )
+    # #13884: fraction of a paginated document's pages that must carry a text
+    # layer before the extraction is treated as usable. Below it the document is
+    # reported as having no usable text layer rather than as a successful
+    # extraction that happens to be empty.
+    document_min_text_page_ratio: str = Field(
+        default="",
+        alias="AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO",
+    )
+    # #13884: minimum average characters per page, alongside the ratio above.
+    # The ratio alone counts a page as readable when it carries a single
+    # character, which a page-number stamp, Bates number, or filename footer
+    # satisfies on every page of a scan. This floor catches that shape.
+    document_min_chars_per_page: str = Field(
+        default="",
+        alias="AUTOBOT_DOCUMENT_MIN_CHARS_PER_PAGE",
+    )
+    # #13896: rasterization resolution for the OCR fallback. 150 DPI is the
+    # usual cause of OCR failures that get blamed on the engine; 300 is the
+    # scanning baseline tesseract's own documentation assumes.
+    document_ocr_dpi: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_DPI")
+    # #13896: per-document page ceiling for OCR. Rasterizing and reading a page
+    # costs CPU-seconds, so an unbounded document can occupy a worker for
+    # minutes.
+    document_max_ocr_pages: str = Field(default="", alias="AUTOBOT_DOCUMENT_MAX_OCR_PAGES")
+    # Per-page OCR wall-clock ceiling (#13896 review). The page ceiling bounds
+    # count, this bounds cost: one page with a pathological MediaBox renders a
+    # very large bitmap however few pages were asked for.
+    document_ocr_page_timeout: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_PAGE_TIMEOUT")
+    document_ocr_timeout: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_TIMEOUT")
+    document_extraction_timeout: str = Field(default="", alias="AUTOBOT_DOCUMENT_EXTRACTION_TIMEOUT")
+    document_max_table_pages: str = Field(default="", alias="AUTOBOT_DOCUMENT_MAX_TABLE_PAGES")
+    # #13896: master switch for the OCR fallback. Default on where the toolchain
+    # is present, since it only runs on pages that produced no text at all — a
+    # born-digital document never rasterizes. Set to "false" to trade scanned
+    # documents for a guaranteed CPU ceiling.
+    document_ocr_enabled: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_ENABLED")
     chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
-    chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
+    chat_timeout: int = Field(default=30, alias="AUTOBOT_CHAT_TIMEOUT")
     chromadb_auth_token: str = Field(
         default="",
         alias="AUTOBOT_CHROMADB_AUTH_TOKEN",
@@ -1610,8 +1721,8 @@ class MiscConfig(RedactedSettings):
     llm_key_rotation_interval_minutes: str = Field(default="", alias="AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES")
     llm_models_yaml: str = Field(default="", alias="AUTOBOT_LLM_MODELS_YAML")
     llm_temperature: str = Field(default="", alias="AUTOBOT_LLM_TEMPERATURE")
-    log_backup_count: int = Field(default=0, alias="AUTOBOT_LOG_BACKUP_COUNT")
-    log_max_bytes: int = Field(default=0, alias="AUTOBOT_LOG_MAX_BYTES")
+    log_backup_count: int = Field(default=5, alias="AUTOBOT_LOG_BACKUP_COUNT")
+    log_max_bytes: int = Field(default=52428800, alias="AUTOBOT_LOG_MAX_BYTES")
     # #13263: deliberately NO default. The pre-#7437 value was "dev", but a
     # working default credential is a vulnerability in its own right — the
     # secret is the whole check, and "dev" is published in this repo, so any
@@ -1662,9 +1773,9 @@ class MiscConfig(RedactedSettings):
         alias="AUTOBOT_VOICE_REALTIME_SESSION_TTL_DAYS",
         description="Redis TTL (days) for voice_realtime_session:* keys. Default 90 days.",
     )
-    memory_log_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
-    memory_pool_size: int = Field(default=0, alias="AUTOBOT_MEMORY_POOL_SIZE")
-    memory_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
+    memory_log_threshold_mb: int = Field(default=1, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
+    memory_pool_size: int = Field(default=100, alias="AUTOBOT_MEMORY_POOL_SIZE")
+    memory_threshold_mb: int = Field(default=500, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
     # #11834: restore pre-#7437 meta-agent defaults (see #11681 pattern);
     # llm_model default stays "" — backend falls back to its model constant.
     meta_agent_approval_threshold: float = Field(default=0.1, alias="AUTOBOT_META_AGENT_APPROVAL_THRESHOLD")
@@ -1799,12 +1910,12 @@ class MiscConfig(RedactedSettings):
     urlhaus_feed_url: str = Field(default="", alias="AUTOBOT_URLHAUS_FEED_URL")
     user_mode: str = Field(default="", alias="AUTOBOT_USER_MODE")
     vue_root: str = Field(default="", alias="AUTOBOT_VUE_ROOT")
-    vllm_async_output: bool = Field(default=False, alias="AUTOBOT_VLLM_ASYNC_OUTPUT")
+    vllm_async_output: bool = Field(default=True, alias="AUTOBOT_VLLM_ASYNC_OUTPUT")
     vllm_multi_step: str = Field(default="", alias="AUTOBOT_VLLM_MULTI_STEP")
-    vllm_prefix_caching: str = Field(default="", alias="AUTOBOT_VLLM_PREFIX_CACHING")
+    vllm_prefix_caching: str = Field(default="true", alias="AUTOBOT_VLLM_PREFIX_CACHING")
     vnc_host: str = Field(default="", alias="AUTOBOT_VNC_HOST")
     vosk_model_path: str = Field(default="", alias="AUTOBOT_VOSK_MODEL_PATH")
-    weak_cache_size: int = Field(default=0, alias="AUTOBOT_WEAK_CACHE_SIZE")
+    weak_cache_size: int = Field(default=128, alias="AUTOBOT_WEAK_CACHE_SIZE")
     web_fetch_cache_ttl: str = Field(default="", alias="AUTOBOT_WEB_FETCH_CACHE_TTL")
     web_fetch_max_bytes: int = Field(default=0, alias="AUTOBOT_WEB_FETCH_MAX_BYTES")
     # #13019: bounds redirect-hop count for the pinned-redirect SSRF fetch path
@@ -1855,6 +1966,12 @@ class MiscConfig(RedactedSettings):
     file_cache_ttl_seconds: int = Field(default=300, alias="FILE_CACHE_TTL_SECONDS")
     gateway_enable_sandbox: str = Field(default="", alias="GATEWAY_ENABLE_SANDBOX")
     gateway_heartbeat_interval: str = Field(default="", alias="GATEWAY_HEARTBEAT_INTERVAL")
+    # #14028: ingest governance stage in front of MessageRouter/agent routing —
+    # dedup TTL, recursion-depth ceiling, and the recursion counter's sliding
+    # window. See services/gateway/ingest_governor.py.
+    gateway_ingest_chain_window_seconds: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_CHAIN_WINDOW_SECONDS")
+    gateway_ingest_dedup_ttl_seconds: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_DEDUP_TTL_SECONDS")
+    gateway_ingest_max_chain_depth: str = Field(default="", alias="AUTOBOT_GATEWAY_INGEST_MAX_CHAIN_DEPTH")
     gateway_max_message_size: int = Field(default=0, alias="GATEWAY_MAX_MESSAGE_SIZE")
     gateway_max_sessions_user: str = Field(default="", alias="GATEWAY_MAX_SESSIONS_USER")
     gateway_message_retention_hours: str = Field(default="", alias="GATEWAY_MESSAGE_RETENTION_HOURS")
@@ -1978,6 +2095,13 @@ class MiscConfig(RedactedSettings):
     discord_bot_token: str = Field(default="", alias="DISCORD_BOT_TOKEN")
     slack_notifications_channel: str = Field(default="", alias="SLACK_NOTIFICATIONS_CHANNEL")
     slm_auth_token: str = Field(default="", alias="SLM_AUTH_TOKEN")
+    # SLM manager's DB node_id (#14173, #9956). Deployments may rename the
+    # node; this default matches the inventory default (slm_server host in
+    # autobot-slm-backend/ansible/inventory/slm-nodes.yml) and the Ansible
+    # fact derived from it (inventory/group_vars/all.yml slm_manager_node_id).
+    # Overridable per-deployment via AUTOBOT_SLM_NODE_ID; no SSOT source
+    # existed under this name before this field.
+    slm_node_id: str = Field(default="00-SLM-Manager", alias="AUTOBOT_SLM_NODE_ID")
     slm_url: str = Field(default="", alias="SLM_URL")
     skill_hub_url: str = Field(default="", alias="AUTOBOT_SKILL_HUB_URL")
     testing: str = Field(default="", alias="TESTING")

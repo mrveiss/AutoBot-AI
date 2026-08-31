@@ -45,7 +45,7 @@ from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
-from .subprocess_base import SubprocessLifecycleAdapter
+from .subprocess_base import SubprocessLifecycleAdapter, placeholder_run_id
 from .subprocess_base import resolve_cli_binary as _resolve_cli_binary
 from .subprocess_base import resolve_timeout as _resolve_timeout
 from .subprocess_support import (
@@ -129,6 +129,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
 
     _LOG_NAME = "ClaudeCodeAdapter"
     _state_path = staticmethod(_state_path)
+    _output_path = staticmethod(_output_path)
     _required_cli = "claude"  # GH#9793: CLI-availability gate in heartbeat dispatch
 
     def _configured_cli_path(self) -> Optional[str]:
@@ -214,7 +215,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         timeout_sec: int = _resolve_timeout(cfg)
 
         session_id = str(uuid.uuid4())
-        run_id_placeholder = f"0/{session_id}"
+        run_id_placeholder = placeholder_run_id(session_id)
         output_file = _output_path(output_dir, agent_id, run_id_placeholder)
         os.makedirs(output_dir, exist_ok=True)
 

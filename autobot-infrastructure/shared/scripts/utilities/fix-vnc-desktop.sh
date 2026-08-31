@@ -6,6 +6,50 @@
 
 set -e
 
+# #14036: resolve the VNC user ONCE, here, in the shell.
+#
+# The unit heredocs below are quoted (<< 'EOF'), which disables parameter
+# expansion, so a ${...} written inside one lands in the unit file verbatim.
+# systemd has no bash-style :- default syntax, so `User=${VNC_USER}`
+# is not a valid directive value and the unit is broken on every run.
+#
+# $USER is not usable here either: this script is run with sudo, so $USER is
+# root and the paths resolved to /home/root.
+#
+# #14314: VNC_USER is canonical — the ansible vnc role
+# (autobot-slm-backend/ansible/roles/vnc/defaults/main.yml) resolves the same
+# name. AUTOBOT_VNC_USER remains a deprecated alias for one release, since an
+# existing host may already have only it set; VNC_USER wins when both are set.
+#
+# #14319: default changed from 'autobot' (the SSH/ansible operational
+# identity) to 'autobot-vnc' (VNC's own dedicated service account). The
+# emergency admin safety-net account is rejected outright below, whatever
+# the default is — see autobot-slm-backend/ansible/roles/vnc/tasks/main.yml
+# for why it must never run VNC.
+if [ -n "${VNC_USER:-}" ]; then
+    : # already set by the caller — keep it
+elif [ -n "${AUTOBOT_VNC_USER:-}" ]; then
+    VNC_USER="$AUTOBOT_VNC_USER"
+else
+    VNC_USER="autobot-vnc"
+fi
+
+if [ "${VNC_USER}" = "autobot_admin" ]; then
+    echo "ERROR: VNC_USER=autobot_admin — the emergency admin safety-net account is rejected (#14319)." >&2
+    echo "Set VNC_USER to a different account, or unset it to use the default (autobot-vnc)." >&2
+    exit 1
+fi
+
+VNC_HOME="/home/${VNC_USER}"
+
+if ! id "${VNC_USER}" &>/dev/null; then
+    echo "ERROR: account '${VNC_USER}' does not exist." >&2
+    echo "Run the ansible vnc role first (autobot-slm-backend/ansible/roles/vnc) —" >&2
+    echo "it creates the dedicated VNC service account — or set VNC_USER to an" >&2
+    echo "existing account." >&2
+    exit 1
+fi
+
 echo "Setting up VNC with XFCE desktop..."
 
 # Stop existing services
@@ -17,8 +61,8 @@ pkill -9 x11vnc 2>/dev/null || true
 pkill -9 Xtigervnc 2>/dev/null || true
 
 # Create proper xstartup for XFCE
-mkdir -p /home/${USER:-autobot}/.vnc
-cat > /home/${USER:-autobot}/.vnc/xstartup << 'EOF'
+mkdir -p ${VNC_HOME}/.vnc
+cat > ${VNC_HOME}/.vnc/xstartup << 'EOF'
 #!/bin/bash
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
@@ -33,29 +77,29 @@ xsetroot -solid "#2E3440" &
 # Start XFCE desktop
 exec startxfce4
 EOF
-chmod +x /home/${USER:-autobot}/.vnc/xstartup
-chown kali:kali /home/${USER:-autobot}/.vnc/xstartup
+chmod +x ${VNC_HOME}/.vnc/xstartup
+chown "${VNC_USER}:${VNC_USER}" ${VNC_HOME}/.vnc/xstartup
 
 # Create VNC password (random, displayed once)
 VNC_PASS=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c 16)
-echo "$VNC_PASS" | vncpasswd -f > /home/${USER:-autobot}/.vnc/passwd
+echo "$VNC_PASS" | vncpasswd -f > ${VNC_HOME}/.vnc/passwd
 echo "Generated VNC password: $VNC_PASS"
-chmod 600 /home/${USER:-autobot}/.vnc/passwd
-chown kali:kali /home/${USER:-autobot}/.vnc/passwd
+chmod 600 ${VNC_HOME}/.vnc/passwd
+chown "${VNC_USER}:${VNC_USER}" ${VNC_HOME}/.vnc/passwd
 
 # Create TigerVNC service (runs its own X server with desktop)
-cat > /etc/systemd/system/tigervnc.service << 'EOF'
+cat > /etc/systemd/system/tigervnc.service << EOF
 [Unit]
 Description=TigerVNC Server with XFCE Desktop
 After=network.target
 
 [Service]
 Type=simple
-User=${AUTOBOT_VNC_USER:-autobot}
-Group=${AUTOBOT_VNC_USER:-autobot}
-Environment=HOME=/home/${AUTOBOT_VNC_USER:-autobot}
-WorkingDirectory=/home/${AUTOBOT_VNC_USER:-autobot}
-ExecStart=/usr/bin/tigervncserver -fg -geometry 1920x1080 -depth 24 -SecurityTypes VncAuth -passwd /home/${USER:-autobot}/.vnc/passwd -xstartup /home/${USER:-autobot}/.vnc/xstartup :1
+User=${VNC_USER}
+Group=${VNC_USER}
+Environment=HOME=/home/${VNC_USER}
+WorkingDirectory=/home/${VNC_USER}
+ExecStart=/usr/bin/tigervncserver -fg -geometry 1920x1080 -depth 24 -SecurityTypes VncAuth -passwd ${VNC_HOME}/.vnc/passwd -xstartup ${VNC_HOME}/.vnc/xstartup :1
 ExecStop=/usr/bin/tigervncserver -kill :1
 Restart=on-failure
 RestartSec=5
@@ -65,7 +109,12 @@ WantedBy=multi-user.target
 EOF
 
 # Update noVNC to connect to TigerVNC (port 5901 for display :1)
-cat > /etc/systemd/system/novnc.service << 'EOF'
+# #13076: /opt/novnc, matching autobot-slm-backend/ansible/roles/vnc/defaults/
+# main.yml novnc_path — NOT the distro /usr/share/novnc, which roles/vnc
+# removes (#13069) and which otherwise serves a stale pre-VeNCrypt client
+# (#13060). This script does not install noVNC itself; run the vnc role (or
+# an equivalent pinned install) first so /opt/novnc exists.
+cat > /etc/systemd/system/novnc.service << EOF
 [Unit]
 Description=noVNC Web Interface
 After=tigervnc.service
@@ -73,13 +122,13 @@ Requires=tigervnc.service
 
 [Service]
 Type=simple
-User=kali
-Group=kali
-WorkingDirectory=/usr/share/novnc
-ExecStart=/usr/bin/websockify --web /usr/share/novnc \
-    --cert=/etc/autobot/certs/server-cert.pem \
-    --key=/etc/autobot/certs/server-key.pem \
-    --ssl-only \
+User=${VNC_USER}
+Group=${VNC_USER}
+WorkingDirectory=/opt/novnc
+ExecStart=/usr/bin/websockify --web /opt/novnc \\
+    --cert=/etc/autobot/certs/server-cert.pem \\
+    --key=/etc/autobot/certs/server-key.pem \\
+    --ssl-only \\
     localhost:6080 localhost:5901
 Restart=always
 RestartSec=5

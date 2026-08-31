@@ -1,6 +1,7 @@
 ---
 name: multimodal-engineer
 description: Multi-modal AI specialist for AutoBot's advanced AI capabilities. Use for computer vision, voice processing, screen analysis, UI understanding, and combined multi-modal workflows. Proactively engage for visual AI, speech features, and cross-modal integration.
+model: sonnet
 tools: Read, Write, Grep, Glob, Bash
 ---
 

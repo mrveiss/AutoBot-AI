@@ -1,5 +1,7 @@
 # Dependency Injection Refactoring
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 **Status**: ✅ **Completed** - Core components refactored to use dependency injection pattern
 
 ## Overview

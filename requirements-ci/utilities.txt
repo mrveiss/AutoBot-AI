@@ -1,6 +1,6 @@
 # General-purpose utilities
 pyyaml==6.0.3
-python-dotenv==1.2.2
+python-dotenv==1.2.3
 click==8.4.2
 jsonschema==4.26.0
 psutil==7.2.2
@@ -8,3 +8,4 @@ watchdog==6.0.0    # services/documentation_watcher imports it; without it docum
 cachetools>=7.1.7  # security/enterprise/domain_reputation imports it; security/enterprise/__init__ re-exports that module, so without it the whole security suite aborts at collection (#13162)
 croniter>=6.2.4,<7.0.0        # production dep of BOTH backends; autobot-slm-backend/services/schedule_executor.py imports it unconditionally (reached via slm main.py), and llc/api/routines.py + llc/scheduler/heartbeat_scheduler.py silently degrade to croniter=None without it (#13086)
 apscheduler>=3.11.3,<4.0.0    # production dep (autobot-backend/requirements.txt); services/llm_key_rotation_scheduler.py imports it at module level. Errors nothing today only because lifespan.py imports that module inside a function — same latent shape as croniter (#13351)
+docker>=7.1.0    # production dep (autobot-backend/requirements.txt, #14872): the container runtime SDK behind sandboxed code execution. tests/integration/test_codeexec_docker_smoke.py::_docker_ready returns False on `except Exception` around `import docker` (:41-46), so without this the whole containerised-sandbox smoke skips silently

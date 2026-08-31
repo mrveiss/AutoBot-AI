@@ -121,9 +121,9 @@ class CodeEmbeddingGenerator:
             from transformers import AutoModel, AutoTokenizer
 
             # HuggingFace model loaded by name; revision pinning managed operationally.
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, resume_download=True)  # nosec B615
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)  # nosec B615
             # HuggingFace model loaded by name; revision pinning managed operationally.
-            self.model = AutoModel.from_pretrained(self.model_name, resume_download=True)  # nosec B615
+            self.model = AutoModel.from_pretrained(self.model_name)  # nosec B615
 
             if self.npu_available:
                 self._convert_to_openvino()

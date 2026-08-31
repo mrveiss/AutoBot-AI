@@ -9,17 +9,25 @@
 
 - **No browsers for CLI tasks:** Use `gh`, `curl`, or API calls instead of Playwright/Puppeteer
 - **3-command exploration limit:** If 3 commands haven't converged, write a hypothesis first
-- **Propose before implementing:** For ambiguous tasks, state approach in 3 bullets and wait for confirmation
-- **Implementation first:** Prefer direct implementation over brainstorming — brief plan (max 10 lines) then implement
+- **Implementation first — clarify only on genuine ambiguity.** Default to a brief plan (max 10 lines) then implement. When the task *is* ambiguous, state the approach in 3 bullets and wait for confirmation (Rule 4 in [`CLAUDE_RULES.md`](CLAUDE_RULES.md)); inside a `/loop`, post the question with a recommendation and continue instead of blocking
 - For large features (backend + frontend), complete and commit backend fully first
 - Commit completed work incrementally
 - If approaching context limit: stop at phase boundary, commit, add GitHub comment with next steps
+- **Long analyses go to a file, not the response.** Start every one in a scratch path *outside*
+  the repo, written incrementally as produced; the reply is the path plus a short summary.
+  Filing an umbrella issue or a design doc is the trigger to move it into
+  `docs/research/<topic>.md` (or `docs/audit/`, `docs/design/`) and cross-link it both ways.
+  An interrupted or token-capped response must never lose the work
 
 ---
 
 ## Deployment Architecture
 
-**All fleet deployments go through the SLM Manager via Ansible playbooks.**
+**Deployments are triggered through the builtin updater only** — the code-sync API /
+self-update path a user reaches in the maintenance UI. It is the updater that runs the
+playbooks below. Invoking ansible or ssh by hand is the banned side-channel: if the builtin
+cannot do something, fix that gap (issue + PR) rather than routing around it. The playbook
+paths here are for *reading and changing* the deployment, not for running it.
 
 - **Code flow:** GitHub repo → SLM Manager pulls latest → Ansible deploys to fleet nodes
 - **Primary playbook:** `autobot-slm-backend/ansible/playbooks/update-all-nodes.yml`
@@ -46,21 +54,26 @@
 - Always target `Dev_new_gui` for PRs unless told otherwise
 - Delete remote feature branches after completing work
 
-**Worktree & Branch Cleanup (MANDATORY after issue closure):**
+**Worktree & Branch Cleanup (MANDATORY once the branch's work is merged):**
 
 ```bash
-git worktree remove .worktrees/issue-XXXX
-git branch -d <branch-name>
-git push origin --delete <branch-name>
+git worktree remove .worktrees/issue-XXXX   # NO --force: a dirty tree is unfinished work
+git branch -D <branch-name>                 # -D, never -d — see below
+git push origin --delete <branch-name> 2>/dev/null || true   # usually already gone
+git worktree prune
 ```
+
+**Use `-D`, never `-d`.** A squash merge rewrites the commits, so the branch is never an
+ancestor of the base and `git branch -d` refuses with "not fully merged" — silently aborting
+the cleanup. Confirm the merge from the PR (`gh pr view N --json state,mergedAt`), never from
+`git branch --merged`, then delete with `-D`. Remove the worktree *before* the branch; a
+branch cannot be deleted while a worktree has it checked out.
 
 Bulk: `scripts/cleanup-worktrees.sh --dry-run` then `scripts/cleanup-worktrees.sh`
 
-**Pre-Flight Checks (before ANY code changes):**
-1. `git branch --show-current`
-2. `git status` — **if any files are dirty, commit or stash them NOW before spawning subagents or starting batch work.** Uncommitted edits are silently discarded when a subagent commits and upstream is merged. (See #4969.)
-3. `git stash list` — if present, ask user
-4. `git fetch origin Dev_new_gui && git log --oneline origin/Dev_new_gui -3`
+**Pre-flight checks:** [`CLAUDE_GIT.md`](CLAUDE_GIT.md) "Pre-Flight Checklist" is the
+canonical list. Steps 1-4 are universal and apply inside your own worktree; steps 5-8 apply
+only when dispatching agents or starting batch work.
 
 ---
 
@@ -79,7 +92,10 @@ protocol lives in the `session-lifecycle` skill; the handoff schema is in
    `git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/Dev_new_gui`.
 3. Read predecessor handoffs in [`.session/`](../../.session/): if a branch is
    unmerged, decide to continue it (rebase onto base first) or start fresh —
-   never duplicate its work blind.
+   never duplicate its work blind. Step 1's sweep reaps handoffs whose branch is
+   gone (#13848), so every file still there names a live branch. A handoff the
+   sweep reports as `STRANDED` is unlanded work with no branch left: file an
+   issue for it before disposing of the file.
 
 **End of session** (mandatory — also when blocked):
 1. Leave nothing uncommitted; WIP gets a `wip:` commit and a handoff note.
@@ -87,8 +103,13 @@ protocol lives in the `session-lifecycle` skill; the handoff schema is in
    markers (`^<<<<<<< `) before the final push.
 3. Push and open/update the PR.
 4. Write `.session/HANDOFF-<branch>.md` (see schema) and commit it on your branch.
-5. Remove scratch only — **not** your own worktree; the next session's start
-   protocol removes it after the branch merges.
+5. Remove scratch only — **not** your own unmerged worktree.
+
+**Who disposes of a worktree:** whoever observes the merge. If your PR merges while you are
+still running, clean up in the same breath as the merge (worktree, local branch, remote
+branch) — a merged PR whose worktree still exists is an unfinished merge. If the session ends
+first, the next session's start protocol is the backstop. Neither ever removes a worktree
+whose work has not landed, and neither touches another session's tree.
 
 LICENSE/NOTICE/SPDX headers are read-only during a session — flag concerns,
 never edit.
@@ -97,23 +118,24 @@ never edit.
 
 ## Multi-Agent Safety
 
-- Do NOT create/apply/drop `git stash` unless explicitly requested
+- **Never** `git stash` — the stack is shared repo-wide, see [`CLAUDE_GIT.md`](CLAUDE_GIT.md#never-stash-14078)
 - Do NOT switch branches unless explicitly requested
 - When pushing, use `git pull --rebase`
 - "commit" = YOUR changes only; "commit all" = everything in grouped chunks
 - Prefer incremental `Edit` over full file `Write` for files >50 lines
 
-**schemas_common.py serialization constraint (response_model= batches):**
-`autobot-backend/api/schemas_common.py` is an append-only file — every `response_model=` audit batch appends new Pydantic schema classes to its end. When two such batches branch from the same `Dev_new_gui` head and both append to this file, git always produces a `CONFLICT (content)`. This is not a real code conflict; it is a git limitation with concurrent appends to the same file.
+**Schema files — the append-only conflict is resolved (#5799).** Schemas now live in
+per-domain modules (`schemas_agent.py`, `schemas_analytics.py`, `schemas_terminal.py`,
+`schemas_workflows.py`, `schemas_code.py`, `schemas_system.py`, and siblings), so parallel
+`response_model=` batches targeting *different* domain files no longer collide and may run
+concurrently.
 
-Rules:
-- **Do not run two `response_model=` audit batches in parallel.** Serialize them — wait for the first batch's PR to merge before starting the next.
-- This constraint applies until issue #5799 (per-domain schema split) is resolved.
-- If a conflict occurs anyway, the resolution is always deterministic:
+Two batches appending to the **same** domain module still conflict — that is a git limitation
+with concurrent appends, not a code conflict. Serialize those, or resolve deterministically:
 
 ```bash
 # Step 1: take origin/Dev_new_gui as the authoritative base
-git show origin/Dev_new_gui:autobot-backend/api/schemas_common.py > autobot-backend/api/schemas_common.py
+git show origin/Dev_new_gui:autobot-backend/api/<schema-module>.py > autobot-backend/api/<schema-module>.py
 
 # Step 2: append the new schema classes from our branch at the end
 # (extract them from git diff or the conflicting branch's version)
@@ -123,7 +145,36 @@ git show origin/Dev_new_gui:autobot-backend/api/schemas_common.py > autobot-back
 
 ## Agent Delegation
 
-**Prefer direct implementation over subagents** — reserve for exploration/research.
+**Split by output type, not by convenience.**
+
+- **Deliverables — implement directly.** Code, fixes, reviews, acceptance criteria: do them in
+  the main session. Round-tripping a deliverable through a subagent adds a translation layer
+  and loses the context that makes it correct.
+- **Mechanical work — delegate to a Haiku agent.** Sweeps, inventories, per-PR status checks,
+  log triage, caller traces, "which of these N files does X". Mechanical means deterministic,
+  verifiable from its output, and requiring no judgement that ships.
+
+**Delegation is not free** — a subagent costs a spawn, a prompt and its own context. For a
+single deterministic command, run it inline. Delegate mechanical work only when it is also
+**high-volume** (output would flood this context), **repeated** (N independent checks that can
+fan out in parallel), or **high-discard** (most of what is read is thrown away).
+
+**Tiers — pick by output type, not task difficulty.** This is the in-repo copy; the extended
+routing table and the never-hand-to-Haiku list live in the global model-tiers doc.
+
+| Tier | Model | Use for |
+|---|---|---|
+| Haiku | `claude-haiku-4-5-20251001` | mechanical work — sweeps, status checks, inventories, capture |
+| Fable | `claude-fable-5` | plans and design documents — PRDs, architecture proposals |
+| Sonnet | `claude-sonnet-5` | deliverables — code, reviews, acceptance criteria, approvals |
+
+Never hand Haiku a deliverable or a judgement that ships. Each agent declares its own tier in
+its `.claude/agents/` definition; an agent with no `model:` inherits the caller's model, which
+is a bug rather than a default.
+
+**Verify what comes back.** A subagent's report is an assertion, not evidence — more so the
+cheaper the model. Confirm the artifacts (`git log`, `gh pr list`, read the file) before
+acting on it. No artifacts ⇒ the work did not happen; resume it yourself.
 
 **Worktree Isolation Warning:**
 Do NOT use `isolation: "worktree"` for agents that create PRs. Instead, create manual worktrees:
@@ -158,11 +209,16 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 
 **Commit format:** `<type>(scope): <description> (#issue-number)`
 
+**Update the issue as work progresses — not only at closure.** Post the pickup (what is being
+attempted, and the base SHA), any decision taken under a `Decision` heading, and the state you
+stopped in if the session dies. The issue is the only record that survives a lost worktree or
+a different machine.
+
 **Always close the issue after implementation.** PRs targeting `Dev_new_gui` will NOT auto-close issues — verify with `gh issue view`.
 
-**CI diagnosis:** queued checks on self-hosted runners are NOT stuck — confirm failure before acting.
-
-**Posting comments:** write literal markdown — never raw JSON or a file path.
+**CI diagnosis** and **posting comments correctly**: see [`CLAUDE_REVIEW.md`](CLAUDE_REVIEW.md)
+— it owns both. In short: queued checks on the self-hosted runner are not failures, and a
+comment body is literal markdown, never raw JSON or a file path.
 
 **GitHub CLI Workarounds:**
 
@@ -228,12 +284,56 @@ It reuses the *same* logic CI does rather than approximating it: the same `awk` 
 **Match CI's interpreter first (#13573).** CI runs Python **3.14**. A box's default `python3` is often older, and every local gate silently uses it:
 
 ```bash
-scripts/setup-ci-parity-env.sh     # build once; idempotent, no sudo
+scripts/setup-ci-parity-env.sh           # build if missing, reconcile if stale; no sudo
+scripts/setup-ci-parity-env.sh --check   # report only, never installs; exit 1 if stale
 ```
 
 This builds the same environment `.github/actions/setup-python-suite/action.yml` builds — same interpreter, same `requirements-ci.txt` + `requirements-ci-test.txt`, same PyTorch CPU index, same venv path. `pr-preflight.sh` then picks it up automatically and reports which interpreter it used.
 
 Running the gates on an older interpreter is not merely a version difference. **`black` skips its AST safety check** — the pass that verifies a reformat did not change the code — for any file using syntax newer than the running interpreter. It warns and passes anyway, so the weaker check is the silent one. Version-dependent tests are also unreproducible: `\z` in a regex is a `re.error` on 3.10 and valid from 3.12, so a red CI test can be green locally and diagnosable only from shard logs.
+
+**The packages matter as much as the interpreter (#15091).** Local verification *is* expected to
+match the declared dependency set — `setup-ci-parity-env.sh` is how, and it installs nothing outside
+its own venv. Where it cannot be met, the mismatch is **reported, never gated**: a box below floor
+stays usable for ordinary work, and a gate that blocked every local run on it would simply be removed.
+
+Two places now say so, using the same reporter
+(`pipeline-scripts/check_dependency_floors.py`, which reads the `-r` closure of `requirements-ci.txt`,
+`requirements-ci-test.txt` and the two backend requirement files):
+
+- `pr-preflight.sh` prints it in its `interpreter` section.
+- every `pytest` run prints it directly beneath the pass/fail counts, so a bare `pytest` that never
+  touches preflight still says it.
+
+**The venv reconciles on every run, and refreshing is prompted, not automatic (#15130).** It used
+to stop as soon as the directory existed, so it drifted: measured against the two files it installs,
+21 of 86 declared versions were unsatisfied and **9 declared packages were not installed at all**.
+The second number is the one that costs you a diagnosis — a test module that `importorskip`s a
+missing package is never collected, so the run passes by doing less. Both are gone after one
+reconcile; a reconciled venv reports **0 of 86**, absence included.
+
+Which way each caller goes, and why:
+
+| Caller | Behaviour on a stale venv |
+|---|---|
+| `setup-ci-parity-env.sh` | repairs in place — re-runs the same two `pip install -r` commands, then re-checks. Every shortfall seen has been an installed version *older* than a satisfiable declaration, which the reinstall fixes; `rm -rf` would re-download the whole torch stack to reach the same place. `--recreate` stays for what that cannot fix. |
+| `setup-ci-parity-env.sh --check` | reports and exits 1. Installs nothing. |
+| `pr-preflight.sh` | calls `--check` and **says so instead of claiming parity**. It does not install and does not fail the run — reinstalling under someone mid-review would be slow and surprising, and #15091's "reported, never gated" applies here too. |
+
+The check is scoped with `--roots` to the two files the script installs. Judged against the backend
+requirement files as well it would look permanently short, because those describe components neither
+it nor CI's python suite ever installs — a number nobody can act on is noise. It also passes
+`--require-present`, which is the one place absence counts as a shortfall rather than a neutral fact.
+
+If your box is below floor and you cannot build the parity venv, **push and read CI** — a green local
+run is not evidence for anything version-dependent. The concrete precedent: under the declared
+fastapi 0.141.1, `APIRouter.include_router()` **defers**, appending an `_IncludedRouter` wrapper with
+`path=None` instead of copying routes onto the parent; on fastapi 0.135.2 it copies eagerly. Measured
+three ways (#15130): 0.141.1 with starlette 1.3.1 defers, 0.141.1 with starlette 1.6.0 defers, 0.135.2
+with starlette 1.6.0 does not. **The deferral is fastapi's, not starlette's** — a starlette floor will
+not reproduce or suppress it, so do not reach for one. A guard enumerating a router's routes therefore read 26 locally and 3 in CI
+(#14998), and an `hasattr`-guarded walk finds nothing at all rather than raising. #15093 records the
+behaviour and the sweep that bounds its blast radius; do not re-derive it.
 
 ### Gate 0: Squash-Duplicate Detection
 

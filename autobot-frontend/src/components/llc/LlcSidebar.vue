@@ -86,6 +86,7 @@ const links = computed<SidebarLink[]>(() => {
     { labelKey: 'nav.llcGoals', to: { path: `/llc/companies/${id}/goals` } },
     { labelKey: 'nav.llcOrgChart', to: { path: `/llc/companies/${id}/org-chart` } },
     { labelKey: 'nav.llcMembers', to: { path: `/llc/companies/${id}/members` } },
+    { labelKey: 'nav.llcRoles', to: { path: `/llc/companies/${id}/roles` } },
     { labelKey: 'nav.llcApprovals', to: { path: `/llc/companies/${id}/approvals` } },
     { labelKey: 'nav.llcCosts', to: { path: `/llc/companies/${id}/costs` } },
     { labelKey: 'nav.llcHeartbeat', to: { path: `/llc/companies/${id}/heartbeat` } },
@@ -180,8 +181,8 @@ async function onCompanyChange(event: Event): Promise<void> {
   flex-direction: column;
   gap: 1rem;
   padding: 1rem 0.75rem;
-  background: var(--bg-surface, #f9fafb);
-  border-right: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-default);
   min-height: 100%;
 }
 
@@ -196,7 +197,7 @@ async function onCompanyChange(event: Event): Promise<void> {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .llc-sidebar-select {
@@ -204,14 +205,14 @@ async function onCompanyChange(event: Event): Promise<void> {
   padding: 0.375rem 0.5rem;
   font-size: 0.875rem;
   border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--border-default, #d1d5db);
-  background: var(--bg-input, #ffffff);
-  color: var(--text-primary, #111827);
+  border: 1px solid var(--border-default);
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .llc-sidebar-switch {
   font-size: 0.75rem;
-  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  color: var(--color-accent-text, var(--color-accent));
   text-decoration: none;
 }
 
@@ -234,7 +235,7 @@ async function onCompanyChange(event: Event): Promise<void> {
   font-size: 0.875rem;
   border-radius: var(--radius-md, 8px);
   border-left: 2px solid transparent;
-  color: var(--text-secondary, #4b5563);
+  color: var(--text-secondary);
   text-decoration: none;
 }
 
@@ -247,19 +248,19 @@ async function onCompanyChange(event: Event): Promise<void> {
   line-height: 1.25rem;
   text-align: center;
   border-radius: 999px;
-  background: var(--color-accent, #c4651a);
-  color: #fff;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }
 
 .llc-nav-item:hover {
-  background: var(--bg-hover, #f3f4f6);
-  color: var(--text-primary, #111827);
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .llc-nav-item.active {
-  background: var(--color-accent-subtle, #fcefe0);
-  border-left-color: var(--color-accent, #c4651a);
-  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  background: var(--color-accent-subtle);
+  border-left-color: var(--color-accent);
+  color: var(--color-accent-text, var(--color-accent));
   font-weight: 600;
 }
 </style>

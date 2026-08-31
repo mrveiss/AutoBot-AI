@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .database import NodeStatus
+from .database import BackupServiceType, NodeStatus
 
 # =============================================================================
 # Authentication Schemas
@@ -127,6 +127,13 @@ class NodeRoleResponse(BaseModel):
     current_version: str | None = None
     last_synced_at: datetime | None = None
     last_error: str | None = None
+    #: #14676: names of assigned roles that reach no deploy path -- no ansible
+    #: group and no dedicated playbook -- so nothing will act on them. The
+    #: assignment still succeeds; without this the operator assigning it at the
+    #: fleet nodes page gets a plain success for something permanently inert.
+    #: Role NAMES rather than a message, so the UI can localise the wording.
+    #: Additive and defaulted, so existing clients are unaffected.
+    unreachable_roles: List[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -206,6 +213,10 @@ class NodeResponse(BaseModel):
     a2a_card: Dict[str, Any] | None = None
     # Issue #1019: Per-service health summary counts
     service_summary: Dict[str, int] | None = None
+    #: #14676: assigned roles that reach no deploy path, so the bulk role
+    #: editor can show what an assignment will silently not do. See
+    #: NodeRoleResponse.unreachable_roles.
+    unreachable_roles: List[str] = Field(default_factory=list)
     extra_data: Dict[str, Any] | None = Field(None, exclude=True)
 
     model_config = {"from_attributes": True}
@@ -309,10 +320,15 @@ class DeploymentListResponse(BaseModel):
 
 
 class BackupCreate(BaseModel):
-    """Backup request."""
+    """Backup request.
+
+    #13578: ``service_type`` is the enum, not a bare string, so FastAPI rejects
+    an unknown engine with 422 *before* ``_run_backup`` writes a ``Backup`` row
+    that would otherwise sit there as a FAILED record for a typo.
+    """
 
     node_id: str
-    service_type: str = "redis"
+    service_type: BackupServiceType = BackupServiceType.REDIS
 
 
 class BackupResponse(BaseModel):
@@ -450,6 +466,11 @@ class HealthResponse(BaseModel):
     version: str
     uptime_seconds: float
     database: str
+    # #14299: Redis was never part of this response — a backend with an open
+    # circuit breaker on its main database still reported itself healthy, as
+    # long as Postgres answered. Required (not Optional): the single caller
+    # (api/health.py::health_check) always sets it.
+    redis: str
     nodes_online: int
     nodes_total: int
 
@@ -709,11 +730,11 @@ class UpdateApplyAllRequest(BaseModel):
 
 
 class ReplicationCreate(BaseModel):
-    """Replication request."""
+    """Replication request (#13578: enum-constrained service_type)."""
 
     source_node_id: str
     target_node_id: str
-    service_type: str = "redis"
+    service_type: BackupServiceType = BackupServiceType.REDIS
 
 
 class ReplicationResponse(BaseModel):
@@ -769,10 +790,10 @@ class BackupRestoreResponse(BaseModel):
 
 
 class DataVerifyRequest(BaseModel):
-    """Data verification request."""
+    """Data verification request (#13578: enum-constrained service_type)."""
 
     node_id: str
-    service_type: str = "redis"
+    service_type: BackupServiceType = BackupServiceType.REDIS
 
 
 class DataVerifyResponse(BaseModel):
@@ -1680,6 +1701,18 @@ class FileDriftReport(BaseModel):
     total_compared: int
     drift_detected: bool
     checked_at: str
+    # #13913: a reading taken while ansible is mid-write reports files that are
+    # simply being copied — 28 of 30 drifts in one measurement evaporated once
+    # the play settled. None means the signal could not be read; it is NOT
+    # collapsed into False, because "could not ask" and "no deploy running" are
+    # different answers and only one of them makes the reading trustworthy.
+    deploy_in_progress: bool | None = None
+    #: Why deploy_in_progress is what it is, for an operator reading the response.
+    deploy_state_reason: str | None = None
+    #: ISO-8601 UTC time the last completed self-update play finished, so a
+    #: caller can judge how fresh this reading is. None when no completed run
+    #: is on record.
+    last_completed_play_at: str | None = None
 
 
 class DriftResolveRequest(BaseModel):

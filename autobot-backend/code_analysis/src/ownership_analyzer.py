@@ -12,8 +12,8 @@ Analyzes codebase for:
 - Team coverage analysis
 """
 
+import asyncio
 import json
-import subprocess
 import sys
 import time
 from collections import defaultdict
@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 
 # Issue #542: Handle imports for both standalone execution and backend import
@@ -63,7 +64,24 @@ _SKIP_DIRECTORIES = (
     "build",
     "egg-info",
     ".eggs",
+    # #13602: near-complete repo copies. Without these, one ownership request
+    # globbed 167,072 files where 6,967 exist, and ran `git blame` on each.
+    ".worktrees",
+    "worktrees",
 )
+
+# #13602: two ceilings, because a file count alone is the wrong bound. Measured
+# on this repo, `git blame --line-porcelain` runs at a median 0.45s per file, so
+# 2000 files is a ~15 minute request — a hang traded for a wait nobody will sit
+# through. The wall-clock budget covers the walk as well as the blames, since
+# globbing a large tree is itself measurable; the file cap just stops a
+# pathological tree before the clock starts mattering.
+_MAX_FILES_TO_BLAME = env_int("AUTOBOT_OWNERSHIP_MAX_FILES", 2000)
+_MAX_BLAME_SECONDS = env_float("AUTOBOT_OWNERSHIP_BUDGET_SECONDS", 20.0)
+# A single blame must not be allowed to outlast the budget that contains it —
+# the pre-existing 30s here exceeded the whole phase's 20s, so one slow file
+# could consume the entire budget and then some. Kept below it deliberately.
+_BLAME_TIMEOUT_SECONDS = env_float("AUTOBOT_OWNERSHIP_BLAME_TIMEOUT_SECONDS", 10.0)
 
 # File patterns to skip
 _SKIP_FILE_PATTERNS = (
@@ -250,6 +268,11 @@ class OwnershipAnalyzer:
             "status": "success",
             "analysis_time_seconds": analysis_time,
             "summary": {
+                # #13602: a truncated result that does not say so reads as a
+                # complete one. The server log alone is not enough — the caller
+                # is the one drawing conclusions from these numbers.
+                "truncated": bool(getattr(self, "_truncated_reason", None)),
+                "truncated_reason": getattr(self, "_truncated_reason", None),
                 "total_files": len(file_ownerships),
                 "total_directories": len(directory_ownerships),
                 "total_contributors": len(expertise_scores),
@@ -267,16 +290,41 @@ class OwnershipAnalyzer:
     async def _analyze_file_ownership(self, root_path: str, patterns: List[str]) -> List[FileOwnership]:
         """Analyze ownership for individual files using git blame"""
         file_ownerships = []
+        self._truncated_reason: str | None = None
         root = Path(root_path).resolve()
 
+        considered = 0
+        deadline = time.monotonic() + _MAX_BLAME_SECONDS
         for pattern in patterns:
             for file_path in root.glob(pattern):
-                if not file_path.is_file() or self._should_skip_file(file_path):
+                # Ahead of the skip `continue` on purpose: behind it, globbing
+                # and skipping sat OUTSIDE the budget entirely — measured 18s of
+                # walk on this repo with blame costing nothing. A budget that
+                # excludes the walk is not what the caller experiences.
+                if time.monotonic() > deadline:
+                    self._truncated_reason = f"time budget ({_MAX_BLAME_SECONDS:.0f}s)"
+                    break
+                if not file_path.is_file() or self._should_skip_file(file_path, root):
                     continue
+                if considered >= _MAX_FILES_TO_BLAME:
+                    self._truncated_reason = f"file cap ({_MAX_FILES_TO_BLAME})"
+                    break
+                considered += 1
 
                 ownership = await self._get_file_ownership(file_path, root)
                 if ownership:
                     file_ownerships.append(ownership)
+            if self._truncated_reason:
+                # Break the PATTERN loop too — otherwise later patterns would
+                # each get a fresh budget, which is not a budget.
+                break
+
+        if self._truncated_reason:
+            logger.warning(
+                "Ownership analysis truncated by %s after %d files — results are a subset",
+                self._truncated_reason,
+                considered,
+            )
 
         # Sort by total lines descending
         file_ownerships.sort(key=lambda x: x.total_lines, reverse=True)
@@ -345,24 +393,87 @@ class OwnershipAnalyzer:
         contributors.sort(key=lambda x: x.lines_count, reverse=True)
         return contributors
 
+    @staticmethod
+    async def _run_blame(file_path: Path, root: Path) -> str | None:
+        """``git blame`` for one file, killed if this coroutine is cancelled (#14390).
+
+        Returns the porcelain stdout, or ``None`` when the blame failed or timed
+        out — the two outcomes the caller already treats as "no ownership data".
+
+        Both non-normal exits terminate the child explicitly:
+
+        * **timeout** — the per-file ceiling that keeps one slow file from eating
+          the whole phase budget (``_MAX_BLAME_SECONDS``);
+        * **cancellation** — the route deadline firing, or an outer
+          ``task.cancel()``. ``CancelledError`` is re-raised after the kill:
+          swallowing it would report the request as completed while the work was
+          abandoned, and every caller above would lose the signal.
+
+        ``proc.wait()`` after ``kill()`` is not optional — it reaps the child.
+        Without it the process becomes a zombie held by this event loop, which
+        is the leak in a slower disguise.
+        """
+        proc = await asyncio.create_subprocess_exec(  # nosec B603 B607  # fixed git argv, no shell
+            "git",
+            "blame",
+            "--line-porcelain",
+            str(file_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            cwd=str(root),
+        )
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_BLAME_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError:
+            await OwnershipAnalyzer._terminate(proc)
+            logger.warning("Git blame timed out for %s", file_path)
+            return None
+        except asyncio.CancelledError:
+            await OwnershipAnalyzer._terminate(proc)
+            raise
+
+        if proc.returncode != 0:
+            return None
+        return stdout.decode("utf-8", errors="replace")
+
+    @staticmethod
+    async def _terminate(proc: "asyncio.subprocess.Process") -> None:
+        """Kill a blame child and reap it, tolerating one that already exited."""
+        if proc.returncode is not None:
+            return
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            return
+        await proc.wait()
+
     async def _get_file_ownership(self, file_path: Path, root: Path) -> FileOwnership | None:
         """Get ownership data for a single file using git blame"""
         try:
             relative_path = str(file_path.relative_to(root))
 
-            result = subprocess.run(  # nosec B603 B607  # fixed git argv; file_path is a Path object, no shell
-                ["git", "blame", "--line-porcelain", str(file_path)],
-                capture_output=True,
-                text=True,
-                cwd=str(root),
-                timeout=30,
-            )
-
-            if result.returncode != 0:
+            # #13602: was a bare subprocess.run inside `async def`, so every
+            # blame blocked the event loop for its full duration — up to the 30s
+            # timeout, once per file. That is what made unrelated endpoints
+            # return 000 while an analytics panel was loading.
+            #
+            # #14390: and then it was `asyncio.to_thread(subprocess.run(...))`,
+            # which unblocks the loop but is still not cancellable. Cancelling
+            # that await abandons the worker thread; the `git blame` child keeps
+            # running until it exits on its own, because nothing holds a handle
+            # to signal. #14256's cooperative token cannot help — it polls a
+            # Python loop, and there is no loop here, only a blocked syscall.
+            #
+            # A native asyncio subprocess is the mechanism that fits: it gives
+            # up the thread hop AND a real handle to kill. See the two
+            # terminating handlers below — without them the child outlives the
+            # request either way.
+            stdout_text = await self._run_blame(file_path, root)
+            if stdout_text is None:
                 return None
 
             # Issue #1183: Delegate parsing and contributor building to helpers
-            total_lines, author_lines = self._parse_blame_output(result.stdout)
+            total_lines, author_lines = self._parse_blame_output(stdout_text)
 
             if total_lines == 0:
                 return None
@@ -394,9 +505,15 @@ class OwnershipAnalyzer:
                 last_modified=last_modified,
             )
 
-        except subprocess.TimeoutExpired:
-            logger.warning(f"Git blame timed out for {file_path}")
-            return None
+        # #14390: the `subprocess.TimeoutExpired` handler that sat here is gone
+        # with the blocking call that raised it — `_run_blame` owns the timeout
+        # now and logs the same message before returning None. A handler for an
+        # exception the body can no longer raise reads as live coverage.
+        #
+        # `CancelledError` is deliberately NOT caught here: it derives from
+        # BaseException, so `except Exception` never saw it, and `_run_blame`
+        # re-raises it after killing the child. Catching it would turn an
+        # abandoned request into a silently empty result.
         except Exception as e:
             logger.warning(f"Failed to analyze {file_path}: {e}")
             return None
@@ -714,13 +831,26 @@ class OwnershipAnalyzer:
             ),
         }
 
-    def _should_skip_file(self, file_path: Path) -> bool:
-        """Check if file should be skipped"""
+    def _should_skip_file(self, file_path: Path, root: "Path | None" = None) -> bool:
+        """Check if file should be skipped, relative to ``root`` when given.
+
+        #13602: this matched _SKIP_DIRECTORIES against the ABSOLUTE path. Once
+        `.worktrees` joined that list, a scan rooted inside one — which is where
+        `resolve_project_root()` lands on any dev checkout — skipped every file
+        below it and returned 200 with zero contributors and no error. Adding
+        the name without this is how a loud 400 becomes a silent empty 200.
+        """
         path_str = str(file_path)
+        if root is not None:
+            try:
+                path_str = str(file_path.resolve().relative_to(root.resolve()))
+            except (ValueError, OSError):
+                # Not inside the root: not part of this scan.
+                return True
         file_name = file_path.name
 
         for skip_dir in _SKIP_DIRECTORIES:
-            if f"/{skip_dir}/" in path_str or path_str.startswith(f"{skip_dir}/"):
+            if f"/{skip_dir}/" in f"/{path_str}":
                 return True
 
         for pattern in _SKIP_FILE_PATTERNS:

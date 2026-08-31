@@ -20,7 +20,9 @@ from io import StringIO
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.path_validator import require_path_string
 from autobot_shared.time_utils import parse_utc_iso
+from constants.threshold_constants import CategoryDefaults
 
 if TYPE_CHECKING:
     import aioredis
@@ -889,7 +891,7 @@ class BulkOperationsMixin:
                     "fact_id": row.get("fact_id"),
                     "content": row.get("content", ""),
                     "metadata": {
-                        "category": row.get("category", "general"),
+                        "category": row.get("category", CategoryDefaults.GENERAL),
                         "tags": [t.strip() for t in row.get("tags", "").split(",") if t.strip()],
                     },
                 }
@@ -1483,9 +1485,13 @@ class BulkOperationsMixin:
         Get backup directory path.
 
         Issue #398: Extracted from create_backup.
+        Issue #14217: a truthy-but-non-str backup_dir (an object whose
+        __fspath__/str() happens to look path-like) must be rejected here,
+        not handed straight to os.makedirs — every caller already wraps
+        this in a try/except that degrades to a safe error result.
         """
-        if backup_dir:
-            return backup_dir
+        if backup_dir is not None:
+            return require_path_string(backup_dir, context="create_backup(backup_dir)")
         from pathlib import Path
 
         project_root = Path(__file__).parent.parent.parent

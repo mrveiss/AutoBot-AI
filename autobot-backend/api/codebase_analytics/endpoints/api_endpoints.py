@@ -14,14 +14,16 @@ Provides endpoints to:
 """
 
 import asyncio
+import threading
 from pathlib import Path
 from typing import Dict
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from utils.cancel_tokens import new_cancel_token, run_cancellable
 
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..models import APIEndpointAnalysis
@@ -45,13 +47,20 @@ def _cache_key(source_id: str | None) -> str:
     return source_id or "default"
 
 
-def _get_checker(project_root: Path | None = None) -> APIEndpointChecker:
+def _get_checker(
+    project_root: Path | None = None,
+    cancel_token: threading.Event | None = None,
+) -> APIEndpointChecker:
     """Get or create the API endpoint checker instance.
 
     Issue #12330: Bind the checker to the requested source's root so it scans
     the selected project rather than AutoBot's own root.
+    Issue #14256: cancel_token is threaded through so a route deadline stops
+    the scan, not only the wait -- these routes dispatch via
+    ``asyncio.to_thread`` (the default executor), the same unmitigated shape
+    as ``report.py``'s ``_get_api_endpoint_analysis`` before that fix.
     """
-    return APIEndpointChecker(project_root=project_root)
+    return APIEndpointChecker(project_root=project_root, cancel_token=cancel_token)
 
 
 async def _get_or_run_analysis(source_id: str | None) -> APIEndpointAnalysis:
@@ -67,8 +76,16 @@ async def _get_or_run_analysis(source_id: str | None) -> APIEndpointAnalysis:
         return cached
 
     root = await resolve_scan_root(source_id)
-    checker = _get_checker(root)
-    analysis = await asyncio.to_thread(checker.run_full_analysis)
+    cancel_token = new_cancel_token()
+    checker = _get_checker(root, cancel_token=cancel_token)
+    # Issue #14256: default executor (``None``), cancellably -- was a bare
+    # ``asyncio.to_thread`` with nothing to stop the scan once running.
+    analysis = await run_cancellable(
+        None,
+        checker.run_full_analysis,
+        operation="api_endpoint_analysis",
+        cancel_token=cancel_token,
+    )
 
     async with _analysis_cache_lock:
         _analysis_cache[key] = analysis
@@ -76,6 +93,7 @@ async def _get_or_run_analysis(source_id: str | None) -> APIEndpointAnalysis:
 
 
 @router.get("/api-endpoints")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_api_endpoints",
@@ -91,8 +109,14 @@ async def get_api_endpoints(
     Issue #12330: Scoped to the selected source's clone path.
     """
     root = await resolve_scan_root(source_id)
-    checker = _get_checker(root)
-    endpoints = await asyncio.to_thread(checker.get_backend_endpoints)
+    cancel_token = new_cancel_token()
+    checker = _get_checker(root, cancel_token=cancel_token)
+    endpoints = await run_cancellable(
+        None,
+        checker.get_backend_endpoints,
+        operation="get_backend_endpoints",
+        cancel_token=cancel_token,
+    )
 
     return JSONResponse(
         {
@@ -104,6 +128,7 @@ async def get_api_endpoints(
 
 
 @router.get("/api-calls")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_frontend_api_calls",
@@ -119,8 +144,14 @@ async def get_frontend_api_calls(
     Issue #12330: Scoped to the selected source's clone path.
     """
     root = await resolve_scan_root(source_id)
-    checker = _get_checker(root)
-    calls = await asyncio.to_thread(checker.get_frontend_calls)
+    cancel_token = new_cancel_token()
+    checker = _get_checker(root, cancel_token=cancel_token)
+    calls = await run_cancellable(
+        None,
+        checker.get_frontend_calls,
+        operation="get_frontend_calls",
+        cancel_token=cancel_token,
+    )
 
     return JSONResponse(
         {
@@ -132,6 +163,7 @@ async def get_frontend_api_calls(
 
 
 @router.get("/endpoint-coverage")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_endpoint_coverage",
@@ -173,6 +205,7 @@ async def get_endpoint_coverage(
 
 
 @router.get("/endpoint-analysis")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_endpoint_analysis_full",
@@ -199,6 +232,7 @@ async def get_endpoint_analysis_full(
 
 
 @router.get("/orphaned-endpoints")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_orphaned_endpoints",
@@ -226,6 +260,7 @@ async def get_orphaned_endpoints(
 
 
 @router.get("/missing-endpoints")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_missing_endpoints",
@@ -253,6 +288,7 @@ async def get_missing_endpoints(
 
 
 @router.get("/used-endpoints")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_used_endpoints",
@@ -293,6 +329,7 @@ async def get_used_endpoints(
 
 
 @router.post("/refresh-endpoint-cache")
+@bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_endpoint_cache",
@@ -310,8 +347,14 @@ async def refresh_endpoint_cache(
     another project's cached analysis.
     """
     root = await resolve_scan_root(source_id)
-    checker = _get_checker(root)
-    analysis = await asyncio.to_thread(checker.run_full_analysis)
+    cancel_token = new_cancel_token()
+    checker = _get_checker(root, cancel_token=cancel_token)
+    analysis = await run_cancellable(
+        None,
+        checker.run_full_analysis,
+        operation="refresh_endpoint_cache",
+        cancel_token=cancel_token,
+    )
 
     # Update cache (thread-safe, Issue #559)
     async with _analysis_cache_lock:

@@ -69,6 +69,7 @@ from models.schemas import (
     ServiceOrderEntry,
     UpdatePolicyResponse,
 )
+from services.ansible_utils import summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_status import derive_code_status as _derive_code_status
 from services.code_status import get_latest_code_version as _get_latest_code_version
@@ -674,7 +675,13 @@ async def update_node_roles(
     await db.refresh(node)
 
     logger.info("Node roles updated: %s -> %s", node_id, roles_data.roles)
-    return NodeResponse.model_validate(node)
+    # #14676: the bulk role editor writes NodeRole rows directly rather than
+    # going through _upsert_node_role, so it needs the advisory attached here
+    # too -- an operator assigning an inert role through this surface would
+    # otherwise get the same unqualified success the single-role path used to.
+    response = NodeResponse.model_validate(node)
+    response.unreachable_roles = _unreachable_roles(list(roles_data.roles or []))
+    return response
 
 
 @router.get("/{node_id}/detected-roles", response_model=NodeRolesResponse)
@@ -827,6 +834,65 @@ async def _run_preflight(node_id: str, role_name: str, db: AsyncSession) -> Pref
     )
 
 
+async def _declare_role_on_node(db: AsyncSession, node_id: str, role_name: str) -> None:
+    """Record the role on ``Node.roles`` as well as the NodeRole table (#14552).
+
+    Assigning a role through the UI IS a declaration -- but this endpoint only
+    ever wrote a NodeRole row, leaving ``Node.roles`` untouched.
+
+    That was invisible until deploy groups became declaration-gated (#14513).
+    Now ``_strip_undeclared_privileged_groups`` reads ``Node.roles`` as the sole
+    record of operator intent, so a role assigned through "Assign Role Manually"
+    would be treated as undeclared: the group is stripped, the update playbook's
+    tasks for it never fire, and the component silently never installs. The
+    admin sees the assignment succeed and nothing happens.
+
+    ``api/npu.py`` already writes ``node.roles`` for its dedicated NPU modal,
+    which is why npu-worker never showed the problem. This brings the generic
+    path in line with it.
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if node is None:
+        return
+
+    current = list(node.roles or [])
+    if role_name not in current:
+        node.roles = current + [role_name]
+        logger.info("Declared role on node: %s -> %s", node_id, role_name)
+
+
+def _unreachable_roles(role_names: list[str]) -> list[str]:
+    """Assigned roles that nothing will deploy (#14676).
+
+    Roles are assigned from the fleet nodes page. A role that reaches no
+    ansible group AND has no dedicated playbook is still recorded and still
+    listed on the node -- but nothing anywhere acts on it, so the operator gets
+    a plain success for an assignment that is permanently inert.
+
+    The assignment is never rejected: a custom role may legitimately be defined
+    before its deploy path is, and refusing it would be the worse failure.
+
+    Returns role names rather than a message so the UI can localise the wording.
+    """
+    try:
+        from services.inventory_builder import unmatched_role_tokens
+
+        return sorted(unmatched_role_tokens(list(role_names or [])))
+    except Exception as exc:  # noqa: BLE001 - this must never fail an assignment
+        # Warned, not debug-logged: this code exists to stop a failure being
+        # swallowed silently, so swallowing its own would be the same defect.
+        logger.warning("Could not evaluate role deploy paths for %s: %s", list(role_names or []), exc)
+        return []
+
+
+def _role_response_with_advisory(record: object, role_name: str) -> NodeRoleResponse:
+    """Attach the #14676 deploy-path report to a single-role assignment."""
+    response = NodeRoleResponse.model_validate(record)
+    response.unreachable_roles = _unreachable_roles([role_name])
+    return response
+
+
 async def _upsert_node_role(
     db: AsyncSession,
     node_id: str,
@@ -843,6 +909,7 @@ async def _upsert_node_role(
 
     if existing:
         existing.assignment_type = role_request.assignment_type
+        await _declare_role_on_node(db, node_id, role_request.role_name)
         await db.commit()
         await db.refresh(existing)
         logger.info(
@@ -851,7 +918,7 @@ async def _upsert_node_role(
             role_request.role_name,
             role_request.assignment_type,
         )
-        return NodeRoleResponse.model_validate(existing)
+        return _role_response_with_advisory(existing, role_request.role_name)
 
     node_role = NodeRole(
         node_id=node_id,
@@ -860,6 +927,7 @@ async def _upsert_node_role(
         status="not_installed",
     )
     db.add(node_role)
+    await _declare_role_on_node(db, node_id, role_request.role_name)
     await db.commit()
     await db.refresh(node_role)
     logger.info(
@@ -868,7 +936,7 @@ async def _upsert_node_role(
         role_request.role_name,
         role_request.assignment_type,
     )
-    return NodeRoleResponse.model_validate(node_role)
+    return _role_response_with_advisory(node_role, role_request.role_name)
 
 
 @router.post("/{node_id}/detected-roles", response_model=NodeRoleResponse)
@@ -992,7 +1060,7 @@ async def _execute_provision_playbook(
             "success": True,
             "message": f"Provisioned {len(target_roles)} role(s) on {node.hostname}",
             "roles": target_roles,
-            "output": result["output"][:500],
+            "output": summarize_playbook_failure(result["output"]),
         }
 
     logger.error("Failed to provision node %s: %s", node_id, result["output"])
@@ -1799,6 +1867,36 @@ def _has_failed_autobot_service(extra_data: dict | None) -> bool:
     return False
 
 
+def _detected_role_names(role_report: dict) -> list[str]:
+    """Role names the agent actually found on the node (#14513).
+
+    The agent probes EVERY known role and reports each one's verdict, so the
+    report's keys are the catalogue, not the node. Recording `.keys()` marked
+    every node as carrying everything: two nodes running completely different
+    things reported byte-identical 20-entry lists, and the inventory then
+    promoted plain fleet nodes into `slm_server`.
+
+    `status` is the agent's own verdict (`slm/agent/role_detector.py`):
+      * not_installed - target path absent
+      * inactive      - path present, service down
+      * active        - path present and running (or no service required)
+
+    Anything but `not_installed` counts as present: a role installed but
+    stopped is still on the node and must keep receiving updates.
+    """
+    detected: list[str] = []
+    for name, report in (role_report or {}).items():
+        status = getattr(report, "status", None)
+        if status is None and isinstance(report, dict):
+            status = report.get("status")
+        # Unknown/absent status is treated as NOT detected: this list grants
+        # group membership, so an unreadable verdict must not silently promote
+        # the node the way the old `.keys()` did.
+        if status and status != "not_installed":
+            detected.append(name)
+    return detected
+
+
 async def _apply_heartbeat_reports(db: AsyncSession, node_id: str, heartbeat: HeartbeatRequest, node) -> None:
     """Helper for node_heartbeat. Ref: #1088.
 
@@ -1808,7 +1906,7 @@ async def _apply_heartbeat_reports(db: AsyncSession, node_id: str, heartbeat: He
     if heartbeat.role_report:
         try:
             await _process_role_report(db, node_id, heartbeat.role_report)
-            node.detected_roles = list(heartbeat.role_report.keys())
+            node.detected_roles = _detected_role_names(heartbeat.role_report)
             node.role_versions = {
                 name: report.version for name, report in heartbeat.role_report.items() if report.version
             }

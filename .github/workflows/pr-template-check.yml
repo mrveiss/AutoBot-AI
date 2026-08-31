@@ -11,6 +11,21 @@ on:
     types: [opened, edited, synchronize, reopened]
     branches: [Dev_new_gui, main]
 
+# #14434: without this, every push left its predecessors queued. 42 of a 271-run
+# sample were for commits no longer at their branch tip - work nothing would ever
+# read, each still fetching its actions. During GitHub's 2026-08-17 archive-download
+# degradation that wasted load became failures on unrelated pull requests (#14444).
+#
+# cancel-in-progress is guarded on the event rather than set to a bare `true`:
+# #13432 found that cancelling base-branch runs meant each merge cancelled the
+# previous merge's verification, and merges arrive faster than a suite completes -
+# of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
+# workflows this was applied to also trigger on push to Dev_new_gui, so the guard
+# is load-bearing there and harmless where it is not.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check-template:
     name: Validate PR template sections
@@ -21,7 +36,16 @@ jobs:
     # the same list as this known-meaningless one. Skip (not pass) so the gate
     # stays honest for human PRs; it is not in the required-checks set, so
     # skipping changes nothing about what can merge.
-    if: github.event.pull_request.user.type != 'Bot'
+    #
+    # #14153: same reasoning applies to fork PRs. The template IS published
+    # (.github/PULL_REQUEST_TEMPLATE.md, linked from CONTRIBUTING.md), but a
+    # drive-by external contributor can still open a PR without ever seeing
+    # GitHub's web compose UI populate it (e.g. a PR opened through the API).
+    # Penalizing them for a convention the tooling didn't show them inverts
+    # the point of the check, so fork PRs skip it the same way bot PRs do.
+    if: >
+      github.event.pull_request.user.type != 'Bot' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read

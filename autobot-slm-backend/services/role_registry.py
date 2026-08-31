@@ -39,7 +39,13 @@ _SLM_ROLES = [
         "health_check_port": 8000,
         "health_check_path": "/api/health",
         "post_sync_cmd": (
-            f"cd {_BASE_DIR}/autobot-slm-backend && " "pip install -r requirements.txt && " "alembic upgrade head"
+            # #14275: venv/bin, not bare. The unit runs
+            # `{{ slm_backend_dir }}/venv/bin/uvicorn`, so a bare `pip`/`alembic`
+            # targets system Python — new code against unchanged dependencies,
+            # and a migration run by a different interpreter than the service.
+            f"cd {_BASE_DIR}/autobot-slm-backend && "
+            "venv/bin/pip install -r requirements.txt && "
+            "venv/bin/alembic upgrade head"
         ),
         "required": True,
         "degraded_without": [],
@@ -242,13 +248,32 @@ _AI_STACK_ROLES = [
         "name": "ai-stack",
         "display_name": "AI Stack",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-ai-stack/"],
+        # #14275: the real AI-stack sources live here, not in the repo's
+        # `autobot-ai-stack/`, which holds a placeholder README and nothing else.
+        # Pointed at that placeholder, a sync delivered one README and reported
+        # success — the update never happened.
+        "source_paths": ["autobot-infrastructure/shared/docker/ai-stack/"],
         "target_path": f"{_BASE_DIR}/autobot-ai-stack",
         "systemd_service": "autobot-ai-stack",
         "auto_restart": True,
         "health_check_port": 8080,
         "health_check_path": "/health",
-        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-ai-stack && pip install -r requirements.txt"),
+        # #14275: routed through the canonical
+        # scripts/build-filtered-requirements.sh rather than a bare
+        # `pip install -r requirements.txt`. This file's requirements carries a
+        # sibling-relative `-c ../constraints/shared.txt` (#10524) that does not
+        # resolve from the deployed directory, and pip aborts the whole sync:
+        #   ERROR: Could not open constraint file: '/constraints/shared.txt'
+        # The backend entry above has delegated to this script since #11134; the
+        # ansible half of the same defect was #14272. Same script, so the two
+        # deploy paths cannot drift apart again.
+        "post_sync_cmd": (
+            f"cd {_BASE_DIR}/autobot-ai-stack && "
+            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
+            f"requirements-ai.txt {_BASE_DIR}/code_source "
+            f"> /tmp/requirements-filtered-ai-stack.txt && "
+            f"venv/bin/pip install -r /tmp/requirements-filtered-ai-stack.txt"
+        ),
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "setup-ai-stack.yml",
@@ -283,7 +308,22 @@ _OPTIONAL_ROLES = [
         "auto_restart": True,
         "health_check_port": 8081,
         "health_check_path": "/health",
-        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-npu-worker && pip install -r requirements.txt"),
+        # #14275: routed through the canonical
+        # scripts/build-filtered-requirements.sh rather than a bare
+        # `pip install -r requirements.txt`. This file's requirements carries a
+        # sibling-relative `-c ../constraints/shared.txt` (#10524) that does not
+        # resolve from the deployed directory, and pip aborts the whole sync:
+        #   ERROR: Could not open constraint file: '/constraints/shared.txt'
+        # The backend entry above has delegated to this script since #11134; the
+        # ansible half of the same defect was #14272. Same script, so the two
+        # deploy paths cannot drift apart again.
+        "post_sync_cmd": (
+            f"cd {_BASE_DIR}/autobot-npu-worker && "
+            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
+            f"requirements.txt {_BASE_DIR}/code_source "
+            f"> /tmp/requirements-filtered-npu-worker.txt && "
+            f"venv/bin/pip install -r /tmp/requirements-filtered-npu-worker.txt"
+        ),
         "required": False,
         "degraded_without": ["GPU inference offloading — backend falls back to local Ollama"],
         "ansible_playbook": "setup-npu-worker.yml",
@@ -298,7 +338,22 @@ _OPTIONAL_ROLES = [
         "auto_restart": True,
         "health_check_port": 8082,
         "health_check_path": "/health",
-        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-tts-worker && pip install -r requirements.txt"),
+        # #14275: routed through the canonical
+        # scripts/build-filtered-requirements.sh rather than a bare
+        # `pip install -r requirements.txt`. This file's requirements carries a
+        # sibling-relative `-c ../constraints/shared.txt` (#10524) that does not
+        # resolve from the deployed directory, and pip aborts the whole sync:
+        #   ERROR: Could not open constraint file: '/constraints/shared.txt'
+        # The backend entry above has delegated to this script since #11134; the
+        # ansible half of the same defect was #14272. Same script, so the two
+        # deploy paths cannot drift apart again.
+        "post_sync_cmd": (
+            f"cd {_BASE_DIR}/autobot-tts-worker && "
+            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
+            f"requirements.txt {_BASE_DIR}/code_source "
+            f"> /tmp/requirements-filtered-tts-worker.txt && "
+            f"venv/bin/pip install -r /tmp/requirements-filtered-tts-worker.txt"
+        ),
         "required": False,
         "degraded_without": ["Voice synthesis — TTS features unavailable"],
         "ansible_playbook": "playbooks/deploy_role.yml",
@@ -406,7 +461,14 @@ _INFRA_ROLES = [
         "target_path": _SLM_AGENT_DIR,
         "systemd_service": "slm-agent",
         "auto_restart": True,
-        "post_sync_cmd": (f"cd {_SLM_AGENT_DIR} && pip install aiohttp psutil"),
+        # #14278: the agent's venv, not system pip, and the SAME package set the
+        # ansible role installs. This listed two of six and targeted an
+        # interpreter the unit does not run, so a code-sync of this role could
+        # not update the dependencies the agent actually imports — and on a
+        # PEP 668 distro it fails outright with externally-managed-environment.
+        "post_sync_cmd": (
+            f"cd {_SLM_AGENT_DIR} && " "venv/bin/pip install aiohttp psutil redis pydantic-settings sqlalchemy pyyaml"
+        ),
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "deploy-slm-agent.yml",
@@ -423,6 +485,21 @@ DEFAULT_ROLES = (
 # Maps each role name to the inventory group(s) expected by
 # provision-fleet-roles.yml.  Used by _generate_dynamic_inventory()
 # in setup_wizard.py to build role-based host groups.
+#
+# #14460: a value here is only useful if the ansible layer CONSULTS that
+# group -- a `groups.get(...)` clause in playbooks/vars/role_active_facts.yml,
+# a play's `hosts:`, or a `groups[...]` lookup. Two values were consulted
+# nowhere: "databases" (plural) and "browser_automation". The inventory
+# builder created those groups and no play, fact or group_vars file ever
+# read them, so joining one activated nothing and inherited no group_vars.
+# Those roles only ever came up through the `node_roles` clause, which the
+# inventory stamps per host independently of group membership -- so the
+# breakage was invisible until someone relied on the group.
+# The consulted spellings are the ones services/inventory_builder.py already
+# emits (_ROLE_TO_GROUPS), the static inventory defines, and group_vars/ has
+# files for: `database` (+`redis`) and `browser` (+`browser_worker`).
+# test_role_registry.py::test_every_ansible_group_is_consulted_by_ansible
+# fails if any value drifts out of that vocabulary again.
 # ---------------------------------------------------------------------------
 ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
     "backend": "backend",
@@ -432,10 +509,14 @@ ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
     "frontend": "frontend",
     "ai-stack": "ai_stack",
     "chromadb": "ai_stack",
-    "redis": "databases",
-    "postgres": "databases",
+    # #14460: was "databases". `role_redis_active` gates on `redis`/`database`.
+    "redis": "database",
+    "postgres": "database",
     "npu-worker": "npu_worker",
-    "browser-service": "browser_automation",
+    # #14460: was "browser_automation". `role_browser_active` gates on
+    # `browser`/`browser_worker`; group_vars/browser.yml exists, none for the
+    # old spelling.
+    "browser-service": "browser",
     "autobot-llm-cpu": "llm_nodes",
     "autobot-llm-gpu": "llm_nodes",
     # tts-worker has Phase 5c in provision-fleet-roles.yml (#2959);
@@ -456,23 +537,57 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # SLM roles
     "slm-backend": ["python314", "nginx"],
     "slm-frontend": ["nodejs", "nginx"],
-    "slm-database": ["postgresql"],
+    # #14460: NOT just postgresql. inventory_builder._ROLE_TO_GROUPS puts
+    # slm-database in {redis, database} -- the same groups `role_redis_active`
+    # gates on -- so a node carrying it runs the redis ansible role and its
+    # unconditional `python3.14 -m venv`. The SLM roles are separable (see the
+    # section header above), so a node can carry slm-database without
+    # slm-backend, which is the only other declarer of the interpreter here.
+    "slm-database": ["postgresql", "python314"],
     "slm-monitoring": [],
     # Service roles
+    #
+    # #14446: celery, scheduler and vnc all map into the *backend* inventory
+    # group (ROLE_ANSIBLE_GROUPS below), so provisioning applies the backend
+    # ansible role to them -- and that role builds a python3.14 venv AND starts
+    # nginx with no `when:` guard on either. A node carrying only one of these
+    # roles must therefore declare both, exactly as "backend" does. Declaring
+    # less does not skip the work; it just means Phase 0 never installs what
+    # Phase 4a is about to require.
     "backend": ["python314", "nginx"],
-    "celery": ["python314"],
-    "scheduler": ["python314"],
+    "celery": ["python314", "nginx"],
+    "scheduler": ["python314", "nginx"],
     "frontend": ["nodejs", "nginx"],
-    "redis": [],
-    "postgres": ["postgresql"],
+    # #14446: the redis role unconditionally `import_tasks: chromadb.yml`,
+    # which runs `python3.14 -m venv`. A redis-only node needs the interpreter
+    # even though nothing about "redis" suggests it.
+    "redis": ["python314"],
+    # #14460: NOT just postgresql. A postgres node joins the `database` group,
+    # and `role_redis_active` gates on that group -- so Phase 3 applies the
+    # *redis* ansible role, whose main.yml unconditionally
+    # `import_tasks: chromadb.yml` and runs `python3.14 -m venv`. The
+    # interpreter is imposed by the shared group, not by postgres itself.
+    # #14446's guard could not see this: its group path looked up "databases",
+    # a name no fact mentions, so it found nothing to require.
+    "postgres": ["postgresql", "python314"],
     "ai-stack": ["python314"],
     "chromadb": ["python314"],
     "browser-service": ["nodejs"],
     "npu-worker": ["python314"],
     "tts-worker": ["python314"],
-    "autobot-llm-cpu": [],
-    "autobot-llm-gpu": [],
-    "vnc": [],
+    # #14460: NOT empty. The `autobot-llm-` prefix key in
+    # inventory_builder._ROLE_TO_GROUPS lands both roles in {ai_stack, aiml,
+    # ai, llm_nodes}; `role_ai_stack_active` gates on ai_stack/aiml, so
+    # provision-fleet-roles.yml applies the ai-stack ansible role, which
+    # creates a python3.14 venv. Same shape as slm-database above: the
+    # requirement comes from the group, not from the role's own name.
+    "autobot-llm-cpu": ["python314"],
+    "autobot-llm-gpu": ["python314"],
+    # #14446: NOT empty. See the note on the service roles above -- vnc maps
+    # into the backend group, so the backend ansible role runs on a vnc-only
+    # node. Provisioning failed at the venv with "No such file or directory:
+    # b'python3.14'", an error naming the venv rather than the dependency.
+    "vnc": ["python314", "nginx"],
     "slm-agent": [],
 }
 

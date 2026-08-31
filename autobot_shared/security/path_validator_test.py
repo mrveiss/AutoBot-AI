@@ -9,12 +9,15 @@ functions used across 16+ backend files for path injection prevention.
 """
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
 from autobot_shared.security.path_validator import (
     _DEFAULT_ALLOWED_ROOTS,
+    PROJECT_ALLOWED_ROOTS,
     SandboxPathError,
+    require_path_string,
     resolve_within_sandbox,
     validate_path,
     validate_relative_path,
@@ -28,10 +31,16 @@ from autobot_shared.security.path_validator import (
 class TestValidatePath:
     """Tests for validate_path()."""
 
-    def test_valid_path_under_default_root(self, tmp_path) -> None:
-        """Path under /tmp (a default root) resolves successfully."""
-        result = validate_path(str(tmp_path / "file.txt"))
-        assert isinstance(result, Path)
+    def test_tmp_path_rejected_by_default(self, tmp_path) -> None:
+        """#15238: a path under a world-writable shared root (/tmp, and
+        pytest's tmp_path lives under it on Linux) is rejected when the
+        caller passes no explicit allowed_roots.
+
+        Contrast: reintroducing "/tmp" into _DEFAULT_ALLOWED_ROOTS makes
+        this pass again -- that regression is exactly what this test pins.
+        """
+        with pytest.raises(ValueError, match="outside allowed directories"):
+            validate_path(str(tmp_path / "file.txt"))
 
     def test_valid_path_under_custom_root(self, tmp_path) -> None:
         """Path under a custom allowed root resolves successfully."""
@@ -110,14 +119,25 @@ class TestValidatePath:
                 allowed_roots=[str(tmp_path)],
             )
 
+    def test_default_allowed_roots_excludes_tmp(self) -> None:
+        """#15238: /tmp is world-writable and shared with every other
+        process on the host, so it must never be a default fallback root --
+        only an explicit, deliberate choice at a call site.
+        """
+        assert "/tmp" not in _DEFAULT_ALLOWED_ROOTS  # nosec B108
+
+    def test_project_allowed_roots_excludes_tmp(self) -> None:
+        """#15238: the shared "inside the AutoBot project" root that
+        call sites opt into explicitly must never resolve to /tmp either.
+        """
+        assert "/tmp" not in PROJECT_ALLOWED_ROOTS  # nosec B108
+        assert len(PROJECT_ALLOWED_ROOTS) == 1
+
     def test_default_allowed_roots_used_when_none(self) -> None:
         """When allowed_roots is None, _DEFAULT_ALLOWED_ROOTS is used."""
-        assert "/tmp" in _DEFAULT_ALLOWED_ROOTS  # nosec B108  # test/controlled code uses tmpdir intentionally
-        result = validate_path(
+        with pytest.raises(ValueError, match="outside allowed directories"):
             # Test/controlled code uses tmpdir intentionally.
-            "/tmp/test_path_validator_check"  # nosec B108
-        )
-        assert str(result).startswith("/tmp")  # nosec B108  # test/controlled code uses tmpdir intentionally
+            validate_path("/tmp/test_path_validator_check")  # nosec B108
 
     def test_symlink_escape(self, tmp_path) -> None:
         """Symlink pointing outside base directory is caught by realpath."""
@@ -131,6 +151,103 @@ class TestValidatePath:
                 str(link / "passwd"),
                 allowed_roots=[str(allowed)],
             )
+
+
+class TestValidatePathEncodedTraversal:
+    """#14050: os.path.realpath never decodes or Unicode-normalizes, so a
+    percent-encoded or Unicode-confusable ``..`` never became a real ``..``
+    — it stayed an inert, nonexistent literal filename. That was never an
+    exploitable escape by itself, but ``validate_path``'s containment check
+    still needs a canonical string to check: without normalizing first, a
+    root that happens to contain the caller's cwd (any checkout-relative
+    root, e.g. the filesystem MCP bridge's ``config.base_dir`` allowlist)
+    lets that literal, nonexistent-but-in-bounds filename satisfy
+    containment.
+
+    An earlier version of this fix denylisted the raw/partially-decoded
+    string outright, which also rejected legitimate in-bounds ``..``
+    navigation and filenames literally containing ``..`` — a false-positive
+    regression across 20+ callers (git_mcp.py, npu_code_search_agent.py, the
+    codebase_analytics endpoints, long_running_operations.py) that
+    legitimately walk arbitrary repository trees. The fix instead
+    canonicalizes *before* the one containment check and lets that check be
+    the sole authority in both directions, exactly like it already was for
+    a literal, undisguised ``..``.
+    """
+
+    @pytest.mark.parametrize(
+        "attack_path",
+        [
+            "%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+            "..%2f..%2f..%2fetc%2fpasswd",
+            "%2e%2e/%2e%2e/%2e%2e/etc/passwd",
+            "%252e%252e%252f%252e%252e%252fetc%252fpasswd",
+            "../../etc/passwd",
+            "﹒﹒/﹒﹒/etc/passwd",
+            "‥/‥/etc/passwd",
+        ],
+    )
+    def test_disguised_traversal_rejected_even_inside_cwd(self, tmp_path, attack_path, monkeypatch) -> None:
+        """The allowed root deliberately includes cwd — the case that let a
+        disguised traversal satisfy containment before canonicalization,
+        because the raw/decoded string never resolved to a real out-of-
+        bounds path in the first place."""
+        monkeypatch.chdir(tmp_path)
+
+        with pytest.raises(ValueError, match="outside allowed directories"):
+            validate_path(attack_path, allowed_roots=[str(tmp_path)])
+
+    def test_legitimate_path_with_single_dot_segment_still_resolves(self, tmp_path) -> None:
+        """'.' is not '..' — an ordinary relative reference to cwd itself is
+        untouched by canonicalization."""
+        target = tmp_path / "file.txt"
+        target.write_text("data", encoding="utf-8")
+
+        result = validate_path(f"{tmp_path}/./file.txt", allowed_roots=[str(tmp_path)])
+
+        assert result == target.resolve()
+
+    def test_in_bounds_dotdot_navigation_accepted(self, tmp_path) -> None:
+        """The false-positive this pins: 'a/../b/file.txt' resolves to a real
+        in-bounds file and must be ACCEPTED, not denylisted on sight."""
+        (tmp_path / "a").mkdir()
+        b_dir = tmp_path / "b"
+        b_dir.mkdir()
+        target = b_dir / "file.txt"
+        target.write_text("data", encoding="utf-8")
+
+        result = validate_path(f"{tmp_path}/a/../b/file.txt", allowed_roots=[str(tmp_path)])
+
+        assert result == target.resolve()
+
+    def test_literal_dotdot_in_filename_accepted(self, tmp_path) -> None:
+        """A real filename containing '..' (not a path segment) must be
+        ACCEPTED — the denylist this replaced rejected it outright."""
+        target = tmp_path / "notes..final.txt"
+        target.write_text("data", encoding="utf-8")
+
+        result = validate_path(str(target), allowed_roots=[str(tmp_path)])
+
+        assert result == target.resolve()
+
+    def test_symlink_escape_still_rejected(self, tmp_path) -> None:
+        """A symlink pointing outside the root carries no '..' at all — the
+        pre-existing realpath+containment check this canonicalization sits
+        in front of already caught it, and still must."""
+        allowed = tmp_path / "allowed"
+        allowed.mkdir()
+        link = allowed / "escape"
+        link.symlink_to("/etc")
+
+        with pytest.raises(ValueError, match="outside allowed directories"):
+            validate_path(str(link / "passwd"), allowed_roots=[str(allowed)])
+
+    def test_percent_encoded_null_byte_rejected(self, tmp_path) -> None:
+        """A null byte smuggled in via '%00' only exists after decoding —
+        checked again post-canonicalization so it can't bypass the
+        pre-decode check the same way an encoded '..' used to."""
+        with pytest.raises(ValueError, match="empty or contains null bytes"):
+            validate_path(f"{tmp_path}/file.txt%00.png", allowed_roots=[str(tmp_path)])
 
 
 # =============================================================================
@@ -246,6 +363,19 @@ class TestResolveWithinSandbox:
         with pytest.raises(SandboxPathError, match="encoded traversal not allowed"):
             resolve_within_sandbox("%2e%2e/etc", tmp_path)
 
+    def test_double_encoded_traversal_rejected(self, tmp_path) -> None:
+        """#14050: a single unquote() pass left %252e%252e undecoded; the
+        shared _canonicalize helper now decodes to a fixed point instead."""
+        with pytest.raises(SandboxPathError, match="encoded traversal not allowed"):
+            resolve_within_sandbox("%252e%252e%252fetc", tmp_path)
+
+    def test_unicode_confusable_traversal_rejected(self, tmp_path) -> None:
+        """#14050: Unicode dot look-alikes (e.g. SMALL FULL STOP) NFKC-normalize
+        to ASCII '..'. The raw string carries no literal '..', so this only
+        the second (decode/normalize) check catches it."""
+        with pytest.raises(SandboxPathError, match="encoded traversal not allowed"):
+            resolve_within_sandbox("﹒﹒/etc", tmp_path)
+
     def test_null_byte_rejected_as_outside_sandbox(self, tmp_path) -> None:
         """A null byte reaches validate_relative_path and surfaces as outside-sandbox."""
         with pytest.raises(SandboxPathError, match="outside sandbox not allowed"):
@@ -254,3 +384,57 @@ class TestResolveWithinSandbox:
     def test_error_is_valueerror_subclass(self) -> None:
         """SandboxPathError remains a ValueError for compatibility."""
         assert issubclass(SandboxPathError, ValueError)
+
+
+# =============================================================================
+# require_path_string — boundary check against non-path values (#14217)
+# =============================================================================
+
+
+class TestRequirePathString:
+    """A sanitizer that stringifies whatever it is given turns junk into a
+    real, creatable directory tree (an object repr, or a MagicMock whose
+    default __fspath__ embeds "/" separators). This is the boundary check
+    that rejects it before it ever reaches Path()/os.makedirs.
+    """
+
+    def test_str_value_accepted_unchanged(self) -> None:
+        assert require_path_string("data/chats", context="test") == "data/chats"
+
+    def test_path_value_accepted_and_stringified(self, tmp_path) -> None:
+        result = require_path_string(tmp_path, context="test")
+        assert result == str(tmp_path)
+        assert isinstance(result, str)
+
+    def test_magicmock_rejected_with_typeerror(self) -> None:
+        """The real reproduction: an object, not a crafted string.
+
+        Path(MagicMock()) never raises — its default __fspath__ embeds "/"
+        separators and silently becomes a multi-component path. This must
+        raise instead.
+        """
+        mock = MagicMock(name="mock.unified_config_manager.get().get().get()")
+
+        with pytest.raises(TypeError, match="expected a str or Path"):
+            require_path_string(mock, context="paths.data.file_manager_root")
+
+    def test_arbitrary_object_rejected_with_typeerror(self) -> None:
+        with pytest.raises(TypeError, match="expected a str or Path"):
+            require_path_string(object(), context="test")
+
+    def test_int_rejected_with_typeerror(self) -> None:
+        with pytest.raises(TypeError, match="expected a str or Path"):
+            require_path_string(123, context="test")
+
+    def test_empty_string_rejected(self) -> None:
+        with pytest.raises(ValueError, match="empty or contains a null byte"):
+            require_path_string("", context="test")
+
+    def test_null_byte_rejected(self) -> None:
+        with pytest.raises(ValueError, match="empty or contains a null byte"):
+            require_path_string("data/file\x00.txt", context="test")
+
+    def test_error_message_includes_context(self) -> None:
+        """The context string points at the misconfigured setting."""
+        with pytest.raises(TypeError, match="settings.backup_dir"):
+            require_path_string(MagicMock(), context="settings.backup_dir")

@@ -175,6 +175,10 @@
         @scan-file="handleFileScan"
       />
 
+      <!-- Impact Analysis (#13506): what transitively calls a node. Self-contained —
+           it owns its own query and fetch, so it takes no props from this view. -->
+      <CodebaseImpactPanel />
+
       <!-- Duplicate Code Analysis (#1469, #184) -->
       <DuplicatesSection
         :duplicates="duplicateAnalysis"
@@ -463,6 +467,7 @@ import { useApiClient } from '@/plugins/api'
 import CodebaseOverviewPanel from '@/components/analytics/CodebaseOverviewPanel.vue'
 import CodebaseDependenciesPanel from '@/components/analytics/CodebaseDependenciesPanel.vue'
 import CodebaseSecurityPanel from '@/components/analytics/CodebaseSecurityPanel.vue'
+import CodebaseImpactPanel from '@/components/analytics/CodebaseImpactPanel.vue'
 import CodeSmellsSection from '@/components/analytics/CodeSmellsSection.vue'
 import DuplicatesSection from '@/components/analytics/DuplicatesSection.vue'
 import DeclarationsSection from '@/components/analytics/DeclarationsSection.vue'
@@ -992,7 +997,7 @@ onUnmounted(() => {
   border-radius: var(--radius-lg);
   padding: var(--spacing-4) var(--spacing-5);
   margin-bottom: var(--spacing-4);
-  border-left: 4px solid var(--accent-primary, #3b82f6);
+  border-left: 4px solid var(--accent-primary);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1020,15 +1025,15 @@ onUnmounted(() => {
   gap: var(--spacing-1);
 }
 
-.project-meta-item.status-ready { color: var(--color-success, #22c55e); }
-.project-meta-item.status-syncing { color: var(--color-warning, #f59e0b); }
-.project-meta-item.status-error { color: var(--color-error, #ef4444); }
+.project-meta-item.status-ready { color: var(--color-success); }
+.project-meta-item.status-syncing { color: var(--color-warning); }
+.project-meta-item.status-error { color: var(--color-error); }
 
 /* GH#11129: LLC project label displayed next to source name */
 .project-header-llc-label {
   font-size: 0.75em;
   font-weight: 500;
-  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  color: var(--color-accent-text, var(--color-accent));
   background: var(--bg-hover);
   padding: 0.125rem 0.5rem;
   border-radius: 999px;

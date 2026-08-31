@@ -15,8 +15,8 @@ import sqlite3
 import traceback
 from pathlib import Path
 
-import aioredis
 import redis
+from redis import asyncio as aioredis
 
 logger = logging.getLogger(__name__)
 
@@ -195,9 +195,14 @@ def test_backend_errors():
         # Test Redis database manager import
         import sys
 
-        sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+        from autobot_shared.paths import project_root
 
-        from utils.redis_database_manager import RedisDatabaseManager
+        sys.path.append(str(project_root()))
+
+        # #14518: `utils.redis_database_manager` exists nowhere. RedisDatabaseManager
+        # is defined in autobot_shared/redis_client.py (the canonical Redis entry
+        # point this repo mandates).
+        from autobot_shared.redis_client import RedisDatabaseManager
 
         manager = RedisDatabaseManager()
         logger.info("✅ RedisDatabaseManager imported successfully")

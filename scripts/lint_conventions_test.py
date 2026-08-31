@@ -9,16 +9,42 @@ mode: a check that cannot run must never report clean. Each test that pins a
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 SCRIPT = Path(__file__).resolve().parent / "lint-conventions.sh"
+LIB_DIR = Path(__file__).resolve().parent / "lib"
+# #13984: the script sources canonical libraries instead of carrying its own
+# copies, so the throwaway repo has to ship them too -- the fixture models a
+# checkout, and a checkout has scripts/lib/ in it.
+#
+# Derived from the script rather than listed here (#15245). A hardcoded name
+# went stale the moment the script gained a second library: the source failed,
+# the script aborted before printing anything, and five assertions read the
+# empty output as a missing message rather than as a dead script. The fixture
+# now ships whatever the script actually sources, so the next library added
+# cannot silently empty this file's output again.
+_SOURCED_LIB = re.compile(r"lib/([A-Za-z0-9_.-]+\.sh)")
+
+
+def _required_libs() -> list[str]:
+    names = sorted(set(_SOURCED_LIB.findall(SCRIPT.read_text(encoding="utf-8"))))
+    assert names, "lint-conventions.sh sources no scripts/lib/*.sh -- the pattern has drifted"
+    missing = [n for n in names if not (LIB_DIR / n).is_file()]
+    assert not missing, f"lint-conventions.sh sources libraries that do not exist: {missing}"
+    return names
 
 
 def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    """#15246: env scrubbed -- an inherited GIT_DIR would run this against the
+    real repository instead of the throwaway one at ``repo``.
+    """
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=scrubbed_git_env())
 
 
 @pytest.fixture()
@@ -28,6 +54,9 @@ def repo(tmp_path: Path) -> Path:
     (r / "scripts").mkdir(parents=True)
     (r / "scripts" / "lint-conventions.sh").write_bytes(SCRIPT.read_bytes())
     (r / "scripts" / "lint-conventions.sh").chmod(0o755)
+    (r / "scripts" / "lib").mkdir(parents=True)
+    for name in _required_libs():
+        (r / "scripts" / "lib" / name).write_bytes((LIB_DIR / name).read_bytes())
     _git(r.parent, "init", "-q", "-b", "main", str(r))
     _git(r, "config", "user.email", "t@example.invalid")
     _git(r, "config", "user.name", "t")
@@ -232,3 +261,16 @@ def test_a_subject_containing_the_field_separator_cannot_shift_the_parse(repo: P
     _bot_commit(repo, "build(deps): bump a\x1fb group", "dependabot[bot]", "d[bot]@users.noreply.github.com")
 
     assert run(repo, "--range", "HEAD~1..HEAD").returncode == 0
+
+
+def test_a_missing_git_scope_library_is_fatal_not_clean(repo: Path) -> None:
+    """#13984: the shared resolver is a hard dependency, not a nice-to-have.
+
+    Deleting it must stop the script, not degrade it into a run that resolves
+    no base and reports a clean tree — the failure shape every rule in that
+    library exists to prevent.
+    """
+    (repo / "scripts" / "lib" / "git-scope.sh").unlink()
+    res = run(repo, "--all")
+    assert res.returncode != 0
+    assert "refusing to report clean" in res.stderr

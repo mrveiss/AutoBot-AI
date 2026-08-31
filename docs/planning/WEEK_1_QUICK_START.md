@@ -19,7 +19,7 @@
 - [x] 5-week master plan: `planning/tasks/backend-vulnerabilities-implementation-plan.md`
 - [x] Week 1 detailed guide: `planning/tasks/week-1-database-initialization-detailed-guide.md`
 - [x] Status tracker: `planning/BACKEND_VULNERABILITIES_FIX_STATUS.md`
-- [x] Architecture analysis: `docs/architecture/BACKEND_CRITICAL_ISSUES_ARCHITECTURAL_ANALYSIS.md`
+- [x] Architecture analysis: `docs/analysis/ANA_backend-critical-issues-architectural-2025-10-05.md`
 
 ---
 

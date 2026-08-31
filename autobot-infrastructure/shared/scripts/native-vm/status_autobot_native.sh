@@ -8,7 +8,11 @@ set -e
 
 # Load SSOT configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" || {
+    echo "FATAL: ${SCRIPT_DIR}/../lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
 
 # Load unified configuration system (legacy)
 _NATIVE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &> /dev/null && pwd)"
@@ -50,7 +54,7 @@ HEALTH_URLS[frontend]="http://${AUTOBOT_FRONTEND_HOST:-localhost}/"
 HEALTH_URLS[npu-worker]="http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health"
 HEALTH_URLS[redis]="${AUTOBOT_REDIS_HOST:-localhost}:${AUTOBOT_REDIS_PORT:-6379}"
 HEALTH_URLS[ai-stack]="http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}/health"
-HEALTH_URLS[browser]="http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health"
+HEALTH_URLS[browser]="http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health"
 
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 SSH_USER="${AUTOBOT_SSH_USER:-autobot}"

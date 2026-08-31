@@ -9,10 +9,12 @@
  * GH#4983: Replaced fake text-input with real SSH terminal plugin.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { SshTerminal } from '@autobot/terminal'
-import { getHosts, getSlmApiBase } from '@/config/ssot-config'
+import { getSlmApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { useAuthStore } from '@/stores/auth'
+import { useFleetStore } from '@/stores/fleet'
 
 const logger = createLogger('TerminalTool')
 
@@ -23,12 +25,68 @@ interface Host {
   description: string
 }
 
-const hosts = ref<Host[]>(getHosts())
-const selectedHostId = ref(hosts.value[0]?.id || '')
+// #15227: the selector used to be `getHosts()` — a literal array of the seven
+// VMs the fleet had when it was written, so a node enrolled since was
+// unreachable from this page and a node retired still appeared on it. The SLM
+// node registry defines the fleet; this reads it, and says so when it cannot.
+const fleet = useFleetStore()
+
+const hosts = computed<Host[]>(() =>
+  fleet.nodeList.map(node => ({
+    id: node.node_id,
+    name: node.hostname,
+    ip: node.ip_address,
+    description: (node.roles ?? []).join(', '),
+  })),
+)
+
+const selectedHostId = ref('')
 const isConnected = ref(false)
 const connectionError = ref<string | null>(null)
 
 const currentHost = computed(() => hosts.value.find(h => h.id === selectedHostId.value))
+
+/**
+ * What the page is showing, so an empty selector and an unreadable registry
+ * never look alike (#15227). `hasNodes` is checked before `failed` on purpose:
+ * a refresh that fails after a good read leaves the previous list on screen,
+ * and that list is stale, not absent — the banner says which.
+ */
+const nodeListState = computed<'loading' | 'failed' | 'empty' | 'ready'>(() => {
+  if (fleet.isLoading && hosts.value.length === 0) return 'loading'
+  if (fleet.error) return 'failed'
+  if (hosts.value.length === 0) return 'empty'
+  return 'ready'
+})
+
+const isShowingStaleList = computed(() => Boolean(fleet.error) && hosts.value.length > 0)
+
+async function loadNodes(): Promise<void> {
+  try {
+    await fleet.fetchNodes()
+  } catch (e) {
+    logger.error('Failed to load the fleet node list:', e)
+  }
+}
+
+// Keep a valid selection without ever inventing one: the first node when
+// nothing is selected, and nothing at all when the fleet is empty.
+watch(
+  hosts,
+  list => {
+    if (!list.some(h => h.id === selectedHostId.value)) {
+      selectedHostId.value = list[0]?.id ?? ''
+    }
+  },
+  { immediate: true },
+)
+
+onMounted(loadNodes)
+
+// #14991: the backend now authenticates this handshake. SshTerminal has no
+// store of its own, so this app supplies the token it already holds for
+// every other SLM API call (stores/auth.ts).
+const authToken = computed(() => useAuthStore().token)
 
 function onConnected() {
   isConnected.value = true
@@ -69,19 +127,46 @@ function onError(message: string) {
 
           <select
             v-model="selectedHostId"
-            :disabled="isConnected"
+            :disabled="isConnected || nodeListState !== 'ready'"
             class="text-sm px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
           >
             <option v-for="host in hosts" :key="host.id" :value="host.id">
               {{ host.name }} ({{ host.ip }})
             </option>
           </select>
+
+          <span v-if="nodeListState === 'loading'" class="text-xs text-gray-500">
+            {{ $t('tools.admin.terminalTool.loadingNodes') }}
+          </span>
+          <span v-else-if="nodeListState === 'empty'" class="text-xs text-gray-500">
+            {{ $t('tools.admin.terminalTool.noNodesEnrolled') }}
+          </span>
         </div>
 
         <div class="flex items-center gap-1.5 text-xs">
           <div class="w-2 h-2 rounded-full" :class="isConnected ? 'bg-green-500' : 'bg-red-500'"></div>
           <span class="text-gray-600">{{ isConnected ? $t('tools.admin.terminalTool.connected') : $t('tools.admin.terminalTool.disconnected') }}</span>
         </div>
+      </div>
+
+      <!-- #15227: an unreadable node list is never shown as an empty or a
+           current fleet. It says which it is, and offers the retry. -->
+      <div
+        v-if="fleet.error"
+        class="m-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 flex items-center justify-between gap-3"
+      >
+        <span>
+          {{ isShowingStaleList
+            ? $t('tools.admin.terminalTool.nodeListStale')
+            : $t('tools.admin.terminalTool.nodeListUnavailable') }}
+        </span>
+        <button
+          class="px-2 py-1 text-xs border border-amber-300 rounded-sm hover:bg-amber-100 transition-colors"
+          :disabled="fleet.isLoading"
+          @click="loadNodes"
+        >
+          {{ $t('tools.admin.terminalTool.retryNodeList') }}
+        </button>
       </div>
 
       <div v-if="connectionError" class="m-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
@@ -93,12 +178,18 @@ function onError(message: string) {
           v-if="selectedHostId"
           :host-id="selectedHostId"
           :ws-base-path="`${getSlmApiBase()}/terminal/ws/ssh/`"
+          :auth-token="authToken"
           class="h-full"
           @connected="onConnected"
           @disconnected="onDisconnected"
           @error="onError"
         />
-        <div v-else class="h-full flex items-center justify-center text-gray-500 text-sm">{{ $t('tools.admin.terminalTool.selectAHostAboveToStart') }}</div>
+        <div v-else class="h-full flex items-center justify-center text-gray-500 text-sm">
+          <span v-if="nodeListState === 'loading'">{{ $t('tools.admin.terminalTool.loadingNodes') }}</span>
+          <span v-else-if="nodeListState === 'failed'">{{ $t('tools.admin.terminalTool.nodeListUnavailable') }}</span>
+          <span v-else-if="nodeListState === 'empty'">{{ $t('tools.admin.terminalTool.noNodesEnrolled') }}</span>
+          <span v-else>{{ $t('tools.admin.terminalTool.selectAHostAboveToStart') }}</span>
+        </div>
       </div>
     </div>
 

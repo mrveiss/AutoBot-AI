@@ -98,6 +98,16 @@ services:
       - /app/autobot-backend/.cache:mode=1777
       - /app/autobot-backend/data:mode=1777  # conversation_file_manager creates data dir on init
       - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
+      # #14081/#14113: SecretsManager/SecretsService resolve their storage
+      # through ssot_config.path.data_path. docker-compose.yml now pins
+      # AUTOBOT_DATA_DIR=/app/data (the persistent backend_data volume, see
+      # its comment there for the full data-loss mechanism this closes) so
+      # this path is normally never touched. Kept as a defence-in-depth
+      # fallback for an operator who overrides AUTOBOT_DATA_DIR back to an
+      # /opt/autobot-relative value: without it, read_only would turn that
+      # override into the same import-time "Read-only file system" crash
+      # this PR fixed. Still ephemeral if ever actually used -- #14122.
+      - /opt/autobot/data:mode=1777
     deploy:
       resources:
         limits:
@@ -115,6 +125,9 @@ services:
       - /app/autobot-backend/.cache:mode=1777
       - /app/autobot-backend/data:mode=1777  # conversation_file_manager creates data dir on init
       - /app/autobot-backend/logs:mode=1777  # logging_manager creates logs/backup dirs on init
+      # See autobot-backend above (#14081/#14113/#14122) -- same image,
+      # same resolver, same crash if this worker imports the secrets store.
+      - /opt/autobot/data:mode=1777
     deploy:
       resources:
         limits:

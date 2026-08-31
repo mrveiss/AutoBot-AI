@@ -23,5 +23,5 @@ Application screenshots showcasing AutoBot features and UI.
 
 ## Related Sections
 
-- [[../designs/_index\|Designs]] — Design mockups and wireframes
+- [[../design/mockups/_index\|Design Mockups]] — UI mockups and wireframes (folded into docs/design/, see #15206)
 - [[../user-guide/_index\|User Guide]] — User guides referencing these screenshots

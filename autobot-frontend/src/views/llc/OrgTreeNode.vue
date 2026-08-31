@@ -8,6 +8,12 @@ import type { AgentDisplayStatus } from '@/composables/llc/llcStatus'
 
 export interface OrgNode {
   id: string
+  // AgentOrgNode UUID PK for an agent, or the raw user UUID for a person
+  // (`OrgChartNode.node_id`, GH#10032) — the assignment keyspace
+  // `assignee_agent_id` references. Optional so fixtures written before
+  // #13940 (which had no reason to carry it) keep compiling; every real
+  // response includes it.
+  node_id?: string
   name: string
   title: string
   status: AgentDisplayStatus
@@ -45,7 +51,9 @@ const emit = defineEmits<{ select: [node: OrgNode] }>()
       <p class="text-xs text-autobot-text-muted truncate">{{ node.title }}</p>
       <div class="flex justify-center items-center gap-1 mt-1">
         <span class="w-2 h-2 rounded-full" :class="agentStatusColor(node.status)" />
-        <span class="text-xs text-autobot-text-muted">{{ node.adapter_type }}</span>
+        <!-- adapter_type is agent vocabulary; a person's card already shows their
+             role as the title, so repeating it (or printing "human") is noise. -->
+        <span v-if="!node.is_human" class="text-xs text-autobot-text-muted">{{ node.adapter_type }}</span>
       </div>
     </div>
 

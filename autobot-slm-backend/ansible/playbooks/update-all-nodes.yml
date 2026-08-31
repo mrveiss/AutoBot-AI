@@ -211,6 +211,14 @@
 # =============================================================================
 # PLAY 1: Update SLM Server First
 # =============================================================================
+# #14336: `hosts: slm_server` deliberately EXCLUDES a node whose only role is
+# slm-agent (#14330 — that node has no /opt/autobot/code_source or
+# autobot-slm-backend checkout, so this play's manager-only tasks fail on it).
+# Such a node still needs its agent redeployed; `services/inventory_builder.py`
+# (`groups_for_role_tokens`, the `is_agent_only` branch) routes it into
+# `infrastructure` instead, so Play 2 below reaches it via the
+# `slm_node_id is defined` agent-redeploy task. Do not "fix" this by adding
+# agent-only nodes here — that reintroduces #14330.
 - name: "Play 1 - Update SLM Server First"
   hosts: slm_server
   gather_facts: false
@@ -271,11 +279,30 @@
     - name: "[PLAY 1] SLM | Record deployed commit marker (#12223, #12202)"
       ansible.builtin.shell:
         cmd: >-
-          git -C {{ code_source_dir | default('/opt/autobot/code_source') }} rev-parse HEAD
+          git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}
+          -C {{ code_source_dir | default('/opt/autobot/code_source') }}
+          rev-parse HEAD
           > /opt/autobot/autobot-slm-backend/.deployed_commit
       changed_when: false
       become: true
       tags: [slm]
+
+    # #14624: render the systemd unit from the SAME task file the role uses.
+    #
+    # This play deploys the backend by unarchive and never runs slm_manager, so
+    # the unit was refreshed only on a full provision. A host was found running
+    # one from two months earlier, predating the AUTOBOT_PROJECT_ROOT line the
+    # template has carried since #14575 -- and once #14544 raised instead of
+    # guessing, the backend crash-looped with no in-band recovery, because the
+    # endpoints that deploy a fix live in the service that will not start.
+    #
+    # `tasks_from` rather than a copied template task: a second copy is what
+    # drifts, and the marker-write above is that mistake already made once.
+    - name: "[PLAY 1] SLM | Refresh the backend systemd unit (#14624)"
+      ansible.builtin.include_role:
+        name: slm_manager
+        tasks_from: service_units.yml
+      tags: [slm, systemd]
 
     - name: "[PLAY 1] SLM | Own the deployed-commit marker (#12223)"
       file:
@@ -518,6 +545,12 @@
 # carries app roles, so pure SLM servers still skip this play while co-located
 # backend/frontend/worker components finally receive updates. Ordering is
 # preserved: Play 1 updates the SLM components first.
+# #14336: an agent-only node (roles reduce to nothing but slm-agent — see
+# Play 1's note above) also joins `infrastructure` here, purely to reach the
+# "SLM Agent | Redeploy agent" task below (`when: slm_node_id is defined`,
+# true for every node). Every other task in this play stays gated on its own
+# `group_names` check, so an agent-only node runs that one task and nothing
+# else.
 - name: "Play 2 - Update Other Infrastructure Nodes"
   hosts: infrastructure
   gather_facts: false
@@ -877,6 +910,23 @@
         tasks_from: unit_only
       when: "'backend' in group_names"
       tags: [backend, systemd, unit]
+
+    # #14866: seed the access control enforcement posture on every update.
+    # Provisioning alone is not enough: every host in the fleet was provisioned
+    # before the seeder existed and nothing re-provisions a working box, so
+    # without this play they would sit at the unset key -- resolved as
+    # `disabled` -- forever. Runs BEFORE the restart so the backend comes up
+    # with a posture already in the flag store.
+    #
+    # `tasks_from` per the #12959 delivery contract: enforcement_mode.yml does
+    # no provisioning, only one idempotent SET NX that never overwrites a value
+    # an operator set deliberately.
+    - name: "[PLAY 2] Backend | Provision access control enforcement mode (#14866)"
+      ansible.builtin.include_role:
+        name: access_control
+        tasks_from: enforcement_mode
+      when: "'backend' in group_names"
+      tags: [backend, access-control, enforcement]
 
     - name: "[PLAY 2] Backend | Restart service"
       systemd:
@@ -1723,12 +1773,21 @@
       pause:
         seconds: 5
 
+    # #14701: this stage is named Verify and could not fail. `ignore_errors`
+    # meant a run whose SLM never came back still printed "Fleet Update
+    # Complete" with "SLM: Check manually" and exited successfully -- a check
+    # that cannot fail is worse than no check, because the green run reads as
+    # verified. Retried rather than probed once: Play 2 restarts services, so a
+    # single immediate probe races the restart it follows.
     - name: Check SLM health
       uri:
         url: "https://{{ slm_host }}/slm/api/health"
         validate_certs: false
+        status_code: 200
       register: slm_health
-      ignore_errors: true
+      until: slm_health.status == 200
+      retries: 12
+      delay: 10
 
     - name: Clean up deploy archives
       file:

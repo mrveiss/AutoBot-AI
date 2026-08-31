@@ -19,6 +19,7 @@ from typing import Callable, List, Set
 from fastapi import HTTPException, Request, status
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_constants import TTL_5_MINUTES
 from user_management.config import get_deployment_config
@@ -432,6 +433,11 @@ async def _emit_permission_denied_audit(
             session.add(entry)
     except Exception as exc:
         logger.error("RBAC: failed to persist permission-denied audit entry: %s", exc)
+        # #14654: keep swallowing -- a failing audit must never convert a clean
+        # 403 into a 500 -- but stop letting the loss be invisible. A live SLM
+        # dropped every audit record for hours behind a 200, with the only
+        # trace in an error log.
+        record_audit_write_failure_safely(AuditAction.PERMISSION_DENIED, type(exc).__name__)
 
 
 def _request_audit_context(request: Request) -> tuple[str, str | None, str | None]:

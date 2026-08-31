@@ -13,6 +13,7 @@ import ast
 import hashlib
 import logging
 import os
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -39,6 +40,35 @@ _FRONTEND_COMPONENTS: frozenset[str] = frozenset({"autobot-frontend", "autobot-s
 # Union set — used as the broadest possible filter and by tests that call
 # _collect_checksums without a component (backward-compatible default).
 _INCLUDE_EXTENSIONS: frozenset[str] = _BACKEND_EXTENSIONS | _FRONTEND_EXTENSIONS
+
+
+#: Files present in a component's SOURCE that its deploying role deliberately
+#: never copies, per component (#14283).
+#:
+#: Only the slm_agent role needs this: it copies its source file-by-file
+#: (roles/slm_agent/tasks/main.yml) and omits the co-located tests, so the walk
+#: found `health_collector_state_change_test.py` and `version_test.py` in
+#: code_source, absent on the node, and reported `autobot-slm-agent` stale
+#: forever — a condition no amount of syncing can clear.
+#:
+#: Deliberately NOT global. The backend components rsync their whole tree, so
+#: their co-located tests ARE deployed and ARE comparable — 1382 files under
+#: autobot-backend and 126 under autobot-slm-backend on a live host. Excluding
+#: `*_test.py` everywhere would hide real drift in all of them.
+_SOURCE_ONLY_PATTERNS: dict[str, tuple[str, ...]] = {
+    # `*_test.py` only: this repo co-locates tests with that suffix, and the
+    # agent source carries exactly two. A `test_*.py` pattern was here too and
+    # matched nothing — dead configuration that reads as protection, which
+    # `test_every_excluded_pattern_matches_something_in_the_source` rejects. If
+    # the convention ever changes, that test fails and the pattern is added then,
+    # rather than being carried on speculation now.
+    "autobot-slm-agent": ("*_test.py",),
+}
+
+
+def source_only_patterns(component: str) -> tuple[str, ...]:
+    """Filename patterns present in *component*'s source but never deployed."""
+    return _SOURCE_ONLY_PATTERNS.get(component, ())
 
 
 def comparable_extensions(component: str) -> frozenset[str]:
@@ -381,6 +411,7 @@ def _file_checksum(path: Path, block_size: int = 65536) -> str:
 def _collect_checksums(
     root: Path,
     extensions: frozenset[str] | None = None,
+    exclude_patterns: tuple[str, ...] = (),
 ) -> Dict[str, str]:
     """Walk *root* and return a mapping of relative-path → SHA-256 checksum.
 
@@ -393,6 +424,9 @@ def _collect_checksums(
         root: Directory to scan.
         extensions: Frozenset of lower-case file-extension strings to include.
             Defaults to ``_INCLUDE_EXTENSIONS`` (the backend ∪ frontend set).
+        exclude_patterns: fnmatch patterns for files the deploying role never
+            copies (#14283). Applied to BOTH sides, so a source-only file cannot
+            read as drift and cannot mask a deployed file of the same name.
 
     Returns:
         Dict mapping POSIX-style relative path strings to hex digest strings.
@@ -407,6 +441,8 @@ def _collect_checksums(
         for filename in filenames:
             filepath = Path(dirpath) / filename
             if filepath.suffix not in active_extensions:
+                continue
+            if any(fnmatch(filename, pattern) for pattern in exclude_patterns):
                 continue
             try:
                 rel = filepath.relative_to(root).as_posix()
@@ -681,8 +717,13 @@ def compute_drift(
         return [], 0
 
     extensions = comparable_extensions(component) if component is not None else None
-    src_checksums = _collect_checksums(src_path, extensions)
-    dep_checksums = _collect_checksums(dep_path, extensions)
+    # #14283: applied to BOTH sides. On the source side it stops a file the role
+    # never copies reading as drift; on the deployed side it keeps the filter
+    # symmetric, so a file that somehow arrives on a node under an excluded name
+    # is not silently compared against nothing.
+    source_only = source_only_patterns(component) if component is not None else ()
+    src_checksums = _collect_checksums(src_path, extensions, source_only)
+    dep_checksums = _collect_checksums(dep_path, extensions, source_only)
 
     rendered = _RENDERED_FILES.get(component or "", {})
     # Rendered files are always compared, even when neither tree lists them:

@@ -27,12 +27,32 @@ from circuit_breaker import (
 )
 from services.resilience.error_budget import get_error_budget_tracker
 from services.resilience.fallback_manager import get_fallback_manager
+from utils.error_catalog import SOURCE_YAML, get_error_catalog_instance
 
 logger = get_logger(__name__)
 
 # Prefix must NOT include "/api" — the app factory prepends it (#9864:
 # the old "/api/resilience" prefix served /api/api/resilience/*).
 router = APIRouter(prefix="/resilience", tags=["resilience"])
+
+
+def _error_catalog_state() -> tuple[bool, dict]:
+    """(is the deployed catalog in use, diagnostic fields for the probe).
+
+    #12969: the deployed ``error_messages.yaml`` went unread on every host and
+    the only trace was one startup log line, which two separate log sweeps read
+    past. Running on the built-in fallback is not an outage — the platform still
+    answers — but it means every edit to the deployed catalog is silently a
+    no-op, and that is a state something has to be able to observe. It is
+    reported here rather than as its own probe because this is the probe that
+    already answers "is error handling healthy".
+    """
+    catalog = get_error_catalog_instance()
+    on_deployed_catalog = catalog.source == SOURCE_YAML
+    return on_deployed_catalog, {
+        "error_catalog_source": catalog.source,
+        "error_catalog_path": str(catalog.catalog_path) if catalog.catalog_path else None,
+    }
 
 
 @register_health_probe(KnownProbes.ERROR_RESILIENCE)
@@ -43,8 +63,9 @@ async def probe_error_resilience(
 
     Singleton resolution alone hid the failure mode the file was designed
     to surface (Issue #4342). Reports ``degraded`` when any circuit
-    breaker is open or any error budget is exhausted, and passes the
-    affected names through ``data`` for diagnostic dashboards.
+    breaker is open, any error budget is exhausted, or the deployed error
+    catalog is not the one in use (#12969), and passes the affected names
+    through ``data`` for diagnostic dashboards.
     """
     try:
         cb_status = get_circuit_breaker_manager().get_status()
@@ -52,26 +73,26 @@ async def probe_error_resilience(
         get_fallback_manager()  # liveness only — no rich state to inspect
         open_breakers = [name for name, cb in cb_status.items() if cb.get("state") == "open"]
         exhausted_budgets = [name for name, budget in budget_status.items() if budget.get("has_budget") is False]
-        if open_breakers or exhausted_budgets:
+        catalog_deployed, catalog_data = _error_catalog_state()
+        data = {
+            "total_breakers": len(cb_status),
+            "total_budgets": len(budget_status),
+            **catalog_data,
+        }
+        if open_breakers or exhausted_budgets or not catalog_deployed:
+            reasons = [
+                f"{len(open_breakers)} breaker(s) open",
+                f"{len(exhausted_budgets)} budget(s) exhausted",
+            ]
+            if not catalog_deployed:
+                reasons.append("error catalog running on the built-in fallback, not the deployed file")
             return ComponentHealth(
                 name="error_resilience",
                 status="degraded",
-                detail=(f"{len(open_breakers)} breaker(s) open, " f"{len(exhausted_budgets)} budget(s) exhausted"),
-                data={
-                    "open_breakers": open_breakers,
-                    "exhausted_budgets": exhausted_budgets,
-                    "total_breakers": len(cb_status),
-                    "total_budgets": len(budget_status),
-                },
+                detail=", ".join(reasons),
+                data={"open_breakers": open_breakers, "exhausted_budgets": exhausted_budgets, **data},
             )
-        return ComponentHealth(
-            name="error_resilience",
-            status="ok",
-            data={
-                "total_breakers": len(cb_status),
-                "total_budgets": len(budget_status),
-            },
-        )
+        return ComponentHealth(name="error_resilience", status="ok", data=data)
     except Exception as exc:
         return ComponentHealth(
             name="error_resilience",

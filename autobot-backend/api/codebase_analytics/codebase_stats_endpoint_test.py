@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import now_utc
 
 
@@ -399,7 +400,7 @@ class TestNormalizeHardcodeRecord:
             "value": "127.0.0.1",
             "line": 1,
             "file": "x.py",
-            "severity": "low",  # override default
+            "severity": Severity.LOW.value,  # override default
         }
         normalized = _normalize_hardcode_record(record)
 
@@ -423,7 +424,7 @@ class TestNormalizeHardcodeRecord:
             "value": "8001",
             "line": 10,
             "file": "app.py",
-            "severity": "medium",
+            "severity": Severity.MEDIUM.value,
             "context": "PORT = 8001",
         }
         normalized = _normalize_hardcode_record(record)

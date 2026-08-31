@@ -152,6 +152,17 @@ pre-commit install
 
 Hooks run automatically on each commit, checking Black formatting, isort, flake8, autoflake, mypy, and bandit. Fix any reported issues before committing again. The CI workflow (`enforce-precommit.yml`) validates these same checks on every PR.
 
+`pre-commit install` is a separate step from `bash scripts/install-git-hooks.sh`, and both are needed. The installer copies AutoBot's own standalone `pre-commit`/`pre-push` hooks (the protected-branch guard, `tools/git-hooks/`); `pre-commit install` wires the framework hooks in `.pre-commit-config.yaml`. **Both write `.git/hooks/pre-commit`, so whichever runs second replaces the other.** Run the installer first and `pre-commit install` second, and re-run `pre-commit install` any time you re-run the installer. Then check what is actually installed rather than assuming:
+
+```bash
+cat .git/hooks/pre-commit        # which of the two is in place
+ls .git/hooks/pre-commit.legacy  # what pre-commit displaced, if anything
+```
+
+The protected-branch rule is enforced on the server regardless, so a displaced branch guard costs you a rejected push rather than a bad commit on `main`.
+
+Not every hook's verdict carries the same weight in CI, and the split is deliberate. Formatter and linter findings are reported as warnings by `enforce-precommit.yml`; a hook that could not *execute* fails the job (#14181); and a **behavioural** hook — one whose entry is a test suite asserting shipped behaviour, currently `ssot-config-lib-guard` — fails the job on a finding (#14878), because there the finding *is* the regression.
+
 ---
 
 ## Good First Issues

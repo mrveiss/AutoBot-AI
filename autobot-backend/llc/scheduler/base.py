@@ -42,6 +42,7 @@ stop() semantics:
 
 import asyncio
 import logging
+import sys
 from typing import Optional
 
 from autobot_shared.env_utils import env_float
@@ -69,6 +70,31 @@ SUPPORTS_PENDING_CANCELLATION = hasattr(asyncio.Task, "cancelling")
 PENDING_CANCELLATION_REQUIREMENT = (
     "requires asyncio.Task.cancelling() (Python 3.11+); the platform floor is 3.14, and CI runs 3.14"
 )
+
+# #13369: enforce that floor at import instead of only describing it.
+#
+# Before this guard the requirement was recorded in a constant that nothing acted
+# on: SUPPORTS_PENDING_CANCELLATION was read only by two test modules to SKIP
+# themselves. On a sub-floor interpreter that combination is the worst of both
+# outcomes — the tests that prove the masked-cancel guard works go green by
+# skipping (an absent result reading as a clean one), while production keeps the
+# unguarded ``current.cancelling()`` call below and raises AttributeError from
+# inside a background poll loop, where it surfaces as an unrelated-looking
+# scheduler fault hours after startup.
+#
+# Failing here names the requirement at the moment the module loads, which is the
+# "fail fast at import" arm of #13369. The alternative arm — a silent
+# ``getattr(current, "cancelling", lambda: False)()`` fallback — is deliberately
+# NOT taken: it would turn the #13085/#13203 masked-cancel guard permanently off
+# and buy every poll loop a full re-armed interval after shutdown, which is the
+# exact defect those issues fixed.
+if not SUPPORTS_PENDING_CANCELLATION:  # pragma: no cover - unreachable at/above the 3.14 platform floor
+    raise RuntimeError(
+        f"{__name__} {PENDING_CANCELLATION_REQUIREMENT}, but this interpreter is "
+        f"Python {sys.version_info.major}.{sys.version_info.minor}. The LLC poll-loop "
+        "schedulers cannot honour a masked cancellation on it. Run AutoBot on the "
+        "supported interpreter rather than disabling the guard."
+    )
 
 
 def honour_pending_cancellation() -> None:

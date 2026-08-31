@@ -11,8 +11,9 @@
 #   1. Worktrees under .worktrees/ for closed issues
 #   2. Local branches (any prefix) for closed issues
 #   3. Remote branches for closed issues (squash-merge aware)
+#   4. `.session/HANDOFF-<branch>.md` files whose branch no longer exists
 #
-# Fixes: #7104, #2508
+# Fixes: #7104, #2508, #13848
 
 set -euo pipefail
 
@@ -33,7 +34,8 @@ for arg in "$@"; do
         --help|-h)
             echo "Usage: $0 [--dry-run] [--branches-only]"
             echo ""
-            echo "Removes git worktrees and branches whose GitHub issues are closed."
+            echo "Removes git worktrees and branches whose GitHub issues are closed,"
+            echo "and reaps session handoffs whose branch is gone."
             echo ""
             echo "Options:"
             echo "  --dry-run        Show what would be cleaned without making changes"
@@ -57,6 +59,10 @@ fi
 # Shared safe-pruning guards (issue-number extraction, recency, open-PR).
 # shellcheck source=scripts/lib/branch-guards.sh
 source "${REPO_ROOT}/scripts/lib/branch-guards.sh"
+
+# Session-handoff reaping rules (#13848).
+# shellcheck source=scripts/lib/session-handoffs.sh
+source "${REPO_ROOT}/scripts/lib/session-handoffs.sh"
 
 wt_removed=0
 wt_skipped=0
@@ -177,8 +183,18 @@ if $DRY_RUN; then
     echo "  (dry-run mode -- no changes will be made)"
 fi
 
-# Fetch latest remote state
-git -C "$REPO_ROOT" fetch --prune 2>/dev/null || true
+# Fetch latest remote state.
+#
+# A swallowed failure here is not cosmetic: every later "is this branch gone?"
+# question is answered from local refs, so an unreachable or unauthenticated
+# remote makes live branches look deleted. Record the outcome instead of
+# discarding it -- Phase 4 refuses to delete anything on stale refs.
+REMOTE_REFS_FRESH=true
+if ! git -C "$REPO_ROOT" fetch --prune 2>/dev/null; then
+    REMOTE_REFS_FRESH=false
+    echo "  WARNING: 'git fetch --prune' failed -- remote refs may be stale."
+    echo "           Branch-deletion decisions below are based on local refs only."
+fi
 
 # Check local branches with issue numbers for closed issues
 local_branches=$(git -C "$REPO_ROOT" branch | sed 's/^[* +]*//' | grep -v "${BASE_BRANCH}\|main\|master" || true)
@@ -250,6 +266,21 @@ if [ -n "$remote_branches" ]; then
             fi
         fi
     done <<< "$remote_branches"
+fi
+
+# ---------- Phase 4: Session handoff reaping ----------
+
+echo ""
+echo "=== Phase 4: Session handoff reaping (#13848) ==="
+if [ "${REMOTE_REFS_FRESH}" != "true" ]; then
+    echo "  SKIPPED: the remote fetch failed, so 'branch is gone' cannot be trusted."
+    echo "           Reaping on stale refs would delete handoffs for live branches."
+    echo "           Re-run once the remote is reachable."
+elif $DRY_RUN; then
+    echo "  (dry-run mode -- no changes will be made)"
+    reap_session_handoffs "${REPO_ROOT}/.session" --dry-run
+else
+    reap_session_handoffs "${REPO_ROOT}/.session"
 fi
 
 # Final prune

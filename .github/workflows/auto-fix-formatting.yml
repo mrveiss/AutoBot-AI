@@ -21,6 +21,13 @@ permissions:
 jobs:
   autofix:
     runs-on: ubuntu-latest
+    # #14153: this job pushes a commit back to the PR branch, which requires
+    # write access to the head repo. On a fork PR that access does not exist —
+    # neither AUTOBOT_PUSH_TOKEN nor GITHUB_TOKEN can push to someone else's
+    # repository — so "Checkout PR branch" failed structurally on every fork
+    # PR regardless of the change. Skip rather than fail: a bot that cannot
+    # push must not report failure for being unable to.
+    if: github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Checkout PR branch
@@ -33,7 +40,9 @@ jobs:
           # treats that bot as external — so every run the push triggers is
           # created with conclusion=action_required and never starts. Falls back
           # to GITHUB_TOKEN so this workflow keeps working before the secret is
-          # configured; the runs simply park as they do today.
+          # configured; the runs simply park as they do today. #14311's
+          # `approve-parked-runs` job below repairs that fallback case
+          # immediately instead of leaving it parked.
           token: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Set up Python 3.12
@@ -81,3 +90,52 @@ jobs:
             git push
             echo "✅ Formatting fixes committed and pushed"
           fi
+
+  # #14311: when the token above falls back to the default GITHUB_TOKEN (or
+  # even with AUTOBOT_PUSH_TOKEN configured but still resolving to a
+  # bot/app identity the fork-PR approval policy does not recognise as a
+  # human), the push in `autofix` is authored by github-actions[bot]. This
+  # repository's fork-PR approval policy (all_external_contributors) treats
+  # that bot as an external contributor, so the `pull_request` run the push
+  # triggers is created with conclusion=action_required and never starts —
+  # the same defect as #12823, guarded in general by ci-dispatch-watchdog.yml.
+  #
+  # That watchdog's own `pull_request` trigger cannot self-repair THIS case:
+  # the `synchronize` event the push raises is itself attributed to
+  # github-actions[bot], so a watchdog run it triggers would park too,
+  # awaiting the very approval it exists to grant (see the header comment in
+  # ci-dispatch-watchdog.yml). Its `schedule` cron still catches this within
+  # 15 minutes, but leaves the PR parked with zero visible failing checks
+  # until then. This job repairs it immediately — in the SAME workflow run
+  # that did the push, which was triggered by whatever human action opened
+  # or updated the PR and is therefore not itself parked — using the
+  # identical script the watchdog runs (`ci_dispatch_watchdog.py --check
+  # dispatch`), not a reimplementation of it.
+  approve-parked-runs:
+    needs: autofix
+    # Mirrors the `autofix` job's own fork guard above: a fork PR never
+    # reaches the push (autofix is skipped for it), and this job must never
+    # widen approval to a fork-origin run regardless. The watchdog script
+    # also enforces this internally — it only approves runs whose head
+    # repository is this repository AND whose triggering actor is
+    # github-actions[bot] — but gating here means a fork PR run never even
+    # attempts the call with its read-only token.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write
+      statuses: write
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Approve the run this push just parked
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          WATCHDOG_BASE_BRANCH: Dev_new_gui
+          WATCHDOG_ONLY_PR: ${{ github.event.pull_request.number }}
+        run: python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch

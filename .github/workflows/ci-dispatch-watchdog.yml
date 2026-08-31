@@ -76,7 +76,22 @@ on:
 concurrency:
   # Never cancel a sweep in flight — a half-finished sweep leaves some PRs
   # without a published status, which is the exact condition being guarded.
-  group: ci-dispatch-watchdog
+  #
+  # The group is scoped to WHAT IS BEING SWEPT, not to the workflow (#13384).
+  # A repo-global group looks like it honours `cancel-in-progress: false`, but
+  # GitHub keeps at most one in-progress AND one pending run per group: the
+  # third arrival cancels the pending one. With a `pull_request` trigger on
+  # every synchronize and a busy queue, the watchdog's own sweeps therefore
+  # cancelled each other and nothing was published. Observed 2026-08-03 (two
+  # cancelled one second apart, ~120 runs left parked for a human) and again
+  # 2026-08-16 (16 of 30 consecutive runs cancelled).
+  #
+  # A `pull_request` sweep is already narrowed to the firing PR via
+  # WATCHDOG_ONLY_PR, so per-PR groups are not merely safe — they match what
+  # the job actually does, and let twelve PR sweeps proceed in parallel.
+  # Everything else (schedule, base push, manual dispatch) shares the single
+  # `base` group, keeping the one genuinely repo-wide sweep serialised.
+  group: ci-dispatch-watchdog-${{ github.event.pull_request.number || 'base' }}
   cancel-in-progress: false
 
 permissions:
@@ -116,6 +131,53 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: python3 pipeline-scripts/ci_dispatch_watchdog.py --check probe
+
+      # #15139: a red tile does not say WHICH condition produced it — a run that
+      # never got a runner, toolchain provisioning failing, a superseded run, or
+      # a real test failure all render identically, and `gh pr checks` buckets
+      # every one of them under `fail`. The classifier names it, reading
+      # GET /actions/jobs/{id} because that is the only endpoint carrying a
+      # `steps` array; /commits/{sha}/check-runs has none, so anything reading
+      # `steps` off the listing finds nothing on every check and classifies by
+      # its default instead.
+      #
+      # It publishes no status and re-queues nothing, so it can never turn a red
+      # check green. --exit-zero keeps a *classification* from being mistaken for
+      # a gate — the required contexts remain the gate — but it cannot suppress
+      # exit 2, so a head with no check runs, or an unreachable API, still fails
+      # this step loudly instead of reading as "all clear". continue-on-error
+      # keeps that informational failure from reddening the sweep it rides on,
+      # the same idiom pr-queue-gate.yml uses for its never-blocks job.
+      #
+      # This runs before the self-modification guard below for the same reason
+      # the capability probe does: the classifier issues GET requests only —
+      # it approves nothing, publishes no status, and writes nothing back — so
+      # a PR head's copy of it cannot spend the job's write permissions.
+      - name: Classify any red checks on the swept head
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -uo pipefail
+          # The exit code is the point, so it is captured rather than piped away:
+          # `... | tee` would report tee's status and this step could never fail.
+          REPORT="$RUNNER_TEMP/ci-red-cause.txt"
+          python3 pipeline-scripts/ci_red_cause.py --sha "$HEAD_SHA" --exit-zero \
+            >"$REPORT" 2>&1
+          rc=$?
+          {
+            echo "### Red-check causes for \`$HEAD_SHA\`"
+            echo ''
+            echo '```'
+            cat "$REPORT"
+            echo "exit=$rc"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          cat "$REPORT"
+          exit "$rc"
 
       - name: Sweep open PRs
         if: ${{ !cancelled() }}

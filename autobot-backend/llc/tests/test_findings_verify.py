@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.status_enums import Severity
 from llc.services.findings_verify import Verdict, combine_verdicts, select_verifier_provider, verify_finding
 
 # ---------------------------------------------------------------------------
@@ -27,7 +28,7 @@ from llc.services.findings_verify import Verdict, combine_verdicts, select_verif
 
 _FINDING = {
     "type": "bug",
-    "severity": "high",
+    "severity": Severity.HIGH.value,
     "file_path": "src/app.py",
     "line_number": 5,
     "description": "Null dereference",

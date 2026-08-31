@@ -29,7 +29,12 @@ from utils.terminal_input_handler import (
 class TestTerminalInputHandler:
     """Test cases for terminal input handler functionality."""
 
-    def __init__(self):
+    # #14927: this was ``__init__``. pytest refuses to collect a class that has a
+    # constructor -- it emits PytestCollectionWarning and moves on -- so every
+    # ``test_*`` method below was silently uncollected despite the class matching
+    # ``python_classes = Test*``. ``setup_method`` is pytest's own per-test hook and
+    # runs before each test, which is what this body always meant.
+    def setup_method(self):
         self.handler = TerminalInputHandler()
 
     def test_environment_detection(self):
@@ -68,7 +73,7 @@ class TestTerminalInputHandler:
                 os.environ[env_var] = old_value
 
         print("✓ Environment detection working")  # noqa: print
-        return True
+        return
 
     def test_mock_responses(self):
         """Test mock response functionality."""
@@ -92,7 +97,7 @@ class TestTerminalInputHandler:
         print(f"  Exhausted mock responses: '{result}' (should be default)")  # noqa: print  # noqa: print
 
         print("✓ Mock responses working")  # noqa: print
-        return True
+        return
 
     def test_default_responses(self):
         """Test default response patterns."""
@@ -122,7 +127,7 @@ class TestTerminalInputHandler:
                 assert result.isdigit(), "Should return digit for choice prompt"
 
         print("✓ Default response patterns working")  # noqa: print
-        return True
+        return
 
     def test_timeout_behavior(self):
         """Test timeout behavior in interactive mode."""
@@ -156,7 +161,7 @@ class TestTerminalInputHandler:
             print(f"  Timeout test skipped due to: {e}")  # noqa: print
 
         print("✓ Timeout behavior working")  # noqa: print
-        return True
+        return
 
     async def test_async_input(self):
         """Test asynchronous input functionality."""
@@ -184,7 +189,7 @@ class TestTerminalInputHandler:
         assert len(results) == 3, "Should handle concurrent requests"
 
         print("✓ Async input working")  # noqa: print
-        return True
+        return
 
     def test_context_manager(self):
         """Test context manager functionality."""
@@ -210,7 +215,7 @@ class TestTerminalInputHandler:
         print(f"  Post-context result: '{result3}'")  # noqa: print
 
         print("✓ Context manager working")  # noqa: print
-        return True
+        return
 
     def test_safe_input_functions(self):
         """Test the safe_input wrapper functions."""
@@ -231,7 +236,7 @@ class TestTerminalInputHandler:
             assert result2 == "wrapper2", "Should use sequential wrapper responses"
 
         print("✓ Safe input wrapper working")  # noqa: print
-        return True
+        return
 
     async def test_safe_input_async_function(self):
         """Test the async safe_input wrapper function."""
@@ -248,7 +253,7 @@ class TestTerminalInputHandler:
             assert result2 == "async_wrapper2", "Should use sequential async responses"
 
         print("✓ Async safe input wrapper working")  # noqa: print
-        return True
+        return
 
     def test_builtin_patch(self):
         """Test built-in input function patching."""
@@ -280,7 +285,36 @@ class TestTerminalInputHandler:
             builtins.input = original_input
 
         print("✓ Built-in input patching working")  # noqa: print
-        return True
+        return
+
+    def test_choice_keywords_do_not_hijack_file_and_port_prompts(self):
+        """A choice keyword alone must not answer a prompt with a bare digit.
+
+        #14927 widened _CHOICE_KEYWORDS to "select"/"option", and the branch is
+        checked before the file/path and port branches. With "any digit anywhere"
+        as the discriminator, "Select a config file (1 of 3):" answered "1" and
+        "Select the port to use:" answered nothing useful either. Only a real
+        enumerated range -- "(1-5)" -- makes a prompt a numbered menu.
+        """
+        self.handler.is_testing = True
+        self.handler.set_mock_responses([])
+
+        menu = self.handler.get_input("Select option (1-5):")
+        assert menu == "1", f"an enumerated menu still answers with its first entry, got {menu!r}"
+
+        file_prompt = self.handler.get_input("Select a config file (1 of 3):")
+        assert not file_prompt.isdigit(), (
+            f"'(1 of 3)' is not an enumerated range; a file prompt must reach the "
+            f"file/path branch, got {file_prompt!r}"
+        )
+        assert "/" in file_prompt, f"expected a path-shaped default, got {file_prompt!r}"
+
+        port_prompt = self.handler.get_input("Select the port to use:")
+        assert port_prompt == self.handler.get_input("Port number:"), (
+            "a port prompt phrased with 'select' must resolve to the same port "
+            f"default as a plain one, got {port_prompt!r}"
+        )
+        assert port_prompt != "1", "the port default must not be the menu fallback"
 
     def test_intelligent_defaults(self):
         """Test intelligent default response generation."""
@@ -306,7 +340,7 @@ class TestTerminalInputHandler:
             assert is_valid, f"Should generate appropriate default for: {prompt}"
 
         print("✓ Intelligent defaults working")  # noqa: print
-        return True
+        return
 
     async def test_concurrent_safety(self):
         """Test thread and async safety."""
@@ -348,7 +382,7 @@ class TestTerminalInputHandler:
         assert len(async_results) == 3, "Should handle concurrent async access"
 
         print("✓ Concurrent safety working")  # noqa: print
-        return True
+        return
 
     async def run_all_tests(self):
         """Run all terminal input handler tests."""

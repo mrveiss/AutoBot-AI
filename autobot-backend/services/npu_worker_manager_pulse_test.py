@@ -307,7 +307,11 @@ def test_check_heartbeat_reachability_disabled(mgr):
 
 def test_check_heartbeat_reachability_naive_datetime(mgr):
     """A tz-naive last_heartbeat is normalised safely; stale naive dt → stale."""
-    naive_old = datetime.utcnow() - timedelta(seconds=700)
+    # Deliberately tz-NAIVE: this test's subject is that a naive
+    # last_heartbeat is normalised safely (#14181). `datetime.utcnow()` is
+    # deprecated in 3.12, so the naive value is built from the tz-aware clock
+    # and stripped -- same value, no deprecated call, intent preserved.
+    naive_old = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=700)
     status = NPUWorkerStatus(id="test-worker-1", status=WorkerStatus.ONLINE, last_heartbeat=naive_old)
     result = mgr._check_heartbeat_reachability("test-worker-1", status)
     assert result == "heartbeat_stale"

@@ -86,6 +86,8 @@ class _TrackingExtension(Extension):
     async def on_before_tool_execute(self, ctx: HookContext) -> None:
         self.called_hooks.append("before_tool_execute")
         self.captured_data["tool_name"] = ctx.get("tool_name")
+        self.captured_data["tool_permission"] = ctx.get("tool_permission")
+        self.captured_data["user_role"] = ctx.get("user_role")
 
     async def on_after_tool_execute(self, ctx: HookContext) -> Any | None:
         self.called_hooks.append("after_tool_execute")
@@ -304,6 +306,60 @@ class TestBeforeToolExecute:
 
         assert "before_tool_execute" in tracker.called_hooks
         assert tracker.captured_data["tool_name"] == "bash"
+
+    @pytest.mark.asyncio
+    async def test_omitted_tool_permission_reaches_extensions_as_none(self):
+        """#14420: a caller that does not pass tool_permission/user_role
+        must not silently invent one - the extension sees the absence."""
+        tracker = _TrackingExtension()
+        get_extension_manager().register(tracker)
+
+        await _emit_before_tool_execute("bash", {}, "sess-1")
+
+        assert tracker.captured_data["tool_permission"] is None
+        assert tracker.captured_data["user_role"] is None
+
+    @pytest.mark.asyncio
+    async def test_extension_receives_tool_permission_and_role_when_provided(self):
+        """#14420: a caller that knows the tool's declared permission and the
+        caller's RBAC role can forward both through to extensions."""
+        tracker = _TrackingExtension()
+        get_extension_manager().register(tracker)
+
+        await _emit_before_tool_execute(
+            "database_execute",
+            {},
+            "sess-1",
+            tool_permission="mcp.database.write",
+            user_role="operator",
+        )
+
+        assert tracker.captured_data["tool_permission"] == "mcp.database.write"
+        assert tracker.captured_data["user_role"] == "operator"
+
+    @pytest.mark.asyncio
+    async def test_a_denial_raised_by_an_extension_cancels_the_tool(self):
+        """#14420: a raised PermissionError must actually cancel execution,
+        not be flattened to `True` via a swallowed `None`."""
+
+        class DenyingExtension(Extension):
+            name = "denying_permission"
+            fail_closed = True
+
+            async def on_before_tool_execute(self, ctx: HookContext):
+                raise PermissionError("caller lacks the required permission")
+
+        get_extension_manager().register(DenyingExtension())
+
+        should_execute = await _emit_before_tool_execute(
+            "database_execute",
+            {},
+            "sess-1",
+            tool_permission="mcp.database.write",
+            user_role="user",
+        )
+
+        assert should_execute is False
 
 
 class TestAfterToolExecute:

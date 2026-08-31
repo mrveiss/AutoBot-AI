@@ -7,6 +7,15 @@
 #
 # Reads baseline from docs/developer/audits/typescript-baseline.md (Total: N line).
 # Exits 1 if current error count exceeds baseline; exits 0 otherwise.
+#
+# #14481: a caller that already compiled this exact project (same command,
+# same tsconfig) can hand this script that output instead of paying for a
+# second compile. Set BOTH TSC_OUTPUT_FILE (raw vue-tsc stdout+stderr) and
+# TSC_STATUS_FILE (its exit code, one line) and this script reads them
+# instead of invoking the compiler again. Either unset, or either file
+# missing, and this script compiles fresh exactly as it always has — so
+# `bash scripts/check-ts-delta.sh` with no environment still works standalone
+# for local development.
 
 set -euo pipefail
 
@@ -30,40 +39,79 @@ if [[ -z "${BASELINE}" ]]; then
   exit 1
 fi
 
-# --- Run TypeScript check ---
-#
-# Why not npx (#13341). This step ran unbounded for over three hours on the
-# singleton self-hosted runner while its sibling `type-check` step — the SAME
-# vue-tsc invocation, reached through `npm run` — finished in about a minute in
-# the same job. The difference was `npx`, and every one of its extra behaviours
-# is an unbounded wait:
-#
-#   * it resolves the package before running it, which can reach the registry;
-#   * when resolution misses it PROMPTS ("Ok to proceed?") and blocks on stdin,
-#     which in a CI step is a pipe that never delivers a line and never closes;
-#   * it takes locks under the shared npm cache, and on the self-hosted runner
-#     $HOME is shared with every concurrently executing job rather than being a
-#     fresh VM per job, so a stale lock blocks instead of being absent.
-#
-# `vue-tsc` is a devDependency, so it is already on disk after `npm ci`; there
-# is nothing for a resolver to do. Calling the installed binary directly removes
-# the network path, the prompt and the cache lock in one move. `</dev/null`
-# guarantees that nothing downstream of this line can ever block on stdin.
-if [[ ! -x "${TSC_BIN}" ]]; then
-  echo "ERROR: vue-tsc not found at ${TSC_BIN}" >&2
-  echo "Run 'npm ci' in ${FRONTEND_DIR} first." >&2
-  exit 1
+# --- Run TypeScript check, or reuse a caller's prior run (#14481) ---
+if [[ -n "${TSC_OUTPUT_FILE:-}" && -n "${TSC_STATUS_FILE:-}" \
+      && -f "${TSC_OUTPUT_FILE}" && -f "${TSC_STATUS_FILE}" ]]; then
+  echo "Reusing vue-tsc output captured by the type-check step (baseline: ${BASELINE} errors)..."
+  TSC_OUTPUT="${TSC_OUTPUT_FILE}"
+  TSC_STATUS="$(<"${TSC_STATUS_FILE}")"
+
+  # A status file is only a valid handoff if it holds exactly what the type-check
+  # step wrote: a single small non-negative integer (0-255, the POSIX exit status
+  # range). Anything else — empty (the file exists but the write raced or failed),
+  # whitespace, multiple lines, or non-numeric content — is a discriminator failure
+  # in its own right, not a status of 0. Trusting it as 0 is exactly the bug this
+  # block exists to prevent: a compiler that never produced a real status would
+  # silently read as a clean exit. Route this through the script's own error
+  # handling rather than letting `set -u`/arithmetic surface bash's raw message.
+  #
+  # `^[0-9]+$` alone is not enough — bash's `(( ))` is fixed-width (64-bit) and
+  # NOT decimal-only, so a value the pattern accepts can still defeat the range
+  # check below it:
+  #   - 2**64 (18446744073709551616) matches the pattern, then WRAPS to 0 in
+  #     fixed-width arithmetic, so `(( TSC_STATUS > 255 ))` silently evaluates
+  #     `0 > 255` and accepts it — exactly the empty-file bug, one layer down.
+  #   - A leading zero (e.g. "008") matches the pattern too, but bash parses a
+  #     leading-zero numeral as OCTAL, and 8/9 are not valid octal digits, so
+  #     `(( ))` throws — inside a *tested* context (`if (( ... ))`), where a
+  #     throw is swallowed as "false" rather than propagating. The guard
+  #     neither rejects nor errors, so this also reads as a clean pass.
+  #
+  # The shape check below rejects both before either reaches arithmetic — no
+  # valid status is longer than 3 digits (255) or has a leading zero followed
+  # by another digit — and `10#` on the surviving value forces base-10 parsing
+  # so nothing that does reach `(( ))` can ever be read as octal.
+  if [[ ! "${TSC_STATUS}" =~ ^([0-9]|[1-9][0-9]{1,2})$ ]] || (( 10#${TSC_STATUS} > 255 )); then
+    echo "ERROR: ${TSC_STATUS_FILE} does not hold a valid exit status." >&2
+    echo "Expected a single decimal integer 0-255 with no leading zero; got: '${TSC_STATUS}'" >&2
+    echo "Refusing to treat this as a clean compile — the compiler's actual exit status is unknown." >&2
+    exit 1
+  fi
+else
+  #
+  # Why not npx (#13341). This step ran unbounded for over three hours on the
+  # singleton self-hosted runner while its sibling `type-check` step — the SAME
+  # vue-tsc invocation, reached through `npm run` — finished in about a minute in
+  # the same job. The difference was `npx`, and every one of its extra behaviours
+  # is an unbounded wait:
+  #
+  #   * it resolves the package before running it, which can reach the registry;
+  #   * when resolution misses it PROMPTS ("Ok to proceed?") and blocks on stdin,
+  #     which in a CI step is a pipe that never delivers a line and never closes;
+  #   * it takes locks under the shared npm cache, and on the self-hosted runner
+  #     $HOME is shared with every concurrently executing job rather than being a
+  #     fresh VM per job, so a stale lock blocks instead of being absent.
+  #
+  # `vue-tsc` is a devDependency, so it is already on disk after `npm ci`; there
+  # is nothing for a resolver to do. Calling the installed binary directly removes
+  # the network path, the prompt and the cache lock in one move. `</dev/null`
+  # guarantees that nothing downstream of this line can ever block on stdin.
+  if [[ ! -x "${TSC_BIN}" ]]; then
+    echo "ERROR: vue-tsc not found at ${TSC_BIN}" >&2
+    echo "Run 'npm ci' in ${FRONTEND_DIR} first." >&2
+    exit 1
+  fi
+
+  echo "Running vue-tsc (baseline: ${BASELINE} errors)..."
+  TSC_OUTPUT="$(mktemp)"
+  trap 'rm -f "${TSC_OUTPUT}"' EXIT
+
+  TSC_STATUS=0
+  (
+    cd "${FRONTEND_DIR}"
+    "${TSC_BIN}" --noEmit -p tsconfig.app.json
+  ) >"${TSC_OUTPUT}" 2>&1 </dev/null || TSC_STATUS=$?
 fi
-
-echo "Running vue-tsc (baseline: ${BASELINE} errors)..."
-TSC_OUTPUT="$(mktemp)"
-trap 'rm -f "${TSC_OUTPUT}"' EXIT
-
-TSC_STATUS=0
-(
-  cd "${FRONTEND_DIR}"
-  "${TSC_BIN}" --noEmit -p tsconfig.app.json
-) >"${TSC_OUTPUT}" 2>&1 </dev/null || TSC_STATUS=$?
 
 CURRENT=$(grep -c "error TS" "${TSC_OUTPUT}" || true)
 
@@ -78,7 +126,9 @@ CURRENT=$(grep -c "error TS" "${TSC_OUTPUT}" || true)
 # vue-tsc returns TypeScript's ExitStatus: 0 clean, 1 a configuration/command
 # diagnostic, 2 the normal "type errors were found", 3 and 4 invalid project.
 # So anything above 2 never completed a check, and a non-zero status with no
-# diagnostics at all is the crash case.
+# diagnostics at all is the crash case. This holds whether TSC_STATUS came from
+# a compile just above or from a reused TSC_STATUS_FILE — a caller that reused
+# a crash gets caught here exactly like a caller that hit one directly.
 if (( TSC_STATUS > 2 )) || { (( TSC_STATUS != 0 )) && (( CURRENT == 0 )); }; then
   echo "ERROR: vue-tsc exited ${TSC_STATUS} without completing a check." >&2
   echo "The error delta is unknown, so this is a failure, not a pass. Output:" >&2

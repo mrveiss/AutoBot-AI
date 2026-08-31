@@ -14,8 +14,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/scripts/lib/project_root.sh"
 
 # Source SSOT configuration (#808)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=infrastructure/shared/scripts/lib/ssot-config.sh
-source "${SCRIPT_DIR}/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=autobot-infrastructure/shared/scripts/lib/ssot-config.sh
+source "${SCRIPT_DIR}/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 
 # Colors for output
 RED='\033[0;31m'

@@ -33,7 +33,7 @@ from autobot_shared.logging_manager import get_logger
 
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
-from .subprocess_base import SubprocessLifecycleAdapter
+from .subprocess_base import SubprocessLifecycleAdapter, placeholder_run_id
 from .subprocess_base import resolve_timeout as _resolve_timeout
 from .subprocess_support import inject_agent_credentials, serialize_invoke_context
 
@@ -75,6 +75,7 @@ class CopilotLocalAdapter(SubprocessLifecycleAdapter):
 
     _LOG_NAME = "CopilotLocalAdapter"
     _state_path = staticmethod(_state_path)
+    _output_path = staticmethod(_output_path)
     _required_cli = "gh"  # GH#9793: CLI-availability gate in heartbeat dispatch
 
     async def _invoke(self, agent_config: dict, context: dict) -> str:
@@ -88,7 +89,7 @@ class CopilotLocalAdapter(SubprocessLifecycleAdapter):
         copilot_model: str = cfg.get("copilot_model", _DEFAULT_COPILOT_MODEL)
 
         session_id = str(uuid.uuid4())
-        run_id_placeholder = f"0/{session_id}"
+        run_id_placeholder = placeholder_run_id(session_id)
         output_file = _output_path(output_dir, agent_id, run_id_placeholder)
         os.makedirs(output_dir, exist_ok=True)
 

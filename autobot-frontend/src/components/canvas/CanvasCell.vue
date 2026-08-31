@@ -163,6 +163,7 @@ import { computed } from 'vue'
 import type { CanvasCell, ChartPayload, CodePayload } from '@/types/canvas'
 import ChartCell from '@/components/artifact-cells/ChartCell.vue'
 import CodeCell from './CodeCell.vue'
+import { useReducedMotion } from '@/composables/useReducedMotion'
 
 const props = defineProps<{ cell: CanvasCell }>()
 
@@ -188,9 +189,10 @@ const codePayload = computed<CodePayload | null>(() => {
   return p?.payloadType === 'code' ? (p as CodePayload) : null
 })
 
-const prefersReducedMotion = typeof window !== 'undefined'
-  ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  : false
+// #14770: was its own inline `matchMedia` read, evaluated once at setup so a
+// mid-session preference change never reached it. The composable is now the
+// single place this preference is read from.
+const { prefersReducedMotion } = useReducedMotion()
 
 function formatMarkdown(text: string): string {
   return text

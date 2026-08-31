@@ -165,6 +165,20 @@ def _raise(*_args, **_kwargs):
     raise OSError("disk full")
 
 
+class TestOversizedArtifactsAreMarked:
+    def test_a_payload_past_the_artifact_cap_is_marked_not_silently_cut(self, monkeypatch):
+        """The excerpt's note quotes the ORIGINAL length, so an unmarked
+        truncation makes the stored artifact contradict it."""
+        monkeypatch.setattr(spill, "SPILL_MAX_ARTIFACT_CHARS", 300)
+
+        value, _ = spill.spill_if_oversized(TASK, "bash", "M" * 5000)
+        stored = spill.read_spilled(value["anchor"], task_id=TASK)
+
+        assert stored is not None
+        assert "truncated" in stored
+        assert len(stored) < 5000
+
+
 class TestRunScopedWindowedRead:
     """#13754: the anchor is a bearer token, so reads must be run-scoped.
 
@@ -184,11 +198,17 @@ class TestRunScopedWindowedRead:
         assert window["has_more"] is True
 
     def test_paging_reaches_the_end(self):
-        big = "".join(str(i % 10) for i in range(300))
+        # 1200 chars, not 300: the spill now measures its replacement and
+        # declines when the excerpt plus its note would not be smaller. At this
+        # fixture's excerpt size that overhead is ~300 chars, so a 300-char
+        # payload is correctly left alone and has no anchor to page.
+        big = "".join(str(i % 10) for i in range(1200))
 
-        value, _ = spill.spill_if_oversized(TASK, "bash", big)
-        first = spill.read_spilled_window(value["anchor"], offset=0, limit=200)
-        second = spill.read_spilled_window(value["anchor"], offset=200, limit=200)
+        value, spilled = spill.spill_if_oversized(TASK, "bash", big)
+        assert spilled is True, "precondition: the payload must be worth spilling"
+
+        first = spill.read_spilled_window(value["anchor"], offset=0, limit=800)
+        second = spill.read_spilled_window(value["anchor"], offset=800, limit=800)
 
         assert first["content"] + second["content"] == big
         assert second["has_more"] is False
@@ -233,6 +253,19 @@ class TestTheExcerptNamesARealTool:
         # #13763 while this test stayed green. Membership in the list the model
         # is actually offered is the property that matters.
         assert "read_spilled_output" in ToolRegistry().get_available_tools()
+
+    def test_the_tool_is_not_advertised_while_the_feature_is_off(self, monkeypatch):
+        """The gate's own direction, which nothing covered.
+
+        `get_available_tools()` reaches the system prompt of every modality
+        agent via `llm_service.chat_optimized`, and none of them dispatch tools
+        or bind a run — so an off-by-default feature must not add to it.
+        """
+        from tools.tool_registry import ToolRegistry
+
+        monkeypatch.setattr(spill, "SPILL_ENABLED", False)
+
+        assert "read_spilled_output" not in ToolRegistry().get_available_tools()
 
     @pytest.mark.asyncio
     async def test_the_named_tool_is_dispatchable(self, tmp_path, monkeypatch):

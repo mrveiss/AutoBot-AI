@@ -49,6 +49,7 @@ import logging
 import os
 import re
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -79,9 +80,24 @@ logger = logging.getLogger(__name__)
 #   monitoring
 
 _ROLE_TO_GROUPS: dict[str, frozenset] = {
-    # SLM manager / slm-agent / any slm-* role
+    # SLM manager's own components. The "slm-" prefix catches slm-backend,
+    # slm-frontend, slm-database and slm-monitoring — all of which run only on
+    # the manager, which is what makes `slm_server` right for them.
     "slm-": frozenset({"slm", "slm_server", "slm_nodes"}),
-    "slm_agent": frozenset({"slm", "slm_server", "slm_nodes"}),
+    # slm-agent is NOT one of those: it runs on EVERY fleet node. Listed
+    # explicitly so the exact-key match above wins over the "slm-" prefix,
+    # because inheriting `slm_server` put every agent-carrying node into the
+    # group `update-all-nodes.yml`'s "Play 1 - Update SLM Server First"
+    # targets. That play does
+    #     git -C /opt/autobot/code_source rev-parse HEAD > /opt/autobot/autobot-slm-backend/.deployed_commit
+    # and neither path exists on a node that is not the manager, so it failed
+    # with a non-zero rc and halted the whole fleet stage (#14330).
+    #
+    # The manager keeps `slm_server` through its own slm-backend/-frontend/
+    # -database/-monitoring roles; only a node carrying the agent alone drops
+    # out, which is the intent.
+    "slm-agent": frozenset({"slm", "slm_nodes"}),
+    "slm_agent": frozenset({"slm", "slm_nodes"}),
     # Backend / API server
     "backend": frozenset({"backend", "main"}),
     "celery": frozenset({"backend", "main"}),
@@ -193,11 +209,101 @@ def _role_tokens_to_groups(role_tokens: list[str]) -> set[str]:
                 groups |= key_groups
             elif not key.endswith("-") and token == key:
                 groups |= key_groups
+
+    # #14676: an unmatched token is deliberately NOT reported from here. This
+    # function sees only `_ROLE_TO_GROUPS`, which is one of three ways a role
+    # can reach a deploy path -- see `unmatched_role_tokens()`, which knows all
+    # three. Reporting on this map alone cries wolf on roles that deploy fine.
     return groups
 
 
+def _registry_deploy_paths() -> tuple[dict, set[str]] | None:
+    """The registry's two non-group deploy routes, or None if it cannot be read.
+
+    Returns `(ROLE_ANSIBLE_GROUPS, roles_with_a_dedicated_playbook)`.
+
+    None means "cannot judge", and the caller must then report nothing. This
+    distinction is the difference between a useful report and a harmful one: if
+    an unreadable registry degraded to empty maps, every role that is not in
+    `_ROLE_TO_GROUPS` -- including `vnc` and `docker`, which deploy fine --
+    would be reported as deploying nothing. Being unable to check must never
+    look like having checked and found a problem.
+    """
+    try:
+        # ssot-config-exempt: local import avoids a cycle -- role_registry
+        # imports nothing from here, but the reverse would form one at module
+        # scope.
+        from services.role_registry import DEFAULT_ROLES, ROLE_ANSIBLE_GROUPS
+    except Exception as exc:  # pragma: no cover - registry unavailable in some harnesses
+        logger.debug("role deploy-path report unavailable: registry could not be read (%s)", exc)
+        return None
+
+    # The import succeeding is not the same as getting the real registry. Test
+    # harnesses stub `services.*`, and a Mock imports cleanly, iterates as
+    # empty, and answers `.get()` with another Mock -- which is truthy, so every
+    # role would look matched and nothing would ever be reported. Checking the
+    # types makes that case "cannot judge" honestly, instead of a silent
+    # all-clear that reads exactly like a clean result.
+    if not isinstance(ROLE_ANSIBLE_GROUPS, Mapping) or not isinstance(DEFAULT_ROLES, (list, tuple)):
+        logger.debug("role deploy-path report unavailable: registry is not the expected shape")
+        return None
+
+    with_playbook = {
+        str(role["name"]).strip().lower()
+        for role in DEFAULT_ROLES
+        if isinstance(role, dict) and role.get("name") and str(role.get("ansible_playbook") or "").strip()
+    }
+    return ROLE_ANSIBLE_GROUPS, with_playbook
+
+
+def unmatched_role_tokens(role_tokens: list[str]) -> set[str]:
+    """Tokens with no deploy path at all (#14676).
+
+    A role reaches deployment three different ways, and a report that knows
+    only one of them is worse than no report: it would flag working roles.
+
+      1. `_ROLE_TO_GROUPS` here, exact or prefix,
+      2. the legacy `ROLE_ANSIBLE_GROUPS`, which is the ONLY route for `vnc`
+         (#14638),
+      3. a dedicated `ansible_playbook` in the registry, which is how `docker`
+         deploys without joining any group.
+
+    What is left is a role that exists as far as the operator is concerned and
+    that nothing anywhere will act on -- the silent no-op this issue is about.
+
+    Returns an empty set when the registry cannot be read: not being able to
+    check must not be reported as having found a problem.
+    """
+    paths = _registry_deploy_paths()
+    if paths is None:
+        return set()
+    role_ansible_groups, with_playbook = paths
+
+    unmatched: set[str] = set()
+    for token in role_tokens:
+        token = token.strip().lower()
+        if not token:
+            continue
+        if _role_tokens_to_groups([token]):
+            continue
+        if role_ansible_groups.get(token):
+            continue
+        if token in with_playbook:
+            continue
+        unmatched.add(token)
+    return unmatched
+
+
 def _union_roles(node: Any) -> list[str]:
-    """Return union of node.roles and node.detected_roles as a deduped list."""
+    """Return union of node.roles and node.detected_roles as a deduped list.
+
+    Detection legitimately adds groups: a node running redis that nobody
+    declared still needs the redis plays to reach it, which
+    ``test_detected_roles_merged_with_roles`` pins.
+
+    What detection must NOT do is grant a privileged group -- see
+    ``_strip_undeclared_privileged_groups`` for why (#14513).
+    """
     seen: set[str] = set()
     result: list[str] = []
     for r in list(node.roles or []) + list(node.detected_roles or []):
@@ -205,6 +311,111 @@ def _union_roles(node: Any) -> list[str]:
             seen.add(r)
             result.append(r)
     return result
+
+
+def _declared_roles(node: Any) -> list[str]:
+    """Return node.roles alone, deduped -- the operator's declared intent.
+
+    Unlike ``_union_roles``, detection never contributes here. Stamped as the
+    ``node_roles_declared`` hostvar so role_active_facts.yml's PRIVILEGED
+    facts (backend, frontend, ai_stack, npu_worker, browser -- the ones that
+    unpack a tree, see ``_DECLARED_ONLY_GROUPS``) can gate their node_roles
+    branch the same way ``_strip_undeclared_privileged_groups`` already gates
+    their group branch (#14560). ``node_roles`` itself is left untouched:
+    ``test_node_roles_unions_detected_roles`` pins it as the union, and the
+    deliberately-union facts (role_tts_worker_active and friends, see the
+    #9965 comment on the ``node_roles`` hostvar below) still need it.
+    """
+    seen: set[str] = set()
+    result: list[str] = []
+    for r in list(node.roles or []):
+        if r not in seen:
+            seen.add(r)
+            result.append(r)
+    return result
+
+
+# Groups whose plays DEPLOY a component's tree onto the host. Detection must
+# never add a node to one of these: the whole failure mode is a node being
+# handed software it does not run.
+#
+# `slm_server`   - "Play 1 - Update SLM Server First" unpacks the SLM manager's
+#                  backend/frontend/shared tree and reads /opt/autobot/code_source.
+# `backend`/`main` - Play 2 unarchives autobot-backend (`when: 'backend' in
+#                  group_names`) and runs the alembic upgrade sequence against
+#                  that host. Play 2 also sets `any_errors_fatal: true` with
+#                  `serial: 3`, so ONE wrongly-included node aborts the whole
+#                  batch of legitimate hosts -- a wider blast radius than the
+#                  Play 1 failure that surfaced this bug.
+#
+# Deliberately NOT everything: `test_detected_roles_merged_with_roles` pins that
+# a detected `redis` still joins `redis`/`database`, and that is wanted -- a
+# node genuinely running redis should keep receiving redis updates. The line is
+# drawn at groups whose plays were checked and found to deploy a tree or migrate
+# a database, not at "detection is untrusted".
+# #14552: `frontend` was missing, and the omission is instructive. Play 2 gates
+# its deploy tasks on exactly two groups -- `backend` and `frontend` -- and
+# #14513 gated only the first, so a vnc node still ran `npx vite build` and
+# failed for want of Node.js. Hand-picking the members is what let that recur;
+# `inventory_deploy_groups_test.py` now DERIVES this set from the playbook and
+# fails if a component is added there without being listed here. That
+# derivation immediately found three MORE gates I had also missed by reading
+# one range of the file -- `aiml`, `npu` and `browser` -- which is the whole
+# argument against maintaining this list by eye.
+# The groups a deploy play NAMES. `update-all-nodes.yml` gates on these; other
+# playbooks target their siblings, which is what #14567 is about.
+_DEPLOY_GATED_SEED = frozenset({"slm_server", "backend", "main", "frontend", "aiml", "npu", "browser"})
+
+
+def _close_over_role_groups(seed: frozenset) -> frozenset:
+    """Every group granted by a role that can already place a node in a gated one.
+
+    #14567: gating only the names a playbook happens to mention leaves the
+    SIBLING names the same role grants. `ai-stack` maps to
+    ``{ai_stack, aiml, ai, llm_nodes}`` while the seed holds only `aiml` -- yet
+    `setup-ai-stack.yml` targets ``hosts: ai_stack`` and `setup-npu-worker.yml`
+    targets ``hosts: npu_worker``, both reachable from `/infrastructure/execute`
+    with `limit_hosts` optional. Enumerating the names by hand has now been too
+    short three times (#14513 -> #14552 -> this), so the set is derived.
+
+    A group is NOT gated when a non-deploy role also grants it. `slm-agent`
+    grants `slm`/`slm_nodes` alongside the `slm-` prefix role, and
+    `deploy-slm-agent.yml` targets `slm_nodes` -- gating them would withhold the
+    agent-repair playbook from agent nodes, making the remedy the agent's own
+    401 message names (#14350 / #14351) unreachable for exactly the nodes that
+    need it.
+    """
+    deploy_groups: set = set(seed)
+    shared_with_non_deploy: set = set()
+
+    for groups in _ROLE_TO_GROUPS.values():
+        if groups & set(seed):
+            deploy_groups |= groups
+        else:
+            shared_with_non_deploy |= groups
+
+    # The seed itself is never removed: those names came from deploy gates
+    # directly, not by inference.
+    return frozenset(set(seed) | (deploy_groups - shared_with_non_deploy))
+
+
+_DECLARED_ONLY_GROUPS = _close_over_role_groups(_DEPLOY_GATED_SEED)
+
+
+def _strip_undeclared_privileged_groups(node: Any, node_groups: set[str]) -> set[str]:
+    """Drop privileged groups the node's DECLARED roles do not justify (#14513).
+
+    Belt-and-braces alongside the change above: a node that has already had the
+    SLM tree unpacked onto it by this very bug will legitimately detect
+    ``slm-backend`` afterwards, so filtering the agent's report alone would not
+    stop the loop on an already-contaminated node.
+    """
+    undeclared = node_groups & _DECLARED_ONLY_GROUPS
+    if not undeclared:
+        return node_groups
+
+    declared_groups = groups_for_role_tokens(list(node.roles or []))
+    return node_groups - (undeclared - declared_groups)
 
 
 def _build_hostvars(node: Any, local_ip_check: Any) -> dict:
@@ -227,14 +438,81 @@ def _build_hostvars(node: Any, local_ip_check: Any) -> dict:
         # activate roles via node_roles, not group membership alone. Group-based
         # activation silently skips roles whose inventory group isn't the one
         # role_*_active checks (e.g. tts-worker -> npu_worker group, but
-        # role_tts_worker_active checks node_roles only; browser-service ->
-        # browser_automation group, but role_browser_active checks browser/
-        # browser_worker) — so optional assigned roles never deploy.
+        # role_tts_worker_active checks node_roles only) — so optional assigned
+        # roles never deploy.
+        # #14460: browser-service used to be the other example here, mapped to
+        # a `browser_automation` group while role_browser_active reads
+        # browser/browser_worker. That mismatch is fixed at the source in
+        # ROLE_ANSIBLE_GROUPS rather than left for this stamp to paper over.
         "node_roles": _union_roles(node),
+        # #14560: declared-only counterpart. role_active_facts.yml's five
+        # PRIVILEGED facts (backend, frontend, ai_stack, npu_worker, browser)
+        # read this instead of node_roles, so a role that only DETECTED
+        # (never declared) no longer activates that fact's deploy tasks --
+        # matching the group-side fix already applied by
+        # ``_strip_undeclared_privileged_groups``. See ``_declared_roles``.
+        "node_roles_declared": _declared_roles(node),
     }
     if local_ip_check(node.ip_address):
         hostvars["ansible_connection"] = "local"
     return hostvars
+
+
+def groups_for_role_tokens(role_tokens: list[str]) -> set[str]:
+    """Complete ansible group set for one node, universal groups included.
+
+    Extracted from ``build_registry_inventory`` so the setup-wizard inventory
+    path can reach the same answer instead of carrying its own mapping
+    (#14286). Two builders emitting different group vocabularies for one fleet
+    is what made plays gated on ``aiml`` / ``database`` match zero hosts and
+    report success having done nothing.
+
+    Args:
+        role_tokens: role / detected_role strings for one node.
+
+    Returns:
+        Every ansible group the node belongs to.
+    """
+    node_groups = _role_tokens_to_groups(role_tokens)
+
+    # Every node joins autobot + autobot_cluster (centralized logging, etc.)
+    node_groups |= _UNIVERSAL_ALL
+
+    # Non-SLM nodes join infrastructure + production_vms. #11436: an SLM
+    # node that ALSO carries app roles (single-node installs co-locate
+    # backend/frontend/workers on the SLM box) must join them too —
+    # otherwise the update playbook's Play 2 never matches that host and
+    # the co-located components silently stop receiving updates.
+    # Co-location is classified at the ROLE-TOKEN level, not the group
+    # level: SLM-internal tokens (slm-database, slm-monitoring) map to
+    # non-SLM groups (redis/monitoring_vm), so group-based detection would
+    # wrongly promote a pure SLM manager into infrastructure (#11453).
+    is_slm = bool(node_groups & {"slm", "slm_server", "slm_nodes"})
+    has_app_roles = any(
+        (t := tok.strip().lower()) and not t.startswith("slm-") and t != "slm_agent" for tok in role_tokens
+    )
+    # #14336: every node keeps `slm-agent` forever (api/nodes.py never removes it, see
+    # "Remove roles no longer assigned"), so a node whose functional roles are all unassigned
+    # legitimately reduces to nothing but the agent. That node is neither the
+    # manager (no `slm_server`) nor carrying any component `_ROLE_TO_GROUPS`
+    # recognises, so it fell through `has_app_roles` above (deliberately
+    # false for every `slm-`-prefixed token, #11453) AND the `slm_server`
+    # gate `update-all-nodes.yml` Play 1 checks (deliberately excluded,
+    # #14330). Net effect before this fix: zero tasks from either play.
+    # `infrastructure` is the only remaining group with an agent-redeploy
+    # task (Play 2, gated on `slm_node_id is defined`, which every node
+    # carries) — every other Play 2 task stays gated on its own group, so
+    # this adds nothing else for a node with no other role.
+    # `_UNIVERSAL_ALL` was already merged in above, so the subset test must
+    # allow for it — comparing against {"slm", "slm_nodes"} alone is never
+    # true here and the branch silently never fires.
+    is_agent_only = (
+        is_slm and "slm_server" not in node_groups and node_groups <= ({"slm", "slm_nodes"} | _UNIVERSAL_ALL)
+    )
+    if not is_slm or has_app_roles or is_agent_only:
+        node_groups |= _UNIVERSAL_NON_SLM
+
+    return node_groups
 
 
 def build_registry_inventory(nodes: list[Any], local_ip_check: Any) -> dict:
@@ -277,27 +555,7 @@ def build_registry_inventory(nodes: list[Any], local_ip_check: Any) -> dict:
         hostvars = _build_hostvars(node, local_ip_check)
         host_section[host_name] = hostvars
 
-        role_tokens = _union_roles(node)
-        node_groups = _role_tokens_to_groups(role_tokens)
-
-        # Every node joins autobot + autobot_cluster (centralized logging, etc.)
-        node_groups |= _UNIVERSAL_ALL
-
-        # Non-SLM nodes join infrastructure + production_vms. #11436: an SLM
-        # node that ALSO carries app roles (single-node installs co-locate
-        # backend/frontend/workers on the SLM box) must join them too —
-        # otherwise the update playbook's Play 2 never matches that host and
-        # the co-located components silently stop receiving updates.
-        # Co-location is classified at the ROLE-TOKEN level, not the group
-        # level: SLM-internal tokens (slm-database, slm-monitoring) map to
-        # non-SLM groups (redis/monitoring_vm), so group-based detection would
-        # wrongly promote a pure SLM manager into infrastructure (#11453).
-        is_slm = bool(node_groups & {"slm", "slm_server", "slm_nodes"})
-        has_app_roles = any(
-            (t := tok.strip().lower()) and not t.startswith("slm-") and t != "slm_agent" for tok in role_tokens
-        )
-        if not is_slm or has_app_roles:
-            node_groups |= _UNIVERSAL_NON_SLM
+        node_groups = _strip_undeclared_privileged_groups(node, groups_for_role_tokens(_union_roles(node)))
 
         for g in node_groups:
             if g not in groups:

@@ -20,11 +20,22 @@ from autobot_shared.logging_manager import get_logger
 
 from .channel_adapters.base import BaseChannelAdapter
 from .config import GatewayConfig
+from .egress_governor import egress_governor
+from .ingest_governor import ingest_governor
 from .message_router import MessageRouter
 from .session_manager import SessionManager
 from .types import ChannelMessage, ChannelType, GatewaySession, MessageType
 
 logger = get_logger(__name__)
+
+# Message types that represent an agent-authored conversational turn, as
+# opposed to session/system control traffic (#14028 recursion guard).
+_AGENT_MESSAGE_TYPES = {
+    MessageType.AGENT_TEXT,
+    MessageType.AGENT_THOUGHT,
+    MessageType.AGENT_TOOL_CODE,
+    MessageType.AGENT_TOOL_OUTPUT,
+}
 
 
 class Gateway:
@@ -246,6 +257,26 @@ class Gateway:
             logger.warning("Message exceeds size limit")
             return False
 
+        # Egress governance (#14067). Applied here, at the shared seam, so a
+        # newly added adapter inherits it without adapter-side work — the same
+        # structural argument #14028 makes for ingest. Scoped to agent-authored
+        # conversational turns: session/system control traffic (SESSION_START,
+        # heartbeats, SYSTEM_ERROR) is not a message to a person and would only
+        # add noise to the audit trail.
+        if message.message_type in _AGENT_MESSAGE_TYPES:
+            verdict = await egress_governor.evaluate(
+                platform=session.channel.value,
+                channel_id=session.session_id,
+                message_id=message.message_id,
+            )
+            if not verdict.allowed:
+                logger.warning(
+                    "Outbound send blocked by egress governance (%s): %s",
+                    verdict.rule,
+                    verdict.reason,
+                )
+                return False
+
         # Send through adapter
         connection_context = self._connection_contexts.get(message.session_id)
         success = await adapter.send_message(
@@ -257,6 +288,11 @@ class Gateway:
         if success:
             # Update session
             session.add_message(message_id=message.message_id)
+            # Record agent-authored sends for the recursion guard (#14028) —
+            # session/system control messages (SESSION_START, SYSTEM_ERROR,
+            # heartbeats, …) don't represent a conversational turn.
+            if message.message_type in _AGENT_MESSAGE_TYPES:
+                await ingest_governor.record_agent_send(platform=session.channel.value, channel_id=session.session_id)
 
         return success
 
@@ -273,7 +309,10 @@ class Gateway:
             session_id: Session receiving the message
 
         Returns:
-            Parsed ChannelMessage or None
+            Parsed ChannelMessage, or None if the session/adapter is missing,
+            the rate limit is exceeded, or the ingest governance stage (#14028)
+            dropped the message (self-echo, duplicate delivery, or a chain past
+            the recursion ceiling — each already logged with its reason).
         """
         # Get session
         session = await self.session_manager.get_session(session_id)
@@ -302,9 +341,22 @@ class Gateway:
 
         # Parse message
         message = await adapter.receive_message(raw_data, session)
-        if message:
-            session.add_message(message_id=message.message_id)
+        if not message:
+            return None
 
+        # Ingest governance stage (#14028) — same guard as the platform-adapter
+        # seam (GatewayManager.normalize_message), applied here so this second
+        # ingest stack inherits it too rather than drifting.
+        verdict = await ingest_governor.evaluate(
+            platform=session.channel.value,
+            channel_id=session.session_id,
+            message_id=message.message_id,
+            author_id=session.user_id,
+        )
+        if not verdict.allowed:
+            return None
+
+        session.add_message(message_id=message.message_id)
         return message
 
     async def route_and_process(

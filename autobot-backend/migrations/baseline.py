@@ -84,6 +84,14 @@ TIMESTAMPTZ_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
     # so the AST probe sees nothing. These markers make it observable and give
     # adoption a real per-table TIMESTAMPTZ check (the migration's ``has_table``
     # guard is mirrored by the ``table in facts.tables`` guard in applied_status).
+    # 20260812_073 adds status/pause_reason/paused_at to agent_org_nodes via raw
+    # ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS`` (#14108: controls_service.py
+    # wrote these columns for months and no migration ever created them). The
+    # raw form is required because a deployed database may already carry them
+    # from an out-of-band path, so the AST probe sees nothing — ``paused_at`` is
+    # TIMESTAMPTZ, which makes the revision observable without an allowlist
+    # exemption.
+    "20260812_073": (("agent_org_nodes", "paused_at"),),
     "20260629_063": (
         ("agent_connections", "updated_at"),
         ("agent_task_history", "updated_at"),

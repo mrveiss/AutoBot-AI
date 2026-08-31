@@ -17,6 +17,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from autobot_shared.paths import project_root
+
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -102,7 +104,11 @@ class LLMModelOptimizer:
 
     def __init__(self):
         """Initialize LLM optimizer with default paths and state containers."""
-        self.autobot_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+        # #14517: a shell placeholder in a plain Python string literal is never
+        # expanded, so this named a directory that cannot exist and every model
+        # path below it silently missed. autobot_shared.paths is the canonical
+        # answer to "where is the project root?" (#13149).
+        self.autobot_root = project_root()
         self.installed_models = {}
         self.missing_models = []
         self.optimization_results = {}

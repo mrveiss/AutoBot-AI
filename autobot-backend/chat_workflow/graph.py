@@ -394,6 +394,7 @@ def _build_llm_iteration_context(state: ChatState):
     ``SystemMessage``.  See that helper's docstring for the full rationale.
     """
     from .models import LLMIterationContext, build_governed_identity
+    from .session_role import resolve_auth_role
 
     initial_prompt = state["llm_params"].get("initial_prompt") or ""
 
@@ -414,6 +415,10 @@ def _build_llm_iteration_context(state: ChatState):
     agent_context, work_item_id, approval_cats = build_governed_identity(
         state.get("context", {}) or {}, state["session_id"]
     )
+    # #13821: same lift for the authenticated role. The graph path builds its own
+    # LLMIterationContext, so omitting it here would leave every graph-path tool
+    # call evaluated as the default role — which is the bug being fixed.
+    auth_role = resolve_auth_role(state.get("context", {}) or {})
 
     return LLMIterationContext(
         ollama_endpoint=state["llm_params"]["ollama_endpoint"],
@@ -427,6 +432,7 @@ def _build_llm_iteration_context(state: ChatState):
         system_prompt=state["llm_params"].get("system_prompt"),
         initial_prompt=initial_prompt,
         message=state["user_message"],
+        auth_role=auth_role,
         # #11552: thread the request context (company_id, user_id, …) into the
         # iteration context so the tool-dispatch seam is company-scoped in the
         # GRAPH path too. The legacy _create_llm_iteration_context already passes
@@ -1068,6 +1074,13 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
     exec_history = list(state.get("execution_history", []))
     break_loop = False
 
+    # #14242: bind the spill run on THIS path too. `_run_continuation_loop_
+    # iteration` binds it for the non-gated path (#13997), but that method is
+    # never called here — GH#11202's whole point is that this node dispatches
+    # instead of it — so a run reaching this seam was never bound and the
+    # offload below would decline to write (no run to re-read it under).
+    manager._bind_spill_run(session_id)
+
     # GH#11202: thread the governed-identity context so the same production
     # seam gates (forbidden_work #11145, config-protection #11177,
     # fact-forcing #11178) apply here exactly as they do on the inline
@@ -1112,9 +1125,20 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
             is_streaming = msg_dict.get("metadata", {}).get("streaming", False)
             if not is_streaming:
                 messages.append(msg_dict)
-            # Track execution results
-            if isinstance(item, dict) and item.get("type") == "execution_summary":
-                exec_history.append(item)
+            # Track execution results (#14242). `item` is the yielded
+            # WorkflowMessage — never a dict — so `isinstance(item, dict)` here
+            # never matched and `exec_history` silently stayed whatever
+            # `state["execution_history"]` already held: new tool results never
+            # reached it, and neither did the offload this seam now applies.
+            # `msg_dict["metadata"]["execution_results"]` is the flat per-tool
+            # list `_build_execution_summary` produces — the same shape
+            # `_handle_execution_summary` extends `execution_history` with on
+            # the non-gated path — offloaded through the same #13997 seam so
+            # oversized output does not reach the model on a resume either.
+            if msg_dict.get("type") == "execution_summary":
+                new_results = msg_dict.get("metadata", {}).get("execution_results", [])
+                new_results = await manager._offload_oversized_output(new_results)
+                exec_history.extend(new_results)
 
     # Issue #3254: Emit a user-visible message when the loop abort threshold is
     # reached so the user understands why the assistant stopped making progress.

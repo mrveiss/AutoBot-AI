@@ -26,6 +26,20 @@
 # own cache-dependency-path carried across, which is why it is going in
 # tranches rather than one sweep.
 #
+# #15313: actions/setup-python resolves a version by downloading a build from
+# actions/python-versions when it is not already in the runner's tool cache.
+# That publisher only ships builds for LTS Ubuntu releases (22.04, 24.04,
+# 26.04...); this repo's self-hosted runners are on 25.10, a non-LTS release
+# with no published build, so any self-hosted job needing a version GitHub
+# has not pre-cached fails outright (proven live on PR #15311). Moving the
+# runner OS to an LTS release is the fix that closes the whole class, but it
+# is a host change this repo cannot make. What IS available from here: on a
+# self-hosted runner, skip actions/setup-python's download path entirely and
+# use the interpreter already on that host's PATH -- if it is missing, this
+# fails with a clear, actionable message instead of setup-python's opaque
+# "not found for Ubuntu 25.10". GitHub-hosted runners are unaffected; they
+# keep using actions/setup-python's normal (cached) path below.
+#
 # Usage:
 #   - uses: ./.github/actions/setup-python-ci
 #     with:
@@ -60,7 +74,7 @@ inputs:
 outputs:
   python-version:
     description: 'The resolved Python version that was installed.'
-    value: ${{ steps.setup.outputs.python-version }}
+    value: ${{ steps.setup.outputs.python-version || steps.setup-self-hosted.outputs.python-version }}
   cache-key:
     description: 'The pip cache key used (for documentation and debugging).'
     value: ${{ steps.cache-key.outputs.value }}
@@ -68,8 +82,9 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Set up Python ${{ inputs.python-version }}
+    - name: Set up Python ${{ inputs.python-version }} (github-hosted)
       id: setup
+      if: runner.environment != 'self-hosted'
       # #13517: was pinned to a v5 SHA while every workflow in this repo is
       # already on v7. Adopting the action as-was would have silently
       # downgraded setup-python across 21 jobs.
@@ -78,6 +93,62 @@ runs:
         python-version: ${{ inputs.python-version }}
         cache: 'pip'
         cache-dependency-path: ${{ inputs.cache-dependency-path }}
+
+    # #15313: no download here. If the requested interpreter is not already
+    # on PATH, this fails loudly (exit 1, ::error::) rather than falling
+    # through to a mismatched system Python silently.
+    - name: Resolve system Python ${{ inputs.python-version }} (self-hosted)
+      id: setup-self-hosted
+      if: runner.environment == 'self-hosted'
+      shell: bash
+      env:
+        PY_VERSION: ${{ inputs.python-version }}
+      run: |
+        BIN="python${PY_VERSION}"
+        if ! command -v "$BIN" >/dev/null 2>&1; then
+          echo "::error::Self-hosted runner has no '$BIN' on PATH. actions/setup-python" \
+            "cannot download a build for this runner's OS release when it is not an LTS" \
+            "GitHub publishes for (#15313) -- install $BIN on this host, or move this job" \
+            "back to a GitHub-hosted runner." >&2
+          exit 1
+        fi
+        RESOLVED="$("$BIN" -c 'import platform; print(platform.python_version())')"
+        echo "python-version=${RESOLVED}" >> "$GITHUB_OUTPUT"
+
+        # #15310: build a venv from the resolved interpreter and put it first
+        # on PATH. This replaces an earlier symlink shim, and solves three
+        # problems that the shim solved none or one of:
+        #
+        #   PEP 668. Debian/Ubuntu mark their Python installs
+        #   externally-managed, so `pip install` into system site-packages is
+        #   refused outright ("externally-managed-environment"). Observed live:
+        #   one runner refused, its sibling did not, because the two hosts had
+        #   been provisioned differently -- an intermittent failure that depends
+        #   on which runner picks the job.
+        #
+        #   Console scripts on PATH. pip puts them in the user script directory
+        #   when site-packages is not writable, which is not on a service
+        #   runner's PATH -- `pre-commit: command not found`, swallowed by a
+        #   step that then reports success.
+        #
+        #   Host cleanliness. Nothing is installed outside RUNNER_TEMP, so the
+        #   runners stay in their default GitHub configuration: no packages
+        #   added to the system interpreter, no .path or .env edits, nothing to
+        #   undo. The venv dies with the job.
+        #
+        # `python`, `python3` and `pip` all resolve here, so later steps need no
+        # knowledge of any of this.
+        VENV_DIR="${RUNNER_TEMP}/setup-python-ci-venv"
+        rm -rf "$VENV_DIR"
+        if ! "$BIN" -m venv "$VENV_DIR"; then
+          echo "::error::Could not create a venv with $BIN. Install the" \
+               "matching python venv package on this runner (#15310)."
+          exit 1
+        fi
+        echo "$VENV_DIR/bin" >> "$GITHUB_PATH"
+        echo "Built venv at $VENV_DIR from $BIN (#15310)."
+
+        echo "Resolved $BIN -> $RESOLVED with no download (#15313)."
 
     # #13516: every input reaches the shell through `env:`, never inline
     # `${{ }}` in a `run:` body. Inline interpolation is textual substitution
@@ -96,6 +167,18 @@ runs:
         REQ_HASH: ${{ hashFiles('**/requirements*.txt', 'pyproject.toml') }}
       run: |
         echo "value=python-${PY_VERSION}-pip-${REQ_HASH}" >> "$GITHUB_OUTPUT"
+
+    # actions/setup-python's `cache: 'pip'` above only runs on the
+    # github-hosted branch. Self-hosted gets the equivalent explicitly, since
+    # skipping actions/setup-python there (#15313) also skips its caching.
+    - name: Cache pip downloads (self-hosted)
+      if: runner.environment == 'self-hosted'
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ steps.cache-key.outputs.value }}
+        restore-keys: |
+          python-${{ inputs.python-version }}-pip-
 
     - name: Upgrade pip, setuptools, wheel
       shell: bash

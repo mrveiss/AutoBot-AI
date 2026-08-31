@@ -19,8 +19,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
-_PROVISION_LOG = Path("/var/log/autobot/provision-wizard.log")
-
 import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -28,10 +26,18 @@ from pydantic import BaseModel
 from api.websocket import ws_manager
 from config import settings
 from services.ansible_secrets import fetch_deploy_secrets
-from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
 from services.database import db_service
-from services.playbook_executor import get_playbook_executor
+from services.inventory_builder import _DECLARED_ONLY_GROUPS, _declared_roles, groups_for_role_tokens
+from services.playbook_executor import ANSIBLE_LOCAL_TMP, get_playbook_executor, link_group_vars
+from services.provision_progress import (
+    PROVISION_STALE_SECONDS,
+    handle_provision_result,
+)
+from services.provision_progress import is_stale as _provision_is_stale
+from services.provision_progress import mark_progress as _mark_provision_progress
+from services.provision_progress import write_provision_log as _write_provision_log
+from services.role_registry import ROLE_ANSIBLE_GROUPS
 
 logger = logging.getLogger(__name__)
 
@@ -108,26 +114,129 @@ async def _set_setting(key: str, value: str) -> None:
         await session.commit()
 
 
+def _groups_for_role_tokens_both_vocabularies(role_tokens: list[str]) -> set[str]:
+    """Union of the canonical map AND the legacy ``ROLE_ANSIBLE_GROUPS`` one.
+
+    Split out so both the raw (all NodeRole rows) and declared (Node.roles
+    alone) group sets in ``_ansible_groups_for_nodes`` are computed the same
+    way -- a role like ``vnc`` reaches ``backend`` ONLY through the legacy
+    map (it has no entry in ``inventory_builder._ROLE_TO_GROUPS`` at all), so
+    computing "declared" through the canonical map alone would strip a role
+    the node genuinely declared (#14638).
+    """
+    groups = set(groups_for_role_tokens(role_tokens))
+    for token in role_tokens:
+        legacy = ROLE_ANSIBLE_GROUPS.get(token)
+        if legacy:
+            groups.add(legacy)
+    return groups
+
+
+def _ansible_groups_for_nodes(
+    node_roles,
+    node_id_to_inv_name: dict[str, str],
+    db_nodes: list,
+) -> dict[str, set[str]]:
+    """Group name -> inventory names, unioning both vocabularies (#14286).
+
+    Split out of ``_build_inventory_children`` to keep it under the length
+    rule. The union is the point: neither map is a superset of the other, so
+    dropping either would trade one set of silent no-ops for another.
+
+    #14638: the result is gated the same way the dynamic-inventory builder
+    gates its own groups (``_strip_undeclared_privileged_groups``,
+    #14513/#14552) -- a node whose only route into a privileged group
+    (``slm_server``, ``backend``, ``main``, ``frontend``, ``aiml``, ``npu``,
+    ``browser``) is a ``NodeRole`` row it never declared must not join it.
+    The check reads ``Node.roles`` directly through ``db_nodes`` -- the same
+    source #14637 uses for ``node_roles_declared`` -- rather than trusting the
+    ``NodeRole`` assignment table ``node_roles`` itself is built from, so the
+    gate survives a future writer that stops keeping that table declared-only
+    instead of depending on it staying that way (#14594).
+
+    ``_strip_undeclared_privileged_groups`` itself is not reused here: it
+    computes "declared" through ``groups_for_role_tokens`` alone, and this
+    path's raw side unions in ``ROLE_ANSIBLE_GROUPS`` too -- reusing it as-is
+    would strip a role (``vnc`` -> ``backend``) that is declared but only
+    reachable through the second vocabulary. Both sides go through
+    ``_groups_for_role_tokens_both_vocabularies`` instead, so "declared" and
+    "raw" agree on what a role token means.
+
+    Args:
+        node_roles: NodeRole rows, each carrying ``node_id`` and ``role_name``.
+        node_id_to_inv_name: node id -> the name the inventory uses.
+        db_nodes: Node ORM rows -- the source of declared intent (Node.roles)
+            used to strip groups a node only reached via detection.
+
+    Returns:
+        Every group each host belongs to, from both mappings, privileged
+        groups stripped for any node that did not declare its way in.
+    """
+    roles_by_node: dict[str, list[str]] = {}
+    raw_node_groups: dict[str, set[str]] = {}
+
+    for nr in node_roles:
+        inv_name = node_id_to_inv_name.get(nr.node_id)
+        if not inv_name:
+            continue
+        roles_by_node.setdefault(inv_name, []).append(nr.role_name)
+
+    for inv_name, role_tokens in roles_by_node.items():
+        raw_node_groups[inv_name] = _groups_for_role_tokens_both_vocabularies(role_tokens)
+
+    declared_roles_by_inv: dict[str, list[str]] = {}
+    for node in db_nodes:
+        inv_name = node_id_to_inv_name.get(node.node_id)
+        if inv_name:
+            declared_roles_by_inv[inv_name] = _declared_roles(node)
+
+    groups: dict[str, set[str]] = {}
+    for inv_name, node_group_set in raw_node_groups.items():
+        undeclared = node_group_set & _DECLARED_ONLY_GROUPS
+        if undeclared:
+            # A node this path cannot resolve back to a Node row has no
+            # declared intent to stand on -- absent means [], which fails
+            # closed rather than skipping the gate.
+            declared_groups = _groups_for_role_tokens_both_vocabularies(declared_roles_by_inv.get(inv_name, []))
+            node_group_set = node_group_set - (undeclared - declared_groups)
+        for group in node_group_set:
+            groups.setdefault(group, set()).add(inv_name)
+
+    return groups
+
+
 def _build_inventory_children(
     hosts: dict[str, dict],
     node_roles: list,
     node_id_to_inv_name: dict[str, str],
+    db_nodes: list,
 ) -> tuple[dict[str, dict], dict[str, set[str]]]:
     """Build Ansible inventory ``children`` with role-based groups (#1346).
 
     Returns (children dict, ansible_groups) where ansible_groups maps
     group name to set of inventory names for logging.
     """
-    from services.role_registry import ROLE_ANSIBLE_GROUPS
 
-    ansible_groups: dict[str, set[str]] = {}
-    for nr in node_roles:
-        inv_name = node_id_to_inv_name.get(nr.node_id)
-        if not inv_name:
-            continue
-        group = ROLE_ANSIBLE_GROUPS.get(nr.role_name)
-        if group:
-            ansible_groups.setdefault(group, set()).add(inv_name)
+    # #14286: this path used to emit ROLE_ANSIBLE_GROUPS alone — one group per
+    # role, a vocabulary that drifted from the canonical builder's. Measured
+    # against every `hosts:` in the playbooks, 13 groups a play can gate on
+    # (aiml, database, redis, infrastructure, main, npu, npu_workers, browser,
+    # slm, monitoring_vm, autobot, autobot_cluster, production_vms) matched
+    # zero hosts through here, so those plays reported success having done
+    # nothing.
+    #
+    # The two maps are unioned rather than swapped, because neither is a
+    # superset: tts-worker's `npu_worker` exists only in ROLE_ANSIBLE_GROUPS,
+    # and playbooks gate on it. Dropping either vocabulary would trade one
+    # silent no-op for another; a host in more groups cannot make a
+    # previously-matching play stop matching.
+    #
+    # #14460: the other two names this note used to cite -- `databases` and
+    # `browser_automation` -- were NOT gated on anywhere. They were emitted
+    # and read back by nothing, so they contributed no activation at all;
+    # ROLE_ANSIBLE_GROUPS now names the consulted spellings (`database`,
+    # `browser`), which the canonical map emits too.
+    ansible_groups = _ansible_groups_for_nodes(node_roles, node_id_to_inv_name, db_nodes)
 
     children: dict[str, dict] = {
         "slm_nodes": {"hosts": {h: None for h in hosts}},
@@ -253,11 +362,23 @@ def _apply_role_host_vars(
     db_nodes: list,
     all_node_roles: list,
 ) -> None:
-    """Stamp node_roles, node_dependencies, and pending_dep_removals onto hosts (#2823).
+    """Stamp node_roles, node_roles_declared, node_dependencies, and
+    pending_dep_removals onto hosts (#2823).
 
     Sets node_roles so provision-fleet-roles.yml conditions work, resolves
     shared-dependency names for Phase 0 (#2747), and propagates any pending
     dependency removals recorded in node.extra_data.
+
+    #14594: node_roles_declared is stamped from ``node.roles`` directly (the
+    same source ``inventory_builder._declared_roles`` reads for the dynamic
+    inventory path), NOT from the NodeRole assignment table that node_roles
+    itself is built from. #14552's ``_declare_role_on_node`` already
+    established ``Node.roles`` as the sole record of operator intent for
+    privileged-group gating; this makes the node_roles_declared hostvar rest
+    on that same guarantee instead of on the incidental fact that every
+    current NodeRole writer happens to keep the table declared-only. If a
+    future writer ever stamps a NodeRole row the node never declared, this
+    hostvar is unaffected -- it never reads that table.
     """
     from services.role_registry import ROLE_DEPENDENCIES
 
@@ -274,9 +395,24 @@ def _apply_role_host_vars(
             continue
         if node.node_id in node_id_to_roles:
             hosts[inv_name]["node_roles"] = node_id_to_roles[node.node_id]
-        roles = hosts[inv_name].get("node_roles", [])
+        hosts[inv_name]["node_roles_declared"] = _declared_roles(node)
+        # #14859: dependencies resolve from DECLARED roles, not from the
+        # declared-plus-detected union `node_roles` carries.
+        #
+        # Detection legitimately drives plays -- a node running redis that
+        # nobody declared still needs the redis plays to reach it, which is what
+        # `_union_roles` documents. Installing OS packages and enabling services
+        # is a different act: that is provisioning a role, not reconciling one
+        # that is already there.
+        #
+        # A node contaminated by #14513 detects `backend`, `celery`, `frontend`,
+        # `scheduler`, `slm-backend` and `slm-frontend` (the residue tracked in
+        # #14667). Resolved from the union, a vnc + slm-agent node was given
+        # nginx, nodejs, postgresql and python314 -- and nginx failing to start
+        # there aborted provisioning for the WHOLE fleet at phase 7.
+        declared_for_deps = hosts[inv_name].get("node_roles_declared") or []
         deps: set[str] = set()
-        for role in roles:
+        for role in declared_for_deps:
             deps.update(ROLE_DEPENDENCIES.get(role, []))
         hosts[inv_name]["node_dependencies"] = sorted(deps)
         pending = (node.extra_data or {}).get("pending_dep_removals", [])
@@ -372,6 +508,14 @@ def _inject_co_located_ai_stack(
         if _ai_stack_roles & set(roles):
             continue
         hosts[inv_name]["node_roles"] = list(roles) + ["ai-stack"]
+        # #14594: also inject into node_roles_declared. This is a deliberate
+        # system decision to run ai-stack here (#3461), equivalent to an
+        # operator declaring it -- role_ai_stack_active is one of the five
+        # PRIVILEGED facts that read node_roles_declared instead of the raw
+        # union, so without this the co-location convenience silently stops
+        # deploying ChromaDB the moment node_roles_declared exists.
+        declared = hosts[inv_name].get("node_roles_declared", [])
+        hosts[inv_name]["node_roles_declared"] = list(declared) + ["ai-stack"]
         # Note: ai-stack role now defaults to autobot:autobot (not autobot-ai)
         # per unified service account model (#4091). No override needed.
         injected.append(inv_name)
@@ -493,6 +637,33 @@ async def _fetch_inventory_data(
     )
 
 
+def _write_wizard_inventory(inventory: dict) -> str:
+    """Write the wizard inventory where a group_vars sibling can live (#14286).
+
+    Into the uid-scoped ansible tmp dir rather than bare /tmp: the symlink
+    placed next to it must not land in a world-writable directory shared with
+    every other user on the box.
+
+    Without that sibling ansible resolves none of ``inventory/group_vars/*.yml``
+    on this path — ``role_redis_active``, and the ``chromadb_service_owner``
+    derived from it, fall back to role defaults, and a single-role redeploy
+    rewrites a unit the named role does not own (#4090's outage, verbatim).
+
+    Args:
+        inventory: the inventory dict to serialise.
+
+    Returns:
+        Path to the written file, as a string.
+    """
+    tmp_dir = Path(ANSIBLE_LOCAL_TMP)
+    tmp_dir.mkdir(mode=0o700, exist_ok=True)
+    fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-", dir=str(tmp_dir))
+    with open(fd, "w", encoding="utf-8") as f:
+        yaml.dump(inventory, f, default_flow_style=False)
+    link_group_vars(Path(path), get_playbook_executor().ansible_dir)
+    return path
+
+
 async def _generate_dynamic_inventory(
     node_ids: list[str] | None = None,
 ) -> Path | None:
@@ -507,7 +678,7 @@ async def _generate_dynamic_inventory(
         return None
 
     (
-        _db_nodes,
+        db_nodes,
         hosts,
         node_id_to_hostname,
         _node_id_to_ip,
@@ -522,8 +693,10 @@ async def _generate_dynamic_inventory(
     # carries group membership, and roles whose mapped group isn't the one
     # role_*_active checks (tts-worker, browser-service) silently never deploy —
     # the provision reports failed=0 while optional roles stay inactive.
-    _apply_role_host_vars(hosts, _db_nodes, all_node_roles)
-    children, ansible_groups = _build_inventory_children(hosts, all_node_roles, node_id_to_hostname)
+    _apply_role_host_vars(hosts, db_nodes, all_node_roles)
+    # #14638: db_nodes carries Node.roles, the declared-intent source
+    # _ansible_groups_for_nodes gates privileged group membership on.
+    children, ansible_groups = _build_inventory_children(hosts, all_node_roles, node_id_to_hostname, db_nodes)
     infra_vars = _build_infra_vars(all_active, all_ip_map, local_ips)
     # For co-located ai-stack (injected, no dedicated AI stack VM), _build_infra_vars
     # never sees the injected role because it reads from DB node_roles, not the
@@ -541,9 +714,7 @@ async def _generate_dynamic_inventory(
         infra_vars["backend_chromadb_port"] = _CHROMADB_PORT
     inventory = _build_inventory_dict(hosts, children, infra_vars)
 
-    fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-")
-    with open(fd, "w", encoding="utf-8") as f:
-        yaml.dump(inventory, f, default_flow_style=False)
+    path = _write_wizard_inventory(inventory)
 
     grp = ", ".join(f"{g}({len(h)})" for g, h in sorted(ansible_groups.items()))
     logger.info(
@@ -674,45 +845,17 @@ async def _activate_provisioned_roles(
         logger.warning("Failed to activate provisioned roles: %s", exc)
 
 
+# #14856: last_progress_at is the sign-of-life timestamp checked by
+# services.provision_progress.is_stale() -- see provision_fleet()'s 409 branch.
 _provision_state: dict = {
     "status": "idle",  # idle | running | completed | failed
     "started_at": None,
     "finished_at": None,
+    "last_progress_at": None,
     "output_lines": [],
     "error": None,
 }
 _provision_lock = asyncio.Lock()
-
-
-def _write_provision_log(line: str) -> None:
-    """Append a line to the persistent provision log (#1455)."""
-    try:
-        _PROVISION_LOG.parent.mkdir(parents=True, exist_ok=True)
-        with open(_PROVISION_LOG, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
-    except OSError:
-        pass
-
-
-def _handle_provision_result(result: dict) -> None:
-    """Record provisioning result to state and log (#1455)."""
-    raw_output = result.get("output", "")
-    if raw_output:
-        for line in raw_output.splitlines():
-            _provision_state["output_lines"].append(line)
-            _write_provision_log(line)
-
-    if result.get("success"):
-        _provision_state["status"] = "completed"
-        _write_provision_log("SUCCESS: Fleet provisioning completed")
-        logger.info("Fleet provisioning completed successfully")
-    else:
-        rc = result.get("returncode", -1)
-        _provision_state["status"] = "failed"
-        summary = _extract_failure_summary(raw_output)
-        _provision_state["error"] = summary or f"Ansible exited with code {rc}"
-        _write_provision_log(f"FAILED: {_provision_state['error']}")
-        logger.error("Fleet provisioning failed (rc=%s): %s", rc, _provision_state["error"])
 
 
 async def _create_wizard_deployments(
@@ -900,6 +1043,7 @@ async def _run_provisioning_task(
             if msg:
                 _provision_state["output_lines"].append(msg)
                 _write_provision_log(msg)
+                _mark_provision_progress(_provision_state)  # #14856
                 # Broadcast via WebSocket (#2754)
                 log_type = "task"
                 if stage == "heartbeat":
@@ -924,7 +1068,7 @@ async def _run_provisioning_task(
             inventory_path=temp_inventory_path,
             progress_callback=log_callback,
         )
-        _handle_provision_result(result)
+        handle_provision_result(_provision_state, result)
 
         # Update Deployment records with playbook outcome (#3032)
         await _complete_wizard_deployments(
@@ -1074,15 +1218,34 @@ async def provision_fleet(
 
     async with _provision_lock:
         if _provision_state["status"] == "running":
-            raise HTTPException(
-                status_code=409,
-                detail="Provisioning is already running",
+            if not _provision_is_stale(_provision_state):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Provisioning is already running",
+                )
+            # #14856: the prior run stopped reporting progress (no output line
+            # and no completion) for longer than PROVISION_STALE_SECONDS, so it
+            # is treated as abandoned rather than blocking every future run
+            # forever. Its last known state is not silently discarded: the
+            # persistent provision log already has every line it produced
+            # on disk (_write_provision_log runs on every callback), and this
+            # adds the terminal marker before the in-memory record below is
+            # superseded, so anyone reading the log sees why it stopped.
+            logger.warning(
+                "Fleet provisioning: prior run has made no progress since %s -- "
+                "treating it as abandoned and starting a new run",
+                _provision_state.get("last_progress_at") or _provision_state.get("started_at"),
+            )
+            _write_provision_log(
+                f"RETIRED: no progress for over {PROVISION_STALE_SECONDS}s -- "
+                "superseded by a new provisioning run (#14856)"
             )
 
         _provision_state = {
             "status": "running",
             "started_at": time.time(),
             "finished_at": None,
+            "last_progress_at": None,
             "output_lines": [],
             "error": None,
         }

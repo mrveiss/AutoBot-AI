@@ -10,6 +10,7 @@ import { ref, computed } from 'vue'
 import { ApiClient } from '@/utils/ApiClient'
 import { extractErrorMessage } from '@/utils/errorExtract'
 import { useLoadingState } from '@/composables/useLoadingState'
+import { CATEGORY_DEFAULTS } from '@/config/ssot-config'
 
 export interface KnowledgeScope {
   scope: string
@@ -258,7 +259,7 @@ export function useKnowledgeCollaboration() {
         const response = await apiClient.post<ScopedSearchResult>('/api/knowledge/search/scoped', {
           query,
           top_k: options.top_k || 10,
-          mode: options.mode || 'hybrid',
+          mode: options.mode || CATEGORY_DEFAULTS.SEARCH_MODE_HYBRID,
           category: options.category,
           tags: options.tags,
           min_score: options.min_score || 0.0,

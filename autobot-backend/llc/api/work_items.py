@@ -39,7 +39,8 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
-from llc.deps import get_session, service_dep
+from autobot_shared.user_management.models.user import resolve_display_name
+from llc.deps import assert_company_access, get_session, service_dep
 from models.agent_org import AgentOrgNode
 from user_management.models.user import User
 from user_management.services import TenantContext
@@ -47,6 +48,7 @@ from user_management.services import TenantContext
 from ..kb.ac_suggester import AcSuggester
 from ..kb.collections import KbCollectionManager
 from ..models.enums import (
+    AssigneeType,
     WorkItemPriority,
     WorkItemRelationType,
     WorkItemStatus,
@@ -91,18 +93,23 @@ class HumanUnclaimRequest(BaseModel):
 
 
 class CoworkerRequest(BaseModel):
-    """Set or clear a co-worker on a work item (GH#8230).
-    To clear the co-worker, omit co_worker_type (or send null).
-    The caller's role is resolved server-side from the auth context — not supplied
-    by the client (GH#8516: removed client-supplied caller_role to prevent privilege escalation).
+    """Set or clear a co-worker on a work item (GH#8230, GH#8516, GH#8583, #14168).
+
+    To clear the co-worker, omit co_worker_type (or send null). Both the
+    caller's role and the company scope are resolved server-side from the
+    authenticated org context — never supplied by the client. GH#8516/
+    GH#8583 removed client-supplied ``caller_role`` to prevent privilege
+    escalation; #14168 removed client-supplied ``company_id`` for the same
+    reason — it was used unvalidated to resolve the caller's role, letting a
+    caller impersonate a role held in a company other than the one owning
+    the work item. ``actor_agent_id``/``actor_user_id`` were likewise
+    removed — the acting identity comes from the authenticated session, not
+    the request body, so the audit trail cannot be spoofed.
     """
 
-    company_id: str
     co_worker_type: Optional[str] = None
     co_worker_agent_id: Optional[str] = None
     co_worker_user_id: Optional[str] = None
-    actor_agent_id: Optional[str] = None
-    actor_user_id: Optional[str] = None
 
 
 logger = get_logger(__name__)
@@ -260,24 +267,24 @@ class RelationDelete(BaseModel):
 
 async def _assignee_display(item: Any, session: AsyncSession) -> Optional[Dict[str, Any]]:
     """Return structured assignee display info resolved from user_management.users (GH#8476)."""
-    if item.assignee_type == "user" and item.assignee_user_id:
+    if item.assignee_type == AssigneeType.USER.value and item.assignee_user_id:
         row = (
             await session.execute(select(User.display_name, User.username).where(User.id == item.assignee_user_id))
         ).one_or_none()
-        name = (row.display_name or row.username) if row else None
+        name = resolve_display_name(row.display_name, row.username) if row else None
         return {
-            "type": "user",
+            "type": AssigneeType.USER.value,
             "id": str(item.assignee_user_id),
             "display_name": name,
             "name": name,
         }
-    if item.assignee_type == "agent" and item.assignee_agent_id:
+    if item.assignee_type == AssigneeType.AGENT.value and item.assignee_agent_id:
         row = (
             await session.execute(select(AgentOrgNode.name).where(AgentOrgNode.id == item.assignee_agent_id))
         ).one_or_none()
         name = row.name if row else None
         return {
-            "type": "agent",
+            "type": AssigneeType.AGENT.value,
             "id": str(item.assignee_agent_id),
             "display_name": name,
             "name": name,
@@ -289,16 +296,16 @@ def _coworker_display(item: Any) -> Optional[Dict[str, Any]]:
     """Return structured co-worker display info (GH#8230)."""
     if not item.co_working_enabled:
         return None
-    if item.co_worker_type == "human" and item.co_worker_user_id:
+    if item.co_worker_type == AssigneeType.USER.value and item.co_worker_user_id:
         return {
-            "type": "human",
+            "type": AssigneeType.USER.value,
             "id": str(item.co_worker_user_id),
             "display_name": None,
             "name": None,
         }
-    if item.co_worker_type == "agent" and item.co_worker_agent_id:
+    if item.co_worker_type == AssigneeType.AGENT.value and item.co_worker_agent_id:
         return {
-            "type": "agent",
+            "type": AssigneeType.AGENT.value,
             "id": str(item.co_worker_agent_id),
             "display_name": None,
             "name": None,
@@ -410,7 +417,12 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
 async def create_work_item(
     body: WorkItemCreate,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # Tenant guard (#14168): reject cross-tenant creation before touching the DB —
+    # body.company_id is client-controlled and must match the caller's authenticated org.
+    assert_company_access(ctx, body.company_id)
     try:
         item = await _service().create(
             session,
@@ -446,6 +458,12 @@ async def list_work_items(
     type: Optional[WorkItemType] = Query(None),
     status: Optional[WorkItemStatus] = Query(None),
     assignee: Optional[str] = Query(None),
+    # #14192: distinct from `assignee` (which maps to assignee_agent_id only,
+    # see below) rather than overloading one param for two different id
+    # spaces — a human org-chart node's `node_id` is a user id, never an
+    # agent id, so a caller building this URL must be able to say which
+    # keyspace it belongs to.
+    assignee_user_id: Optional[str] = Query(None),
     reviewer: Optional[str] = Query(None),
     sprint_id: Optional[str] = Query(None),
     parent_id: Optional[str] = Query(None),
@@ -456,7 +474,16 @@ async def list_work_items(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
+    # Tenant guard (#14168): the ``company_id`` query param is client-controlled;
+    # require_org_context already membership-checks it when it is the sole org
+    # source, but a caller can still supply a different, still-valid
+    # ``X-Organization-Id`` header alongside a foreign ``company_id`` query
+    # value (header wins in get_tenant_context's precedence). Reject any
+    # mismatch explicitly rather than relying on precedence order.
+    assert_company_access(ctx, company_id)
     items = await _service().list_by_project(
         session,
         company_id=company_id,
@@ -464,6 +491,7 @@ async def list_work_items(
         type=type,
         status=status,
         assignee_agent_id=assignee,
+        assignee_user_id=assignee_user_id,
         reviewer_user_id=reviewer,
         sprint_id=sprint_id,
         parent_id=parent_id,
@@ -525,6 +553,20 @@ async def delete_work_item(
         raise HTTPException(status_code=404, detail="Work item not found")
     await session.delete(item)
     await session.commit()
+    # #13920: drop the KB collection with its entity. Post-commit and
+    # non-fatal — the row is gone either way, and a stranded collection is a
+    # tidiness problem where a failed delete would be a correctness one.
+    await _drop_kb_collection(work_item_id)
+
+
+async def _drop_kb_collection(work_item_id: str) -> None:
+    """Best-effort removal of a deleted work item's KB collection (#13920)."""
+    from llc.kb.collections import KbCollectionManager  # noqa: PLC0415
+
+    try:
+        await KbCollectionManager().drop_collection(KbCollectionManager.WORK_ITEM_PREFIX, work_item_id)
+    except Exception:  # noqa: BLE001 - defensive; drop_collection does not raise
+        logger.warning("Could not drop KB collection for work item %s", work_item_id, exc_info=True)
 
 
 @router.post("/{work_item_id}/checkout")
@@ -713,52 +755,63 @@ async def unclaim_work_item(
         raise HTTPException(status_code=400, detail="Internal server error")
 
 
-class CoWorkerSetRequest(BaseModel):
-    """Set co-worker on a work item (GH#8230).
-
-    caller_role is resolved server-side from auth context — not supplied
-    by the client (GH#8583: removed client-supplied caller_role to prevent privilege escalation).
-    """
-
-    co_worker_type: str
-    company_id: str
-    co_worker_agent_id: Optional[str] = None
-    co_worker_user_id: Optional[str] = None
-    actor_id: Optional[str] = None
-
-
-class CoWorkerClearRequest(BaseModel):
-    company_id: str
-    actor_id: Optional[str] = None
-
-
 @router.post("/{work_item_id}/coworker", status_code=200)
 async def set_coworker(
     work_item_id: str,
-    body: CoWorkerSetRequest,
+    body: CoworkerRequest,
     session: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
-    """Set co-worker fields for a work item (GH#8230, GH#8517, GH#8583).
+    """Set or clear co-worker fields for a work item (GH#8230, GH#8517, GH#8583, #14168).
 
-    Returns 404 when the work item is not found, 403 when the caller lacks
-    permission, and 422 for invalid co-worker identity values.
+    Omit ``co_worker_type`` (or send null) to clear the co-worker.
+
+    Returns 404 when the work item is not found or belongs to a different
+    org (#14168 IDOR guard — checked against the caller's authenticated org,
+    never client input), 403 when the caller lacks permission, and 422 for
+    invalid co-worker identity values.
+
+    This used to be two separate routes registered on the same path/method
+    (the second, unauthenticated one — ``set_or_clear_coworker`` — was
+    unreachable dead code shadowed by this one, but a live landmine: it
+    hard-coded ``caller_role="owner"`` and trusted a client-supplied
+    ``company_id`` with zero tenant check). Consolidated into one canonical,
+    authenticated, tenant-scoped handler (#14168).
     """
     actor_id = current_user.get("user_id") or current_user.get("agent_id") or current_user.get("id")
     if not actor_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    # IDOR guard (#14168): verify the item belongs to the caller's org before
+    # mutating or resolving a role for it.
+    existing = await _service().get(session, work_item_id)
+    if existing is None or str(existing.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
+    company_id = str(ctx.org_id)
+    actor_type = "user" if current_user.get("user_id") else "agent"
     try:
-        caller_role = await resolve_actor_role(session, actor_id, body.company_id)
-        item = await _service().enable_coworking(
-            session,
-            work_item_id=work_item_id,
-            co_worker_type=body.co_worker_type,
-            company_id=body.company_id,
-            co_worker_agent_id=body.co_worker_agent_id,
-            co_worker_user_id=body.co_worker_user_id,
-            actor_id=actor_id,
-            caller_role=caller_role,
-        )
+        caller_role = await resolve_actor_role(session, actor_id, company_id)
+        if body.co_worker_type:
+            item = await _service().enable_coworking(
+                session,
+                work_item_id=work_item_id,
+                co_worker_type=body.co_worker_type,
+                company_id=company_id,
+                co_worker_agent_id=body.co_worker_agent_id,
+                co_worker_user_id=body.co_worker_user_id,
+                actor_id=actor_id,
+                actor_type=actor_type,
+                caller_role=caller_role,
+            )
+        else:
+            item = await _service().disable_coworking(
+                session,
+                work_item_id=work_item_id,
+                company_id=company_id,
+                actor_id=actor_id,
+                actor_type=actor_type,
+                caller_role=caller_role,
+            )
         await session.commit()
         return await _item_to_dict(item, session)
     except CoWorkingPermissionError as exc:
@@ -979,58 +1032,6 @@ async def get_handoff_brief(
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
-
-
-@router.post("/{work_item_id}/coworker", status_code=200)
-async def set_or_clear_coworker(
-    work_item_id: str,
-    body: CoworkerRequest,
-    session: AsyncSession = Depends(get_session),
-) -> Dict[str, Any]:
-    """Set or clear co-worker on a work item (GH#8230, GH#8516).
-
-    Omit or null co_worker_type to clear the co-worker.
-    caller_role is resolved server-side; it is no longer accepted from the
-    client (GH#8516: removed to prevent privilege escalation).
-    """
-    actor_id = body.actor_agent_id or body.actor_user_id
-    actor_type = "agent" if body.actor_agent_id else "user"
-    try:
-        if body.co_worker_type:
-            item = await _service().enable_coworking(
-                session,
-                work_item_id=work_item_id,
-                co_worker_type=body.co_worker_type,
-                company_id=body.company_id,
-                co_worker_agent_id=body.co_worker_agent_id,
-                co_worker_user_id=body.co_worker_user_id,
-                actor_id=actor_id,
-                actor_type=actor_type,
-                caller_role="owner",
-            )
-        else:
-            item = await _service().disable_coworking(
-                session,
-                work_item_id=work_item_id,
-                company_id=body.company_id,
-                actor_id=actor_id,
-                actor_type=actor_type,
-                caller_role="owner",
-            )
-        await session.commit()
-        # #11684: was `return _item_to_dict(item)` — unawaited and missing the
-        # session arg (latent since _item_to_dict became an async 2-arg fn); the
-        # awaitable_attrs relation load makes it a guaranteed crash. Match every
-        # other caller.
-        return await _item_to_dict(item, session)
-    except CoWorkingPermissionError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=403, detail="Internal server error")
-    except ValueError as exc:
-        msg = str(exc)
-        if "not found" in msg.lower():
-            raise HTTPException(status_code=404, detail=msg)
-        raise HTTPException(status_code=422, detail=msg)
 
 
 @router.get("/{work_item_id}/products")

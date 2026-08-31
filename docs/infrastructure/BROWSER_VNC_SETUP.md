@@ -138,7 +138,7 @@ Environment="DISPLAY=:1"
 ### noVNC Settings
 
 - **Port**: 6080
-- **Web Root**: /usr/share/novnc
+- **Web Root**: /opt/novnc (#13069; distro /usr/share/novnc is removed by roles/vnc and stale where it survives)
 - **Proxy Target**: localhost:5901
 
 ## Frontend Integration
@@ -316,7 +316,7 @@ ssh autobot@<browser-ip> 'systemctl status browser-playwright --no-pager | grep 
 
 - VNC server uses VncAuth/TLSVnc authentication (password required)
 - Password auto-generated to `/etc/autobot/vnc-secrets.env` during provisioning
-- Only accessible from AutoBot internal network (172.16.168.x)
+- Only accessible from AutoBot internal network (<network-subnet>)
 - Do NOT expose VNC ports (5901, 6080) to public internet
 - Consider VPN/SSH tunnel for remote access
 - NEVER use `-SecurityTypes None` — always require authentication

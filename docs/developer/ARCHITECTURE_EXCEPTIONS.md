@@ -143,3 +143,64 @@ class FlashAttentionV2:  # canonical: ignore py-duplicate-concept — published 
 ```
 
 **Grep check:** `git grep -n "FlashAttentionV2"` should return only flash-attention implementation and test files.
+
+---
+
+## VNC Service Account — Real Home Directory (not `nologin`'s no-home)
+
+**File:** `autobot-slm-backend/ansible/roles/vnc/tasks/main.yml`,
+`autobot-slm-backend/ansible/roles/vnc/defaults/main.yml`
+**Issue:** #14319 (shell corrected in PR #14412 review round 2)
+
+**Pattern bypassed:** Every other per-service account on the platform
+(`autobot-backend`, `autobot-ai`, `autobot-npu`, `autobot-browser`,
+`autobot-tts`) is `system: true` with `shell: /usr/sbin/nologin` and no home
+directory — the account exists only to own files and run one systemd unit.
+
+**Reason — home directory only, NOT the shell:** VNC starts an interactive
+desktop session and needs a real home directory (`~/.vnc/passwd`,
+`~/.vnc/xstartup`, `~/.vnc/config`) to hold its state; a `nologin` account
+with `create_home: false` has nowhere to put it. That is the ONLY dimension
+this account deviates on. The shell field does not need to change:
+`vnc-server.service.j2` starts `vncserver` through systemd's `User=`
+directive, which execs the unit's `ExecStart` directly and never consults
+`/etc/passwd`'s shell field, and `templates/xstartup.j2` carries its own
+`#!/bin/bash` shebang, so the kernel resolves the interpreter from the
+script itself when `vncserver` execs it — nothing in the VNC path needs the
+account's login shell to be anything other than `nologin`. `autobot-vnc`
+(the account's default name — see `vnc_user` in `defaults/main.yml`) is
+therefore `system: true`, `shell: /usr/sbin/nologin`, `create_home: true` —
+identical to every other per-service account except `create_home`. A
+standing interactive login shell on a service account is an unnecessary
+persistence foothold; `su -s /bin/bash - autobot-vnc` still works as root
+for interactive debugging if that is ever needed.
+
+**What it explicitly does NOT get:** sudo access of any kind, and the
+account is validated to never be `autobot_admin` (the emergency admin
+safety-net account) — see the `assert` task at the top of `tasks/main.yml`.
+
+**Grep check:** `grep -n "vnc_user\|vnc_forbidden_user" autobot-slm-backend/ansible/roles/vnc/defaults/main.yml`
+
+---
+
+## Service-Discovery Cache TTL — Plain Shared Constant, Not Env-Backed
+
+**File:** `autobot_shared/service_discovery.py`
+**Issue:** #14465
+
+**Pattern bypassed:** "Cache TTL — never hard-code — module-level constant
+from an env var."
+
+**Reason:** `slm/agent/health_collector.py`'s discovery-sweep cache TTL and
+`services/reconciler.py`'s restart-churn window (which must stay
+comfortably larger than that TTL, or the churn signal regresses to a pulse
+that misses most heartbeats) run in two DIFFERENT processes on two
+DIFFERENT machines — the agent on each fleet node, the backend on the
+manager host. An env var only provides a genuine single source of truth if
+it is set to the identical value on every one of those machines; nothing in
+either process can enforce that. A plain constant, shipped in the one
+codebase both processes deploy from, cannot drift that way — changing it is
+one edit that reaches every node on the next code-sync, not an env var an
+operator has to remember to set identically everywhere.
+
+**Grep check:** `grep -rn "SERVICE_DISCOVERY_TTL_S" autobot_shared/service_discovery.py autobot-slm-backend/slm/agent/health_collector.py autobot-slm-backend/services/reconciler.py` should show one definition and two importers, no second hardcoded literal.

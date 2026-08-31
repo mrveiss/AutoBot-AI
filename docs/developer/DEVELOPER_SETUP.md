@@ -168,7 +168,7 @@ cd autobot-slm-backend/ansible
 ansible-playbook playbooks/update-all-nodes.yml
 
 # Enroll a new node
-ansible-playbook playbooks/enroll-node.yml -e "target_host=172.16.168.XX"
+ansible-playbook playbooks/enroll-node.yml -e "target_host=<new-node-ip>"
 
 # Deploy NPU worker only
 ansible-playbook playbooks/update-all-nodes.yml --tags npu

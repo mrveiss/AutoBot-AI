@@ -1,0 +1,202 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
+// #14079: every shift-drag pan that started on a node ended with that node's
+// drawer open over the canvas the user had just panned.
+//
+// A pan translates the canvas by the pointer delta, so the node the gesture
+// started on stays under the cursor. `mouseup` lands on it, the browser fires
+// `click`, and `@click.stop="selectNode(node.id)"` emits `node-selected`.
+//
+// The suppression has to be narrow in two directions, and both are asserted
+// here: a shift-click that never moves is still a selection, and a pan that
+// ends over empty canvas must not swallow the user's NEXT click on a node.
+//
+// #14610: the component now listens for Pointer Events (`pointerdown` /
+// `pointermove` / `pointerup`), not `mousedown`/`mousemove`/`mouseup` — one
+// input path for mouse and touch. The gestures below are triggered with the
+// pointer event names; the flag they exercise (`movedThisGesture`, renamed
+// from `pannedThisGesture`) and the assertions are otherwise unchanged.
+
+import { describe, it, expect } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import en from '@/i18n/locales/en.json'
+
+import WorkflowCanvas from '../WorkflowCanvas.vue'
+import type { CanvasNode } from '../canvasNode'
+import { firePointer } from './pointerTestUtils'
+
+const NODES: CanvasNode[] = [
+  {
+    id: 'ceo',
+    type: 'org-person',
+    position: { x: 40, y: 40 },
+    data: { title: 'Ada', rule: 'idle' },
+    connections: [],
+  },
+]
+
+// #14860: one shared instance for the whole file. A fresh createI18n per
+// mount re-ingested the ~400KB message bundle every time; nothing here
+// mutates the instance, so building it once is enough.
+const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+
+function mountCanvas() {
+  return mount(WorkflowCanvas, {
+    props: { nodes: NODES, selectedNodeId: null, readonly: true },
+    global: { plugins: [i18n] },
+  })
+}
+
+type Wrapper = ReturnType<typeof mountCanvas>
+
+const node = (w: Wrapper) => w.find('.workflow-node')
+const area = (w: Wrapper) => w.find('.canvas-area')
+const selections = (w: Wrapper) => w.emitted('node-selected') ?? []
+
+/** Shift-drag from `from` to `to`, starting on whichever element is given. */
+async function panFrom(w: Wrapper, start: ReturnType<typeof node>, dx: number): Promise<void> {
+  await firePointer(start.element, 'pointerdown', { shiftKey: true, clientX: 100, clientY: 100, button: 0 })
+  await firePointer(area(w).element, 'pointermove', { clientX: 100 + dx, clientY: 100 + dx })
+  await firePointer(area(w).element, 'pointerup', { clientX: 100 + dx, clientY: 100 + dx })
+}
+
+describe('a pan gesture is not a selection (#14079)', () => {
+  it('does not select the node a pan started on', async () => {
+    const w = mountCanvas()
+    await panFrom(w, node(w), 70)
+    // The click the browser fires when the pointer comes up over the node.
+    await node(w).trigger('click')
+
+    expect(selections(w)).toHaveLength(0)
+  })
+
+  it('still selects on a plain click', async () => {
+    const w = mountCanvas()
+    await firePointer(node(w).element, 'pointerdown', { clientX: 100, clientY: 100, button: 0 })
+    await firePointer(node(w).element, 'pointerup', { clientX: 100, clientY: 100 })
+    await node(w).trigger('click')
+
+    expect(selections(w)).toEqual([['ceo']])
+  })
+
+  it('still selects on a shift-click that never moves', async () => {
+    // Shift is the pan modifier, but a press that does not move is not a pan.
+    // Keying the suppression on the modifier instead of on movement would
+    // silently make shift-click stop working.
+    const w = mountCanvas()
+    await firePointer(node(w).element, 'pointerdown', { shiftKey: true, clientX: 100, clientY: 100, button: 0 })
+    await firePointer(node(w).element, 'pointerup', { clientX: 100, clientY: 100 })
+    await node(w).trigger('click')
+
+    expect(selections(w)).toEqual([['ceo']])
+  })
+
+  it('does not swallow the click after a pan that ended on empty canvas', async () => {
+    // The failure mode of clearing the flag on the click it suppresses: this
+    // pan is followed by no node click at all, so the flag would still be set
+    // when the user next clicks a node.
+    const w = mountCanvas()
+    await firePointer(area(w).element, 'pointerdown', { shiftKey: true, clientX: 10, clientY: 10, button: 0 })
+    await firePointer(area(w).element, 'pointermove', { clientX: 90, clientY: 90 })
+    await firePointer(area(w).element, 'pointerup', { clientX: 90, clientY: 90 })
+
+    await firePointer(node(w).element, 'pointerdown', { clientX: 100, clientY: 100, button: 0 })
+    await node(w).trigger('click')
+
+    expect(selections(w)).toEqual([['ceo']])
+  })
+})
+
+// #14625: `movedThisGesture` used to be set on the FIRST `pointermove` of a
+// gesture, with no minimum distance — so a single pixel of incidental
+// jitter during a deliberate click (an unsteady hand, a trackpad, a touch
+// screen) silently swallowed it. `onPointerMove` now only sets the flag once
+// the pointer has moved past a threshold from the gesture's start point.
+describe('a click/tap has a movement threshold, not zero (#14625)', () => {
+  it('still selects a plain click with sub-threshold jitter', async () => {
+    // The bug: 2px of jitter (well under the mouse threshold) during an
+    // otherwise-stationary press must not be mistaken for a drag.
+    const w = mountCanvas()
+    await firePointer(node(w).element, 'pointerdown', { clientX: 100, clientY: 100, button: 0 })
+    await firePointer(node(w).element, 'pointermove', { clientX: 101, clientY: 102 })
+    await firePointer(node(w).element, 'pointerup', { clientX: 101, clientY: 102 })
+    await node(w).trigger('click')
+
+    expect(selections(w)).toEqual([['ceo']])
+  })
+
+  it('still selects a shift-click with sub-threshold jitter', async () => {
+    // Same bug, pan branch: shift is the pan modifier, but 2px of jitter is
+    // not a pan either.
+    const w = mountCanvas()
+    await firePointer(node(w).element, 'pointerdown', { shiftKey: true, clientX: 100, clientY: 100, button: 0 })
+    await firePointer(area(w).element, 'pointermove', { clientX: 102, clientY: 101 })
+    await firePointer(area(w).element, 'pointerup', { clientX: 102, clientY: 101 })
+    await node(w).trigger('click')
+
+    expect(selections(w)).toEqual([['ceo']])
+  })
+
+  it('does not select on a genuine drag past the threshold', async () => {
+    // A real drag started on a node (#14610's plain-click branch) must still
+    // be treated as a drag, not a click, once it clears the threshold.
+    const w = mountCanvas()
+    await firePointer(node(w).element, 'pointerdown', { clientX: 100, clientY: 100, button: 0 })
+    await firePointer(node(w).element, 'pointermove', { clientX: 120, clientY: 100 })
+    await firePointer(node(w).element, 'pointerup', { clientX: 120, clientY: 100 })
+    await node(w).trigger('click')
+
+    expect(selections(w)).toHaveLength(0)
+  })
+
+  it('still selects a touch tap with jitter above the mouse threshold but below the touch tolerance', async () => {
+    // Touch gets a taller tolerance than mouse (a fingertip drifts more for
+    // the same intended tap): 6px clears the mouse threshold but must not
+    // clear the touch one.
+    const w = mountCanvas()
+    await firePointer(node(w).element, 'pointerdown', {
+      pointerType: 'touch', clientX: 100, clientY: 100, button: 0,
+    })
+    await firePointer(node(w).element, 'pointermove', {
+      pointerType: 'touch', clientX: 106, clientY: 100,
+    })
+    await firePointer(node(w).element, 'pointerup', {
+      pointerType: 'touch', clientX: 106, clientY: 100,
+    })
+    await node(w).trigger('click')
+
+    expect(selections(w)).toEqual([['ceo']])
+  })
+
+  it('does not select a touch drag once it clears the touch threshold', async () => {
+    const w = mountCanvas()
+    await firePointer(node(w).element, 'pointerdown', {
+      pointerType: 'touch', clientX: 100, clientY: 100, button: 0,
+    })
+    await firePointer(node(w).element, 'pointermove', {
+      pointerType: 'touch', clientX: 130, clientY: 100,
+    })
+    await firePointer(node(w).element, 'pointerup', {
+      pointerType: 'touch', clientX: 130, clientY: 100,
+    })
+    await node(w).trigger('click')
+
+    expect(selections(w)).toHaveLength(0)
+  })
+
+  it('accumulates a slow drag built from many 1px moves into a real drag', async () => {
+    // Comparing against the gesture's fixed start point (not the previous
+    // event) is what makes this work: many sub-pixel-tolerance single steps
+    // must still add up to a drag once their sum clears the threshold.
+    const w = mountCanvas()
+    await firePointer(node(w).element, 'pointerdown', { clientX: 100, clientY: 100, button: 0 })
+    for (let i = 1; i <= 10; i++) {
+      await firePointer(node(w).element, 'pointermove', { clientX: 100 + i, clientY: 100 })
+    }
+    await firePointer(node(w).element, 'pointerup', { clientX: 110, clientY: 100 })
+    await node(w).trigger('click')
+
+    expect(selections(w)).toHaveLength(0)
+  })
+})

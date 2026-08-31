@@ -18,14 +18,26 @@ Usage:
 from __future__ import annotations
 
 import os
+import unicodedata
 import urllib.parse
 from pathlib import Path
 from typing import Sequence
 
-_DEFAULT_ALLOWED_ROOTS: tuple[str, ...] = (
-    "/opt/autobot",
-    "/tmp",  # nosec B108  # test/controlled code uses tmpdir intentionally
-)
+from autobot_shared.paths import project_root
+
+# #15238: no `/tmp` here. It is world-writable and shared with every other
+# process on the host, so an unprivileged local process can plant a file
+# there for any endpoint that falls back to this default to read back.
+# Every caller must state the root it actually means; there is no safe
+# universal fallback.
+_DEFAULT_ALLOWED_ROOTS: tuple[str, ...] = ("/opt/autobot",)
+
+#: Call sites that mean "inside the AutoBot project" — the common case for
+#: request handlers analyzing this codebase — import this alongside
+#: ``validate_path`` instead of hand-rolling `/opt/autobot` or reaching for
+#: the (deliberately narrow) default. Centralised so a grandfathered,
+#: line-frozen call site can add it via its *existing* import line (#15238).
+PROJECT_ALLOWED_ROOTS: tuple[str, ...] = (str(project_root()),)
 
 # Characters rejected outright in sandbox-relative user paths (Issue #326).
 # Single source of truth for the sandbox resolver shared by files.py and
@@ -40,6 +52,44 @@ class SandboxPathError(ValueError):
     verbatim (e.g. as a FastAPI ``HTTPException`` detail) without
     re-deriving wording.
     """
+
+
+#: Decode-loop cap for :func:`_canonicalize`. ``os.path.realpath`` never
+#: decodes anything itself, so a percent-encoded ``..`` only *looks* like a
+#: harmless literal filename to it. 8 rounds is deep enough for any encoding
+#: depth seen in practice while bounding a pathological input.
+_MAX_DECODE_ROUNDS = 8
+
+
+def _canonicalize(path: str) -> str:
+    """Fully percent-decode (to a fixed point) and NFKC-normalize *path*.
+
+    ``os.path.realpath`` performs neither percent-decoding nor Unicode
+    normalization. Left alone, a disguised ``..`` — percent-encoded to any
+    depth, or spelled with a Unicode confusable such as ``﹒`` SMALL FULL
+    STOP or ``‥`` TWO DOT LEADER — never becomes a real ``..`` and stays an
+    inert, nonexistent literal filename. That is not itself an escape (it
+    can't resolve past the caller's cwd), but a denylist that rejects the
+    raw/partially-decoded string on sight is wrong in the other direction:
+    it also rejects a legitimate in-bounds ``a/../b`` and a real file
+    literally named ``notes..final.txt`` (#14050).
+
+    Canonicalizing *before* the single containment check — rather than
+    denylisting the raw string — makes containment the sole authority: a
+    genuinely disguised traversal becomes a real ``..`` that resolves (and
+    is rejected if it escapes), while in-bounds ``..`` usage resolves and is
+    accepted, exactly as plain ``os.path.realpath`` already handles a
+    literal ``..`` today. Callers must resolve and operate on this same
+    canonical string — checking one representation and opening a different,
+    still-encoded one would reintroduce the gap.
+    """
+    decoded = path
+    for _ in range(_MAX_DECODE_ROUNDS):
+        next_decoded = urllib.parse.unquote(decoded)
+        if next_decoded == decoded:
+            break
+        decoded = next_decoded
+    return unicodedata.normalize("NFKC", decoded)
 
 
 def validate_path(
@@ -69,15 +119,25 @@ def validate_path(
     Raises
     ------
     ValueError
-        If the path escapes all allowed roots, contains null bytes, or
-        (when *must_exist*) does not exist.
+        If the path escapes all allowed roots, contains null bytes
+        (including one smuggled in via percent-encoding), or (when
+        *must_exist*) does not exist.
     """
     if not user_path or "\x00" in user_path:
         raise ValueError("Invalid path: empty or contains null bytes")
 
+    # #14050: canonicalize (decode + normalize) *before* resolving, then let
+    # the containment check below be the sole authority — see _canonicalize
+    # for why a denylist on the raw string is wrong. The resolved path
+    # returned is derived from this same canonical string, so a caller's
+    # actual file operation and this check never see different strings.
+    canonical = _canonicalize(user_path)
+    if "\x00" in canonical:
+        raise ValueError("Invalid path: empty or contains null bytes")
+
     roots = tuple(allowed_roots) if allowed_roots is not None else _DEFAULT_ALLOWED_ROOTS
 
-    resolved = Path(os.path.realpath(user_path))
+    resolved = Path(os.path.realpath(canonical))
 
     for root in roots:
         root_resolved = Path(os.path.realpath(root))
@@ -141,6 +201,54 @@ def validate_relative_path(
     return resolved
 
 
+def require_path_string(value: object, *, context: str) -> str:
+    """Reject anything that is not a real path — str or Path (#14217).
+
+    A sanitizer that stringifies whatever it is handed — an object's
+    ``repr()``, or (in tests) a ``MagicMock`` whose default ``__fspath__``
+    embeds ``/`` separators — turns junk into a real, creatable directory
+    tree the moment it reaches ``Path()`` / ``os.makedirs``. ``Path()``
+    itself never raises for such a value; it happily calls
+    ``os.fspath()`` and returns a multi-component path. Call this at the
+    boundary, *before* the value is used as a path, so a malformed or
+    unmocked config value is rejected loudly instead of silently promoted
+    into a nested directory on disk.
+
+    ``str`` and ``Path`` are both accepted — pydantic ``BaseSettings``
+    fields typed ``Path`` (e.g. ``settings.backup_dir``) already coerce a
+    genuine config value to ``Path`` before this ever runs, and that is a
+    legitimate path, not junk. Anything else (a ``MagicMock``, an int, an
+    arbitrary object) is rejected.
+
+    Parameters
+    ----------
+    value:
+        The candidate path value, straight from config or a caller.
+    context:
+        Human-readable origin of *value*, included in the raised error so
+        it points at the misconfigured setting or call site.
+
+    Returns
+    -------
+    str
+        *value* as a ``str``, once validated.
+
+    Raises
+    ------
+    TypeError
+        If *value* is neither a ``str`` nor a ``Path``.
+    ValueError
+        If *value* is empty or contains a null byte.
+    """
+    if isinstance(value, Path):
+        value = str(value)
+    if not isinstance(value, str):
+        raise TypeError(f"{context}: expected a str or Path, got {type(value).__name__} instead")
+    if not value or "\x00" in value:
+        raise ValueError(f"{context}: path is empty or contains a null byte")
+    return value
+
+
 def resolve_within_sandbox(path: str, root: Path) -> Path:
     """Strip, reject traversal, and resolve *path* under *root* (#11844).
 
@@ -188,8 +296,17 @@ def resolve_within_sandbox(path: str, root: Path) -> Path:
     ):
         raise SandboxPathError("Invalid path: path traversal not allowed")
 
-    decoded_path = urllib.parse.unquote(clean_path)
-    if ".." in decoded_path or decoded_path.startswith("/"):
+    # Unlike validate_path, this sandbox intentionally forbids *any* '..'
+    # reference — in-bounds or not. Every caller addresses a single flat
+    # file-management root with no legitimate reason to navigate above it,
+    # so (unlike validate_path) a denylist is the correct design here; it
+    # just needs to canonicalize to the same standard validate_path does.
+    # #14050: shares _canonicalize with validate_path so a double-encoded
+    # (%252e%252e) or Unicode-confusable (﹒﹒, ‥) traversal can't slip past
+    # this resolver either — the single-pass unquote() this replaced only
+    # caught one level of percent-encoding.
+    canonical = _canonicalize(clean_path)
+    if ".." in canonical or canonical.startswith("/"):
         raise SandboxPathError("Invalid path: encoded traversal not allowed")
 
     try:

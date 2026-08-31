@@ -26,6 +26,8 @@ from typing import List, Tuple
 
 import psycopg2
 
+from migrations import utils as _migration_utils
+
 logger = logging.getLogger(__name__)
 
 # Migration files in order of execution
@@ -104,6 +106,62 @@ def get_db_url() -> str:
     return url.replace("postgresql+asyncpg://", "postgresql://")
 
 
+def get_user_management_db_url() -> str:
+    """URL for the separate user_management database (#14300).
+
+    ``role_permissions`` and ``audit_logs`` are user_management tables,
+    which live in a database of their own — distinct from the primary SLM
+    database ``get_db_url()`` returns for ``DATABASE_URL``. Production opens
+    that second database the same way the SLM backend itself already does
+    at startup (``main.py``'s ``_init_user_management_tables`` via
+    ``user_management.database.get_slm_engine``): through
+    ``user_management.config.get_slm_db_config``, which reads
+    ``SLM_USERS_DATABASE_URL`` (falling back to discrete
+    ``SLM_POSTGRES_*`` env vars). No connection string is hardcoded here —
+    this function is a thin sync-URL adapter over that existing config
+    source, not a second source of truth for it.
+    """
+    from user_management.config import get_slm_db_config
+
+    return get_slm_db_config().sync_url
+
+
+# A migration module may declare which database it targets by setting a
+# module-level ``TARGET_DB`` constant to one of these. Migrations that don't
+# declare one default to TARGET_DB_SLM (DATABASE_URL) -- every migration
+# written before #14300 is unaffected.
+TARGET_DB_SLM = "slm"
+TARGET_DB_USER_MANAGEMENT = "user_management"
+
+
+def _resolve_migration_db_url(module, default_db_url: str) -> str:
+    """Pick the connection URL a migration module should run against (#14300).
+
+    Reading ``TARGET_DB`` off the module, rather than always handing every
+    migration ``DATABASE_URL``, is what makes a cross-database migration
+    like ``add_role_permission_audit_log_timestamps`` reachable at all: it
+    alters ``role_permissions``/``audit_logs``, which live in the
+    user_management database, never in ``DATABASE_URL``'s database — no
+    connection to the latter can ever see those tables, by construction.
+
+    An unrecognized ``TARGET_DB`` value is a configuration mistake in the
+    migration itself, not something to quietly defer around: it raises here,
+    at the moment the migration is loaded, so the mismatch is a loud,
+    diagnosable failure instead of a deferral that looks identical to the
+    ordinary "table not created yet" case and retries forever without
+    anyone noticing the target database was wrong in the first place.
+    """
+    target = getattr(module, "TARGET_DB", TARGET_DB_SLM)
+    if target == TARGET_DB_SLM:
+        return default_db_url
+    if target == TARGET_DB_USER_MANAGEMENT:
+        return get_user_management_db_url()
+    raise ValueError(
+        f"{module.__name__} declares unknown TARGET_DB={target!r}; "
+        f"expected {TARGET_DB_SLM!r} or {TARGET_DB_USER_MANAGEMENT!r}"
+    )
+
+
 def _parse_db_url(url: str) -> dict:
     """Parse PostgreSQL URL into connection parameters (#786)."""
     # postgresql://user:pass@host:port/database
@@ -139,7 +197,7 @@ def get_connection(db_url: str = None, timeout: int = 10) -> psycopg2.extensions
 
 
 def ensure_migrations_table(conn: psycopg2.extensions.connection) -> None:
-    """Create migrations tracking table if it doesn't exist (#786, #5515)."""
+    """Create migrations tracking table if it doesn't exist (#786, #5515, #14321)."""
     with conn.cursor() as cur:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS migrations_applied (
@@ -162,6 +220,29 @@ def ensure_migrations_table(conn: psycopg2.extensions.connection) -> None:
                     ALTER TABLE migrations_applied
                         ALTER COLUMN applied_at TYPE TIMESTAMPTZ
                         USING applied_at AT TIME ZONE 'UTC';
+                END IF;
+            END
+            $$;
+        """)
+        # #14321: seed_agents was recorded applied by the "no migrate()
+        # function == success" default in run_migration below, without ever
+        # seeding a row (see migrations/seed_agents.py). Clear that stale
+        # entry once, on hosts where the roster genuinely never got seeded,
+        # so the next run picks it up as pending and applies the real
+        # migrate() this issue added. Guarded on the 'agents' table and a
+        # known roster member so it never re-fires once seeding has run,
+        # and never errors on a fresh DB where 'agents' doesn't exist yet.
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM migrations_applied WHERE name = 'seed_agents'
+                )
+                AND to_regclass('public.agents') IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM agents WHERE agent_id = 'chat'
+                ) THEN
+                    DELETE FROM migrations_applied WHERE name = 'seed_agents';
                 END IF;
             END
             $$;
@@ -201,16 +282,39 @@ def run_migration(db_url: str, name: str) -> Tuple[bool, str]:
         # Import the migration module
         module = importlib.import_module(f"migrations.{name}")
 
+        # Resolve which database this migration actually targets (#14300) --
+        # defaults to db_url (DATABASE_URL) unchanged for every migration
+        # that doesn't declare TARGET_DB.
+        target_db_url = _resolve_migration_db_url(module, db_url)
+
         # Check if it has a migrate() function (passes db_url)
         if hasattr(module, "migrate"):
-            module.migrate(db_url)
+            module.migrate(target_db_url)
             return True, f"Applied migration: {name}"
         elif hasattr(module, "run"):
-            module.run(db_url)
+            module.run(target_db_url)
             return True, f"Applied migration: {name}"
         else:
-            # Some migrations might just be seed scripts
-            return True, f"Loaded migration: {name} (no migrate function)"
+            # A module with no entry point did NOT run, so it must not report
+            # success (#14321). This branch is what hid the defect this change
+            # fixes: `seed_agents` exposed only a standalone async function, so
+            # the runner never called anything, returned success here, and
+            # recorded the migration in `migrations_applied` — a migration that
+            # is permanently "applied" while its table stays unseeded, and no
+            # bookkeeping check can ever see it because the bookkeeping is what
+            # lied. Marking a migration applied when it did nothing is strictly
+            # worse than failing: a failure is retried, a false success is not.
+            #
+            # Verified reachable-by-nobody at the time of the change: all 27
+            # entries in MIGRATIONS expose `migrate()` or `run()`, so nothing
+            # depends on the old permissive behaviour. Any migration that hits
+            # this branch in future is malformed, and saying so loudly is the
+            # only way the next one does not repeat #14321.
+            return False, (
+                f"{name} exposes no migrate(db_url) or run(db_url) entry point — "
+                "nothing was executed. A migration module must expose one, or be "
+                "removed from MIGRATIONS if it is not a migration."
+            )
 
     except Exception as e:
         return False, f"Failed to apply {name}: {e}"
@@ -251,7 +355,20 @@ def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
         logger.info("Running %d pending migration(s)", len(pending))
 
         for migration_name in pending:
+            _migration_utils.reset_deferrals()
             success, message = run_migration(db_url, migration_name)
+            deferred = _migration_utils.deferrals()
+
+            if success and deferred:
+                # #14300: it "succeeded" having skipped every schema change it
+                # was asked to make, because the tables were not in this
+                # database. Marking it applied is what made that permanent —
+                # leave it pending so the next boot retries it.
+                message = f"Deferred {migration_name}: tables not present yet ({', '.join(deferred)})"
+                logger.warning(message)
+                results.append((migration_name, True, message))
+                continue
+
             results.append((migration_name, success, message))
 
             if success:
@@ -263,9 +380,12 @@ def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
                 break
 
     except Exception as e:
+        # #14300: this used to record the error only when NOTHING had run yet.
+        # An exception after one success left `results` all-successes, so the
+        # startup caller saw a clean run and carried on with the schema half
+        # migrated. The failure is always recorded now.
         logger.error("Migration execution failed: %s", e)
-        if results == []:
-            results.append(("migrations_execution", False, f"Execution error: {e}"))
+        results.append(("migrations_execution", False, f"Execution error: {e}"))
     finally:
         if conn:
             conn.close()
@@ -302,6 +422,17 @@ async def run_migrations_async(db_url: str = None) -> List[Tuple[str, bool, str]
     return await loop.run_in_executor(None, run_all_migrations, db_url)
 
 
+def _exit_code_for(results: List[Tuple[str, bool, str]]) -> int:
+    """Non-zero exit whenever any migration in ``results`` failed (#14326).
+
+    Extracted so the SLM migration gate's core assertion — a real migration
+    failure must fail the process, not print a checkmark and exit 0 — is a
+    plain function a unit test can call, rather than logic buried in
+    ``__main__`` that only a live subprocess run could exercise.
+    """
+    return 1 if any(not success for _, success, _ in results) else 0
+
+
 if __name__ == "__main__":
     # Allow running directly: python3 -m migrations.runner
     logging.basicConfig(level=logging.INFO)
@@ -318,3 +449,5 @@ if __name__ == "__main__":
             logger.info(f"  {status} {message}")
     else:
         logger.info("No migrations to run")
+
+    sys.exit(_exit_code_for(results))

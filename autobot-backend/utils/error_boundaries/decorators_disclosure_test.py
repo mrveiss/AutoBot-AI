@@ -36,6 +36,11 @@ async def _endpoint_that_raises_http():
     raise HTTPException(status_code=404, detail="Widget 7 not found")
 
 
+@with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="deliberate_sync_operation")
+def _sync_endpoint_that_raises_http():
+    raise HTTPException(status_code=404, detail="Widget 7 not found")
+
+
 def _body(exc: HTTPException) -> dict:
     return exc.detail["error"]
 
@@ -96,6 +101,22 @@ async def test_a_deliberate_http_exception_is_untouched():
     """Endpoints that raise their own HTTPException still speak to the caller."""
     with pytest.raises(HTTPException) as caught:
         await _endpoint_that_raises_http()
+
+    assert caught.value.status_code == 404
+    assert caught.value.detail == "Widget 7 not found"
+
+
+def test_a_deliberate_http_exception_is_untouched_sync():
+    """Same guarantee, sync wrapper (#14191).
+
+    The async test above only ever exercised the async wrapper's
+    ``except HTTPException: raise``. The sync wrapper has an identical,
+    separately-written copy of that line — #14191's mutation testing
+    stripped it from both wrappers, and this test is what would have caught
+    a sync-only regression of exactly that class before this PR.
+    """
+    with pytest.raises(HTTPException) as caught:
+        _sync_endpoint_that_raises_http()
 
     assert caught.value.status_code == 404
     assert caught.value.detail == "Widget 7 not found"

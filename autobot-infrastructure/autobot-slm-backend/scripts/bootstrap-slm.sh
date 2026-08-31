@@ -16,8 +16,21 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-source "$PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
-INFRA_ROOT="${PROJECT_ROOT}/infrastructure"
+# #14041: capture what the operator actually exported for AUTOBOT_REDIS_HOST
+# *before* sourcing the SSOT library below, which -- now that it exists --
+# fills in a 127.0.0.1 default when the caller left it unset. Line ~406 below
+# depends on being able to tell "the operator set it" from "the library
+# defaulted it": #2224 made an unset AUTOBOT_REDIS_HOST fail loudly on purpose,
+# because this script bakes the value into a REMOTE node's generated .env, and
+# a loopback default there silently points a distributed Redis at the wrong
+# host. Do not fold this into the library's own defaulting.
+_OPERATOR_REDIS_HOST="${AUTOBOT_REDIS_HOST:-}"
+# shellcheck source=/dev/null
+source "$PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" || {
+    echo "FATAL: $PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
+INFRA_ROOT="${PROJECT_ROOT}/autobot-infrastructure"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 LOG_FILE="${PROJECT_ROOT}/bootstrap-slm-${TIMESTAMP}.log"
 
@@ -403,12 +416,18 @@ SLM_DATABASE_URL=postgresql+asyncpg://slm_app@127.0.0.1:5432/slm
 
 # Redis (optional but recommended)
 # AUTOBOT_REDIS_HOST must be set in the deployment environment (#2224)
-REDIS_HOST=${AUTOBOT_REDIS_HOST:?AUTOBOT_REDIS_HOST is required -- set it in your environment}
+REDIS_HOST=${_OPERATOR_REDIS_HOST:?AUTOBOT_REDIS_HOST is required -- set it in your environment}
 REDIS_PORT=6379
 REDIS_DB=0
 
 # Security
 SECRET_KEY=${SECRET_KEY}
+
+# Admin bootstrap. main.py::_ensure_admin_user reads this at startup and
+# creates (or re-syncs) the admin user through UserService, with bcrypt
+# hashing. It is the only supported way to seed the SLM admin -- see the
+# comment at the admin-verification step below.
+SLM_ADMIN_PASSWORD=${ADMIN_PASSWORD}
 
 # Logging
 LOG_LEVEL=INFO
@@ -420,33 +439,49 @@ ENVEOF"
     info "Setting up database..."
     remote_exec_sudo "mkdir -p ${REMOTE_BACKEND}/data"
     remote_exec_sudo "chown -R autobot:autobot ${REMOTE_BACKEND}"
-    # Run migrations if available
-    if remote_exec "test -f ${REMOTE_BACKEND}/migrations/run.py" &>/dev/null; then
-        remote_exec_sudo "cd ${REMOTE_BACKEND} && ${REMOTE_BACKEND}/venv/bin/python -m migrations.run" || true
+    # Run migrations. The guard used to test for migrations/run.py, which does
+    # not exist -- the entry point is migrations/runner.py -- so the branch never
+    # fired and `|| true` would have swallowed the failure if it had.
+    if remote_exec "test -f ${REMOTE_BACKEND}/migrations/runner.py"; then
+        if ! remote_exec_sudo "cd ${REMOTE_BACKEND} && ${REMOTE_BACKEND}/venv/bin/python -m migrations.runner"; then
+            error "Database migrations FAILED. The backend will not start against this schema."
+            return 1
+        fi
+        success "Database setup complete"
+    else
+        error "migrations/runner.py not found at ${REMOTE_BACKEND} -- the deployed tree is incomplete."
+        return 1
     fi
-    success "Database setup complete"
 
-    # Create admin user
-    info "Creating SLM admin user..."
-    remote_exec_sudo "cd ${REMOTE_BACKEND} && ${REMOTE_BACKEND}/venv/bin/python -c \"
-from database.db import init_db, get_db
-from models.user import User
-import hashlib
-
-init_db()
-db = next(get_db())
-
-# Check if admin exists
-existing = db.query(User).filter(User.username == 'admin').first()
-if not existing:
-    password_hash = hashlib.sha256('${ADMIN_PASSWORD}'.encode()).hexdigest()
-    admin = User(username='admin', password_hash=password_hash, is_admin=True)
-    db.add(admin)
-    db.commit()
-    print('Admin user created')
-else:
-    print('Admin user already exists')
-\"" 2>/dev/null || warn "Could not create admin user (may need manual setup)"
+    # Admin user.
+    #
+    # This step used to run an inline python block importing `database.db` and
+    # `models.user`. Neither module has ever existed in this tree: the DB layer
+    # is `services/database.py` (async-only, so `next(get_db())` and
+    # `db.query()` cannot work), the user model is
+    # `user_management/models/user.py`, there is no `is_admin` column
+    # (it is `is_platform_admin`), the NOT NULL `email` column was never
+    # supplied, and it hashed the password with SHA-256 while the rest of the
+    # system uses bcrypt via autobot_shared.auth.jwt_core.hash_password. The
+    # whole block was wrapped in `2>/dev/null || warn`, so every one of those
+    # failures surfaced as one soft warning and the bootstrap reported success
+    # having created no admin at all.
+    #
+    # The supported path already exists and is the one Ansible uses:
+    # main.py::_ensure_admin_user reads SLM_ADMIN_PASSWORD from the .env
+    # written above and creates or re-syncs the admin through UserService with
+    # bcrypt hashing. Adding SLM_ADMIN_PASSWORD to that .env is what actually
+    # makes the admin appear; re-implementing the write here is what went
+    # wrong the first time.
+    #
+    # This step deliberately does NOT claim to have verified it. The backend is
+    # not running yet at this phase, and a check that cannot run must not print
+    # a reassuring line (#14867). Tracked separately: a post-start admin
+    # verification, and the missing PYTHONPATH that stops the bootstrapped
+    # backend importing autobot_shared at all.
+    info "Admin user: seeded by the backend on first start from SLM_ADMIN_PASSWORD"
+    warn "NOT VERIFIED by this script - the backend has not started yet."
+    warn "After start, confirm with: sudo journalctl -u autobot-slm-backend | grep -i admin"
 
     # Install helper scripts
     info "Installing helper scripts..."

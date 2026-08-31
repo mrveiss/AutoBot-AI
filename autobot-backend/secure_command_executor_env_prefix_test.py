@@ -15,7 +15,8 @@ linker hijack of any dynamic symbol) and must classify as FORBIDDEN.
 
 import pytest
 
-from secure_command_executor import CommandRisk, SecureCommandExecutor
+from autobot_shared.status_enums import CommandRisk
+from secure_command_executor import SecureCommandExecutor
 
 
 @pytest.fixture

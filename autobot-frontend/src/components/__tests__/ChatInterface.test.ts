@@ -13,6 +13,24 @@ import {
 import { webSocketTestUtil } from '../../test/mocks/websocket-mock'
 import { ServiceURLs } from '@/constants/network'
 
+// #14613/#14842: this file's per-test budget, and only this file's.
+//
+// All 23 tests here render the FULL chat tree — sidebar, session list, message
+// list, composer and settings — through `renderComponent()` with a Pinia store
+// and a router. That is the heaviest mount in the suite and it is the subject
+// of the tests, not incidental setup: there is no unresolved promise to fix and
+// nothing to stub away without deleting the coverage. `waitFor()` has its own
+// 1s budget and fails with "unable to find element", so a 10s failure here has
+// always meant the render itself was still running.
+//
+// On the singleton self-hosted runner the reported `environment` cost is ~3x the
+// `tests` cost, so a mount measured at 3-4s idle has repeatedly crossed 10s under
+// contention — on a different test each run, which is why this is set per FILE
+// rather than pinned to whichever test lost the draw. The global `testTimeout`
+// in vitest.config.ts stays at 10s: a genuinely hung test elsewhere must still
+// fail fast.
+vi.setConfig({ testTimeout: 20_000 })
+
 // ---- Module mocks ----
 
 // Mock BatchApiService - the primary initialization path for ChatInterface

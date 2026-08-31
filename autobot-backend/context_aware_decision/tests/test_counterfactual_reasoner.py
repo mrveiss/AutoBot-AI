@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from autobot_shared.status_enums import Severity
 from context_aware_decision.counterfactual_reasoner import CounterfactualReasoner
 from context_aware_decision.models import (
     ContextElement,
@@ -127,7 +128,7 @@ def sample_causal_patterns():
                 {
                     "type": "latency_increase",
                     "frequency": 0.9,
-                    "severity": "medium",
+                    "severity": Severity.MEDIUM.value,
                 }
             ],
         },
@@ -140,7 +141,7 @@ def sample_causal_patterns():
                 {
                     "type": "user_notification",
                     "frequency": 1.0,
-                    "severity": "low",
+                    "severity": Severity.LOW.value,
                 }
             ],
         },
@@ -358,13 +359,13 @@ class TestCausalPrediction:
                 "name": "pattern1",
                 "conditions": {"decision_type": "automation_action"},
                 "predicted_success_rate": 0.6,
-                "side_effects": [{"type": "effect1", "severity": "low"}],
+                "side_effects": [{"type": "effect1", "severity": Severity.LOW.value}],
             },
             {
                 "name": "pattern2",
                 "conditions": {"decision_type": "automation_action"},
                 "predicted_success_rate": 0.8,
-                "side_effects": [{"type": "effect2", "severity": "medium"}],
+                "side_effects": [{"type": "effect2", "severity": Severity.MEDIUM.value}],
             },
         ]
 
@@ -445,7 +446,7 @@ class TestHeuristicPrediction:
         reasoner = CounterfactualReasoner()
 
         # Add high-risk factors
-        sample_context.risk_factors = [{"risk_type": "critical_error", "severity": "high"}]
+        sample_context.risk_factors = [{"risk_type": "critical_error", "severity": Severity.HIGH.value}]
 
         outcome = reasoner._predict_heuristic("retry", sample_context, {"confidence": 0.8})
 
@@ -644,7 +645,7 @@ class TestInterventionOutcomeSerialization:
                 {
                     "type": "latency_increase",
                     "frequency": 0.8,
-                    "severity": "medium",
+                    "severity": Severity.MEDIUM.value,
                 }
             ],
             confidence=0.8,

@@ -1,31 +1,120 @@
 #!/bin/bash
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-# Setup passwordless sudo for AutoBot operations
+# Setup least-privilege passwordless sudo for AutoBot process-management operations
+#
+# #14317: this used to hardcode NOPASSWD sudo for a leftover 'kali' dev-image
+# account (#926) -- a leftover on any host without that account (visudo accepts
+# an unknown name silently, so the rule never applied), and a passwordless path
+# to root on any host that DOES have one, via `usermod -aG docker`: docker group
+# membership is equivalent to root, so that line was a privilege-escalation
+# primitive sitting beside plain process-inspection commands.
+#
+# PR #14412 review (round 2): bare `NOPASSWD: /usr/bin/kill` and `/usr/bin/
+# pkill` still let a compromised process this account already runs
+# (`npm run dev`, `python3 main.py`) signal ANY PID as root -- `sudo pkill -f
+# sshd`, `sudo kill -9 $(pgrep auditd)` -- and bare `lsof` reads every other
+# user's open files/sockets. Both are now routed through
+# autobot-cleanup-port, a fixed root-owned wrapper that hardcodes the exact
+# ports/pattern the platform's tooling uses and takes no free-form argument;
+# sudoers names only its exact invocations, never the bare binaries.
+#
+# PR #14412 review (round 3): the wrapper used to resolve its ports from
+# AUTOBOT_BACKEND_PORT/AUTOBOT_FRONTEND_PORT/AUTOBOT_BACKEND_TLS_PORT in its
+# OWN environment -- fixed subcommand *names*, but the *value* each name
+# resolved to was still whatever the calling account's environment said,
+# which sudo passes through unless env_reset is active. The wrapper no
+# longer reads ports from the environment at all (they are hardcoded from
+# SSOT); this file also states env_reset/secure_path explicitly for the
+# wrapper's exact path, rather than relying on it being the (correct, but
+# unwritten) system default.
+#
+# Fixed:
+#  - the account is resolved via AUTOBOT_USER, the same override pattern
+#    roles/vnc uses for its own account (VNC_USER/AUTOBOT_VNC_USER) -- default
+#    'autobot', matching autobot_user in
+#    autobot-slm-backend/ansible/roles/common/vars/main.yml. A host provisions
+#    sudoers for the account it actually runs as, never a name that isn't this
+#    platform's own. The value is validated as a syntactically sane Linux
+#    account name BEFORE it reaches the sudoers content -- visudo validates
+#    syntax only, not that a multi-line AUTOBOT_USER didn't inject a second,
+#    unrelated rule.
+#  - `usermod -aG docker` is gone. Docker group membership is granted once, at
+#    account-provisioning time (see install-bare-metal.sh's `useradd`), or
+#    interactively with a real sudo password prompt (run_agent.sh,
+#    setup/setup_repair.sh) -- never passwordlessly at runtime. Group
+#    membership is a standing grant, not a repeated operational need, so it
+#    does not belong in this file.
+#  - the remaining grants name autobot-cleanup-port's exact subcommands, the
+#    only operations the platform's own automation invokes: port cleanup
+#    (run_agent.sh, deployment/deploy_hybrid.sh), a TLS-port diagnostic
+#    (ansible/fix-backend-deadlock.sh) and uvicorn process cleanup
+#    (run_agent.sh).
 
-echo "Setting up passwordless sudo for AutoBot operations..."
+set -euo pipefail
 
-# Create sudoers file for AutoBot operations
-sudo tee /etc/sudoers.d/autobot << 'EOF'
-# Allow kali user to run specific commands without password for AutoBot
-kali ALL=(ALL) NOPASSWD: /usr/bin/lsof
-kali ALL=(ALL) NOPASSWD: /usr/bin/kill
-kali ALL=(ALL) NOPASSWD: /usr/bin/pkill
-kali ALL=(ALL) NOPASSWD: /usr/sbin/usermod -aG docker kali
+AUTOBOT_USER="${AUTOBOT_USER:-autobot}"
+
+# visudo -c only checks sudoers GRAMMAR. AUTOBOT_USER=$'autobot\nattacker
+# ALL=(ALL) NOPASSWD: ALL' is two perfectly well-formed rules and would pass
+# validation and install -- so the account name is constrained to what a
+# Linux username actually allows (single line, no whitespace, no sudoers
+# metacharacters) before it ever reaches the heredoc below.
+if ! [[ "${AUTOBOT_USER}" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
+    echo "❌ Invalid AUTOBOT_USER: '${AUTOBOT_USER}' is not a valid Linux account name" >&2
+    exit 1
+fi
+
+SUDOERS_FILE="/etc/sudoers.d/autobot"
+WRAPPER_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/autobot-cleanup-port"
+WRAPPER_DEST="/opt/autobot/bin/autobot-cleanup-port"
+
+echo "Setting up passwordless sudo for AutoBot operations (user: ${AUTOBOT_USER})..."
+
+if [ ! -f "${WRAPPER_SRC}" ]; then
+    echo "❌ Wrapper not found at ${WRAPPER_SRC}" >&2
+    exit 1
+fi
+
+sudo install -d -m 0755 -o root -g root /opt/autobot/bin
+sudo install -m 0755 -o root -g root "${WRAPPER_SRC}" "${WRAPPER_DEST}"
+
+sudoers_tmp="$(mktemp)"
+trap 'rm -f "${sudoers_tmp}"' EXIT
+
+# Every rule names an EXACT invocation of the wrapper -- no wildcard args, no
+# bare binary, no privilege-escalation primitives. sudo denies anything not
+# listed here by default.
+cat > "${sudoers_tmp}" <<EOF
+# AutoBot passwordless sudo -- process-management commands only (#14317,
+# hardened further in PR #14412 review rounds 2-3).
+# Generated by setup/system/setup_passwordless_sudo.sh. Do not hand-edit;
+# re-run the script (with AUTOBOT_USER set, if not 'autobot') instead.
+#
+# env_reset/secure_path stated explicitly for this exact command, rather
+# than relied on as an inherited system default (#14412 review round 3):
+# the wrapper no longer reads ports from the environment, but this states
+# the assumption in the file that grants the privilege, so a later change
+# to either this wrapper or another file under sudoers.d cannot silently
+# reopen it.
+Defaults!${WRAPPER_DEST} env_reset
+Defaults!${WRAPPER_DEST} secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+${AUTOBOT_USER} ALL=(root) NOPASSWD: ${WRAPPER_DEST} kill-port backend
+${AUTOBOT_USER} ALL=(root) NOPASSWD: ${WRAPPER_DEST} kill-port frontend
+${AUTOBOT_USER} ALL=(root) NOPASSWD: ${WRAPPER_DEST} diagnose-port backend-tls
+${AUTOBOT_USER} ALL=(root) NOPASSWD: ${WRAPPER_DEST} kill-uvicorn
 EOF
 
-# Validate sudoers file
-sudo visudo -c -f /etc/sudoers.d/autobot
-
-if [ $? -eq 0 ]; then
+# Validate BEFORE the file is live -- unlike writing straight to
+# /etc/sudoers.d and validating after, an invalid rule set is never installed.
+if sudo visudo -c -f "${sudoers_tmp}"; then
+    sudo install -m 0440 -o root -g root "${sudoers_tmp}" "${SUDOERS_FILE}"
     echo "✅ Passwordless sudo configured successfully for AutoBot operations"
-    echo "The following commands now work without password:"
-    echo "  - sudo lsof (port checking)"
-    echo "  - sudo kill (process termination)"
-    echo "  - sudo pkill (process cleanup)"
-    echo "  - sudo usermod (docker group)"
+    echo "The following now work without a password for ${AUTOBOT_USER}:"
+    echo "  - sudo ${WRAPPER_DEST} kill-port backend|frontend"
+    echo "  - sudo ${WRAPPER_DEST} diagnose-port backend-tls"
+    echo "  - sudo ${WRAPPER_DEST} kill-uvicorn"
 else
-    echo "❌ Failed to configure sudoers file"
-    sudo rm -f /etc/sudoers.d/autobot
+    echo "❌ Failed to configure sudoers file (visudo validation failed)"
     exit 1
 fi

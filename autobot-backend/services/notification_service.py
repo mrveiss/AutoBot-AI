@@ -14,7 +14,6 @@ Dispatches workflow event notifications over four channels:
 Usage::
 
     from services.notification_service import (
-from autobot_shared.logging_manager import get_logger
         NotificationService,
         NotificationChannel,
         NotificationEvent,
@@ -39,6 +38,7 @@ from email.mime.text import MIMEText
 from enum import Enum
 from string import Template
 from typing import Any, Dict, List
+from urllib.parse import urlparse
 
 import aiohttp
 
@@ -46,6 +46,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_7_DAYS
+from services.gateway.egress_governor import egress_governor
 
 logger = get_logger(__name__)
 
@@ -55,6 +56,25 @@ logger = get_logger(__name__)
 
 _NOTIFICATIONS_REDIS_DB = "main"
 _NOTIFICATION_TTL_SECONDS = TTL_7_DAYS
+
+
+def _mask_email(email: str) -> str:
+    """Mask a recipient address for the egress audit record and log line.
+
+    An email address is directly usable outside this system on its own — more
+    identifying than the phone number the WhatsApp seam already masks via
+    ``whatsapp_integration._mask_phone`` (channel-identity rule, #14540, see
+    ``services.gateway.egress_governor``). The local part is redacted; the
+    domain is kept, since "which mailbox" plus "which domain" is enough for
+    an operator to locate the blocked send without a plaintext address
+    sitting in every audit row (#14573).
+    """
+    if not email or "@" not in email:
+        return "<none>"
+    local, _, domain = email.rpartition("@")
+    if not local:
+        return f"***@{domain}"
+    return f"{local[0]}***@{domain}"
 
 
 class NotificationChannel(str, Enum):
@@ -437,6 +457,40 @@ class NotificationService:
         msg["To"] = to
         msg.attach(MIMEText(body, "plain", "utf-8"))
 
+        # #14270: email was the one notification channel left ungated while its
+        # siblings were wired. SMTP delivers to a real external recipient — the
+        # same class of action as the webhook path above — so leaving it out made
+        # the control look complete while one door stayed open.
+        # require_approval=False for the same reason as the other alert channels:
+        # an APPROVAL_NEEDED alert must not be gated by the approval system.
+        #
+        # The verdict is still checked. With require_approval=False the governor
+        # currently always allows, so this reads as dead — it is not. It stops
+        # the seam depending on `_decide`'s present shape: a policy that denies
+        # for a reason other than approval (a blocklist, a kill switch) would
+        # otherwise be silently ignored here, and nothing in this file would say
+        # so. Two reviews flagged the discarded verdict as a fail-open gate.
+        #
+        # channel_id used to be passed as "" unconditionally, so a blocked send
+        # left an audit row that identified nothing (#14573). An email address
+        # is directly usable outside this system — reduce it (channel-identity
+        # rule, #14540) before it reaches evaluate() and the denial log line.
+        masked_to = _mask_email(to)
+        verdict = await egress_governor.evaluate(
+            platform="email",
+            channel_id=masked_to,
+            message_id="",
+            require_approval=False,
+        )
+        if not verdict.allowed:
+            logger.warning(
+                "email notification to %s blocked by egress governance (%s): %s",
+                masked_to,
+                verdict.rule,
+                verdict.reason,
+            )
+            return
+
         try:
             if use_tls:
                 from autobot_shared.tls import get_internal_tls_context
@@ -468,6 +522,29 @@ class NotificationService:
         Raises on non-2xx response or network error so the caller's error
         handler can log and continue.
         """
+        # #14270: audited, never blocked. ``require_approval=False`` is passed
+        # explicitly rather than relying on the env default, so arming the policy
+        # cannot silence outage alerts or deadlock APPROVAL_NEEDED. The record
+        # still lands, so an operator can see what left the machine.
+        # Host only, never the full URL — a path can embed a bearer token. Applied
+        # to the audit record and this log line alike (channel-identity rule,
+        # #14540, see services.gateway.egress_governor).
+        host = urlparse(url).hostname or "unknown"
+        verdict = await egress_governor.evaluate(
+            platform="webhook",
+            channel_id=host,
+            message_id="",
+            require_approval=False,
+        )
+        if not verdict.allowed:
+            logger.warning(
+                "webhook notification to %s blocked by egress governance (%s): %s",
+                host,
+                verdict.rule,
+                verdict.reason,
+            )
+            return
+
         headers = {
             "Content-Type": "application/json",
             "User-Agent": "AutoBot-Notifier/1.0",
@@ -516,6 +593,12 @@ class NotificationService:
             await service.send_message(
                 chat_id=chat_id,
                 text=message,
+                # #14270: operational alerts are audited but never blocked. This
+                # path carries WORKFLOW_FAILED, SERVICE_FAILED and APPROVAL_NEEDED
+                # — gating the last one behind the approval system would deadlock
+                # it, and gating the first two would silence outage alerts exactly
+                # when they matter.
+                require_approval=False,
             )
             logger.info(f"Sent Telegram notification to chat {chat_id}")
         except Exception as exc:

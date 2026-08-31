@@ -51,10 +51,12 @@ from api.schemas_chat import (
 )
 from api.schemas_common import DataResponse
 from api.user_management.dependencies import require_org_context
+from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
+from chat_history.message_schema import llm_role, message_text, message_type
 
 # Import context overflow protection (#9043)
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
@@ -69,7 +71,7 @@ from exceptions import get_exceptions_lazy
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 # CRITICAL SECURITY FIX: Import session ownership validation
-from security.session_ownership import validate_session_ownership
+from security.session_ownership import build_owner_metadata, validate_session_ownership
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
 
@@ -198,8 +200,7 @@ def _has_longer_streaming_response(
 
 def _is_streaming_response(msg: Dict) -> bool:
     """Check if message is a streaming LLM response (Issue #281: module-level helper)."""
-    message_type = msg.get("messageType", msg.get("type", "default"))
-    return message_type in STREAMING_MESSAGE_TYPES
+    return message_type(msg) in STREAMING_MESSAGE_TYPES
 
 
 def _get_message_signature(msg: Dict) -> tuple:
@@ -214,7 +215,7 @@ def _get_message_signature(msg: Dict) -> tuple:
     For assistant messages, use sender + content (truncated) for deduplication.
     For terminal/system messages, use ID if available, else timestamp + content prefix.
     """
-    message_type = msg.get("messageType", msg.get("type", "default"))
+    msg_type = message_type(msg)
     sender = msg.get("sender", "")
     text_content = msg.get("text", "") or msg.get("content", "")
 
@@ -228,7 +229,7 @@ def _get_message_signature(msg: Dict) -> tuple:
         # Use first 300 chars of content - enough to identify unique messages
         # while handling minor whitespace differences
         normalized_content = text_content.strip()[:300]
-        return ("assistant", message_type, normalized_content)
+        return ("assistant", msg_type, normalized_content)
 
     # For TERMINAL/SYSTEM messages: use ID if available
     msg_id = msg.get("id") or msg.get("messageId")
@@ -404,7 +405,11 @@ def _to_persisted_message(api_data: Dict[str, Any], default_type: str) -> Dict[s
     persisted: Dict[str, Any] = {
         "id": api_data["id"],
         "sender": sender,
-        "content": api_data.get("content", ""),
+        # #14341: api_data may be API-shape ("content") or stored-shape
+        # ("text") — create_summary_message returns the latter. Resolving
+        # through message_text handles both instead of reading only "content"
+        # and silently persisting an empty summary.
+        "content": message_text(api_data),
         "timestamp": api_data.get("timestamp"),
         "type": default_type,
         "metadata": api_data.get("metadata") or {},
@@ -549,8 +554,42 @@ def _build_llm_context(
         message_limit = 20
         logger.warning("Context manager not available, using default limit")
 
+    # #14305: read through the shared normaliser. This asked for the role key
+    # with a caller-shaped default, over records `_to_persisted_message` in this
+    # same file stores the speaker under `sender` — so the key was always absent
+    # and every prior turn, the assistant's own replies included, reached the
+    # model attributed to the caller. The body survived only because that writer
+    # happens to name its field the same as the API does; the speaker did not.
+    #
+    # `llm_role`, not `message_role`: a session also carries records written by
+    # terminal integration and the workflow state machine, whose speakers are
+    # not roles any provider accepts. Reading them faithfully and forwarding
+    # them would turn a mislabelled-but-working turn into a rejected request.
+    #
+    # Non-dict entries are skipped rather than raising. They raised here both
+    # before and after this fix, and this runs *after* the answer has been
+    # generated — so a malformed record would lose a reply the user already
+    # paid for. That is the stance `as_llm_messages` and `_sanitize_tool_messages`
+    # already take. Not switched to `as_llm_messages` wholesale: that also drops
+    # empty-bodied messages, which would quietly change what the model sees here.
+    #
+    # #14342 review follow-up: `messageType` in NON_CONVERSATIONAL_WEBSOCKET_
+    # MESSAGE_TYPES excludes the websocket-broadcast UI telemetry (agent
+    # steps, tool output, workflow progress/errors, thoughts) that #14342 made
+    # reachable from a session for the first time. Before that fix these
+    # records never reached any session, so this builder never saw them.
+    # Filtered *before* the `[-message_limit:]` slice, not after: filtering
+    # after would still let a busy turn's telemetry consume slots in a
+    # count-bounded window and evict real dialogue that never even reaches
+    # this list. Terminal/approval/workflow-state records that predate
+    # #14342 keep a different `messageType` and are unaffected.
+    conversational_context = [
+        msg
+        for msg in chat_context
+        if isinstance(msg, dict) and message_type(msg) not in NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
+    ]
     llm_context = [
-        {"role": msg.get("role", "user"), "content": msg.get("content", "")} for msg in chat_context[-message_limit:]
+        {"role": llm_role(msg), "content": message_text(msg)} for msg in conversational_context[-message_limit:]
     ]
     llm_context.append({"role": message.role, "content": message.content})
 
@@ -821,6 +860,11 @@ async def process_chat_message(
             "fill_percentage": overflow_status.get("current_fill_percentage", 0),
             "total_tokens": overflow_status.get("total_tokens", 0),
             "context_limit": overflow_status.get("context_limit", 0),
+            # #14065: a failed compaction has to be visible to the user, not
+            # only to the log. Without this the session silently stays over
+            # threshold and the only symptom is the assistant contradicting
+            # earlier turns once history is eventually trimmed.
+            "compaction_failed": bool(overflow_status.get("summary_error")),
         }
 
     # Issue #10548: RAG grounding — query KB and attach structured citations by default.
@@ -1453,7 +1497,12 @@ def _validate_chat_services(chat_history_manager, chat_workflow_manager) -> None
 
 
 async def _stream_chat_workflow_messages(
-    chat_workflow_manager, chat_id: str, message: str, context: dict, request_id: str
+    chat_workflow_manager,
+    chat_id: str,
+    message: str,
+    context: dict,
+    request_id: str,
+    auth_role: str | None = None,
 ):
     """Stream chat workflow messages as SSE events (Issue #398: extracted)."""
     try:
@@ -1464,7 +1513,7 @@ async def _stream_chat_workflow_messages(
         logger.debug("[%s] Processing message: %s...", request_id, message[:50])
         message_count = 0
         async for msg in chat_workflow_manager.process_message_stream(
-            session_id=chat_id, message=message, context=context
+            session_id=chat_id, message=message, context=context, auth_role=auth_role
         ):
             message_count += 1
             msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
@@ -1498,6 +1547,7 @@ async def _stream_direct_response(
     message: str,
     remember_choice: bool,
     request_id: str,
+    auth_role: str | None = None,
 ):
     """Stream direct response for approvals/denials (Issue #398: extracted)."""
     try:
@@ -1508,6 +1558,7 @@ async def _stream_direct_response(
             session_id=chat_id,
             message=message,
             context={"remember_choice": remember_choice},
+            auth_role=auth_role,
         ):
             msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
             yield f"data: {json.dumps(msg_data)}\n\n"
@@ -1602,6 +1653,10 @@ async def send_chat_message_by_id(
             message,
             context,
             request_id,
+            # #13821: the RBAC role from the authenticated session, NOT from
+            # request_data — `context` above is the caller's own bag and is
+            # explicitly not trusted for this.
+            auth_role=(current_user or {}).get("role"),
         )
     )
 
@@ -1773,6 +1828,30 @@ async def _merge_chat_messages(
         return new_messages
 
 
+async def _durable_owner_metadata(chat_history_manager, session_id: str, ownership: "dict | None") -> dict | None:
+    """Owner metadata to write when the save path creates a session (#14020).
+
+    `save_session` writes a `metadata` key only when one is passed, so saving to a
+    session id with no existing file produced a session with **no durable owner**.
+    Since #14018 made the file record authoritative, such a session reads as
+    unowned every time its Redis key lapses and is claimed by whoever visits next.
+
+    The write **mirrors the validator's own decision** rather than making an
+    independent one. `validate_chat_ownership` returns ``legacy_migration`` exactly
+    when it found no owner and granted the caller ownership — that is the only case
+    where stamping the file is recording what already happened.
+
+    It deliberately does NOT write on ``enforcement_disabled`` or ``auth_disabled``:
+    those fast paths authorise **without checking any owner at all** (and disabled
+    is the default today, #14010), so claiming there would let any authenticated
+    caller permanently stamp themselves onto an ownerless session — a claim that
+    would outlive the switch to enforced.
+    """
+    if not isinstance(ownership, dict) or ownership.get("reason") != "legacy_migration":
+        return None
+    return build_owner_metadata(ownership.get("user_data")) or None
+
+
 @router.post("/chats/{chat_id}/save", response_model=DataResponse[ChatSaveData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1809,7 +1888,10 @@ async def save_chat_by_id(
     )
 
     result = await chat_history_manager.save_session(
-        session_id=chat_id, messages=merged_messages, name=save_data.get("name", "")
+        session_id=chat_id,
+        messages=merged_messages,
+        name=save_data.get("name", ""),
+        metadata=await _durable_owner_metadata(chat_history_manager, chat_id, ownership),
     )
 
     return JSONResponse(
@@ -1887,15 +1969,35 @@ async def send_direct_chat_response(
     Send direct user response to chat (Issue #398: refactored).
 
     Issue #744: Requires authenticated user.
+    Issue #13982: and must own the chat — see the ownership check below.
     """
     request_id = generate_request_id()
     log_request_context(request, "send_direct_response", request_id)
+
+    # #13982: this endpoint carries approval and denial decisions, so without an
+    # ownership check any authenticated user could resolve another user's pending
+    # command approval — and with remember_choice, persist that decision for
+    # future turns in a chat they do not own.
+    #
+    # `Depends(validate_chat_ownership)` cannot be reused here: it resolves
+    # `chat_id` as a path parameter and this endpoint takes it from the body, so
+    # the dependency would validate a different value than the one used. The
+    # explicit call is the same pattern the session endpoints above use.
+    await validate_chat_ownership(chat_id, request)  # SECURITY: caller must own the session
 
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_workflow_manager(chat_workflow_manager)
 
     return _create_streaming_response(
-        _stream_direct_response(chat_workflow_manager, chat_id, message, remember_choice, request_id)
+        _stream_direct_response(
+            chat_workflow_manager,
+            chat_id,
+            message,
+            remember_choice,
+            request_id,
+            # #13821: server-side identity, same as the message endpoint.
+            auth_role=(current_user or {}).get("role"),
+        )
     )
 
 
@@ -2015,9 +2117,22 @@ async def _generate_ai_stack_chat_response(
         model_name = message.metadata.get("model") if message.metadata else None
         message_limit = _get_ai_stack_message_limit(chat_history_manager, model_name)
 
+        # The same defect `_build_llm_context` carried (#14305), on the AI Stack
+        # path: this reads its context from the same store, in the same stored
+        # shape, so the speaker was likewise never present and every turn — the
+        # assistant's own replies included — arrived attributed to the caller.
+        #
+        # #14342 review follow-up: same UI-telemetry exclusion as
+        # `_build_llm_context`, and filtered before the slice for the same
+        # reason — this path reads from the same session store, so it is
+        # exposed to the same newly-reachable websocket event records.
+        conversational_context = [
+            msg
+            for msg in chat_context
+            if isinstance(msg, dict) and message_type(msg) not in NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
+        ]
         formatted_history = [
-            {"role": msg.get("role", "user"), "content": msg.get("content", "")}
-            for msg in chat_context[-message_limit:]
+            {"role": llm_role(msg), "content": message_text(msg)} for msg in conversational_context[-message_limit:]
         ]
 
         ai_stack_response = await ai_client.chat_message(

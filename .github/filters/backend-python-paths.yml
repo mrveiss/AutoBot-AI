@@ -1,0 +1,101 @@
+# Canonical path set for "which paths are backend Python code?" (#12986)
+#
+# SINGLE SOURCE OF TRUTH — do not inline a copy of `backend-python` back into a
+# workflow's `changes` job. Same contract as frontend-paths.yml and
+# python-paths.yml in this directory.
+#
+# The list used to be duplicated across six workflows. Adding a backend
+# directory meant remembering every one of them, and a miss was SILENT: the
+# gate simply stopped running on the new path, nothing failed, and the coverage
+# quietly shrank. For `api-wiring` and `startup-import-smoke` — both required
+# contexts — that is a blocking check that no longer blocks anything on the
+# paths it forgot.
+#
+# Two kinds of consumer, and only one of them can read this file:
+#
+#   1. A `changes` job's dorny/paths-filter step. It loads this file by path,
+#      so it tracks `backend-python` automatically. Every such job reads its
+#      own key below; the keys are globally unique, so one file serves them all
+#      and the extra outputs each job ignores cost nothing.
+#
+#   2. A workflow's `on.push.paths` / `on.pull_request.paths` trigger. GitHub
+#      offers NO include mechanism for event path filters — they must be
+#      literal, in the workflow file. Those copies cannot be removed, so
+#      `pipeline-scripts/check_workflow_path_filters.py` asserts every one of
+#      them still contains all of `backend-python` and fails the build when it
+#      does not. The duplication that is unavoidable is at least no longer
+#      silent.
+#
+# `pipeline-scripts/check_workflow_path_filters.py` also carries the reverse
+# check: a `changes` job that loads this file but is absent from its table is a
+# failure, so a new consumer cannot be added without being declared.
+
+# ── the canonical set ────────────────────────────────────────────────────────
+# Anchored, and referenced below with `*backend_python`. dorny/paths-filter
+# flattens the nested sequence an alias produces (documented behaviour), so
+# each composed filter is the canonical set plus its own extras — never a
+# retyped copy. Nesting is kept to exactly one level everywhere.
+backend-python: &backend_python
+  - 'autobot-backend/**/*.py'
+  - 'autobot-slm-backend/**/*.py'
+  # Load-bearing for every consumer below, not merely adjacent. Two examples
+  # that were measured rather than assumed: scripts/audit_api_wiring.py imports
+  # autobot_shared.api_routing.router_prefixes and
+  # autobot_shared.openapi_schema, and tests/test_startup_imports.py fresh-
+  # imports modules that resolve through autobot_shared. A change confined to
+  # this tree alters what those gates compute.
+  - 'autobot_shared/**/*.py'
+  # A change here changes what "backend Python" means for every consumer, so it
+  # must run all of them.
+  - '.github/filters/backend-python-paths.yml'
+
+# ── composed filters, one per consuming `changes` job ────────────────────────
+# Key names are unchanged from the inline copies they replace, so each
+# workflow's `steps.filter.outputs.<name>` keeps working verbatim.
+
+# .github/workflows/security.yml — job `changes`, output `python`.
+python:
+  - *backend_python
+  - '.github/workflows/security.yml'
+
+# .github/workflows/security.yml — job `changes`, output `deps`.
+# Not a backend-Python filter, and it lives here only because a single
+# dorny/paths-filter step reads exactly one `filters` source: security.yml's
+# step needs `python` and `deps` together. Left byte-identical to the inline
+# copy it replaces.
+deps:
+  - '**/requirements*.txt'
+  - 'requirements-ci/**'
+  - 'pyproject.toml'
+  - 'autobot_shared/pyproject.toml'
+  - 'autobot-frontend/package*.json'
+  - '.github/workflows/security.yml'
+
+# .github/workflows/ai-security-review.yml — job `changes`, output `reviewable`.
+reviewable:
+  - *backend_python
+  - 'ansible/**'
+  - '.github/workflows/ai-security-review.yml'
+
+# .github/workflows/startup-import-smoke.yml — job `changes`, output `backend`.
+backend:
+  - *backend_python
+  - '**/requirements*.txt'
+  - 'requirements-ci/**'
+  - '.github/workflows/startup-import-smoke.yml'
+
+# .github/workflows/api-wiring.yml — job `changes`, output `wiring`.
+#
+# #12986: this filter used to omit autobot_shared/**/*.py while
+# scripts/audit_api_wiring.py imports two modules from that tree. Editing
+# autobot_shared/api_routing/router_prefixes.py therefore changed what the gate
+# computes while the gate itself self-skipped — the required `api-wiring`
+# context reported green over an audit that never ran. Adopting the canonical
+# set closes that; it widens when the gate runs, which is the safe direction.
+wiring:
+  - *backend_python
+  - 'autobot-frontend/src/**'
+  - 'scripts/audit_api_wiring.py'
+  - 'scripts/api_wiring_baseline.txt'
+  - 'requirements*.txt'
+  - '.github/workflows/api-wiring.yml'

@@ -5,9 +5,13 @@
 // per-board and move endpoints were already consumed inline by BoardsView /
 // KanbanBoardView / SprintBoardView, but the *create* endpoints
 // (POST /kanban, POST /sprint) had no frontend caller, so a fresh company's
-// empty board list was a dead end. This composable centralises all five calls
-// (list / create-kanban / create-sprint / items / move) so the create path is
+// empty board list was a dead end. This composable centralises four calls
+// (list / create-kanban / create-sprint / move) so the create path is
 // reachable and unit-testable.
+//
+// GH#13993: this comment previously advertised five calls including `items`,
+// which was never implemented here — the board views call that endpoint
+// directly. Corrected rather than left claiming a function that does not exist.
 import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'

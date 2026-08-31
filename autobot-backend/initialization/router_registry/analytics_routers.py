@@ -12,13 +12,9 @@ Issue #281: Refactored from 338 lines of repetitive try/except blocks to
 data-driven configuration pattern for improved maintainability.
 """
 
-import importlib
 from typing import List, Tuple
 
-from autobot_shared.logging_manager import get_logger
-
-logger = get_logger(__name__)
-
+from .loader import load_router_group
 
 # Issue #281: Router configurations as data instead of repetitive code blocks
 # Format: (module_path, prefix, tags, name)
@@ -185,57 +181,16 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
 ]
 
 
-def _load_single_analytics_router(module_path: str, prefix: str, tags: List[str], name: str) -> Tuple | None:
-    """
-    Load a single analytics router with graceful fallback.
-
-    Issue #281: Extracted helper for loading individual routers to eliminate
-    repetitive try/except blocks and enable data-driven router loading.
-
-    Args:
-        module_path: Full Python module path (e.g., 'backend.api.analytics')
-        prefix: URL prefix for the router (e.g., '/analytics')
-        tags: List of OpenAPI tags for the router
-        name: Human-readable name for logging
-
-    Returns:
-        Tuple of (router, prefix, tags, name) if successful, None otherwise
-    """
-    try:
-        module = importlib.import_module(module_path)
-        router = getattr(module, "router")
-        logger.info("✅ Optional router loaded: %s", name)
-        return (router, prefix, tags, name)
-    except ImportError as e:
-        logger.warning("⚠️ Optional router not available: %s - %s", name, e)
-        return None
-    except AttributeError as e:
-        logger.warning("⚠️ Router not found in module %s: %s - %s", module_path, name, e)
-        return None
-
-
 def load_analytics_routers() -> List[Tuple]:
     """
     Dynamically load analytics API routers with graceful fallback.
 
     Issue #281: Refactored to use data-driven configuration pattern.
     Original implementation had 20 repetitive try/except blocks (~338 lines).
-    Now uses ANALYTICS_ROUTER_CONFIGS list and _load_single_analytics_router helper.
+    Now uses ANALYTICS_ROUTER_CONFIGS with the shared loader (#14207).
 
     Returns:
         list: List of tuples in format (router, prefix, tags, name)
               Only includes routers that successfully imported.
     """
-    optional_routers = []
-
-    for module_path, prefix, tags, name in ANALYTICS_ROUTER_CONFIGS:
-        result = _load_single_analytics_router(module_path, prefix, tags, name)
-        if result:
-            optional_routers.append(result)
-
-    logger.info(
-        "📊 Loaded %s/%s analytics routers",
-        len(optional_routers),
-        len(ANALYTICS_ROUTER_CONFIGS),
-    )
-    return optional_routers
+    return load_router_group("analytics", ANALYTICS_ROUTER_CONFIGS)

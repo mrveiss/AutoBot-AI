@@ -21,9 +21,16 @@ from type_defs.common import Metadata
 
 from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
+from .errors import PostExecutionError, execution_failed_response, post_execution_failed_response, post_execution_guard
 from .models import AgentSessionState, AgentTerminalSession
 from .session_manager import SessionManager
-from .utils import create_command_execution, is_interactive_command
+from .utils import (
+    create_command_execution,
+    is_interactive_command,
+    log_autobot_command,
+    log_command_approval,
+    log_command_result,
+)
 
 logger = get_logger(__name__)
 
@@ -91,14 +98,21 @@ class AgentTerminalService:
         conversation_id: str | None = None,
         host: str = "main",
         metadata: Metadata | None = None,
+        owner: str | None = None,
     ) -> AgentTerminalSession:
-        """Create a new agent terminal session with PTY integration."""
+        """Create a new agent terminal session with PTY integration.
+
+        Issue #14989: `owner` is the authenticated creator's username, stamped
+        onto the shared terminal session_configs entry so the WebSocket
+        ownership gate in api.terminal can recognise them (#14960).
+        """
         return await self.session_manager.create_session(
             agent_id=agent_id,
             agent_role=agent_role,
             conversation_id=conversation_id,
             host=host,
             metadata=metadata,
+            owner=owner,
         )
 
     async def get_session(self, session_id: str) -> AgentTerminalSession | None:
@@ -199,6 +213,21 @@ class AgentTerminalService:
         await self.command_queue.add_command(cmd_execution)
         logger.info("✅ [QUEUE] Added command %s to queue", cmd_execution.command_id)
 
+        # #14955 review: session.pending_approval["risk"] (read back via
+        # get_pending_risk_level()) feeds the auto-approve rules engine
+        # (store_auto_approve_rule / check_auto_approve_rules in
+        # approval_handler.py) and approval_memory.py's RISK_LEVELS table,
+        # BOTH of which key on the 6-member CommandRisk vocabulary — the
+        # check site (_check_auto_approval_or_queue, below) was never
+        # touched and still compares against raw CommandRisk.value. Storing
+        # a converted RiskLevel here instead would silently break every
+        # "always allow" rule created after this point (RiskLevel != the
+        # CommandRisk the check compares against) and would permanently
+        # collapse the DANGEROUS/FORBIDDEN/CRITICAL distinction
+        # approval_memory.py's ranking exists to preserve. Keep this value
+        # as the raw CommandRisk — only the UI-facing response below is
+        # converted to the RiskLevel wire vocabulary ApprovalRequestCard.vue
+        # renders.
         session.set_pending_approval(
             command=command,
             description=description,
@@ -222,9 +251,15 @@ class AgentTerminalService:
                 user_id=user_id,
             )
 
+        # cmd_execution.risk_level is the map_risk_to_level() conversion of
+        # this same `risk` value (computed by create_command_execution
+        # above) — reused here so the UI response can't drift from the
+        # CommandExecution object built from the same risk assessment.
+        # This is the ONLY risk value this method converts to RiskLevel;
+        # everything above stays in the CommandRisk vocabulary.
         return session.build_pending_response(
             command=command,
-            risk_value=risk.value,
+            risk_value=cmd_execution.risk_level.value,
             reasons=reasons,
             description=description,
             command_id=cmd_execution.command_id,
@@ -239,46 +274,30 @@ class AgentTerminalService:
         command: str,
         risk,
     ) -> Metadata:
-        """Execute an auto-approved command (Issue #281: extracted)."""
-        task_start_time = time.time()
+        """Execute an auto-approved command (Issue #281: extracted).
 
-        if session.has_conversation():
-            await self.terminal_logger.log_command(
-                session_id=session.conversation_id,
-                command=command,
-                run_type="autobot",
-                status="executing",
-                user_id=None,
-            )
+        #15073: the guard opens the moment the executor has returned. Metrics,
+        transcript, chat, interpretation and broadcast are all post-processing
+        — a defect in any of them is reported as such, never as a command that
+        failed to run, and never at the cost of the result already in hand.
+        """
+        task_start_time = time.time()
+        await log_autobot_command(self.terminal_logger, session, command, "executing")
 
         result = await self.command_executor.execute_in_pty(session, command)
 
-        task_duration = time.time() - task_start_time
-        status = "success" if result.get("status") == "success" else "error"
-        self.prometheus_metrics.record_task_execution(
-            task_type="command_execution",
-            agent_type=session.agent_role.value,
-            status=status,
-            duration=task_duration,
-        )
-
-        if session.has_conversation():
-            await self.terminal_logger.log_command(
-                session_id=session.conversation_id,
-                command=command,
-                run_type="autobot",
+        with post_execution_guard(result):
+            status = "success" if result.get("status") == "success" else "error"
+            self.prometheus_metrics.record_task_execution(
+                task_type="command_execution",
+                agent_type=session.agent_role.value,
                 status=status,
-                result=result,
-                user_id=None,
+                duration=time.time() - task_start_time,
             )
-
-        await self._save_command_to_chat(session.conversation_id, command, result, command_type="agent")
-
-        # Interpret result if chat workflow manager available
-        await self._interpret_command_result(session, command, result)
-
-        # Update session history and broadcast status (Issue #665: extracted helper)
-        await self._finalize_auto_approved_execution(session, command, risk, result)
+            await log_autobot_command(self.terminal_logger, session, command, status, result)
+            await self._save_command_to_chat(session.conversation_id, command, result, command_type="agent")
+            await self._interpret_command_result(session, command, result)
+            await self._finalize_auto_approved_execution(session, command, risk, result)
 
         return result
 
@@ -360,59 +379,6 @@ class AgentTerminalService:
     # Helper Methods for _approve_command_internal (Issue #281)
     # ============================================================================
 
-    async def _log_command_approval(
-        self,
-        session: AgentTerminalSession,
-        command: str,
-        user_id: str | None,
-    ) -> None:
-        """
-        Log command approval to terminal logger.
-
-        Issue #665: Extracted from _execute_approved_command.
-
-        Args:
-            session: Terminal session
-            command: Command being approved
-            user_id: User who approved the command
-        """
-        if session.has_conversation():
-            await self.terminal_logger.log_command(
-                session_id=session.conversation_id,
-                command=command,
-                run_type="manual",
-                status="approved",
-                user_id=user_id,
-            )
-
-    async def _log_command_result(
-        self,
-        session: AgentTerminalSession,
-        command: str,
-        result: Metadata,
-        user_id: str | None,
-    ) -> None:
-        """
-        Log command execution result to terminal logger.
-
-        Issue #665: Extracted from _execute_approved_command.
-
-        Args:
-            session: Terminal session
-            command: Executed command
-            result: Execution result
-            user_id: User who approved the command
-        """
-        if session.has_conversation():
-            await self.terminal_logger.log_command(
-                session_id=session.conversation_id,
-                command=command,
-                run_type="manual",
-                status="success" if result.get("status") == "success" else "error",
-                result=result,
-                user_id=user_id,
-            )
-
     async def _post_execution_updates(
         self,
         session: AgentTerminalSession,
@@ -477,28 +443,28 @@ class AgentTerminalService:
         auto_approve_future: bool,
     ) -> Metadata:
         """Helper for _execute_approved_command. Ref: #1088."""
-        await self._log_command_approval(session, command, user_id)
+        await log_command_approval(self.terminal_logger, session, command, user_id)
 
         result = await self.command_executor.execute_in_pty(session, command)
 
-        await self.approval_handler.update_command_queue_status(
-            command_id=command_id,
-            approved=True,
-            output=result.get("stdout", ""),
-            stderr=result.get("stderr", ""),
-            return_code=result.get("return_code", 0),
-        )
-
-        await self._log_command_result(session, command, result, user_id)
-        await self._post_execution_updates(
-            session,
-            command,
-            result,
-            risk_level,
-            user_id,
-            comment,
-            auto_approve_future,
-        )
+        with post_execution_guard(result):
+            await self.approval_handler.update_command_queue_status(
+                command_id=command_id,
+                approved=True,
+                output=result.get("stdout", ""),
+                stderr=result.get("stderr", ""),
+                return_code=result.get("return_code", 0),
+            )
+            await log_command_result(self.terminal_logger, session, command, result, user_id)
+            await self._post_execution_updates(
+                session,
+                command,
+                result,
+                risk_level,
+                user_id,
+                comment,
+                auto_approve_future,
+            )
 
         return {
             "status": "approved",
@@ -554,13 +520,14 @@ class AgentTerminalService:
                 comment=comment,
                 auto_approve_future=auto_approve_future,
             )
-        except Exception as e:
-            logger.error("Approved command execution error: %s", e)
-            return {
-                "status": "error",
-                "error": "Command execution failed",
-                "command": command,
-            }
+        except PostExecutionError as exc:
+            logger.error("Approved command post-execution failure: %s", exc, exc_info=True)
+            return post_execution_failed_response(command, exc)
+        except (TypeError, AttributeError):
+            raise
+        except Exception:
+            logger.error("Approved command execution error", exc_info=True)
+            return execution_failed_response(command)
 
     async def _handle_denied_command(
         self,
@@ -794,13 +761,14 @@ class AgentTerminalService:
         # Execute auto-approved command
         try:
             return await self._execute_auto_approved_command(session, command, risk)
-        except Exception as e:
-            logger.error("Command execution error: %s", e)
-            return {
-                "status": "error",
-                "error": "Command execution failed",
-                "command": command,
-            }
+        except PostExecutionError as exc:
+            logger.error("Auto-approved command post-execution failure: %s", exc, exc_info=True)
+            return post_execution_failed_response(command, exc)
+        except (TypeError, AttributeError):
+            raise
+        except Exception:
+            logger.error("Command execution error", exc_info=True)
+            return execution_failed_response(command)
 
     async def _save_command_to_chat(
         self,

@@ -65,6 +65,8 @@ from api import (
     websocket_router,
 )
 from api.code_source import router as code_source_router
+from api.memory_lifecycle_proxy import router as memory_lifecycle_router
+from api.performance import metrics_router as performance_metrics_router
 from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
@@ -613,6 +615,30 @@ app.add_middleware(ApiRequestCounterMiddleware)
 #   sso_router      — SSO provider list; accessed before credentials are available
 #   sso_auth_router — OAuth callback; must complete before a token exists
 #   websocket_router — out of scope (#10198); has separate async auth handling
+#   scim_router     — authenticated per route by _require_scim_bearer, not by
+#       this gate; all 11 routes carry it. Declared here because "no
+#       service.management gate" is what this list tracks, and it was already
+#       absent before #14339 added the check below
+#   performance_metrics_router — prometheus scrape surface; a scraper cannot
+#       authenticate, so the gate returned 401 on every scrape (#14339)
+#
+# Two routes below are declared here rather than moved into a router, because
+# the idiom itself — not the auth outcome — is what has to be visible:
+#   root (@app.get("/")) — service banner; no credentials exist yet to check,
+#       and it discloses only a static name/version string
+#   prometheus_registry_metrics (@app.get("/metrics")) — top-level prometheus
+#       scrape target (#10851); a scraper cannot authenticate, same reasoning
+#       as performance_metrics_router above
+#
+# This list is enforced, not decorative: tests/api/
+# test_prometheus_scrape_is_unauthenticated_14339.py fails if any router is
+# mounted without the gate and is not named here. It had already gone stale
+# once, which is how a public surface stops being visible in the one place the
+# file keeps that inventory. The same check now also covers routes added
+# directly with `@app.<verb>(...)` or `app.add_api_route(...)` instead of a
+# router (#14363), and resolves a simple module-level alias of `app` before
+# deciding what a mount's receiver is (#14366) — both used to slip past
+# entirely because the check only ever looked for `app.include_router(...)`.
 
 # Service-management gate (#10198, epic #10193): all other routers require
 # Permission.SERVICE_MANAGEMENT.  Ordinary users (role=user/readonly/analyst/editor)
@@ -651,6 +677,10 @@ app.include_router(updates_router, prefix="/api", dependencies=_SM)
 app.include_router(maintenance_router, prefix="/api", dependencies=_SM)
 app.include_router(monitoring_router, prefix="/api", dependencies=_SM)
 app.include_router(performance_router, prefix="/api", dependencies=_SM)
+# #14339: the prometheus scrape route, mounted WITHOUT _SM. Prometheus cannot
+# authenticate, so while it sat behind the dependency above every scrape got a
+# 401 and the job never yielded a sample.
+app.include_router(performance_metrics_router, prefix="/api")
 app.include_router(errors_router, prefix="/api", dependencies=_SM)
 app.include_router(events_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(external_agents_router, prefix="/api", dependencies=_SM)
@@ -667,6 +697,10 @@ app.include_router(roles_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(code_source_router, prefix="/api", dependencies=_SM)
 app.include_router(personality_proxy_router, prefix="/api", dependencies=_SM)  # Issue #1145
 app.include_router(voice_proxy_router, prefix="/api", dependencies=_SM)  # Voice proxy for personality voice assignment
+# #12632: memory lifecycle aggregator. Admin-gated like the rest of the node
+# proxies — it exposes what the nightly decay would delete, which is operator
+# information, not user information.
+app.include_router(memory_lifecycle_router, prefix="/api", dependencies=_SM)
 app.include_router(orchestration_router, prefix="/api", dependencies=_SM)
 app.include_router(discovery_router, prefix="/api", dependencies=_SM)
 app.include_router(config_router, prefix="/api", dependencies=_SM)

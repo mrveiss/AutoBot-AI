@@ -74,7 +74,8 @@ fi
 #
 # Note the two versions are different things: black *runs* under 3.14, while
 # `target-version` in pyproject.toml controls the syntax it *emits* and stays
-# at py312 for the 3.11 NPU worker (#10877).
+# at py312 until #13747 has host evidence that the NPU worker is actually
+# running 3.14, not merely configured for it (see pyproject.toml).
 PYTHON_BIN=""
 for candidate in python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
     command -v "$candidate" >/dev/null 2>&1 || continue

@@ -12,12 +12,9 @@ Issue #281: Refactored from 112 lines to use data-driven router loading.
 Issue #729: Infrastructure routers removed - now served by slm-server.
 """
 
-import importlib
 from typing import List, Tuple
 
-from autobot_shared.logging_manager import get_logger
-
-logger = get_logger(__name__)
+from .loader import load_router_group
 
 # Router configurations: (module_path, router_name, prefix, tags, display_name)
 # Issue #281: Centralized router configuration for maintainability
@@ -25,6 +22,16 @@ logger = get_logger(__name__)
 MONITORING_ROUTER_CONFIGS = [
     ("api.branch_health", "router", "", ["branch-health"], "branch_health"),
     ("api.monitoring", "router", "/monitoring", ["monitoring"], "monitoring"),
+    # #12631: memory lifecycle read view. Registered here rather than under a new
+    # group because it is observability, and the umbrella (#12630) composes it
+    # into the same operator surface as the rest of monitoring.
+    (
+        "api.memory_lifecycle",
+        "router",
+        "/memory",
+        ["memory-lifecycle"],
+        "memory_lifecycle",
+    ),
     ("api.metrics", "router", "/metrics", ["metrics"], "metrics"),
     # Issue #1288: Prometheus scrape endpoint at /api/metrics/prometheus
     # (no auth, used by Prometheus server). Moved from /metrics to avoid
@@ -79,35 +86,6 @@ MONITORING_ROUTER_CONFIGS = [
 ]
 
 
-def _try_load_router(module_path: str, router_attr: str, prefix: str, tags: List[str], name: str) -> Tuple:
-    """
-    Attempt to load a single router module with graceful fallback.
-
-    Issue #281: Extracted from load_monitoring_routers to reduce repetition.
-
-    Args:
-        module_path: Full module path (e.g., 'backend.api.monitoring')
-        router_attr: Attribute name for the router (usually 'router')
-        prefix: API prefix for the router
-        tags: OpenAPI tags for the router
-        name: Display name for logging
-
-    Returns:
-        Tuple of (router, prefix, tags, name) if successful, None otherwise
-    """
-    try:
-        module = importlib.import_module(module_path)
-        router = getattr(module, router_attr)
-        logger.info("✅ Optional router loaded: %s", name)
-        return (router, prefix, tags, name)
-    except ImportError as e:
-        logger.warning("⚠️ Optional router not available: %s - %s", name, e)
-        return None
-    except AttributeError as e:
-        logger.warning("⚠️ Router attribute missing: %s - %s", name, e)
-        return None
-
-
 def load_monitoring_routers() -> List[Tuple]:
     """
     Dynamically load monitoring API routers with graceful fallback.
@@ -119,12 +97,4 @@ def load_monitoring_routers() -> List[Tuple]:
         list: List of tuples in format (router, prefix, tags, name)
               Only includes routers that successfully imported.
     """
-    optional_routers = []
-
-    for config in MONITORING_ROUTER_CONFIGS:
-        module_path, router_attr, prefix, tags, name = config
-        result = _try_load_router(module_path, router_attr, prefix, tags, name)
-        if result:
-            optional_routers.append(result)
-
-    return optional_routers
+    return load_router_group("monitoring", MONITORING_ROUTER_CONFIGS)

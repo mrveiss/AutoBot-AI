@@ -35,8 +35,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from autobot_shared.paths import project_root
+
 # Add AutoBot paths
-sys.path.append(os.environ.get("AUTOBOT_PROJECT_ROOT", "/opt/autobot/code_source"))
+sys.path.append(str(project_root()))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -220,9 +222,13 @@ class CICDIntegrationTester:
             ),
         ]
 
-        # Create results directory
-        self.results_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results")
-        self.results_dir.mkdir(exist_ok=True)
+        # #14517: was a shell placeholder in a plain string literal, so mkdir either
+        # failed on the missing parent or created a junk tree literally named
+        # ``${AUTOBOT_PROJECT_ROOT:-`` under the working directory. ``parents=True``
+        # because the resolved path now has a real parent that a fresh checkout does
+        # not carry -- ``mkdir(exist_ok=True)`` alone would raise FileNotFoundError.
+        self.results_dir = project_root() / "tests" / "results"
+        self.results_dir.mkdir(parents=True, exist_ok=True)
 
         self.pipeline_id = f"hardware_pipeline_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
@@ -281,7 +287,10 @@ class CICDIntegrationTester:
                 text=True,
                 timeout=stage.timeout,
                 env=env,
-                cwd="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}",
+                # #14517: a non-existent cwd makes subprocess.run raise before the
+                # stage command ever starts, which this except block then reported
+                # as an ordinary stage failure.
+                cwd=str(project_root()),
             )
 
             end_time = datetime.now()

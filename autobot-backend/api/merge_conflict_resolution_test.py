@@ -29,14 +29,27 @@ from auth_middleware import check_admin_permission
 # ``APIRouter()`` with no prefix of its own, so there is nothing to double up.
 API_PREFIX = "/api/code-intelligence/merge-conflicts"
 
-# autobot_shared.security.path_validator only permits /opt/autobot and the
-# system temp dir (#2848); anything else is rejected with a generic
-# "Invalid or disallowed path" *before* an endpoint's existence check runs.
-# Point the "missing path" cases at an allowed root so they genuinely exercise
-# the does-not-exist branch they are named for.
+# #15238: production scopes _assert_safe_path's allowed_roots to the project
+# root only -- not the shared, world-writable system temp dir. These tests
+# build real merge-conflict fixtures with ``tempfile`` for isolation, so the
+# autouse fixture below scopes this module's PROJECT_ALLOWED_ROOTS to the temp
+# dir for the test run instead of loosening the real default. Point the
+# "missing path" cases at that same root so they genuinely exercise the
+# does-not-exist branch they are named for.
 _TMP_ROOT = tempfile.gettempdir()
 MISSING_FILE = os.path.join(_TMP_ROOT, "autobot-merge-conflict-tests", "missing.py")
 MISSING_REPO = os.path.join(_TMP_ROOT, "autobot-merge-conflict-tests", "missing-repo")
+
+
+@pytest.fixture(autouse=True)
+def _scope_allowed_roots_to_tmp(monkeypatch):
+    """Scope PROJECT_ALLOWED_ROOTS to the system temp dir for this test run.
+
+    The endpoints under test build real merge-conflict fixtures with
+    ``tempfile``, not through a real project-tree file, and production
+    intentionally no longer permits the shared temp dir by default (#15238).
+    """
+    monkeypatch.setattr("api.merge_conflict_resolution.PROJECT_ALLOWED_ROOTS", (_TMP_ROOT,))
 
 
 def payload(response):

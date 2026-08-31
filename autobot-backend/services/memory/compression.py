@@ -15,27 +15,30 @@ from typing import Any, Dict, List
 import yaml
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import CategoryDefaults
+from autobot_shared.token_count import estimate_fast
 
 logger = get_logger(__name__)
 
 # Default threshold: only compress for models with context_window_tokens <= 8192.
 _DEFAULT_COMPRESSION_THRESHOLD = 8192
 
-# Token estimation: words * 1.3 approximates BPE token count without an
-# external tokenizer dependency (GPT-style subword tokenisation averages
-# ~1.3 tokens per whitespace-delimited word for English prose).
-_WORDS_TO_TOKENS = 1.3
-
 _CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "context_windows.yaml"
 
 
 def _estimate_tokens(text: str) -> int:
-    """Estimate token count using word-count heuristic.
+    """Estimate token count (#13694).
 
-    Approximation: len(text.split()) * 1.3.  Avoids any external tokenizer
-    dependency while staying within ~10 % of real BPE counts for English prose.
+    Was ``len(text.split()) * 1.3``, whose docstring conceded it held "for
+    English prose". Measured against the character estimate it under-counted
+    JSON by ~19x and CJK by ~26x — ``text.split()`` returns one element for a
+    non-space-delimited script — and this number gates whether compression runs
+    at all. Under-counting means the threshold is never reached on exactly the
+    payloads that need compressing.
+
+    Delegates to the shared fast path so this is not a fourth estimator.
     """
-    return int(len(text.split()) * _WORDS_TO_TOKENS)
+    return estimate_fast(text)
 
 
 def _message_tokens(msg: Dict[str, Any]) -> int:
@@ -162,7 +165,7 @@ class ContextCompressionService:
             return messages
 
         summary = {
-            "role": "assistant",
+            "role": CategoryDefaults.ROLE_ASSISTANT,
             "content": (
                 f"[Summary: {dropped_count} earlier message(s) were omitted to fit"
                 f" the {target_tokens}-token history budget.]"

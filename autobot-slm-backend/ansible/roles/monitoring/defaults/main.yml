@@ -43,6 +43,11 @@ prometheus_config_dir: "/etc/prometheus"
 # #12460: fail the play when no alerts-*.yml is found rather than installing
 # zero rules silently. Set false only for a node that intentionally ships none.
 prometheus_alert_rules_required: true
+# How long to wait for Prometheus to serve /api/v1/rules after a restart
+# (#14531). Var-backed rather than literal, matching backend_health_check_*:
+# a large WAL replay can outlast a fixed minute and false-fail the play.
+prometheus_rules_check_retries: 12
+prometheus_rules_check_delay: 5
 prometheus_data_dir: "/var/lib/prometheus"
 grafana_data_dir: "/var/lib/grafana"
 
@@ -56,3 +61,15 @@ autobot_repo_dir: "/opt/autobot"  # Override per inventory for your deployment p
 code_source_dir: "/opt/autobot/code_source"  # Full repo clone; matches slm_manager default
 autobot_log_dir: "/var/log/autobot"
 health_check_cron_wrapper: "/usr/local/bin/autobot-health-check-cron.sh"
+
+# #14315: mirrored from roles/backend/defaults/main.yml.
+#
+# The monitoring role renders the scrape config but runs against `slm_server`,
+# while the backend role runs against `backend` — role defaults do not cross
+# hosts, so `backend_port` is simply undefined here. A `| default(8001)` inline
+# would have been a second hardcoded literal wearing a derivation's clothes,
+# which is the failure being fixed. Mirrored explicitly instead, and
+# test_prometheus_scrape_targets_14315_test.py fails if these drift from the
+# backend role's own values.
+backend_port: 8001           # uvicorn: plain HTTP, loopback only
+backend_nginx_port: 8443     # nginx: external TLS, the only LAN-facing entry

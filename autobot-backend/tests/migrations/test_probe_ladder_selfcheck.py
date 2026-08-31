@@ -111,12 +111,21 @@ def test_observability_coverage():
     allowed = {
         "20260525_043",  # guarded enum-value add — idempotent re-run
         "20260526_045",  # agent_runtime_state data migration — idempotent UPDATE
+        "20260815_075",  # co_worker_type human->user (#13970) — data-only,
+        # idempotent UPDATE: re-running matches nothing
         "20260608_052",  # merge revision — no-op
         "20260623_062",  # RBAC colon->dot reconcile (#10458) — data-only head;
         # absorbed by the data-only tail advance, idempotent if re-run
         "20260630_064",  # llc reviewer cols (UUID) + kb_summary (TEXT) drift fix
         # (#10750) — non-TIMESTAMPTZ cols added via raw ADD COLUMN IF NOT EXISTS,
         # so unparseable; fully idempotent (IF NOT EXISTS + has_table) if re-run
+        "20260821_081",  # roles (org_id, name) partial unique index (#14325) —
+        # creates only an index, and extract_artifacts observes revisions solely
+        # through create_table/add_column, so an index-only revision cannot be
+        # observable by construction. Extended consciously, not to silence the
+        # guard: upgrade() returns early when the index already exists, so the
+        # adoption re-run this allowlist permits is a genuine no-op rather than
+        # a "relation already exists" failure.
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "

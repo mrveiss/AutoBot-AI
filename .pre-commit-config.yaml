@@ -8,7 +8,7 @@ repos:
   - repo: local
     hooks:
       - id: record-branch
-        name: Record Branch for Branch Guard (Issue #1670)
+        name: 'Record Branch for Branch Guard (Issue #1670)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-record-branch
         language: script
         pass_filenames: false
@@ -63,8 +63,29 @@ repos:
       - id: flake8
         # Uses .flake8 config file in repo root via args
         args: [--config=.flake8]
-        # Exclude tests, infrastructure, and code analysis tools (non-production code)
+        # Exclude tests, infrastructure, and code analysis tools (non-production code).
+        # This regex is correctly anchored -- it is NOT the #14419 depth bug -- and the
+        # full production ruleset genuinely does not apply here. The narrowing #14405
+        # needed is the hook below, not a hole in this line.
         exclude: ^(tests/|autobot-infrastructure/|autobot-backend/code_analysis/)
+
+      # #14405 -- undefined names ARE production defects, wherever they live.
+      # `autobot-infrastructure/` sat behind the exclude above with nothing else
+      # linting it (no CI flake8 invocation passes the tree either), and 12 operator
+      # scripts accumulated 103 undefined names -- live NameErrors, not style. This
+      # hook carves that one subtree back in for F821 alone, so the gate is clean
+      # today with no exemption list to grandfather the very defect it guards. The
+      # other codes there (E501, F841, F401, F541, E741) stay excluded as a separate
+      # cosmetic backlog. `--isolated` skips .flake8, whose `count`/`statistics`/
+      # `show-source` settings exist for the hook above's human output.
+      # tools/lint/check_infra_scripts_undefined_names.py --audit re-proves from the
+      # REQUIRED code-quality check that this hook still reaches the tree, because a
+      # regression here lints fewer files and would make every lint job look greener.
+      - id: flake8
+        alias: flake8-infra-scripts-undefined-names
+        name: flake8 F821 (autobot-infrastructure/shared/scripts) (#14405)
+        args: [--isolated, --select=F821]
+        files: ^autobot-infrastructure/shared/scripts/.*\.py$
 
   # Remove unused imports and variables with autoflake
   - repo: https://github.com/PyCQA/autoflake
@@ -146,13 +167,34 @@ repos:
   - repo: local
     hooks:
       - id: no-utcnow-isoformat
-        name: Block datetime.utcnow().isoformat() and friends (#5178 #5238)
+        name: 'Block datetime.utcnow().isoformat() and friends (#5178 #5238)'
         entry: tools/lint/check_no_utcnow_isoformat.py
         language: python
         files: \.py$
         # Stage matches the existing record-branch hook above.
         stages: [pre-commit]
         description: "Use autobot_shared.time_utils.utc_timestamp() instead of datetime.utcnow().isoformat()"
+
+  # #14015: every route in a covered package carries a deadline, or is declared
+  # unbounded with a reason. #13602 was an endpoint that held the socket open
+  # past 180s and logged nothing, because bounding was opt-in per call site and
+  # one handler simply had none. Only a check that covers every member by
+  # construction catches an omission.
+  #
+  # pass_filenames: false — the checker walks the covered packages itself, so a
+  # commit touching an unrelated file still validates the whole surface. A
+  # filename-scoped run would pass on the very commit that adds an unbounded
+  # route elsewhere.
+  - repo: local
+    hooks:
+      - id: route-deadlines
+        name: Every covered route carries a deadline (#14015)
+        entry: tools/lint/check_route_deadlines.py
+        language: python
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Add @bounded(seconds=...) or declare the route in UNBOUNDED_BY_DESIGN"
 
   # AutoBot custom: regression-prevention for #6987 broken `src.*` mock paths.
   # autobot-backend has no `src/` package; ``patch("src.foo.bar")`` silently
@@ -166,7 +208,7 @@ repos:
   - repo: local
     hooks:
       - id: no-src-mock-path
-        name: Block patch("src.*") mock paths in tests (#6987 / #7165)
+        name: 'Block patch("src.*") mock paths in tests (#6987 / #7165)'
         entry: tools/lint/check_no_src_mock_path.py
         language: python
         files: (_test\.py|test_.*\.py)$
@@ -192,20 +234,22 @@ repos:
   # AutoBot custom: regression-prevention for #6743 (chat-session TTL drift).
   # The root cause was a literal `3600` in setex() with no env-var knob.
   # This hook blocks any new literal integer/float in the TTL position of
-  # Redis calls (setex, expire, pexpire) and Cache.set(ttl=N).
+  # Redis calls (setex, psetex, expire, pexpire, expireat, pexpireat) and
+  # Cache.set(ttl=N) / redis-py's native set(ex=)/set(px=)/set(exat=)/
+  # set(pxat=)/getex(...) keyword forms.
   # Use named constants from autobot_shared.ssot_constants (TTL_1_HOUR, etc.).
   # Allowlist: autobot-backend/constants/ttl_constants.py and
   # autobot_shared/ssot_constants.py (where the constants live).
   - repo: local
     hooks:
       - id: no-literal-ttl-seconds
-        name: Ban literal TTL seconds in Redis calls (#6743 / #7080)
+        name: 'Ban literal TTL seconds in Redis calls (#6743 / #7080 / #14206)'
         entry: pipeline-scripts/check_no_literal_ttl_seconds.py
         language: python
         files: \.py$
         exclude: ^(autobot-backend/constants/ttl_constants\.py|autobot_shared/ssot_constants.*\.py)$
         stages: [pre-commit]
-        description: "Use TTL_* named constants from autobot_shared.ssot_constants instead of literal ints in setex/expire/pexpire/Cache.set(ttl=)"
+        description: "Use TTL_* named constants from autobot_shared.ssot_constants instead of literal ints in setex/psetex/expire/pexpire/expireat/pexpireat/Cache.set(ttl=)/set(ex=|px=|exat=|pxat=)/getex(...)"
 
   # AutoBot custom: regression-prevention for the CLAUDE.md encoding rule (#3391
   # / #13151). Text-mode open() without encoding= falls back to the platform
@@ -213,8 +257,112 @@ repos:
   # file list but added no guard, so the pattern drifted back.
   - repo: local
     hooks:
+      # #14171: core.fileMode=false hides a hook script committed as 100644 --
+      # the working tree stays executable, so the mismatch is invisible on the
+      # machine that introduced it and only breaks a fresh checkout. It has
+      # reached CI twice (#14151's sweep, #14162), and #14181 records the 16
+      # hooks it found already dormant.
+      # #14198: 19 sites fell back to ${AUTOBOT_BROWSER_SERVICE_PORT:-3000} --
+      # Grafana's port, not the browser service's 9001 (#4052). Dead while
+      # lib/ssot-config.sh loads (it assigns the SSOT value with := first), and
+      # live the moment it does not, because every source line is `|| true`.
+      # Bans divergence, not the shape: 145 other fallbacks agree with the SSOT.
+      - id: port-fallbacks-match-ssot
+        name: Shell port fallbacks must agree with the SSOT (#14198)
+        entry: tools/lint/check_port_fallbacks_match_ssot.py
+        language: python
+        files: (\.sh|ssot_config\.py)$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "A ${AUTOBOT_*_PORT:-N} fallback that disagrees with ssot_config.py points at the wrong service whenever the shell library fails to load"
+
+      # #15176: six guards resolved the repository root with `git rev-parse
+      # --show-toplevel` and no scrub of the git environment. A hook exports
+      # GIT_DIR and no GIT_WORK_TREE, so git calls the caller's CWD the work
+      # tree and the flag answers with the CWD -- silently. Three of the six
+      # were hook entries; two of those printed their success line having
+      # inspected nothing, one of them over a deliberately planted violation.
+      # #15245 extended the same scanner to shell (text-based, not AST) after
+      # sixteen more sites turned up there.
+      - id: git-toplevel-env-scrubbed
+        name: "Asking git for the repo root must scrub GIT_DIR first (#15176, #15245)"
+        entry: tools/lint/check_git_toplevel_env_scrubbed.py
+        language: python
+        files: \.(py|sh)$
+        stages: [pre-commit]
+        description: "An inherited GIT_DIR makes --show-toplevel answer with the caller's CWD; resolve the root with autobot_shared.paths.git_repo_root() (Python) or scripts/lib/git-root.sh's git_repo_root() (shell)"
+
+      # #15246: a test that shells out to `git init`/`add`/`commit`/`checkout`/
+      # etc. in a tmp_path fixture, with subprocess.run's default of inheriting
+      # os.environ, does not touch that fixture at all under the pre-push hook
+      # -- it writes to whatever GIT_DIR names, which is the pushing worktree's
+      # own git directory. autobot_shared/paths_test.py did exactly that and
+      # dropped 86 tracked files from the live index (#15243 fixed the
+      # instance; this gates the class).
+      - id: git-write-env-scrubbed
+        name: "A test's git write must scrub GIT_DIR first (#15246)"
+        entry: tools/lint/check_git_write_env_scrubbed.py
+        language: python
+        files: (_test\.py|(^|/)test_[^/]+\.py)$
+        stages: [pre-commit]
+        description: "An inherited GIT_DIR makes a test fixture's git init/add/commit/etc. write to the real repository instead of tmp_path; pass env=scrubbed_git_env()"
+
+      # #14228: autobot-backend/requirements.txt ends with `-r ../requirements.txt`,
+      # so pip sees both files as one set and aborts when the same distribution
+      # arrives with different specifiers. openpyxl and python-pptx did exactly
+      # that and killed a live provisioning run. pip reports only the FIRST, so a
+      # one-at-a-time fix moves the failure to the next deploy.
+      - id: requirements-no-conflicting-dupes
+        name: A requirements file and its include must not pin a package differently (#14228)
+        entry: pipeline-scripts/check_requirements_no_conflicting_dupes.py
+        language: python
+        files: requirements.*\.txt$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "pip aborts on a differing duplicate across `-r` includes; identical duplicates are tolerated and not flagged"
+
+      - id: hook-exec-bits
+        name: Pre-commit hook entries must be tracked executable (#14171)
+        entry: pipeline-scripts/check_hook_exec_bits.py
+        language: python
+        additional_dependencies: [pyyaml]
+        files: ^(\.pre-commit-config\.yaml|autobot-infrastructure/shared/config/\.pre-commit-config\.yaml)$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "A hook entry that names a repo path is executed directly, so it must be tracked 100755 or it dies on a fresh clone"
+
+      - id: workflow-path-filters
+        name: Workflow path filters must match the canonical set (#12986)
+        entry: pipeline-scripts/check_workflow_path_filters.py
+        language: python
+        additional_dependencies: [pyyaml]
+        files: ^\.github/(workflows/.*\.yml|filters/backend-python-paths\.yml)$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "GitHub cannot include a file in an event `paths:` trigger, so those copies are policed instead: a gate that quietly stops running on a path is the failure this catches"
+
+      # #14216: 14 session/audit reports accumulated at the repository root —
+      # BUG_SWEEP_REPORT.md, UMBRELLA_9931_RECOVERY_REPORT.md, TRIAGE_DELTA_REPORT.md
+      # and friends. Legitimate work product written to the front door because
+      # that is where the session happened to be. The root is the first screen a
+      # visitor sees, and nothing stopped them landing there. Reports now live in
+      # docs/reports/; this is the stop. Also blocks the MagicMock/ artifact tree
+      # that the #14217 path-sanitizer bug creates on every suite run.
+      - id: no-root-clutter
+        name: Keep session reports and test artifacts out of the repo root (#14216)
+        entry: tools/lint/check_no_root_clutter.py
+        language: python
+        # Trigger on any top-level path, or a MagicMock/ component at any depth
+        # — the artifact tree lands wherever the test process's CWD was, and a
+        # trigger narrower than the check means the check never runs for the
+        # case it was written to catch.
+        files: (^[^/]+$)|(^|/)MagicMock/
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Top-level *.md/*.txt must be allowlisted — reports belong in docs/reports/, research in docs/research/"
+
       - id: no-open-without-encoding
-        name: Require encoding= on text-mode open() (#3391 / #13151)
+        name: 'Require encoding= on text-mode open() (#3391 / #13151)'
         entry: pipeline-scripts/check_open_encoding.py
         language: python
         files: \.py$
@@ -246,9 +394,11 @@ repos:
   - repo: local
     hooks:
       - id: git-safe-directory-required
-        name: Block unguarded `git -C {{ git_repo_root }}` (#7150 #7219)
+        name: 'Block unguarded `git -C {{ git_repo_root }}` (#7150 #7219)'
         entry: tools/lint/check_git_safe_directory.py
         language: python
+        # #14196: parses the YAML instead of scanning lines, so it needs PyYAML.
+        additional_dependencies: [pyyaml]
         files: \.(yml|yaml)$
         stages: [pre-commit]
         description: "Pass -c safe.directory={{ git_repo_root }} to every git -C invocation against code_source"
@@ -264,9 +414,12 @@ repos:
   - repo: local
     hooks:
       - id: no-deprecated-ansible-facts
-        name: Block deprecated `{{ ansible_X }}` fact refs (#7180 #7221)
+        name: 'Block deprecated `{{ ansible_X }}` fact refs (#7180 #7221)'
         entry: tools/lint/check_no_deprecated_ansible_facts.py
         language: python
+        # #14196: .yml/.yaml are parsed with PyYAML instead of scanned line by
+        # line; .j2 templates (not YAML) still use the line-based path.
+        additional_dependencies: [pyyaml]
         files: \.(yml|yaml|j2)$
         stages: [pre-commit]
         description: "Use ansible_facts['X'] instead of the deprecated ansible_X top-level fact"
@@ -426,7 +579,7 @@ repos:
   - repo: local
     hooks:
       - id: worktree-branch-guard
-        name: Worktree Branch Guard (Issue #1654)
+        name: 'Worktree Branch Guard (Issue #1654)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-worktree-branch-guard
         language: script
         pass_filenames: false
@@ -439,7 +592,7 @@ repos:
   - repo: local
     hooks:
       - id: target-branch-guard
-        name: Target Branch Guard (Issue #4113)
+        name: 'Target Branch Guard (Issue #4113)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-target-branch-guard
         language: script
         pass_filenames: false
@@ -451,13 +604,58 @@ repos:
   - repo: local
     hooks:
       - id: detect-mass-deletions
-        name: Detect Mass Deletions (Issue #4111)
+        name: 'Detect Mass Deletions (Issue #4111)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-detect-mass-deletions
         language: script
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
         description: "Blocks commits with >50 staged file deletions (likely stash bug, not intended cleanup)"
+
+  # No tracked symlink entries — mode 120000 checks out as a plain file
+  # under this repo's core.symlinks=false, silently clobbering whatever
+  # real path was there (Issue #14137)
+  - repo: local
+    hooks:
+      - id: no-tracked-symlink
+        name: 'No Tracked Symlink Entries (Issue #14137)'
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tracked-symlink
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks a NEW tracked mode-120000 entry — a symlink materialises as a plain file under core.symlinks=false, silently overwriting whatever real path was there"
+
+  # No tracked path shadows a name in .gitignore's virtualenv section
+  # (Issue #14137) — the other half of how the venv symlink got in
+  - repo: local
+    hooks:
+      - id: no-gitignore-shadow
+        name: 'No Tracked Path Shadows the Virtualenv Ignore Names (Issue #14137)'
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-gitignore-shadow
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks a tracked path whose name matches a .gitignore virtualenv-section entry unless explicitly negated"
+
+  # Shell SSOT library regression guard (#14041)
+  # 23 tracked scripts silently no-op'd for years because they sourced a path
+  # with a wrong directory segment (infrastructure/ instead of
+  # autobot-infrastructure/); the library itself never existed at all. Runs
+  # the library's own bash self-test -- including the "no tracked *.sh file
+  # sources the non-autobot- path" guard -- whenever a shell script changes,
+  # so the wrong path (or a broken library) cannot regrow silently again.
+  - repo: local
+    hooks:
+      - id: ssot-config-lib-guard
+        name: Shell SSOT Library Self-Test (#14041)
+        entry: bash autobot-infrastructure/shared/tests/test_ssot_config_lib.sh
+        language: system
+        files: \.sh$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Sources lib/ssot-config.sh under every known call shape and asserts no tracked *.sh file still points at the wrong infrastructure/ path (#14041)"
 
   # Hardcoded value detection (Issue #694)
   - repo: local
@@ -466,7 +664,25 @@ repos:
         name: Detect Hardcoded Values (Strict)
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
         language: script
-        types: [python, ts, vue]
+        # #14371: was [python, ts, vue]. The merged rule set scans .sh/.yml/.yaml
+        # too — the CI tree scanner has since #14316, specifically because
+        # Ansible playbooks and shell utilities are where hardcoded hosts, paths
+        # and accounts actually get typed. A hook whose `types` were narrower
+        # than its own rules would be a guard narrower than its subject.
+        types_or: [python, ts, vue, javascript, shell, yaml]
+        # Generated clients are machine-produced from the OpenAPI schema; a
+        # "hardcoded value" in one is a symptom of the schema, not of code
+        # anyone wrote, so scanning them finds nothing actionable.
+        #
+        # It is also ruinously slow. Measured 2026-08-11 on this hook:
+        #   3 changed .py files ........  3.7s
+        #   generated/api.ts alone .....  >240s (173,665 lines, timed out)
+        # Every PR that touches an API response model regenerates that file,
+        # which drags it into the changed set and turns `code-quality` — a
+        # REQUIRED check — into a 40-70 minute job. Observed on #13976.
+        #
+        # Same pattern the line-length hook above already uses.
+        exclude: ^(.*(_generated|generated)/)
         pass_filenames: false
         stages: [pre-commit]
         description: "Blocks commits with hardcoded IPs, ports, magic numbers, role strings, AutoBot file paths, and model name literals (#3397)"
@@ -475,7 +691,7 @@ repos:
   - repo: local
     hooks:
       - id: function-length-check
-        name: Function Length Check (Issue #620)
+        name: 'Function Length Check (Issue #620)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-function-length
         language: script
         types: [python]
@@ -487,7 +703,7 @@ repos:
   - repo: local
     hooks:
       - id: no-direct-redis
-        name: No Direct Redis Connections in Production Code (Issue #1086)
+        name: 'No Direct Redis Connections in Production Code (Issue #1086)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-direct-redis
         language: script
         types: [python]
@@ -507,11 +723,22 @@ repos:
         stages: [pre-commit]
         description: "Warns on new module-level singletons in agent/runtime paths — use SharedRuntimeBag instead"
 
+  # No analysis/design/plan documents under docs/architecture/ (Issues #15190, #15192, #15206)
+  - repo: local
+    hooks:
+      - id: no-doc-kind-in-architecture
+        name: 'No Analysis/Design/Plan Documents Under docs/architecture/ (Issues #15190, #15192, #15206)'
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-doc-kind-in-architecture
+        language: script
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks new *_ANALYSIS.md, *_DESIGN.md, *_IMPLEMENTATION_PLAN.md files under docs/architecture/ — they belong in docs/analysis|design|planning/"
+
   # No new /health routes outside api/system_health.py (Issue #3333)
   - repo: local
     hooks:
       - id: no-new-health-route
-        name: No New /health Routes Outside system_health.py (Issue #3333)
+        name: 'No New /health Routes Outside system_health.py (Issue #3333)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-health-route
         language: script
         types: [python]
@@ -523,7 +750,7 @@ repos:
   - repo: local
     hooks:
       - id: no-new-workflow-step
-        name: No New WorkflowStep/AgentTask/WorkflowPlan Outside Canonical (Issue #6951)
+        name: 'No New WorkflowStep/AgentTask/WorkflowPlan Outside Canonical (Issue #6951)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-workflow-step
         language: script
         types: [python]
@@ -535,7 +762,7 @@ repos:
   - repo: local
     hooks:
       - id: no-new-status-enum
-        name: No New *Status(Enum) Outside Canonical (Issue #6973)
+        name: 'No New *Status(Enum) Outside Canonical (Issue #6973)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-new-status-enum
         language: script
         types: [python]
@@ -553,7 +780,7 @@ repos:
   - repo: local
     hooks:
       - id: no-tag-pinned-action
-        name: No Tag-Pinned 3rd-Party GitHub Actions (Issue #7120)
+        name: 'No Tag-Pinned 3rd-Party GitHub Actions (Issue #7120)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tag-pinned-action
         language: script
         files: ^\.github/(workflows|actions)/.*\.ya?ml$
@@ -565,7 +792,7 @@ repos:
   - repo: local
     hooks:
       - id: no-print-console
-        name: No print()/console.* in Production Code (Issue #1082)
+        name: 'No print()/console.* in Production Code (Issue #1082)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-print-console
         language: script
         pass_filenames: false
@@ -579,7 +806,7 @@ repos:
   - repo: local
     hooks:
       - id: branch-guard
-        name: Branch Guard — Abort on Silent Branch Switch (Issue #1670)
+        name: 'Branch Guard — Abort on Silent Branch Switch (Issue #1670)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-branch-guard
         language: script
         pass_filenames: false
@@ -593,7 +820,7 @@ repos:
   - repo: local
     hooks:
       - id: warn-untracked-files
-        name: Warn on Untracked Source Files (Issue #1503)
+        name: 'Warn on Untracked Source Files (Issue #1503)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-warn-untracked
         language: script
         pass_filenames: false
@@ -610,7 +837,7 @@ repos:
   - repo: local
     hooks:
       - id: install-post-checkout
-        name: Install post-checkout hook (Issue #1692)
+        name: 'Install post-checkout hook (Issue #1692)'
         entry: bash -c 'SRC="scripts/hooks/post-checkout"; DST="$(git rev-parse --git-common-dir)/hooks/post-checkout"; [ -f "$SRC" ] && { [ ! -f "$DST" ] || ! diff -q "$SRC" "$DST" >/dev/null 2>&1; } && cp "$SRC" "$DST" && chmod +x "$DST" && echo "post-checkout hook installed" || true'
         language: system
         pass_filenames: false
@@ -624,7 +851,7 @@ repos:
   - repo: local
     hooks:
       - id: install-post-commit
-        name: Install post-commit hook (Issue #2416)
+        name: 'Install post-commit hook (Issue #2416)'
         entry: bash -c 'SRC="scripts/hooks/post-commit"; DST="$(git rev-parse --git-common-dir)/hooks/post-commit"; [ -f "$SRC" ] && { [ ! -f "$DST" ] || ! diff -q "$SRC" "$DST" >/dev/null 2>&1; } && cp "$SRC" "$DST" && chmod +x "$DST" && echo "post-commit hook installed" || true'
         language: system
         pass_filenames: false

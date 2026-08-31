@@ -907,6 +907,13 @@ async def delete_sprint(
         raise HTTPException(status_code=404, detail="Sprint not found")
     await session.delete(sprint)
     await session.commit()
+    # #13920: drop the KB collection with its entity (post-commit, non-fatal).
+    try:
+        from llc.kb.collections import KbCollectionManager  # noqa: PLC0415
+
+        await KbCollectionManager().drop_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
+    except Exception:  # noqa: BLE001 - defensive; drop_collection does not raise
+        logger.warning("Could not drop KB collection for sprint %s", sprint_id, exc_info=True)
 
 
 @router.post("/sprints/{sprint_id}/close", response_model=SprintResponse)

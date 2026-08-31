@@ -591,6 +591,17 @@
   --terminal-text-dim-strong: #dddddd;    /* emphasis body text */
   --terminal-text-output: #d4d4d4;        /* default (non-ANSI) command-output text */
 
+  /* Connection status bar (SSHTerminal.vue) — same literal-hex rationale as
+   * the rest of this block: a status bar showing the state of a live remote
+   * shell connection, not a generic UI alert, so it stays out of the
+   * semantic --color-success/warning/error palette on purpose (#14989). */
+  --terminal-status-bg-connecting: #3d3d00;
+  --terminal-status-text-connecting: #ffc107;
+  --terminal-status-bg-connected: #1e3d1e;
+  --terminal-status-text-connected: #4caf50;
+  --terminal-status-bg-error: #3d1e1e;
+  --terminal-status-text-error: #f44336;
+
   /* ANSI content palette — literal, do NOT remap to semantic tokens */
   --terminal-ansi-green: #00ff00;         /* prompt + cursor */
   --terminal-ansi-red: #ff6b6b;           /* error output */
@@ -789,9 +800,15 @@
    * badge (--text-on-warning carries an OKLCH override that would drift).
    * --wfcanvas-node-switch: cyan header fill for the "switch" node type —
    * no existing exact token (--chart-cyan is a different cyan).
+   * --wfcanvas-node-vision-from/-to: the violet gradient stops on vision-*
+   * node headers. Missed by #11977 because the pair sits inside a
+   * linear-gradient() rather than a bare color declaration; the stylelint
+   * changed-file gate surfaced them once #13936 touched this file (#13961).
    * ============================================ */
   --wfcanvas-on-warning: #000;      /* experimental badge text on warning bg */
   --wfcanvas-node-switch: #0891b2;  /* "switch" node-type header fill */
+  --wfcanvas-node-vision-from: #7c3aed;  /* vision-* header gradient start */
+  --wfcanvas-node-vision-to: #6d28d9;    /* vision-* header gradient end */
 
   /* ============================================
    * INTERACTIVE SCREENSHOT TOKENS
@@ -1101,6 +1118,47 @@
   --kanban-wip-warn-text: #713f12;      /* WIP-limit warning column-header text */
   --kanban-wip-exceeded-bg: #fee2e2;    /* WIP-limit exceeded column-header fill */
   --kanban-wip-exceeded-text: #991b1b;  /* WIP-limit exceeded column-header text */
+
+  /* ============================================
+   * SYNTAX HIGHLIGHTING TOKENS (#14770, umbrella #11515)
+   * Scoped to canvas/CodeCell.vue's highlight.js theme.
+   *
+   * The comment on the Kanban block above records the earlier call that this
+   * palette is "DATA, preserved literal in the component" (#12048). That held
+   * only while the file went untouched: `color-no-hex` lints CHANGED files, so
+   * the first edit to it — a one-line composable migration here — surfaced all
+   * fourteen. The decision and the linter disagreed, and the disagreement was
+   * invisible rather than resolved.
+   *
+   * Tokenised rather than suppressed: this repo has no `stylelint-disable`
+   * anywhere, and adding the first one to get a gate green is not a fix.
+   *
+   * Deliberately NOT themeable, despite living here. These are the One Dark /
+   * One Light code palettes and both sets must be available at once — the
+   * component picks between them by class, not by theme — so they carry no
+   * OKLCH override and must not be folded into the semantic --color-* scale.
+   * ============================================ */
+  --codecell-syntax-attr-dark: #88bbff;      /* attr / attribute */
+  --codecell-syntax-number-dark: #d19a66;    /* literal / number */
+  --codecell-syntax-string-dark: #98c379;    /* string */
+  --codecell-syntax-callable-dark: #61afef;  /* built_in / title / function */
+  --codecell-syntax-keyword-dark: #c678dd;   /* keyword */
+  --codecell-syntax-comment-dark: #5c6370;   /* comment */
+  --codecell-syntax-attr-light: #0184bc;
+  --codecell-syntax-number-light: #986801;
+  --codecell-syntax-string-light: #50a14f;
+  --codecell-syntax-callable-light: #4078f2;
+  --codecell-syntax-keyword-light: #a626a4;
+  --codecell-syntax-comment-light: #a0a1a7;
+
+  /* ============================================
+   * KB SEARCH HIGHLIGHT TOKENS (#14770, umbrella #11515)
+   * Scoped to knowledge/KBSearchResultPanel.vue's `.kb-highlight` mark, which
+   * lives in an UNSCOPED style block because it decorates `v-html` content.
+   * Surfaced by the same changed-file rule as the block above.
+   * ============================================ */
+  --kbsearch-highlight-bg: #fef08a;    /* search-term mark fill */
+  --kbsearch-highlight-text: #713f12;  /* search-term mark text */
 
   /* ============================================
    * OPERATION DETAIL TOKENS (#12052, umbrella #11515)

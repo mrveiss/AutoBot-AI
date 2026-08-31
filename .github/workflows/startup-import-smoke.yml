@@ -13,10 +13,15 @@ name: Backend Startup Import Smoke
 on:
   push:
     branches: [main, Dev_new_gui, develop]
+    #
+    # #12986: the backend-Python entries are the canonical `backend-python` set
+    # from .github/filters/backend-python-paths.yml; GitHub cannot include a file here, so
+    # pipeline-scripts/check_workflow_path_filters.py enforces the match.
     paths:
       - 'autobot-backend/**/*.py'
-      - 'autobot_shared/**/*.py'
       - 'autobot-slm-backend/**/*.py'
+      - 'autobot_shared/**/*.py'
+      - '.github/filters/backend-python-paths.yml'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
       - '.github/workflows/startup-import-smoke.yml'
@@ -32,7 +37,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -48,14 +53,8 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
-          filters: |
-            backend:
-              - 'autobot-backend/**/*.py'
-              - 'autobot_shared/**/*.py'
-              - 'autobot-slm-backend/**/*.py'
-              - '**/requirements*.txt'
-              - 'requirements-ci/**'
-              - '.github/workflows/startup-import-smoke.yml'
+          # #12986: `backend` is defined in the canonical filter file.
+          filters: .github/filters/backend-python-paths.yml
 
   startup-import-smoke:
     needs: changes
@@ -95,6 +94,23 @@ jobs:
             echo ""
             echo "If known-broken, add to KNOWN_BROKEN_AT_TEST_INTRODUCTION in"
             echo "autobot-backend/tests/test_startup_imports.py with issue ref."
+            exit 1
+          }
+
+      # #14035: this is the only CI job that runs `pip install -e autobot_shared`
+      # (the sharded python-suite job relies on pytest.ini's `pythonpath =`
+      # instead), so it is the only place a broken editable-install mapping can
+      # actually be caught. The guard skips itself everywhere else.
+      - name: Run editable-install packaging guard
+        run: |
+          python -m pytest autobot_shared/editable_install_layout_test.py -v --tb=short || {
+            echo ""
+            echo "autobot_shared editable-install packaging guard FAILED (#14035)."
+            echo ""
+            echo "The editable finder is registering autobot_shared's submodules"
+            echo "as top-level names instead of (or in addition to) autobot_shared"
+            echo "itself. Check autobot_shared/pyproject.toml's"
+            echo "[tool.setuptools]/[tool.setuptools.packages.find] config."
             exit 1
           }
 

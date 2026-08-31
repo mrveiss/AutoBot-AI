@@ -15,7 +15,8 @@ import logging
 import os
 from typing import Any, Dict
 
-from tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
+# Fully-qualified (#14373) — see plugins/core-plugins/image-generation-plugin/main.py.
+from autobot_shared.tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -273,8 +274,6 @@ class GenerateImageTool(BaseTool):
         images = []
         for artifact in data.get("artifacts", []):
             if artifact.get("finishReason") == "SUCCESS":
-                import base64
-
                 b64 = artifact.get("base64", "")
                 # Return as data URL so frontend can display without a CDN
                 images.append({

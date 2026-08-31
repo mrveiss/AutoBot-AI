@@ -94,8 +94,9 @@ sudo apt update
 sudo apt install -y intel-level-zero-gpu level-zero intel-opencl-icd
 sudo apt install -y intel-media-va-driver-non-free intel-media-driver
 
-# Install OpenVINO runtime
-pip3 install openvino[pytorch,tensorflow] openvino-dev[pytorch,tensorflow]
+# Install OpenVINO runtime (no openvino-dev: it is a deprecated meta-package
+# incompatible with openvino 2026.x -- see #14447)
+pip3 install "openvino[pytorch,tensorflow]>=2026.3.0"
 ```
 
 ### **Step 2: Verify Hardware Access**

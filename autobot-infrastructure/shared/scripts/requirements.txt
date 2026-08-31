@@ -1,0 +1,29 @@
+# Operator/analysis scripts tree — install with:
+#   pip install -r autobot-infrastructure/shared/scripts/requirements.txt
+#
+# #14876/#14871: these packages are imported by scripts in THIS directory and
+# were declared in no requirements file anywhere in the repository. They are not
+# core runtime — nothing under autobot-backend/ needs them — so they are declared
+# here, next to their only consumers, rather than in a backend requirements file
+# that requirements-ci/ would then have to mirror.
+#
+# Every entry names its consumer. An entry with no consumer is a stale
+# declaration and belongs deleted, not carried.
+
+# analysis/redis_final_analysis.py, analysis/redis_vector_analysis.py and
+# analysis/test_redis_comparison.py compare the modern langchain-redis vector
+# store against the legacy langchain_community.vectorstores.redis path. Without
+# this the modern arm is never measured, and the report reads as a two-arm
+# comparison that found the legacy path adequate (#14871).
+langchain-redis>=0.2.0
+
+# run_benchmarks.sh --save-results produces the machine-readable benchmark
+# report through this pytest plugin. Without it the run still exits 0 and writes
+# a placeholder file, so a benchmark run that measured nothing is hard to tell
+# from one that measured everything (#14876).
+pytest-json-report>=1.5.0
+
+# comprehensive_log_aggregator.py and logging/log_forwarder.py collect container
+# logs through the Docker SDK; both guard-import it and drop container log
+# sources entirely when it is absent (#14872).
+docker>=7.1.0

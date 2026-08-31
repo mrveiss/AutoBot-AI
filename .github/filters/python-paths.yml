@@ -1,0 +1,70 @@
+# Canonical path set for "does this change require the Python test suite?"
+#
+# SINGLE SOURCE OF TRUTH — do not inline a copy back into either workflow.
+#
+# Two workflows load this file with dorny/paths-filter, and between them they
+# publish exactly one conclusion for the `python-suite` status context:
+#
+#   .github/workflows/ci.yml
+#       jobs `python-shard` / `python-suite`, ubuntu-latest, run when
+#       `python == 'true'` (the real gate)
+#
+#   .github/workflows/python-required-context.yml
+#       job `python-suite`, ubuntu-latest, runs when `python != 'true'`
+#       (reports the context green when the suite does not apply)
+#
+# The two `if:` conditions are exact complements, so the split is only correct
+# while both workflows compute the SAME value for `python`. If they ever
+# disagreed in one particular direction — the shim seeing "no Python change"
+# while ci.yml sees one — a pull request would take the shim's green while the
+# real suite never ran. That is a silent gate bypass, not a flake. Keeping the
+# patterns in one file that both jobs read from the same checkout of the same
+# commit removes that divergence by construction (#14353, same reasoning as
+# #13405 for the frontend set).
+python:
+  - '**/*.py'
+  - '**/requirements*.txt'
+  - 'requirements-ci/**'
+  - 'pyproject.toml'
+  - 'autobot_shared/pyproject.toml'
+  - '.github/workflows/ci.yml'
+  # The shim gates a required context, so editing it must run the real suite for
+  # the same reason editing ci.yml does.
+  - '.github/workflows/python-required-context.yml'
+  # A change here changes what "python" means for both workflows.
+  - '.github/filters/python-paths.yml'
+  # #14544/#14575: repo_tests/deployment_declares_project_root_14544_test.py
+  # asserts each of these five non-.py deployment sources still declares
+  # AUTOBOT_PROJECT_ROOT. Without an explicit entry here, editing only one of
+  # them (no `**/*.py` touched) computes `python != 'true'`, the shim reports
+  # `python-suite` green, and the guard test that would have caught a dropped
+  # declaration never runs -- the exact "required check gated by a filter that
+  # omits the inputs it guards" shape flagged in review.
+  - 'docker/backend/Dockerfile'
+  - 'docker/slm/Dockerfile'
+  - 'autobot-slm-backend/ansible/roles/slm_manager/templates/autobot-slm-backend.service.j2'
+  - 'autobot-slm-backend/ansible/roles/slm_agent/templates/slm-agent.service.j2'
+  - 'autobot-slm-backend/ansible/roles/ai-stack/templates/ai-stack.env.j2'
+  # #14909/#14891: the same shape again, for the hook guards. Three repo_tests
+  # assert on inputs that contain no Python at all — git hook INDEX MODES
+  # (git_hooks_executable_test.py), the copy-based installer
+  # (git_hooks_installer_test.py) and every shell script under
+  # autobot-infrastructure/ (shell_lib_sources_resolve_test.py). Without these
+  # entries, flipping tools/git-hooks/pre-push back to 100644, or reintroducing
+  # `|| true` in an extensionless hook, touches no `**/*.py` path: the shim
+  # computes `python != 'true'`, reports `python-suite` green, and the guard
+  # written to catch exactly that never runs. A mode-only change still appears
+  # in the changed-file list, so these entries do gate it.
+  # `autobot-infrastructure/**`, not a narrower shell-shaped pattern, on
+  # purpose. shell_lib_sources_resolve_test.py finds its subjects by SHEBANG,
+  # and "has a shebang naming a shell" cannot be written as a glob: a new
+  # extensionless script added anywhere under this tree would match neither
+  # `**/*.sh` nor `shared/scripts/hooks/**`, take the shim's green, and sit
+  # outside the guard exactly as the 16 hooks did before #14891. The narrow
+  # patterns happened to cover 100% of the surface on the day they were
+  # written, which is the property that decays silently. The cost is that an
+  # infrastructure-only change now runs python-suite; the alternative is a
+  # filter that is narrower than the guard it gates.
+  - 'autobot-infrastructure/**'
+  - 'tools/git-hooks/**'
+  - 'scripts/install-git-hooks.sh'

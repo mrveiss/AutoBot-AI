@@ -64,6 +64,7 @@ import logging
 import time
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_constants import TTL_2_HOURS
 
 logger = logging.getLogger(__name__)
 
@@ -249,7 +250,7 @@ class RateLimiter:
             # Remove entries older than one hour
             pipe.zremrangebyscore(hour_key, "-inf", now - 3600)
             # Expire the whole key after 2 hours so stale keys auto-clean
-            pipe.expire(hour_key, 7200)
+            pipe.expire(hour_key, TTL_2_HOURS)
             await pipe.execute()
         except Exception as exc:
             logger.warning(
@@ -366,7 +367,9 @@ class RateLimiter:
                     hour_key, minute_cutoff, "+inf", start=0, num=1, withscores=True
                 )
                 if oldest_in_minute:
-                    oldest_ts = oldest_in_minute[0][1]
+                    # withscores yields the score as a float at runtime; redis-py
+                    # types the member/score pair loosely, so coerce (#15134).
+                    oldest_ts = float(oldest_in_minute[0][1])
                     wait = max(wait, 60.0 - (now - oldest_ts))
 
             if hour_count >= self._rph:
@@ -374,7 +377,7 @@ class RateLimiter:
                     hour_key, hour_cutoff, "+inf", start=0, num=1, withscores=True
                 )
                 if oldest_in_hour:
-                    oldest_ts = oldest_in_hour[0][1]
+                    oldest_ts = float(oldest_in_hour[0][1])
                     wait = max(wait, 3600.0 - (now - oldest_ts))
 
             return max(0, int(wait) + 1)  # +1 for safe rounding

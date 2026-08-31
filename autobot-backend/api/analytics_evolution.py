@@ -43,7 +43,8 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
-from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
+from autobot_shared.ssot_constants import TTL_365_DAYS
 from autobot_shared.time_utils import parse_utc_iso
 
 logger = get_logger(__name__)
@@ -245,7 +246,7 @@ async def store_quality_snapshot(snapshot: EvolutionQualitySnapshot) -> bool:
 
         # Issue #361: Execute sync Redis ops in thread pool
         def _store_snapshot():
-            redis_client.set(key, snapshot.json(), ex=86400 * 365)  # Keep for 1 year
+            redis_client.set(key, snapshot.json(), ex=TTL_365_DAYS)  # Keep for 1 year
             redis_client.zadd(f"{EVOLUTION_PREFIX}timeline", {key: timestamp_score})
 
         await asyncio.to_thread(_store_snapshot)
@@ -275,7 +276,7 @@ async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
 
         # Issue #361: Execute sync Redis ops in thread pool
         def _store_pattern():
-            redis_client.set(key, snapshot.json(), ex=86400 * 365)
+            redis_client.set(key, snapshot.json(), ex=TTL_365_DAYS)
             redis_client.zadd(timeline_key, {key: timestamp_score})
 
         await asyncio.to_thread(_store_pattern)
@@ -1118,7 +1119,7 @@ def _validate_evolution_repo_path(repo_path_str: str):
     """
 
     try:
-        repo_path = validate_path(repo_path_str)
+        repo_path = validate_path(repo_path_str, allowed_roots=PROJECT_ALLOWED_ROOTS)
     except ValueError:
         return None, EvolutionAnalysisResponse(
             status="error",

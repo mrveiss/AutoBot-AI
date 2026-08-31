@@ -245,6 +245,7 @@ async def test_compose_ast_violation_rejected():
 @pytest.mark.asyncio
 async def test_compose_approval_gate_creates_record():
     """When auto-approve is off, compose persists a WORKFLOW_GATE record and yields approval_required."""
+    import chat_workflow.compose_tool_handler as cth
     import chat_workflow.tool_handler as th
 
     handler = object.__new__(th.ToolHandlerMixin)
@@ -254,7 +255,9 @@ async def test_compose_approval_gate_creates_record():
     handler._persist_compose_approval = AsyncMock(return_value="approval-uuid-1")
     handler._poll_compose_approval = AsyncMock(return_value="rejected")
 
-    with patch.object(th, "CODEEXEC_AUTOAPPROVE_READONLY", False):
+    # #14491: CODEEXEC_AUTOAPPROVE_READONLY moved to compose_tool_handler.py with
+    # the function (_compose_auto_approvable's body) that reads it.
+    with patch.object(cth, "CODEEXEC_AUTOAPPROVE_READONLY", False):
         async for msg in handler._handle_compose_tool(tool_call, "s1", [], _FakeCtx()):
             msgs.append(msg)
 
@@ -389,7 +392,9 @@ async def test_compose_e2e_with_fake_executor():
     fake_executor_instance.execute_with_stdio_broker = AsyncMock(return_value=fake_result)
 
     msgs = []
-    with patch("chat_workflow.tool_handler.CODEEXEC_AUTOAPPROVE_READONLY", True):
+    # #14491: CODEEXEC_AUTOAPPROVE_READONLY moved to compose_tool_handler.py
+    # with the function (_compose_auto_approvable's body) that reads it.
+    with patch("chat_workflow.compose_tool_handler.CODEEXEC_AUTOAPPROVE_READONLY", True):
         with patch("secure_sandbox_executor.SecureSandboxExecutor", return_value=fake_executor_instance):
             async for msg in handler._handle_compose_tool(tool_call, "s1", [], _FakeCtx()):
                 msgs.append(msg)
@@ -523,13 +528,19 @@ def test_injectable_excludes_sensitive_even_when_env_widened():
 
 
 def test_tool_policy_is_single_source_for_consumers():
-    """shim_codegen and tool_handler must expose the tool_policy objects, not copies."""
-    import chat_workflow.tool_handler as th
+    """shim_codegen and compose_tool_handler must expose the tool_policy objects, not copies.
+
+    #14491: CODEEXEC_READONLY_TOOLS's consumer moved from chat_workflow.tool_handler
+    to chat_workflow.compose_tool_handler (the extracted compose-tool module) — this
+    assertion is pinning that the *consumer*, whichever module that is, shares the
+    one tool_policy object rather than holding a copy, so it moves with the consumer.
+    """
+    import chat_workflow.compose_tool_handler as cth
     from chat_workflow.code_exec import shim_codegen, tool_policy
 
     assert shim_codegen.SENSITIVE_TOOLS is tool_policy.SENSITIVE_TOOLS
     assert shim_codegen.CODEEXEC_INJECTABLE_TOOLS is tool_policy.CODEEXEC_INJECTABLE_TOOLS
-    assert th.CODEEXEC_READONLY_TOOLS is tool_policy.CODEEXEC_READONLY_TOOLS
+    assert cth.CODEEXEC_READONLY_TOOLS is tool_policy.CODEEXEC_READONLY_TOOLS
 
 
 def test_tool_policy_invariants_hold():
@@ -568,6 +579,45 @@ def test_tool_policy_default_classification_unchanged():
     assert tp.CODEEXEC_INJECTABLE_TOOLS == default_four
     assert tp.CODEEXEC_READONLY_TOOLS == default_four
     assert tp.CODEEXEC_MUTATING_TOOLS == frozenset()
+
+
+def _mcp_permission_is_write_level(permission) -> bool:
+    """A permission whose action segment is not `read`/`view` can mutate state."""
+    action = permission.value.rsplit(".", 1)[-1]
+    return action not in {"read", "view"}
+
+
+def test_tool_policy_and_mcp_permissions_agree_on_readonly_tools():
+    """#14536: a tool tool_policy.py auto-approves (no human gate, readonly)
+    must never carry a write-level grant in mcp_tool_permissions.py — that
+    combination is exactly what let a compose script call `map_site` (declared
+    KNOWLEDGE_WRITE) without ever hitting the KNOWLEDGE_WRITE gate, because
+    tool_policy.py's readonly default auto-approved it first.
+
+    Scoped to tools both sources name at all — a rename or moved constant on
+    either side must fail loud, not silently pass an empty overlap.
+    """
+    from autobot_shared.auth.mcp_tool_permissions import TOOL_PERMISSIONS
+    from chat_workflow.code_exec import tool_policy as tp
+
+    tool_policy_named = tp.SENSITIVE_TOOLS | tp.CODEEXEC_INJECTABLE_TOOLS
+    assert tool_policy_named, "tool_policy.py names no tools — source resolved empty"
+    assert TOOL_PERMISSIONS, "mcp_tool_permissions.py declares no tools — source resolved empty"
+
+    named_by_both = tool_policy_named & set(TOOL_PERMISSIONS)
+    assert named_by_both, "no overlap between tool_policy.py and mcp_tool_permissions.py — check for a rename"
+
+    disagreements = {
+        name
+        for name in named_by_both
+        if name in tp.CODEEXEC_READONLY_TOOLS and _mcp_permission_is_write_level(TOOL_PERMISSIONS[name])
+    }
+    agreeing = len(named_by_both) - len(disagreements)
+
+    assert not disagreements, (
+        f"{agreeing}/{len(named_by_both)} agree; auto-approved as readonly in tool_policy.py but "
+        f"declared a write-level MCP permission: {sorted(disagreements)}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -728,6 +778,7 @@ async def test_run_broker_script_starts_container_once():
 @pytest.mark.asyncio
 async def test_compose_non_readonly_shim_forces_gate_despite_flag():
     """A non-read-only tool in the shim snapshot forces approval even when auto-approve is on."""
+    import chat_workflow.compose_tool_handler as cth
     import chat_workflow.tool_handler as th
 
     handler = object.__new__(th.ToolHandlerMixin)
@@ -737,7 +788,8 @@ async def test_compose_non_readonly_shim_forces_gate_despite_flag():
     tool_call = {"name": "compose", "params": {"program": "import asyncio\n"}}
 
     msgs = []
-    with patch.object(th, "CODEEXEC_AUTOAPPROVE_READONLY", True):
+    # #14491: moved to compose_tool_handler.py with its reader.
+    with patch.object(cth, "CODEEXEC_AUTOAPPROVE_READONLY", True):
         async for msg in handler._handle_compose_tool(tool_call, "s1", [], _FakeCtx()):
             msgs.append(msg)
 
@@ -747,13 +799,15 @@ async def test_compose_non_readonly_shim_forces_gate_despite_flag():
 
 def test_compose_auto_approvable_only_for_readonly_set():
     """_compose_auto_approvable is True only when all shims are read-only AND flag on."""
+    import chat_workflow.compose_tool_handler as cth
     import chat_workflow.tool_handler as th
 
     handler = object.__new__(th.ToolHandlerMixin)
-    with patch.object(th, "CODEEXEC_AUTOAPPROVE_READONLY", True):
+    # #14491: moved to compose_tool_handler.py with its reader.
+    with patch.object(cth, "CODEEXEC_AUTOAPPROVE_READONLY", True):
         assert handler._compose_auto_approvable(["web_search"]) is True
         assert handler._compose_auto_approvable(["web_search", "write_file"]) is False
-    with patch.object(th, "CODEEXEC_AUTOAPPROVE_READONLY", False):
+    with patch.object(cth, "CODEEXEC_AUTOAPPROVE_READONLY", False):
         assert handler._compose_auto_approvable(["web_search"]) is False
 
 
@@ -765,6 +819,7 @@ def test_compose_auto_approvable_only_for_readonly_set():
 @pytest.mark.asyncio
 async def test_compose_gate_approved_resumes_execution():
     """An APPROVED gate proceeds to _execute_compose."""
+    import chat_workflow.compose_tool_handler as cth
     import chat_workflow.tool_handler as th
 
     handler = object.__new__(th.ToolHandlerMixin)
@@ -777,7 +832,8 @@ async def test_compose_gate_approved_resumes_execution():
     tool_call = {"name": "compose", "params": {"program": "import asyncio\n"}}
 
     msgs = []
-    with patch.object(th, "CODEEXEC_AUTOAPPROVE_READONLY", False):
+    # #14491: moved to compose_tool_handler.py with its reader.
+    with patch.object(cth, "CODEEXEC_AUTOAPPROVE_READONLY", False):
         async for msg in handler._handle_compose_tool(tool_call, "s1", [], _FakeCtx()):
             msgs.append(msg)
 
@@ -788,6 +844,7 @@ async def test_compose_gate_approved_resumes_execution():
 @pytest.mark.asyncio
 async def test_compose_gate_denied_returns_refusal_and_skips_execution():
     """A DENIED gate returns a refusal and never calls _execute_compose."""
+    import chat_workflow.compose_tool_handler as cth
     import chat_workflow.tool_handler as th
 
     handler = object.__new__(th.ToolHandlerMixin)
@@ -798,7 +855,8 @@ async def test_compose_gate_denied_returns_refusal_and_skips_execution():
     tool_call = {"name": "compose", "params": {"program": "import asyncio\n"}}
 
     msgs = []
-    with patch.object(th, "CODEEXEC_AUTOAPPROVE_READONLY", False):
+    # #14491: moved to compose_tool_handler.py with its reader.
+    with patch.object(cth, "CODEEXEC_AUTOAPPROVE_READONLY", False):
         async for msg in handler._handle_compose_tool(tool_call, "s1", [], _FakeCtx()):
             msgs.append(msg)
 

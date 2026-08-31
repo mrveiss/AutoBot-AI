@@ -10,7 +10,11 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/lib/ssot-config.sh" || {
+    echo "FATAL: ${SCRIPT_DIR}/lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
 
 BROWSER_VM_IP="${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
@@ -61,9 +65,14 @@ run_on_browser_vm "/usr/bin/vncserver :1 \
 echo "  VNC server started on :1 (port 5901, password-protected)"
 
 # Step 5: Start websockify for noVNC access
+# #13076: web root is /opt/novnc, matching autobot-slm-backend/ansible/roles/
+# vnc/defaults/main.yml novnc_path — NOT the distro /usr/share/novnc, which
+# roles/vnc removes (#13069) and which otherwise serves a stale pre-VeNCrypt
+# client (#13060). This script does not install noVNC itself; run the vnc role
+# (or an equivalent pinned install) first so /opt/novnc exists.
 echo "[5/7] Starting websockify for noVNC..."
 run_on_browser_vm "nohup /usr/bin/websockify \
-    --web /usr/share/novnc \
+    --web ${AUTOBOT_NOVNC_PATH:-/opt/novnc} \
     --cert=/etc/autobot/certs/server-cert.pem \
     --key=/etc/autobot/certs/server-key.pem \
     --ssl-only \

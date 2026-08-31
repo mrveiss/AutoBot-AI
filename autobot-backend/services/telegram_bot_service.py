@@ -18,6 +18,7 @@ from autobot_shared.field_encryption import decrypt_field, encrypt_field
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from services.gateway.egress_governor import egress_governor
 
 logger = get_logger(__name__)
 
@@ -26,6 +27,9 @@ TELEGRAM_BOT_TOKEN_KEY = (
     "autobot:settings:telegram_bot_token"  # nosec B105  # Redis key name for storing the token, not the token itself
 )
 TELEGRAM_WEBHOOK_SECRET_KEY = "autobot:settings:telegram_webhook_secret"  # nosec B105  # Redis key name for storing the
+# The bot's own numeric Telegram user id (getMe().id), not a secret — feeds
+# the Gateway ingest self-filter (#14028), see api/telegram_bot.py.
+TELEGRAM_BOT_ID_KEY = "autobot:settings:telegram_bot_id"
 
 # Sentinel prefix for encrypted values (backward compatibility)
 _ENCRYPTED_PREFIX = "enc:"
@@ -75,12 +79,55 @@ class TelegramBotService:
 
         return cls(bot_token=bot_token)
 
+    async def _egress_denied(
+        self,
+        chat_id: str,
+        reply_to_message_id: Optional[int] = None,
+        require_approval: Optional[bool] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """The egress gate every live Telegram send passes through (#14270).
+
+        One helper rather than the check inlined per method: this class has three
+        senders that each reach the Bot API, and the first version of #14270
+        gated only ``send_message``. Review found ``send_photo`` and
+        ``send_document`` still posting ungoverned — both reachable from the
+        agent-response dispatcher this control exists to protect. A copied guard
+        is a guard the next sender silently omits.
+
+        Returns the denial response to hand straight back, or ``None`` to proceed.
+
+        ``chat_id`` is recorded and logged unmasked — deliberately. It is an
+        opaque identifier scoped to this bot's own token, not directly usable
+        outside this system the way a phone number is; masking it would only
+        make the record useless for locating which conversation was blocked.
+        See the channel-identity rule in ``services.gateway.egress_governor``
+        (#14540), pinned by ``TestChannelIdentityRule``.
+
+        The denial response carries ``verdict.safe_reason``, never
+        ``verdict.reason`` — the latter is the audit-facing text and, once a
+        real approver is registered (#14068), can carry raw exception text
+        from whatever the approver touched (#14539).
+        """
+        verdict = await egress_governor.evaluate(
+            platform="telegram",
+            channel_id=str(chat_id),
+            message_id=str(reply_to_message_id or ""),
+            require_approval=require_approval,
+        )
+        if verdict.allowed:
+            return None
+        logger.warning(
+            "Telegram send to chat %s blocked by egress governance (%s): %s", chat_id, verdict.rule, verdict.reason
+        )
+        return {"ok": False, "error": "egress_denied", "reason": verdict.safe_reason}
+
     async def send_message(
         self,
         chat_id: str,
         text: str,
         reply_to_message_id: Optional[int] = None,
         parse_mode: str = "Markdown",
+        require_approval: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Send a message via Telegram Bot API.
@@ -109,6 +156,17 @@ class TelegramBotService:
 
         if reply_to_message_id:
             payload["reply_to_message_id"] = reply_to_message_id
+
+        # Egress governance (#14270). This is the live send seam — the Gateway's
+        # governed path (#14067) is dormant, so without this the bytes reach a
+        # real person with no record and no gate. Audit-only until armed.
+        # require_approval=False is the operational-alert exemption: an alert about
+        # a failure — APPROVAL_NEEDED above all — must never be gated by the
+        # approval system it exists to serve, or arming the policy deadlocks it.
+        # Callers opt into that explicitly; the default (None) follows the env flag.
+        denied = await self._egress_denied(chat_id, reply_to_message_id, require_approval)
+        if denied:
+            return denied
 
         url = f"{self.base_url}/sendMessage"
         async with get_http_client().tracked_request("POST", url, json=payload) as response:
@@ -280,6 +338,10 @@ class TelegramBotService:
         if message_thread_id:
             payload["message_thread_id"] = message_thread_id
 
+        denied = await self._egress_denied(chat_id, reply_to_message_id)
+        if denied:
+            return denied
+
         url = f"{self.base_url}/sendPhoto"
         async with get_http_client().tracked_request("POST", url, json=payload) as response:
             if response.status != 200:
@@ -334,6 +396,10 @@ class TelegramBotService:
         if message_thread_id:
             payload["message_thread_id"] = message_thread_id
 
+        denied = await self._egress_denied(chat_id, reply_to_message_id)
+        if denied:
+            return denied
+
         url = f"{self.base_url}/sendDocument"
         async with get_http_client().tracked_request("POST", url, json=payload) as response:
             if response.status != 200:
@@ -345,15 +411,22 @@ class TelegramBotService:
             logger.info(f"Sent document to Telegram chat {chat_id}")
             return result
 
-    async def verify_token(self) -> bool:
+    async def get_me(self) -> Optional[Dict[str, Any]]:
         """
-        Verify that the bot token is valid by calling getMe.
+        Call Telegram's getMe to fetch this bot's own account info.
+
+        Backs both token verification (``verify_token``) and resolving the
+        bot's own numeric id for the Gateway ingest self-filter (#14028) —
+        Telegram does not normally echo a bot's own outbound message back
+        through its own inbound webhook, but deriving and persisting the real
+        id (``api/telegram_bot.py::configure_telegram_bot``) is still cheaper
+        and more correct than leaving that guard unconfigured by default.
 
         Returns:
-            True if token is valid, False otherwise
+            Telegram's ``result`` object (id, username, …), or None on failure.
         """
         if not self.bot_token or not self.base_url:
-            return False
+            return None
 
         try:
             url = f"{self.base_url}/getMe"
@@ -361,13 +434,24 @@ class TelegramBotService:
                 if response.status == 200:
                     result = await response.json()
                     if result.get("ok"):
-                        bot_info = result.get("result", {})
-                        logger.info(f"Telegram bot verified: @{bot_info.get('username')}")
-                        return True
-            return False
+                        return result.get("result", {})
+            return None
         except Exception as exc:
-            logger.error(f"Failed to verify Telegram bot token: {exc}")
-            return False
+            logger.error(f"Failed to call Telegram getMe: {exc}")
+            return None
+
+    async def verify_token(self) -> bool:
+        """
+        Verify that the bot token is valid by calling getMe.
+
+        Returns:
+            True if token is valid, False otherwise
+        """
+        bot_info = await self.get_me()
+        if bot_info is not None:
+            logger.info(f"Telegram bot verified: @{bot_info.get('username')}")
+            return True
+        return False
 
 
 async def save_telegram_bot_token(bot_token: str) -> None:
@@ -417,6 +501,40 @@ async def get_telegram_bot_token() -> Optional[str]:
             logger.warning("Telegram bot token is stored in plaintext (not encrypted)")
             return bot_token
     return None
+
+
+async def save_telegram_bot_id(bot_id: str) -> None:
+    """
+    Persist this bot's own Telegram user id (#14028 ingest self-filter).
+
+    Not a secret — stored in plaintext, unlike the token/webhook secret.
+
+    Args:
+        bot_id: Numeric Telegram user id from getMe()
+    """
+    redis = await get_redis_client()
+    if redis is None:
+        raise RuntimeError("Redis client not available")
+    await redis.set(TELEGRAM_BOT_ID_KEY, bot_id)
+    logger.info("Saved Telegram bot id to Redis")
+
+
+async def get_telegram_bot_id() -> Optional[str]:
+    """
+    Get this bot's own Telegram user id, resolved at ``configure_telegram_bot``
+    time (#14028).
+
+    Returns:
+        The bot's numeric Telegram user id as a string, or None if not yet resolved.
+    """
+    redis = await get_redis_client()
+    if redis is None:
+        return None
+
+    bot_id = await redis.get(TELEGRAM_BOT_ID_KEY)
+    if bot_id is None:
+        return None
+    return bot_id.decode("utf-8") if isinstance(bot_id, bytes) else bot_id
 
 
 async def save_telegram_webhook_secret(secret: str) -> None:

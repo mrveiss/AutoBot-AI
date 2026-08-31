@@ -34,7 +34,6 @@ from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from constants.network_constants import NetworkConstants
 
 logger = get_logger(__name__)
 
@@ -353,44 +352,75 @@ class HelpCommand(Command):
 class StatusCommand(Command):
     """System status command."""
 
+    # Per-status glyphs for the aggregator's five states (api/system_health).
+    _ICONS = {"ok": "✅", "degraded": "⚠️", "down": "❌", "not_applicable": "➖", "idle": "💤"}
+
     async def execute(self) -> SlashCommandResult:
-        """Execute /status command - show system status."""
-        # Import here to avoid circular dependencies
+        """Execute /status — report measured health, or say it is unknown.
+
+        #14851: this imported ``services.consolidated_health_service``, which has
+        never existed. The import is function-local, so it raised
+        ModuleNotFoundError on every single call, and the surrounding
+        ``except Exception`` answered with "Status: ✅ Running / The chat system
+        is operational" — unconditionally, with no check behind it. A user asking
+        /status during an outage was told everything was fine.
+        """
         try:
-            from services.consolidated_health_service import ConsolidatedHealthService
+            health = await self._measure_health()
+        except Exception as exc:
+            logger.warning("/status could not determine system health: %s", exc, exc_info=True)
+            return self._undetermined(exc)
+        return self._measured(health)
 
-            health_service = ConsolidatedHealthService()
-            status = await health_service.get_health_status()
+    @staticmethod
+    async def _measure_health():
+        """Run the canonical health aggregator, or raise.
 
-            content = f"""## ⚡ AutoBot System Status
+        ``api/system_health`` is the single source of truth for
+        ``/api/system/health``; /status now answers from the same place rather
+        than from a service of its own.
 
-**Overall Status:** {'✅ Healthy' if status.get('status') == 'healthy' else '⚠️ Degraded'}
+        An empty probe registry is treated as a failure even though the
+        aggregator reports it as ``ok``. "Nothing was checked" reading as
+        healthy is the exact defect this command is being fixed for, and the
+        aggregator's answer is right for its own contract — so it is clamped
+        here, at the consumer, rather than by changing what /api/system/health
+        returns.
+        """
+        from api.system_health import collect_system_health, list_registered_probes
 
-**Services:**
-  • Backend API: {'✅' if status.get('backend_api') else '❌'}
-  • Redis: {'✅' if status.get('redis') else '❌'}
-  • LLM Service: {'✅' if status.get('llm_service') else '❌'}
+        if not list_registered_probes():
+            raise RuntimeError("no health probes are registered in this process — nothing was checked")
+        return await collect_system_health()
 
-**Timestamp:** {status.get('timestamp', 'N/A')}
-
-For detailed status, visit the monitoring dashboard."""
-
-        except Exception as e:
-            logger.warning("Could not get detailed status: %s", e)
-            content = f"""## ⚡ AutoBot System Status
-
-**Status:** ✅ Running
-
-The chat system is operational. For detailed status information,
-check the monitoring dashboard or system logs.
-
-📊 Dashboard: http://localhost:{NetworkConstants.BACKEND_PORT}/api/health"""
-
-        return SlashCommandResult(
-            success=True,
-            command_type=CommandType.STATUS,
-            content=content,
+    @classmethod
+    def _measured(cls, health) -> SlashCommandResult:
+        """Render a real measurement, naming every component that was checked."""
+        components = "\n".join(
+            f"  • {component.name}: {cls._ICONS.get(component.status, '❔')} {component.status}"
+            for component in health.components
         )
+        content = (
+            "## ⚡ AutoBot System Status\n\n"
+            f"**Overall Status:** {cls._ICONS.get(health.status, '❔')} {health.status.upper()}\n\n"
+            f"**Components checked:** {len(health.components)}\n"
+            f"{components}\n\n"
+            f"**Measured at:** {health.timestamp.isoformat()}"
+        )
+        return SlashCommandResult(success=True, command_type=CommandType.STATUS, content=content)
+
+    @staticmethod
+    def _undetermined(reason: Exception) -> SlashCommandResult:
+        """Say the check did not run. Never assert health that was not measured."""
+        content = (
+            "## ⚡ AutoBot System Status\n\n"
+            "**Overall Status:** ❔ UNKNOWN — health could not be determined\n\n"
+            "The health check did not run, so this is **not** a report that the "
+            "system is working.\n\n"
+            f"**Reason:** {type(reason).__name__}: {reason}\n\n"
+            "Check the monitoring dashboard or the backend logs."
+        )
+        return SlashCommandResult(success=False, command_type=CommandType.STATUS, content=content)
 
 
 class ScanCommand(Command):
@@ -1154,7 +1184,8 @@ Your secret has been securely encrypted and stored.
             return validation_error
 
         try:
-            from api.secrets import ChatSecretScope, SecretCreateRequest, SecretType
+            from api.secrets import ChatSecretScope, SecretCreateRequest
+            from autobot_shared.status_enums import SecretType
 
             scope = ChatSecretScope.CHAT if self.chat_id else ChatSecretScope.GENERAL
             request = SecretCreateRequest(

@@ -4,22 +4,25 @@
 # Author: mrveiss
 """Unit tests for PollLoopScheduler base class (GH#9842).
 
-Interpreter dependency (#13727): every test that lets ``_loop`` complete an
-iteration needs ``asyncio.Task.cancelling()``, which exists only on Python 3.11+.
-``honour_pending_cancellation()`` runs once per iteration and has no fallback
-below that, so on a sub-floor interpreter it raises ``AttributeError``, that
-error escapes ``_loop``, and the loop dies after exactly one tick.  The five
-tests marked below then fail with assertions about tick counts and cancelled
-tasks — they read like a regression in the cancellation contract when the only
-thing wrong is the interpreter.  They are skipped there rather than left red,
-because a permanently-red module stops carrying information: a genuine
-regression would look identical and be dismissed for the same reason.
+Interpreter dependency (#13727, resolved differently by #13369): every test that
+lets ``_loop`` complete an iteration needs ``asyncio.Task.cancelling()``, which
+exists only on Python 3.11+.  ``honour_pending_cancellation()`` runs once per
+iteration and has no fallback below that, so on a sub-floor interpreter it
+raised ``AttributeError``, that error escaped ``_loop``, and the loop died after
+exactly one tick — five tests here then failed with assertions about tick counts
+and cancelled tasks, reading like a regression in the cancellation contract when
+the only thing wrong was the interpreter.
 
-The skip is not coverage loss where it counts.  CI runs 3.14 and the platform
-floor is 3.14 (``startup_validator._validate_system_requirements``), so nothing
-is skipped on any supported interpreter.  The gate is the capability itself, not
-a version number, so it stays correct without tracking release history.  The
-other tests in this module do not depend on it and keep running everywhere.
+#13727 handled that by skipping those five.  #13369 established that the skip was
+the wrong half of the trade: it made this module go GREEN on precisely the
+interpreter where the production masked-cancel guard was inert, so the strongest
+evidence that the guard works disappeared exactly when the guard did not.
+``llc.scheduler.base`` now refuses to import below the floor with a message
+naming the requirement, so a sub-floor interpreter fails loudly at import here
+and at startup in production, and this module asserts the capability instead of
+skipping on it.  CI runs 3.14 and the platform floor is 3.14
+(``startup_validator._validate_system_requirements``), so nothing changes on any
+supported interpreter.
 """
 
 import asyncio
@@ -29,10 +32,11 @@ import pytest
 
 from llc.scheduler.base import PENDING_CANCELLATION_REQUIREMENT, SUPPORTS_PENDING_CANCELLATION, PollLoopScheduler
 
-requires_pending_cancellation = pytest.mark.skipif(
-    not SUPPORTS_PENDING_CANCELLATION,
-    reason=PENDING_CANCELLATION_REQUIREMENT,
-)
+# #13369: assert the capability, never skip on it. base.py now refuses to import
+# below the floor, so reaching this line at all proves cancelling() exists — but
+# stating it as an assertion keeps the dependency visible and, unlike the skip
+# this replaces, cannot report "absent" as "clean".
+assert SUPPORTS_PENDING_CANCELLATION, PENDING_CANCELLATION_REQUIREMENT
 
 # ---------------------------------------------------------------------------
 # Test double — concrete subclass with a controllable tick
@@ -239,7 +243,6 @@ def test_task_name_falls_back_to_class_name_when_empty() -> None:
 # ---------------------------------------------------------------------------
 
 
-@requires_pending_cancellation
 @pytest.mark.asyncio
 async def test_tick_exception_does_not_kill_loop(caplog: pytest.LogCaptureFixture) -> None:
     """When _tick() raises, the loop continues (exception is caught and logged).
@@ -282,7 +285,6 @@ async def test_tick_exception_logs_class_name(caplog: pytest.LogCaptureFixture) 
 # ---------------------------------------------------------------------------
 
 
-@requires_pending_cancellation
 @pytest.mark.asyncio
 async def test_cancellation_breaks_loop_cleanly() -> None:
     """A bare cancel ends the loop and leaves the scheduler restartable (#13203).
@@ -316,7 +318,6 @@ async def test_cancellation_breaks_loop_cleanly() -> None:
     await sched.aclose()
 
 
-@requires_pending_cancellation
 @pytest.mark.asyncio
 async def test_cancellation_marks_the_task_cancelled() -> None:
     """_loop re-raises CancelledError so the task ends in the cancelled state.
@@ -378,7 +379,6 @@ async def test_masked_cancellation_does_not_start_another_interval() -> None:
     assert sched.tick_count == 1, "the loop must not have started a second tick"
 
 
-@requires_pending_cancellation
 @pytest.mark.asyncio
 async def test_swallowed_cancellation_does_not_start_another_interval() -> None:
     """A tick that *swallows* the masked cancel must not buy a fresh interval.
@@ -495,7 +495,6 @@ async def test_aclose_is_bounded_when_the_task_cannot_be_drained(
     await asyncio.wait_for(asyncio.gather(task, return_exceptions=True), timeout=1.0)
 
 
-@requires_pending_cancellation
 @pytest.mark.asyncio
 async def test_restart_after_aclose_keeps_ticking() -> None:
     """A scheduler restarted after aclose() resumes running its tick.

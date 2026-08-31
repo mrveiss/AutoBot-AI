@@ -561,7 +561,7 @@ which websockify
 pip list | grep websockify
 
 # Test websockify manually
-websockify --web /usr/share/novnc 6080 localhost:5900
+websockify --web /opt/novnc 6080 localhost:5900
 ```
 
 **Takeover Session Failures**:

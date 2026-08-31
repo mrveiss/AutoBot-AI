@@ -14,7 +14,7 @@
       <!-- Category Navigation -->
       <nav class="category-nav" :aria-label="$t('workflow.views.navAriaLabel')">
         <router-link
-          to="/automation/overview"
+          :to="`${automationBase}/overview`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.overviewAriaLabel')"
@@ -30,7 +30,7 @@
         </div>
 
         <router-link
-          to="/automation/canvas"
+          :to="`${automationBase}/canvas`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.visualBuilderAriaLabel')"
@@ -42,7 +42,7 @@
         </router-link>
 
         <router-link
-          to="/automation/templates"
+          :to="`${automationBase}/templates`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.templatesAriaLabel')"
@@ -55,7 +55,7 @@
         </router-link>
 
         <router-link
-          to="/automation/natural-language"
+          :to="`${automationBase}/natural-language`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.naturalLanguageAriaLabel')"
@@ -71,7 +71,7 @@
         </div>
 
         <router-link
-          to="/automation/runner"
+          :to="`${automationBase}/runner`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.runnerAriaLabel')"
@@ -87,7 +87,7 @@
         </router-link>
 
         <router-link
-          to="/automation/history"
+          :to="`${automationBase}/history`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.historyAriaLabel')"
@@ -100,7 +100,7 @@
 
         <!-- Issue #3139: Per-workflow notification configuration -->
         <router-link
-          to="/automation/notifications"
+          :to="`${automationBase}/notifications`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.notifications.sidebarLabel')"
@@ -113,7 +113,7 @@
         </router-link>
 
         <router-link
-          to="/automation/gui-automation"
+          :to="`${automationBase}/gui-automation`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.guiAutomationAriaLabel')"
@@ -126,7 +126,7 @@
         </router-link>
 
         <router-link
-          to="/automation/browser-automation"
+          :to="`${automationBase}/browser-automation`"
           class="category-item"
           :class="{ active: $route.name === 'browser-automation' }"
           :aria-label="$t('nav.browserAutomation')"
@@ -138,7 +138,7 @@
         </router-link>
 
         <router-link
-          to="/automation/vision-automation"
+          :to="`${automationBase}/vision-automation`"
           class="category-item"
           :class="{ active: $route.name === 'vision-automation' }"
           :aria-label="$t('nav.visionAutomation')"
@@ -158,7 +158,7 @@
         </div>
 
         <router-link
-          to="/automation/screen-analysis"
+          :to="`${automationBase}/screen-analysis`"
           active-class="active"
           class="category-item"
           :class="{ 'vision-disabled': isVisionOffline }"
@@ -175,7 +175,7 @@
         </router-link>
 
         <router-link
-          to="/automation/video-processing"
+          :to="`${automationBase}/video-processing`"
           active-class="active"
           class="category-item"
           :class="{ 'vision-disabled': isVisionOffline }"
@@ -192,7 +192,7 @@
         </router-link>
 
         <router-link
-          to="/automation/media-gallery"
+          :to="`${automationBase}/media-gallery`"
           active-class="active"
           class="category-item"
           :class="{ 'vision-disabled': isVisionOffline }"
@@ -214,7 +214,7 @@
 
         <!-- Issue #2155: Live Execution Dashboard -->
         <router-link
-          to="/automation/live-dashboard"
+          :to="`${automationBase}/live-dashboard`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.liveDashboardAriaLabel')"
@@ -226,7 +226,7 @@
         </router-link>
 
         <router-link
-          to="/automation/orchestration"
+          :to="`${automationBase}/orchestration`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.visualizerAriaLabel')"
@@ -238,7 +238,7 @@
         </router-link>
 
         <router-link
-          to="/automation/agents"
+          :to="`${automationBase}/agents`"
           active-class="active"
           class="category-item"
           :aria-label="$t('workflow.views.agentsAriaLabel')"
@@ -436,6 +436,7 @@
             @node-moved="handleNodeMoved"
             @node-selected="handleNodeSelected"
             @nodes-connected="handleNodesConnected"
+            @nodes-disconnected="handleNodesDisconnected"
             @save-workflow="handleSaveWorkflow"
           />
         </section>
@@ -689,6 +690,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { workflowIdFromQuery } from '@/composables/workflow/workflowDeepLink';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useNotificationBus } from '@/composables/useNotificationBus';
@@ -722,11 +724,29 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
-/** True when a non-section child route (e.g. /automation/browser-automation) is active (#2368) */
-const isChildRoute = computed(() => route.matched.length > 1 && !route.meta.sectionRoute);
+/**
+ * GH#13939: the module moved under Company OS
+ * (/llc/companies/:companyId/automation). Every in-view link is built from
+ * this base so the builder works wherever it is mounted; the legacy
+ * /automation/* paths forward here.
+ */
+const automationBase = computed(() => {
+  const raw = route.params.companyId;
+  const companyId = Array.isArray(raw) ? raw[0] : raw;
+  return companyId ? `/llc/companies/${companyId}/automation` : '/automation';
+});
+
+/** True when a non-section child route (e.g. …/automation/browser-automation) is active (#2368) */
+const isChildRoute = computed(() => {
+  if (route.meta.sectionRoute) return false;
+  const builderIndex = route.matched.findIndex(
+    (record) => record.name === 'automation' || record.name === 'llc-company-automation',
+  );
+  return builderIndex >= 0 && route.matched.length > builderIndex + 1;
+});
 
 function navigateTo(section: SectionType): void {
-  router.push(`/automation/${section}`);
+  router.push(`${automationBase.value}/${section}`);
 }
 const { showToast } = useNotificationBus();
 
@@ -788,6 +808,7 @@ const {
   removeNode,
   updateNodePosition,
   connectNodes,
+  disconnectNodes,
   clearCanvas,
   exportCanvasToSteps,
   getWorkflowStatus,
@@ -1042,6 +1063,15 @@ function handleNodesConnected(sourceId: string, targetId: string): void {
   connectNodes(sourceId, targetId);
 }
 
+/**
+ * #14612: undo's inverse of a connect — `disconnectNodes` already existed in
+ * `useWorkflowBuilder` but was never wired to anything until the canvas
+ * gained undo/redo and needed a real "connect" to reverse.
+ */
+function handleNodesDisconnected(sourceId: string, targetId: string): void {
+  disconnectNodes(sourceId, targetId);
+}
+
 async function handleSaveWorkflow(name: string, description: string): Promise<void> {
   // #2182: Warn when unsupported node types will be dropped on save
   const unsupportedNodes = workflowNodes.value.filter(
@@ -1155,6 +1185,23 @@ async function handleSkipStep(workflowId: string, stepId: string): Promise<void>
   }
 }
 
+/**
+ * Open a workflow named in the URL (#13963).
+ *
+ * A process node on the Company OS org canvas links here with
+ * `?workflow=<id>`. Without this the link would land on the module and ignore
+ * which workflow was clicked — a link that looks specific and is not, which is
+ * worse than no link at all.
+ *
+ * Reuses `handleViewWorkflow` rather than re-implementing the load, so the deep
+ * link and the in-app click cannot diverge in what "open a workflow" means.
+ */
+async function openWorkflowFromQuery(): Promise<void> {
+  const workflowId = workflowIdFromQuery(route.query);
+  if (!workflowId) return;
+  await handleViewWorkflow(workflowId);
+}
+
 async function handleViewWorkflow(workflowId: string): Promise<void> {
   // Issue #1367: Load the selected workflow before switching to runner
   navigateTo('runner');
@@ -1209,10 +1256,13 @@ function handleNotificationConfigSaved(workflowId: string): void {
 }
 
 // Lifecycle
-onMounted(() => {
-  refreshAll();
+onMounted(async () => {
+  await refreshAll();
   loadAgentCapabilities();
   connectWebSocket(sessionId.value);
+  // After refreshAll, so activeWorkflows is populated and the requested
+  // workflow can be resolved locally instead of always re-fetching it.
+  await openWorkflowFromQuery();
 });
 
 onUnmounted(() => {

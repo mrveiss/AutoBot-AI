@@ -17,6 +17,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from autobot_shared.status_enums import Severity
+
 # ---------------------------------------------------------------------------
 # Stub out autobot_shared so PropertyGraph imports without real Redis
 # ---------------------------------------------------------------------------
@@ -193,9 +195,9 @@ class TestQueryNodes:
     @pytest.mark.asyncio
     async def test_query_nodes_single_filter(self):
         g = make_graph()
-        await g.add_node("bug1", {"type": "bug", "severity": "high"})
-        await g.add_node("bug2", {"type": "bug", "severity": "low"})
-        await g.add_node("feat1", {"type": "feature", "severity": "high"})
+        await g.add_node("bug1", {"type": "bug", "severity": Severity.HIGH.value})
+        await g.add_node("bug2", {"type": "bug", "severity": Severity.LOW.value})
+        await g.add_node("feat1", {"type": "feature", "severity": Severity.HIGH.value})
 
         results = await g.query_nodes({"type": "bug"})
         ids = {n["id"] for n in results}
@@ -206,10 +208,10 @@ class TestQueryNodes:
     @pytest.mark.asyncio
     async def test_query_nodes_multi_filter(self):
         g = make_graph()
-        await g.add_node("bug1", {"type": "bug", "severity": "high"})
-        await g.add_node("bug2", {"type": "bug", "severity": "low"})
+        await g.add_node("bug1", {"type": "bug", "severity": Severity.HIGH.value})
+        await g.add_node("bug2", {"type": "bug", "severity": Severity.LOW.value})
 
-        results = await g.query_nodes({"type": "bug", "severity": "high"})
+        results = await g.query_nodes({"type": "bug", "severity": Severity.HIGH.value})
         assert len(results) == 1
         assert results[0]["id"] == "bug1"
 

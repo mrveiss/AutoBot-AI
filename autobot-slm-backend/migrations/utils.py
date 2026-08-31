@@ -82,6 +82,30 @@ def index_exists(cursor, index_name: str) -> bool:
     return cursor.fetchone()[0]
 
 
+# Operations skipped because their table was not present. The runner clears
+# this before each migration and consults it after, so a migration that did
+# nothing is not recorded as done (#14300).
+_DEFERRED: list = []
+
+
+def reset_deferrals() -> None:
+    """Clear the deferral record. Called by the runner before each migration."""
+    _DEFERRED.clear()
+
+
+def deferrals() -> list:
+    """Operations the last migration skipped for a missing table."""
+    return list(_DEFERRED)
+
+
+def defer(item: str) -> None:
+    """Record a skipped operation for migrations that don't go through
+    add_column_if_not_exists / create_index_if_not_exists (which already
+    record their own deferrals internally) — e.g. a seed migration whose
+    target table is absent. See #14300."""
+    _DEFERRED.append(item)
+
+
 def add_column_if_not_exists(
     cursor,
     table_name: str,
@@ -95,8 +119,19 @@ def add_column_if_not_exists(
     exist' (#9785).
     """
     if not table_exists(cursor, table_name):
-        logger.debug(
-            "Skipping add column %s.%s: table does not exist yet",
+        # #9785 made this skip rather than ALTER a missing table, which was
+        # right. #14300 is what the skip grew into: the runner then marks the
+        # migration applied, permanently, so the column is never added once the
+        # table does appear — or, as on the live host, when the table lives in
+        # a different database than the one the runner connects to.
+        #
+        # Recording the deferral lets the runner decline to mark it applied, so
+        # it is retried on the next boot. WARNING rather than DEBUG because a
+        # skipped schema change that looks like a completed one is exactly the
+        # thing nobody goes looking for.
+        _DEFERRED.append(f"{table_name}.{column_name}")
+        logger.warning(
+            "Deferring add column %s.%s: table does not exist in this database yet (#14300)",
             table_name,
             column_name,
         )
@@ -123,8 +158,19 @@ def create_index_if_not_exists(
     later create-all converges the schema without a Postgres ERROR (#9785).
     """
     if not table_exists(cursor, table_name):
-        logger.debug(
-            "Skipping index %s: table %s does not exist yet",
+        # #14327: the same shape #14300 fixed for columns. The #9785 skip is
+        # right, but on its own the runner then marks the migration applied,
+        # permanently — so the index is never created once the table appears,
+        # or when the table lives in a different database than the one the
+        # runner connects to. Recording the deferral lets the runner decline to
+        # mark it applied, so it is retried on the next boot.
+        #
+        # WARNING rather than DEBUG for the same reason as the column helper: a
+        # skipped schema change that looks like a completed one is exactly the
+        # thing nobody goes looking for, and DEBUG is not on in production.
+        _DEFERRED.append(f"{table_name}.{index_name}")
+        logger.warning(
+            "Deferring index %s on %s: table does not exist in this database yet (#14327)",
             index_name,
             table_name,
         )

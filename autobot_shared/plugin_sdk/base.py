@@ -119,6 +119,10 @@ class PluginManifest(BaseModel):
     author: str = Field(..., description="Plugin author")
     entry_point: str = Field(..., description="Python module path (e.g., 'plugins.hello_plugin.main')")
     dependencies: List[str] = Field(default_factory=list, description="Required plugin names")
+    python_dependencies: List[str] = Field(
+        default_factory=list,
+        description="Required importable Python modules (#13966), checked with importlib.util.find_spec",
+    )
     config_schema: Dict[str, Any] = Field(default_factory=dict, description="JSON schema for plugin configuration")
     hooks: List[str] = Field(default_factory=list, description="Hook names this plugin provides")
     required_env: List[RequiredEnvVar] = Field(

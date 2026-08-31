@@ -1,0 +1,423 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
+// GH#13939: the Org Chart gained a second render of the same data — the
+// existing WorkflowCanvas — behind a view-mode toggle. These tests pin both
+// halves: the canvas mode (mapping, tabs, drawer wiring, read-only canvas) and
+// the nested-tree mode, which stays the default and must keep hire / pause /
+// resume / terminate and the detail drawer working exactly as before.
+
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { firePointer } from '@/components/workflow/__tests__/pointerTestUtils'
+import { mount, flushPromises } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import { ref } from 'vue'
+import en from '@/i18n/locales/en.json'
+
+const get = vi.fn()
+const post = vi.fn()
+
+vi.mock('@/plugins/api', () => ({
+  useApiClient: () => ({ get, post }),
+}))
+
+vi.mock('@/utils/debugUtils', () => ({
+  createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
+}))
+
+// A real ref, not a plain object: `companyId` is typed `string` on
+// `CanvasNodeSidebar` (#13940), and only an actual `Ref` auto-unwraps in the
+// template — a `{ value: 'c1' }` look-alike passes the prop through as an
+// object and trips Vue's prop-type warning the moment the child is not stubbed.
+const companyRef = ref('c1')
+
+vi.mock('@/composables/llc/useLlcCompanyContext', () => ({
+  useLlcCompanyContext: () => ({
+    companyId: companyRef,
+    resolveCompanyId: () => Promise.resolve(companyRef.value),
+  }),
+}))
+
+import OrgChart from '../OrgChart.vue'
+import OrgTreeNode from '../OrgTreeNode.vue'
+import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue'
+import { ORG_GROUP_PREFIX } from '@/composables/llc/orgCanvasGraph'
+
+const NODES = [
+  {
+    id: 'ceo',
+    name: 'Ada',
+    title: 'CEO',
+    status: 'idle',
+    adapter_type: 'claude',
+    is_human: false,
+    last_heartbeat: null,
+    budget_spent: 1,
+    budget_total: 10,
+    assigned_item_count: 2,
+    parent_id: null,
+    children: [
+      {
+        id: 'dev',
+        name: 'Grace',
+        title: 'Engineer',
+        status: 'paused',
+        adapter_type: 'ollama',
+        is_human: false,
+        last_heartbeat: null,
+        budget_spent: 0,
+        budget_total: 5,
+        assigned_item_count: 1,
+        parent_id: 'ceo',
+        children: [],
+      },
+    ],
+  },
+  {
+    id: 'advisor',
+    name: 'Alan',
+    title: 'Advisor',
+    status: 'idle',
+    adapter_type: 'openai',
+    is_human: true,
+    last_heartbeat: null,
+    budget_spent: 0,
+    budget_total: 0,
+    assigned_item_count: 0,
+    parent_id: null,
+    children: [],
+  },
+]
+
+const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+
+async function mountChart() {
+  const wrapper = mount(OrgChart, {
+    global: {
+      plugins: [i18n],
+      stubs: { HireAgentModal: true },
+    },
+  })
+  await flushPromises()
+  return wrapper
+}
+
+/** The canvas node with `id`, as the canvas currently receives it. */
+function canvasNode(wrapper: Awaited<ReturnType<typeof mountChart>>, id: string) {
+  return wrapper
+    .findComponent(WorkflowCanvas)
+    .props('nodes')
+    .find((node) => node.id === id)!
+}
+
+/** The rendered person card carrying `name`. */
+function personNode(wrapper: Awaited<ReturnType<typeof mountChart>>, name: string) {
+  return wrapper.findAll('.workflow-node.org-person').find((node) => node.text().includes(name))!
+}
+
+/**
+ * Drag a person node with a real mouse gesture (#13996) — emitting
+ * `node-moved` directly is what let the pan and the drag defects ship green.
+ */
+async function dragPerson(
+  wrapper: Awaited<ReturnType<typeof mountChart>>,
+  name: string,
+  dx: number,
+  dy: number,
+) {
+  // #14610: the canvas listens for Pointer Events now — one path for mouse and
+  // touch — so a gesture driven with `mousedown`/`mousemove` reaches nothing.
+  // The gesture and every assertion around it are otherwise unchanged.
+  const person = personNode(wrapper, name)
+  const area = wrapper.get('.canvas-area')
+  await firePointer(person.element, 'pointerdown', { clientX: 300, clientY: 300, button: 0 })
+  await firePointer(area.element, 'pointermove', { clientX: 300 + dx, clientY: 300 + dy })
+  await firePointer(area.element, 'pointerup', { clientX: 300 + dx, clientY: 300 + dy })
+  await flushPromises()
+}
+
+beforeEach(() => {
+  get.mockReset()
+  post.mockReset()
+  get.mockResolvedValue({ nodes: structuredClone(NODES) })
+  post.mockResolvedValue({})
+})
+
+describe('OrgChart view-mode toggle (#13939)', () => {
+  it('defaults to the nested tree — the canvas is not mounted', async () => {
+    const wrapper = await mountChart()
+
+    expect(wrapper.findComponent(OrgTreeNode).exists()).toBe(true)
+    expect(wrapper.findComponent(WorkflowCanvas).exists()).toBe(false)
+    expect(wrapper.get('[data-testid="org-view-tree"]').attributes('aria-pressed')).toBe('true')
+  })
+
+  it('renders the company graph on WorkflowCanvas in canvas mode', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+
+    const canvas = wrapper.findComponent(WorkflowCanvas)
+    expect(canvas.exists()).toBe(true)
+    expect(wrapper.findComponent(OrgTreeNode).exists()).toBe(false)
+
+    const ids = canvas.props('nodes').map((node) => node.id)
+    expect(ids).toContain('ceo')
+    expect(ids).toContain('dev')
+    expect(ids).toContain(`${ORG_GROUP_PREFIX}ceo`)
+  })
+
+  it('mounts the canvas read-only — the org chart is not a workflow editor', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+
+    expect(wrapper.findComponent(WorkflowCanvas).props('readonly')).toBe(true)
+  })
+
+  it('offers one canvas tab per unit plus "all units"', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+
+    const canvas = wrapper.findComponent(WorkflowCanvas)
+    // #13994: `advisor` is a root with no reports — a person, not a unit, so it
+    // gets no tab of its own.
+    expect(canvas.props('tabs')).toEqual([
+      { id: 'all', label: en.llc.orgChart.canvasTabAll },
+      { id: 'ceo', label: 'Ada' },
+    ])
+    expect(canvas.props('activeTabId')).toBe('all')
+  })
+
+  it('a tab selection narrows the canvas to that unit', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+    const canvas = wrapper.findComponent(WorkflowCanvas)
+
+    canvas.vm.$emit('tab-selected', 'ceo')
+    await flushPromises()
+
+    const ids = wrapper.findComponent(WorkflowCanvas).props('nodes').map((node) => node.id)
+    expect(ids).toEqual([`${ORG_GROUP_PREFIX}ceo`, 'dev', 'ceo'])
+  })
+
+  it('a canvas node selection opens the same detail drawer the tree opens', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+
+    wrapper.findComponent(WorkflowCanvas).vm.$emit('node-selected', 'dev')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.llc.orgChart.agentDetail)
+    expect(wrapper.text()).toContain('Grace')
+  })
+
+  it('a container selection is ignored — containers are not agents', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+
+    wrapper.findComponent(WorkflowCanvas).vm.$emit('node-selected', `${ORG_GROUP_PREFIX}ceo`)
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain(en.llc.orgChart.agentDetail)
+  })
+
+  it('a dragged node keeps its new position', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+
+    wrapper.findComponent(WorkflowCanvas).vm.$emit('node-moved', 'dev', { x: 900, y: 42 })
+    await flushPromises()
+
+    const moved = wrapper
+      .findComponent(WorkflowCanvas)
+      .props('nodes')
+      .find((node) => node.id === 'dev')
+    expect(moved!.position).toEqual({ x: 900, y: 42 })
+  })
+
+  it('a dragged container stays anchored to its subtree', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+    const groupId = `${ORG_GROUP_PREFIX}ceo`
+    const before = wrapper
+      .findComponent(WorkflowCanvas)
+      .props('nodes')
+      .find((node) => node.id === groupId)!.position
+
+    wrapper.findComponent(WorkflowCanvas).vm.$emit('node-moved', groupId, { x: 900, y: 900 })
+    await flushPromises()
+
+    const after = wrapper
+      .findComponent(WorkflowCanvas)
+      .props('nodes')
+      .find((node) => node.id === groupId)!.position
+    expect(after).toEqual(before)
+  })
+
+  it('a drag performed as a real gesture survives a pause/resume (#13996)', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+    const before = canvasNode(wrapper, 'dev').position
+
+    await dragPerson(wrapper, 'Grace', 120, 60)
+    const dragged = canvasNode(wrapper, 'dev').position
+    expect(dragged).not.toEqual(before)
+
+    // Resume the agent from the drawer — the primary canvas-mode action.
+    //
+    // The press is fired before the click on purpose. #14610 extended the
+    // "a gesture that moved is not a selection" rule from pans to node drags
+    // (the half #14079 deferred), and the flag clears on the next pointerdown
+    // — which a real browser always delivers before a click. A bare `click`
+    // here would be a sequence no user can produce, and would now read as the
+    // click that ended the drag above.
+    await firePointer(personNode(wrapper, 'Grace').element, 'pointerdown', {
+      clientX: 420, clientY: 360, button: 0,
+    })
+    await firePointer(personNode(wrapper, 'Grace').element, 'pointerup', {
+      clientX: 420, clientY: 360,
+    })
+    await personNode(wrapper, 'Grace').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="org-drawer-pause"]').trigger('click')
+    await flushPromises()
+
+    expect(post).toHaveBeenCalledWith('/api/llc/companies/c1/controls/agents/dev/resume', {})
+    expect(canvasNode(wrapper, 'dev').position).toEqual(dragged)
+  })
+
+  it('a pause/resume still reaches the canvas as a status change (#13996)', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+    expect(canvasNode(wrapper, 'dev').data.status).toBe('paused')
+
+    wrapper.findComponent(WorkflowCanvas).vm.$emit('node-selected', 'dev')
+    await flushPromises()
+    await wrapper.get('[data-testid="org-drawer-pause"]').trigger('click')
+    await flushPromises()
+
+    expect(canvasNode(wrapper, 'dev').data.status).toBe('idle')
+    // The drawer reads the same node, so a second toggle is not fighting a copy.
+    expect(wrapper.get('[data-testid="org-drawer-pause"]').text()).toBe(
+      en.llc.orgChart.pauseAgent,
+    )
+  })
+
+  it('resume from the drawer still calls the canonical endpoint in canvas mode', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+    wrapper.findComponent(WorkflowCanvas).vm.$emit('node-selected', 'dev')
+    await flushPromises()
+
+    await wrapper.get('[data-testid="org-drawer-pause"]').trigger('click')
+
+    expect(post).toHaveBeenCalledWith('/api/llc/companies/c1/controls/agents/dev/resume', {})
+  })
+})
+
+describe('OrgChart nested-tree mode is unregressed (#13939)', () => {
+  it('renders one OrgTreeNode per root and opens the drawer on select', async () => {
+    const wrapper = await mountChart()
+
+    const roots = wrapper.findAllComponents(OrgTreeNode).filter((node) => node.props('depth') === 0)
+    expect(roots).toHaveLength(2)
+
+    roots[0].vm.$emit('select', structuredClone(NODES)[0])
+    await flushPromises()
+    expect(wrapper.text()).toContain(en.llc.orgChart.agentDetail)
+    expect(wrapper.text()).toContain('Ada')
+  })
+
+  it('pause from the tree drawer hits the canonical pause endpoint', async () => {
+    const wrapper = await mountChart()
+    const root = wrapper.findAllComponents(OrgTreeNode)[0]
+
+    root.vm.$emit('select', structuredClone(NODES)[0])
+    await flushPromises()
+    await wrapper.get('[data-testid="org-drawer-pause"]').trigger('click')
+
+    expect(post).toHaveBeenCalledWith('/api/llc/companies/c1/controls/agents/ceo/pause', {})
+  })
+
+  it('terminate from the tree drawer confirms, posts and reloads', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const wrapper = await mountChart()
+
+    wrapper.findAllComponents(OrgTreeNode)[0].vm.$emit('select', structuredClone(NODES)[0])
+    await flushPromises()
+    await wrapper.get('[data-testid="org-drawer-terminate"]').trigger('click')
+    await flushPromises()
+
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(post).toHaveBeenCalledWith('/api/llc/companies/c1/controls/agents/ceo/terminate', {})
+    // #13942: mount issues two GETs (tree + the independent executor
+    // rollup); terminate's reload only refetches the tree — so 2 + 1 = 3.
+    expect(get).toHaveBeenCalledTimes(3) // reload from the source of truth
+    confirmSpy.mockRestore()
+  })
+
+  it('still fetches the org chart from the company-scoped endpoint', async () => {
+    await mountChart()
+
+    expect(get).toHaveBeenCalledWith('/api/llc/companies/c1/org-chart')
+  })
+
+  it('switching back to tree restores the nested render', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+    await wrapper.get('[data-testid="org-view-tree"]').trigger('click')
+
+    expect(wrapper.findComponent(OrgTreeNode).exists()).toBe(true)
+    expect(wrapper.findComponent(WorkflowCanvas).exists()).toBe(false)
+  })
+})
+
+// GH#13994: people arrive from the org-chart endpoint as roots (a membership
+// carries no `reports_to` edge). The tab strip used to be built from root-ness,
+// so a company of twelve people got twelve person-named tabs beside twelve
+// single-person boxes. The strip and the canvas now share one definition of a
+// unit, so they cannot disagree.
+describe('OrgChart canvas tabs follow the container rule (#13994)', () => {
+  const MEMBERS = Array.from({ length: 12 }, (_, i) => ({
+    ...structuredClone(NODES)[1],
+    id: `user:${i}`,
+    name: `Person ${i}`,
+    title: 'member',
+  }))
+
+  async function mountWith(nodes: unknown[]) {
+    get.mockResolvedValue({ nodes })
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+    return wrapper
+  }
+
+  it('shows no tab strip for a company that is only people', async () => {
+    const canvas = (await mountWith(MEMBERS)).findComponent(WorkflowCanvas)
+
+    expect(canvas.props('tabs')).toEqual([])
+    const nodes = canvas.props('nodes')
+    expect(nodes.filter((node) => node.type === 'org-group')).toEqual([])
+    expect(nodes.filter((node) => node.type === 'org-person')).toHaveLength(12)
+  })
+
+  it('draws all twelve people on the canvas — none of them hidden behind a tab', async () => {
+    const wrapper = await mountWith(MEMBERS)
+    const canvas = wrapper.findComponent(WorkflowCanvas)
+
+    expect(canvas.props('nodes').map((node) => node.id)).toEqual(
+      MEMBERS.map((member) => member.id),
+    )
+    expect(wrapper.findAll('.workflow-node.org-person')).toHaveLength(12)
+    expect(wrapper.find('.canvas-tabs').exists()).toBe(false)
+  })
+
+  it('falls back to all units when the selected tab is no longer a unit', async () => {
+    const wrapper = await mountWith(MEMBERS)
+
+    wrapper.findComponent(WorkflowCanvas).vm.$emit('tab-selected', 'user:3')
+    await flushPromises()
+
+    const canvas = wrapper.findComponent(WorkflowCanvas)
+    expect(canvas.props('activeTabId')).toBe('all')
+    expect(canvas.props('nodes')).toHaveLength(12)
+  })
+})

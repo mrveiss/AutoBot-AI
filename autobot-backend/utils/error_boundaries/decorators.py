@@ -19,6 +19,7 @@ from fastapi import HTTPException
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import RetryConfig, exponential_backoff_delay
+from utils.cancel_tokens import begin_cancel_scope, end_cancel_scope, signal_cancel_scope
 
 from .boundary_manager import get_error_boundary_manager
 from .types import APIErrorResponse, ErrorCategory, ErrorContext, RecoveryStrategy
@@ -295,6 +296,118 @@ def _raise_or_return_error(error_response: APIErrorResponse):
     raise HTTPException(status_code=error_response.status_code, detail=error_response.to_dict())
 
 
+# #14015: the request-layer deadline.
+#
+# Before this, bounding was opt-in and per-call-site: every handler that wanted
+# a limit hand-rolled `asyncio.wait_for`, with its own constant. `report.py`
+# alone carried three different ones — and one analysis with none at all, which
+# is #13602: the endpoint held the socket open past 180s and logged nothing,
+# because the handler never ran.
+#
+# The problem is the pattern, not that one omission. When bounding is opt-in, an
+# unbounded path is invisible — it looks exactly like every other handler until
+# it hangs. So the deadline is a decorator that stacks with with_error_handling,
+# and `tools/lint/check_route_deadlines.py` requires every covered route to
+# carry one or to be listed as deliberately unbounded WITH A REASON. An
+# unbounded route becomes a declaration rather than a default.
+DEFAULT_ROUTE_DEADLINE_SECONDS = 60.0
+
+# Margin a route-level deadline must clear above the largest internal budget
+# reachable from that route. #14015 review: a blanket 60s outer bound sat BELOW
+# pre-existing internal timeouts of 120s, 180s and 240s, which would have turned
+# previously-slow-but-successful requests into guaranteed 504s. And on /report
+# the outer bound was tighter than its own fan-out ceiling, so it would have won
+# the race with a generic message where report.py's design says the inner
+# deadline should win and name the analysis that ran long.
+ROUTE_DEADLINE_GRACE = 15.0
+
+
+def bounded(seconds: float = DEFAULT_ROUTE_DEADLINE_SECONDS, *, operation: str | None = None):
+    """Bound an async route handler, returning a structured error on timeout.
+
+    Wraps the handler in ``asyncio.wait_for``. On expiry the client gets a 504
+    naming the endpoint and the limit, instead of a socket held open with
+    nothing logged.
+
+    Deliberately raises ``HTTPException`` rather than returning a response
+    object: that is what ``with_error_handling`` already does on this stack, so
+    a timeout and a failure surface through the same path.
+
+    Args:
+        seconds: Wall-clock limit. Must be positive — a zero or negative
+            deadline would make ``wait_for`` expire immediately, turning every
+            request into a 504, which is the kind of always-on failure that
+            reads as a broken endpoint rather than a misconfiguration.
+        operation: Name for the error payload and the log line. Defaults to the
+            handler's own name, which is what an operator greps for.
+
+    Raises:
+        ValueError: at decoration time (import time) for a non-positive
+            deadline, so the mistake surfaces at startup rather than on the
+            first request.
+
+    Issue #14256: opens a cancel scope for the duration of the call. Any
+    pooled work the handler dispatches via
+    ``utils.cancel_tokens.submit_cancellable``/``run_cancellable`` registers
+    its cancel token here; on expiry (or on this call being cancelled from
+    outside, e.g. graceful shutdown) every registered token is signalled
+    before the 504/CancelledError propagates. The route deadline and the
+    cancellation of the work it dispatched are therefore the same event
+    rather than two facts that can drift (#14244).
+    """
+    if seconds <= 0:
+        raise ValueError(f"bounded() needs a positive deadline, got {seconds!r}")
+
+    def decorator(func: Callable) -> Callable:
+        name = operation or getattr(func, "__name__", "unknown")
+
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            scope = begin_cancel_scope()
+            try:
+                return await asyncio.wait_for(func(*args, **kwargs), timeout=seconds)
+            except asyncio.TimeoutError:
+                # The one thing #13602 could not do: say something. A hang with
+                # no output is indistinguishable from a slow network, a stuck
+                # proxy or a dead process.
+                logger.warning(
+                    "Request deadline exceeded: %s did not complete within %.1fs (#14015)",
+                    name,
+                    seconds,
+                )
+                # #14256: the deadline stopping the CALLER is only half the fix --
+                # signal every cancel token this call dispatched so pooled work
+                # stops cooperatively instead of running to completion for a
+                # result nobody reads (#14244).
+                signal_cancel_scope(f"route deadline for {name} exceeded {seconds:.1f}s")
+                raise HTTPException(
+                    status_code=504,
+                    detail={
+                        "status": "error",
+                        "error": "deadline_exceeded",
+                        "operation": name,
+                        "timeout_seconds": seconds,
+                        "message": (
+                            f"{name} did not complete within {seconds:.0f}s. The work may still be "
+                            "running server-side; retry or narrow the request."
+                        ),
+                    },
+                ) from None
+            except asyncio.CancelledError:
+                # Reachable via graceful shutdown or an outer deadline tighter
+                # than this one -- same treatment as a timeout (#14256): signal,
+                # then re-raise. Never swallowed.
+                signal_cancel_scope(f"{name} was cancelled before its {seconds:.1f}s deadline")
+                raise
+            finally:
+                end_cancel_scope(scope)
+
+        wrapper.__route_deadline_seconds__ = seconds
+        return wrapper
+
+    return decorator
+
+
 def with_error_handling(
     category: ErrorCategory = ErrorCategory.SERVER_ERROR,
     operation: str = None,
@@ -319,7 +432,20 @@ def with_error_handling(
 
     Returns:
         Decorated function with error handling
+
+    Raises:
+        TypeError: if used bare (``@with_error_handling`` with no parentheses).
+            That form calls this factory with the decorated function as
+            ``category``, which would otherwise silently hand back the inner
+            ``decorator`` instead of a wrapped endpoint (#14191, and the bare
+            usage #14186 had to fix by hand because nothing caught it).
     """
+    if callable(category) and not isinstance(category, ErrorCategory):
+        raise TypeError(
+            "with_error_handling() must be called with parentheses: "
+            "use @with_error_handling() or @with_error_handling(category=...), "
+            "not bare @with_error_handling."
+        )
 
     def decorator(func):
         """Inner decorator that wraps function with API error handling."""

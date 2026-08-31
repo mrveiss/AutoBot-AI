@@ -6,6 +6,19 @@
 """
 Configuration Validation and Testing Script
 Tests centralized configuration system and validates all config values
+
+#15189: ``test_config_values``, ``test_config_manager`` and
+``test_config_validation`` each wrapped their assertions in
+``try: ... except Exception: return False``. ``except Exception`` catches
+``AssertionError``, so every assertion in those three was inert — the function
+returned on both branches and reported the same verdict whichever way it went.
+The wrappers are gone and the assertions now propagate.
+
+The driver contract is unchanged, because ``main()`` below already wraps every
+call in its own ``try/except`` and records a crash as a failed test. The only
+difference is that a broken assertion is now one of the things it records,
+instead of being converted to a quiet ``False`` at the point it fired — and the
+traceback names the assertion rather than being discarded.
 """
 
 import logging
@@ -17,6 +30,16 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# #14518: the ``src.`` package prefix below is a pre-restructure path that no
+# longer exists (src/unified_config.py was a re-export wrapper deleted by
+# 441649af66 in favour of the ``config`` package, and src/ later became
+# autobot-backend/). autobot-backend was also never on sys.path, so this
+# script raised ModuleNotFoundError on its own import block. Add the
+# directory the way the other operator entry points in this tree do (#14129).
+_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+
 # Setup logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,7 +50,7 @@ def test_config_imports():
     logger.info("Testing configuration imports...")
 
     try:
-        import src.unified_config  # noqa: F401 - test imports work
+        import config  # noqa: F401 - test imports work
 
         logger.info("   All configuration imports successful")
         return True
@@ -40,76 +63,68 @@ def test_config_values():
     """Test configuration values are properly loaded"""
     logger.info("Testing configuration values...")
 
-    try:
-        from config import (
-            API_BASE_URL,
-            API_TIMEOUT,
-            OLLAMA_URL,
-            REDIS_URL,
-            VNC_CONTAINER_PORT,
-            VNC_DISPLAY_PORT,
-            get_vnc_direct_url,
-            get_vnc_display_port,
-        )
+    from config import (
+        API_BASE_URL,
+        API_TIMEOUT,
+        OLLAMA_URL,
+        REDIS_URL,
+        VNC_CONTAINER_PORT,
+        VNC_DISPLAY_PORT,
+        get_vnc_direct_url,
+        get_vnc_display_port,
+    )
 
-        # Test basic values
-        assert API_BASE_URL.startswith("http"), "API_BASE_URL should start with http"
-        assert REDIS_URL.startswith("redis"), "REDIS_URL should start with redis"
-        assert OLLAMA_URL.startswith("http"), "OLLAMA_URL should start with http"
-        assert isinstance(API_TIMEOUT, int), "API_TIMEOUT should be integer"
+    # Test basic values
+    assert API_BASE_URL.startswith("http"), "API_BASE_URL should start with http"
+    assert REDIS_URL.startswith("redis"), "REDIS_URL should start with redis"
+    assert OLLAMA_URL.startswith("http"), "OLLAMA_URL should start with http"
+    assert isinstance(API_TIMEOUT, int), "API_TIMEOUT should be integer"
 
-        # Test VNC configuration
-        vnc_port = get_vnc_display_port()
-        vnc_url = get_vnc_direct_url()
-        assert isinstance(vnc_port, int), "VNC port should be integer"
-        assert vnc_url.startswith("vnc://"), "VNC URL should start with vnc://"
-        assert vnc_port in [
-            VNC_DISPLAY_PORT,
-            VNC_CONTAINER_PORT,
-        ], "VNC port should be valid option"
+    # Test VNC configuration
+    vnc_port = get_vnc_display_port()
+    vnc_url = get_vnc_direct_url()
+    assert isinstance(vnc_port, int), "VNC port should be integer"
+    assert vnc_url.startswith("vnc://"), "VNC URL should start with vnc://"
+    assert vnc_port in [
+        VNC_DISPLAY_PORT,
+        VNC_CONTAINER_PORT,
+    ], "VNC port should be valid option"
 
-        logger.info("   API_BASE_URL: %s", API_BASE_URL)
-        logger.info("   REDIS_URL: %s", REDIS_URL)
-        logger.info("   OLLAMA_URL: %s", OLLAMA_URL)
-        logger.info("   API_TIMEOUT: %dms", API_TIMEOUT)
-        logger.info("   VNC_PORT (intelligent): %d", vnc_port)
-        logger.info("   VNC_URL: %s", vnc_url)
+    logger.info("   API_BASE_URL: %s", API_BASE_URL)
+    logger.info("   REDIS_URL: %s", REDIS_URL)
+    logger.info("   OLLAMA_URL: %s", OLLAMA_URL)
+    logger.info("   API_TIMEOUT: %dms", API_TIMEOUT)
+    logger.info("   VNC_PORT (intelligent): %d", vnc_port)
+    logger.info("   VNC_URL: %s", vnc_url)
 
-        return True
-    except Exception as e:
-        logger.error("   Configuration value validation failed: %s", e)
-        return False
+    return True
 
 
 def test_config_manager():
     """Test configuration manager functionality"""
     logger.info("Testing configuration manager...")
 
-    try:
-        from config import config
+    from config import config
 
-        # Test basic operations
-        backend_config = config.get("backend", {})
-        llm_config = config.get_llm_config()
-        redis_config = config.get_redis_config()
+    # Test basic operations
+    backend_config = config.get("backend", {})
+    llm_config = config.get_llm_config()
+    redis_config = config.get_redis_config()
 
-        assert isinstance(backend_config, dict), "Backend config should be dict"
-        assert isinstance(llm_config, dict), "LLM config should be dict"
-        assert isinstance(redis_config, dict), "Redis config should be dict"
+    assert isinstance(backend_config, dict), "Backend config should be dict"
+    assert isinstance(llm_config, dict), "LLM config should be dict"
+    assert isinstance(redis_config, dict), "Redis config should be dict"
 
-        # Test nested access
-        nested_value = config.get_nested("backend.server_host", "default")
-        assert nested_value is not None, "Nested config access should work"
+    # Test nested access
+    nested_value = config.get_nested("backend.server_host", "default")
+    assert nested_value is not None, "Nested config access should work"
 
-        logger.info("   Configuration manager operational")
-        logger.info("   Backend config keys: %d", len(backend_config))
-        logger.info("   LLM config keys: %d", len(llm_config))
-        logger.info("   Redis config keys: %d", len(redis_config))
+    logger.info("   Configuration manager operational")
+    logger.info("   Backend config keys: %d", len(backend_config))
+    logger.info("   LLM config keys: %d", len(llm_config))
+    logger.info("   Redis config keys: %d", len(redis_config))
 
-        return True
-    except Exception as e:
-        logger.error("   Configuration manager test failed: %s", e)
-        return False
+    return True
 
 
 def test_environment_overrides():
@@ -154,31 +169,27 @@ def test_config_validation():
     """Test configuration validation functionality"""
     logger.info("Testing configuration validation...")
 
-    try:
-        from config import config
+    from config import config
 
-        validation_result = config.validate_config()
+    validation_result = config.validate_config()
 
-        assert isinstance(validation_result, dict), "Validation should return dict"
-        assert "config_loaded" in validation_result, "Should include config_loaded status"
+    assert isinstance(validation_result, dict), "Validation should return dict"
+    assert "config_loaded" in validation_result, "Should include config_loaded status"
 
-        logger.info("   Configuration validation operational")
-        logger.info(
-            "   Validation status: %s",
-            validation_result.get("config_loaded", "unknown"),
-        )
+    logger.info("   Configuration validation operational")
+    logger.info(
+        "   Validation status: %s",
+        validation_result.get("config_loaded", "unknown"),
+    )
 
-        if validation_result.get("issues"):
-            logger.warning("   Configuration issues found: %d", len(validation_result["issues"]))
-            for issue in validation_result["issues"][:3]:  # Show first 3 issues
-                logger.warning("      - %s", issue)
-        else:
-            logger.info("   No configuration issues found")
+    if validation_result.get("issues"):
+        logger.warning("   Configuration issues found: %d", len(validation_result["issues"]))
+        for issue in validation_result["issues"][:3]:  # Show first 3 issues
+            logger.warning("      - %s", issue)
+    else:
+        logger.info("   No configuration issues found")
 
-        return True
-    except Exception as e:
-        logger.error("   Configuration validation test failed: %s", e)
-        return False
+    return True
 
 
 def test_config_performance():

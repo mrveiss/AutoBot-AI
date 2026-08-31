@@ -46,7 +46,22 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-cd "$(git rev-parse --show-toplevel)" || { echo "not a git repo" >&2; exit 2; }
+# Canonical base/head resolution and changed-file scoping (#13984). Resolved to
+# an ABSOLUTE path and sourced BEFORE the `cd` below: ${BASH_SOURCE[0]} is
+# relative to the invoking shell's cwd, so sourcing after the cd looks for the
+# library under whatever tree this script was pointed at.
+# shellcheck source=scripts/lib/git-scope.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-scope.sh" || {
+  echo "FATAL: cannot load scripts/lib/git-scope.sh — refusing to report clean" >&2
+  exit 1
+}
+# shellcheck source=scripts/lib/git-root.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh" || {
+  echo "FATAL: cannot load scripts/lib/git-root.sh — refusing to report clean" >&2
+  exit 1
+}
+
+cd "$(git_repo_root)" || { echo "not a git repo" >&2; exit 2; }
 
 FAILURES=0
 fail() { FAILURES=$((FAILURES+1)); printf '  FAIL  %s\n' "$1"; }
@@ -81,22 +96,24 @@ case "$MODE" in
       || die "git ls-files failed — cannot determine scope, refusing to report clean" ;;
   --range)
     [ -n "$RANGE" ] || die "--range needs A..B"
-    BASE_REF="${RANGE%%...*}"; BASE_REF="${BASE_REF%%..*}"
-    HEAD_REF="${RANGE##*..}"
-    for r in "$BASE_REF" "$HEAD_REF"; do
-      git rev-parse --verify --quiet "${r}^{commit}" >/dev/null \
-        || die "'$r' does not resolve in this clone. A shallow checkout cannot compare against the base — set 'fetch-depth: 0' on actions/checkout."
-    done
+    # Range splitting and ref validation come from scripts/lib/git-scope.sh
+    # (#13984). The three-dot case matters: stripping `..` from `A...B` used to
+    # leave a stray dot on the base ref, and the shared splitter handles the
+    # three-dot separator first.
+    BASE_REF=$(git_scope_split_range "$RANGE" base) || die "'$RANGE' is not an A..B or A...B range"
+    HEAD_REF=$(git_scope_split_range "$RANGE" head) || die "'$RANGE' is not an A..B or A...B range"
+    git_scope_require_commits "$BASE_REF" "$HEAD_REF" || exit 1
     # Three-dot: changes introduced by HEAD since the merge-base, so files that
     # other merged PRs touched on the base never enter this PR's scope (M5).
-    LIST=$(git diff --name-only --diff-filter=ACMR "${BASE_REF}...${HEAD_REF}") \
+    LIST=$(git_scope_diff_names_symmetric "$BASE_REF" "$HEAD_REF") \
       || die "git diff failed for $RANGE" ;;
 esac
 
 FILES=()
 [ -n "$LIST" ] && mapfile -t FILES <<< "$LIST"
 EXISTING=()
-for f in "${FILES[@]}"; do [ -f "$f" ] && EXISTING+=("$f"); done
+# git names deleted paths too; git_scope_existing_files is the shared filter.
+while IFS= read -r f; do EXISTING+=("$f"); done < <(printf '%s\n' "${FILES[@]+"${FILES[@]}"}" | git_scope_existing_files)
 
 echo "lint-conventions: ${#EXISTING[@]} file(s) in scope ($MODE)"
 

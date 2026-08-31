@@ -14,6 +14,21 @@ on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
 
+# #14434: without this, every push left its predecessors queued. 42 of a 271-run
+# sample were for commits no longer at their branch tip - work nothing would ever
+# read, each still fetching its actions. During GitHub's 2026-08-17 archive-download
+# degradation that wasted load became failures on unrelated pull requests (#14444).
+#
+# cancel-in-progress is guarded on the event rather than set to a bare `true`:
+# #13432 found that cancelling base-branch runs meant each merge cancelled the
+# previous merge's verification, and merges arrive faster than a suite completes -
+# of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
+# workflows this was applied to also trigger on push to Dev_new_gui, so the guard
+# is load-bearing there and harmless where it is not.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   pull-requests: read
 
@@ -30,6 +45,7 @@ jobs:
           PR_BRANCH: ${{ github.event.pull_request.head.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
         run: |
           set -euo pipefail
 
@@ -86,6 +102,40 @@ jobs:
 
           if printf '%s' "$BODY" | grep -qE "$token_re"; then
             echo "PR correctly links to issue ${EXPECTED_ISSUE}"
+            echo "status=success" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # #14241: a fork's branch name is chosen by the contributor and a
+          # maintainer cannot rename it. Requiring the branch's issue there makes
+          # the ONLY green path a link to an issue the PR does not address --
+          # which then leaves a false cross-link on an unrelated issue's timeline.
+          # Observed on #14146: branch `fix/issue-13162-...`, actual issue #14235.
+          #
+          # So for a fork, an explicit CLOSING keyword naming a concrete issue is
+          # accepted as the author's statement of what this PR is for. `Refs`
+          # alone deliberately does not qualify -- otherwise any `Refs #1` would
+          # satisfy the gate for any branch, and requirement (a) already accepts
+          # `Refs`. Same-repo branches keep the strict check: renaming one costs
+          # nothing, and a mismatch there is a real signal rather than an
+          # unfixable accident.
+          # Fenced code is illustrative, not a claim. A body pasting the PR
+          # template inside ``` would otherwise satisfy this with an example.
+          PROSE=$(printf '%s' "$BODY" | awk '/^[[:space:]]*```/{f=!f; next} !f')
+
+          # The left boundary is load-bearing: without it `encloses` and
+          # `discloses` match `closes` as a substring. The `-` inside the class
+          # is what excludes `self-closes` — it must stay LAST in the bracket
+          # expression to be a literal rather than a range.
+          # `#0` is excluded because no issue can have that number, so it is
+          # never an author naming something.
+          keyword_re="(^|[^[:alnum:]_-])(resolves|closes|fixes)[[:space:]]+(#[1-9][0-9]*|MVA-[1-9][0-9]*)([^0-9]|$)"
+
+          if [ "${PR_IS_FORK:-false}" = "true" ] \
+             && printf '%s' "$PROSE" | grep -iqE "$keyword_re"; then
+            echo "::notice::Fork PR: branch implies ${EXPECTED_ISSUE}, but the body explicitly closes a different issue."
+            echo "::notice::Accepting the body over the branch name (#14241)."
+            echo "::notice::This gate checks that a claim was MADE, not that it is the right one — that is review's job."
             echo "status=success" >> "$GITHUB_OUTPUT"
             exit 0
           fi

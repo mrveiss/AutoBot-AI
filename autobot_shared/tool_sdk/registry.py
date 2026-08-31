@@ -12,7 +12,7 @@ OpenAPI spec generation for every BaseTool subclass registered with it.
 import logging
 from typing import Dict, List, Type
 
-from tool_sdk.base import (
+from .base import (
     BaseTool,
     ToolInputError,
     ToolMetadata,

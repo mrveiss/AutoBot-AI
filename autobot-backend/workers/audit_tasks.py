@@ -23,11 +23,15 @@ import subprocess  # nosec B404  # internal git/gh CLI calls only
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
+from celery.signals import beat_init, worker_ready
+
+from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from celery_app import celery_app
+from workers.audit_queries import MAX_LOG_CHARS, list_open_issue_titles, vulture_scan
 
 logger = get_logger(__name__)
 
@@ -50,18 +54,124 @@ except ValueError:
 
 # GitHub repo used for filing issues
 _GH_REPO = "mrveiss/AutoBot-AI"
+# #13859: the KEY the issue-filing credential is stored under in the SYSTEM
+# vault. Not the credential — see _resolve_filing_token, which reads it.
+#
+# Named for what it is after both scanners disagreed with the old name
+# `_FILING_TOKEN_SECRET`: bandit raised B105 (hardcoded password) and CodeQL
+# raised two high-severity clear-text-logging alerts, because logging this
+# constant looked like logging a secret. They were reacting to a genuinely
+# misleading name, so the name changed rather than the warnings being
+# suppressed. A scanner-suppression comment here would have taught the next
+# reader that this file logs secrets and that we decided not to mind.
+_FILING_CREDENTIAL_VAULT_KEY = "github_issue_filing_token"
 
 # Labels applied to all discovery issues filed by this daemon
 _AUDIT_LABELS = "enhancement,observability,priority: medium"
-
-# Max characters of gh output kept in logs on failure
-_MAX_LOG_CHARS = 500
 
 # Cap on the full-findings dump written when the dead-letter queue itself cannot
 # be persisted (#13570). Generous: at that point the log IS the queue, and a
 # truncated finding is still better than none — but an unbounded dump could
 # itself take out the log.
 _MAX_DEFERRED_LOG_CHARS = 100_000
+
+# #13570: a queryable record of whether this worker can file at all, written on
+# every run AND at worker startup. The issue's third fix -- "fail loudly at
+# startup when the worker's filing credential is absent, rather than per-finding
+# at run time" -- was the one that never landed, and the reason it matters is
+# that a log line is not a surface a check can query. The umbrella (#13852) puts
+# it plainly: a service that is running but not working must be distinguishable
+# from one that is working, by something a check can query, not by reading logs.
+_FILING_STATUS_KEY = "audit:filing_status"
+
+# The status key outlives any single run on purpose, but not forever: a stale
+# entry from a worker that has since stopped would answer "filing is broken" for
+# a worker that no longer exists. Refreshed on every run and at startup, so the
+# TTL only has to outlive the longest gap between runs (audit_claims is weekly).
+try:
+    _FILING_STATUS_TTL_S = max(1, int(os.getenv("AUTOBOT_AUDIT_FILING_STATUS_TTL_S", str(86400 * 30))))
+except ValueError:
+    _FILING_STATUS_TTL_S = 86400 * 30
+
+# Task statuses. A run that filed nothing because it COULD not file is not a
+# success, and reporting one is the same defect as the dead-letter queue that
+# claimed to hold findings it never held.
+_STATUS_SUCCESS = "success"
+_STATUS_DEGRADED = "degraded"
+_STATUS_ERROR = "error"
+
+
+class FilingOutcome(NamedTuple):
+    """What actually happened to a run's findings (#13570).
+
+    ``lost`` is the field the old ``(filed, deferred)`` pair could not express:
+    when the dead-letter queue itself cannot be written, ``deferred`` is 0 --
+    identical to a clean run that had nothing to defer. Every caller then
+    reported ``issues_deferred: 0`` and ``status: "success"`` for a run that had
+    just destroyed its own findings.
+
+    Positional so existing unpacking keeps working; named so a caller asking
+    "did anything get lost" does not have to know the order.
+    """
+
+    filed: int
+    deferred: int
+    lost: int
+    filing_available: bool
+
+
+def _filing_status_payload(outcome: "FilingOutcome | None", vault_backed: bool, gh_ok: bool) -> dict:
+    """The queryable shape written to ``audit:filing_status``."""
+    payload = {
+        "checked_at": utc_timestamp(),
+        "filing_available": gh_ok,
+        "credential_source": "system vault" if vault_backed else "ambient CLI auth",
+        "vault_credential_present": vault_backed,
+    }
+    if outcome is not None:
+        payload["last_run_filed"] = outcome.filed
+        payload["last_run_deferred"] = outcome.deferred
+        payload["last_run_lost"] = outcome.lost
+    return payload
+
+
+def _record_filing_status(redis, outcome: "FilingOutcome | None", vault_backed: bool, gh_ok: bool) -> None:
+    """Publish filing health where a check can read it, not only a log reader."""
+    _redis_set(
+        redis,
+        _FILING_STATUS_KEY,
+        _filing_status_payload(outcome, vault_backed, gh_ok),
+        ttl=_FILING_STATUS_TTL_S,
+    )
+
+
+def _vault_backed_now() -> bool:
+    """Did THIS run resolve a vault-owned token? Read, never re-derive.
+
+    Reads the cache `_gh_available` already populated rather than calling
+    `_gh_env()` again. Re-deriving would trigger a second vault round-trip --
+    and, where `_gh_available` is substituted, a lookup that the run itself
+    never made, so the recorded credential source would describe a code path
+    that did not execute. An empty cache means nothing resolved a token, which
+    is exactly "not vault-backed".
+    """
+    return bool(_gh_env_cache[1]) if _gh_env_cache is not None else False
+
+
+def _run_status(outcome: FilingOutcome) -> str:
+    """The status an audit run should report, given what happened to its findings.
+
+    #13570: all three tasks returned ``"success"`` unconditionally. On the live
+    host that meant a run which queued 1,644 findings it could not file -- and a
+    run which lost them outright -- both reported success to Celery, the one
+    machine-readable surface these tasks produce. The log said CRITICAL; the
+    result said success; nothing that polls task results could tell.
+    """
+    if outcome.lost:
+        return _STATUS_ERROR
+    if outcome.deferred or not outcome.filing_available:
+        return _STATUS_DEGRADED
+    return _STATUS_SUCCESS
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +221,7 @@ def _redis_set(redis, key: str, value: Any, ttl: int | None = 86400 * 14) -> boo
         return False
 
 
-def _run(cmd: list[str], cwd: str | None = None) -> tuple[int, str, str]:
+def _run(cmd: list[str], cwd: str | None = None, env: dict[str, str] | None = None) -> tuple[int, str, str]:
     """Run *cmd*, return (returncode, stdout, stderr). Never raises."""
     try:
         result = subprocess.run(  # nosec B603
@@ -119,6 +229,7 @@ def _run(cmd: list[str], cwd: str | None = None) -> tuple[int, str, str]:
             capture_output=True,
             text=True,
             cwd=cwd,
+            env=env,
             timeout=60,
         )
         return result.returncode, result.stdout, result.stderr
@@ -126,35 +237,127 @@ def _run(cmd: list[str], cwd: str | None = None) -> tuple[int, str, str]:
         return 1, "", str(exc)
 
 
+def _resolve_filing_token() -> str | None:
+    """Read the issue-filing token from the SYSTEM vault (#13859).
+
+    The worker used to rely entirely on ambient `gh` CLI auth for whichever
+    account Celery happened to run as. Nothing owned that credential, nothing
+    rotated it, nothing audited its use, and the only place its absence showed
+    up was a log line — which is exactly how it lapsed unnoticed in #13570.
+
+    SYSTEM vault and `PrincipalKind.SERVICE`: this is a background task, not a
+    user session, so there is no user vault it could belong to and the audit
+    trail should attribute filings to the service rather than to whoever last
+    logged into the host. `VaultKind.SYSTEM` is documented as the home for
+    "admin-only system secrets (provider keys, internal tokens)".
+
+    Returns None when no token is stored — the caller decides what that means,
+    and says so loudly rather than silently continuing on ambient state.
+    """
+    try:
+        return run_or_schedule(_read_filing_token())
+    except Exception as exc:  # noqa: BLE001 — a vault outage must not kill the audit run
+        # Class name only, never the exception text. This is a secrets path, and
+        # a message that happens to interpolate a value would put it in the log.
+        # CodeQL flags it as clear-text-logging-sensitive-data and is right to:
+        # the guarantee should be structural, not a reader having audited every
+        # exception type these calls can raise.
+        logger.warning("audit: vault lookup for the filing token failed (%s)", type(exc).__name__)
+        return None
+
+
+async def _read_filing_token() -> str | None:
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from api.user_management.dependencies import get_async_session  # noqa: PLC0415
+    from autobot_shared.secrets_vault import VaultKind, VaultRef  # noqa: PLC0415
+    from models.secret import Secret  # noqa: PLC0415
+    from services.envelope_secrets_service import (  # noqa: PLC0415
+        EnvelopeSecretsService,
+        SecretAccessError,
+        SecretNotFoundError,
+    )
+
+    owner = VaultRef(kind=VaultKind.SYSTEM)
+    owner_str = owner.to_str()
+    async for session in get_async_session():
+        result = await session.execute(
+            select(Secret).where(Secret.name == _FILING_CREDENTIAL_VAULT_KEY, Secret.owner_vault == owner_str)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        try:
+            raw = await EnvelopeSecretsService().read(session, secret_id=row.id, accessible_vaults=[owner])
+        except (SecretNotFoundError, SecretAccessError) as exc:
+            # Class name only — same reason as above.
+            logger.warning("audit: filing token present but unreadable (%s)", type(exc).__name__)
+            return None
+        return raw.decode("utf-8").strip() or None
+    return None
+
+
+# (env, came_from_vault) — one fact, cached together. Deriving the second from
+# the first is what made the detector lie (#13859 review).
+_gh_env_cache: tuple[dict[str, str], bool] | None = None
+
+
+def reset_gh_env_cache() -> None:
+    """Drop the cached credential so the next run re-reads the vault (#13859).
+
+    Called at the start of every audit task. Celery workers are long-lived, so
+    without this a rotated or revoked token would keep working for the life of
+    the process — which would defeat the revocation this issue is about.
+    """
+    global _gh_env_cache
+    _gh_env_cache = None
+
+
+def _gh_env() -> tuple[dict[str, str], bool]:
+    """Subprocess environment for every `gh` call, and whether the vault
+    supplied the token (#13859).
+
+    Mirrors the LLC Copilot adapter: both GH_TOKEN and GITHUB_TOKEN, because
+    different gh subcommands read different ones.
+
+    Returns the flag rather than letting callers test `"GH_TOKEN" in env`. That
+    test answers "does this process have a token anywhere?", which is a
+    different question: the env starts as a copy of os.environ, and an ambient
+    GH_TOKEN is exactly what the pre-#13859 CRITICAL log told operators to set
+    — docker-compose injects an empty one unconditionally. Deriving the flag
+    that way reported ambient state as vault-owned, suppressed the warning this
+    change exists to emit, and told the operator the credential came from the
+    vault while asking them to put one there.
+
+    Cached per run: a task files one issue per finding, and a vault round-trip
+    per finding would be pure waste.
+    """
+    global _gh_env_cache
+    if _gh_env_cache is not None:
+        env, from_vault = _gh_env_cache
+        return dict(env), from_vault
+    env = dict(os.environ)
+    token = _resolve_filing_token()
+    if token:
+        env["GH_TOKEN"] = token
+        env["GITHUB_TOKEN"] = token
+    _gh_env_cache = (env, bool(token))
+    return dict(env), bool(token)
+
+
 def _repo_root() -> Path:
     """Resolve the AutoBot-AI repo root relative to this file."""
     return Path(__file__).resolve().parent.parent.parent
 
 
-def _list_open_issues(label: str | None = None) -> list[str]:
-    """Return titles of open GitHub issues (optionally filtered by label)."""
-    cmd = [
-        "gh",
-        "issue",
-        "list",
-        "--repo",
-        _GH_REPO,
-        "--state",
-        "open",
-        "--json",
-        "title",
-        "--limit",
-        "500",
-    ]
-    if label:
-        cmd += ["--label", label]
-    code, out, _ = _run(cmd)
-    if code != 0:
-        return []
-    try:
-        return [item["title"] for item in json.loads(out)]
-    except Exception:
-        return []
+def _list_open_issues(label: str | None = None) -> tuple[list[str], bool]:
+    """Titles of open issues, and whether the listing was actually observed.
+
+    #13570: this returned a bare `[]` on failure, which is what a repo with no
+    open issues returns. "I could not look" and "there is nothing there" were
+    one answer, and the caller acted on the second.
+    """
+    return list_open_issue_titles(_GH_REPO, label, _gh_env()[0], _run)
 
 
 def _gh_available() -> bool:
@@ -169,17 +372,33 @@ def _gh_available() -> bool:
     identical to a healthy one, so there was no way to tell when filing broke or
     how much had been deferred since.
     """
-    code, out, err = _run(["gh", "auth", "status"])
+    env, vault_backed = _gh_env()
+    if not vault_backed:
+        # #13859: ambient CLI auth is not an owned credential. Nothing rotates
+        # it, nothing audits its use, and nothing can revoke it — which is how
+        # it lapsed unnoticed in #13570. Say so on every run, even when the
+        # ambient session happens to work, or the gap stays invisible until the
+        # day it does not.
+        logger.warning(
+            "audit worker has no vault-owned filing credential: falling back to "
+            "ambient `gh` CLI auth for whichever account this worker runs as. "
+            "Store a token as '%s' in the system vault to get grant, audit and "
+            "revocation. (#13859)",
+            _FILING_CREDENTIAL_VAULT_KEY,
+        )
+    code, out, err = _run(["gh", "auth", "status"], env=env)
     if code != 0:
         logger.critical(
-            "audit worker cannot file issues: `gh auth status` failed for this "
-            "service account (%s). Every finding this run produces will be queued "
-            "instead of filed. Fix: authenticate gh for the service account, or "
-            "give the worker a GH_TOKEN. gh said: %s",
+            "audit worker cannot file issues: `gh auth status` failed (%s, "
+            "credential source: %s). Every finding this run produces will be "
+            "queued instead of filed. Fix: store a token as '%s' in the system "
+            "vault, or authenticate gh for the service account. gh said: %s",
             _GH_REPO,
+            "system vault" if vault_backed else "ambient CLI auth",
+            _FILING_CREDENTIAL_VAULT_KEY,
             # stdout as well as stderr: gh routes this message to stderr today,
             # but a build that changed that would gut the diagnostic silently.
-            ((err or "").strip() or (out or "").strip())[:_MAX_LOG_CHARS] or "no output",
+            ((err or "").strip() or (out or "").strip())[:MAX_LOG_CHARS] or "no output",
         )
     return code == 0
 
@@ -199,10 +418,11 @@ def _file_issue(title: str, body: str, labels: str = _AUDIT_LABELS) -> bool:
             body,
             "--label",
             labels,
-        ]
+        ],
+        env=_gh_env()[0],
     )
     if code != 0:
-        logger.error("gh issue create failed (%s): %s", title, err[:_MAX_LOG_CHARS])
+        logger.error("gh issue create failed (%s): %s", title, err[:MAX_LOG_CHARS])
         return False
     return True
 
@@ -311,7 +531,8 @@ def _dedupe_and_file(
     existing_titles: set[str],
     label: str,
     redis=None,
-) -> tuple[int, int]:
+    dedupe_ok: bool = True,
+) -> FilingOutcome:
     """File GitHub issues for new findings; persist any that cannot be filed.
 
     Drains the dead-letter queue first (retrying previously deferred findings),
@@ -320,10 +541,18 @@ def _dedupe_and_file(
     Redis dead-letter queue when filing is impossible (unauthenticated gh) or
     fails. No finding is ever silently discarded (#12319).
 
-    Returns ``(filed, deferred)`` where ``filed + deferred`` accounts for every
-    non-duplicate finding drawn from both the queue and *findings*.
+    Returns a `FilingOutcome`. ``filed + deferred + lost`` accounts for every
+    non-duplicate finding drawn from both the queue and *findings* -- ``lost``
+    being the count the old ``(filed, deferred)`` pair could not express, since
+    a queue that could not be written reported ``deferred == 0``, exactly like a
+    clean run (#13570).
     """
-    gh_ok = _gh_available()
+    # `dedupe_ok` False means the open-issue listing never happened, so
+    # `existing_titles` is empty for want of an answer rather than because the
+    # repo is clean. Filing on that would re-file everything already open.
+    # Deferring instead is the only outcome that does not act on an
+    # unobserved fact -- the queue is retried once the query works (#13570).
+    gh_ok = _gh_available() and dedupe_ok
     pending, queue_readable = _load_deferred(redis)
 
     filed = 0
@@ -356,8 +585,28 @@ def _dedupe_and_file(
         deferred_count = 0
         _log_unwritable_queue(still_deferred, "the existing queue could not be read")
 
+    # A finding is LOST when it was neither filed nor left in the queue.
+    #
+    # Measured as "how many unique findings went in, minus how many the queue
+    # reports holding" rather than special-casing `deferred_count == 0`. Review
+    # found that earlier form blind at the OTHER boundary: when
+    # `_persist_deferred` sheds past `_MAX_DEFERRED` it returns the POST-shed
+    # count, which is nonzero, so `lost` stayed 0 while findings were dropped
+    # for good and `filed + deferred + lost` undercounted by exactly the shed
+    # amount. Same "0 where loss occurred" defect this issue is about, moved
+    # from the write-failure boundary to the cap boundary.
+    #
+    # Deduped by title first, because `_persist_deferred` dedupes too: two
+    # findings with one title collapsing is intended behaviour, not loss, and
+    # counting the raw list would report a phantom every time a queued finding
+    # was re-discovered.
+    unique_deferred = len({finding["title"] for finding in still_deferred})
+    lost = max(0, unique_deferred - deferred_count)
+
     _report_deferral_outcome(gh_ok, still_deferred, deferred_count)
-    return filed, deferred_count
+    outcome = FilingOutcome(filed=filed, deferred=deferred_count, lost=lost, filing_available=gh_ok)
+    _record_filing_status(redis, outcome, _vault_backed_now(), gh_ok)
+    return outcome
 
 
 def _report_deferral_outcome(gh_ok: bool, still_deferred: list[dict], deferred_count: int) -> None:
@@ -382,6 +631,74 @@ def _report_deferral_outcome(gh_ok: bool, still_deferred: list[dict], deferred_c
         "credential and Redis need attention.",
         len(still_deferred),
     )
+
+
+# ---------------------------------------------------------------------------
+# Startup credential guard (#13570 fix 3)
+# ---------------------------------------------------------------------------
+
+
+def check_filing_credential_at_startup(redis=None) -> bool:
+    """Report at STARTUP whether this worker can file issues at all (#13570).
+
+    The issue asks for three things. Two landed in #13860 (the queue reports
+    what it actually stored) and #13859 (a vault-owned credential instead of
+    ambient CLI auth). This is the third, and it never did: *fail loudly at
+    startup when the worker's filing credential is absent, rather than
+    per-finding at run time.*
+
+    Why startup specifically. `_gh_available` runs inside a task, so the first
+    signal that filing is broken arrives whenever an audit next happens to
+    produce a finding -- weekly for `audit_claims`. On the live host the lapse
+    went unnoticed long enough to accumulate 1,644 queued findings, and there is
+    still no way to say when it broke. A worker that cannot file has been unable
+    to file since it started; that fact is available the moment it starts.
+
+    Writes `audit:filing_status` as well as logging. A CRITICAL line is not a
+    surface a check can query, and "the automation reports deferral but nothing
+    is parked" is precisely a story about trusting a reassuring message over an
+    observable fact.
+
+    Returns whether filing is available, so a caller can act on it. Never
+    raises: a broken credential check must not stop a worker from booting, or
+    the audit stops entirely rather than degrading.
+    """
+    try:
+        reset_gh_env_cache()
+        gh_ok = _gh_available()
+        _record_filing_status(redis if redis is not None else _get_redis(), None, _vault_backed_now(), gh_ok)
+        if not gh_ok:
+            logger.critical(
+                "audit worker started WITHOUT a working issue-filing credential. Every "
+                "finding it produces will be queued to %s instead of filed, and the "
+                "backlog is retried automatically once a credential resolves. Store a "
+                "token as '%s' in the system vault. Filing health is queryable at '%s'. "
+                "(#13570)",
+                _DEFERRED_FINDINGS_KEY,
+                _FILING_CREDENTIAL_VAULT_KEY,
+                _FILING_STATUS_KEY,
+            )
+        return gh_ok
+    except Exception as exc:  # noqa: BLE001 - a startup probe must never stop the worker
+        logger.error("audit: startup filing-credential check failed (%s)", type(exc).__name__)
+        return False
+
+
+@worker_ready.connect
+def _audit_worker_ready(**_kwargs) -> None:
+    """Run the startup guard when a Celery worker comes up (#13570)."""
+    check_filing_credential_at_startup()
+
+
+@beat_init.connect
+def _audit_beat_init(**_kwargs) -> None:
+    """Run the startup guard when Beat comes up (#13570).
+
+    Both signals, not just `worker_ready`: Beat and the worker are separate
+    processes with separate deployments, and it is Beat that decides these tasks
+    run at all. A deployment that brings up only one of them must still say so.
+    """
+    check_filing_credential_at_startup()
 
 
 # ---------------------------------------------------------------------------
@@ -474,6 +791,12 @@ def _testgap_findings(modules: list[Path], repo_root: Path) -> list[dict]:
 @celery_app.task(bind=True, name="workers.audit_testgaps")
 def audit_testgaps(self) -> dict:
     """Every-6h task: find Python modules changed since last run that lack tests."""
+    # #13859: FIRST thing in the task. reset_gh_env_cache() used to live
+    # inside _gh_available(), but every task calls _list_open_issues()
+    # before that — so the run's first gh call carried the PREVIOUS run's
+    # token. A revoked one there returns [], which empties existing_titles
+    # and silently disables dedupe, re-filing every finding.
+    reset_gh_env_cache()
     redis = _get_redis()
     last_run = _redis_get(redis, _TESTGAPS_LAST_RUN_KEY)
     run_at = utc_timestamp()
@@ -482,25 +805,30 @@ def audit_testgaps(self) -> dict:
     modules = _changed_python_modules(last_run, repo_root)
 
     findings = _testgap_findings(modules, repo_root)
-    existing_titles = set(_list_open_issues(label="observability"))
-    filed, deferred = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS, redis)
+    existing_titles, dedupe_ok = _list_open_issues(label="observability")
+    outcome = _dedupe_and_file(findings, set(existing_titles), _AUDIT_LABELS, redis, dedupe_ok=dedupe_ok)
 
     _redis_set(redis, _TESTGAPS_LAST_RUN_KEY, run_at)
 
     result = {
-        "status": "success",
+        "status": _run_status(outcome),
         "run_at": run_at,
         "modules_checked": len(modules),
         "gaps_found": len(findings),
-        "issues_filed": filed,
-        "issues_deferred": deferred,
+        "issues_filed": outcome.filed,
+        "issues_deferred": outcome.deferred,
+        "issues_lost": outcome.lost,
+        "filing_available": outcome.filing_available,
     }
     logger.info(
-        "audit_testgaps complete: modules_checked=%d gaps_found=%d " "issues_filed=%d issues_deferred=%d",
+        "audit_testgaps complete: status=%s modules_checked=%d gaps_found=%d "
+        "issues_filed=%d issues_deferred=%d issues_lost=%d",
+        result["status"],
         len(modules),
         len(findings),
-        filed,
-        deferred,
+        outcome.filed,
+        outcome.deferred,
+        outcome.lost,
     )
     return result
 
@@ -510,23 +838,9 @@ def audit_testgaps(self) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _run_vulture(repo_root: Path) -> list[str]:
-    """Run vulture on the backend and return lines identifying dead code."""
-    cmd = [
-        sys.executable,
-        "-m",
-        "vulture",
-        "autobot-backend",
-        "--min-confidence",
-        "80",
-        "--exclude",
-        "*/migrations/*,*/__pycache__/*,*/tests/*",
-    ]
-    code, out, err = _run(cmd, cwd=str(repo_root))
-    if code not in (0, 1):  # vulture exits 1 when dead code found
-        logger.warning("vulture exited %d: %s", code, err[:_MAX_LOG_CHARS])
-        return []
-    return [line.strip() for line in out.splitlines() if line.strip()]
+def _run_vulture(repo_root: Path) -> tuple[list[str], bool]:
+    """Dead-code lines from vulture, and whether the scan actually ran (#13570)."""
+    return vulture_scan(repo_root, _run, sys.executable)
 
 
 def _dead_code_fingerprint(line: str) -> str:
@@ -539,12 +853,18 @@ def _dead_code_fingerprint(line: str) -> str:
 @celery_app.task(bind=True, name="workers.audit_dead_code")
 def audit_dead_code(self) -> dict:
     """Daily task: run vulture, file issues only for findings new since last run."""
+    # #13859: FIRST thing in the task. reset_gh_env_cache() used to live
+    # inside _gh_available(), but every task calls _list_open_issues()
+    # before that — so the run's first gh call carried the PREVIOUS run's
+    # token. A revoked one there returns [], which empties existing_titles
+    # and silently disables dedupe, re-filing every finding.
+    reset_gh_env_cache()
     redis = _get_redis()
     last_inventory: list[str] = _redis_get(redis, _DEAD_CODE_INVENTORY_KEY) or []
     last_set = set(last_inventory)
 
     repo_root = _repo_root()
-    current_lines = _run_vulture(repo_root)
+    current_lines, scan_ran = _run_vulture(repo_root)
     current_fps = {_dead_code_fingerprint(ln): ln for ln in current_lines}
 
     new_findings_raw = [v for k, v in current_fps.items() if k not in last_set]
@@ -561,26 +881,35 @@ def audit_dead_code(self) -> dict:
         )
         findings.append({"title": title, "body": body})
 
-    existing_titles = set(_list_open_issues(label="observability"))
-    filed, deferred = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS, redis)
+    existing_titles, dedupe_ok = _list_open_issues(label="observability")
+    outcome = _dedupe_and_file(findings, set(existing_titles), _AUDIT_LABELS, redis, dedupe_ok=dedupe_ok)
 
-    # Persist current full inventory for next run's diff
-    _redis_set(redis, _DEAD_CODE_INVENTORY_KEY, list(current_fps.keys()))
+    # Persist current full inventory for next run's diff -- but ONLY when there
+    # was a scan. Writing an empty inventory from a scan that never ran wipes the
+    # baseline, so the next successful run sees every finding as new (#13570).
+    if scan_ran:
+        _redis_set(redis, _DEAD_CODE_INVENTORY_KEY, list(current_fps.keys()))
 
     result = {
-        "status": "success",
+        "status": _run_status(outcome) if scan_ran else _STATUS_DEGRADED,
         "run_at": utc_timestamp(),
+        "scan_ran": scan_ran,
         "total_findings": len(current_lines),
         "new_findings": len(new_findings_raw),
-        "issues_filed": filed,
-        "issues_deferred": deferred,
+        "issues_filed": outcome.filed,
+        "issues_deferred": outcome.deferred,
+        "issues_lost": outcome.lost,
+        "filing_available": outcome.filing_available,
     }
     logger.info(
-        "audit_dead_code complete: total_findings=%d new_findings=%d " "issues_filed=%d issues_deferred=%d",
+        "audit_dead_code complete: status=%s total_findings=%d new_findings=%d "
+        "issues_filed=%d issues_deferred=%d issues_lost=%d",
+        result["status"],
         len(current_lines),
         len(new_findings_raw),
-        filed,
-        deferred,
+        outcome.filed,
+        outcome.deferred,
+        outcome.lost,
     )
     return result
 
@@ -676,6 +1005,12 @@ def _write_verification_doc(repo_root: Path, verified: list, unverified: list) -
 @celery_app.task(bind=True, name="workers.audit_claims")
 def audit_claims(self) -> dict:
     """Weekly task: verify README/docs capability claims have wired implementations."""
+    # #13859: FIRST thing in the task. reset_gh_env_cache() used to live
+    # inside _gh_available(), but every task calls _list_open_issues()
+    # before that — so the run's first gh call carried the PREVIOUS run's
+    # token. A revoked one there returns [], which empties existing_titles
+    # and silently disables dedupe, re-filing every finding.
+    reset_gh_env_cache()
     redis = _get_redis()
     _redis_get(redis, _CLAIMS_LAST_RUN_KEY)
     run_at = utc_timestamp()
@@ -714,8 +1049,8 @@ def audit_claims(self) -> dict:
         )
         findings.append({"title": title, "body": body})
 
-    existing_titles = set(_list_open_issues(label="observability"))
-    filed, deferred = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS, redis)
+    existing_titles, dedupe_ok = _list_open_issues(label="observability")
+    outcome = _dedupe_and_file(findings, set(existing_titles), _AUDIT_LABELS, redis, dedupe_ok=dedupe_ok)
 
     _redis_set(redis, _CLAIMS_LAST_RUN_KEY, run_at)
     _redis_set(
@@ -725,21 +1060,26 @@ def audit_claims(self) -> dict:
     )
 
     result = {
-        "status": "success",
+        "status": _run_status(outcome),
         "run_at": run_at,
         "claims_checked": len(claims),
         "verified": len(verified),
         "unverified": len(unverified),
-        "issues_filed": filed,
-        "issues_deferred": deferred,
+        "issues_filed": outcome.filed,
+        "issues_deferred": outcome.deferred,
+        "issues_lost": outcome.lost,
+        "filing_available": outcome.filing_available,
         "verification_doc": str(doc_path.relative_to(repo_root)),
     }
     logger.info(
-        "audit_claims complete: claims_checked=%d verified=%d unverified=%d " "issues_filed=%d issues_deferred=%d",
+        "audit_claims complete: status=%s claims_checked=%d verified=%d unverified=%d "
+        "issues_filed=%d issues_deferred=%d issues_lost=%d",
+        result["status"],
         len(claims),
         len(verified),
         len(unverified),
-        filed,
-        deferred,
+        outcome.filed,
+        outcome.deferred,
+        outcome.lost,
     )
     return result

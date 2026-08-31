@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from constants.threshold_constants import CategoryDefaults
 
 logger = get_logger(__name__)
 
@@ -167,7 +168,7 @@ class SpecializedAgentService:
 
         counts: Dict[str, int] = {}
         for agent in agents:
-            cat = agent.get("category", "general")
+            cat = agent.get("category", CategoryDefaults.GENERAL)
             counts[cat] = counts.get(cat, 0) + 1
         return counts
 

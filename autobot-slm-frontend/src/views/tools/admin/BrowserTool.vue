@@ -15,25 +15,40 @@ const logger = createLogger('BrowserTool')
 
 import { ref, onMounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
+import {
+  readBrowserVmStatus,
+  readFleetMembershipSource,
+  type BrowserUiStatus,
+} from '@/utils/browserVmStatus'
 
 const api = useAutobotApi()
 
 // State
 const loading = ref(false)
 const error = ref<string | null>(null)
-// Default to an internal URL that passes the backend URL whitelist (#985)
+// Relative default: the guard admits loopback and any node the SLM registry
+// lists, so an internal target needs no special casing here (#15228).
 const url = ref('/')
 const screenshot = ref<string | null>(null)
-const browserStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected')
+const browserStatus = ref<BrowserUiStatus>('unknown')
 
 const isConnected = ref(false)
+/** Set when the backend answered from configured hosts, not the live registry. */
+const fleetDegraded = ref(false)
 
 async function checkStatus(): Promise<void> {
   try {
     const data = await api.getBrowserStatus()
-    isConnected.value = data.status === 'connected' || data.status === 'ready'
+    // #15228: this read `data.status` and compared it to 'connected'/'ready'.
+    // The route nests the field under `browser_vm` AND uses a different
+    // vocabulary, so the indicator could never read connected. One helper owns
+    // both halves of that contract now.
+    browserStatus.value = readBrowserVmStatus(data)
+    isConnected.value = browserStatus.value === 'connected'
+    fleetDegraded.value = readFleetMembershipSource(data) === 'ssot_fallback'
   } catch (e) {
     logger.error('Failed to check browser status:', e)
+    browserStatus.value = 'unknown'
     isConnected.value = false
   }
 }
@@ -149,14 +164,19 @@ onMounted(() => {
               :class="{
                 'bg-green-500': browserStatus === 'connected',
                 'bg-yellow-500 animate-pulse': browserStatus === 'connecting',
+                'bg-amber-500': browserStatus === 'degraded',
+                'bg-gray-400': browserStatus === 'unknown',
                 'bg-red-500': browserStatus === 'disconnected'
               }"
             ></div>
-            <span class="text-xs text-gray-600">{{ browserStatus }}</span>
+            <span class="text-xs text-gray-600">{{ $t(`tools.admin.browserTool.status.${browserStatus}`) }}</span>
+            <span v-if="fleetDegraded" class="text-xs text-amber-700">
+              {{ $t('tools.admin.browserTool.fleetDegraded') }}
+            </span>
           </div>
 
           <button
-            v-if="browserStatus === 'disconnected'"
+            v-if="!isConnected"
             @click="startBrowser"
             :disabled="loading"
             class="px-3 py-1 text-xs bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors disabled:opacity-50"

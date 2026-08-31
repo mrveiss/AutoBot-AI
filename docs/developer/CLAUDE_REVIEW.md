@@ -64,9 +64,45 @@ root causes and both are yours to fix:
    blocked if a required context never reported at all. Count reported contexts
    against `gh api repos/{owner}/{repo}/branches/Dev_new_gui/protection --jq
    '.required_status_checks.contexts[]'`.
-3. **Root-cause and fix it** in the same PR. If the check itself is wrong, fix the
+3. **Name the cause before you debug the diff (#15139).** Five conditions render as
+   the same red tile, and `gh pr checks` buckets every one of them under `fail` —
+   `fail` there is **not** `conclusion: failure` and must be confirmed against the
+   run object. Run `pipeline-scripts/ci_red_cause.py --pr N` (add `--json` to parse
+   it). It reads `GET /actions/jobs/{id}`, the only endpoint carrying a `steps`
+   array — `GET /commits/{sha}/check-runs` has none, so anything classifying from
+   the check-runs listing alone is guessing.
+
+   | cause | what happened | at fault | remedy |
+   |---|---|---|---|
+   | `runner-starvation` | job executed 0 steps — it never got a runner | environment | nothing ran; push a new head commit |
+   | `provisioning-failure` | first failing step is toolchain setup (`apt` exit 124) | environment | no test result; push a new head commit |
+   | `superseded` | `conclusion: cancelled` — a newer push retired the run | neither | wait for the run already queued on the current head |
+   | `test-failure` | first failing step is a work step | **the diff** | fix the diff |
+   | `undetermined` | the cause could not be established | **assume the diff** | establish the cause before acting |
+
+   Read the **first** failing step, never the last: a setup failure makes later test
+   steps fail downstream, so the last failure lies about the cause.
+
+   **`infrastructure: true` means the diff is not indicted — it does NOT mean
+   re-running will fix it (#15139).** Measured on run `33149960063`:
+   `POST /actions/runs/{id}/rerun-failed-jobs` reported success and advanced the run
+   to `attempt=2`, but the failed matrix leg `python-suite shard 12/12` was **carried
+   forward, not re-executed** — same job id, same `started_at` — and only its
+   dependents re-ran 18 minutes later, so the `python-suite` rollup failed again on
+   `Fail if any shard failed`. All fourteen already-executed jobs kept their original
+   attempt-1 timestamps. Re-queueing twice and getting the same red does not mean the
+   classifier is wrong; it means the remedy is.
+
+   What is structurally guaranteed instead: **a new head commit starts a new run at
+   `attempt=1`**, and an attempt-1 run has no previous attempt to carry a job forward
+   from, so every job must execute. That guarantees re-execution — not success.
+
+   **A named cause never makes a red check green.** The tool publishes no status and
+   re-queues nothing; it exits 1 on any red whatever the cause, and exits 2 when
+   nothing could be classified — which is never "clean".
+4. **Root-cause and fix it** in the same PR. If the check itself is wrong, fix the
    check — in the same PR or a fast-follow that lands first.
-4. **If it genuinely cannot be fixed now:** label the PR `blocked`, post a
+5. **If it genuinely cannot be fixed now:** label the PR `blocked`, post a
    one-paragraph root-cause writeup on it, and move to the next issue. Do not merge,
    do not `--admin` past it, and do not interrupt a `/loop` to ask about it.
 
@@ -114,7 +150,7 @@ After ALL PRs merged:
 2. **Call-site validation:** For every removed/renamed function, grep all callers
 3. **Orphaned parameters:** Check function signatures don't break callers
 4. **File parsing:** `python -m py_compile` (backend), `npx tsc --noEmit` (frontend)
-5. **Discovery issues:** For ALL gaps found, file GitHub issues. Do NOT fix inline.
+5. **Discovery issues:** For ALL gaps found, file GitHub issues. Do NOT fix them inline **in this audit** — the PRs are already merged, so an inline fix here would bypass review entirely. Each gap gets its own issue and its own reviewed PR. (This is the narrow exception to Rule 6's fix-by-default; while *implementing*, an in-scope pre-existing bug is still fixed in the same PR.)
 
 **Why:** Bugs like removed `_init_redis()` breaking 9+ call sites get caught here.
 
@@ -126,7 +162,7 @@ After merging all PRs in a batch:
 
 1. Run `/dead-code-audit` to discover new gaps introduced by merged code
 2. File discovery issues for any new dead/orphaned code
-3. Do NOT fix gaps inline — file issues under `dead-code` and `not-wired` labels
+3. Do NOT fix gaps inline in this audit — file issues under `dead-code` and `not-wired` labels, each to be fixed in its own reviewed PR. Findings are always **wire-it-in** issues, never deletion issues
 
 ---
 
@@ -155,6 +191,23 @@ After merging all PRs in a batch:
 
 **Why:** Sessions wasted time canceling/retriggering smoke tests that were running normally.
 
+**A deep queue is the hosted-runner cap, not a dead self-hosted pool (#15139).**
+Measured 2026-08-28: **155** runs queued, **14** jobs executing — **13 of them on
+`ubuntu-latest`, 1 on self-hosted** — with both self-hosted runners `online`. A
+12-run sample of the queued runs found `ubuntu-latest` on every job. So queue depth
+tracks the GitHub-hosted concurrency cap; it is neither a dispatch gate nor a starved
+self-hosted pool, and **idle self-hosted runners next to a long queue is expected**,
+not evidence of a fault. Re-measure before assuming otherwise:
+
+```bash
+gh api 'repos/{owner}/{repo}/actions/runs?status=queued&per_page=1' --jq .total_count
+gh api repos/{owner}/{repo}/actions/runners --jq '[.runners[] | {name, status, busy}]'
+```
+
+A run queued past `WATCHDOG_STALL_MINUTES` (default **45**) is the threshold
+`ci_dispatch_watchdog.py --check runner-starvation` reports on. Below it, waiting is
+normal and your diff is not the reason.
+
 ---
 
 ## PR Template Format
@@ -177,14 +230,10 @@ Always use these exact headings when creating or editing PR descriptions.
 - Before posting review findings or comments to any Paperclip/MVA issue, **verify the target issue is assigned to this agent**
 - If the correct target is unclear, pivot to an agent-owned tracking issue
 - PR authors cannot self-approve — post a detailed review comment instead
-- **When posting comments:** write literal markdown text — never a raw JSON string or file path
 
----
+**Posting comments correctly** — when writing a PR/issue comment or updating a PR body:
 
-## Posting Comments Correctly
-
-When posting PR/issue comments or updating PR bodies:
 - Write the literal text/markdown content
 - Never pass a raw JSON string as the body
-- Never pass a file path instead of file contents
+- Never pass a file path instead of the file's contents
 - Verify the rendered comment after posting

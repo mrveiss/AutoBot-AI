@@ -236,7 +236,24 @@ MUST_STAY_VISIBLE = {
         "tokenizers_parallelism",
     ],
     "tls": ["ca_cert", "cert_dir", "remote_cert_dir"],
-    "path": ["ssh_key_path", "vnc_passwd_file"],
+    "path": [
+        # Service-account inter-node key (#12429) -- location of a credential,
+        # not the credential; `is_credential_field` already excludes it via the
+        # `_path` LOCATION_SUFFIX, this entry only satisfies the broader
+        # name-heuristic sweep below that a "*key*" substring anywhere trips.
+        "ssh_key_path",
+        "vnc_passwd_file",
+        # Operator's own key (#14173), deliberately a SEPARATE field from
+        # ssh_key_path above (different owner, different consumer -- see the
+        # field comment in autobot_shared/ssot_config.py). Classified the SAME
+        # as its sibling for the SAME reason: it is a path to a key, not key
+        # material, and its default (~/.ssh/autobot_key) names no real
+        # user/host/environment. A deployment-supplied override could in
+        # principle embed something sensitive in the path string, but that
+        # risk is identical to ssh_key_path's own overridable default and is
+        # not treated differently there either.
+        "management_ssh_key_path",
+    ],
     "auth": ["google_oauth_client_id", "microsoft_oauth_client_id"],
     "llm": ["searxng_basic_auth_user"],
 }

@@ -2,16 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Shadow-mode RBAC reporting on the MCP dispatcher (#13228 stage 2).
+"""Canonical-RBAC verdict on the MCP dispatcher — shadow (#13228 stage 2) and
+enforced (#14523 stage 3).
 
-Stage 1 declared a permission per tool. Stage 3 will refuse the undeclared. This
-stage answers the question the flip needs answered first — *which working calls
-would it break?* — by reporting the canonical-RBAC verdict without acting on it.
+Stage 1 declared a permission per tool. Stage 2 (below, the `_would_deny` unit
+tests) reported what canonical RBAC would decide without acting on it, to
+answer the question the flip needed answered first: *which working calls
+would it break?* Stage 3 (#14523) promotes that same verdict to the actual
+decision `dispatch()` enforces, replacing the retired `_ADMIN_ONLY_TOOLS`
+substring blocklist.
 
-So the property under test is unusual and is the whole point: **the verdict must
-change nothing.** A test that only checked the log would pass just as happily if
-the shadow had started denying calls, which is the one outcome that must not
-happen yet.
+The `_would_deny` unit tests below are unchanged by the flip — they test the
+decision function, not who acts on it. The `dispatch()` integration tests in
+the second half now assert the opposite of what they asserted under stage 2:
+a would-be denial refuses the call rather than merely being logged.
 """
 
 from unittest.mock import AsyncMock, patch
@@ -93,16 +97,49 @@ def test_a_malformed_cache_entry_does_not_raise():
 
 @pytest.mark.parametrize("role", ["superadmin", "SUPERADMIN", "Admin", "ADMIN"])
 def test_administrative_roles_are_not_reported_as_unknown(role):
-    """``superadmin`` is administrative but is not a ``Role`` enum member.
+    """The original point of this test, preserved across #13854.
 
-    Resolving it through ``Role()`` reported the most privileged role in the system
-    as denied on every tool — and a stage 3 built on that inventory would have
-    stripped a superadmin of all MCP access. ``is_admin_role`` is the canonical,
-    case-insensitive answer, and it is what the legacy gate already uses.
+    ``superadmin`` used not to be a ``Role`` member, so ``Role()`` raised on it and
+    the shadow log reported the most privileged role in the system as an
+    *unrecognised string*. That was the defect: an administrative role and a typo
+    produced the same verdict.
+
+    It is a ``Role`` member now, so it resolves — and what it resolves to is a role
+    holding no granular permission. The verdict is therefore about a missing
+    grant, never about an unknown role. That distinction is the one this test
+    exists to protect, and it is asserted directly below rather than inferred from
+    ``is None``.
     """
     d = _dispatcher({"click": _tool("click", "mcp.browser.control")})
 
+    verdict = d._would_deny("click", role)
+
+    assert verdict is None or not verdict.startswith("unknown-role"), (
+        f"{role!r} resolved as an unrecognised role ({verdict!r}) — it is administrative "
+        "and must resolve through the canonical vocabulary"
+    )
+
+
+@pytest.mark.parametrize("role", ["admin", "ADMIN", "Admin"])
+def test_admin_is_permitted_every_declared_tool(role):
+    """``admin`` holds all 54 permissions, so it is never denied a declared tool."""
+    d = _dispatcher({"click": _tool("click", "mcp.browser.control")})
+
     assert d._would_deny("click", role) is None
+
+
+@pytest.mark.parametrize("role", ["superadmin", "SUPERADMIN"])
+def test_superadmin_is_refused_a_tool_whose_permission_it_does_not_hold(role):
+    """#13854: this gate stopped short-circuiting on the administrative predicate.
+
+    Before, ``is_admin_role`` waved superadmin through every tool while the
+    canonical mapping said it held nothing — ``ADMIN_ROLES`` acting as a
+    permission source. The refusal names the missing grant, so the reason is
+    actionable rather than a bare denial.
+    """
+    d = _dispatcher({"click": _tool("click", "mcp.browser.control")})
+
+    assert d._would_deny("click", role) == "missing:mcp.browser.control"
 
 
 def test_a_known_role_in_the_wrong_case_still_resolves():
@@ -132,17 +169,14 @@ def test_privileged_roles_hold_the_control_grants(role):
     assert d._would_deny("click", role) is None
 
 
-# --------------------------------------------- it must not change behaviour
+# ------------------------------------------------ stage 3: it now refuses
 
 
 @pytest.mark.asyncio
-async def test_a_would_be_denial_still_dispatches():
-    """The load-bearing test: shadow mode reports, it does not refuse.
-
-    If this ever fails, stage 2 has silently become stage 3 and every caller of
-    an undeclared tool starts breaking without the fallout inventory that the
-    flip is supposed to be based on.
-    """
+async def test_an_undeclared_tool_no_longer_dispatches():
+    """#14523: the load-bearing test flips here. Stage 2 pinned that shadow mode
+    must not refuse; stage 3 is exactly that flip landing on purpose, now that
+    #14494 has proven no live tool is actually undeclared."""
     d = _dispatcher({"mystery": _tool("mystery", None)})
     d._ensure_cache_fresh = AsyncMock()
     d._call_bridge = AsyncMock(return_value={"success": True, "result": "ran"})
@@ -153,12 +187,34 @@ async def test_a_would_be_denial_still_dispatches():
     ):
         result = await d.dispatch("mystery", {}, role="readonly")
 
-    assert result.get("success") is True, "shadow mode refused a call it must only report"
+    assert result.get("success") is False, "an undeclared tool must be refused, not dispatched"
+    d._call_bridge.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_the_legacy_blocklist_still_decides():
-    """`_ADMIN_ONLY_TOOLS` remains the authority until stage 3."""
+async def test_an_undeclared_tool_is_refused_even_for_admin():
+    """#14523: undeclared denies unconditionally — no role, including admin,
+    should be able to run a tool nobody has judged what permission it needs."""
+    d = _dispatcher({"mystery": _tool("mystery", None)})
+    d._ensure_cache_fresh = AsyncMock()
+    d._call_bridge = AsyncMock(return_value={"success": True, "result": "ran"})
+
+    with (
+        patch("chat_workflow.cot_events.emit_tool_call", AsyncMock()),
+        patch("chat_workflow.cot_events.emit_tool_result", AsyncMock()),
+    ):
+        result = await d.dispatch("mystery", {}, role="admin")
+
+    assert result.get("success") is False
+    d._call_bridge.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_flushall_still_denies_non_admin_via_canonical_rbac():
+    """#14523: replaces `_ADMIN_ONLY_TOOLS` — flushall's real declaration
+    (`mcp.manage`, `_DECLARED_AHEAD_OF_TIME` in mcp_tool_permissions.py) is
+    admin-exclusive, so the canonical path denies a non-admin exactly like the
+    retired substring blocklist did."""
     d = _dispatcher({"flushall": _tool("flushall", "mcp.manage", bridge="redis_mcp")})
     d._ensure_cache_fresh = AsyncMock()
     d._call_bridge = AsyncMock(return_value={"success": True, "result": "ran"})
@@ -169,7 +225,26 @@ async def test_the_legacy_blocklist_still_decides():
     ):
         result = await d.dispatch("flushall", {}, role="user")
 
-    assert result.get("success") is False, "the legacy blocklist stopped enforcing"
+    assert result.get("success") is False, "the canonical path stopped enforcing"
+    d._call_bridge.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_flushall_still_dispatches_for_admin_via_canonical_rbac():
+    """The control case: the canonical path is not overly strict — admin still
+    reaches flushall, matching the retired blocklist's actual behaviour."""
+    d = _dispatcher({"flushall": _tool("flushall", "mcp.manage", bridge="redis_mcp")})
+    d._ensure_cache_fresh = AsyncMock()
+    d._call_bridge = AsyncMock(return_value={"success": True, "result": "ran"})
+
+    with (
+        patch("chat_workflow.cot_events.emit_tool_call", AsyncMock()),
+        patch("chat_workflow.cot_events.emit_tool_result", AsyncMock()),
+    ):
+        result = await d.dispatch("flushall", {}, role="admin")
+
+    assert result.get("success") is True
+    d._call_bridge.assert_awaited_once()
 
 
 @pytest.mark.asyncio
