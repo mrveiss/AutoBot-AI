@@ -14,8 +14,16 @@ This script verifies:
 import sys
 from pathlib import Path
 
-# Add autobot-backend to path
-backend_path = Path(__file__).parent / "autobot-backend"
+# Add the repo root and autobot-backend to path.
+# Path(__file__).parent is repo_tests/ itself, not the repo root -- the prior
+# `.parent / "autobot-backend"` resolved to the non-existent
+# repo_tests/autobot-backend and supplied nothing (#15251). `autobot_shared`
+# lives at the repo root and `llm_shared` only under autobot-backend/, so a
+# standalone `python repo_tests/trivial_config_test.py` run (pytest already
+# gets both from pytest.ini's `pythonpath`) needs both corrected anchors.
+repo_root = Path(__file__).resolve().parent.parent
+backend_path = repo_root / "autobot-backend"
+sys.path.insert(0, str(repo_root))
 sys.path.insert(0, str(backend_path))
 
 from autobot_shared.ssot_config import TRIVIAL_MODEL, get_config

@@ -47,6 +47,25 @@ keeps only paths ``git ls-files`` reports, for two measured reasons:
 Measured: 3,099 sources, identical in the main checkout and in a fresh
 worktree.
 
+A DIRECTORY NAMED `tests/` MAY HOLD NON-TEST FILES (#15258)
+--------------------------------------------------------------
+Pruning `tests` out of `_SKIP_PARTS` used to drop every file inside a
+directory of that name, test or not -- so a fork of `with_error_handling`
+placed in a non-test helper living there (`autobot-backend/llc/tests/_e2e_harness.py`, `autobot-infrastructure/shared/tests/mock_llm_interface.py`)
+would never reach the scan. DECISION: narrow the exclusion to file name, not
+directory name. `_production_sources` already drops any file matching
+`test_*.py` / `*_test.py` regardless of which directory it sits in (see the
+filename check below); removing `tests` from `_SKIP_PARTS` and relying on
+that per-file check instead means a non-test helper under `tests/` is
+scanned exactly like one anywhere else, while an actual test file inside it
+stays excluded. Measured population moved from 3,099 to 3,199 sources with
+the directory no longer pruned wholesale.
+
+Swept the tree for other guards with the same directory-name blind spot
+(AC4): one other, ``repo_tests/workflow_planner_deprecation_test.py``, also
+prunes a literal ``"tests"`` entry from its own ``_SKIP_PARTS``. Left as-is
+here -- a different file, tracked separately as #15350.
+
 UNPARSEABLE IS AN UNKNOWN, NOT AN ABSENCE (#15202 item 3)
 ----------------------------------------------------------
 ``_defines_target`` used to catch ``SyntaxError``/``UnicodeDecodeError`` and
@@ -95,10 +114,8 @@ _TARGET_NAME = "with_error_handling"
 # whole workflow runs from `<main-tree>/.worktrees/<branch>/` checkouts, so
 # `"/.worktrees/" in path.as_posix()` is true of the repo root itself and skips
 # every file in the tree; the guard then inspects nothing and fails its own
-# non-vacuity assertion. `tests` has the identical failure mode for a checkout
-# under any directory of that name. Same form as
-# `first_party_imports_resolve_test.py:33` and
-# `shell_lib_sources_resolve_test.py:58`.
+# non-vacuity assertion. Same form as `first_party_imports_resolve_test.py:33`
+# and `shell_lib_sources_resolve_test.py:58`.
 #
 # #15202 item 2: `.worktrees` was an unreachable entry while the scan root was
 # `autobot-backend/` -- no path relative to that root can carry it. Scanning
@@ -107,7 +124,12 @@ _TARGET_NAME = "with_error_handling"
 # under `<repo>/.worktrees/`, each a full copy of this tree with its own
 # `decorators.py`. `test_a_worktrees_directory_under_the_scan_root_is_pruned`
 # pins that, so the entry can never go back to doing nothing unnoticed.
-_SKIP_PARTS = {"node_modules", ".worktrees", "tests", "__pycache__", "venv", ".venv"}
+#
+# `tests` is deliberately NOT here (#15258): pruning it by directory name
+# dropped non-test helpers living inside `tests/` right along with the actual
+# tests. The filename check in `_production_sources` below excludes test files
+# wherever they live, which is the narrower rule this guard actually needs.
+_SKIP_PARTS = {"node_modules", ".worktrees", "__pycache__", "venv", ".venv"}
 
 # The one file allowed to define it. Anything else defining a function or
 # async function with this exact name is the fork this test exists to catch.
@@ -118,13 +140,15 @@ _CANONICAL_DEFINER = (_BACKEND / "utils" / "error_boundaries" / "decorators.py")
 # moving the floor much, so the floor alone would not catch it.
 _TREES_THAT_MUST_BE_SCANNED = ("autobot_shared", "autobot-slm-backend", "scripts", "tools")
 
-#: Population floor for the tracked scan. Measured at 3,099 sources; the floor
-#: sits 149 below that. For scale, the largest number of `.py` files deleted by
-#: any single merge in the last 300 first-parent commits is 3, so ordinary churn
-#: has ~50x headroom, while losing any one of the four trees above (217, 175,
-#: 55, 22 files) or any comparable subtree fails. RATCHET: raise it when the
+#: Population floor for the tracked scan. Measured at 3,199 sources after
+#: #15258 narrowed the `tests` exclusion to file name (was 3,099 with the
+#: directory pruned wholesale); the floor sits 149 below that, same margin as
+#: before. For scale, the largest number of `.py` files deleted by any single
+#: merge in the last 300 first-parent commits is 3, so ordinary churn has
+#: ~50x headroom, while losing any one of the four trees above (217, 175, 55,
+#: 22 files) or any comparable subtree fails. RATCHET: raise it when the
 #: population genuinely grows; lower it only with a stated reason.
-_SOURCE_FLOOR = 2950
+_SOURCE_FLOOR = 3050
 
 #: How far the population may outgrow the floor before the floor is stale. The
 #: floor started at 100 against 2,308 files -- 23x slack -- which is how it
@@ -278,13 +302,20 @@ def _write_fixture_tree(root: Path) -> Path:
 
     Same fixture shape as `scripts/check_ansible_file_references_test.py:40-45`
     and `repo_tests/lint/canonical/test_context.py:76-78`.
+
+    `tests/` holds a test-named file (excluded by filename, #15258) rather than
+    the generic `vendored.py` the other excluded directories get: since #15258
+    narrowed the `tests` exclusion to file name, a non-test file placed there
+    would no longer be pruned, and this fixture needs to keep demonstrating
+    what IS still excluded.
     """
     (root / "utils" / "error_boundaries").mkdir(parents=True)
     definer = root / "utils" / "error_boundaries" / "decorators.py"
     definer.write_text(f"def {_TARGET_NAME}():\n    pass\n", encoding="utf-8")
-    for excluded in ("node_modules", "tests"):
-        (root / excluded).mkdir()
-        (root / excluded / "vendored.py").write_text("x = 1\n", encoding="utf-8")
+    (root / "node_modules").mkdir()
+    (root / "node_modules" / "vendored.py").write_text("x = 1\n", encoding="utf-8")
+    (root / "tests").mkdir()
+    (root / "tests" / "test_something.py").write_text("x = 1\n", encoding="utf-8")
     return definer
 
 
@@ -334,6 +365,37 @@ def test_a_worktrees_directory_under_the_scan_root_is_pruned(tmp_path):
         "a copy of the tree under .worktrees/ was scanned as if it were the tree — "
         "every worktree in the mandated layout would report itself as a fork"
     )
+
+
+def test_a_non_test_helper_inside_a_tests_directory_is_still_scanned(tmp_path):
+    """#15258 contrast mutation: a fork placed in a non-test file under `tests/`.
+
+    Before this fix, pruning `tests` by directory name dropped everything under
+    it, test or not — a real instance of exactly this shape sits at
+    `autobot-backend/llc/tests/_e2e_harness.py` and
+    `autobot-infrastructure/shared/tests/mock_llm_interface.py`. Narrowing the
+    exclusion to file name means a fork placed in a helper like those is caught,
+    while an actual test file in the same directory stays excluded.
+    """
+    root = tmp_path / "autobot-backend"
+    (root / "utils" / "error_boundaries").mkdir(parents=True)
+    (root / "utils" / "error_boundaries" / "decorators.py").write_text(
+        f"def {_TARGET_NAME}():\n    pass\n", encoding="utf-8"
+    )
+    harness_dir = root / "llc" / "tests"
+    harness_dir.mkdir(parents=True)
+    fork = harness_dir / "_e2e_harness.py"
+    fork.write_text(f"def {_TARGET_NAME}():\n    pass\n", encoding="utf-8")
+    real_test = harness_dir / "test_something.py"
+    real_test.write_text(f"def {_TARGET_NAME}():\n    pass\n", encoding="utf-8")
+
+    scanned = _production_sources(root)
+
+    assert fork in scanned, (
+        "a non-test helper inside a tests/ directory was pruned by directory "
+        "name alone — a with_error_handling fork placed there would go unseen (#15258)"
+    )
+    assert real_test not in scanned, "an actual test file inside tests/ must stay excluded by its filename"
 
 
 @pytest.mark.parametrize("ancestor", sorted(_SKIP_PARTS))

@@ -79,27 +79,26 @@ from repo_tests.collected_test_model import (
     test_modules,
 )
 
-# Measured on this branch, per top-level tree:
-#   tree: (test functions with an empty body that must not be exceeded,
-#          test functions that must STILL be found in that tree)
+# Measured on this branch, per top-level tree.
 #
-# Eleven today, in three files, every one a placeholder whose docstring names a
-# check its body does not perform:
+# All eleven found under #15189 are now written for real (#15256):
 #
 #   autobot-backend/config/timeout_configuration_test.py            2
-#     ("would require importing KnowledgeBase")
+#     now exercises DocumentsMixin.add_document's asyncio.wait_for(timeout=
+#     kb_timeouts.document_add) against a controllable internal delay.
 #   autobot-backend/services/rag_integration_test.py                5
-#     (TestAPIEndpoints — "would require FastAPI TestClient integration")
+#     moved to services/rag_integration_api_test.py (#15256, kept this file
+#     under MAX_LINES) and now hit the real api.knowledge_rag router through
+#     TestClient with dependency_overrides standing in for auth and the
+#     KnowledgeBase/RAGService construction.
 #   autobot-backend/tests/api/test_knowledge_grounding.py           4
-#     ("Endpoint test structure")
+#     now hit the real api.knowledge_grounding router the same way, with the
+#     GroundedAgent singleton and Redis client patched per test.
 #
-# All eleven are reported rather than converted under #15189: each needs a real
-# integration test written against a live endpoint or a real KnowledgeBase, and
-# half-converting a population is how a ratchet gets stuck. None is decorated
-# with skip or xfail — all eleven run, and all eleven report green.
-_EMPTY_BODIED = {
-    "autobot-backend": (11, 18000),
-}
+# No tree is pinned above zero. An entry only returns here if a real empty
+# body is found again, and it fails on arrival in ANY tree by derivation --
+# not just the ones that have had one before (see the module docstring).
+_EMPTY_BODIED: dict[str, tuple[int, int]] = {}
 
 
 def _empty_by_tree() -> dict[str, list[str]]:
@@ -111,6 +110,17 @@ def _empty_by_tree() -> dict[str, list[str]]:
     return counts
 
 
+# The sweep's own floor, deliberately NOT derived from _EMPTY_BODIED. That dict
+# is now empty -- every tree reached zero -- so a floor computed from it iterates
+# nothing and can never fire. A guard against tests that execute nothing must not
+# itself pass by finding nothing: if test_modules() ever stops resolving, both the
+# population and the empty-body count collapse to zero together and every
+# assertion below reports clean. Measured 28708 across 13 trees on Dev_new_gui;
+# the floors sit under that with room for ordinary churn, and only ever rise.
+_TOTAL_FUNCTION_FLOOR = 25000
+_TREE_FLOOR = 10
+
+
 def _collapsed(populations: dict[str, int]) -> dict[str, tuple[int, int]]:
     return {
         tree: (populations.get(tree, 0), floor)
@@ -119,14 +129,29 @@ def _collapsed(populations: dict[str, int]) -> dict[str, tuple[int, int]]:
     }
 
 
+def _sweep_shortfalls(populations: dict[str, int]) -> list[str]:
+    """Every way the sweep can be too small, reported together."""
+    total = sum(populations.values())
+    shortfalls = []
+    if total < _TOTAL_FUNCTION_FLOOR:
+        shortfalls.append(f"only {total} test functions collected, floor is {_TOTAL_FUNCTION_FLOOR}")
+    if len(populations) < _TREE_FLOOR:
+        shortfalls.append(f"only {len(populations)} trees reached, floor is {_TREE_FLOOR}")
+    collapsed = _collapsed(populations)
+    if collapsed:
+        shortfalls.append(f"trees below their recorded floor (found, floor): {collapsed}")
+    return shortfalls
+
+
 def test_no_tree_outside_the_known_set_has_a_test_that_executes_nothing() -> None:
     """The hard zero, derived — no list of clean trees to go stale."""
     populations = test_functions_by_tree()
-    collapsed = _collapsed(populations)
-    assert not collapsed, (
-        "the sweep no longer finds the tests it is supposed to be scanning "
-        f"(found, floor): {collapsed}. The zero below is therefore meaningless — "
-        "a scan that finds nothing reports every tree clean. Fix the sweep."
+    shortfalls = _sweep_shortfalls(populations)
+    assert not shortfalls, (
+        "the sweep no longer finds the tests it is supposed to be scanning: "
+        + "; ".join(shortfalls)
+        + ". The zero below is therefore meaningless — a scan that finds nothing "
+        "reports every tree clean. Fix the sweep."
     )
 
     empty = _empty_by_tree()
@@ -148,10 +173,11 @@ def test_no_tree_outside_the_known_set_has_a_test_that_executes_nothing() -> Non
 def test_the_empty_bodied_budgets_only_ever_shrink() -> None:
     """Ratchet, both directions — a recorded shrink is locked in (#14498)."""
     populations = test_functions_by_tree()
-    collapsed = _collapsed(populations)
-    assert not collapsed, (
-        "the sweep no longer finds the tests it is supposed to be scanning "
-        f"(found, floor): {collapsed}. Fix the sweep; do NOT lower these numbers."
+    shortfalls = _sweep_shortfalls(populations)
+    assert not shortfalls, (
+        "the sweep no longer finds the tests it is supposed to be scanning: "
+        + "; ".join(shortfalls)
+        + ". Fix the sweep; do NOT lower these numbers."
     )
 
     empty = _empty_by_tree()
