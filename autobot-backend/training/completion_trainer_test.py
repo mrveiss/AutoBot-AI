@@ -389,6 +389,23 @@ def test_load_checkpoint_rejects_versions_outside_the_written_shape(version):
     assert _VERSION_RE.fullmatch(version) is None, f"{version!r} must not be accepted as a checkpoint version"
 
 
+@pytest.mark.parametrize("version", ["../etc/passwd", "best/../x", "v2026_1", "best\n"])
+def test_load_checkpoint_raises_on_a_rejected_version(tmp_path, version):
+    """The control is the raise. Everything above asserts on the pattern object.
+
+    Review of #15344 found that replacing the ``raise`` in ``load_checkpoint``
+    with a ``logger.warning`` removed the constraint entirely while every test
+    in this file and its source-reading guard stayed green — because none of
+    them called ``load_checkpoint``. Nothing anywhere asserted the ``ValueError``.
+    This is that assertion: it fails if the constraint is detected but not enforced.
+    """
+    from training.completion_trainer import CompletionTrainer
+
+    trainer = CompletionTrainer(model_dir=str(tmp_path))
+    with pytest.raises(ValueError, match="Invalid checkpoint version"):
+        trainer.load_checkpoint(version)
+
+
 @pytest.mark.parametrize("version", ["best", "v20260830_123456", "v19700101_000000"])
 def test_load_checkpoint_accepts_exactly_what_save_checkpoint_writes(version):
     """The negative cases above are only meaningful if the real shapes still pass.
