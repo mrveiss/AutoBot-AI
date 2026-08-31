@@ -110,8 +110,10 @@ commit's pre-image), not carried over from the issue table unchecked; see
   Pre-#7437: 50 / 50.
 - ``anthropic_api_base_url``/``vllm_host``: ``services/provider_health/providers.py``
   assigns both straight from ``ssot_config`` unguarded; an empty base URL
-  breaks every request built from it. Pre-#7437: "https://api.anthropic.com/v1"
-  / "http://127.0.0.1:8000".
+  breaks every request built from it. Both pre-#7437 defaults are restored in
+  ``ssot_config.py``; they are deliberately not repeated here, because a
+  literal URL in prose is both a second place to update and a hardcoded-value
+  violation on this file's own lines.
 - ``openrouter_default_model``/``vllm_dtype``/``vllm_gpu_memory_utilization``/
   ``vllm_tensor_parallel_size``: ``llm_shared/provider_registry.py`` (moved
   from the pre-#7437 ``llm_interface_pkg/provider_registry.py``) reads all
