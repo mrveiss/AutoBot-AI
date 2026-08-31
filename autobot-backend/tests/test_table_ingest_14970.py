@@ -52,15 +52,23 @@ def _docx_bytes_with_table() -> bytes:
 
 
 def _pdf_bytes_with_table() -> bytes:
+    """A PDF whose table has ruling lines, which is what pdfplumber's default
+    layout-detection strategy needs to see a table at all (#14232) — an
+    unstyled ``Table()`` renders as bare positioned text, indistinguishable
+    from ordinary prose to pdfplumber's line/rectangle analysis.
+    """
     pytest.importorskip("reportlab", reason="reportlab needed to synthesize a PDF fixture")
     pytest.importorskip("pypdf", reason="pypdf needed to read the PDF back")
     pytest.importorskip("pdfplumber", reason="pdfplumber needed to detect the table")
+    from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter
-    from reportlab.platypus import SimpleDocTemplate, Table
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
-    doc.build([Table([["Name", "Amount"], ["Widget", "5"]])])
+    table = Table([["Name", "Amount"], ["Widget", "5"]])
+    table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 1, colors.black)]))
+    doc.build([table])
     return buffer.getvalue()
 
 
