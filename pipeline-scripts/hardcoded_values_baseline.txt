@@ -1428,4 +1428,3 @@
 1|other|autobot_shared/security/path_validator.py|"/opt/autobot/data
 1|other|autobot_shared/user_management/organization_service.py|50
 1|other|autobot_shared/user_management/team_service.py|50
-1|other|scripts/setup-ci-parity-env.sh|https://download.pytorch.org/whl/cpu
