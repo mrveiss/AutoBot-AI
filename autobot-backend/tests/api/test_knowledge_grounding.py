@@ -35,6 +35,7 @@ from fastapi.testclient import TestClient
 
 from api.knowledge_grounding import router as grounding_router
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.status_enums import Severity
 from services.grounded_agent import (
     Claim,
     ClaimStatus,
@@ -665,7 +666,7 @@ async def test_api_list_conflicts_endpoint(mock_app):
     fake_redis.hgetall = AsyncMock(
         return_value={
             "status": "pending",
-            "severity": "high",
+            "severity": Severity.HIGH.value,
             "description": "conflicting facts",
             "timestamp": "100.0",
         }
@@ -681,7 +682,7 @@ async def test_api_list_conflicts_endpoint(mock_app):
     body = response.json()
     assert body["total"] == 1
     assert body["conflicts"][0]["conflict_id"] == "c1"
-    assert body["conflicts"][0]["severity"] == "high"
+    assert body["conflicts"][0]["severity"] == Severity.HIGH.value
 
 
 @pytest.mark.asyncio
