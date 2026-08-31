@@ -14,8 +14,10 @@
 #   (b) it was pushed seconds ago and its PR does not exist yet (push->PR gap), or
 #   (c) it still has an open PR.
 #
-# Source this file -- do not execute it:
-#     source "$(git rev-parse --show-toplevel)/scripts/lib/branch-guards.sh"
+# Source this file -- do not execute it. Resolve it from your own location
+# (${BASH_SOURCE[0]}), not via `git rev-parse` -- an ambient GIT_DIR makes
+# that answer the caller's CWD instead of the repository root (#15245):
+#     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../scripts/lib/branch-guards.sh"
 
 # Minimum age (hours) a branch must reach before automated pruning may delete
 # it. Protects in-flight work whose PR has not been created yet. Override via

@@ -77,7 +77,9 @@ if [ "$PRINT_ONLY" = 1 ]; then
   exit 0
 fi
 
-REPO_ROOT=$(git rev-parse --show-toplevel) || exit 2
+# shellcheck source=scripts/lib/git-root.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh" || exit 2
+REPO_ROOT=$(git_repo_root) || exit 2
 cd "$REPO_ROOT" || exit 2
 
 # ---------------------------------------------------------------- interpreter
