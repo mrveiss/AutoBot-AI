@@ -152,13 +152,18 @@ def test_a_sentinel_zero_default_does_not_fail_a_real_port(guard, tmp_path, monk
 
 
 def test_the_real_ssot_sentinels_are_excluded(guard):
-    """Pins the two sentinel variables against the actual SSOT, so this stops
-    being an assumption if either gains a real default later."""
+    """Pins the sentinel against the actual SSOT, so this stops being an
+    assumption if it gains a real default later.
+
+    `AUTOBOT_SMTP_PORT` is what that clause was written for: it was a sentinel
+    until #13264 restored its pre-#7437 default of 587, and this test is what
+    caught the change rather than letting it pass silently. It is now asserted
+    as a real, comparable port."""
     root = guard._repo_root()
     ports = guard._ssot_ports(root)
 
     assert "AUTOBOT_POSTGRES_PORT" not in ports, "a sentinel default leaked into the comparison map"
-    assert "AUTOBOT_SMTP_PORT" not in ports
+    assert ports.get("AUTOBOT_SMTP_PORT") == "587", "restored by #13264; no longer a sentinel"
     assert ports.get("AUTOBOT_BROWSER_SERVICE_PORT") == "9001", "the real port this guard exists for"
     assert ports.get("AUTOBOT_GRAFANA_PORT") == "3000", "3000 belongs to Grafana — the whole point of #14198"
 
