@@ -219,7 +219,8 @@ class DocumentAnalysisSkill(BaseSkill):
 
     def _render(self, extracted: Any, pages: Tuple[Any, ...], output_format: str) -> Dict[str, Any]:
         """Render extracted content in the configured output format."""
-        from media.document.extraction import render_pages, strip_page_markers
+        from media.document.extraction import render_pages
+        from media.document.provenance import strip_page_markers
 
         if not pages:
             # Unpaginated formats carry their whole body in ``text``.
