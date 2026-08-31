@@ -15,10 +15,6 @@
   vars:
     target_roles: "{{ target_roles | default('slm-agent') }}"
 
-  # #7050/#7051 shared role-active facts — see playbooks/vars/role_active_facts.yml
-  # for why this is needed (this play can run against a temp inventory with no
-  # sibling group_vars/, e.g. the SLM wizard path).
-  #
   # #14289: chromadb_service_owner MUST derive from host state
   # (role_redis_active / role_ai_stack_active), never from target_roles. A unit
   # shared by two roles may only be claimed from facts about the host — target_roles
@@ -26,6 +22,21 @@
   # from target_roles meant a `target_roles=ai-stack` redeploy against an
   # already-combined host reclaimed the unit from redis on every run, even though
   # redis was never touched (#4090).
+  #
+  # #14678: everywhere else, this is the ONLY tracked definition of the
+  # role-active facts -- provision-fleet-roles.yml dropped this same
+  # vars_files because every inventory builder now links the real
+  # group_vars beside its temp inventory (#11781, #14286). This play is
+  # the one exception: its only two callers, services/deployment.py
+  # (_build_ansible_base_command) and services/blue_green.py
+  # (_deploy_roles_to_node), invoke it with a bare `-i "<host>,"` string,
+  # not a directory, so Ansible has nowhere to auto-discover group_vars
+  # from -- group_vars/all.yml never loads on this codepath. vars_files
+  # is not a leftover duplicate here; it is the only way these facts
+  # reach this play. Removing it needs those two callers to write a real
+  # inventory (with group_vars linked, as playbook_executor.py's dynamic
+  # inventories already do) first -- tracked as its own follow-up (#15348)
+  # so it doesn't block the rest of #14678.
   vars_files:
     - playbooks/vars/role_active_facts.yml
 
