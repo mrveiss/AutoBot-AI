@@ -8160,6 +8160,13 @@ export interface components {
              * @default 0
              */
             outdated_nodes: number;
+            /**
+             * Process Divergence
+             * @default {}
+             */
+            process_divergence: {
+                [key: string]: string;
+            };
             /** Self Update Detail */
             self_update_detail?: string | null;
             /**
