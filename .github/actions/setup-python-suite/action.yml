@@ -152,7 +152,7 @@ runs:
 
     - name: Restore cached virtualenv
       id: venv-cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ${{ steps.env.outputs.venv }}
         # No `restore-keys`. A partial-match restore would hand back an

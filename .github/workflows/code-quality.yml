@@ -497,22 +497,23 @@ jobs:
     - name: Type-check autobot_shared (required)
       run: |
         # autobot_shared is the shared library and must be strictly typed.
-        # Errors in the backends are tracked in GH#7105.
+        # Errors in the backends are tracked in GH#15345 (#7105 is closed --
+        # it tracked wiring mypy in, not the errors it found).
         python3 -m mypy autobot_shared/ || {
           echo "mypy found type errors in autobot_shared/"
-          echo "Fix the errors above or suppress with '# type: ignore[code]  # GH#7105'"
+          echo "Fix the errors above or suppress with '# type: ignore[code]  # GH#15345'"
           exit 1
         }
 
     - name: Type-check autobot-backend (informational)
       run: |
         # Non-blocking: surfaces new regressions in trend output.
-        # 4133 pre-existing errors tracked for resolution in GH#7105.
+        # 4133 pre-existing errors tracked for resolution in GH#15345 (#7105 is closed).
         python3 -m mypy autobot-backend/ 2>&1 | tail -5 || true
 
     - name: Type-check autobot-slm-backend (informational)
       run: |
-        # Non-blocking: 1281 SQLAlchemy Column[T] errors tracked in GH#7105.
+        # Non-blocking: 1281 SQLAlchemy Column[T] errors tracked in GH#15345 (#7105 is closed).
         python3 -m mypy autobot-slm-backend/ 2>&1 | tail -5 || true
 
     - name: Enforce extension/skill/plugin import boundaries (#7372)
