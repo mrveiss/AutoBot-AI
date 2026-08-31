@@ -41,6 +41,11 @@ source "${SCRIPT_DIR}/../lib/ssot-config.sh" || {
     echo "FATAL: ${SCRIPT_DIR}/../lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
     return 1 2>/dev/null || exit 1
 }
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/../../../../scripts/lib/git-root.sh" || {
+    echo "FATAL: ${SCRIPT_DIR}/../../../../scripts/lib/git-root.sh could not be sourced -- refusing to run the git safety check on a possibly-wrong root (#15245)" >&2
+    return 1 2>/dev/null || exit 1
+}
 
 # AutoBot VM configuration - Using SSOT env vars
 declare -A VMS=(
@@ -71,7 +76,7 @@ git_safety_check() {
     fi
 
     local repo_root
-    repo_root="$(git -C "$(pwd)" rev-parse --show-toplevel 2>/dev/null)" || return 0
+    repo_root="$(git_repo_root "$(pwd)")" || return 0
 
     local branch
     branch="$(git -C "$repo_root" branch --show-current 2>/dev/null)"

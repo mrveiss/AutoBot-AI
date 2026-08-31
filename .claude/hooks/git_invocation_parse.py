@@ -35,16 +35,43 @@ Scope of the shell parsing, stated rather than assumed:
   earlier in the line is applied to the invocation that follows it.
 
 What it deliberately does **not** understand: backtick substitution, ``eval``,
-shell functions and aliases, and variable expansion. A directory it cannot pin
-down is reported as ``?`` so the caller can stay conservative, and a command it
-cannot tokenize at all exits :data:`EXIT_UNPARSEABLE` so the caller can refuse
-to judge out loud instead of guessing silently.
+shell functions and aliases -- these still evaluate the words they carry
+without this tool trying to. A directory it cannot pin down is reported as
+``?`` so the caller can stay conservative, and a command it cannot tokenize at
+all exits :data:`EXIT_UNPARSEABLE` so the caller can refuse to judge out loud
+instead of guessing silently.
+
+**Variable expansion at the subcommand position is the one exception**
+(#15303): ``SUB=switch; git $SUB main`` used to produce no invocation at all,
+because the subcommand check matched a literal ``"switch"`` token and nothing
+else -- a variable there was simply invisible, and no invocation meant nothing
+to judge, so the command was allowed on this repository's main tree, which is
+exactly what the guard exists to prevent. A command-position token this tool
+cannot read as a literal (``$VAR``, ``${VAR}``, the ``$`` a ``$(...)``
+substitution leaves at that position, or a backtick) is now reported instead
+of skipped, with :data:`AMBIGUOUS_SUBCOMMAND_FLAG` in its ``flags`` field, so
+the caller can deny it rather than treat "cannot read" as "nothing there". This
+is deliberately measured against false positives, not assumed safe: a
+repository-wide grep of AutoBot's own shell tooling for ``git $VAR``,
+``git ${VAR}``, ``git $(...)`` or a backtick at that position found zero real
+invocations of the shape, only a mocked ``git "$@"`` forwarder inside a test
+file's function body -- text the guard never sees, since it inspects a typed
+command line, not file contents. The trade is recorded here because the next
+reader should not have to re-derive it: denying an *unresolvable* subcommand
+is a wider net than denying only a *resolved-but-forbidden* one, and that is
+accepted specifically because this repository's own tooling never triggers
+it. This tool still does not resolve the variable's VALUE -- it cannot, without
+evaluating shell -- so it denies the whole shape rather than guessing what the
+value would have been (module scope note above, "Attempt limited expansion.
+Do not do this").
 
 Output: one tab-separated record per invocation on stdout --
 ``<directory>|<git-dir>|<flags>|<branch-arg>``, separated by 0x1f (see
 :data:`FIELD_SEPARATOR`) -- where *directory* is empty
 for "the caller's own working directory" and ``?`` for "could not be resolved",
-and *flags* is a comma-separated subset of ``new``/``restore``.
+and *flags* is a comma-separated subset of ``new``/``restore``/``ambiguous``
+(the last means *branch-arg* is meaningless -- the subcommand itself, not the
+branch, is what could not be read).
 """
 
 from __future__ import annotations
@@ -120,6 +147,20 @@ _SUBCOMMANDS = ("checkout", "switch")
 
 #: A directory whose real value only the shell knows.
 UNKNOWN_DIR = "?"
+
+#: A word starting with one of these cannot be a literal git subcommand --
+#: the shell has not expanded it yet at the point this tool inspects the
+#: command text (#15303). ``$`` covers a bare variable (``$SUB``), a braced
+#: one (``${SUB}``) and the ``$`` this tokenizer leaves behind when a
+#: ``$(...)`` substitution sits at this position (see ``tokenize``'s handling
+#: of ``$(``); a backtick covers the other substitution syntax, which this
+#: parser has never evaluated (module docstring, "What it deliberately does
+#: not understand").
+_UNRESOLVED_SUBCOMMAND_MARKERS = ("$", "`")
+
+#: The ``flags`` value for an invocation reported because its subcommand is
+#: unresolvable, not because it is known to be ``checkout``/``switch``.
+AMBIGUOUS_SUBCOMMAND_FLAG = "ambiguous"
 
 
 def _is_redirect(token: str) -> bool:
@@ -341,8 +382,20 @@ def _parse_subcommand(tokens: list[str], index: int, directory: str, git_dir: st
     return record, cursor
 
 
-def _parse_git(tokens: list[str], index: int, directory: str) -> tuple[dict[str, str] | None, int]:
-    """Parse the ``git`` invocation at *index*; only the two subcommands report."""
+def _ambiguous_record(directory: str, git_dir: str) -> dict[str, str]:
+    """A report for a subcommand position this tool cannot read literally.
+
+    Reported rather than silently skipped (#15303): ``SUB=switch; git $SUB
+    main`` used to return no invocation at all, and the caller reads "no
+    invocation" as "nothing to judge, allow". Denying an invocation whose
+    shape it cannot rule out is the same choice already made for a directory
+    only the shell could resolve -- see ``UNKNOWN_DIR`` above.
+    """
+    return {"dir": directory, "git_dir": git_dir, "flags": AMBIGUOUS_SUBCOMMAND_FLAG, "arg": ""}
+
+
+def _skip_global_flags(tokens: list[str], index: int, directory: str) -> tuple[int, str, str]:
+    """``(cursor, directory, git_dir)`` just past ``git``'s global options."""
     cursor = index + 1
     git_dir = ""
     while cursor < len(tokens) and tokens[cursor].startswith("-"):
@@ -358,9 +411,26 @@ def _parse_git(tokens: list[str], index: int, directory: str) -> tuple[dict[str,
         if token.startswith("--git-dir="):
             git_dir = token.split("=", 1)[1]
         cursor += 1
-    if cursor >= len(tokens) or tokens[cursor] not in _SUBCOMMANDS:
+    return cursor, directory, git_dir
+
+
+def _parse_git(tokens: list[str], index: int, directory: str) -> tuple[dict[str, str] | None, int]:
+    """Parse the ``git`` invocation at *index*.
+
+    Reports the two subcommands this tool understands, PLUS a subcommand
+    position it cannot read at all -- everything else (``git status``, an
+    absent subcommand, a global-flag-only invocation) stays unreported, same
+    as before #15303.
+    """
+    cursor, directory, git_dir = _skip_global_flags(tokens, index, directory)
+    if cursor >= len(tokens):
         return None, cursor
-    return _parse_subcommand(tokens, cursor, directory, git_dir)
+    subcommand = tokens[cursor]
+    if subcommand in _SUBCOMMANDS:
+        return _parse_subcommand(tokens, cursor, directory, git_dir)
+    if subcommand.startswith(_UNRESOLVED_SUBCOMMAND_MARKERS):
+        return _ambiguous_record(directory, git_dir), cursor + 1
+    return None, cursor
 
 
 def scan(tokens: list[str]) -> list[dict[str, str]]:
