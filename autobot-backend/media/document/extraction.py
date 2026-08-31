@@ -19,12 +19,20 @@ Page text is kept **structured** rather than pre-joined. Callers that need a fla
 string call :func:`render_pages`; callers that need per-page provenance read
 ``pages`` directly. That split is what lets page numbers reach retrieval as
 metadata instead of as marker text baked into the embedding (#13894).
+
+Page-offset lookups (``page_for_offset``/``pages_for_span``/``chunk_page_map``)
+and table rendering (``render_tables``/``render_text_and_tables``) live in
+:mod:`media.document.provenance` (#14970) — split out once folding tables into
+ingest text pushed this module over ``MAX_LINES``. ``PageSpan`` and
+``render_plain`` stayed here rather than moving with them, since
+``api/knowledge.py`` imports ``render_plain`` directly and this way that file
+needs no import-path change. Nothing in this module calls into
+``provenance.py``, so the split carries no circular import.
 """
 
 from __future__ import annotations
 
 import io
-import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
@@ -270,6 +278,34 @@ def render_pages(pages: Sequence[PageText], marker: str = PAGE_MARKER_TEMPLATE) 
     return "\n\n".join(parts)
 
 
+PAGE_SEPARATOR = "\n\n"
+
+
+def render_plain(pages: Sequence[PageText], separator: str = PAGE_SEPARATOR) -> Tuple[str, Tuple[PageSpan, ...]]:
+    """Join pages with **no** markers, returning the text and where each page sits.
+
+    The marker-carrying :func:`render_pages` is the wrong input for an embedding:
+    ``## Page 7`` is structure, not meaning, and it competes with the document's
+    own words for similarity. This is the same text with the provenance moved out
+    of the string and into character spans a caller stores as metadata (#13894).
+
+    Empty pages are skipped, exactly as :func:`render_pages` skips them, so the
+    two renderings stay page-for-page comparable.
+    """
+    parts: List[str] = []
+    spans: List[PageSpan] = []
+    offset = 0
+    for page in pages:
+        if not page.text.strip():
+            continue
+        if parts:
+            offset += len(separator)
+        spans.append(PageSpan(number=page.number, start=offset, end=offset + len(page.text)))
+        parts.append(page.text)
+        offset += len(page.text)
+    return separator.join(parts), tuple(spans)
+
+
 def detect_format(raw: bytes, mime_type: str = "") -> str:
     """Detect document format from magic bytes, falling back to MIME type."""
     mime = (mime_type or "").lower()
@@ -481,93 +517,3 @@ def extract_document(raw: bytes, mime_type: str = "") -> ExtractedDocument:
     if detected == "docx":
         return extract_docx(raw)
     return extract_plain_text(raw)
-
-
-def strip_page_markers(text: str, marker: str = PAGE_MARKER_TEMPLATE) -> str:
-    """Remove canonical page markers from rendered text.
-
-    Consumers that want prose without structural markers — an embedding input,
-    for instance — use this rather than re-extracting with a different renderer.
-    """
-    pattern = re.escape(marker).replace(r"\{number\}", r"\d+")
-    return re.sub(rf"^{pattern}\n?", "", text, flags=re.MULTILINE)
-
-
-PAGE_SEPARATOR = "\n\n"
-
-
-def render_plain(pages: Sequence[PageText], separator: str = PAGE_SEPARATOR) -> Tuple[str, Tuple[PageSpan, ...]]:
-    """Join pages with **no** markers, returning the text and where each page sits.
-
-    The marker-carrying :func:`render_pages` is the wrong input for an embedding:
-    ``## Page 7`` is structure, not meaning, and it competes with the document's
-    own words for similarity. This is the same text with the provenance moved out
-    of the string and into character spans a caller stores as metadata (#13894).
-
-    Empty pages are skipped, exactly as :func:`render_pages` skips them, so the
-    two renderings stay page-for-page comparable.
-    """
-    parts: List[str] = []
-    spans: List[PageSpan] = []
-    offset = 0
-    for page in pages:
-        if not page.text.strip():
-            continue
-        if parts:
-            offset += len(separator)
-        spans.append(PageSpan(number=page.number, start=offset, end=offset + len(page.text)))
-        parts.append(page.text)
-        offset += len(page.text)
-    return separator.join(parts), tuple(spans)
-
-
-def page_for_offset(spans: Sequence[PageSpan], offset: int) -> int | None:
-    """Return the page number containing *offset*, or ``None`` if outside them all.
-
-    An offset landing in the separator between two pages belongs to neither; the
-    caller decides what that means rather than being handed a silent guess.
-    """
-    for span in spans:
-        if span.start <= offset < span.end:
-            return span.number
-    return None
-
-
-def pages_for_span(spans: Sequence[PageSpan], start: int, end: int) -> Tuple[int, ...]:
-    """Return every page number a ``[start, end)`` range touches.
-
-    A chunk that straddles a page break genuinely comes from two pages. Reporting
-    only the first would silently mis-cite half its content, so this returns the
-    range and lets the caller record it.
-    """
-    if end <= start:
-        return ()
-    return tuple(span.number for span in spans if span.start < end and start < span.end)
-
-
-def chunk_page_map(spans: Sequence[PageSpan], chunks: Sequence[str], text: str) -> Tuple[Tuple[int, ...], ...]:
-    """Map each chunk of *text* to the page numbers it came from.
-
-    Chunkers return strings, not offsets, so the offsets are recovered by
-    scanning forward through *text*. Searching forward from the previous chunk's
-    end — rather than with :meth:`str.find` from zero — keeps repeated boilerplate
-    (headers, footers, recurring table scaffolding) from collapsing every
-    occurrence onto the first page it appeared on.
-    """
-    result: List[Tuple[int, ...]] = []
-    cursor = 0
-    for chunk in chunks:
-        if not chunk:
-            result.append(())
-            continue
-        start = text.find(chunk, cursor)
-        if start < 0:
-            # The chunker transformed the text (trimmed, normalized whitespace),
-            # so offsets cannot be recovered for this chunk. Report nothing
-            # rather than a wrong page.
-            result.append(())
-            continue
-        end = start + len(chunk)
-        result.append(pages_for_span(spans, start, end))
-        cursor = end
-    return tuple(result)
