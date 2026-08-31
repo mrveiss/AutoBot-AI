@@ -134,11 +134,19 @@ def test_environment_variable_overrides_apply_to_config(monkeypatch) -> None:
     True either way" shape this file exists to remove, just without the
     swallow to hide it. `apply_env_overrides` is the real consumer.
     """
+    # Scoped to the one key this test controls. ENV_VAR_MAPPINGS covers ~15
+    # other AUTOBOT_* vars, so asserting equality against the WHOLE result
+    # would fail whenever any of them is already set in the environment --
+    # sourcing .env.localhost is a documented workflow here. That failure
+    # would be unrelated to the code under test, which is the shape this
+    # file exists to remove rather than reintroduce.
     monkeypatch.setenv("AUTOBOT_BACKEND_PORT", "9999")
     overridden = apply_env_overrides({})
-    assert overridden == {"backend": {"server_port": 9999}}, (
-        "AUTOBOT_BACKEND_PORT should override backend.server_port as an int"
+    assert overridden["backend"]["server_port"] == 9999, (
+        "AUTOBOT_BACKEND_PORT should override backend.server_port as an int, "
+        f"got {overridden.get('backend', {}).get('server_port')!r}"
     )
+    assert isinstance(overridden["backend"]["server_port"], int), "the override must be type-converted, not left a str"
 
 
 def test_multimodal_config_consolidation() -> None:
