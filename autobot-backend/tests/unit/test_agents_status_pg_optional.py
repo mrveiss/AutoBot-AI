@@ -41,24 +41,57 @@ def _make_stub(name: str, **attrs: Any) -> types.ModuleType:
 class TestFallbackAgentsFromRegistry:
     """_fallback_agents_from_registry must return valid status dicts without PG."""
 
-    def _import_func(self):
-        """Import target helper without loading the full api.agent_org graph."""
-        # Stub enough for the import chain
+    def _import_func(self, attr_name: str):
+        """Import one attribute from api/agent_org.py by path (#15251).
+
+        Loads the module by file location rather than ``import api.agent_org``
+        so the heavy FastAPI/SQLAlchemy import graph is only paid for at call
+        time, not at collection time. Raises rather than returning ``None`` on
+        any failure: a helper that silently resolves to nothing masks the
+        defect that caused it (#15251) instead of surfacing it.
+        """
         _make_stub("autobot_shared.logging_manager", get_logger=MagicMock(return_value=MagicMock()))
-        # Import the function directly via importlib to avoid pulling heavy deps
         import importlib.util
         from pathlib import Path
 
-        spec = importlib.util.spec_from_file_location(
-            "_agent_org_mod",
-            Path(__file__).parents[3] / "api" / "agent_org.py",
-        )
-        if spec is None or spec.loader is None:
-            raise ImportError("Could not load api/agent_org.py")
+        # This file is autobot-backend/tests/unit/test_agents_status_pg_optional.py,
+        # so autobot-backend is parents[2] -- parents[3] is the repo root and never
+        # contained an api/ directory, which made every prior call inert.
+        module_path = Path(__file__).resolve().parents[2] / "api" / "agent_org.py"
+        if not module_path.is_file():
+            raise ImportError(f"api/agent_org.py not found at {module_path}")
 
-        # We can't exec the full module without heavy stubs; instead test the logic
-        # inline by calling the AgentCapabilityRegistry directly.
-        return None
+        spec = importlib.util.spec_from_file_location("_agent_org_mod", module_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Could not build an import spec for {module_path}")
+
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        if not hasattr(module, attr_name):
+            raise AttributeError(f"api/agent_org.py has no attribute {attr_name!r}")
+        return getattr(module, attr_name)
+
+    def test_import_func_resolves_the_real_module(self):
+        """_import_func must actually import api/agent_org.py, not return None (#15251).
+
+        Exercises the real module's own ``_fallback_agents_from_registry`` and
+        ``_ORCH_TYPE_MAP`` rather than the class's local reimplementations
+        below, so a divergence between the two would be caught here.
+        """
+        fallback_fn = self._import_func("_fallback_agents_from_registry")
+        orch_map = self._import_func("_ORCH_TYPE_MAP")
+
+        assert callable(fallback_fn)
+        assert orch_map == {
+            "research": "analyzer",
+            "librarian": "analyzer",
+            "system_commands": "executor",
+            "orchestrator": "orchestrator",
+        }
+
+        agents = fallback_fn()
+        assert isinstance(agents, list)
 
     def test_fallback_returns_list(self):
         """_fallback_agents_from_registry must return a non-empty list."""

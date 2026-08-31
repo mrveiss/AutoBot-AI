@@ -11,14 +11,16 @@ Validates:
 - Backward compatibility
 """
 
+import asyncio
 import os
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 import pytest
 
 from autobot_shared.ssot_config import config
 from config import UnifiedConfigManager
-from utils.knowledge_base_timeouts import KnowledgeBaseTimeouts
+from knowledge.documents import DocumentsMixin
+from utils.knowledge_base_timeouts import KnowledgeBaseTimeouts, kb_timeouts
 
 
 class TestUnifiedConfigTimeouts:
@@ -235,19 +237,58 @@ class TestBackwardCompatibility:
         assert default_timeout != 999
 
 
+class _TimedDocumentsKB(DocumentsMixin):
+    """Minimal DocumentsMixin host with a controllable internal delay."""
+
+    def __init__(self, delay_seconds: float):
+        self._delay_seconds = delay_seconds
+
+    async def _add_document_internal(self, content, metadata=None, doc_id=None):
+        await asyncio.sleep(self._delay_seconds)
+        return {"status": "success"}
+
+
 class TestIntegration:
     """Integration tests for timeout system"""
 
-    def test_knowledge_base_uses_timeouts(self):
-        """Test that KnowledgeBase correctly uses timeout accessor"""
-        # This would require importing KnowledgeBase
-        # and checking that it uses kb_timeouts
-        # Skipped for unit tests - would be in integration tests
+    @pytest.mark.asyncio
+    async def test_knowledge_base_uses_timeouts(self):
+        """KnowledgeBase.add_document must actually apply kb_timeouts.document_add (#15256).
 
-    def test_timeout_changes_affect_runtime(self):
-        """Test that timeout configuration changes affect runtime behavior"""
-        # This would require testing actual timeout behavior
-        # Skipped for unit tests - would be in integration tests
+        knowledge/documents.py:66-69 wraps the real work in
+        ``asyncio.wait_for(..., timeout=kb_timeouts.document_add)``. Pin a 1ms
+        budget against a 50ms internal operation: if add_document read the
+        accessor, it times out; if it silently ignored it (the defect this
+        test used to let through unnoticed), it would report success instead.
+        """
+        kb = _TimedDocumentsKB(delay_seconds=0.05)
+
+        with patch.object(type(kb_timeouts), "document_add", new_callable=PropertyMock, return_value=0.001):
+            result = await kb.add_document("content")
+
+        assert result["status"] == "timeout", (
+            "add_document succeeded despite a 1ms document_add budget against a "
+            "50ms internal operation -- it is not reading kb_timeouts.document_add"
+        )
+
+    @pytest.mark.asyncio
+    async def test_timeout_changes_affect_runtime(self):
+        """Changing kb_timeouts.document_add must change add_document's outcome (#15256).
+
+        Same slow internal operation, two different configured budgets: a
+        budget shorter than the operation must time out and a budget longer
+        than it must succeed. If the configuration value were plumbed through
+        once at import time rather than read live, both runs would agree.
+        """
+        kb = _TimedDocumentsKB(delay_seconds=0.05)
+
+        with patch.object(type(kb_timeouts), "document_add", new_callable=PropertyMock, return_value=0.001):
+            timed_out = await kb.add_document("content")
+        with patch.object(type(kb_timeouts), "document_add", new_callable=PropertyMock, return_value=5.0):
+            succeeded = await kb.add_document("content")
+
+        assert timed_out["status"] == "timeout"
+        assert succeeded["status"] == "success"
 
 
 if __name__ == "__main__":

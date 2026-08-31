@@ -101,12 +101,6 @@ def frontend_url(config) -> str:
 
 
 @pytest.fixture
-def test_data_dir() -> Path:
-    """Get test data directory."""
-    return Path(__file__).parent / "fixtures" / "data"
-
-
-@pytest.fixture
 def temp_dir(tmp_path) -> Path:
     """Provide temporary directory for test files."""
     return tmp_path
