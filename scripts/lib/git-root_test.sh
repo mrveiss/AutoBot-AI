@@ -24,6 +24,15 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/lib/git-root.sh
 source "${HERE}/git-root.sh"
 
+# This suite is itself registered with repo_tests/shell_lib_test.py and run
+# under pytest from the pre-push hook -- which is exactly a process that
+# exports GIT_DIR. Left ambient, it corrupts the very `git init` below (git
+# writes wherever GIT_DIR points, not "${REPO}"), so every assertion that
+# follows would be testing a broken fixture rather than the helper. Scrubbed
+# once, up front, same as scripts/install-git-hooks.sh -- GIT_ROOT_AMBIENT_VARS
+# so this list can never drift from git-root.sh's own.
+unset "${GIT_ROOT_AMBIENT_VARS[@]}"
+
 pass=0
 fail=0
 check() {
