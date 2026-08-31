@@ -14,6 +14,7 @@ import hashlib
 
 from autobot_shared.logging_manager import get_logger
 from media.document.extraction import DocumentExtractionError, ExtractedDocument, extract_docx, extract_pdf
+from media.document.provenance import render_text_and_tables
 
 logger = get_logger(__name__)
 
@@ -24,13 +25,13 @@ def content_hash(text: str) -> str:
 
 
 def extract_text_from_docx(content_bytes: bytes) -> str:
-    """Extract text from Word .docx file.
+    """Extract text from Word .docx file, tables included (#14970).
 
     Connectors ingest in bulk, so a single unreadable file must not abort a sync:
     failures degrade to an empty string, as they always have here.
     """
     try:
-        return extract_docx(content_bytes).text
+        return render_text_and_tables(extract_docx(content_bytes))
     except DocumentExtractionError as exc:
         logger.warning("Failed to extract text from DOCX: %s", exc)
         return ""
@@ -52,13 +53,14 @@ def extract_pdf_document(content_bytes: bytes) -> ExtractedDocument | None:
 
 
 def extract_text_from_pdf(content_bytes: bytes) -> str:
-    """Extract text from PDF file.
+    """Extract text from PDF file, tables included (#14970).
 
     Previously ran ``PyPDF2``, which is unmaintained, while the repo pins
     ``pypdf`` as a security update — so Drive/OneDrive ingestion used the library
     the rest of the codebase had deliberately moved off (#13893). Now shares the
     canonical extractor, which emits the same ``## Page N`` markers this
-    connector already used.
+    connector already used. Tables were previously dropped outright; they now
+    fold into the same string via the shared renderer, same as DOCX.
     """
     extracted = extract_pdf_document(content_bytes)
-    return extracted.text if extracted else ""
+    return render_text_and_tables(extracted) if extracted else ""
