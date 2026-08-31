@@ -1309,16 +1309,9 @@ def test_the_real_workflow_tree_classifies_the_reported_workflows_correctly(watc
 
     assert paths is not None
     resolved = {Path(p).name for p in paths}
-    # #15395 retired the self-hosted pins: no workflow targets a self-hosted
-    # runner any more, so the truthful answer here is the EMPTY set. That is a
-    # different fact from `None`, which still means "the directory could not be
-    # read" -- test_an_unreadable_workflow_dir_is_unknown_not_empty above pins
-    # that distinction, and it is the one that must never collapse.
-    #
-    # Pinned as an equality rather than dropped: this is now the guard that a
-    # workflow does not quietly regain a self-hosted pin. #15311 had moved
-    # code-quality, enforce-precommit and frontend-test onto the runners on the
-    # premise that idle capacity should be used; #15395 recorded that the
-    # premise was never grounded in a hardware requirement, and that three
-    # REQUIRED contexts were hostage to a two-machine pool.
+    # #15395 retired every self-hosted pin, so the empty set is now the truthful
+    # answer -- distinct from None, which still means "directory unreadable"
+    # (pinned above, and the distinction that must never collapse). Kept as an
+    # equality rather than dropped: this is the guard that no workflow quietly
+    # regains a pin.
     assert resolved == set(), f"a workflow regained a self-hosted pin: {sorted(resolved)}"
