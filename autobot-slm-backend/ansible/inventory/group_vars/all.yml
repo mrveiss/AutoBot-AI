@@ -414,10 +414,14 @@ role_xrdp_active: >-
 # #14567: `ai_stack`/`llm_nodes` are declaration-gated deploy targets, so this
 # fact reads node_roles_declared (#14560).
 #
-# #14678: this file is now the ONLY tracked definition of the role-active facts.
-# It previously had two byte-identical siblings kept in step by a diff guard;
-# the guard worked but enforcing three copies was never the fix #7095 asked for.
-# The test inventory's copy is generated from this file at CI time.
+# #14678: this is the canonical, single tracked definition of the role-active
+# facts. It used to have two byte-identical siblings kept in step by a diff
+# guard; the guard worked but enforcing three copies was never the fix #7095
+# asked for. The test inventory's copy is now generated from this file at CI
+# time (never tracked). One tracked sibling remains --
+# playbooks/vars/role_active_facts.yml -- because deploy.yml's only two
+# callers invoke it with a bare host inventory that has no group_vars to
+# discover; see deploy.yml's own comment and check_role_facts_synced.py.
 # #14682: `ai_stack` is NOT an LLM signal. It is granted by `chromadb` and
 # `tts-worker` as well as by `ai-stack` and `autobot-llm-*`, so gating on it
 # meant declaring a vector database or a speech synthesiser ran roles/llm --

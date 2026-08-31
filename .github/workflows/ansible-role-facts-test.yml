@@ -120,12 +120,16 @@ jobs:
         run: |
           python3 tests/check_test_inventory_group_vars.py
 
-      - name: Run role_*_active facts test (vars_files codepath, #7094)
+      - name: Run role_*_active facts test (deploy.yml's vars_files codepath, #14678)
         working-directory: autobot-slm-backend/ansible
-        # #7094: tests/inventory_dynamic/ is a copy of tests/inventory/ WITHOUT
-        # the group_vars/all.yml symlink. Mimics the SLM-triggered provision
-        # path where the temp inventory in /tmp/ has no sibling group_vars/.
-        # The playbook MUST succeed loading facts via vars_files alone.
+        # #7094 named this the SLM-triggered provision path; that shape no longer
+        # exists (#11781, #14286 link group_vars/ beside every dynamic inventory).
+        # It now stands in for deploy.yml's actual callers (services/deployment.py,
+        # services/blue_green.py), which invoke deploy.yml with a bare `-i "<host>,"`
+        # string -- not a directory, so no group_vars discovery either (#14678).
+        # tests/inventory_dynamic/ is a copy of tests/inventory/ WITHOUT the
+        # group_vars/all.yml symlink, so the playbook MUST succeed loading facts
+        # via vars_files alone.
         run: |
           ansible-playbook -i tests/inventory_dynamic/test_role_facts.yml tests/playbooks/test_role_active_facts_no_group_vars.yml
 
