@@ -207,7 +207,7 @@ jobs:
           if CHANGED=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" \
                 --paginate --jq '.[].filename'); then
             case "$CHANGED" in
-              *ci_dispatch_watchdog*|*ci-dispatch-watchdog*) SELF_MODIFYING=yes ;;
+              *ci_dispatch_watchdog*|*ci-dispatch-watchdog*|*ci_dispatch_retry*) SELF_MODIFYING=yes ;;
               *) SELF_MODIFYING=no ;;
             esac
           else
@@ -226,3 +226,33 @@ jobs:
             WATCHDOG_ONLY_PR="$PR_NUMBER" \
               python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch
           fi
+
+      # #15139: the classifier above NAMES the cause but re-queues nothing, so a
+      # run that never obtained a runner keeps a red tile that reads exactly like
+      # a test failure. This step acts on that classification.
+      #
+      # AFTER the self-modification guard, deliberately. The classifier can run
+      # ahead of it because it only ever issues GETs; this step writes, so a pull
+      # request's own copy of it must not execute while the job holds
+      # `actions: write`. The guard's case pattern covers ci_dispatch_retry too.
+      #
+      # Admission-controlled, because an eager retry re-queues into the very
+      # condition that produced the failure: it refuses to spend when the REST
+      # budget is low OR unreadable, when in-progress runs are at the ceiling,
+      # and after one retry per run — a second non-dispatch is a capacity signal
+      # and must stay visible rather than be retried away.
+      #
+      # continue-on-error and an unconditional exit 0 inside the script: a
+      # watchdog that reddens the sweep it rides on has made the pipeline noisier,
+      # which is the problem #15139 is about.
+      - name: Re-dispatch infrastructure-caused reds (#15139)
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -uo pipefail
+          python3 pipeline-scripts/ci_dispatch_retry.py --sha "$HEAD_SHA" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
