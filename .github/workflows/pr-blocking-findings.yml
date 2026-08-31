@@ -13,6 +13,12 @@
 name: PR Blocking Findings
 
 on:
+  # #14054: the merge queue builds each entrant against base + the entries
+  # ahead of it and expects the required contexts to report against that
+  # temporary ref. A required context with no `merge_group:` trigger never
+  # fires, and the queue waits on it forever. Inert until the `merge_queue`
+  # ruleset rule is enabled -- this event does not exist before then.
+  merge_group:
   pull_request:
     types: [opened, edited, synchronize, reopened]
     branches: [Dev_new_gui, main]
@@ -46,9 +52,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          # #14054: a merge_group event carries no pull_request object. The
+          # queue ref does carry the number --
+          #   refs/heads/gh-readonly-queue/<base>/pr-<N>-<sha>
+          # -- so the entrant is still identifiable, and this gate keeps
+          # asking the question it exists to ask rather than passing by
+          # default on the one event where merging actually happens.
+          MERGE_GROUP_REF: ${{ github.event.merge_group.head_ref }}
         shell: bash
         run: |
           set -euo pipefail
+
+          if [ -z "${PR_NUMBER:-}" ] && [ -n "${MERGE_GROUP_REF:-}" ]; then
+            PR_NUMBER=$(printf '%s' "$MERGE_GROUP_REF" |
+              sed -n 's|.*/pr-\([0-9][0-9]*\)-[0-9a-f]*$|\1|p')
+            echo "merge_group entrant resolved to PR #${PR_NUMBER:-<none>}"
+          fi
+          if [ -z "${PR_NUMBER:-}" ]; then
+            echo "::error::could not resolve a PR number from event"
+            echo "::error::ref='${MERGE_GROUP_REF:-}' -- refusing to report"
+            echo "::error::this gate green without having run it (#14054)."
+            exit 1
+          fi
 
           # Candidate open issues labeled blocks-merge that mention this PR
           # number somewhere. A missing label / no matches yields an empty list
