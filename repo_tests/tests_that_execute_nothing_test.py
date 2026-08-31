@@ -110,6 +110,17 @@ def _empty_by_tree() -> dict[str, list[str]]:
     return counts
 
 
+# The sweep's own floor, deliberately NOT derived from _EMPTY_BODIED. That dict
+# is now empty -- every tree reached zero -- so a floor computed from it iterates
+# nothing and can never fire. A guard against tests that execute nothing must not
+# itself pass by finding nothing: if test_modules() ever stops resolving, both the
+# population and the empty-body count collapse to zero together and every
+# assertion below reports clean. Measured 28708 across 13 trees on Dev_new_gui;
+# the floors sit under that with room for ordinary churn, and only ever rise.
+_TOTAL_FUNCTION_FLOOR = 25000
+_TREE_FLOOR = 10
+
+
 def _collapsed(populations: dict[str, int]) -> dict[str, tuple[int, int]]:
     return {
         tree: (populations.get(tree, 0), floor)
@@ -118,14 +129,29 @@ def _collapsed(populations: dict[str, int]) -> dict[str, tuple[int, int]]:
     }
 
 
+def _sweep_shortfalls(populations: dict[str, int]) -> list[str]:
+    """Every way the sweep can be too small, reported together."""
+    total = sum(populations.values())
+    shortfalls = []
+    if total < _TOTAL_FUNCTION_FLOOR:
+        shortfalls.append(f"only {total} test functions collected, floor is {_TOTAL_FUNCTION_FLOOR}")
+    if len(populations) < _TREE_FLOOR:
+        shortfalls.append(f"only {len(populations)} trees reached, floor is {_TREE_FLOOR}")
+    collapsed = _collapsed(populations)
+    if collapsed:
+        shortfalls.append(f"trees below their recorded floor (found, floor): {collapsed}")
+    return shortfalls
+
+
 def test_no_tree_outside_the_known_set_has_a_test_that_executes_nothing() -> None:
     """The hard zero, derived — no list of clean trees to go stale."""
     populations = test_functions_by_tree()
-    collapsed = _collapsed(populations)
-    assert not collapsed, (
-        "the sweep no longer finds the tests it is supposed to be scanning "
-        f"(found, floor): {collapsed}. The zero below is therefore meaningless — "
-        "a scan that finds nothing reports every tree clean. Fix the sweep."
+    shortfalls = _sweep_shortfalls(populations)
+    assert not shortfalls, (
+        "the sweep no longer finds the tests it is supposed to be scanning: "
+        + "; ".join(shortfalls)
+        + ". The zero below is therefore meaningless — a scan that finds nothing "
+        "reports every tree clean. Fix the sweep."
     )
 
     empty = _empty_by_tree()
@@ -147,10 +173,11 @@ def test_no_tree_outside_the_known_set_has_a_test_that_executes_nothing() -> Non
 def test_the_empty_bodied_budgets_only_ever_shrink() -> None:
     """Ratchet, both directions — a recorded shrink is locked in (#14498)."""
     populations = test_functions_by_tree()
-    collapsed = _collapsed(populations)
-    assert not collapsed, (
-        "the sweep no longer finds the tests it is supposed to be scanning "
-        f"(found, floor): {collapsed}. Fix the sweep; do NOT lower these numbers."
+    shortfalls = _sweep_shortfalls(populations)
+    assert not shortfalls, (
+        "the sweep no longer finds the tests it is supposed to be scanning: "
+        + "; ".join(shortfalls)
+        + ". Fix the sweep; do NOT lower these numbers."
     )
 
     empty = _empty_by_tree()
