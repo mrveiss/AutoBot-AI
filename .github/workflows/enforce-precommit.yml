@@ -132,6 +132,26 @@ jobs:
         with:
           node-version: '22'
 
+      # #15358: pre-commit builds an isolated environment per hook — its own
+      # virtualenvs, plus a node env for the `canonical_check.mjs` hook — under
+      # ~/.cache/pre-commit. Nothing cached that, so every run rebuilt all of
+      # them before a single file was checked. Scoping the sweep below removes
+      # work proportional to the tree; this removes the fixed setup cost that
+      # remained regardless of diff size.
+      #
+      # Keyed on the config hash, so changing a hook or bumping a rev rebuilds.
+      # The restore-key fallback is deliberate and safe: pre-commit rebuilds any
+      # environment whose entry no longer matches, and #14181's guard fails the
+      # job on a hook that could not EXECUTE — so a partially stale cache cannot
+      # become a hook silently not running.
+      - name: Cache pre-commit hook environments
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            pre-commit-${{ runner.os }}-
+
       - name: Run pre-commit over the change under review
         if: steps.filter.outputs.code == 'true'
         env:
