@@ -54,14 +54,31 @@ def _load(name: str, filename: str):
     return module
 
 
+_LOADED_NAMES = ("ci_dispatch_watchdog", "ci_red_cause", "ci_dispatch_retry")
+
+
 @pytest.fixture()
 def retry():
-    """A fresh, isolated load of the module under test and its dependencies."""
-    watchdog = _load("ci_dispatch_watchdog", "ci_dispatch_watchdog.py")
-    _load("ci_red_cause", "ci_red_cause.py")
-    module = _load("ci_dispatch_retry", "ci_dispatch_retry.py")
-    module.GitHubApi = watchdog.GitHubApi  # exposed for test construction below
-    return module
+    """A fresh, isolated load of the module under test and its dependencies.
+
+    Installs and removes each name in the same try/finally. Leaving them in
+    ``sys.modules`` contaminates every test collected afterwards on the same
+    worker -- the guard caught exactly that here, and it is the defect class
+    #13224/#15338 exist for. The baseline is not the answer: it only shrinks.
+    """
+    saved = {name: sys.modules.get(name) for name in _LOADED_NAMES}
+    try:
+        watchdog = _load("ci_dispatch_watchdog", "ci_dispatch_watchdog.py")
+        _load("ci_red_cause", "ci_red_cause.py")
+        module = _load("ci_dispatch_retry", "ci_dispatch_retry.py")
+        module.GitHubApi = watchdog.GitHubApi  # exposed for test construction below
+        yield module
+    finally:
+        for name, previous in saved.items():
+            if previous is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = previous
 
 
 class _FakeTransport:
