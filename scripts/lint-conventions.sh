@@ -55,8 +55,13 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-scope.sh" || {
   echo "FATAL: cannot load scripts/lib/git-scope.sh — refusing to report clean" >&2
   exit 1
 }
+# shellcheck source=scripts/lib/git-root.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh" || {
+  echo "FATAL: cannot load scripts/lib/git-root.sh — refusing to report clean" >&2
+  exit 1
+}
 
-cd "$(git rev-parse --show-toplevel)" || { echo "not a git repo" >&2; exit 2; }
+cd "$(git_repo_root)" || { echo "not a git repo" >&2; exit 2; }
 
 FAILURES=0
 fail() { FAILURES=$((FAILURES+1)); printf '  FAIL  %s\n' "$1"; }

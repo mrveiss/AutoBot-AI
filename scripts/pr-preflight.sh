@@ -34,7 +34,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-REPO_ROOT=$(git rev-parse --show-toplevel) || exit 2
+# shellcheck source=scripts/lib/git-root.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh" || exit 2
+REPO_ROOT=$(git_repo_root) || exit 2
 cd "$REPO_ROOT" || exit 2
 
 BASE="${PREFLIGHT_BASE:-origin/Dev_new_gui}"
@@ -131,7 +133,7 @@ case "$BRANCH" in
   *) pass "branch '$BRANCH' is not protected" ;;
 esac
 
-if [ "$(git rev-parse --show-toplevel)" = "$(git rev-parse --git-common-dir | xargs dirname 2>/dev/null)" ]; then
+if [ "$(git_repo_root)" = "$(git rev-parse --git-common-dir | xargs dirname 2>/dev/null)" ]; then
   note "this looks like the main checkout, not a worktree"
 fi
 

@@ -8,7 +8,17 @@
 # Run: bash scripts/lib/session-handoffs_test.sh
 #
 # Hermetic: a throwaway git repo per run, no network, no `gh`, and the real
-# repository is never touched.
+# repository is never touched -- which depends on scrubbing the git
+# environment first. An inherited GIT_DIR (exactly what a pre-commit/pre-push
+# hook hands its children) is honoured over `-C`'s directory, so without this
+# the `git -C "$TMP_REPO" init/add/commit/branch/checkout` calls below write
+# to the REAL repository's real refs while treating $TMP_REPO as its work
+# tree (#15246): reproduced live while fixing #15245, where the sibling
+# suite git-scope_test.sh did exactly this and left a stray commit and
+# config on the checkout's shared .git/config before this file was audited
+# too. Same scrub as .claude/hooks/block-dangerous-commands_test.sh.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
+unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 
 set -uo pipefail
 
