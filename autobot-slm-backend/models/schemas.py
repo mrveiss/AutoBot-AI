@@ -1655,6 +1655,12 @@ class CodeSyncStatusResponse(BaseModel):
     # Non-empty means a managed component is stale even if node code_version
     # matches latest — so consumers must not report "up to date" while this is set.
     stale_components: list[str] = []
+    # #15323: per-component "stale"/"healthy"/"unknown" — does the RUNNING
+    # service's loaded code match what stale_components already knows is on
+    # disk? Distinct question: a component can have zero file drift and still
+    # be stale here if a post-sync failure rewrote its tree without a restart
+    # landing. "unknown" (never "healthy") when either side is undeterminable.
+    process_divergence: dict[str, str] = {}
     # #12776: post-hoc verdict on the last self-update run. The self-update path
     # restarts this backend mid-run by design, so the process that launched the
     # playbook is gone before it finishes — completion can only be judged from
