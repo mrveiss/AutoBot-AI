@@ -32,8 +32,8 @@ from media.document.extraction import (
     extract_pdf,
     extract_plain_text,
     render_pages,
-    strip_page_markers,
 )
+from media.document.provenance import strip_page_markers
 
 _BACKEND_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _REQUIREMENTS = _BACKEND_ROOT / "requirements.txt"
