@@ -6,6 +6,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { isRealAuthToken } from '@/utils/authToken'
+import { isAdminRole } from '@/constants/roles'
 
 const logger = createLogger('useUserStore')
 
@@ -15,7 +16,7 @@ export interface UserProfile {
   email?: string
   displayName: string
   avatar?: string
-  role: 'admin' | 'operator' | 'analyst' | 'editor' | 'user' | 'viewer' | 'readonly'
+  role: 'admin' | 'superadmin' | 'operator' | 'analyst' | 'editor' | 'user' | 'viewer' | 'readonly'
   preferences: UserPreferences
   createdAt: Date
   lastLoginAt?: Date
@@ -97,10 +98,15 @@ export const useUserStore = defineStore('user', () => {
   // Computed
   const isAuthenticated = computed(() => authState.value.isAuthenticated)
 
-  const isAdmin = computed(() => currentUser.value?.role === 'admin')
+  // #14937: mirrors backend is_admin_role() — admits every administrative
+  // role (admin AND superadmin), not just a literal 'admin' comparison.
+  const isAdmin = computed(() => isAdminRole(currentUser.value?.role))
 
   // Roles that hold Permission.SERVICE_MANAGEMENT (service.management) — must
   // mirror ROLE_PERMISSIONS in autobot_shared/auth/permissions.py (#10198).
+  // superadmin deliberately excluded: its ROLE_PERMISSIONS entry is empty by
+  // design (it is an administrative predicate, not a permission grant) —
+  // see autobot_shared/auth/permissions.py.
   // Fail-safe: unknown role → false (hidden).
   const hasServiceManagement = computed(() => {
     const role = currentUser.value?.role
