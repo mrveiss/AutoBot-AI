@@ -56,10 +56,16 @@ file the size gate could not read became a violation, not a pass.
 So ``_file_anchors`` raises and ``_sweep`` records the module in a second list,
 which ``test_no_test_module_is_unreadable_by_the_sweep`` fails on. Measured on
 the branch that added this file: 0 unreadable of 1995 modules, so failing loudly
-costs nothing today. ``KNOWN_UNPARSEABLE`` exists as the same down-only escape
-hatch as ``KNOWN_UNRESOLVED`` and is deliberately empty — an entry there is a
-statement that a tracked test module does not parse, which is a defect in its own
-right and has to be argued for at the site.
+costs nothing today. ``KNOWN_UNPARSEABLE`` is a down-only escape hatch and is deliberately empty —
+an entry there is a statement that a tracked test module does not parse, which
+is a defect in its own right and has to be argued for at the site. An earlier
+revision of this file also grandfathered one unresolved anchor,
+``autobot-backend/tests/unit/test_agents_status_pg_optional.py:54`` (a
+``parents[3]`` that should have been ``parents[2]``, inert only because the
+enclosing ``_import_func`` discarded the spec it built and returned ``None``).
+#15251 fixed both the anchor and the swallow, so the grandfather entry is gone;
+``test_the_previously_grandfathered_anchor_now_resolves`` pins that it stays
+fixed.
 """
 
 from __future__ import annotations
@@ -88,22 +94,10 @@ SKIP_DIR_PARTS = frozenset(
 #: it when the population genuinely grows; lower it only with a stated reason.
 MIN_SWEPT_EXPRESSIONS = 100
 
-#: Anchors that are already wrong on this branch and are NOT fixed here, because
-#: they sit outside #15181's scope. Each is a real defect of the same shape, found
-#: by this guard's first run and reported rather than absorbed. Remove an entry
-#: when its site is fixed; never add one to make a new failure pass.
-#:
-#: * ``autobot-backend/tests/unit/test_agents_status_pg_optional.py:54`` builds
-#:   ``parents[3] / "api" / "agent_org.py"``. The module is at
-#:   ``autobot-backend/api/agent_org.py``, which is ``parents[2]``; ``parents[3]``
-#:   is the repository root. It is inert today only because the enclosing
-#:   ``_import_func`` discards the spec it just built and returns ``None``.
-KNOWN_UNRESOLVED = frozenset({"autobot-backend/tests/unit/test_agents_status_pg_optional.py"})
-
 #: Test modules that do not parse and are therefore swept blind. Empty on purpose:
-#: measured at 0 of 1995 on the branch that added this file. Same down-only
-#: discipline as ``KNOWN_UNRESOLVED`` — an entry here is an admission that a tracked
-#: test module is syntactically broken, which is its own defect, not a waiver.
+#: measured at 0 of 1995 on the branch that added this file. Down-only: an entry
+#: here is an admission that a tracked test module is syntactically broken, which
+#: is its own defect, not a waiver.
 KNOWN_UNPARSEABLE: frozenset[str] = frozenset()
 
 
@@ -240,7 +234,7 @@ class TestEveryAnchoredDataFileExists:
         missing = [
             f"{module.relative_to(root)}:{line}  ->  {resolved}"
             for module, line, _expr, resolved in swept
-            if not resolved.exists() and str(module.relative_to(root)) not in KNOWN_UNRESOLVED
+            if not resolved.exists()
         ]
         assert not missing, (
             "These test modules resolve a data file that does not exist. A fixture that "
@@ -265,19 +259,21 @@ class TestEveryAnchoredDataFileExists:
         assert hits[0][3].exists(), f"{site} still resolves to a missing file: {hits[0][3]}"
         assert hits[0][3].name == "redis-databases.yaml"
 
-    def test_the_grandfathered_set_is_down_only(self, swept) -> None:
-        """Every allowlisted module must still be swept, and still be broken.
+    def test_the_previously_grandfathered_anchor_now_resolves(self, swept) -> None:
+        """#15251: the one entry KNOWN_UNRESOLVED ever grandfathered must stay fixed.
 
-        An entry that no longer fails is an entry to delete — otherwise the set
-        grows into a place to hide new defects.
+        ``test_agents_status_pg_optional.py:54`` used to anchor at ``parents[3]``
+        (the repo root) instead of ``parents[2]`` (``autobot-backend``), inert only
+        because the enclosing ``_import_func`` discarded the spec and returned
+        ``None``. Both are fixed; this pins the anchor so a regression is caught by
+        this guard directly rather than only by the swallow it used to hide behind.
         """
         root = project_root()
-        still_missing = {
-            str(module.relative_to(root)) for module, _line, _expr, resolved in swept if not resolved.exists()
-        }
-        stale = KNOWN_UNRESOLVED - still_missing
-        assert not stale, f"these entries are fixed and must be removed from KNOWN_UNRESOLVED: {sorted(stale)}"
-        assert len(KNOWN_UNRESOLVED) <= 1, "KNOWN_UNRESOLVED is a down-only ratchet; a new defect is fixed, not listed"
+        site = "autobot-backend/tests/unit/test_agents_status_pg_optional.py"
+        hits = [entry for entry in swept if str(entry[0].relative_to(root)) == site]
+        assert len(hits) == 1, f"{site} contributes {len(hits)} anchored data files to the sweep, expected 1"
+        assert hits[0][3].exists(), f"{site} still resolves to a missing file: {hits[0][3]}"
+        assert hits[0][3].name == "agent_org.py"
 
 
 class TestAModuleTheSweepCannotReadIsNotClean:
