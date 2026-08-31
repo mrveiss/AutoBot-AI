@@ -1309,9 +1309,9 @@ def test_the_real_workflow_tree_classifies_the_reported_workflows_correctly(watc
 
     assert paths is not None
     resolved = {Path(p).name for p in paths}
-    # #15311 moved code-quality/enforce-precommit to self-hosted (#15310); both sides pinned.
-    assert "frontend-test.yml" in resolved
-    assert "code-quality.yml" in resolved
-    assert "enforce-precommit.yml" in resolved
-    assert "ci.yml" not in resolved
-    assert "frontend-required-context.yml" not in resolved
+    # #15395 retired every self-hosted pin, so the empty set is now the truthful
+    # answer -- distinct from None, which still means "directory unreadable"
+    # (pinned above, and the distinction that must never collapse). Kept as an
+    # equality rather than dropped: this is the guard that no workflow quietly
+    # regains a pin.
+    assert resolved == set(), f"a workflow regained a self-hosted pin: {sorted(resolved)}"
