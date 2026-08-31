@@ -720,16 +720,31 @@ async def _compute_process_divergence() -> Dict[str, str]:
     already owns — keeps the generic detector layering-clean (services/
     never imports api/, see process_divergence.py's module docstring).
 
-    Frontend components are excluded: their unit is nginx, which loads no
-    Python, so a .py mtime comparison against it would be meaningless — the
-    detector already answers "unknown" for them via the empty-mtime path,
-    but skipping them here keeps that intentional, not incidental.
-    """
-    from services.process_divergence import compute_process_divergence
+    Passes EVERY unit in _COMPONENT_SERVICES[component], not just the first
+    (#15323 review): autobot_shared alone restarts 6 units and
+    autobot-ai-stack's first-listed unit (autobot-chromadb) is a compiled
+    binary that never loads the .py tree being scanned — checking only
+    svcs[0] silently verified the wrong process, or 1-of-6 processes, and
+    could report "healthy" while the real Python unit stayed stale.
 
-    units = {c: svcs[0] for c, svcs in _COMPONENT_SERVICES.items() if svcs and svcs[0] != "nginx"}
-    deployed_dirs = {c: get_default_deployed_dir(c) for c in units}
-    return await compute_process_divergence(units, deployed_dirs)
+    Frontend components (unit list == ["nginx"]) are excluded: nginx loads
+    no Python, so a deploy-time comparison against it would be meaningless —
+    the detector already answers "unknown" for them via the empty-scan path,
+    but skipping them here keeps that intentional, not incidental.
+
+    Wrapped in try/except (#15323 review) to match _compute_stale_components'
+    invariant: a failure computing this signal must degrade /status, never
+    break it.
+    """
+    try:
+        from services.process_divergence import compute_process_divergence
+
+        units_by_component = {c: svcs for c, svcs in _COMPONENT_SERVICES.items() if svcs and svcs != ["nginx"]}
+        deployed_dirs = {c: get_default_deployed_dir(c) for c in units_by_component}
+        return await compute_process_divergence(units_by_component, deployed_dirs)
+    except Exception:  # noqa: BLE001 - a bad scan must not break /status
+        logger.exception("process-divergence: /status scan failed")
+        return {}
 
 
 @router.get("/status", response_model=CodeSyncStatusResponse)

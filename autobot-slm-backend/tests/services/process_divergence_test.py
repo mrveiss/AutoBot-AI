@@ -14,12 +14,14 @@ detector here.
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from services.process_divergence import (
+    _aggregate_unit_statuses,
     _component_divergence,
-    _newest_py_mtime,
+    _newest_py_deploy_time,
     _service_active_since_epoch,
     compute_process_divergence,
     invalidate_process_divergence_cache,
@@ -42,20 +44,20 @@ def _monotonic_us_to_stdout(value_us: int) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# _newest_py_mtime
+# _newest_py_deploy_time (ctime, not mtime — #15323 review)
 # ---------------------------------------------------------------------------
 
 
-def test_newest_py_mtime_returns_none_for_missing_dir(tmp_path) -> None:
-    assert _newest_py_mtime(str(tmp_path / "absent")) is None
+def test_newest_py_deploy_time_returns_none_for_missing_dir(tmp_path) -> None:
+    assert _newest_py_deploy_time(str(tmp_path / "absent")) is None
 
 
-def test_newest_py_mtime_returns_none_when_no_py_files(tmp_path) -> None:
+def test_newest_py_deploy_time_returns_none_when_no_py_files(tmp_path) -> None:
     (tmp_path / "readme.txt").write_text("hi", encoding="utf-8")
-    assert _newest_py_mtime(str(tmp_path)) is None
+    assert _newest_py_deploy_time(str(tmp_path)) is None
 
 
-def test_newest_py_mtime_finds_newest_across_subdirs(tmp_path) -> None:
+def test_newest_py_deploy_time_finds_newest_across_subdirs(tmp_path) -> None:
     older = tmp_path / "a.py"
     older.write_text("x", encoding="utf-8")
     sub = tmp_path / "pkg"
@@ -63,24 +65,38 @@ def test_newest_py_mtime_finds_newest_across_subdirs(tmp_path) -> None:
     newer = sub / "b.py"
     newer.write_text("y", encoding="utf-8")
 
-    older_time = time.time() - 100
-    newer_time = time.time()
-    import os
-
-    os.utime(older, (older_time, older_time))
-    os.utime(newer, (newer_time, newer_time))
-
-    result = _newest_py_mtime(str(tmp_path))
-    assert result == newer.stat().st_mtime
+    result = _newest_py_deploy_time(str(tmp_path))
+    assert result == newer.stat().st_ctime
 
 
-def test_newest_py_mtime_skips_artifact_dirs(tmp_path) -> None:
+def test_newest_py_deploy_time_skips_artifact_dirs(tmp_path) -> None:
     """A .py file under __pycache__ must never count as source (#15323)."""
     cache_dir = tmp_path / "__pycache__"
     cache_dir.mkdir()
     (cache_dir / "mod.cpython-310.py").write_text("compiled", encoding="utf-8")
 
-    assert _newest_py_mtime(str(tmp_path)) is None
+    assert _newest_py_deploy_time(str(tmp_path)) is None
+
+
+def test_newest_py_deploy_time_ignores_source_mtime_bumped_by_deploy(tmp_path) -> None:
+    """#15323 review — the exact defect: rsync -a preserves SOURCE mtime, so a
+    file last edited long ago but deployed just now must still read as a
+    RECENT deploy. Simulated by writing the file (which stamps ctime to
+    "now", exactly like rsync's write()) and then forcing its mtime back
+    into the past via os.utime — precisely what `rsync -a` does when it
+    copies a file and then restores the source timestamp."""
+    f = tmp_path / "app.py"
+    f.write_text("code", encoding="utf-8")
+    old_time = time.time() - 10 * 86400  # "last edited" 10 days ago
+    os.utime(f, (old_time, old_time))
+
+    deploy_time = _newest_py_deploy_time(str(tmp_path))
+
+    assert deploy_time is not None
+    # mtime was forced 10 days into the past; ctime must NOT have followed —
+    # it reflects the utime() call itself (i.e. "now", the deploy moment).
+    assert deploy_time > old_time + 86400
+    assert f.stat().st_mtime == old_time, "fixture sanity: mtime really is the old value"
 
 
 # ---------------------------------------------------------------------------
@@ -140,17 +156,43 @@ def test_service_active_since_epoch_converts_monotonic_to_wallclock() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _aggregate_unit_statuses — conservative reduction (#15323 review)
+# ---------------------------------------------------------------------------
+
+
+def test_aggregate_healthy_only_when_every_unit_healthy() -> None:
+    assert _aggregate_unit_statuses(["healthy", "healthy"]) == "healthy"
+
+
+def test_aggregate_any_stale_wins_over_healthy() -> None:
+    assert _aggregate_unit_statuses(["healthy", "stale"]) == "stale"
+
+
+def test_aggregate_any_stale_wins_over_unknown() -> None:
+    assert _aggregate_unit_statuses(["unknown", "stale"]) == "stale"
+
+
+def test_aggregate_unknown_when_no_stale_but_one_unknown() -> None:
+    assert _aggregate_unit_statuses(["healthy", "unknown"]) == "unknown"
+
+
+# ---------------------------------------------------------------------------
 # _component_divergence / compute_process_divergence — stale / healthy / unknown
 # ---------------------------------------------------------------------------
 
 
 def test_component_divergence_unknown_when_deployed_dir_missing() -> None:
-    result = _run(_component_divergence("autobot-backend", "autobot-backend", None))
+    result = _run(_component_divergence("autobot-backend", ["autobot-backend"], None))
+    assert result == "unknown"
+
+
+def test_component_divergence_unknown_when_no_units() -> None:
+    result = _run(_component_divergence("autobot-backend", [], "/nonexistent"))
     assert result == "unknown"
 
 
 def test_component_divergence_unknown_when_no_py_files(tmp_path) -> None:
-    result = _run(_component_divergence("autobot-backend", "autobot-backend", str(tmp_path)))
+    result = _run(_component_divergence("autobot-backend", ["autobot-backend"], str(tmp_path)))
     assert result == "unknown"
 
 
@@ -160,58 +202,83 @@ def test_component_divergence_unknown_when_service_active_since_undeterminable(t
     (tmp_path / "app.py").write_text("x", encoding="utf-8")
 
     with patch("services.process_divergence._service_active_since_epoch", AsyncMock(return_value=None)):
-        result = _run(_component_divergence("autobot-backend", "autobot-backend", str(tmp_path)))
+        result = _run(_component_divergence("autobot-backend", ["autobot-backend"], str(tmp_path)))
 
     assert result == "unknown"
 
 
 def test_component_divergence_stale_when_file_newer_than_process_start(tmp_path) -> None:
     (tmp_path / "app.py").write_text("x", encoding="utf-8")
-    file_mtime = (tmp_path / "app.py").stat().st_mtime
+    deploy_time = (tmp_path / "app.py").stat().st_ctime
 
     with patch(
         "services.process_divergence._service_active_since_epoch",
-        AsyncMock(return_value=file_mtime - 60),
+        AsyncMock(return_value=deploy_time - 60),
     ):
-        result = _run(_component_divergence("autobot-backend", "autobot-backend", str(tmp_path)))
+        result = _run(_component_divergence("autobot-backend", ["autobot-backend"], str(tmp_path)))
 
     assert result == "stale"
 
 
 def test_component_divergence_healthy_when_process_started_after_newest_file(tmp_path) -> None:
     (tmp_path / "app.py").write_text("x", encoding="utf-8")
-    file_mtime = (tmp_path / "app.py").stat().st_mtime
+    deploy_time = (tmp_path / "app.py").stat().st_ctime
 
     with patch(
         "services.process_divergence._service_active_since_epoch",
-        AsyncMock(return_value=file_mtime + 60),
+        AsyncMock(return_value=deploy_time + 60),
     ):
-        result = _run(_component_divergence("autobot-backend", "autobot-backend", str(tmp_path)))
+        result = _run(_component_divergence("autobot-backend", ["autobot-backend"], str(tmp_path)))
 
     assert result == "healthy"
 
 
+def test_component_divergence_multi_unit_second_unit_stale_is_not_healthy(tmp_path) -> None:
+    """#15323 review — BLOCKING 1 regression: a component backed by TWO units
+    (e.g. autobot_shared -> 6 restart targets, autobot-ai-stack -> chromadb +
+    the actual Python unit) must not read "healthy" just because the FIRST
+    unit checked out. Here unit A started after the newest file (healthy on
+    its own) but unit B did not (stale) — the component verdict must be
+    "stale", never "healthy"."""
+    (tmp_path / "app.py").write_text("x", encoding="utf-8")
+    deploy_time = (tmp_path / "app.py").stat().st_ctime
+
+    async def _fake_active_since(unit):
+        return deploy_time + 60 if unit == "unit-a-healthy" else deploy_time - 60
+
+    with patch("services.process_divergence._service_active_since_epoch", side_effect=_fake_active_since):
+        result = _run(
+            _component_divergence(
+                "autobot_shared",
+                ["unit-a-healthy", "unit-b-stale"],
+                str(tmp_path),
+            )
+        )
+
+    assert result == "stale"
+
+
 def test_compute_process_divergence_scans_all_components_and_caches(tmp_path) -> None:
     (tmp_path / "app.py").write_text("x", encoding="utf-8")
-    file_mtime = (tmp_path / "app.py").stat().st_mtime
+    deploy_time = (tmp_path / "app.py").stat().st_ctime
     calls: list[str] = []
 
     async def _fake_active_since(unit):
         calls.append(unit)
-        return file_mtime + 60
+        return deploy_time + 60
 
     invalidate_process_divergence_cache()
     with patch("services.process_divergence._service_active_since_epoch", side_effect=_fake_active_since):
         first = _run(
             compute_process_divergence(
-                {"autobot-backend": "autobot-backend"},
+                {"autobot-backend": ["autobot-backend"]},
                 {"autobot-backend": str(tmp_path)},
                 force=True,
             )
         )
         second = _run(
             compute_process_divergence(
-                {"autobot-backend": "autobot-backend"},
+                {"autobot-backend": ["autobot-backend"]},
                 {"autobot-backend": str(tmp_path)},
             )
         )
@@ -219,6 +286,29 @@ def test_compute_process_divergence_scans_all_components_and_caches(tmp_path) ->
     assert first == {"autobot-backend": "healthy"}
     assert second == first
     assert calls == ["autobot-backend"], "second call within the TTL must hit the cache, not re-scan"
+
+
+def test_compute_process_divergence_checks_every_unit_not_just_first(tmp_path) -> None:
+    """#15323 review — end-to-end through the public entry point, not just
+    _component_divergence directly: a multi-unit component must still
+    surface a stale second unit."""
+    (tmp_path / "app.py").write_text("x", encoding="utf-8")
+    deploy_time = (tmp_path / "app.py").stat().st_ctime
+
+    async def _fake_active_since(unit):
+        return deploy_time + 60 if unit == "autobot-chromadb" else deploy_time - 60
+
+    invalidate_process_divergence_cache()
+    with patch("services.process_divergence._service_active_since_epoch", side_effect=_fake_active_since):
+        result = _run(
+            compute_process_divergence(
+                {"autobot-ai-stack": ["autobot-chromadb", "autobot-ai-stack"]},
+                {"autobot-ai-stack": str(tmp_path)},
+                force=True,
+            )
+        )
+
+    assert result == {"autobot-ai-stack": "stale"}
 
 
 def test_compute_process_divergence_one_bad_component_reports_unknown_not_crash(tmp_path) -> None:
@@ -234,7 +324,7 @@ def test_compute_process_divergence_one_bad_component_reports_unknown_not_crash(
     with patch("services.process_divergence._service_active_since_epoch", side_effect=_boom):
         result = _run(
             compute_process_divergence(
-                {"autobot-backend": "autobot-backend"},
+                {"autobot-backend": ["autobot-backend"]},
                 {"autobot-backend": str(tmp_path)},
                 force=True,
             )

@@ -450,7 +450,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-npu-worker/resources/windows-npu-worker/app/npu_worker.py": 2248,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 739,
     "autobot-slm-backend/api/code_source.py": 720,
-    "autobot-slm-backend/api/code_sync.py": 6099,
+    "autobot-slm-backend/api/code_sync.py": 6114,
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,
     "autobot-slm-backend/api/monitoring.py": 1096,

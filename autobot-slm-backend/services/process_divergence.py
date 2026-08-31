@@ -10,21 +10,46 @@ loaded it — the job row reads "failed" but nothing previously compared what
 the RUNNING process actually loaded against what is now on disk. That
 comparison is what this module answers, per component:
 
-    Is the newest source file under the deployed tree newer than the moment
-    the service that runs it last became active?
+    Is the deployed tree's newest file-write newer than the moment the
+    unit(s) that run it last became active?
 
-* ``"stale"``   — yes: the process is running code older than what is on
+* ``"stale"``   — yes for at least one of the component's units: some
+  process backing this component is running code older than what is on
   disk (the exact divergence #14866/#14010/#13570/#13747 need to see).
-* ``"healthy"`` — no: the process started at or after the newest file.
-* ``"unknown"`` — either side could not be determined (no deployed dir, no
-  ``.py`` file under it, systemd unavailable, unit never activated). This
-  module never reports ``"healthy"`` when it cannot tell — a false
-  "healthy" is the exact defect being fixed, so "cannot determine" must
-  never collapse into the good answer.
+* ``"healthy"`` — every one of the component's units resolved and started
+  at or after the newest deployed file.
+* ``"unknown"`` — no unit came back "stale", but at least one side could
+  not be determined for at least one unit (no deployed dir, no ``.py``
+  file under it, systemd unavailable, unit never activated). This module
+  never reports ``"healthy"`` when it cannot tell — a false "healthy" is
+  the exact defect being fixed, so "cannot determine" must never collapse
+  into the good answer, and neither may a partial "healthy" from checking
+  only SOME of a multi-unit component's processes.
+
+Deploy-time signal — ctime, not mtime (#15323 review)
+-------------------------------------------------------
+Every rsync invocation in ``api/code_sync.py`` uses ``-a``/``-avz``, and
+``-a`` implies ``-t``: a deployed file keeps its SOURCE mtime (when the
+line was last edited in git), not the moment it landed on this host. A file
+last edited 10 days ago and deployed 5 minutes ago has an mtime from 10
+days ago — comparing that against a process that started 5 days ago would
+read "healthy" moments after that exact file was overwritten with new code.
+
+ctime (inode change time) is used instead. rsync cannot preserve it — there
+is no syscall that lets a caller set another file's ctime to an arbitrary
+value; every write() and every explicit utime() call (which is exactly how
+rsync applies the preserved mtime) stamps ctime to "now" as a side effect.
+So ctime tracks the moment content actually landed on THIS filesystem,
+which is precisely "was this file deployed here", while remaining stable
+(not bumped) for any file rsync left untouched because it already matched.
+The alternative of a separate deploy-time marker file/stamp was rejected as
+a detector-side fix should not also require changing the sync's own rsync
+flags (behavioural change, out of scope for a read-only detector) or adding
+a new write path that could itself go stale.
 
 Kept in ``services/`` (not ``api/code_sync.py``, already at its size ceiling)
 and free of any ``api.*`` import — callers pass in the component -> systemd
-unit and component -> deployed-dir mappings ``code_sync.py`` already owns,
+unit(s) and component -> deployed-dir mappings ``code_sync.py`` already owns,
 so this stays a pure, layering-clean detector.
 """
 
@@ -35,7 +60,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Dict, Literal, Mapping, Optional
+from typing import Dict, Literal, Mapping, Optional, Sequence
 
 from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
 
@@ -52,8 +77,8 @@ DivergenceStatus = Literal["stale", "healthy", "unknown"]
 
 # #15323: TTL for the per-component divergence scan, mirroring the existing
 # _STALE_COMPONENTS_TTL_SECONDS pattern in api/code_sync.py — a full-tree
-# mtime walk plus a systemctl round-trip per component is cheap but must not
-# run on every /status poll.
+# ctime walk plus a systemctl round-trip per unit is cheap but must not run
+# on every /status poll.
 PROCESS_DIVERGENCE_TTL_SECONDS = int(os.getenv("SLM_PROCESS_DIVERGENCE_TTL_SECONDS", "60"))
 
 # Timeout for each `systemctl show` round-trip — a hung systemd must not hang
@@ -79,8 +104,15 @@ def invalidate_process_divergence_cache() -> None:
     _cache["ts"] = -PROCESS_DIVERGENCE_TTL_SECONDS - 1.0
 
 
-def _newest_py_mtime(deployed_dir: str) -> Optional[float]:
-    """Newest ``.py`` mtime under *deployed_dir*; None if absent or no ``.py`` file."""
+def _newest_py_deploy_time(deployed_dir: str) -> Optional[float]:
+    """Newest ``.py`` ctime under *deployed_dir*; None if absent or no ``.py`` file.
+
+    ctime, not mtime — see the module docstring's "Deploy-time signal"
+    section. rsync's ``-a`` (implies ``-t``) preserves the SOURCE mtime, so
+    mtime answers "when was this line last edited", not "when did this
+    file land on this host"; ctime answers the latter and is the one this
+    detector needs.
+    """
     root = Path(deployed_dir)
     if not root.is_dir():
         return None
@@ -91,12 +123,12 @@ def _newest_py_mtime(deployed_dir: str) -> Optional[float]:
             if not filename.endswith(".py"):
                 continue
             try:
-                mtime = (Path(dirpath) / filename).stat().st_mtime
+                ctime = (Path(dirpath) / filename).stat().st_ctime
             except OSError as exc:
                 logger.warning("process-divergence: cannot stat %s/%s: %s", dirpath, filename, exc)
                 continue
-            if newest is None or mtime > newest:
-                newest = mtime
+            if newest is None or ctime > newest:
+                newest = ctime
     return newest
 
 
@@ -141,40 +173,62 @@ async def _service_active_since_epoch(unit: str) -> Optional[float]:
     return time.time() - seconds_ago
 
 
-async def _component_divergence(component: str, unit: str, deployed_dir: Optional[str]) -> DivergenceStatus:
-    """Single-component verdict — never "healthy" unless BOTH sides resolved."""
-    if not deployed_dir:
+def _unit_divergence(newest_deploy_time: Optional[float], active_since: Optional[float]) -> DivergenceStatus:
+    """Single-unit verdict — "healthy" only when both sides resolved."""
+    if newest_deploy_time is None or active_since is None:
         return "unknown"
-    newest_mtime = _newest_py_mtime(deployed_dir)
-    if newest_mtime is None:
+    return "stale" if newest_deploy_time > active_since else "healthy"
+
+
+def _aggregate_unit_statuses(statuses: Sequence[DivergenceStatus]) -> DivergenceStatus:
+    """Conservative reduction over a component's units (#15323 review).
+
+    A component restarts MULTIPLE units (autobot_shared fans out to every
+    Python service; autobot-ai-stack pairs a compiled chromadb binary with
+    the actual Python autobot-ai-stack unit). Checking only one unit let a
+    healthy chromadb restart mask a still-stale Python process — the wrong
+    process entirely for the ai-stack case. "stale" beats "unknown" beats
+    "healthy" so any one bad unit is enough to withhold "healthy".
+    """
+    if any(status == "stale" for status in statuses):
+        return "stale"
+    if any(status == "unknown" for status in statuses):
         return "unknown"
-    active_since = await _service_active_since_epoch(unit)
-    if active_since is None:
+    return "healthy"
+
+
+async def _component_divergence(component: str, units: Sequence[str], deployed_dir: Optional[str]) -> DivergenceStatus:
+    """Component verdict — aggregated over EVERY unit that backs it (#15323 review)."""
+    if not deployed_dir or not units:
         return "unknown"
-    return "stale" if newest_mtime > active_since else "healthy"
+    newest_deploy_time = _newest_py_deploy_time(deployed_dir)
+    statuses = [_unit_divergence(newest_deploy_time, await _service_active_since_epoch(unit)) for unit in units]
+    return _aggregate_unit_statuses(statuses)
 
 
 async def compute_process_divergence(
-    unit_by_component: Mapping[str, str],
+    units_by_component: Mapping[str, Sequence[str]],
     deployed_dir_by_component: Mapping[str, str],
     *,
     force: bool = False,
 ) -> Dict[str, DivergenceStatus]:
     """Per-component stale/healthy/unknown verdict, TTL-cached (#15323).
 
-    *unit_by_component* and *deployed_dir_by_component* are supplied by the
+    *units_by_component* and *deployed_dir_by_component* are supplied by the
     caller (api/code_sync.py already owns ``_COMPONENT_SERVICES`` and
     ``get_default_deployed_dir``) so this module never imports ``api.*``.
+    Every unit listed for a component is checked — see
+    ``_aggregate_unit_statuses`` — not just the first.
     """
     now = time.monotonic()
     if not force and now - _cache["ts"] < PROCESS_DIVERGENCE_TTL_SECONDS:
         return _cache["value"]
 
     result: Dict[str, DivergenceStatus] = {}
-    for component, unit in unit_by_component.items():
+    for component, units in units_by_component.items():
         deployed_dir = deployed_dir_by_component.get(component)
         try:
-            result[component] = await _component_divergence(component, unit, deployed_dir)
+            result[component] = await _component_divergence(component, units, deployed_dir)
         except Exception:  # noqa: BLE001 - one bad component must not break the scan
             logger.exception("process-divergence: scan failed for %s", component)
             result[component] = "unknown"
