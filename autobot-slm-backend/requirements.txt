@@ -34,7 +34,7 @@ redis[asyncio]>=8.1.0
 
 # Async utilities
 aiofiles>=25.1.0
-websockets>=17.0.1,<18       # Issue #3098: relaxed from >=16.0 (#10386): slm_client uses only API present in 15.x; <16 satisfies langgraph-sdk 0.4.2 on backend side
+websockets>=17.1,<18       # Issue #3098: relaxed from >=16.0 (#10386): slm_client uses only API present in 15.x; <16 satisfies langgraph-sdk 0.4.2 on backend side
 
 # Ansible integration
 ansible-runner>=2.4.3
@@ -68,6 +68,6 @@ pysaml2>=7.5.4  # SAML 2.0 Service Provider
 pyotp>=2.10.0  # TOTP generation and verification
 
 # Security: explicit pins to override vulnerable transitive versions
-cryptography>=50.0.0  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
+cryptography>=50.0.1  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
 # Note: pyopenssl version resolved by pysaml2's dependencies (constraints conflict with >=26.0.0)
-# cryptography>=50.0.0 provides primary security coverage
+# cryptography>=50.0.1 provides primary security coverage
