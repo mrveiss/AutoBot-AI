@@ -336,8 +336,11 @@ jobs:
         # These are GitHub-generated SHAs, but keeping every ${{ }} out of
         # `run:` is the rule that does not need a per-field risk judgement.
         PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
+        # PR_HEAD_SHA and PR_NUMBER removed: neither was read by this step's
+        # body (PR_BASE_SHA above is, at git_scope_resolve_base). Verified
+        # unreferenced here and in scripts/lib/ and pipeline-scripts/ -- the
+        # PR_NUMBER hits there belong to pr-queue-open-list.sh, a different
+        # workflow's variable of the same name.
       run: |
         set -euo pipefail
         # The denylist of third-party product names is NOT stored in this repo:
