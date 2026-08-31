@@ -76,7 +76,7 @@ jobs:
 
     steps:
       - name: Check out full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # Every branch and the full commit graph: the merges below are real
           # merges, and `rev-list --count` needs the ancestry. A shallow clone

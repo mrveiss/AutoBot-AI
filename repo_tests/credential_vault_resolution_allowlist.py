@@ -98,21 +98,4 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/utils/chromadb_client.py", "chromadb_auth_token"): (
         f"{_AUTH_BOOTSTRAP}: internal ChromaDB data-layer service credential"
     ),
-    # --- tracked gap: third-party/service credentials, same defect class as
-    # --- #15267/#15268. 27 of the 29 sites named in #15276 were migrated to
-    # --- the vault seam in that issue's fix; these two remain because their
-    # --- file already sits at its frozen KNOWN_LARGE ceiling
-    # --- (scripts/python_file_size_known_large.py) and the mandatory new
-    # --- resolve_provider_key import has no line-neutral home in either --
-    # --- no existing services.provider_key_vault import to fold it into, no
-    # --- genuinely dead line to remove instead. Raising a grandfathered
-    # --- file's ceiling to make room is exactly what #14236 forbids.
-    ("autobot-backend/services/execution/claude_code_backend.py", "anthropic_api_key"): (
-        f"{_TRACKED} #15276: execution backend reads the key directly rather than via the registry -- "
-        "blocked on a line-neutral import site in a KNOWN_LARGE file at its frozen ceiling"
-    ),
-    ("autobot-backend/services/notification_service.py", "smtp_password"): (
-        f"{_TRACKED} #15276: SMTP credential -- blocked on a line-neutral import site "
-        "in a KNOWN_LARGE file at its frozen ceiling"
-    ),
 }
