@@ -107,7 +107,9 @@ def recording_work_units(recorder: Callable[[str, object], None] | None) -> Iter
         _WORK_UNIT_RECORDER.reset(token)
 
 
-def assert_within_work_budget(elapsed_ms: float, budget_units: float, what: str) -> None:
+def assert_within_work_budget(
+    elapsed_ms: float, budget_units: float, what: str, calibrated_under: str | None = None
+) -> None:
     """Assert an operation cost fewer than `budget_units` calibrated work units.
 
     Fails on three distinct conditions, all of them real:
@@ -119,6 +121,19 @@ def assert_within_work_budget(elapsed_ms: float, budget_units: float, what: str)
       or by being handed a stub in place of a measurement;
     * the calibration itself measured nothing, which would make the ratio
       meaningless rather than merely generous.
+
+    `calibrated_under` names the STATE the budget was measured in, and is
+    reported on breach (#15342). A budget is only meaningful together with that
+    state: `Multimodal processor startup` was calibrated at 315.602 units while
+    `VisionProcessor`'s CLIP load was raising `TypeError` (#15054), so the
+    constructor exited early. When #15297 fixed that load, the same constructor
+    began doing the work it had been skipping and measured ~1500 units. Nothing
+    regressed; the baseline's premise had gone.
+
+    Without the state recorded, that breach is indistinguishable from a real
+    slowdown, and the failure text — "investigate the code, do not raise it" —
+    sends the reader hunting a regression that does not exist. With it, the two
+    cases read differently, which is the whole point.
     """
     assert isinstance(elapsed_ms, (int, float)), f"{what}: no measurement was taken (got {elapsed_ms!r})"
     assert elapsed_ms > 0.0, f"{what}: measured {elapsed_ms}ms — the operation under test did not run"
@@ -135,10 +150,18 @@ def assert_within_work_budget(elapsed_ms: float, budget_units: float, what: str)
     if recorder is not None:
         recorder("perf_work_units", report)
 
-    assert units < budget_units, (
-        f"{report}. This is a load-invariant ratio, not a wall-clock ceiling — "
-        f"investigate the code, do not raise it."
-    )
+    if calibrated_under:
+        state_note = (
+            f"\n  budget calibrated under: {calibrated_under}"
+            f"\n  If that state no longer holds this is a RE-BASELINE, not a regression:"
+            f"\n  confirm which, then reset the budget and update `calibrated_under`."
+        )
+    else:
+        state_note = (
+            "\n  This is a load-invariant ratio, not a wall-clock ceiling — " "investigate the code, do not raise it."
+        )
+
+    assert units < budget_units, f"{report}.{state_note}"
 
 
 def assert_within_baseline_ratio(
