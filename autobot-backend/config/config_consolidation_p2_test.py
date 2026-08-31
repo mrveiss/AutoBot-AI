@@ -136,9 +136,9 @@ def test_environment_variable_overrides_apply_to_config(monkeypatch) -> None:
     """
     monkeypatch.setenv("AUTOBOT_BACKEND_PORT", "9999")
     overridden = apply_env_overrides({})
-    assert overridden == {"backend": {"server_port": 9999}}, (
-        "AUTOBOT_BACKEND_PORT should override backend.server_port as an int"
-    )
+    assert overridden == {
+        "backend": {"server_port": 9999}
+    }, "AUTOBOT_BACKEND_PORT should override backend.server_port as an int"
 
 
 def test_multimodal_config_consolidation() -> None:
