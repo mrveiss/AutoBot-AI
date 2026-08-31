@@ -173,7 +173,7 @@ runs:
     # skipping actions/setup-python there (#15313) also skips its caching.
     - name: Cache pip downloads (self-hosted)
       if: runner.environment == 'self-hosted'
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/.cache/pip
         key: ${{ steps.cache-key.outputs.value }}
