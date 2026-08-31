@@ -386,7 +386,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/tasks/knowledge_tasks.py": 912,
     "autobot-backend/tests/agents/test_librarian_assistant_extract.py": 635,
     "autobot-backend/tests/api/test_canvas.py": 679,
-    "autobot-backend/tests/api/test_knowledge_grounding.py": 934,
+    "autobot-backend/tests/api/test_knowledge_grounding.py": 929,
     "autobot-backend/tests/api/test_marketplace.py": 772,
     "autobot-backend/tests/content_reach/test_url_guard.py": 787,
     "autobot-backend/tests/fixtures/mocks.py": 671,

@@ -663,14 +663,8 @@ async def test_api_list_conflicts_endpoint(mock_app):
     """GET /api/kb-conflicts must page and shape conflicts read from Redis."""
     fake_redis = AsyncMock()
     fake_redis.keys = AsyncMock(return_value=["conflict:c1"])
-    fake_redis.hgetall = AsyncMock(
-        return_value={
-            "status": "pending",
-            "severity": Severity.HIGH.value,
-            "description": "conflicting facts",
-            "timestamp": "100.0",
-        }
-    )
+    conflict = {"status": "pending", "severity": Severity.HIGH.value, "description": "conflict", "timestamp": "100.0"}
+    fake_redis.hgetall = AsyncMock(return_value=conflict)
 
     app = _build_grounding_test_app()
     app.dependency_overrides[get_current_user] = lambda: {"username": "test-user"}
