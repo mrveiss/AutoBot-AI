@@ -86,9 +86,12 @@ commit's pre-image), not carried over from the issue table unchecked; see
   Pre-#7437: 5 / 30 / 24.
 - ``smtp_host``/``smtp_port``/``smtp_from``/``smtp_tls``:
   ``services/notification_service.py`` reads all four unguarded. ``""``
-  host/from and ``0`` port break outbound mail; ``smtp_tls=""`` fails the
-  ``.lower() != "false"`` check into "TLS off" instead of "TLS on"
-  (pre-#7437 default was "true"). Pre-#7437: "localhost" / 587 /
+  host/from and ``0`` port break outbound mail. ``smtp_tls`` is the
+  exception and is restored for SSOT accuracy, not to fix a live defect:
+  the reader is ``config.smtp_tls.lower() != "false"``, and ``""`` already
+  evaluates True, so TLS is on either way. Restoring "true" makes the SSOT
+  state what the code actually does instead of leaving a reader to work it
+  out from an empty string. Pre-#7437: "localhost" / 587 /
   "autobot@localhost" / "true".
 - ``mcp_worker_log_level``: ``services/mcp_bridge_workers/worker_entrypoint.py``
   passes it straight to ``logging.basicConfig(level=...)`` unguarded; ``""``
