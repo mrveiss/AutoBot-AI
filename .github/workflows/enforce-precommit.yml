@@ -5,6 +5,11 @@
 name: Enforce Pre-commit Hooks
 
 on:
+  # #14054: the tenth required context. Without this trigger the queue
+  # deadlocks on verify-precommit-config -- every entrant waiting on a
+  # check that never fires. Inert until the merge_queue ruleset rule
+  # exists; this event cannot occur before then.
+  merge_group:
   pull_request:
     branches: [ main, Dev_new_gui, develop ]
     # No `paths:` filter — this workflow is a REQUIRED status check (#12174), and
@@ -29,7 +34,12 @@ jobs:
     # this runner's OS release. Python and shell only — no Docker, no service
     # containers — and a single unsharded job at ~462s, so moving it forfeits
     # no parallelism.
-    runs-on: [self-hosted, Linux, X64]
+    # ubuntu-latest (#15395). This job publishes a REQUIRED context, and a
+    # required context pinned to a two-machine pool cannot report when that
+    # pool is down -- the #13401 deadlock, recurring as #15185 and #14444.
+    # Nothing here needs self-hosted hardware: the pins carried only the
+    # generic [self-hosted, Linux, X64] labels, never an npu/gpu/cuda one.
+    runs-on: ubuntu-latest
     # Fail fast on self-hosted, not GitHub's ~360min default (#11077 precedent in
     # frontend-test.yml). This is a required, non-path-filtered context: without a
     # bound, a runner outage queues it for hours and wedges every open PR.
@@ -90,6 +100,11 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
+          # #14054: dorny/paths-filter errors on an event it does not
+          # recognise unless `base` is given. This filter gates steps rather
+          # than the job, so the failure mode is not a deadlock but a RED
+          # required context on every queue entrant. Empty on push/PR.
+          base: ${{ github.event.merge_group.base_sha || '' }}
           filters: .github/filters/docs-only-paths.yml
 
       # NOT gated, deliberately (#15299). Two ungated steps below run
@@ -270,7 +285,7 @@ jobs:
 
   check-instructions:
     # Self-hosted (#15310) — same reasoning as verify-precommit-config above.
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout code
