@@ -4,6 +4,12 @@
 name: Frontend Testing Suite
 
 on:
+  # #14054: the merge queue builds each entrant against base + the entries
+  # ahead of it and expects the required contexts to report against that
+  # temporary ref. A required context with no `merge_group:` trigger never
+  # fires, and the queue waits on it forever. Inert until the `merge_queue`
+  # ruleset rule is enabled -- this event does not exist before then.
+  merge_group:
   push:
     branches: [main, develop, 'Dev_*']
     # Mirror of .github/filters/frontend-paths.yml. GitHub requires event path
@@ -73,6 +79,12 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
+          # #14054: dorny/paths-filter errors on an event it does not
+          # recognise unless `base` is given, and a failed `changes` job
+          # skips every job that needs it -- i.e. the required context
+          # never reports and the queue deadlocks. Empty on push/PR, so
+          # their existing behaviour is unchanged.
+          base: ${{ github.event.merge_group.base_sha || '' }}
           # Shared file, NOT an inline list: frontend-required-context.yml's
           # `changes` job loads the very same path set. Its shim job and the
           # `unit-tests` job below carry the same required context name under
@@ -84,9 +96,14 @@ jobs:
   unit-tests:
     name: Unit & Integration Tests
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30  # #11077: fail fast (self-hosted); not GitHub's 24h default
+    if: github.event_name == 'merge_group' || needs.changes.outputs.frontend == 'true'
+    # ubuntu-latest (#15395). This job publishes a REQUIRED context, and a
+    # required context pinned to a two-machine pool cannot report when that
+    # pool is down -- the #13401 deadlock, recurring as #15185 and #14444.
+    # Nothing here needs self-hosted hardware: the pins carried only the
+    # generic [self-hosted, Linux, X64] labels, never an npu/gpu/cuda one.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # #11077: fail fast; not GitHub's 24h default
     # vue-tsc (the `type-check` and `check-ts-delta` steps) is near the default
     # V8 old-space ceiling on this project and intermittently OOMs
     # ("Reached heap limit … JavaScript heap out of memory"), flaking this
@@ -243,8 +260,8 @@ jobs:
     name: Security Scan
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 20  # #11077: fail fast (self-hosted); not GitHub's 24h default
+    runs-on: ubuntu-latest
+    timeout-minutes: 20  # #11077: fail fast; not GitHub's 24h default
 
     steps:
       - name: Checkout code
@@ -355,8 +372,8 @@ jobs:
   # Job 3: Build Test
   build-test:
     name: Build Test
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30  # #11077: fail fast (self-hosted); not GitHub's 24h default
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # #11077: fail fast; not GitHub's 24h default
     # `changes` added so the dependency graph is consistent; build-test already
     # self-skips when unit-tests skips (path-untouched PRs).
     needs: [changes, unit-tests]
@@ -401,8 +418,8 @@ jobs:
   # Job 4: Test Summary and Reporting
   test-summary:
     name: Test Summary
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 15  # #11077: fail fast (self-hosted); not GitHub's 24h default
+    runs-on: ubuntu-latest
+    timeout-minutes: 15  # #11077: fail fast; not GitHub's 24h default
     needs: [changes, unit-tests, security-scan, build-test]
     # `always()` so the summary still reports when a test job FAILED, but gated
     # on the same `changes` output as the jobs it summarises. Without the gate
