@@ -4,6 +4,12 @@
 name: Code Quality
 
 on:
+  # #14054: the merge queue builds each entrant against base + the entries
+  # ahead of it and expects the required contexts to report against that
+  # temporary ref. A required context with no `merge_group:` trigger never
+  # fires, and the queue waits on it forever. Inert until the `merge_queue`
+  # ruleset rule is enabled -- this event does not exist before then.
+  merge_group:
   push:
     branches: [ main, Dev_new_gui, develop ]
     paths:
@@ -78,6 +84,12 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
+          # #14054: dorny/paths-filter errors on an event it does not
+          # recognise unless `base` is given, and a failed `changes` job
+          # skips every job that needs it -- i.e. the required context
+          # never reports and the queue deadlocks. Empty on push/PR, so
+          # their existing behaviour is unchanged.
+          base: ${{ github.event.merge_group.base_sha || '' }}
           filters: |
             backend:
               - '**/*.py'
@@ -115,14 +127,17 @@ jobs:
 
   code-quality:
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
-    # Back on self-hosted (#15310). The MVA-2605 outage this was moved away from
-    # is over: both runners are online. This job is the slowest in the set at
-    # ~601s average and is a single unsharded job, so its wall-clock is one job's
-    # duration on either runner type — it gives up no parallelism by moving,
-    # unlike the sharded suites which stay hosted deliberately.
-    runs-on: [self-hosted, Linux, X64]
-    # Fail fast on self-hosted rather than GitHub's ~360min default (#11077).
+    if: github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true'
+    # ubuntu-latest (#15395). This job publishes a REQUIRED context, and a
+    # required context pinned to a two-machine pool cannot report when that
+    # pool is down -- the #13401 deadlock, recurring as #15185 and #14444.
+    # Nothing here needs self-hosted hardware: the pins carried only the
+    # generic [self-hosted, Linux, X64] labels, never an npu/gpu/cuda one.
+    # It is the slowest job in the set (~601s self-hosted, unmeasured hosted --
+    # #15395 tracks recording the delta) and single unsharded, so it gives up
+    # no parallelism either way.
+    runs-on: ubuntu-latest
+    # Fail fast rather than GitHub's ~360min default (#11077).
     #
     # 60, not 30. The 30 came from a ~601s measurement taken on a GitHub-hosted
     # runner against a small diff, and it does not generalise: this job's work
@@ -248,7 +263,7 @@ jobs:
 
     - name: Block datetime.utcnow().isoformat() regressions (#5178 #5238 #5268)
       env:
-        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         HEAD_SHA: ${{ github.sha }}
       run: |
         set -euo pipefail
@@ -320,8 +335,8 @@ jobs:
         # Bound through env rather than interpolated into the script body.
         # These are GitHub-generated SHAs, but keeping every ${{ }} out of
         # `run:` is the rule that does not need a per-field risk judgement.
-        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
       run: |
         set -euo pipefail
