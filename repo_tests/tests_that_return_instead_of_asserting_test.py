@@ -227,11 +227,11 @@ _KNOWN_OFFENDERS = {
     # requires no permission at all.
     # 127 -> 121 with #15189: the three swallowing driver functions in
     # shared/scripts/test_configuration.py lost their `except Exception:
-    # return False` wrappers, so their assertions propagate. Each still returns
-    # True for the module's own main(), but a test with a LIVE assertion is
-    # exempt by the rule above — removing six swallowed returns from this
-    # ceiling took nothing away from what is enforced.
-    "autobot-backend": (86, 18000),
+    # return False` wrappers, so their assertions propagate — exempt by the
+    # rule above, since a test with a LIVE assertion is no longer counted.
+    # 86 -> 75 with #15189 (continued): config_consolidation_p2_test.py's ten
+    # swallowing sections are now ten real tests; all 11 counted returns gone.
+    "autobot-backend": (75, 18000),
     "autobot-infrastructure": (121, 250),
     "autobot-npu-worker": (7, 150),
 }
@@ -252,18 +252,19 @@ _KNOWN_OFFENDERS = {
 # to report one, `pytest.fail(...)` or `raise` in the handler, both of which
 # this guard already recognises as reporting rather than swallowing.
 #
-# 9 -> 5 with #15189, and `autobot-infrastructure` deleted rather than left at
-# zero: three driver functions in shared/scripts/test_configuration.py and
-# `test_secrets_service_config_migration` in autobot-backend/config/
-# config_migration_integration_test.py were unwrapped, and every assertion each
-# one holds now reaches pytest. The five that remain are named in #15189 and
-# left deliberately: config/config_consolidation_p2_test.py (one 200-line
-# driver function) and four scenario-report methods in tests/integration/
-# test_causal_framework_integration.py that catch AssertionError into a
-# dataclass an aggregator consumes. Both need the restructuring #15166 did for
-# the sibling file, not an unwrap.
+# 9 -> 5 with #15189 (`autobot-infrastructure` deleted rather than left at zero): three
+# driver functions in shared/scripts/test_configuration.py and
+# `test_secrets_service_config_migration` in config_migration_integration_test.py were
+# unwrapped. The five remaining, named in #15189, needed #15166-style restructuring: one
+# in config_consolidation_p2_test.py, four aggregator methods in
+# test_causal_framework_integration.py.
+# 5 -> 4 (continued): config_consolidation_p2_test.py is now ten real tests, zero inert
+# asserts, surfacing two drifts fixed in the same change: `_get_default_config()` never
+# existed on `ConfigManager` (real fn: `config.defaults.get_default_config()`), and
+# multimodal asserted the pre-#13207 `voice.confidence_threshold` of 0.8, not current
+# 0.7 — the remaining four are the unchanged aggregator methods.
 _SWALLOWED_ASSERTIONS = {
-    "autobot-backend": (5, 18000),
+    "autobot-backend": (4, 18000),
 }
 
 # Floors under the whole population. A sweep that has silently stopped matching
