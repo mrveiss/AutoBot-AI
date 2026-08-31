@@ -443,11 +443,11 @@ class NotificationService:
             AUTOBOT_SMTP_FROM   (default: autobot@localhost)
             AUTOBOT_SMTP_TLS    (default: true)
         """
-
-        smtp_host = config.smtp_host
-        smtp_port = int(config.smtp_port)
+        smtp_host, smtp_port = config.smtp_host, int(config.smtp_port)
         smtp_user = config.smtp_user
-        smtp_password = config.smtp_password
+        from services.provider_key_vault import resolve_provider_key
+
+        smtp_password = resolve_provider_key("AUTOBOT_SMTP_PASSWORD", config.smtp_password)
         smtp_from = config.smtp_from
         use_tls = config.smtp_tls.lower() != "false"
 
