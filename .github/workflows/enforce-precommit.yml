@@ -40,7 +40,7 @@ jobs:
     # Nothing here needs self-hosted hardware: the pins carried only the
     # generic [self-hosted, Linux, X64] labels, never an npu/gpu/cuda one.
     runs-on: ubuntu-latest
-    # Fail fast on self-hosted, not GitHub's ~360min default (#11077 precedent in
+    # Fail fast, not GitHub's ~360min default (#11077 precedent in
     # frontend-test.yml). This is a required, non-path-filtered context: without a
     # bound, a runner outage queues it for hours and wedges every open PR.
     timeout-minutes: 30
@@ -232,8 +232,18 @@ jobs:
 
       - name: Block newly tracked symlinks into or out of the working tree (#14137)
         env:
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # #14054: merge_group carries no pull_request object. PR_BASE_SHA is
+          # read below by git_scope_resolve_base; without this fallback it is
+          # empty on a queue entrant, which is fail-CLOSED (a red required
+          # context) rather than a deadlock -- but the equivalent steps in
+          # code-quality.yml and no-commit-trailers.yml already carry it, and
+          # an inconsistency here is an untested assumption, which #14054 AC2
+          # asks us not to accept.
+          #
+          # PR_HEAD_SHA removed with it: the step resolves the head as HEAD and
+          # never read this binding. Verified unreferenced in this workflow and
+          # in scripts/lib/, so no capability goes with it.
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: |
           set -euo pipefail
           # BLOCKING, and diff-scoped rather than a full-tree scan: #14149
