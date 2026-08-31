@@ -90,6 +90,40 @@ def _extract_tracked_references(files: list[Path]) -> list[Reference]:
     return references
 
 
+# The two defects this guard exists to catch, as literal text, plus the prose
+# that made a wider pattern unusable. The repository scan below cannot pin this:
+# once #7105 is repointed, that shape leaves the tree entirely, so a later
+# "simplification" of the pattern could keep the count floor green while
+# silently losing the shape the guard was built for.
+_MATCHES = [
+    ("tracked in GH#7105", 7105),
+    ("tracked by #5263 (22 in 10 files)", 5263),
+    ("tracked for resolution in #734", 734),
+    ("# a path tracked in #14371 without updating", 14371),
+]
+_NON_MATCHES = [
+    "Block newly tracked symlinks in the pre-commit hook (#14137)",
+    "see #13637",
+    "tracked separately; the follow-up work is not numbered here",
+]
+
+
+def test_the_pattern_matches_both_known_defect_shapes():
+    """The premise of the narrowing: it still catches what it was built for."""
+    missed = []
+    for text, expected in _MATCHES:
+        match = TRACKED_REFERENCE_PATTERN.search(text)
+        if match is None or int(match.group(1)) != expected:
+            missed.append(f"{text!r} -> {match.group(0) if match else None}")
+    assert not missed, "the pattern stopped matching live-tracking citations: " + "; ".join(missed)
+
+
+def test_the_pattern_rejects_prose_that_merely_contains_tracked():
+    """A wider pattern produced 234 false positives out of 293; keep it narrow."""
+    caught = [t for t in _NON_MATCHES if TRACKED_REFERENCE_PATTERN.search(t) is not None]
+    assert not caught, f"the pattern widened back into ordinary prose: {caught}"
+
+
 def test_the_scan_actually_finds_tracked_references():
     """A regex that matched nothing would make the guard below vacuous, not clean."""
     references = _extract_tracked_references(_workflow_files())
