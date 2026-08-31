@@ -1565,10 +1565,7 @@ class MiscConfig(RedactedSettings):
     # layer before the extraction is treated as usable. Below it the document is
     # reported as having no usable text layer rather than as a successful
     # extraction that happens to be empty.
-    document_min_text_page_ratio: str = Field(
-        default="",
-        alias="AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO",
-    )
+    document_min_text_page_ratio: str = Field(default="", alias="AUTOBOT_DOCUMENT_MIN_TEXT_PAGE_RATIO")
     # #13884: minimum average characters per page, alongside the ratio above.
     # The ratio alone counts a page as readable when it carries a single
     # character, which a page-number stamp, Bates number, or filename footer
@@ -1592,6 +1589,9 @@ class MiscConfig(RedactedSettings):
     document_ocr_timeout: str = Field(default="", alias="AUTOBOT_DOCUMENT_OCR_TIMEOUT")
     document_extraction_timeout: str = Field(default="", alias="AUTOBOT_DOCUMENT_EXTRACTION_TIMEOUT")
     document_max_table_pages: str = Field(default="", alias="AUTOBOT_DOCUMENT_MAX_TABLE_PAGES")
+    # #14970: bounds the *rendered* table text folded into ingest content, the
+    # way document_max_table_pages bounds the extraction work that produces it.
+    document_max_table_chars: str = Field(default="", alias="AUTOBOT_DOCUMENT_MAX_TABLE_CHARS")
     # #13896: master switch for the OCR fallback. Default on where the toolchain
     # is present, since it only runs on pages that produced no text at all — a
     # born-digital document never rasterizes. Set to "false" to trade scanned
