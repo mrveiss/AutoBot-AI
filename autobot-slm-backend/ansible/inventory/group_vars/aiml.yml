@@ -233,7 +233,7 @@ packages:
     # this list installs nothing today, but it reproduces #14447 the moment
     # anything is wired to read it. Left in place per the never-delete-code
     # rule rather than removed.
-    - openvino>=2026.3.0
+    - openvino>=2026.3.1
 
     # Computer vision
     - opencv-python>=4.8.0
