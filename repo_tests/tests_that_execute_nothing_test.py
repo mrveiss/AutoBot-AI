@@ -79,27 +79,26 @@ from repo_tests.collected_test_model import (
     test_modules,
 )
 
-# Measured on this branch, per top-level tree:
-#   tree: (test functions with an empty body that must not be exceeded,
-#          test functions that must STILL be found in that tree)
+# Measured on this branch, per top-level tree.
 #
-# Eleven today, in three files, every one a placeholder whose docstring names a
-# check its body does not perform:
+# All eleven found under #15189 are now written for real (#15256):
 #
 #   autobot-backend/config/timeout_configuration_test.py            2
-#     ("would require importing KnowledgeBase")
+#     now exercises DocumentsMixin.add_document's asyncio.wait_for(timeout=
+#     kb_timeouts.document_add) against a controllable internal delay.
 #   autobot-backend/services/rag_integration_test.py                5
-#     (TestAPIEndpoints — "would require FastAPI TestClient integration")
+#     moved to services/rag_integration_api_test.py (#15256, kept this file
+#     under MAX_LINES) and now hit the real api.knowledge_rag router through
+#     TestClient with dependency_overrides standing in for auth and the
+#     KnowledgeBase/RAGService construction.
 #   autobot-backend/tests/api/test_knowledge_grounding.py           4
-#     ("Endpoint test structure")
+#     now hit the real api.knowledge_grounding router the same way, with the
+#     GroundedAgent singleton and Redis client patched per test.
 #
-# All eleven are reported rather than converted under #15189: each needs a real
-# integration test written against a live endpoint or a real KnowledgeBase, and
-# half-converting a population is how a ratchet gets stuck. None is decorated
-# with skip or xfail — all eleven run, and all eleven report green.
-_EMPTY_BODIED = {
-    "autobot-backend": (11, 18000),
-}
+# No tree is pinned above zero. An entry only returns here if a real empty
+# body is found again, and it fails on arrival in ANY tree by derivation --
+# not just the ones that have had one before (see the module docstring).
+_EMPTY_BODIED: dict[str, tuple[int, int]] = {}
 
 
 def _empty_by_tree() -> dict[str, list[str]]:

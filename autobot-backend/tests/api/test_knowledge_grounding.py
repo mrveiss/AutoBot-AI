@@ -27,10 +27,14 @@ Test coverage:
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from api.knowledge_grounding import router as grounding_router
+from auth_middleware import check_admin_permission, get_current_user
 from services.grounded_agent import (
     Claim,
     ClaimStatus,
@@ -610,28 +614,123 @@ async def test_api_ground_response_endpoint(mock_app):
     assert client is not None
 
 
+def _build_grounding_test_app() -> FastAPI:
+    """Minimal FastAPI app wrapping the real knowledge_grounding router (#15256).
+
+    Mounted with the same ``/api`` prefix the router declares itself, so these
+    tests hit the production route table. Auth is overridden per-test via
+    ``dependency_overrides``.
+    """
+    app = FastAPI()
+    app.include_router(grounding_router)
+    return app
+
+
+def _sample_verified_claim() -> VerifiedClaim:
+    return VerifiedClaim(
+        claim=Claim(claim_text="Latency increased", subject="Latency", predicate="increased", object="15%"),
+        kb_status=ClaimStatus.IN_KB,
+        kb_source="fact-1",
+        confidence=0.9,
+        evidence=["Found in KB monitoring facts"],
+        verification_method="kb_lookup",
+    )
+
+
 @pytest.mark.asyncio
 async def test_api_verify_claim_endpoint(mock_app):
-    """Test POST /api/verify-claim endpoint."""
-    # Endpoint test structure
+    """POST /api/verify-claim must call the agent and surface its verdict."""
+    fake_agent = Mock()
+    fake_agent._classify_and_verify_claim = AsyncMock(return_value=_sample_verified_claim())
+
+    app = _build_grounding_test_app()
+    app.dependency_overrides[get_current_user] = lambda: {"username": "test-user"}
+    claim_body = {"claim_text": "Latency increased", "subject": "Latency", "predicate": "increased", "object": "15%"}
+
+    with patch("api.knowledge_grounding.get_grounded_agent", return_value=fake_agent):
+        response = TestClient(app).post("/api/verify-claim", json=claim_body)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kb_status"] == "in_kb"
+    assert body["confidence"] == 0.9
+    fake_agent._classify_and_verify_claim.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_api_list_conflicts_endpoint(mock_app):
-    """Test GET /api/kb-conflicts endpoint."""
-    # Endpoint test structure
+    """GET /api/kb-conflicts must page and shape conflicts read from Redis."""
+    fake_redis = AsyncMock()
+    fake_redis.keys = AsyncMock(return_value=["conflict:c1"])
+    fake_redis.hgetall = AsyncMock(
+        return_value={
+            "status": "pending",
+            "severity": "high",
+            "description": "conflicting facts",
+            "timestamp": "100.0",
+        }
+    )
+
+    app = _build_grounding_test_app()
+    app.dependency_overrides[get_current_user] = lambda: {"username": "test-user"}
+
+    with patch("autobot_shared.redis_client.get_async_redis_client", AsyncMock(return_value=fake_redis)):
+        response = TestClient(app).get("/api/kb-conflicts")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["conflicts"][0]["conflict_id"] == "c1"
+    assert body["conflicts"][0]["severity"] == "high"
 
 
 @pytest.mark.asyncio
 async def test_api_resolve_conflict_endpoint(mock_app):
-    """Test POST /api/kb-conflicts/{id}/resolve endpoint."""
-    # Endpoint test structure
+    """POST /api/kb-conflicts/{id}/resolve must call the agent with the caller's choice."""
+    fake_agent = Mock()
+    fake_agent.resolve_conflict = AsyncMock(
+        return_value={"status": "success", "resolved": True, "chosen_fact": "fact-1"}
+    )
+
+    app = _build_grounding_test_app()
+    app.dependency_overrides[check_admin_permission] = lambda: True
+
+    with patch("api.knowledge_grounding.get_grounded_agent", return_value=fake_agent):
+        response = TestClient(app).post(
+            "/api/kb-conflicts/conflict-1/resolve",
+            json={"chosen_fact": "fact-1", "reasoning": "matches monitoring data"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["resolved"] is True
+    fake_agent.resolve_conflict.assert_awaited_once_with(
+        conflict_id="conflict-1", chosen_fact_id="fact-1", reasoning="matches monitoring data"
+    )
 
 
 @pytest.mark.asyncio
 async def test_api_get_stats_endpoint(mock_app):
-    """Test GET /api/kb-stats endpoint."""
-    # Endpoint test structure
+    """GET /api/kb-stats must convert the Redis hash into typed stats fields."""
+    fake_redis = AsyncMock()
+    fake_redis.hgetall = AsyncMock(
+        return_value={
+            "total_responses_grounded": "10",
+            "total_claims_extracted": "42",
+            "claims_verified": "0.9",
+            "average_confidence": "0.87",
+        }
+    )
+
+    app = _build_grounding_test_app()
+    app.dependency_overrides[check_admin_permission] = lambda: True
+
+    with patch("autobot_shared.redis_client.get_async_redis_client", AsyncMock(return_value=fake_redis)):
+        response = TestClient(app).get("/api/kb-stats")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_responses_grounded"] == 10
+    assert body["average_confidence"] == 0.87
 
 
 # ===== INTEGRATION TESTS =====
