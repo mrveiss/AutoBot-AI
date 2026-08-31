@@ -131,7 +131,18 @@ def find_disagreements(root: Path = REPO_ROOT) -> list[str]:
             lines = doc.read_text(encoding="utf-8").splitlines()
         except (OSError, UnicodeDecodeError):
             continue
+        # In YAML a leading `#` is unambiguously a comment, so the line cannot be
+        # an invocation of anything. Without this, prose that merely NAMES a
+        # script -- e.g. a rationale comment saying "uses `branch_landing_evidence`
+        # from scripts/lib/branch-guards.sh" -- was reported as running it
+        # directly, and the suggested remedy (chmod +x) would have been wrong:
+        # that file is a library three workflows `source`, and 644 is correct for
+        # it. Markdown is deliberately NOT skipped this way: there `#` is a
+        # heading, and prose there can legitimately show a command to run.
+        yaml_doc = doc.suffix in {".yml", ".yaml"}
         for lineno, line in enumerate(lines, 1):
+            if yaml_doc and line.lstrip().startswith("#"):
+                continue
             if _INTERPRETED.search(line) or _DIRECTIVE.search(line):
                 continue
             hits = {m.group(1) for m in _INVOCATION_WITH_ARGS.finditer(line)}
