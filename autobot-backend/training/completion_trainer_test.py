@@ -352,3 +352,80 @@ def test_hit_at_k_metric():
     result = hit5.compute()
 
     assert result == 1.0  # Both in top-5
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint version constraint (#15340)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "version",
+    [
+        "../etc/passwd",
+        "best/../x",
+        "v2026_1",
+        "",
+        "best ",
+        "vXXXXXXXX_123456",
+        "best\n",
+        "/absolute/path",
+    ],
+)
+def test_load_checkpoint_rejects_versions_outside_the_written_shape(version):
+    """#15340 constrains `version` locally instead of trusting the caller.
+
+    The value is interpolated into a filename, so the shape has to be enforced
+    here. The only caller today looks the version up first and 404s when absent,
+    which does prevent traversal — but that guarantee lives in a distant module
+    and disappears silently the moment a second caller appears.
+
+    Parametrised rather than asserted in a loop so a regression names the input
+    that got through, and pinned because the control is one line: without a test
+    it can be dropped in a refactor and nothing would notice (#15333, #15334).
+    """
+    from training.completion_trainer import _VERSION_RE
+
+    assert _VERSION_RE.fullmatch(version) is None, f"{version!r} must not be accepted as a checkpoint version"
+
+
+@pytest.mark.parametrize("version", ["../etc/passwd", "best/../x", "v2026_1", "best\n"])
+def test_load_checkpoint_raises_on_a_rejected_version(tmp_path, version):
+    """The control is the raise. Everything above asserts on the pattern object.
+
+    Review of #15344 found that replacing the ``raise`` in ``load_checkpoint``
+    with a ``logger.warning`` removed the constraint entirely while every test
+    in this file and its source-reading guard stayed green — because none of
+    them called ``load_checkpoint``. Nothing anywhere asserted the ``ValueError``.
+    This is that assertion: it fails if the constraint is detected but not enforced.
+    """
+    from training.completion_trainer import CompletionTrainer
+
+    trainer = CompletionTrainer(model_dir=str(tmp_path))
+    with pytest.raises(ValueError, match="Invalid checkpoint version"):
+        trainer.load_checkpoint(version)
+
+
+@pytest.mark.parametrize("version", ["best", "v20260830_123456", "v19700101_000000"])
+def test_load_checkpoint_accepts_exactly_what_save_checkpoint_writes(version):
+    """The negative cases above are only meaningful if the real shapes still pass.
+
+    These are the two forms `save_checkpoint()` produces: the literal ``best``,
+    and ``v`` + its ``%Y%m%d_%H%M%S`` stamp. A pattern that rejected everything
+    would satisfy the rejection test and break the feature.
+    """
+    from training.completion_trainer import _VERSION_RE
+
+    assert _VERSION_RE.fullmatch(version) is not None, f"{version!r} is a shape save_checkpoint() writes"
+
+
+def test_the_pattern_is_anchored_not_merely_prefixed():
+    """`match` would accept trailing content; `fullmatch` is what makes this safe.
+
+    Pinned separately because swapping one for the other is a plausible edit that
+    leaves every other assertion in this file passing.
+    """
+    from training.completion_trainer import _VERSION_RE
+
+    assert _VERSION_RE.match("best/../../etc/passwd") is not None, "guard the premise: match() does accept this"
+    assert _VERSION_RE.fullmatch("best/../../etc/passwd") is None, "fullmatch() must reject it"
