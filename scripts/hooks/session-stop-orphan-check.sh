@@ -14,7 +14,10 @@
 
 set -euo pipefail
 
-cd "$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+# shellcheck source=scripts/lib/git-root.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/git-root.sh" || exit 0
+
+cd "$(git_repo_root)" || exit 0
 
 # Skip if a git operation is in progress (race condition with in-progress commits)
 if [ -f "$(git rev-parse --git-dir 2>/dev/null)/index.lock" ]; then
