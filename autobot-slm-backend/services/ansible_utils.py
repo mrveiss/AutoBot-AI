@@ -77,9 +77,26 @@ def _msg_from_following_lines(lines: list[str], index: int) -> str:
     line and ending the capture at ``$`` is correct.
     """
     for j in range(index + 1, min(index + 10, len(lines))):
-        msg_match = re.search(r'"?msg"?\s*[:=]\s*["\']?(.+?)["\',]?\s*$', lines[j].strip())
+        # Greedy to end-of-line, with the trimming done in Python.
+        #
+        # CodeQL flags the previous pattern as py/polynomial-redos: it ended
+        # `(.+?)["\',]?\s*$`, a lazy group followed by an optional class and
+        # `\s*$`, which can retry the lazy group at every split point.
+        #
+        # NOT claimed as an exploitable fix. The attack CodeQL describes needs a
+        # line ending in many spaces, and the call above applies `.strip()` first,
+        # which removes them before the regex runs — `"msg:a" + " "*4000` is five
+        # characters by the time it arrives. Timed both patterns at 1k-8k spaces,
+        # stripped and unstripped: no blowup in either.
+        #
+        # The rewrite stands on being simpler and provably non-backtracking —
+        # `(.*)` matches once — not on closing a live hole. Output is identical
+        # on the realistic shapes (quoted, unquoted, trailing comma, embedded
+        # comma, single quotes, padded), with the trailing comma now stripped in
+        # Python where the old pattern excluded it inside the regex.
+        msg_match = re.search(r'"?msg"?\s*[:=]\s*(.*)', lines[j].strip())
         if msg_match:
-            return msg_match.group(1).strip().strip("'\"")
+            return msg_match.group(1).strip().strip(",").strip("'\"")
     return ""
 
 

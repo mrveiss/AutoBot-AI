@@ -1,5 +1,7 @@
 # AutoBot Scaling Roadmap: From Docker to Kubernetes
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 ## Current State: Docker Compose (Small Scale)
 **Target**: 1-10 concurrent users, single server
 

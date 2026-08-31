@@ -73,6 +73,7 @@ from autobot_shared.ssot_config import (
 )
 from autobot_shared.ssot_config import INSTRUCTION_MODEL as SSOT_INSTRUCTION_MODEL
 from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as SSOT_LIGHT_PROCESSING_MODEL
+from autobot_shared.ssot_config import PROJECT_ROOT as CANONICAL_PROJECT_ROOT
 from autobot_shared.ssot_config import QUALITY_MODEL as SSOT_QUALITY_MODEL
 from autobot_shared.ssot_config import ROUTING_MODEL as SSOT_ROUTING_MODEL
 from autobot_shared.ssot_config import SYSTEM_MODEL as SSOT_SYSTEM_MODEL
@@ -390,8 +391,8 @@ def get_model_endpoint(provider: str) -> str:
 class PathConstants:
     """Centralized path constants"""
 
-    PROJECT_ROOT: Path = Path(__file__).parent.parent
-    CONFIG_DIR: Path = PROJECT_ROOT / "infrastructure" / "shared" / "config"
+    PROJECT_ROOT: Path = CANONICAL_PROJECT_ROOT  # #13149: was Path(__file__).parent.parent
+    CONFIG_DIR: Path = PROJECT_ROOT / "autobot-infrastructure" / "shared" / "config"  # #14892: was "infrastructure"
     DATA_DIR: Path = PROJECT_ROOT / "data"
     LOGS_DIR: Path = PROJECT_ROOT / "logs"
     DOCS_DIR: Path = PROJECT_ROOT / "docs"
@@ -399,8 +400,7 @@ class PathConstants:
     STATIC_DIR: Path = PROJECT_ROOT / "autobot-backend" / "static"
     FRONTEND_DIR: Path = PROJECT_ROOT / "autobot-frontend"
     TESTS_DIR: Path = PROJECT_ROOT / "autobot-backend"
-    # Temp/generated-files dir cleaned by tasks.cleanup_generated_files (#10385-adjacent)
-    TEMP_DIR: Path = DATA_DIR / "temp"
+    TEMP_DIR: Path = DATA_DIR / "temp"  # cleaned by tasks.cleanup_generated_files (#10385-adjacent)
 
     @classmethod
     def get_config_path(cls, *parts: str) -> Path:
@@ -848,6 +848,19 @@ class CategoryDefaults:
     CONTEXT_TYPE_GENERAL: str = "general"
     CONTEXT_TYPE_SECURITY: str = "security"
     CONTEXT_TYPE_RESEARCH: str = "research"
+    # CHAT MESSAGE authorship — who wrote a message. NOT an authorization role.
+    #
+    # Two other vocabularies use the word "role" and share values with this one
+    # (#14024): ``autobot_shared.auth.permissions.Role`` (platform RBAC) and
+    # ``llc.models.enums.MembershipRole`` (company membership). ``ROLE_USER``
+    # holds the same string as ``Role.USER``, and this class is a bare string
+    # constant holder, so a value from here satisfies an RBAC parameter with no
+    # type error and no test failure.
+    #
+    # ``tools/tool_registry`` came within one applied lint suggestion of tying an
+    # authorization decision to ``ROLE_USER`` (#13934). If a field is consumed by
+    # a permission check, it wants ``auth.permissions.Role`` — not these. The
+    # overlap is asserted in ``security/roles_do_not_collide_test.py``.
     ROLE_USER: str = "user"
     ROLE_ASSISTANT: str = "assistant"
     ROLE_SYSTEM: str = "system"

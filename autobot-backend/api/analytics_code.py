@@ -26,7 +26,7 @@ from api.schemas_analytics import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from code_intelligence.shared.scoring import get_grade_from_score
 
 # Import shared analytics controller from analytics module
@@ -69,9 +69,9 @@ async def index_codebase(
 
     Issue #744: Requires admin authentication.
     """
-    # Validate request
+    # Validate request (#15238: explicit project root, not the shared /tmp default)
     try:
-        validate_path(request.target_path, must_exist=True)
+        validate_path(request.target_path, must_exist=True, allowed_roots=PROJECT_ALLOWED_ROOTS)
     except (ValueError, PermissionError):
         raise HTTPException(
             status_code=400,

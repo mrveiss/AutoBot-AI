@@ -33,11 +33,19 @@ else
     echo "❌ Missing (install with: sudo apt install xfce4)"
 fi
 
+# (#14876) This imported the `websockify` PYTHON package, which is declared in
+# no requirements file - and which nothing in this repo imports either. Every
+# consumer runs the BINARY: api/vnc_manager.py:108, setup_browser_vnc.sh:74 and
+# the browser-vnc systemd units all exec /usr/bin/websockify. So the check was
+# testing something production does not depend on, while `2>/dev/null` meant a
+# broken install and an absent one printed the same reassuring line. It now
+# checks what is actually used, the same way every other check in this script
+# does.
 echo -n "Websockify: "
-if python3 -c "import websockify" 2>/dev/null; then
+if command -v websockify >/dev/null 2>&1; then
     echo "✅ Found"
 else
-    echo "⚠️  Will be installed automatically"
+    echo "❌ Missing (install with: sudo apt install websockify)"
 fi
 
 echo -n "noVNC: "

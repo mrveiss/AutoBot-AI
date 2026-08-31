@@ -25,6 +25,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { memoizeByLocale } from '@/test/utils/i18n-cache'
 import en from '@/i18n/locales/en.json'
 import ar from '@/i18n/locales/ar.json'
 
@@ -56,9 +57,13 @@ const STEP_NODE: CanvasNode[] = [
   },
 ]
 
-function makeI18n(locale: 'en' | 'ar') {
-  return createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: { en, ar } })
-}
+// #14860: memoized per locale. This helper ran on EVERY mount and each call
+// re-ingested the ~400KB `en` and `ar` message bundles. The locale is a real
+// parameter here, so a blind hoist would be wrong — one instance per locale
+// is not. Nothing in this file mutates the returned instance.
+const makeI18n = memoizeByLocale((locale: string) =>
+  createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: { en, ar } }),
+)
 
 function mountCanvas(props: Record<string, unknown>, locale: 'en' | 'ar' = 'en') {
   return mount(WorkflowCanvas, {
@@ -139,7 +144,9 @@ describe('WorkflowCanvas one-finger touch drag (#14610)', () => {
       pointerType: 'touch', pointerId: 1, clientX: 130, clientY: 140,
     })
 
-    expect(w.emitted('node-moved')).toEqual([['n1', { x: 130, y: 80 }]])
+    // #14768: the drag lands on the grid — the raw drop is (130, 80) and 130
+    // snaps to the nearest 20. The y is already a grid multiple.
+    expect(w.emitted('node-moved')).toEqual([['n1', { x: 140, y: 80 }]])
     // The pan transform must not have moved — this was a drag, not a pan.
     expect(transform(w)).toContain('translate(50px, 50px)')
   })

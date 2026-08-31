@@ -62,6 +62,69 @@ def env(name: str, default: Any = None) -> Any:
 # Registered variables — grouped by component
 # ---------------------------------------------------------------------------
 
+# The "ai" component (LLM/model config, delegation, chat trajectories) lives in
+# a sibling module, split out to keep this file under its file-size ceiling
+# (#14236, #14856). Importing it here — after EnvVarSpec/register_env_var/REGISTRY
+# are defined above, and before anything below can observe the registry — is a
+# side effect that fully populates the "ai" entries. See env_registry_ai.py.
+#
+# Same reason, same mechanism (#14961): this file was still at its ceiling
+# with no slack to add the new "terminal" component var inline, so the one
+# "testing" entry that lived at the tail moved out to make room, and the new
+# entry lives in its own sibling module rather than inline here.
+from autobot_shared import env_registry_ai  # noqa: E402,F401
+from autobot_shared import env_registry_terminal  # noqa: E402,F401
+from autobot_shared import env_registry_testing  # noqa: E402,F401
+
+# --- events (#14817, #14818) -------------------------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHANNEL_SEQ_KEY_PREFIX",
+        type=str,
+        default="autobot:events:seq:",
+        description=("Redis key prefix for per-channel live-event sequence counters."),
+        component="events",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHANNEL_STREAM_KEY_PREFIX",
+        type=str,
+        default="autobot:events:channel:",
+        description=("Redis key prefix for per-channel live-event replay streams."),
+        component="events",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHANNEL_STREAM_MAX_ENTRIES",
+        type=int,
+        default=1000,
+        description=(
+            "Events retained per channel for reconnect replay. A client whose "
+            "last_event_id has fallen outside this window is told to resync "
+            "rather than handed a partial history."
+        ),
+        component="events",
+        range=(1, 1000000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHANNEL_STREAM_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=("Idle expiry for a per-channel replay stream, so session and chat channels do not accumulate."),
+        component="events",
+        range=(60, 2592000),
+    )
+)
+
+
 # --- backend ----------------------------------------------------------------
 
 register_env_var(
@@ -107,6 +170,12 @@ register_env_var(
 )
 
 # --- ai ---------------------------------------------------------------------
+#
+# Kept here rather than moved to env_registry_ai.py (#14856): these three
+# carry hardcoded-value baseline entries keyed to this file's path in
+# pipeline-scripts/hardcoded_values_baseline.txt, and check_baseline_no_growth.sh
+# has no route to repoint an entry onto a file that did not exist at the base
+# ref. See env_registry_ai.py's module docstring and #13131.
 
 register_env_var(
     EnvVarSpec(
@@ -830,6 +899,22 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_AUDIT_FILING_STATUS_TTL_S",
+        type=int,
+        default=2592000,
+        description=(
+            "Seconds the audit worker's filing-health record survives in Redis. "
+            "Refreshed on every run and at worker startup, so this only has to "
+            "outlive the longest gap between runs (the claims audit is weekly); "
+            "it exists so a record left by a worker that has since stopped does "
+            "not keep answering for one that no longer exists (#13570)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CODE_ANALYSIS_POOL_WORKERS",
         type=int,
         default=2,
@@ -860,6 +945,23 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_PROVISION_STALE_SECONDS",
+        type=int,
+        default=1800,
+        description=(
+            "How long a provision run may report no progress before the setup "
+            "wizard treats it as abandoned and lets a new run supersede it "
+            "(#14856). Keyed on observed progress, not on time since start, so "
+            "a slow-but-live run is never superseded; the floor keeps a value "
+            "too small to distinguish the two from wedging the wizard the other way."
+        ),
+        component="provisioning",
+        range=(60, 86400),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CONFIG_REGISTRY_REDIS_RETRY_SECONDS",
         type=float,
         default=30.0,
@@ -887,6 +989,20 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_NODE_PROXY_TIMEOUT_SECONDS",
+        type=float,
+        default=15.0,
+        description=(
+            "Ceiling on a proxied request from the SLM to a node's backend. "
+            "The aggregator fans out across the fleet, so without a bound one "
+            "unresponsive node would hold the whole lifecycle view open."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_GRAPH_PATH_TIMEOUT_SECONDS",
         type=float,
         default=10.0,
@@ -896,20 +1012,6 @@ register_env_var(
             "occupying a worker indefinitely."
         ),
         component="kb",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_LLM_MAX_RETRY_AFTER_SECONDS",
-        type=float,
-        default=30.0,
-        description=(
-            "Cap applied to a provider's `Retry-After`. Without it a provider "
-            "advertising a long back-off would stall a request for that whole "
-            "period (services/llm_service.py)."
-        ),
-        component="ai",
     )
 )
 
@@ -996,6 +1098,32 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_REMOTE_APPROVAL_FLAG_TTL_SECONDS",
+        type=int,
+        default=604800,
+        description=(
+            "How long a session stays flagged for remote approval routing without being "
+            "refreshed. Expiry returns the session to asking inline; it never widens autonomy."
+        ),
+        component="approvals",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REMOTE_APPROVAL_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "How long a remotely delivered approval stays correlatable with its reply. "
+            "After this the reply can no longer be tied to a request and resolves nothing."
+        ),
+        component="approvals",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL",
         type=int,
         default=86400,
@@ -1008,19 +1136,6 @@ register_env_var(
 
 
 # --- storage paths and toolsets (#14223) -------------------------------------
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_OPENVINO_CACHE_DIR",
-        type=str,
-        default="data/openvino_cache",
-        description=(
-            "Directory for compiled OpenVINO model artefacts. Relative to the "
-            "working directory unless given as an absolute path."
-        ),
-        component="ai",
-    )
-)
 
 register_env_var(
     EnvVarSpec(
@@ -1154,52 +1269,6 @@ register_env_var(
             "what reaches the prompt (#11537)."
         ),
         component="backend",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_CHAT_TRAJECTORY_CAPTURE_CONCURRENCY",
-        type=int,
-        default=2,
-        description=("Concurrent trajectory judge calls. Bounded so a burst of turns cannot stampede " "the LLM."),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_CHAT_TRAJECTORY_CONTEXT",
-        type=bool,
-        default=True,
-        description=(
-            "Search past trajectories before answering. Defaults on because the search is "
-            "one vector query; capture is gated separately since it spends a judge call."
-        ),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_CHAT_TRAJECTORY_TIMEOUT_S",
-        type=float,
-        default=0.15,
-        description=(
-            "Seconds the pre-answer trajectory search may take. It rides the response hot "
-            "path, so a cold or slow collection must never delay first token."
-        ),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_CHAT_TRAJECTORY_TOP_K",
-        type=int,
-        default=3,
-        description=("How many past trajectories the pre-answer search retrieves."),
-        component="ai",
     )
 )
 
@@ -1348,28 +1417,6 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_DELEGATION_ENABLED",
-        type=bool,
-        default=False,
-        description=(
-            "Master switch for the delegate tool. Off, it records the delegation request " "and does not dispatch it."
-        ),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_FACT_FORCING",
-        type=bool,
-        default=False,
-        description=("Enable the fact-forcing gate, which requires an answer to cite retrieved " "facts."),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
         name="AUTOBOT_INJECTION_HARDBLOCK_ENABLED",
         type=bool,
         default=False,
@@ -1391,52 +1438,6 @@ register_env_var(
             "hard-blocked. 0.75 maps to HIGH; 1.0 would block only CRITICAL."
         ),
         component="auth",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_LLM_TOKEN_BUDGET_PER_RUN",
-        type=int,
-        default=0,
-        description=(
-            "Cumulative token ceiling (input plus output) for one run. Zero disables the "
-            "gate, which is the shipped default (#11541)."
-        ),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS",
-        type=int,
-        default=86400,
-        description=(
-            "Seconds a run's cumulative token counter survives in Redis, bounding memory "
-            "for abandoned sessions. Refreshed on every increment."
-        ),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_MAX_DELEGATIONS_PER_TURN",
-        type=int,
-        default=5,
-        description=("Delegate calls allowed in a single LLM turn — a fan-out bound, not a quality " "setting."),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_MAX_DELEGATION_DEPTH",
-        type=int,
-        default=2,
-        description=("How deep delegation may nest before it is refused, bounding runaway recursive " "delegation."),
-        component="ai",
     )
 )
 
@@ -1476,31 +1477,6 @@ register_env_var(
             "(#13602)."
         ),
         component="backend",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_PLAN_BEST_OF_N_COUNT",
-        type=int,
-        default=3,
-        description=(
-            "How many candidate plans best-of-N generates before selection. Clamped to a "
-            "minimum of 2, since best-of-1 is not a selection."
-        ),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_PROVIDER_DEGRADATION_TTL_SECONDS",
-        type=int,
-        default=300,
-        description=(
-            "Seconds a provider stays marked degraded after a failure before traffic is " "offered to it again."
-        ),
-        component="ai",
     )
 )
 
@@ -1578,78 +1554,6 @@ register_env_var(
             "the whole buffer averages a short reply into silence (#13104)."
         ),
         component="voice",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TRAJECTORY_CONSOLIDATE_SCAN_LIMIT",
-        type=int,
-        default=50000,
-        description=("Rows a consolidation pass may scan, keeping the pass bounded on a large " "trajectory store."),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TRAJECTORY_OUTCOME_PARTIAL_MIN",
-        type=float,
-        default=0.4,
-        description=(
-            "Reward at or above which a trajectory outcome is 'partial'. Below it the " "outcome is a failure (#11280)."
-        ),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TRAJECTORY_OUTCOME_SUCCESS_MIN",
-        type=float,
-        default=0.7,
-        description=(
-            "Reward at or above which a trajectory outcome is 'success'. The canonical "
-            "threshold, so callers stop re-deriving it inline (#11280)."
-        ),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TRAJECTORY_PRUNE_MAX_AGE_DAYS",
-        type=int,
-        default=30,
-        description=("Age in days beyond which a low-reward trajectory is eligible for pruning " "(#11263)."),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TRAJECTORY_PRUNE_REWARD_FLOOR",
-        type=float,
-        default=0.4,
-        description=(
-            "Reward below which an aged trajectory is pruned. Stale low-reward failures are "
-            "noise that costs retrieval precision (#11263)."
-        ),
-        component="ai",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TRAJECTORY_USER_SCOPED",
-        type=bool,
-        default=True,
-        description=(
-            "Scope trajectory retrieval by user as well as tenant. tenant_id alone is "
-            "insufficient in single-company deployments where org_id is empty or identical "
-            "for everyone (#11089)."
-        ),
-        component="ai",
     )
 )
 

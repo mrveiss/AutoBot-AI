@@ -4387,7 +4387,17 @@
       "searchResultsStatus": "تم العثور على {count} لِـ \"{query}\"",
       "searchNoResults": "لا توجد نتائج مطابقة لـ \"{query}\"",
       "fitToSelection": "احتواء التحديد أو التصفية",
-      "minimapLabel": "نظرة عامة على اللوحة"
+      "minimapLabel": "نظرة عامة على اللوحة",
+      "undo": "تراجع",
+      "redo": "إعادة",
+      "undoScope": "يشمل التراجع والإعادة نقل العقد وإضافتها وإزالتها وربطها في هذه اللوحة. لا يمكن التراجع هنا عن التعديلات داخل العقدة، ولا عن أي إجراء يُرسل إلى الخادم — مثل الحفظ أو الإرفاق أو الإزالة.",
+      "selectionStatus": "تم تحديد {count} من العقد",
+      "contextMenuLabel": "إجراءات العقدة",
+      "contextMenuButtonLabel": "إجراءات {name}",
+      "contextMenuZoomToNode": "تكبير إلى العقدة",
+      "contextMenuFitSelection": "احتواء العرض ضمن التحديد",
+      "contextMenuDeleteSelection": "حذف {count} من العقد المحددة",
+      "contextMenuOpenWorkflow": "فتح سير العمل المرتبط"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -5608,7 +5618,8 @@
       "executing": "Executing...",
       "securityNote": "Commands are executed in a sandboxed environment with limited permissions.",
       "missingSessionId": "Missing session ID for command execution",
-      "executionFailed": "Command execution failed",
+      "executionFailed": "فشل تنفيذ الأمر",
+      "postExecutionFailed": "تم تنفيذ الأمر، لكن فشلت خطوة لاحقة. يتم عرض المخرجات؛ قد تكون بعض التحديثات مفقودة.",
       "enterComment": "Please enter a comment before submitting"
     },
     "darkModeToggle": {
@@ -8041,6 +8052,8 @@
       "colRunDuration": "Run Duration",
       "colAction": "Action",
       "statusUnknown": "unknown",
+      "skipReasonLabel": "تم التخطي:",
+      "errorLabel": "خطأ:",
       "triggering": "Triggering...",
       "triggerNow": "Trigger Now",
       "runHistoryTitle": "Run History – {name}",
@@ -8291,6 +8304,12 @@
       "roleLensBanner": "فلتر العرض: {role} — يعرض {shown} من {total} عقدة. الوصول لا يتغيّر.",
       "roleLensEmpty": "فلتر العرض: لا توجد عقد مطابقة لـ «{role}» في هذا العرض. الوصول لا يتغيّر — امسح الفلتر لرؤية الجميع.",
       "roleLensClear": "مسح الفلتر",
+      "teamFilterLabel": "تصفية حسب الفريق",
+      "teamFilterAll": "كل الفرق",
+      "teamFilterBanner": "فلتر الفريق: {team} — يعرض {shown} من {total} أشخاص. الوصول لا يتغيّر.",
+      "toolFilterLabel": "تصفية حسب الأداة",
+      "toolFilterAll": "كل الأدوات",
+      "toolFilterBanner": "فلتر الأداة: {tool} — يعرض {shown} من {total} أشخاص. الوصول لا يتغيّر.",
       "sidebar": {
         "owner": "المالك",
         "tools": "الأدوات",
@@ -8332,6 +8351,7 @@
       "attachError": "تعذّر إرفاق سير العمل هذا.",
       "detachError": "تعذّرت إزالة سير العمل هذا.",
       "processDetach": "إزالة {workflow} من {role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "تعذّر تحميل الأدوار، لذا قد تكون هذه القائمة غير مكتملة.",
       "canvasGroupKind": "مجموعة",
       "toolNodeLabel": "أداة",
@@ -8340,6 +8360,7 @@
       "toolAttachError": "تعذّر إرفاق هذه الأداة.",
       "toolDetachError": "تعذّرت إزالة هذه الأداة.",
       "toolDetach": "إزالة {tool} من {role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "معلومات الأدوات غير متاحة حاليًا — قد تكون هذه القائمة غير مكتملة.",
       "canvasNoToolsDefined": "لا توجد أدوات مرفقة بأي دور في هذه الشركة.",
       "deepLinkNodeNotFound": "تشير هذه الوصلة إلى عقدة تعذر العثور عليها هنا. ربما تمت إزالتها، أو قد لا تملك صلاحية الوصول إليها."
@@ -8432,6 +8453,8 @@
       "secretMappingIncomplete": "Fill in all secret values above before importing.",
       "importSuccess": "Import successful — company ID:",
       "warningsLabel": "Warnings:",
+      "droppedReportingLinesLabel": "Reporting lines that could not be kept:",
+      "droppedReportingLine": "{agent} was imported without a manager: {manager} was not created.",
       "importFailed": "Import failed:",
       "toastTemplateExported": "Template exported successfully",
       "toastTemplateExportFailed": "Template export failed",
@@ -8587,7 +8610,15 @@
       "unassigned": "بلا دور",
       "unassignedHint": "مُدرج في هذا القسم، لكن لا يوجد دور يفسّر وجوده",
       "inactive": "غير نشط",
-      "inactiveHint": "مُعطَّل أو مُزال — لا يزال ظاهرًا لأن عناصر عمله ودوره باقية، لكن لا يمكن إسناد عمل جديد إليه."
+      "inactiveHint": "مُعطَّل أو مُزال — لا يزال ظاهرًا لأن عناصر عمله ودوره باقية، لكن لا يمكن إسناد عمل جديد إليه.",
+      "editAriaLabel": "تعديل {name}",
+      "fullNameLabel": "الاسم الكامل",
+      "roleTitleLabel": "الدور / المسمى الوظيفي",
+      "emailLabel": "البريد الإلكتروني",
+      "phoneLabel": "الهاتف",
+      "saving": "جارٍ الحفظ…",
+      "save": "حفظ",
+      "contactSaveError": "تعذّر حفظ جهة الاتصال."
     }
   },
   "code": {

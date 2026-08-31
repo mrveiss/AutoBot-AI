@@ -22,9 +22,17 @@ from typing import Any, Dict, List
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent))
 
+# `phase_validation_system.py` lives beside this script in a directory that is
+# not a package, so the owning directory goes on sys.path explicitly (#14518).
+# `scripts.phase_validation_system` could never resolve: repo-root `scripts/`
+# contains no phase_validation_system.py and has no __init__.py.
+_SCRIPTS_DIR = Path(__file__).resolve().parents[0]
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
 from project_state_tracker import get_state_tracker
 from phase_progression_manager import get_progression_manager
-from scripts.phase_validation_system import PhaseValidator
+from phase_validation_system import PhaseValidator  # noqa: E402 - must follow the sys.path setup above
 from utils.html_dashboard_utils import create_dashboard_header, get_light_theme_css
 from utils.template_loader import load_css, template_exists
 

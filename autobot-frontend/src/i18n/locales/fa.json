@@ -3826,7 +3826,17 @@
       "searchResultsStatus": "{count} مورد برای «{query}» یافت شد",
       "searchNoResults": "هیچ نتیجه‌ای برای «{query}» یافت نشد",
       "fitToSelection": "تنظیم اندازه بر اساس انتخاب یا فیلتر",
-      "minimapLabel": "نمای کلی بوم"
+      "minimapLabel": "نمای کلی بوم",
+      "undo": "واگرد",
+      "redo": "انجام دوباره",
+      "undoScope": "واگرد و انجام دوباره شامل جابه‌جایی، افزودن، حذف و اتصال گره‌ها در این بوم می‌شود. ویرایش‌های داخل یک گره، و هر اقدامی که به سرور ارسال می‌شود — ذخیره، پیوست، جدا کردن — در اینجا قابل واگرد نیست.",
+      "selectionStatus": "{count} گره انتخاب شد",
+      "contextMenuLabel": "کنش‌های گره",
+      "contextMenuButtonLabel": "کنش‌های {name}",
+      "contextMenuZoomToNode": "بزرگ‌نمایی به گره",
+      "contextMenuFitSelection": "تنظیم نما بر اساس انتخاب",
+      "contextMenuDeleteSelection": "حذف {count} گره انتخاب‌شده",
+      "contextMenuOpenWorkflow": "باز کردن گردش‌کار پیوندشده"
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
@@ -4743,7 +4753,8 @@
       "theme": "Theme"
     },
     "commandPermission": {
-      "executionFailed": "Command execution failed",
+      "executionFailed": "اجرای دستور ناموفق بود",
+      "postExecutionFailed": "دستور اجرا شد، اما یک مرحله پس از آن ناموفق بود. خروجی آن نمایش داده می‌شود؛ ممکن است برخی به‌روزرسانی‌ها انجام نشده باشند.",
       "allow": "Allow",
       "purposeLabel": "Purpose",
       "defaultPurpose": "System operation requested",
@@ -8041,6 +8052,8 @@
       "colRunDuration": "Run Duration",
       "colAction": "Action",
       "statusUnknown": "unknown",
+      "skipReasonLabel": "نادیده گرفته شد:",
+      "errorLabel": "خطا:",
       "triggering": "Triggering...",
       "triggerNow": "Trigger Now",
       "runHistoryTitle": "Run History – {name}",
@@ -8291,6 +8304,12 @@
       "roleLensBanner": "فیلتر نمایش: {role} — نمایش {shown} از {total} گره. دسترسی بدون تغییر است.",
       "roleLensEmpty": "فیلتر نمایش: هیچ گره‌ای با «{role}» در این نما مطابقت ندارد. دسترسی بدون تغییر است — فیلتر را پاک کنید تا همه را ببینید.",
       "roleLensClear": "پاک کردن فیلتر",
+      "teamFilterLabel": "فیلتر بر اساس تیم",
+      "teamFilterAll": "همه تیم‌ها",
+      "teamFilterBanner": "فیلتر تیم: {team} — نمایش {shown} از {total} نفر. دسترسی بدون تغییر است.",
+      "toolFilterLabel": "فیلتر بر اساس ابزار",
+      "toolFilterAll": "همه ابزارها",
+      "toolFilterBanner": "فیلتر ابزار: {tool} — نمایش {shown} از {total} نفر. دسترسی بدون تغییر است.",
       "sidebar": {
         "owner": "مالک",
         "tools": "ابزارها",
@@ -8332,6 +8351,7 @@
       "attachError": "پیوست کردن این گردش‌کار ممکن نشد.",
       "detachError": "جدا کردن این گردش‌کار ممکن نشد.",
       "processDetach": "جدا کردن {workflow} از {role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "نقش‌ها بارگیری نشدند، بنابراین این فهرست ممکن است ناقص باشد.",
       "canvasGroupKind": "گروه",
       "toolNodeLabel": "ابزار",
@@ -8340,6 +8360,7 @@
       "toolAttachError": "پیوست کردن این ابزار ممکن نشد.",
       "toolDetachError": "جدا کردن این ابزار ممکن نشد.",
       "toolDetach": "جدا کردن {tool} از {role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "اطلاعات ابزارها در حال حاضر در دسترس نیست — این فهرست ممکن است ناقص باشد.",
       "canvasNoToolsDefined": "هیچ ابزاری به هیچ نقشی در این شرکت پیوست نشده است.",
       "deepLinkNodeNotFound": "این پیوند به گره‌ای اشاره دارد که در اینجا یافت نشد. ممکن است حذف شده باشد یا شما به آن دسترسی نداشته باشید."
@@ -8432,6 +8453,8 @@
       "secretMappingIncomplete": "Fill in all secret values above before importing.",
       "importSuccess": "Import successful — company ID:",
       "warningsLabel": "Warnings:",
+      "droppedReportingLinesLabel": "Reporting lines that could not be kept:",
+      "droppedReportingLine": "{agent} was imported without a manager: {manager} was not created.",
       "importFailed": "Import failed:",
       "toastTemplateExported": "Template exported successfully",
       "toastTemplateExportFailed": "Template export failed",
@@ -8587,7 +8610,15 @@
       "unassigned": "بدون نقش",
       "unassignedHint": "در این بخش ثبت شده، اما هیچ نقشی حضورش را توضیح نمی‌دهد",
       "inactive": "غیرفعال",
-      "inactiveHint": "غیرفعال یا حذف‌شده — همچنان نمایش داده می‌شود زیرا کارها و نقش او باقی می‌مانند، اما کار جدیدی نمی‌توان به او سپرد."
+      "inactiveHint": "غیرفعال یا حذف‌شده — همچنان نمایش داده می‌شود زیرا کارها و نقش او باقی می‌مانند، اما کار جدیدی نمی‌توان به او سپرد.",
+      "editAriaLabel": "ویرایش {name}",
+      "fullNameLabel": "نام کامل",
+      "roleTitleLabel": "نقش / عنوان",
+      "emailLabel": "ایمیل",
+      "phoneLabel": "تلفن",
+      "saving": "در حال ذخیره…",
+      "save": "ذخیره",
+      "contactSaveError": "امکان ذخیرهٔ مخاطب وجود نداشت."
     }
   },
   "code": {

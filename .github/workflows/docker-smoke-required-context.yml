@@ -1,0 +1,78 @@
+# Docker smoke required-context publisher — #15299
+#
+# `smoke-test` is a REQUIRED status check on the integration branch (#6723).
+# Exactly one of two mutually exclusive jobs publishes it:
+#
+#   docker paths changed   -> `smoke-test` in docker-smoke-test.yml, which builds
+#                             the images and starts the compose stack. That is
+#                             the real gate (this workflow reports nothing then).
+#   docker paths untouched -> `smoke-test` below, which reports the context green
+#                             because the image build does not apply.
+#
+# WITHOUT THIS SHIM the job could not be gated at all: docker-smoke-test.yml's
+# `smoke-test` is guarded by `needs.changes.outputs.docker == 'true'`, so on a
+# docs-only pull request it would never run, never report, and the pull request
+# would sit blocked forever on a context nobody can produce. That is the exact
+# deadlock #14353 removed for `python-suite`.
+#
+# WHY ITS OWN FILE — the same reason python-required-context.yml is its own file.
+# docker-smoke-test.yml declares a WORKFLOW-level concurrency group with
+# `cancel-in-progress` on pull requests. A shim living inside it shares that
+# group, so a superseded run takes the shim down with it and the required context
+# goes missing exactly when a rapid push sequence needs it most.
+#
+# NO `concurrency:` BLOCK — DELIBERATE, for that same reason. This job finishes
+# in seconds, so there is nothing to save by cancelling it and a great deal to
+# lose.
+#
+# THE FILTER IS SHARED, NOT COPIED — .github/filters/docker-paths.yml. The two
+# `if:` conditions are exact complements, and the failure direction is silent: a
+# shim that thinks nothing Docker-related changed while docker-smoke-test.yml
+# thinks otherwise would publish green for a build that never ran.
+
+name: docker-smoke-required-context
+
+on:
+  pull_request:
+    branches: [ Dev_new_gui ]
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changed paths (docker required context)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: filter
+        with:
+          filters: .github/filters/docker-paths.yml
+
+  smoke-test:
+    # IDENTICAL to the job name in docker-smoke-test.yml on purpose: the required
+    # status context is the JOB name, so this reports the same context when the
+    # real smoke test legitimately does not run.
+    name: smoke-test
+    needs: changes
+    # Exact complement of docker-smoke-test.yml's
+    # `needs.changes.outputs.docker == 'true'`.
+    #
+    # Fail-closed: if `changes` errors, `needs` skips this job rather than
+    # reporting green, so a broken detector can never fake a pass. It leaves the
+    # context unreported, which blocks the pull request — the safe direction.
+    if: needs.changes.outputs.docker != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: No Docker-related changes — reporting required context as success
+        run: |
+          echo "No Docker-related paths changed in this pull request."
+          echo "The image build and compose smoke test in docker-smoke-test.yml"
+          echo "do not apply, so the required 'smoke-test' context is reported"
+          echo "green from here."
+          echo "Path set: .github/filters/docker-paths.yml (#15299)."

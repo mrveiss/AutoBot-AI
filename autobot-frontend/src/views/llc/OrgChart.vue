@@ -36,12 +36,24 @@ import {
   buildOrgPeople,
   countByKind,
   groupPeopleByTeam,
+  UNGROUPED_TEAM_ID,
 } from '@/composables/llc/orgPeople'
-import type { CompanyTeam, ContactSource } from '@/composables/llc/orgPeople'
+import type { CompanyTeam, ContactEditPatch, ContactSource } from '@/composables/llc/orgPeople'
 import ExecutorRollupPanel from '@/components/llc/ExecutorRollupPanel.vue'
 import { buildExecutorRollupMatrix } from '@/composables/llc/executorRollup'
 import type { ExecutorRollupCell, ExecutorRollupMatrix } from '@/composables/llc/executorRollup'
-import { availableLensRoles, applyRoleLens, roleLensCounts } from '@/composables/llc/orgRoleLens'
+import { availableLensRoles, roleLensCounts } from '@/composables/llc/orgRoleLens'
+import type { CanvasFilterState, CanvasFilterContext } from '@/composables/llc/orgCanvasFilters'
+import {
+  applyHierarchyFilters,
+  applyTeamSectionFilter,
+  applyProcessToolFilter,
+  applyToolSectionFilter,
+  buildTeamIdsByOrgNodeId,
+  buildToolRoleIndex,
+  teamFilterCounts,
+  toolFilterCounts,
+} from '@/composables/llc/orgCanvasFilters'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
 import BaseButton from '@/components/base/BaseButton.vue'
 
@@ -99,6 +111,13 @@ const teamsFailed = ref(false)
 // would prove it has actually completed (#14064's failure shape).
 const teamsAttempted = ref(false)
 const peopleLoading = ref(false)
+// #14603: contact editing, from the People list. `savingContactId` is the
+// contact id a PATCH is in flight for — never a plain boolean, so the row
+// the People list is not saving stays interactive. Single-flight per the
+// same pattern as `processMutationInFlight`/`toolMutationInFlight` above:
+// one save at a time, guarded before the first await.
+const savingContactId = ref<string | null>(null)
+const contactSaveError = ref<{ contactId: string; message: string } | null>(null)
 
 /**
  * One tab per unit, plus an "all units" tab — and no strip at all when nothing
@@ -225,6 +244,29 @@ watch(statusById, (statuses) => {
 // reports zero matches instead (see `roleLens.value && lensCounts...` below).
 const roleLens = ref<string>('')
 const availableRoles = computed<string[]>(() => availableLensRoles(tree.value))
+
+// #14608: team and tool filters — the two axes `orgCanvasFilters.ts` adds
+// beside the role lens above. Same '' == "no filter" convention as `roleLens`.
+const teamFilter = ref<string>('')
+const toolFilter = ref<string>('')
+
+/**
+ * Team filter options, drawn from `groupPeopleByTeam` — the exact grouping
+ * `buildTeamCanvasNodes` already renders the roster section from — so the
+ * picker can never offer a bucket the canvas itself would not draw. Reuses
+ * `people.value`/`teams.value` (#13938/#14596), no new fetch.
+ */
+const availableTeamFilters = computed<{ id: string; name: string }[]>(() =>
+  groupPeopleByTeam(people.value, teams.value).map((group) => ({
+    id: group.id,
+    name: group.id === UNGROUPED_TEAM_ID ? t('llc.orgChart.peopleNoTeam') : group.name,
+  })),
+)
+
+/** Tool filter options — distinct tool names, alphabetised, mirroring `availableLensRoles`. */
+const availableToolFilters = computed<string[]>(() =>
+  [...new Set(toolNodes.value.map((row) => row.tool_name))].sort((a, b) => a.localeCompare(b)),
+)
 /**
  * Process nodes, derived rather than stored in `canvasNodes` (#13963).
  *
@@ -279,21 +321,40 @@ const toolCanvasNodes = computed<CanvasNode[]>(() =>
   ),
 )
 
+// #14608: the multi-filter's current selection and the lookups its team/tool
+// predicates need — see `orgCanvasFilters.ts`'s module docstring for why each
+// axis touches the sections it touches.
+const canvasFilters = computed<CanvasFilterState>(() => ({
+  role: roleLens.value || null,
+  team: teamFilter.value || null,
+  tool: toolFilter.value || null,
+}))
+const canvasFilterContext = computed<CanvasFilterContext>(() => {
+  const { names, ids } = buildToolRoleIndex(toolNodes.value)
+  return {
+    teamIdsByOrgNodeId: buildTeamIdsByOrgNodeId(people.value, teams.value),
+    toolRoleNames: names,
+    toolRoleIds: ids,
+  }
+})
+
 const lensedCanvasNodes = computed<CanvasNode[]>(() => [
-  ...applyRoleLens(canvasNodes.value, roleLens.value || null),
-  // Not lensed: the role lens filters *people* by role, and a process is not a
-  // person. Hiding processes when a lens is active would remove them for a
-  // reason that does not apply to them.
-  ...processCanvasNodes.value,
-  // #14596: a team roster is a different grouping question than the role
-  // lens's own filter, and it is never the only place a person is drawn
-  // (they are always still on the reporting-hierarchy canvas too), so it is
-  // left unlensed for the same reason process nodes are.
-  ...teamCanvasNodes.value,
-  // #14597: a tool is not a person either, same reasoning as processes.
-  ...toolCanvasNodes.value,
+  ...applyHierarchyFilters(canvasNodes.value, canvasFilters.value, canvasFilterContext.value),
+  ...applyProcessToolFilter(processCanvasNodes.value, canvasFilters.value.tool, canvasFilterContext.value),
+  ...applyTeamSectionFilter(teamCanvasNodes.value, canvasFilters.value.team),
+  ...applyToolSectionFilter(toolCanvasNodes.value, canvasFilters.value.tool),
 ])
 const lensCounts = computed(() => roleLensCounts(canvasNodes.value, roleLens.value || null))
+const teamLensCounts = computed(() =>
+  teamFilterCounts(canvasNodes.value, teamFilter.value || null, canvasFilterContext.value),
+)
+const toolLensCounts = computed(() =>
+  toolFilterCounts(canvasNodes.value, toolFilter.value || null, canvasFilterContext.value),
+)
+/** The selected team's display name, for the banner copy. */
+const teamFilterName = computed(
+  () => availableTeamFilters.value.find((team) => team.id === teamFilter.value)?.name ?? teamFilter.value,
+)
 
 /**
  * Load the two sources the People list needs beyond the org chart.
@@ -349,6 +410,50 @@ async function loadPeopleSources(): Promise<void> {
   // Only a complete answer is cached; a partial one retries on re-entry.
   peopleLoaded.value = !contactsFailed.value && !teamsFailed.value
   peopleLoading.value = false
+}
+
+/**
+ * Force the People sources to actually re-fetch (#14603) — mirrors
+ * `reloadProcessNodes`/`reloadToolNodes`. `peopleLoaded` guards the lazy
+ * fetch above, so a contact save has to clear it first or the "refetch"
+ * would hit the guard and silently keep showing the pre-edit row.
+ */
+async function reloadPeopleSources(): Promise<void> {
+  peopleLoaded.value = false
+  await loadPeopleSources()
+}
+
+/**
+ * Save an edited contact from the People list (#14603).
+ *
+ * Only a contact ever reaches this handler — `OrgPeopleList` renders the
+ * edit affordance for `kind === 'contact'` alone, and the endpoint itself is
+ * scoped to `llc_contacts`, so there is no path from here to a user or an
+ * agent. No optimistic update: the list is the confirmation, not the form —
+ * `reloadPeopleSources` re-reads from the server rather than patching the
+ * row in place, same principle as the tool/process attach handlers above.
+ */
+async function onSaveContact(contactId: string, patch: ContactEditPatch): Promise<void> {
+  if (!companyId.value || savingContactId.value !== null) return
+  savingContactId.value = contactId
+  contactSaveError.value = null
+  try {
+    await api.patch(`/api/llc/contacts/${companyId.value}/${contactId}`, {
+      full_name: patch.full_name,
+      role_title: patch.role_title || null,
+      email: patch.email || null,
+      phone: patch.phone || null,
+    })
+    await reloadPeopleSources()
+  } catch (err: unknown) {
+    logger.error('Failed to save contact:', err)
+    contactSaveError.value = {
+      contactId,
+      message: describeError(err, 'llc.orgPeople.contactSaveError'),
+    }
+  } finally {
+    savingContactId.value = null
+  }
 }
 
 function setViewMode(mode: OrgViewMode) {
@@ -902,6 +1007,59 @@ onMounted(() => {
           </select>
         </div>
 
+        <!-- #14608: team filter — same view-filter contract as the role lens
+             above, combining with it rather than replacing it
+             (`orgCanvasFilters.ts`). -->
+        <div
+          v-if="viewMode === 'canvas' && teams.length > 0"
+          class="flex items-center gap-2 pl-3 border-l border-autobot-border"
+          data-testid="team-filter-control"
+        >
+          <label
+            for="org-team-filter"
+            class="text-sm text-autobot-text-secondary"
+            :title="t('llc.orgChart.roleLensHint')"
+          >
+            {{ t('llc.orgChart.teamFilterLabel') }}
+          </label>
+          <select
+            id="org-team-filter"
+            v-model="teamFilter"
+            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
+            data-testid="team-filter-select"
+            :aria-label="t('llc.orgChart.teamFilterLabel')"
+          >
+            <option value="">{{ t('llc.orgChart.teamFilterAll') }}</option>
+            <option v-for="team in availableTeamFilters" :key="team.id" :value="team.id">{{ team.name }}</option>
+          </select>
+        </div>
+
+        <!-- #14608: tool filter — narrows the hierarchy, the process grid and
+             the tool grid together (`orgCanvasFilters.ts`). -->
+        <div
+          v-if="viewMode === 'canvas' && availableToolFilters.length > 0"
+          class="flex items-center gap-2 pl-3 border-l border-autobot-border"
+          data-testid="tool-filter-control"
+        >
+          <label
+            for="org-tool-filter"
+            class="text-sm text-autobot-text-secondary"
+            :title="t('llc.orgChart.roleLensHint')"
+          >
+            {{ t('llc.orgChart.toolFilterLabel') }}
+          </label>
+          <select
+            id="org-tool-filter"
+            v-model="toolFilter"
+            class="text-sm rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-autobot-text-primary"
+            data-testid="tool-filter-select"
+            :aria-label="t('llc.orgChart.toolFilterLabel')"
+          >
+            <option value="">{{ t('llc.orgChart.toolFilterAll') }}</option>
+            <option v-for="tool in availableToolFilters" :key="tool" :value="tool">{{ tool }}</option>
+          </select>
+        </div>
+
         <button
           v-if="companyId"
           class="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
@@ -973,7 +1131,10 @@ onMounted(() => {
         :teams-failed="teamsFailed"
         :unassigned-contact-ids="unassignedContactIds"
         :contacts-failed="contactsFailed"
+        :saving-contact-id="savingContactId"
+        :contact-save-error="contactSaveError"
         @select="onPersonSelected"
+        @save-contact="onSaveContact"
       />
     </div>
 
@@ -1193,6 +1354,46 @@ onMounted(() => {
         </button>
       </div>
 
+      <!-- #14608: the team filter's own affordance, alongside the role
+           lens's (both can be visible at once — that IS "several filters
+           combine, and the active set is visible" without opening a menu). -->
+      <div
+        v-if="teamFilter"
+        class="flex items-center justify-between gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
+        role="status"
+        data-testid="team-filter-banner"
+      >
+        <span class="text-autobot-text-primary">
+          {{ t('llc.orgChart.teamFilterBanner', { team: teamFilterName, shown: teamLensCounts.shown, total: teamLensCounts.total }) }}
+        </span>
+        <button
+          class="shrink-0 underline text-autobot-text-secondary hover:text-autobot-text-primary"
+          data-testid="team-filter-clear"
+          @click="teamFilter = ''"
+        >
+          {{ t('llc.orgChart.roleLensClear') }}
+        </button>
+      </div>
+
+      <!-- #14608: the tool filter's own affordance, same pattern. -->
+      <div
+        v-if="toolFilter"
+        class="flex items-center justify-between gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
+        role="status"
+        data-testid="tool-filter-banner"
+      >
+        <span class="text-autobot-text-primary">
+          {{ t('llc.orgChart.toolFilterBanner', { tool: toolFilter, shown: toolLensCounts.shown, total: toolLensCounts.total }) }}
+        </span>
+        <button
+          class="shrink-0 underline text-autobot-text-secondary hover:text-autobot-text-primary"
+          data-testid="tool-filter-clear"
+          @click="toolFilter = ''"
+        >
+          {{ t('llc.orgChart.roleLensClear') }}
+        </button>
+      </div>
+
       <!-- Only when the lens leaves literally nothing — no matching person AND
            no unit container to stand in for one (an ungrouped roster, #13994)
            — is WorkflowCanvas replaced outright: mounting it with an empty
@@ -1201,7 +1402,21 @@ onMounted(() => {
            as "no data" rather than "filtered by view". Whenever at least one
            `org-group` container survives, WorkflowCanvas stays mounted and
            renders that (now person-less) box — the emptied box is itself the
-           "filtered, not missing" cue, so it is the stronger default. -->
+           "filtered, not missing" cue, so it is the stronger default.
+
+           Unchanged from #13943 — this condition still only names `roleLens`.
+           #14608's team and tool axes never need a combined empty-state of
+           their own: both are only ever selectable from a value that already
+           exists in the fetched data (`availableTeamFilters`/
+           `availableToolFilters`), and `applyTeamSectionFilter`/
+           `applyToolSectionFilter` always keep that one team's or tool's own
+           container node — never removing every last node the way role can.
+           So `lensedCanvasNodes.length === 0` is only reachable when team and
+           tool are BOTH inactive, at which point this condition is exactly
+           the single-role lens's original one (proven, not assumed — see
+           `OrgChart.canvasFilters.test.ts`'s team/tool "still shows the …
+           box" tests, which pin that landmark for the new axes the same way
+           #13943 already pinned it for units). -->
       <div
         v-if="roleLens && lensedCanvasNodes.length === 0"
         class="flex-1 flex items-center justify-center text-center px-6 text-sm text-autobot-text-muted"

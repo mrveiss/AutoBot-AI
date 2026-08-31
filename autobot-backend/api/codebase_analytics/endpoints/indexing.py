@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from constants.path_constants import PATH
 
 
@@ -130,7 +130,7 @@ async def _validate_and_get_path(
         return source.clone_path
     if request and request.root_path:
         try:
-            safe_path_str = validate_path(request.root_path, must_exist=True)
+            safe_path_str = validate_path(request.root_path, must_exist=True, allowed_roots=PROJECT_ALLOWED_ROOTS)
             target_path = Path(safe_path_str)
         except (ValueError, PermissionError):
             raise HTTPException(

@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../../architecture/VM_ROLES.md) for role definitions.
+
 # Dynamic Service Discovery and Per-Node Configuration Design
 
 > **Issue:** [#760](https://github.com/mrveiss/AutoBot-AI/issues/760)
@@ -86,11 +88,11 @@ New file `api/discovery.py`:
 ```json
 {
     "service_name": "autobot-backend",
-    "host": "172.16.168.20",
+    "host": "<backend-ip>",
     "port": 8001,
     "protocol": "http",
     "endpoint_path": "/api",
-    "url": "https://172.16.168.20:8443/api",
+    "url": "https://<backend-ip>:8443/api",
     "healthy": true,
     "node_id": "node-main"
 }

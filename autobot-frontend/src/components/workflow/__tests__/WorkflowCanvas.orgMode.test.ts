@@ -9,6 +9,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { memoizeByLocale } from '@/test/utils/i18n-cache'
 import en from '@/i18n/locales/en.json'
 import ar from '@/i18n/locales/ar.json'
 
@@ -17,7 +18,7 @@ vi.mock('@/composables/useConfirmDialog', () => ({
 }))
 
 import WorkflowCanvas from '../WorkflowCanvas.vue'
-import type { CanvasNode } from '../canvasNode'
+import { CANVAS_NODE_WIDTH, type CanvasNode } from '../canvasNode'
 import { buildOrgCanvasGraph } from '@/composables/llc/orgCanvasGraph'
 import type { OrgNode } from '@/views/llc/OrgTreeNode.vue'
 import { firePointer } from './pointerTestUtils'
@@ -49,9 +50,13 @@ const WORKFLOW_NODES: CanvasNode[] = [
   },
 ]
 
-function makeI18n(locale: 'en' | 'ar') {
-  return createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: { en, ar } })
-}
+// #14860: memoized per locale. This helper ran on EVERY mount and each call
+// re-ingested the ~400KB `en` and `ar` message bundles. The locale is a real
+// parameter here, so a blind hoist would be wrong — one instance per locale
+// is not. Nothing in this file mutates the returned instance.
+const makeI18n = memoizeByLocale((locale: string) =>
+  createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: { en, ar } }),
+)
 
 function mountCanvas(props: Record<string, unknown>, locale: 'en' | 'ar' = 'en') {
   return mount(WorkflowCanvas, {
@@ -90,6 +95,8 @@ async function panBy(wrapper: ReturnType<typeof mountCanvas>, dx: number, dy: nu
 }
 
 afterEach(() => {
+  // #14103: teardown was already explicit; the gap was that the LTR *setup*
+  // was not. Kept so a test that sets `dir` cannot leak it to a later one.
   document.documentElement.removeAttribute('dir')
 })
 
@@ -130,8 +137,11 @@ describe('WorkflowCanvas read-only org mode (#13939)', () => {
 
     expect(wrapper.find('.canvas-area').exists()).toBe(true)
     // #14611 added a fourth button (fit to selection/filter) alongside the
-    // three #13939 originally pinned.
-    expect(wrapper.findAll('.toolbar-right .tool-btn')).toHaveLength(4)
+    // three #13939 originally pinned; #14612 added undo/redo as a fifth and
+    // sixth, neither gated on `readonly` either (moving/undoing a move both
+    // persist nothing, the same reasoning #14610 already established for
+    // dragging).
+    expect(wrapper.findAll('.toolbar-right .tool-btn')).toHaveLength(6)
   })
 
   it('labels org nodes from their data and sizes the container', () => {
@@ -270,13 +280,39 @@ describe('WorkflowCanvas draws a company of people (#13994)', () => {
 })
 
 describe('WorkflowCanvas panning is direction-agnostic (#13939)', () => {
+  // #14103: both directions are set EXPLICITLY rather than the LTR case
+  // relying on the `dir` attribute being absent. Relying on its absence made
+  // the assertion depend on ambient document state, which is why it failed
+  // roughly once per N multi-directory runs and passed in isolation: any
+  // sibling suite sharing the environment and touching direction could leave
+  // `dir` set when the LTR mount happened. Setting it per case makes the test
+  // state its own precondition instead of inheriting one.
   it('pans by the same transform in an RTL locale as in an LTR one', async () => {
+    document.documentElement.setAttribute('dir', 'ltr')
     const ltr = mountCanvas({ nodes: ORG_NODES, readonly: true }, 'en')
-    const ltrStyle = await panBy(ltr, 120, 30)
+    // #14103: the gesture starts ON A NODE, not in the gutter. The gutter is
+    // the easy case; #13996's original defect was precisely that a gesture
+    // starting on a node or an org container failed to pan, so a guard that
+    // only ever presses empty canvas cannot catch a regression of it.
+    const ltrStyle = await panFrom(ltr, '.workflow-node.org-person', 120, 30)
 
     document.documentElement.setAttribute('dir', 'rtl')
     const rtl = mountCanvas({ nodes: ORG_NODES, readonly: true }, 'ar')
-    const rtlStyle = await panBy(rtl, 120, 30)
+    const rtlStyle = await panFrom(rtl, '.workflow-node.org-person', 120, 30)
+
+    expect(ltrStyle).toContain('translate(170px, 80px)')
+    expect(rtlStyle).toBe(ltrStyle)
+  })
+
+  it('pans by the same transform from the gutter in RTL as in LTR', async () => {
+    // #14103: the gutter case the assertion above used to cover, kept as its
+    // own test rather than dropped — the two start points exercise different
+    // handlers (`startPan` directly vs. a node press bubbling into it).
+    document.documentElement.setAttribute('dir', 'ltr')
+    const ltrStyle = await panBy(mountCanvas({ nodes: ORG_NODES, readonly: true }, 'en'), 120, 30)
+
+    document.documentElement.setAttribute('dir', 'rtl')
+    const rtlStyle = await panBy(mountCanvas({ nodes: ORG_NODES, readonly: true }, 'ar'), 120, 30)
 
     expect(ltrStyle).toContain('translate(170px, 80px)')
     expect(rtlStyle).toBe(ltrStyle)
@@ -329,7 +365,8 @@ describe('WorkflowCanvas shift-drag pans from anywhere (#13996)', () => {
     })
 
     expect(style).toContain('translate(50px, 50px)') // canvas did not move
-    expect(wrapper.emitted('node-moved')).toEqual([['n1', { x: 130, y: 40 }]])
+    // #14768: raw drop (130, 40); 130 snaps to the nearest grid multiple.
+    expect(wrapper.emitted('node-moved')).toEqual([['n1', { x: 140, y: 40 }]])
   })
 })
 
@@ -364,7 +401,16 @@ describe('WorkflowCanvas node rendering (#13996)', () => {
     })
 
     const step = wrapper.get('.workflow-node.step').attributes('style')
-    expect(step).not.toContain('width')
+    // #14726 moved the node width out of the CSS and into `nodeStyle()`, so
+    // every node now carries an inline width. `not.toContain('width')` was
+    // only ever a proxy for the invariant this test exists to guard — that an
+    // authoring node is NOT sized from its own `data` bag — and that proxy no
+    // longer distinguishes the two cases. Assert the invariant directly
+    // instead: the step's width is the shared constant, emphatically not the
+    // `width: 900` its `data` carries, and `data.height` is still ignored
+    // outright.
+    expect(step).toContain(`width: ${CANVAS_NODE_WIDTH}px`)
+    expect(step).not.toContain('900px')
     expect(step).not.toContain('height')
     expect(wrapper.get('.workflow-node.org-group').attributes('style')).toContain('width: 600px')
   })

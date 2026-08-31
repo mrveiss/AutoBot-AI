@@ -58,10 +58,15 @@ function node(id: string, x: number, y: number): CanvasNode {
 
 const NODES = [node('a', 0, 0), node('b', 2000, 1000)]
 
+// #14860: one shared instance for the whole file. A fresh createI18n per
+// mount re-ingested the ~400KB message bundle every time; nothing here
+// mutates the instance, so building it once is enough.
+const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
+
 function mountCanvas(props: Record<string, unknown> = {}) {
   return mount(WorkflowCanvas, {
     props: { nodes: NODES, selectedNodeId: null, readonly: true, ...props },
-    global: { plugins: [createI18n({ legacy: false, locale: 'en', messages: { en } })] },
+    global: { plugins: [i18n] },
   })
 }
 

@@ -33,6 +33,9 @@ on:
       # file never committed) IS a checked-in artifact here, so it is watched
       # too — a hand-edit or bad merge of it must also trigger the fix-back.
       - 'autobot-slm-backend/**/*.py'
+      # #12986: completes the canonical `backend-python` set from .github/filters/backend-python-paths.yml;
+      # enforced by pipeline-scripts/check_workflow_path_filters.py.
+      - '.github/filters/backend-python-paths.yml'
       - 'autobot-slm-frontend/openapi.json'
       - 'autobot-slm-frontend/src/types/generated/api.ts'
       - '.github/workflows/auto-fix-generated-types.yml'

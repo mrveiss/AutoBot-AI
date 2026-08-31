@@ -4387,7 +4387,17 @@
       "searchResultsStatus": "Atrasti {count} rezultāti vaicājumam \"{query}\"",
       "searchNoResults": "Nav atbilstību vaicājumam \"{query}\"",
       "fitToSelection": "Pielāgot atlasei vai filtram",
-      "minimapLabel": "Audekla pārskats"
+      "minimapLabel": "Audekla pārskats",
+      "undo": "Atsaukt",
+      "redo": "Atkārtot",
+      "undoScope": "Atsaukšana un atkārtošana attiecas uz mezglu pārvietošanu, pievienošanu, noņemšanu un savienošanu šajā audeklā. Izmaiņas mezgla iekšienē, kā arī jebko, kas tiek nosūtīts serverim — saglabāšana, pievienošana, atvienošana —, šeit atsaukt nevar.",
+      "selectionStatus": "Atlasīti {count} mezgli",
+      "contextMenuLabel": "Mezgla darbības",
+      "contextMenuButtonLabel": "{name} darbības",
+      "contextMenuZoomToNode": "Tuvināt mezglam",
+      "contextMenuFitSelection": "Pielāgot skatu atlasei",
+      "contextMenuDeleteSelection": "Dzēst {count} atlasītos mezglus",
+      "contextMenuOpenWorkflow": "Atvērt saistīto darbplūsmu"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -5608,7 +5618,8 @@
       "executing": "Executing...",
       "securityNote": "Commands are executed in a sandboxed environment with limited permissions.",
       "missingSessionId": "Missing session ID for command execution",
-      "executionFailed": "Command execution failed",
+      "executionFailed": "Komandas izpilde neizdevās",
+      "postExecutionFailed": "Komanda tika izpildīta, taču nākamais solis neizdevās. Tās izvade tiek rādīta; daži atjauninājumi var trūkt.",
       "enterComment": "Please enter a comment before submitting"
     },
     "darkModeToggle": {
@@ -8041,6 +8052,8 @@
       "colRunDuration": "Run Duration",
       "colAction": "Action",
       "statusUnknown": "unknown",
+      "skipReasonLabel": "Izlaists:",
+      "errorLabel": "Kļūda:",
       "triggering": "Triggering...",
       "triggerNow": "Trigger Now",
       "runHistoryTitle": "Run History – {name}",
@@ -8291,6 +8304,12 @@
       "roleLensBanner": "Skata filtrs: {role} — rāda {shown} no {total} mezgliem. Piekļuve nemainās.",
       "roleLensEmpty": "Skata filtrs: nevienam mezglam neatbilst \"{role}\" šajā skatā. Piekļuve nemainās — notīriet filtru, lai redzētu visus.",
       "roleLensClear": "Notīrīt filtru",
+      "teamFilterLabel": "Filtrēt pēc komandas",
+      "teamFilterAll": "Visas komandas",
+      "teamFilterBanner": "Komandas filtrs: {team} — rāda {shown} no {total} cilvēkiem. Piekļuve nemainās.",
+      "toolFilterLabel": "Filtrēt pēc rīka",
+      "toolFilterAll": "Visi rīki",
+      "toolFilterBanner": "Rīka filtrs: {tool} — rāda {shown} no {total} cilvēkiem. Piekļuve nemainās.",
       "sidebar": {
         "owner": "Īpašnieks",
         "tools": "Rīki",
@@ -8332,6 +8351,7 @@
       "attachError": "Neizdevās pievienot šo darbplūsmu.",
       "detachError": "Neizdevās noņemt šo darbplūsmu.",
       "processDetach": "Noņemt {workflow} no {role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "Lomas neizdevās ielādēt, tāpēc šis saraksts var būt nepilnīgs.",
       "canvasGroupKind": "Grupa",
       "toolNodeLabel": "Rīks",
@@ -8340,6 +8360,7 @@
       "toolAttachError": "Neizdevās pievienot šo rīku.",
       "toolDetachError": "Neizdevās noņemt šo rīku.",
       "toolDetach": "Noņemt {tool} no {role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Rīku informācija pašlaik nav pieejama — šis saraksts var būt nepilnīgs.",
       "canvasNoToolsDefined": "Šim uzņēmumam nevienai lomai nav pievienots neviens rīks.",
       "deepLinkNodeNotFound": "Šī saite norāda uz mezglu, kas šeit nav atrasts. Iespējams, tas ir noņemts, vai jums nav piekļuves tam."
@@ -8432,6 +8453,8 @@
       "secretMappingIncomplete": "Fill in all secret values above before importing.",
       "importSuccess": "Import successful — company ID:",
       "warningsLabel": "Warnings:",
+      "droppedReportingLinesLabel": "Reporting lines that could not be kept:",
+      "droppedReportingLine": "{agent} was imported without a manager: {manager} was not created.",
       "importFailed": "Import failed:",
       "toastTemplateExported": "Template exported successfully",
       "toastTemplateExportFailed": "Template export failed",
@@ -8587,7 +8610,15 @@
       "unassigned": "nav lomas",
       "unassignedHint": "Piesaistīts šai nodaļai, bet neviena loma to neizskaidro",
       "inactive": "Neaktīvs",
-      "inactiveHint": "Deaktivizēts vai noņemts — joprojām redzams, jo darba vienības un loma paliek, taču jaunu darbu piešķirt nevar."
+      "inactiveHint": "Deaktivizēts vai noņemts — joprojām redzams, jo darba vienības un loma paliek, taču jaunu darbu piešķirt nevar.",
+      "editAriaLabel": "Rediģēt {name}",
+      "fullNameLabel": "Pilns vārds",
+      "roleTitleLabel": "Loma / amats",
+      "emailLabel": "E-pasts",
+      "phoneLabel": "Tālrunis",
+      "saving": "Saglabā…",
+      "save": "Saglabāt",
+      "contactSaveError": "Neizdevās saglabāt kontaktu."
     }
   },
   "code": {

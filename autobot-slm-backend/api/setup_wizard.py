@@ -19,8 +19,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
-_PROVISION_LOG = Path("/var/log/autobot/provision-wizard.log")
-
 import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -28,11 +26,17 @@ from pydantic import BaseModel
 from api.websocket import ws_manager
 from config import settings
 from services.ansible_secrets import fetch_deploy_secrets
-from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
 from services.database import db_service
 from services.inventory_builder import _DECLARED_ONLY_GROUPS, _declared_roles, groups_for_role_tokens
 from services.playbook_executor import ANSIBLE_LOCAL_TMP, get_playbook_executor, link_group_vars
+from services.provision_progress import (
+    PROVISION_STALE_SECONDS,
+    handle_provision_result,
+)
+from services.provision_progress import is_stale as _provision_is_stale
+from services.provision_progress import mark_progress as _mark_provision_progress
+from services.provision_progress import write_provision_log as _write_provision_log
 from services.role_registry import ROLE_ANSIBLE_GROUPS
 
 logger = logging.getLogger(__name__)
@@ -392,9 +396,23 @@ def _apply_role_host_vars(
         if node.node_id in node_id_to_roles:
             hosts[inv_name]["node_roles"] = node_id_to_roles[node.node_id]
         hosts[inv_name]["node_roles_declared"] = _declared_roles(node)
-        roles = hosts[inv_name].get("node_roles", [])
+        # #14859: dependencies resolve from DECLARED roles, not from the
+        # declared-plus-detected union `node_roles` carries.
+        #
+        # Detection legitimately drives plays -- a node running redis that
+        # nobody declared still needs the redis plays to reach it, which is what
+        # `_union_roles` documents. Installing OS packages and enabling services
+        # is a different act: that is provisioning a role, not reconciling one
+        # that is already there.
+        #
+        # A node contaminated by #14513 detects `backend`, `celery`, `frontend`,
+        # `scheduler`, `slm-backend` and `slm-frontend` (the residue tracked in
+        # #14667). Resolved from the union, a vnc + slm-agent node was given
+        # nginx, nodejs, postgresql and python314 -- and nginx failing to start
+        # there aborted provisioning for the WHOLE fleet at phase 7.
+        declared_for_deps = hosts[inv_name].get("node_roles_declared") or []
         deps: set[str] = set()
-        for role in roles:
+        for role in declared_for_deps:
             deps.update(ROLE_DEPENDENCIES.get(role, []))
         hosts[inv_name]["node_dependencies"] = sorted(deps)
         pending = (node.extra_data or {}).get("pending_dep_removals", [])
@@ -827,45 +845,17 @@ async def _activate_provisioned_roles(
         logger.warning("Failed to activate provisioned roles: %s", exc)
 
 
+# #14856: last_progress_at is the sign-of-life timestamp checked by
+# services.provision_progress.is_stale() -- see provision_fleet()'s 409 branch.
 _provision_state: dict = {
     "status": "idle",  # idle | running | completed | failed
     "started_at": None,
     "finished_at": None,
+    "last_progress_at": None,
     "output_lines": [],
     "error": None,
 }
 _provision_lock = asyncio.Lock()
-
-
-def _write_provision_log(line: str) -> None:
-    """Append a line to the persistent provision log (#1455)."""
-    try:
-        _PROVISION_LOG.parent.mkdir(parents=True, exist_ok=True)
-        with open(_PROVISION_LOG, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
-    except OSError:
-        pass
-
-
-def _handle_provision_result(result: dict) -> None:
-    """Record provisioning result to state and log (#1455)."""
-    raw_output = result.get("output", "")
-    if raw_output:
-        for line in raw_output.splitlines():
-            _provision_state["output_lines"].append(line)
-            _write_provision_log(line)
-
-    if result.get("success"):
-        _provision_state["status"] = "completed"
-        _write_provision_log("SUCCESS: Fleet provisioning completed")
-        logger.info("Fleet provisioning completed successfully")
-    else:
-        rc = result.get("returncode", -1)
-        _provision_state["status"] = "failed"
-        summary = _extract_failure_summary(raw_output)
-        _provision_state["error"] = summary or f"Ansible exited with code {rc}"
-        _write_provision_log(f"FAILED: {_provision_state['error']}")
-        logger.error("Fleet provisioning failed (rc=%s): %s", rc, _provision_state["error"])
 
 
 async def _create_wizard_deployments(
@@ -1053,6 +1043,7 @@ async def _run_provisioning_task(
             if msg:
                 _provision_state["output_lines"].append(msg)
                 _write_provision_log(msg)
+                _mark_provision_progress(_provision_state)  # #14856
                 # Broadcast via WebSocket (#2754)
                 log_type = "task"
                 if stage == "heartbeat":
@@ -1077,7 +1068,7 @@ async def _run_provisioning_task(
             inventory_path=temp_inventory_path,
             progress_callback=log_callback,
         )
-        _handle_provision_result(result)
+        handle_provision_result(_provision_state, result)
 
         # Update Deployment records with playbook outcome (#3032)
         await _complete_wizard_deployments(
@@ -1227,15 +1218,34 @@ async def provision_fleet(
 
     async with _provision_lock:
         if _provision_state["status"] == "running":
-            raise HTTPException(
-                status_code=409,
-                detail="Provisioning is already running",
+            if not _provision_is_stale(_provision_state):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Provisioning is already running",
+                )
+            # #14856: the prior run stopped reporting progress (no output line
+            # and no completion) for longer than PROVISION_STALE_SECONDS, so it
+            # is treated as abandoned rather than blocking every future run
+            # forever. Its last known state is not silently discarded: the
+            # persistent provision log already has every line it produced
+            # on disk (_write_provision_log runs on every callback), and this
+            # adds the terminal marker before the in-memory record below is
+            # superseded, so anyone reading the log sees why it stopped.
+            logger.warning(
+                "Fleet provisioning: prior run has made no progress since %s -- "
+                "treating it as abandoned and starting a new run",
+                _provision_state.get("last_progress_at") or _provision_state.get("started_at"),
+            )
+            _write_provision_log(
+                f"RETIRED: no progress for over {PROVISION_STALE_SECONDS}s -- "
+                "superseded by a new provisioning run (#14856)"
             )
 
         _provision_state = {
             "status": "running",
             "started_at": time.time(),
             "finished_at": None,
+            "last_progress_at": None,
             "output_lines": [],
             "error": None,
         }

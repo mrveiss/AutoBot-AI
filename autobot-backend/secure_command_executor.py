@@ -14,12 +14,12 @@ import logging
 import os
 import re
 import shlex
-from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import CommandRisk
 from constants.network_constants import NetworkConstants
 from security.command_patterns import (
     FORBIDDEN_COMMANDS,
@@ -122,16 +122,11 @@ _FIND_SUID_RECON_PATTERNS = (
 # MODERATE so they're audit-logged.
 _DNS_RECON_COMMANDS = frozenset({"dig", "nslookup", "host", "whois", "drill"})
 
-# #7406: ordering for CommandRisk so chained-command detection can pick the
-# strictest risk across sub-commands. Strings are used here because the enum
-# class is defined later in this module; the caller compares via this lookup.
-_RISK_ORDER: Dict[str, int] = {
-    "safe": 0,
-    "moderate": 1,
-    "high": 2,
-    "critical": 3,
-    "forbidden": 4,
-}
+# #7406: chained-command detection picks the strictest risk across sub-commands.
+# #13845: the ordering now comes from ``CommandRisk.rank``, derived from the
+# enum's own declaration order. The string table this replaces listed five
+# members by hand and so silently rated ``DANGEROUS`` as unknown once the two
+# risk enums were unioned.
 
 
 def _check_argument_aware_risk(command: str) -> Tuple["CommandRisk", List[str]] | None:
@@ -221,7 +216,7 @@ def _check_argument_aware_risk(command: str) -> Tuple["CommandRisk", List[str]] 
                     continue
                 sub_risk, sub_reasons = sub_result
                 # Take the strictest risk (FORBIDDEN > HIGH > MODERATE > SAFE).
-                if highest_risk is None or _RISK_ORDER[sub_risk.value] > _RISK_ORDER[highest_risk.value]:
+                if highest_risk is None or sub_risk.rank > highest_risk.rank:
                     highest_risk = sub_risk
                 all_reasons.extend(sub_reasons)
             if highest_risk is not None:
@@ -266,16 +261,6 @@ def _check_dangerous_env_var_prefix(command: str) -> List[str] | None:
 
 
 # Issue #765: Path constants now imported from security.command_patterns
-
-
-class CommandRisk(Enum):
-    """Risk levels for commands"""
-
-    SAFE = "safe"
-    MODERATE = "moderate"
-    HIGH = "high"
-    CRITICAL = "critical"
-    FORBIDDEN = "forbidden"
 
 
 class SecurityPolicy:
@@ -856,7 +841,7 @@ class SecureCommandExecutor:
             "return_code": 1,
             "status": "error",
             "security": {
-                "risk": "forbidden",
+                "risk": CommandRisk.FORBIDDEN.value,
                 "reasons": [rule_info.get("description", "Denied by rule")],
                 "blocked": True,
                 "permission_rule": rule_info,
@@ -1149,7 +1134,10 @@ class SecureCommandExecutor:
         risk, reasons = self.assess_command_risk(command)
         log_entry = self._build_standard_log_entry(command, risk, reasons)
 
-        if risk == CommandRisk.FORBIDDEN:
+        # #13845: ask ``.blocks`` rather than comparing against FORBIDDEN alone.
+        # DANGEROUS is the terminal layer's blocking verdict for the same enum;
+        # an equality check here would run a command that layer refuses.
+        if risk.blocks:
             return await self._handle_forbidden_command(command, risk, reasons, log_entry)
 
         denial_result = await self._handle_approval_flow(

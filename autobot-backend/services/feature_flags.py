@@ -29,6 +29,7 @@ Usage:
 
 import asyncio
 import json
+import os
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -46,6 +47,100 @@ class EnforcementMode(str, Enum):
     DISABLED = "disabled"  # No enforcement, no logging
     LOG_ONLY = "log_only"  # Log violations but don't block
     ENFORCED = "enforced"  # Full enforcement, block violations
+
+
+class EnforcementModeUnavailable(RuntimeError):
+    """The enforcement mode could not be read (#14010).
+
+    Deliberately distinct from :attr:`EnforcementMode.DISABLED`. An operator
+    turning enforcement off and the flag store being unreachable are different
+    facts, and collapsing them into one value is how an outage silently became
+    "authorization is off" platform-wide, with nothing louder than a debug line
+    saying so.
+
+    Callers that display the mode may surface this as unknown; callers that
+    *gate* on it must not read it as permission.
+    """
+
+
+# How strictly each mode gates access, from most to least permissive. Used only
+# to compare a global mode against a per-endpoint override (#15086) -- never to
+# order modes for any other purpose.
+_ENFORCEMENT_STRICTNESS: dict[EnforcementMode, int] = {
+    EnforcementMode.DISABLED: 0,
+    EnforcementMode.LOG_ONLY: 1,
+    EnforcementMode.ENFORCED: 2,
+}
+
+
+def combine_enforcement_modes(global_mode: EnforcementMode, override: EnforcementMode | None) -> EnforcementMode:
+    """Combine the global enforcement mode with a per-endpoint override (#15086).
+
+    Precedence: the **stricter** of the two wins. An override can tighten
+    enforcement above the global mode -- an operator turning ``enforced`` on for
+    one endpoint while the fleet is still ``log_only`` -- but it can never
+    loosen enforcement below the global mode. Letting an override relax below
+    the platform-wide posture would make it a per-endpoint fail-open: the same
+    class of defect as #14010 and #14866, a control that reads as protection
+    while doing the opposite.
+
+    ``override=None`` means no override is stored, or reading one failed and
+    degraded to "no opinion" rather than to a value (see
+    :meth:`FeatureFlags.get_endpoint_enforcement`) -- either way the global mode
+    applies unchanged. This is also why a failed override read cannot yield a
+    weaker mode than the global one: it never contributes a mode at all.
+    """
+    if override is None:
+        return global_mode
+    if _ENFORCEMENT_STRICTNESS[override] > _ENFORCEMENT_STRICTNESS[global_mode]:
+        return override
+    return global_mode
+
+
+# The single Redis key the platform's whole access-control posture is read from.
+# It was a literal repeated at each reader and writer; provisioning has to name
+# the same key, and a fourth copy of a string is how the fourth copy drifts.
+ENFORCEMENT_MODE_KEY = "feature_flag:access_control:enforcement_mode"
+
+# The audit list recording who moved the posture and when. Named here for the
+# same reason as the key above: the writer and the statistics reader both have
+# to mean the same list.
+ENFORCEMENT_HISTORY_KEY = "feature_flag:access_control:history"
+ENFORCEMENT_HISTORY_LENGTH = 100
+
+# Posture provisioning writes when an install has no value of its own (#14866).
+# ``log_only`` is the value both issues record: #14010's acceptance criterion 4
+# asks for "the ``log_only`` measurement before any flip to ``enforced``", and
+# #14866 calls it "the safe first value" because every ownership check runs and
+# every violation is audited while nothing that succeeds today starts being
+# refused. Flipping to ``enforced`` is a separate, measured step and is
+# deliberately NOT made here. Neither is the meaning of an unset key or of
+# ``log_only`` changed: this makes *unset* stop being the production state, it
+# does not redefine it.
+PROVISIONED_ENFORCEMENT_MODE_ENV = "ACCESS_CONTROL_ENFORCEMENT_MODE"
+PROVISIONED_ENFORCEMENT_MODE_DEFAULT = EnforcementMode.LOG_ONLY
+
+
+def resolve_provisioned_enforcement_mode(raw: str | None = None) -> EnforcementMode:
+    """Resolve the posture provisioning should write.
+
+    Precedence: an explicit *raw* value (the provisioning entry point's
+    ``--mode``), then the ``ACCESS_CONTROL_ENFORCEMENT_MODE`` environment value,
+    then :data:`PROVISIONED_ENFORCEMENT_MODE_DEFAULT`.
+
+    An unrecognised value raises instead of falling back. Quietly defaulting a
+    misconfigured authorization posture is precisely the defect #14866 exists
+    for, and a provisioning run that cannot honour what it was asked for must
+    say so rather than write something else.
+    """
+    value = raw if raw is not None else os.environ.get(PROVISIONED_ENFORCEMENT_MODE_ENV, "")
+    if not value or not value.strip():
+        return PROVISIONED_ENFORCEMENT_MODE_DEFAULT
+    try:
+        return EnforcementMode(value.strip().lower())
+    except ValueError as exc:
+        valid = ", ".join(mode.value for mode in EnforcementMode)
+        raise ValueError(f"Unrecognised enforcement mode {value!r}; expected one of: {valid}") from exc
 
 
 class FeatureFlags(AsyncRedisClientMixin):
@@ -66,15 +161,14 @@ class FeatureFlags(AsyncRedisClientMixin):
         self._enforcement_default_logged = False
 
     async def get_enforcement_mode(self) -> EnforcementMode:
-        """
-        Get current access control enforcement mode
+        """Current access control enforcement mode.
 
-        Returns:
-            EnforcementMode enum value
+        An absent key resolves to :data:`PROVISIONED_ENFORCEMENT_MODE_DEFAULT`,
+        the same posture the provisioning seeder writes (#14866).
         """
         try:
             redis = await self._get_redis()
-            mode_str = await redis.get("feature_flag:access_control:enforcement_mode")
+            mode_str = await redis.get(ENFORCEMENT_MODE_KEY)
 
             if mode_str:
                 # Handle bytes response
@@ -82,51 +176,143 @@ class FeatureFlags(AsyncRedisClientMixin):
                     mode_str = mode_str.decode()
                 return EnforcementMode(mode_str)
 
-            # Default to DISABLED if not set (log once at INFO, then DEBUG)
+            # Two statements of one default that disagree is how this control
+            # came to be off everywhere: the seeder wrote log_only, the reader
+            # read nothing as "off", so an install provisioning never reached
+            # was indistinguishable from one deliberately disabled. log_only
+            # blocks nothing -- it audits.
             if not self._enforcement_default_logged:
-                logger.info("Enforcement mode not set, defaulting to DISABLED")
+                logger.info(
+                    "Enforcement mode not set; using the provisioned default %s",
+                    PROVISIONED_ENFORCEMENT_MODE_DEFAULT.value,
+                )
                 self._enforcement_default_logged = True
             else:
-                logger.debug("Enforcement mode not set, using default DISABLED")
-            return EnforcementMode.DISABLED
+                logger.debug("Enforcement mode not set, using default %s", PROVISIONED_ENFORCEMENT_MODE_DEFAULT.value)
+            return PROVISIONED_ENFORCEMENT_MODE_DEFAULT
 
         except Exception as e:
-            logger.error("Failed to get enforcement mode: %s", e)
-            # Fail-safe: default to DISABLED on error
-            return EnforcementMode.DISABLED
+            # NOT a fail-safe: this is an authorization control, and returning
+            # DISABLED here made an unreachable flag store indistinguishable
+            # from a deliberate "off" (#14010). Raise so the caller decides,
+            # rather than deciding "no enforcement" on its behalf.
+            logger.error("Could not read enforcement mode: %s", e)
+            raise EnforcementModeUnavailable(str(e)) from e
+
+    @staticmethod
+    async def _read_enforcement_mode(redis) -> EnforcementMode | None:
+        """Return the mode currently stored, or ``None`` when the key is absent."""
+        raw = await redis.get(ENFORCEMENT_MODE_KEY)
+        if isinstance(raw, bytes):
+            raw = raw.decode()
+        return EnforcementMode(raw) if raw else None
+
+    async def seed_enforcement_mode(
+        self, mode: EnforcementMode | None = None, dry_run: bool = False
+    ) -> tuple[bool, EnforcementMode]:
+        """Give an install a deliberate enforcement posture without clobbering one.
+
+        Writes *mode* only when the key is absent, with ``SET NX`` so the check
+        and the write are one atomic Redis operation: two provisioning runs
+        racing cannot both write, and re-provisioning never overwrites a value an
+        operator set on purpose (#14866). That is the whole of the idempotency
+        guarantee -- it is Redis's, not a read-then-write of ours.
+
+        Returns ``(written, effective_mode)``.
+        """
+        target = mode or resolve_provisioned_enforcement_mode()
+        redis = await self._get_redis()
+        if redis is None:
+            raise EnforcementModeUnavailable("no Redis client available to provision the enforcement mode")
+
+        if dry_run:
+            existing = await self._read_enforcement_mode(redis)
+            return existing is None, existing or target
+
+        if await redis.set(ENFORCEMENT_MODE_KEY, target.value, nx=True):
+            logger.info("Provisioned access control enforcement mode: %s", target.value)
+            return True, target
+
+        existing = await self._read_enforcement_mode(redis)
+        if existing is None:
+            raise EnforcementModeUnavailable("enforcement mode was neither written nor readable")
+        logger.info("Access control enforcement mode already set to %s; left unchanged", existing.value)
+        return False, existing
+
+    @staticmethod
+    def _enforcement_history_entry(mode: EnforcementMode) -> str:
+        """Serialise one posture change for the audit list."""
+        return json.dumps(
+            {
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                "mode": mode.value,
+                "changed_by": "system",
+            }
+        )
+
+    @staticmethod
+    def _report_enforcement_write(mode: EnforcementMode, results: list) -> bool:
+        """Say whether the posture changed, and name the half that did not.
+
+        ``True`` means one thing only: :data:`ENFORCEMENT_MODE_KEY` now holds
+        *mode*. Reporting a write that landed as a failure is the defect this
+        replaces (#15089), so a lost audit entry is logged loudly and does not
+        turn a change that happened into a reported failure.
+        """
+        if not results or isinstance(results[0], Exception):
+            reason = results[0] if results else "Redis returned no result for the mode write"
+            logger.error("Failed to set enforcement mode: %s", reason)
+            return False
+
+        history_errors = [result for result in results[1:] if isinstance(result, Exception)]
+        if history_errors:
+            # Redis applies the remainder of a MULTI when one command errors,
+            # so the posture did move even though its record did not.
+            logger.error(
+                "Enforcement mode set to %s, but its change history was not recorded: %s",
+                mode.value,
+                history_errors[0],
+            )
+            return True
+
+        logger.info("Enforcement mode set to: %s", mode.value)
+        return True
 
     async def set_enforcement_mode(self, mode: EnforcementMode) -> bool:
-        """
-        Set access control enforcement mode
+        """Set the access control enforcement mode, with its audit entry.
 
-        Args:
-            mode: Enforcement mode to set
+        The posture and the record of who moved it are issued as one
+        ``MULTI``/``EXEC``. Before #15089 they were three awaits in a row and
+        the second reached for a ``_redis`` attribute the async client does not
+        have, so every call wrote the key, raised, and returned ``False`` -- the
+        admin API answered 500 for a change that had in fact happened, and the
+        audit trail was never written at all.
+
+        One dispatched operation is what removes that shape structurally: an
+        exception while the commands are being queued now happens before ``EXEC``
+        and therefore before anything is written, so ``False`` genuinely means
+        the posture is unchanged. It cannot be reintroduced by a later edit
+        moving a line between two writes, because there are no longer two.
 
         Returns:
-            True if successful
+            ``True`` when :data:`ENFORCEMENT_MODE_KEY` holds *mode* afterwards.
         """
         try:
             redis = await self._get_redis()
+            if redis is None:
+                logger.error("Failed to set enforcement mode: no Redis client available")
+                return False
 
-            # Set the mode
-            await redis.set("feature_flag:access_control:enforcement_mode", mode.value)
+            pipe = redis.pipeline(transaction=True)
+            pipe.set(ENFORCEMENT_MODE_KEY, mode.value)
+            pipe.lpush(ENFORCEMENT_HISTORY_KEY, self._enforcement_history_entry(mode))
+            pipe.ltrim(ENFORCEMENT_HISTORY_KEY, 0, ENFORCEMENT_HISTORY_LENGTH - 1)
+            results = await pipe.execute(raise_on_error=False)
 
-            # Record change in history
-            history_key = "feature_flag:access_control:history"
-            history_entry = json.dumps(
-                {
-                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                    "mode": mode.value,
-                    "changed_by": "system",
-                }
-            )
-            await redis._redis.lpush(history_key, history_entry)
-            await redis._redis.ltrim(history_key, 0, 99)  # Keep last 100 changes
-
-            logger.info("Enforcement mode set to: %s", mode.value)
-            return True
+            return self._report_enforcement_write(mode, results)
 
         except Exception as e:
+            # Nothing reached EXEC, so nothing was written: False is the truth.
             logger.error("Failed to set enforcement mode: %s", e)
             return False
 
@@ -332,16 +518,14 @@ class FeatureFlags(AsyncRedisClientMixin):
             mode = await self.get_enforcement_mode()
 
             # Get and parse change history (Issue #315 - uses helper)
-            history_raw = await redis._redis.lrange("feature_flag:access_control:history", 0, 9)
+            history_raw = await redis.lrange(ENFORCEMENT_HISTORY_KEY, 0, 9)
             history = self._parse_history_entries(history_raw)
 
             # Get endpoint overrides
             endpoint_keys = []
             cursor = 0
             while True:
-                cursor, keys = await redis._redis.scan(
-                    cursor, match="feature_flag:access_control:endpoint:*", count=100
-                )
+                cursor, keys = await redis.scan(cursor, match="feature_flag:access_control:endpoint:*", count=100)
                 endpoint_keys.extend(keys)
                 if cursor == 0:
                     break
@@ -384,7 +568,7 @@ class FeatureFlags(AsyncRedisClientMixin):
             cursor = 0
             deleted = 0
             while True:
-                cursor, keys = await redis._redis.scan(cursor, match="feature_flag:*", count=100)
+                cursor, keys = await redis.scan(cursor, match="feature_flag:*", count=100)
                 if keys:
                     deleted += await redis.delete(*keys)
                 if cursor == 0:

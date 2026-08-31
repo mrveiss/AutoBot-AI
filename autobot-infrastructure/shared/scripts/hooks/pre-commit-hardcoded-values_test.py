@@ -22,7 +22,22 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-hardcoded-values"
+
+
+def _test_git_env() -> dict[str, str]:
+    """#15273/#15246: env for every git subprocess this suite spawns.
+
+    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    GIT_DIR pointing at the worktree it is pushing (every checkout here is
+    one), and an unscrubbed `git init`/`git add`/`git diff --cached` in a
+    fixture then operates on THAT repository instead of tmp_path's --
+    reproduced: it staged ~20 bogus entries into the real worktree and
+    overwrote two tracked files' index blobs with 1-line test content.
+    """
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
 
 
 def _run_hook_with_staged(tmp_path: Path, files: dict[str, str]) -> subprocess.CompletedProcess:
@@ -31,20 +46,25 @@ def _run_hook_with_staged(tmp_path: Path, files: dict[str, str]) -> subprocess.C
 
     files: relative path -> file content
     """
-    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.email", "test@test"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
+    env = _test_git_env()
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True, env=env)
+    subprocess.run(["git", "config", "user.email", "test@test"], cwd=tmp_path, check=True, env=env)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True, env=env)
     for rel, content in files.items():
         path = tmp_path / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-        subprocess.run(["git", "add", rel], cwd=tmp_path, check=True)
+        subprocess.run(["git", "add", rel], cwd=tmp_path, check=True, env=env)
 
+    # Same scrub: the hook itself runs `git diff --cached` against
+    # tmp_path, and an inherited GIT_DIR would point it at the real
+    # worktree's staged set instead.
     return subprocess.run(
         ["bash", str(HOOK_PATH)],
         cwd=tmp_path,
         capture_output=True,
         text=True,
+        env=env,
     )
 
 
@@ -150,13 +170,26 @@ class TestAllowlistedContexts:
         # has a clear regression to flip.
         assert result.returncode == 0
 
-    def test_allows_yaml_files(self, tmp_path: Path) -> None:
-        # Hook only filters .py/.ts/.vue — YAML/JSON pass through untouched
+    def test_blocks_yaml_files_since_the_rule_sets_merged(self, tmp_path: Path) -> None:
+        """#14371: YAML is in scope now, and this is the gap that closed.
+
+        This hook used to filter to .py/.ts/.vue/.js, so an Ansible playbook or
+        a deployment manifest carrying a raw fleet address passed untouched.
+        The CI tree scanner had covered .sh/.yml/.yaml since #14316 —
+        specifically because that is where hardcoded hosts, paths and accounts
+        actually get typed — and that coverage is part of the merged rule set
+        rather than something traded away for it.
+
+        The assertion is inverted from the version that pinned the gap: a
+        merge that keeps every rule has to change the outcome here, and a test
+        still asserting the old outcome would hide the merge failing to.
+        """
         result = _run_hook_with_staged(
             tmp_path,
             {"deploy.yaml": 'host: "172.16.168.23"\n'},
         )
-        assert result.returncode == 0
+        assert result.returncode != 0
+        assert "172.16.168.23" in result.stdout
 
     def test_allows_markdown_files(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
@@ -166,6 +199,47 @@ class TestAllowlistedContexts:
             },
         )
         assert result.returncode == 0
+
+
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
+class TestRepoTestsSupportModuleExemption:
+    """#15273: a test-SUPPORT module under repo_tests/ (not itself named
+    *_test.py) gets the same exemption the filename rule already grants its
+    siblings -- scoped to the DIRECTORY so production code keeps exactly the
+    exemption it had before and no more."""
+
+    _URL = 'http://backend.test:9999'
+
+    def test_allows_literal_in_repo_tests_support_module(self, tmp_path: Path) -> None:
+        # repo_tests/sdk_request_shared.py (#15265): a non-test-named helper
+        # module, collected by nothing, imported only by *_test.py siblings.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"repo_tests/sdk_request_shared.py": f'_BASE = "{self._URL}"\n'},
+        )
+        assert result.returncode == 0, f"repo_tests/ support module should be exempt:\n{result.stdout}"
+
+    def test_blocks_same_literal_in_production_code(self, tmp_path: Path) -> None:
+        # The identical literal, in a non-test-named file OUTSIDE repo_tests/,
+        # must still be flagged -- proves the new exemption is scoped to the
+        # directory and did not loosen the filename rule generally.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"autobot-backend/sdk_request_shared.py": f'_BASE = "{self._URL}"\n'},
+        )
+        assert result.returncode != 0
+        assert self._URL in result.stdout
+
+    def test_does_not_match_a_directory_merely_containing_the_substring(self, tmp_path: Path) -> None:
+        # `not_repo_tests/` and `repo_tests_archive/` must NOT be swept in by
+        # a loose substring match -- the exemption is anchored on the exact
+        # path segment `repo_tests/`.
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"not_repo_tests/sdk_request_shared.py": f'_BASE = "{self._URL}"\n'},
+        )
+        assert result.returncode != 0
+        assert self._URL in result.stdout
 
 
 @pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
@@ -619,9 +693,11 @@ class TestHardcodedModelNames:
     ``qwen3.5:9b``, ``nomic-embed-text:latest``, ``gemma2:2b``, ``phi3:mini``,
     ``mistral:7b-instruct``, ``dolphin-llama3:8b``.
 
-    Anything outside that list is silently allowed — including current-gen
-    models like ``qwen3:8b`` (no ``.5`` suffix). Documented false-negative;
-    keep the deny list in sync with whatever models are actively used.
+    #14371: the table is no longer the whole rule. It still supplies the
+    precise config-key suggestion for a known model, but the merged rule set
+    also carries the generic ``(llama3|dolphin|openchat|gemma|phi|deepseek|
+    qwen)…:<N>b`` regex from the dormant third detector, so a model the table
+    has not heard of is caught too.
     """
 
     def test_blocks_hardcoded_qwen35_model_string(self, tmp_path: Path) -> None:
@@ -633,15 +709,23 @@ class TestHardcodedModelNames:
         assert result.returncode != 0
         assert "qwen3.5:9b" in result.stdout
 
-    def test_allows_unlisted_model_documented_false_negative(self, tmp_path: Path) -> None:
-        # #6786 regression target: the model_pattern is a hardcoded allowlist
-        # (model names that get fenced); models added later (qwen3:8b, etc.)
-        # silently pass. Flip the assertion when the model_pattern is generalized.
+    def test_blocks_an_unlisted_model_now_that_the_generic_rule_is_in(self, tmp_path: Path) -> None:
+        """#6786's regression target, flipped by #14371 exactly as it asked.
+
+        The explicit deny list is an allowlist by another name: a model added
+        after it was written (``qwen3:8b``, no ``.5``) passed silently. The
+        dormant third detector carried a GENERIC tag regex that would have
+        caught it, and nothing ever invoked that detector. Merging the rule
+        sets brings the generic rule in alongside the explicit table, so the
+        table still supplies the precise config-key suggestion and the regex
+        catches what the table has not heard of yet.
+        """
         result = _run_hook_with_staged(
             tmp_path,
             {"src/llm.py": 'MODEL = "qwen3:8b"\n'},
         )
-        assert result.returncode == 0
+        assert result.returncode != 0
+        assert "qwen3:8b" in result.stdout
 
     def test_allows_model_via_config_llm(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
@@ -727,7 +811,9 @@ class TestHardcodedTimeouts:
 
 
 def _git(repo, *args):
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True)
+    return subprocess.run(
+        ["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env()
+    )
 
 
 @pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
@@ -753,5 +839,7 @@ class TestFailsClosedOnGitFailure:
         # Corrupt the index so git errors rather than returning an empty answer.
         (tmp_path / ".git" / "index").write_text("garbage", encoding="utf-8")
 
-        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=tmp_path, capture_output=True, text=True)
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH)], cwd=tmp_path, capture_output=True, text=True, env=_test_git_env()
+        )
         assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"

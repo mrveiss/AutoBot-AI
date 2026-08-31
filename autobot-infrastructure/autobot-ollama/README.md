@@ -54,7 +54,7 @@ ssh autobot@172.16.168.20 'ollama pull llama3.2'
 
 # Restart Ollama service
 ansible-playbook playbooks/slm-service-control.yml \
-  -e "service=ollama action=restart"
+  -e "target=<group-or-host> service=ollama action=restart"
 ```
 
 ---

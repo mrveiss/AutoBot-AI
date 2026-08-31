@@ -20,6 +20,26 @@ import initialization.lifespan as lifespan_module
 from initialization.lifespan import cleanup_services
 
 
+@pytest.fixture
+def llc_schedulers_enabled(monkeypatch):
+    """Opt this test in to starting real LLC poll loops (#13085).
+
+    The gate added in #13085 keeps `_init_liveness_monitor`,
+    `_init_budget_watchdog` and `_start_community_clustering_loop` from starting
+    anything under pytest, because a test that boots the real lifespan and
+    abandons it leaves an infinite loop holding the event loop alive for a whole
+    re-armed interval (300 s for BudgetWatchdog) — the ~10-minute suite tail this
+    issue measured.
+
+    The tests below are the deliberate exception: they exist to prove the wiring
+    *actually starts* each scheduler rather than merely constructing it, so they
+    must have the real thing. Requiring them to say so explicitly is the point —
+    starting a poll loop in the test process is now a decision a test makes on
+    the record, and every test using this fixture drains what it starts.
+    """
+    monkeypatch.setenv("AUTOBOT_ENABLE_LLC_SCHEDULERS", "1")
+
+
 @contextlib.contextmanager
 def _stub_slow_cleanup_legs():
     """Stub cleanup_services()'s unconditional (not hasattr-gated) real-I/O
@@ -157,7 +177,7 @@ async def test_cleanup_drains_community_cluster_scheduler():
 
 
 @pytest.mark.asyncio
-async def test_start_community_clustering_loop_actually_starts_a_scheduler():
+async def test_start_community_clustering_loop_actually_starts_a_scheduler(llc_schedulers_enabled):
     """#13085: prove the wiring starts the scheduler rather than merely
     asserting it exists in source — nothing in the suite previously drove
     ``initialize_background_services`` far enough to start these schedulers,
@@ -176,7 +196,7 @@ async def test_start_community_clustering_loop_actually_starts_a_scheduler():
 
 
 @pytest.mark.asyncio
-async def test_start_community_clustering_loop_skips_without_mesh_db():
+async def test_start_community_clustering_loop_skips_without_mesh_db(llc_schedulers_enabled):
     """No mesh_db on app.state (GraphRAG disabled) must not start a scheduler
     that would immediately fail every tick."""
     from initialization.lifespan import _start_community_clustering_loop
@@ -189,7 +209,7 @@ async def test_start_community_clustering_loop_skips_without_mesh_db():
 
 
 @pytest.mark.asyncio
-async def test_init_liveness_monitor_actually_starts_it():
+async def test_init_liveness_monitor_actually_starts_it(llc_schedulers_enabled):
     """#13085: same proof as the community-clustering test above, for the
     other two named schedulers — LivenessMonitor and BudgetWatchdog are also
     never exercised past construction anywhere in the suite."""
@@ -207,7 +227,7 @@ async def test_init_liveness_monitor_actually_starts_it():
 
 
 @pytest.mark.asyncio
-async def test_init_budget_watchdog_actually_starts_it():
+async def test_init_budget_watchdog_actually_starts_it(llc_schedulers_enabled):
     """#13085: BudgetWatchdog counterpart of the LivenessMonitor test above."""
     from initialization.lifespan import _init_budget_watchdog
 
@@ -223,7 +243,7 @@ async def test_init_budget_watchdog_actually_starts_it():
 
 
 @pytest.mark.asyncio
-async def test_health_probe_reports_liveness_monitor_and_checkpointer_running_via_real_lifespan():
+async def test_health_probe_reports_liveness_monitor_and_checkpointer_running_via_real_lifespan(llc_schedulers_enabled):
     """#13331: llc/health/probe.py used to build its own private,
     never-started LivenessMonitor/SessionCheckpointer singletons instead of
     reading the ones lifespan actually starts and stores on app.state, so
@@ -273,7 +293,7 @@ async def test_health_probe_reports_liveness_monitor_and_checkpointer_running_vi
 
 
 @pytest.mark.asyncio
-async def test_health_probe_reports_wired_but_not_running_after_real_shutdown():
+async def test_health_probe_reports_wired_but_not_running_after_real_shutdown(llc_schedulers_enabled):
     """#13331: a component lifespan started and then stopped (aclose()) is
     wired=True, running=False -- degraded, not down. Distinct from the
     unwired case (no request / app.state never got the attribute), which is
@@ -417,3 +437,111 @@ async def test_cleanup_drain_of_stuck_community_scheduler_is_bounded_and_measure
         _UncancellableScheduler.mask_cancellation = False
         task.cancel()
         await asyncio.wait_for(asyncio.gather(task, return_exceptions=True), timeout=1.0)
+
+
+# ---------------------------------------------------------------------------
+# #13585: the shutdown handler joined its own thread, and one `except Exception`
+# wrapped the whole teardown — so that first cosmetic failure skipped every step
+# below it, on every restart, and the only trace was one line with no traceback.
+# ---------------------------------------------------------------------------
+
+
+def test_draining_the_shared_pool_when_it_is_the_default_executor():
+    """The reproduction, then the fix — in that order.
+
+    ``asyncio.to_thread`` dispatches through the loop's DEFAULT executor, and
+    the startup path makes the shared worker pool exactly that. So
+    ``to_thread(pool.shutdown, wait=True)`` ran the shutdown ON a pool worker,
+    which then joined every pool thread including the one it was running on.
+
+    Asserting the old call still raises is the point: a test that only checked
+    the new helper would pass just as happily if the failure had never existed,
+    and could not tell a fix from a coincidence.
+    """
+
+    async def _old_call() -> BaseException | None:
+        loop = asyncio.get_running_loop()
+        pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="autobot_worker")
+        loop.set_default_executor(pool)
+        await loop.run_in_executor(None, lambda: None)  # warm a worker so there is a thread to join
+        try:
+            await asyncio.to_thread(pool.shutdown, wait=True, cancel_futures=False)
+        except RuntimeError as exc:
+            return exc
+        return None
+
+    raised = asyncio.run(_old_call())
+    assert raised is not None and "cannot join current thread" in str(raised), (
+        "the failure this fix exists for no longer reproduces — re-derive the fix "
+        "rather than trusting the assertion below"
+    )
+
+    async def _drain_helper() -> None:
+        loop = asyncio.get_running_loop()
+        pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="autobot_worker")
+        loop.set_default_executor(pool)
+        await loop.run_in_executor(None, lambda: None)
+        await lifespan_module._drain_worker_executor(pool)
+
+    asyncio.run(_drain_helper())  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_a_failing_cleanup_step_does_not_skip_the_steps_after_it(caplog):
+    """One failure must cost one step, not the whole teardown."""
+    ran_later: list[str] = []
+
+    async def _boom() -> None:
+        raise RuntimeError("cannot join current thread")
+
+    async def _process_adapter_stop() -> None:
+        ran_later.append("process_adapter")
+
+    async def _redis_close() -> None:
+        ran_later.append("redis_close")
+
+    trigger_service = MagicMock()
+    trigger_service.stop = AsyncMock(side_effect=_boom)
+    process_adapter = MagicMock()
+    process_adapter.stop = AsyncMock(side_effect=_process_adapter_stop)
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(trigger_service=trigger_service, process_adapter_service=process_adapter)
+    )
+
+    with _stub_slow_cleanup_legs():
+        with (
+            patch("autobot_shared.redis_client.close_all_redis_connections", new=_redis_close),
+            patch.object(lifespan_module, "shutdown_tracing", new=AsyncMock()),
+            caplog.at_level("INFO"),
+        ):
+            failed = await cleanup_services(app)
+
+    assert "Trigger service stop" in failed, f"the failing step was not recorded: {failed}"
+    assert ran_later == [
+        "process_adapter",
+        "redis_close",
+    ], "a step after the failure did not run — one failure still aborts the teardown"
+    assert (
+        "Cleanup completed successfully" not in caplog.text
+    ), "a shutdown that skipped a step closed with the same line as a clean one"
+    assert "teardown was INCOMPLETE" in caplog.text
+    assert "cannot join current thread" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_clean_shutdown_still_reports_success(caplog):
+    """Negative control: the verdict must distinguish, not just alarm."""
+    app = SimpleNamespace(state=SimpleNamespace())
+
+    with _stub_slow_cleanup_legs():
+        with (
+            patch("autobot_shared.redis_client.close_all_redis_connections", new=AsyncMock()),
+            patch.object(lifespan_module, "shutdown_tracing", new=AsyncMock()),
+            caplog.at_level("INFO"),
+        ):
+            failed = await cleanup_services(app)
+
+    assert failed == [], f"a clean shutdown reported failed steps: {failed}"
+    assert "Cleanup completed successfully" in caplog.text
+    assert "teardown was INCOMPLETE" not in caplog.text

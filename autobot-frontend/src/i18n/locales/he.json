@@ -3826,7 +3826,17 @@
       "searchResultsStatus": "נמצאו {count} תוצאות עבור \"{query}\"",
       "searchNoResults": "אין התאמות עבור \"{query}\"",
       "fitToSelection": "התאם לבחירה או למסנן",
-      "minimapLabel": "סקירה כללית של הקנבס"
+      "minimapLabel": "סקירה כללית של הקנבס",
+      "undo": "בטל",
+      "redo": "בצע שוב",
+      "undoScope": "בטל ובצע שוב חלים על הזזה, הוספה, הסרה וחיבור של צמתים על הקנבס הזה. עריכות בתוך צומת, וכל פעולה שנשלחת לשרת — שמירה, צירוף, ניתוק — לא ניתנות לביטול כאן.",
+      "selectionStatus": "{count} צמתים נבחרו",
+      "contextMenuLabel": "פעולות צומת",
+      "contextMenuButtonLabel": "פעולות עבור {name}",
+      "contextMenuZoomToNode": "התמקד בצומת",
+      "contextMenuFitSelection": "התאם תצוגה לבחירה",
+      "contextMenuDeleteSelection": "מחק {count} צמתים נבחרים",
+      "contextMenuOpenWorkflow": "פתח את זרימת העבודה המקושרת"
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
@@ -4743,7 +4753,8 @@
       "theme": "Theme"
     },
     "commandPermission": {
-      "executionFailed": "Command execution failed",
+      "executionFailed": "הרצת הפקודה נכשלה",
+      "postExecutionFailed": "הפקודה רצה, אך שלב המשך נכשל. הפלט שלה מוצג; ייתכן שחלק מהעדכונים חסרים.",
       "allow": "Allow",
       "purposeLabel": "Purpose",
       "defaultPurpose": "System operation requested",
@@ -8041,6 +8052,8 @@
       "colRunDuration": "Run Duration",
       "colAction": "Action",
       "statusUnknown": "unknown",
+      "skipReasonLabel": "דולג:",
+      "errorLabel": "שגיאה:",
       "triggering": "Triggering...",
       "triggerNow": "Trigger Now",
       "runHistoryTitle": "Run History – {name}",
@@ -8291,6 +8304,12 @@
       "roleLensBanner": "מסנן תצוגה: {role} — מציג {shown} מתוך {total} צמתים. הגישה לא משתנה.",
       "roleLensEmpty": "מסנן תצוגה: אין צמתים התואמים ל-\"{role}\" בתצוגה זו. הגישה לא משתנה — נקה את המסנן כדי לראות את כולם.",
       "roleLensClear": "נקה מסנן",
+      "teamFilterLabel": "סנן לפי צוות",
+      "teamFilterAll": "כל הצוותים",
+      "teamFilterBanner": "מסנן צוות: {team} — מציג {shown} מתוך {total} אנשים. הגישה לא משתנה.",
+      "toolFilterLabel": "סנן לפי כלי",
+      "toolFilterAll": "כל הכלים",
+      "toolFilterBanner": "מסנן כלי: {tool} — מציג {shown} מתוך {total} אנשים. הגישה לא משתנה.",
       "sidebar": {
         "owner": "בעלים",
         "tools": "כלים",
@@ -8332,6 +8351,7 @@
       "attachError": "לא ניתן היה לצרף תהליך זה.",
       "detachError": "לא ניתן היה להסיר תהליך זה.",
       "processDetach": "הסר את {workflow} מ-{role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "לא ניתן היה לטעון את התפקידים, ולכן ייתכן שרשימה זו חלקית.",
       "canvasGroupKind": "קבוצה",
       "toolNodeLabel": "כלי",
@@ -8340,6 +8360,7 @@
       "toolAttachError": "לא ניתן היה לצרף כלי זה.",
       "toolDetachError": "לא ניתן היה להסיר כלי זה.",
       "toolDetach": "הסר את {tool} מ-{role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "מידע על כלים אינו זמין כעת — רשימה זו עשויה להיות חלקית.",
       "canvasNoToolsDefined": "לא צורפו כלים לאף תפקיד בחברה זו.",
       "deepLinkNodeNotFound": "קישור זה מפנה לצומת שלא נמצא כאן. ייתכן שהוא הוסר, או שאין לך גישה אליו."
@@ -8432,6 +8453,8 @@
       "secretMappingIncomplete": "Fill in all secret values above before importing.",
       "importSuccess": "Import successful — company ID:",
       "warningsLabel": "Warnings:",
+      "droppedReportingLinesLabel": "Reporting lines that could not be kept:",
+      "droppedReportingLine": "{agent} was imported without a manager: {manager} was not created.",
       "importFailed": "Import failed:",
       "toastTemplateExported": "Template exported successfully",
       "toastTemplateExportFailed": "Template export failed",
@@ -8587,7 +8610,15 @@
       "unassigned": "ללא תפקיד",
       "unassignedHint": "משויך למחלקה זו, אך אין תפקיד שמסביר זאת",
       "inactive": "לא פעיל",
-      "inactiveHint": "הושבת או הוסר — עדיין מוצג משום שפריטי העבודה והתפקיד שלו נותרים, אך לא ניתן להקצות לו עבודה חדשה."
+      "inactiveHint": "הושבת או הוסר — עדיין מוצג משום שפריטי העבודה והתפקיד שלו נותרים, אך לא ניתן להקצות לו עבודה חדשה.",
+      "editAriaLabel": "ערוך את {name}",
+      "fullNameLabel": "שם מלא",
+      "roleTitleLabel": "תפקיד / כותרת",
+      "emailLabel": "דוא\"ל",
+      "phoneLabel": "טלפון",
+      "saving": "שומר…",
+      "save": "שמור",
+      "contactSaveError": "לא ניתן היה לשמור את איש הקשר."
     }
   },
   "code": {

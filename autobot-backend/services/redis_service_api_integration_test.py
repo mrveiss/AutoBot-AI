@@ -23,6 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.live_service_probe import require_live_endpoint
 from autobot_shared.logging_manager import get_logger
 
 try:
@@ -37,6 +38,44 @@ logger = get_logger(__name__)
 
 
 # Fixtures
+@pytest.fixture(scope="session")
+def backend_url() -> str:
+    """Base URL of the backend API these tests drive (#14930).
+
+    Nothing under ``autobot-backend/`` defined this fixture, so every test in
+    the module errored at setup with ``fixture 'backend_url' not found`` — 19
+    of the 19 collection errors in the marker-excluded suite came from this one
+    file. The only conftest that provided it,
+    ``autobot-infrastructure/shared/tests/conftest.py``, is not on this tree's
+    conftest chain.
+
+    Providing it rather than deselecting the module is deliberate: the tests are
+    well-formed and *should* run — see ``_require_live_backend`` below for the
+    condition under which they can.
+    """
+    from constants.network_constants import ServiceURLs
+
+    return ServiceURLs.BACKEND_API
+
+
+@pytest.fixture(autouse=True)
+def _require_live_backend(backend_url) -> None:
+    """These tests issue real HTTP; skip when no backend is listening.
+
+    Unlike ``knowledge_api_integration_test.py`` — which patches
+    ``aiohttp.ClientSession.get`` and therefore only needs a syntactically valid
+    URL — every request here goes over the wire to ``backend_url`` through a
+    genuine ``httpx.AsyncClient``. Patching ``api.service_management.redis_service_manager``
+    affects this process, not the server being dialled. So a live backend is a
+    real precondition, and without one the correct report is "not exercised
+    here", not ``ConnectionRefusedError`` dressed up as a test failure.
+
+    Autouse rather than module-level: a deselected test never runs the fixture,
+    so the PR unit gate pays nothing for this.
+    """
+    require_live_endpoint(backend_url, what="the AutoBot backend API")
+
+
 @pytest.fixture
 async def api_client(backend_url):
     """Create async HTTP client for API testing."""

@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from llc.adapters import registered_adapter_types
+from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.deps import assert_company_access
 from llc.services.budget import BudgetService
 from llc.services.model_tiers import get_model_tier_service
@@ -370,6 +370,18 @@ async def hire_agent(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(f"Unknown adapter_type {resolved_adapter!r}. " f"Registered types: {registered_adapter_types()}"),
+        )
+
+    # #12681: registered is not the same as runnable. The check above stops an
+    # unknown type, but a known one whose CLI is absent produces the identical
+    # symptom it was written to prevent — every heartbeat skipped, the agent
+    # looking degraded forever. The availability probe already exists and is
+    # already what `GET /adapters` reports; the hire path simply never asked.
+    unavailable = adapter_unavailable_reason(resolved_adapter)
+    if unavailable:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(f"Adapter {resolved_adapter!r} is registered but cannot run on this " f"deployment: {unavailable}"),
         )
 
     is_haiku = resolved_model == HAIKU_MODEL

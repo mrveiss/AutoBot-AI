@@ -4387,7 +4387,17 @@
       "searchResultsStatus": "Znaleziono {count} dla „{query}”",
       "searchNoResults": "Brak wyników dla „{query}”",
       "fitToSelection": "Dopasuj do zaznaczenia lub filtra",
-      "minimapLabel": "Podgląd całego obszaru roboczego"
+      "minimapLabel": "Podgląd całego obszaru roboczego",
+      "undo": "Cofnij",
+      "redo": "Ponów",
+      "undoScope": "Cofanie i ponawianie obejmują przenoszenie, dodawanie, usuwanie i łączenie węzłów na tym obszarze roboczym. Edycji wewnątrz węzła oraz wszystkiego, co jest wysyłane na serwer — zapisu, dołączania, odłączania — nie można tu cofnąć.",
+      "selectionStatus": "Wybrano węzłów: {count}",
+      "contextMenuLabel": "Działania węzła",
+      "contextMenuButtonLabel": "Działania dla {name}",
+      "contextMenuZoomToNode": "Przybliż do węzła",
+      "contextMenuFitSelection": "Dopasuj widok do zaznaczenia",
+      "contextMenuDeleteSelection": "Usuń {count} zaznaczonych węzłów",
+      "contextMenuOpenWorkflow": "Otwórz powiązany przepływ pracy"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -5608,7 +5618,8 @@
       "executing": "Executing...",
       "securityNote": "Commands are executed in a sandboxed environment with limited permissions.",
       "missingSessionId": "Missing session ID for command execution",
-      "executionFailed": "Command execution failed",
+      "executionFailed": "Wykonanie polecenia nie powiodło się",
+      "postExecutionFailed": "Polecenie zostało wykonane, ale kolejny krok się nie powiódł. Wynik jest wyświetlany; niektóre aktualizacje mogą być niekompletne.",
       "enterComment": "Please enter a comment before submitting"
     },
     "darkModeToggle": {
@@ -8041,6 +8052,8 @@
       "colRunDuration": "Run Duration",
       "colAction": "Action",
       "statusUnknown": "unknown",
+      "skipReasonLabel": "Pominięto:",
+      "errorLabel": "Błąd:",
       "triggering": "Triggering...",
       "triggerNow": "Trigger Now",
       "runHistoryTitle": "Run History – {name}",
@@ -8291,6 +8304,12 @@
       "roleLensBanner": "Filtr widoku: {role} — pokazano {shown} z {total} węzłów. Dostęp pozostaje bez zmian.",
       "roleLensEmpty": "Filtr widoku: żaden węzeł nie pasuje do „{role}” w tym widoku. Dostęp pozostaje bez zmian — wyczyść filtr, aby zobaczyć wszystkich.",
       "roleLensClear": "Wyczyść filtr",
+      "teamFilterLabel": "Filtruj według zespołu",
+      "teamFilterAll": "Wszystkie zespoły",
+      "teamFilterBanner": "Filtr zespołu: {team} — pokazano {shown} z {total} osób. Dostęp pozostaje bez zmian.",
+      "toolFilterLabel": "Filtruj według narzędzia",
+      "toolFilterAll": "Wszystkie narzędzia",
+      "toolFilterBanner": "Filtr narzędzia: {tool} — pokazano {shown} z {total} osób. Dostęp pozostaje bez zmian.",
       "sidebar": {
         "owner": "Właściciel",
         "tools": "Narzędzia",
@@ -8332,6 +8351,7 @@
       "attachError": "Nie udało się dołączyć tego przepływu.",
       "detachError": "Nie udało się odłączyć tego przepływu.",
       "processDetach": "Odłącz {workflow} od {role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "Nie udało się wczytać ról, więc ta lista może być niekompletna.",
       "canvasGroupKind": "Grupa",
       "toolNodeLabel": "Narzędzie",
@@ -8340,6 +8360,7 @@
       "toolAttachError": "Nie udało się dołączyć tego narzędzia.",
       "toolDetachError": "Nie udało się odłączyć tego narzędzia.",
       "toolDetach": "Odłącz {tool} od {role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Informacje o narzędziach są obecnie niedostępne — ta lista może być niepełna.",
       "canvasNoToolsDefined": "Żadne narzędzie nie jest dołączone do żadnej roli w tej firmie.",
       "deepLinkNodeNotFound": "Ten link wskazuje węzeł, którego nie można tu znaleźć. Mógł zostać usunięty lub nie masz do niego dostępu."
@@ -8432,6 +8453,8 @@
       "secretMappingIncomplete": "Fill in all secret values above before importing.",
       "importSuccess": "Import successful — company ID:",
       "warningsLabel": "Warnings:",
+      "droppedReportingLinesLabel": "Reporting lines that could not be kept:",
+      "droppedReportingLine": "{agent} was imported without a manager: {manager} was not created.",
       "importFailed": "Import failed:",
       "toastTemplateExported": "Template exported successfully",
       "toastTemplateExportFailed": "Template export failed",
@@ -8587,7 +8610,15 @@
       "unassigned": "brak roli",
       "unassignedHint": "Przypisany do tego działu, ale żadna rola tego nie wyjaśnia",
       "inactive": "Nieaktywny",
-      "inactiveHint": "Dezaktywowany lub usunięty — nadal widoczny, ponieważ jego zadania i rola pozostają, ale nie można przydzielić mu nowej pracy."
+      "inactiveHint": "Dezaktywowany lub usunięty — nadal widoczny, ponieważ jego zadania i rola pozostają, ale nie można przydzielić mu nowej pracy.",
+      "editAriaLabel": "Edytuj {name}",
+      "fullNameLabel": "Pełne imię i nazwisko",
+      "roleTitleLabel": "Rola / stanowisko",
+      "emailLabel": "E-mail",
+      "phoneLabel": "Telefon",
+      "saving": "Zapisywanie…",
+      "save": "Zapisz",
+      "contactSaveError": "Nie udało się zapisać kontaktu."
     }
   },
   "code": {

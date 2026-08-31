@@ -1,16 +1,23 @@
 #!/bin/bash
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""
-Phase 4 Enterprise Features Enablement Script
-Enables all enterprise-grade features for AutoBot Phase 4 completion.
-"""
+#
+# Phase 4 Enterprise Features Enablement Script
+# Enables all enterprise-grade features for AutoBot Phase 4 completion,
+# driving the /api/enterprise/* router (autobot-backend/api/enterprise_features.py,
+# Issue #620). #15127: the opening block used to be a Python-style triple-quoted
+# docstring, which bash parses as commands, not a comment -- each of the three
+# lines ran as an unknown command before `set -e` was even active.
 
 set -euo pipefail
 
 # Load SSOT configuration
 SCRIPT_DIR_UTIL="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR_UTIL}/../lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR_UTIL}/../lib/ssot-config.sh" || {
+    echo "FATAL: ${SCRIPT_DIR_UTIL}/../lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
 
 # Color codes for output
 RED='\033[0;31m'
@@ -46,6 +53,24 @@ print_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
+# #15127: every route under /api/enterprise is admin-gated
+# (`APIRouter(dependencies=[Depends(check_admin_permission)])` in
+# autobot-backend/api/enterprise_features.py). check_admin_permission accepts
+# either an authenticated admin session or the trusted internal-service API
+# key (Issue #1145) via the X-Internal-API-Key header -- the same mechanism
+# autobot-slm-backend/api/voice_proxy.py uses for its own service-to-service
+# calls. A shell script has no session cookie, so it authenticates the same
+# way: read AUTOBOT_INTERNAL_API_KEY from the environment and send it. This is
+# not a parallel credential path -- it is the one the backend already
+# recognizes, and the script never stores or generates the key itself.
+if [[ -z "${AUTOBOT_INTERNAL_API_KEY:-}" ]]; then
+    print_error "AUTOBOT_INTERNAL_API_KEY is not set."
+    echo -e "${YELLOW}Every /api/enterprise/* route requires admin auth; export the same${NC}"
+    echo -e "${YELLOW}internal API key the backend and SLM services share, then re-run.${NC}"
+    exit 1
+fi
+CURL_AUTH_ARGS=(-H "X-Internal-API-Key: ${AUTOBOT_INTERNAL_API_KEY}")
+
 # Function to check if service is running
 check_service() {
     local service_url="$1"
@@ -68,6 +93,7 @@ enable_enterprise_feature() {
     print_status "Enabling $feature_name..."
 
     local response=$(curl -s -X POST "$backend_url/api/enterprise/features/enable" \
+        "${CURL_AUTH_ARGS[@]}" \
         -H "Content-Type: application/json" \
         -d "{\"feature_name\": \"$feature_name\"}" \
         2>/dev/null || echo '{"status": "error", "message": "Request failed"}')
@@ -125,7 +151,9 @@ main() {
     echo "  8. Zero-Downtime Deployment"
     echo
 
-    # Array of enterprise features to enable
+    # Array of enterprise features to enable (must match the keys the
+    # _get_*_features() methods in enterprise_feature_manager.py register --
+    # verified against that file, #15127)
     declare -a enterprise_features=(
         "web_research_orchestration"
         "advanced_knowledge_search"
@@ -156,6 +184,7 @@ main() {
 
     # Try bulk enablement
     bulk_response=$(curl -s -X POST "$BACKEND_URL/api/enterprise/features/enable-all" \
+        "${CURL_AUTH_ARGS[@]}" \
         -H "Content-Type: application/json" 2>/dev/null || echo '{"status": "error"}')
 
     bulk_status=$(echo "$bulk_response" | jq -r '.status // "error"' 2>/dev/null || echo "error")
@@ -179,7 +208,7 @@ main() {
     print_status "Validating enterprise feature status..."
 
     # Get enterprise status
-    status_response=$(curl -s "$BACKEND_URL/api/enterprise/status" 2>/dev/null || echo '{}')
+    status_response=$(curl -s "${CURL_AUTH_ARGS[@]}" "$BACKEND_URL/api/enterprise/status" 2>/dev/null || echo '{}')
 
     if command -v jq >/dev/null 2>&1; then
         enabled_count=$(echo "$status_response" | jq -r '.enterprise_status.feature_summary.enabled_features // 0')
@@ -196,23 +225,16 @@ main() {
     print_status "Testing key enterprise capabilities..."
 
     # Test infrastructure status
-    if curl -s -f "$BACKEND_URL/api/enterprise/infrastructure" >/dev/null 2>&1; then
+    if curl -s -f "${CURL_AUTH_ARGS[@]}" "$BACKEND_URL/api/enterprise/infrastructure" >/dev/null 2>&1; then
         print_success "Infrastructure management API available"
     else
         print_warning "Infrastructure management API not responding"
     fi
 
-    # Test health monitoring
-    if curl -s -f "$BACKEND_URL/api/enterprise/health" >/dev/null 2>&1; then
-        print_success "Health monitoring API available"
-    else
-        print_warning "Health monitoring API not responding"
-    fi
-
     # Test Phase 4 validation
     print_status "Running Phase 4 completion validation..."
 
-    validation_response=$(curl -s "$BACKEND_URL/api/enterprise/phase4/validation" 2>/dev/null || echo '{}')
+    validation_response=$(curl -s "${CURL_AUTH_ARGS[@]}" "$BACKEND_URL/api/enterprise/phase4/validation" 2>/dev/null || echo '{}')
 
     if command -v jq >/dev/null 2>&1; then
         completion_percentage=$(echo "$validation_response" | jq -r '.validation.completion_percentage // "0%"')
@@ -223,20 +245,6 @@ main() {
         else
             print_warning "Phase 4 validation: $completion_percentage - Not yet enterprise grade"
         fi
-    fi
-
-    echo
-    print_status "Updating chat workflow configuration..."
-
-    # Update chat workflow for enterprise features
-    if [[ -f "src/chat_workflow_config_updater.py" ]]; then
-        if python3 src/chat_workflow_config_updater.py; then
-            print_success "Chat workflow updated for enterprise features"
-        else
-            print_warning "Chat workflow update encountered issues"
-        fi
-    else
-        print_warning "Chat workflow updater not found"
     fi
 
     echo
@@ -254,7 +262,7 @@ main() {
     echo
 
     print_status "Next steps:"
-    echo "  1. Run integration tests: python3 tests/phase4_integration_test.py"
+    echo "  1. Run the unit suite: pytest autobot-backend/enterprise_feature_manager_test.py"
     echo "  2. Monitor system performance and health"
     echo "  3. Test enterprise features through the web interface"
     echo "  4. Consider load testing for production readiness"

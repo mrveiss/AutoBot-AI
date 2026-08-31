@@ -44,6 +44,7 @@ from autobot_shared.auth.permissions import (  # noqa: F401 — re-exported for 
     Permission,
     Role,
     is_admin_role,
+    role_value,
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -78,7 +79,7 @@ def _get_user_permissions(user_role: str) -> List[str]:
 
     # Get RBAC permissions from our mapping
     try:
-        role_enum = Role(user_role.lower())
+        role_enum = Role(role_value(user_role).lower())
         role_perms = ROLE_PERMISSIONS.get(role_enum, [])
         permissions.extend([p.value if isinstance(p, Permission) else p for p in role_perms])
     except ValueError:
@@ -267,8 +268,13 @@ def require_role(*roles: Role | str) -> Callable:
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
 
-        user_role = user_data.get("role", "").lower()
-        allowed_roles = [r.value if isinstance(r, Role) else r.lower() for r in roles]
+        # role_value(), not a hand-rolled isinstance ladder: it is the same
+        # decision, in one place, and it rejects a member of a *different* role
+        # vocabulary instead of lowercasing it into this one (#14944, #14024).
+        # A str-mixin enum answers `.lower()` with its value, so the old ladder
+        # would have admitted MembershipRole.ADMIN as a platform admin.
+        user_role = role_value(user_data.get("role")).lower()
+        allowed_roles = [role_value(r).lower() for r in roles]
 
         if user_role not in allowed_roles:
             _deny_role_access(user_data, allowed_roles, user_role, request)

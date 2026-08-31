@@ -63,6 +63,63 @@ def test_a_newly_added_core_package_is_blocked_without_editing_the_checker(check
     assert "a_package_invented_today" in violations[0]
 
 
+def test_a_plain_import_of_a_core_package_is_caught(checker, tmp_path, monkeypatch):
+    """#14742: `import services.x` crossed the layer while `from services.x import y` did not.
+
+    The rule enforced a syntax rather than a boundary, so the plain spelling was
+    a silent bypass — and nobody writing it would learn the rule existed.
+    """
+    monkeypatch.setattr(checker, "_core_packages", lambda: frozenset({"services"}))
+    probe = _skill_file(tmp_path, "import services.llm_service\n")
+
+    violations = checker._check_file(probe, probe.read_text(encoding="utf-8"))
+
+    assert violations, "a plain import of a core package must be a violation"
+    assert "services.llm_service" in violations[0]
+
+
+def test_an_aliased_plain_import_is_caught(checker, tmp_path, monkeypatch):
+    """`import agents.x as y` is the form that surfaced this."""
+    monkeypatch.setattr(checker, "_core_packages", lambda: frozenset({"agents"}))
+    probe = _skill_file(tmp_path, "import agents.summarization_agent as agent_mod\n")
+
+    assert checker._check_file(probe, probe.read_text(encoding="utf-8"))
+
+
+def test_a_plain_import_can_be_waived(checker, tmp_path, monkeypatch):
+    """The waiver mechanism must apply to both spellings, not just one."""
+    monkeypatch.setattr(checker, "_core_packages", lambda: frozenset({"services"}))
+    probe = _skill_file(
+        tmp_path,
+        "import services.llm_service  # nosemgrep: extension-no-core-internals\n",
+    )
+
+    assert checker._check_file(probe, probe.read_text(encoding="utf-8")) == []
+
+
+def test_both_import_forms_report_identically(checker, tmp_path, monkeypatch):
+    """One boundary, one verdict — the spelling must not change the answer."""
+    monkeypatch.setattr(checker, "_core_packages", lambda: frozenset({"services"}))
+
+    plain = _skill_file(tmp_path, "import services.llm_service\n")
+    plain_violations = checker._check_file(plain, plain.read_text(encoding="utf-8"))
+
+    from_form = _skill_file(tmp_path, "from services.llm_service import get_llm_service\n")
+    from_violations = checker._check_file(from_form, from_form.read_text(encoding="utf-8"))
+
+    assert len(plain_violations) == len(from_violations) == 1
+    assert "extension-no-core-internals" in plain_violations[0]
+    assert "extension-no-core-internals" in from_violations[0]
+
+
+def test_a_plain_stdlib_or_thirdparty_import_is_untouched(checker, tmp_path, monkeypatch):
+    """Only the backend namespace is closed; ordinary imports must stay silent."""
+    monkeypatch.setattr(checker, "_core_packages", lambda: frozenset({"services"}))
+    probe = _skill_file(tmp_path, "import json\nimport pytest\n")
+
+    assert checker._check_file(probe, probe.read_text(encoding="utf-8")) == []
+
+
 def test_autobot_shared_is_allowed(checker, tmp_path):
     probe = _skill_file(tmp_path, "from autobot_shared.logging_manager import get_logger\n")
     assert checker._check_file(probe, probe.read_text(encoding="utf-8")) == []

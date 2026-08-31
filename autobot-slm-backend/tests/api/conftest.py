@@ -113,6 +113,20 @@ def _blocked_subprocess_exec(*cmd: object, **kwargs: object):
     pytest.fail(_LIVE_SUBPROCESS_MESSAGE.format(argv=argv), pytrace=False)
 
 
+async def _reconcile_component_default_stub(*args: object, **kwargs: object) -> None:
+    """Default no-op stand-in for api.code_sync.reconcile_component (#15063).
+
+    reconcile_component's own subprocess calls are already caught by the guard
+    above, but this host also carries a real deployed tree (#15063's own
+    premise), so an un-stubbed call reaches a REAL requirements.txt before it
+    ever spawns anything, and the failure that surfaces names venv internals
+    rather than whatever the test actually exercises. Tests that legitimately
+    drive reconciliation install their own AsyncMock inside the test body —
+    same "inner patch wins" contract as the guards above.
+    """
+    return None
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call(item):
     """Fail fast instead of dead-waiting or touching the host."""
@@ -129,8 +143,15 @@ def pytest_runtest_call(item):
     saved_exec = asyncio.create_subprocess_exec
     httpx.AsyncClient = _LiveHealthPollBlocked
     asyncio.create_subprocess_exec = _blocked_subprocess_exec
+    code_sync = sys.modules.get("api.code_sync")
+    has_reconcile = code_sync is not None and hasattr(code_sync, "reconcile_component")
+    saved_reconcile = code_sync.reconcile_component if has_reconcile else None
+    if has_reconcile:
+        code_sync.reconcile_component = _reconcile_component_default_stub
     try:
         yield
     finally:
         httpx.AsyncClient = saved_client
         asyncio.create_subprocess_exec = saved_exec
+        if has_reconcile:
+            code_sync.reconcile_component = saved_reconcile

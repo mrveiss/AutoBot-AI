@@ -43,14 +43,13 @@ from api.schemas_analytics import (
     AnalyticsDetailedHealthResponse,
     AnalyticsHistoricalTrendsResponse,
     AnalyticsOverview,
-    AnalyticsPerformanceMetricsResponse,
     AnalyticsRealtimeMetricsResponse,
     AnalyticsRootCauseResponse,
     AnalyticsStatusResponse,
     AnalyticsTrackEventResponse,
-    AnalyticsUsageStatisticsResponse,
     RealTimeEvent,
 )
+from api.schemas_analytics_collector import AnalyticsPerformanceMetricsResponse, AnalyticsUsageStatisticsResponse
 
 # Import controller class (extracted from this file - Issue #212)
 from api.ws_security import enforce_ws_origin
@@ -58,6 +57,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import parse_utc_iso
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
@@ -205,7 +205,7 @@ def _check_resource_alerts(system_resources: Dict) -> List[Dict[str, Any]]:
             {
                 "type": "cpu_high",
                 "message": f"CPU usage at {cpu_usage:.1f}%",
-                "severity": "warning",
+                "severity": Severity.WARNING.value,
             }
         )
 
@@ -216,7 +216,7 @@ def _check_resource_alerts(system_resources: Dict) -> List[Dict[str, Any]]:
             {
                 "type": "memory_high",
                 "message": f"Memory usage at {memory_usage:.1f}%",
-                "severity": "warning",
+                "severity": Severity.WARNING.value,
             }
         )
 

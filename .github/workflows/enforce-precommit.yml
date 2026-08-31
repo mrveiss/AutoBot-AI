@@ -23,7 +23,17 @@ permissions:
 
 jobs:
   verify-precommit-config:
-    runs-on: ubuntu-latest
+    # Self-hosted (#15310). Unblocked by #15314: setup-python-ci now branches on
+    # runner.environment, so on a self-hosted runner it uses the interpreter
+    # already on PATH instead of downloading a build that does not exist for
+    # this runner's OS release. Python and shell only — no Docker, no service
+    # containers — and a single unsharded job at ~462s, so moving it forfeits
+    # no parallelism.
+    runs-on: [self-hosted, Linux, X64]
+    # Fail fast on self-hosted, not GitHub's ~360min default (#11077 precedent in
+    # frontend-test.yml). This is a required, non-path-filtered context: without a
+    # bound, a runner outage queues it for hours and wedges every open PR.
+    timeout-minutes: 30
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -70,6 +80,25 @@ jobs:
           echo "✓ All required hooks (black, isort, flake8, autoflake, mypy) are configured"
 
       # #13517: shared composite action (also upgrades pip/setuptools/wheel).
+      # Step-level, not job-level: this job publishes a required status context
+      # and carries the SPDX and symlink checks, which must cover EVERY pull
+      # request including docs-only ones (see the `on:` comment above). Gating
+      # the job would re-open that gap and wedge the context. Only the repo-wide
+      # sweep below is scoped, and it is the whole cost: measured on PR #15250
+      # (one markdown file) the sweep was 1008s of the job's 1142s, while every
+      # other step finished in 0-7s (#15299).
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: filter
+        with:
+          filters: .github/filters/docs-only-paths.yml
+
+      # NOT gated, deliberately (#15299). Two ungated steps below run
+      # `python3 pipeline-scripts/...` and those scripts `import yaml`; pyyaml
+      # reaches the runner only as pre-commit's own dependency, installed here —
+      # the comment on the workflow-path-filter step below says so explicitly.
+      # Gating this step made a required check die with ModuleNotFoundError on
+      # exactly the docs-only PRs this change exists to speed up. It costs 18s
+      # against the sweep's 1008s, so ungating it forfeits almost no saving.
       - name: Set up Python
         uses: ./.github/actions/setup-python-ci
         with:
@@ -79,7 +108,25 @@ jobs:
       # extra-packages, which also upgrades pip/setuptools/wheel — this step
       # duplicated both.
 
+      # A pre-commit hook shells out to `node`
+      # (.pre-commit-config.yaml: `entry: node autobot-frontend/scripts/
+      # canonical_check.mjs`). GitHub-hosted images ship Node; self-hosted
+      # runners do not, so the hook could not execute and the #14181 gate below
+      # correctly refused to pass over it — a hook that cannot run reports
+      # nothing about the code.
+      #
+      # Unlike actions/setup-python, this works on a non-LTS runner OS: Node
+      # publishes generic linux-x64 tarballs rather than per-distro builds, so
+      # there is no missing-build problem to work around (#15313 does not apply).
+      # Version matches the rest of CI.
+      - name: Set up Node
+        if: steps.filter.outputs.code == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: '22'
+
       - name: Run pre-commit on all files
+        if: steps.filter.outputs.code == 'true'
         run: |
           # #14181: this used to swallow the result entirely with
           # `|| { echo "::warning::..."; exit 0; }`. The comment said the goal was
@@ -104,12 +151,59 @@ jobs:
           cat precommit-output.txt
 
       - name: Fail when a hook could not run at all (#14181)
+        if: steps.filter.outputs.code == 'true'
         run: |
           # Tolerates exactly the hooks still on check_hook_exec_bits.py's
           # _KNOWN_DORMANT list, imported rather than duplicated -- a second copy
           # is a second thing to go stale (#14202). As each is woken both guards
           # tighten together, and this becomes absolute when the baseline empties.
           python3 pipeline-scripts/check_precommit_hooks_executed.py precommit-output.txt
+
+      - name: Fail when a behavioural hook reported a finding (#14878)
+        if: steps.filter.outputs.code == 'true'
+        run: |
+          # The third class, between the two the steps above already handle.
+          #
+          # `pre-commit run --all-files` above routes findings to a warning, and
+          # for a formatter or a linter that is right: gating a merge on Black's
+          # opinion is a judgement nobody made. The step after it fails when a
+          # hook could not EXECUTE (#14181), because a pass over a hook that
+          # never ran is a false clean bill of health.
+          #
+          # `ssot-config-lib-guard` is neither. Its entry is a TEST SUITE
+          # (autobot-infrastructure/shared/tests/test_ssot_config_lib.sh), the
+          # regression guard for #14041, and a failure there means a shipped
+          # script's config bootstrap is broken. It executes fine, so #14181 is
+          # satisfied; it reports a finding, so the workflow warned and moved on.
+          # The guard therefore ran in exactly one place and blocked nothing —
+          # the same shape as the defect it was written to catch (#14878).
+          #
+          # HERE, not in python-suite. Wrapping the suite under pytest was the
+          # other option in #14878 and is the weaker one today: `python-suite` is
+          # not a required context (#14353/#13162), so that route would move the
+          # guard from one non-gating place to another. This job publishes
+          # `verify-precommit-config`, which IS required, so a finding blocks.
+          #
+          # The allowlist is explicit, keyed by hook id, and self-guarding: an id
+          # that leaves .pre-commit-config.yaml fails rather than silently
+          # exempting itself, and an absent or Skipped result fails rather than
+          # reading as clean. Criterion for adding one is in the script's header.
+          python3 pipeline-scripts/check_gating_precommit_hooks.py precommit-output.txt
+
+      - name: Workflow path filters must match the canonical set (#12986)
+        run: |
+          # BLOCKING, and deliberately in THIS workflow rather than
+          # code-quality: enforce-precommit carries no `paths:` filter (it is a
+          # required context, and a path-filtered required check never
+          # reports), so this guard's reach is the whole repository. In
+          # code-quality it would sit behind a `changes` filter that does not
+          # cover .github/workflows/**, and would therefore never run on the
+          # exact edit it exists to catch.
+          #
+          # pyyaml is present here as pre-commit's own dependency, installed by
+          # the setup-python-ci step above -- same route
+          # check_precommit_hooks_executed.py already relies on.
+          python3 pipeline-scripts/check_workflow_path_filters.py
 
       - name: Enforce SPDX/Apache-2.0 license header (#9840)
         run: |
@@ -138,23 +232,27 @@ jobs:
           # Resolve through HEAD's own parents first (#13880): on a
           # pull_request the checkout is the merge commit, so HEAD^1 is the
           # base tip and HEAD^2 is the PR head — no event payload needed.
-          have() { git cat-file -e "${1}^{commit}" 2>/dev/null; }
-          if have 'HEAD^2' && have 'HEAD^1'; then
-            base="HEAD^1"
-          elif have "${PR_BASE_SHA:-x}"; then
-            base="$PR_BASE_SHA"
-          else
-            echo "::error::cannot resolve a base commit — refusing to report 0 changed files as clean"
-            exit 1
-          fi
+          # #13984: this was the FIFTH hand-written copy of the same base
+          # resolution. It now comes from the canonical resolver, which also
+          # supplies the origin/<base> and last-resort-parent fallbacks this
+          # copy never had.
+          # shellcheck source=scripts/lib/git-scope.sh
+          source scripts/lib/git-scope.sh
+          # Explicit `|| { exit 1; }` rather than leaning on Actions' implicit
+          # `bash -eo pipefail`. Both stop the step; only one says so at the
+          # call site, and every other git-scope call site in this change uses
+          # the explicit form. A reader should not have to know the runner's
+          # default shell flags to see that this fails closed.
+          base=$(git_scope_resolve_base HEAD "${PR_BASE_SHA:-}") || exit 1
+          git_scope_require_commits "$base" HEAD || exit 1
           # No extension pathspec: the destructive entries in both #14137
           # (venv) and #14149 (all.yml) are exactly the shapes a
           # source-extension filter would exclude — one has no extension at
           # all, the other isn't a source file.
-          if ! raw_files=$(git diff --name-only "$base" HEAD); then
-            echo "::error::git diff failed for ${base}..HEAD — refusing to report clean."
-            exit 1
-          fi
+          # Same explicit form. git_scope_diff_names returns 0 for an empty
+          # result and non-zero only when git itself failed, so this fires on a
+          # real failure and never on "nothing changed".
+          raw_files=$(git_scope_diff_names "$base" HEAD) || exit 1
           if [ -z "$raw_files" ]; then
             echo "No changed files — skipping pre-commit-no-tracked-symlink."
             exit 0
@@ -171,7 +269,9 @@ jobs:
           bash autobot-infrastructure/shared/scripts/hooks/pre-commit-no-gitignore-shadow
 
   check-instructions:
-    runs-on: ubuntu-latest
+    # Self-hosted (#15310) — same reasoning as verify-precommit-config above.
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

@@ -15,11 +15,17 @@ logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
-# Add src directory to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+# #14518: the path insert here pointed at a ``src`` directory that does not
+# exist beside this script, and ``llm_interface`` is a pre-restructure module
+# name. LLMInterface now lives in autobot-backend/llm_multi_provider.py. Add
+# autobot-backend the way the other operator entry points in this tree do
+# (#14129).
+_BACKEND_DIR = Path(__file__).resolve().parents[4] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
 
-import config as config
-from llm_interface import LLMInterface
+import config as config  # noqa: E402
+from llm_multi_provider import LLMInterface  # noqa: E402
 
 
 def check_llm_config():

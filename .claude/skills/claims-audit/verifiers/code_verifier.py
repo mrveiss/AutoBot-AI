@@ -31,8 +31,13 @@ class CodeVerifier(BaseVerifier):
         text = claim.get("text", "")
         category = claim.get("category", "")
 
-        # Check if it's explicitly categorized as code
-        if category in ("feature", "architecture"):
+        # Check if it's explicitly categorized as code. `infrastructure` is one
+        # of these: "Uses ChromaDB client" names a dependency that either is
+        # wired or is not, and with the category left out no verifier claimed
+        # it and it went to MANUAL unread (#14986). CodeVerifier runs last in
+        # ClaimsVerifier's chain, so this only picks up what Endpoint, Test and
+        # Config declined.
+        if category in ("feature", "architecture", "infrastructure"):
             return True
 
         # Check if text mentions code-like entities

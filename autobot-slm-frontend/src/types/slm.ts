@@ -131,6 +131,10 @@ export interface SLMNode {
   service_summary?: { running: number; stopped: number; failed: number; total: number } | null
   // Issue #1129: Role-centric architecture — roles detected by slm-agent heartbeat
   detected_roles?: string[]
+  // #14676: roles assigned to this node that reach no ansible group and have
+  // no dedicated playbook, so nothing will deploy them. Optional: older
+  // backends do not send it.
+  unreachable_roles?: string[]
 }
 
 /**

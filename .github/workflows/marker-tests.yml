@@ -30,6 +30,33 @@
 #     Redis, so one is provided below rather than letting the first night fail
 #     for infrastructure reasons and calling it "the point". #13286 stays open
 #     until a run is green or its remaining failures have been triaged.
+#
+#     TRIAGED under #14930. The run on 2026-08-24 read
+#     `19 failed, 35 passed, 12 skipped, 19 errors`. All 38 non-passes were one
+#     defect class in two disguises: a live service the runner does not have,
+#     reported as a hard result instead of a stated non-result.
+#       * 19 errors — `redis_service_api_integration_test.py` had no
+#         `backend_url` fixture on this tree at all, so every test in it errored
+#         at setup. The fixture is now defined in the module.
+#       * 16 failures — `infrastructure_integration_test.py` (6) and
+#         `voice_integration_test.py` (10) dial a backend on :8001 and a TTS
+#         worker on :8083 over real HTTP. Both now skip, naming the absent
+#         service, via `autobot_shared.live_service_probe`.
+#       * 2 failures — the two knowledge-base tests. NOT an infrastructure gap:
+#         the Redis below is healthy, but `autobot-backend/conftest.py` replaces
+#         `autobot_shared.redis_client` with a socket-free stand-in for every
+#         backend item, markers included, so `get_redis_client()` returns None
+#         whatever Redis is running. Tracked as #14932; they skip on that
+#         structural condition until it lands, then run for real.
+#       * 1 failure — `performance_benchmarks_test.py` asserted absolute process
+#         RSS under 500 MB. A worker sits at ~1.6 GB from imports alone before
+#         the first benchmark, so the budget was spent before the test started.
+#         Now measured as the RSS delta across the operation, which is what the
+#         assertion always meant.
+#
+#     A skip is a real outcome here, not a pass. "Report marker coverage" below
+#     prints the counts and fails the job if the selection collected nothing, so
+#     the difference is on the run page instead of inferred from a log.
 #   * No coverage gate. Coverage is measured by the PR gate; adding tracing here
 #     would roughly double the runtime for no added assertion.
 #   * Two invocations, same reason as ci.yml: autobot-backend/ and
@@ -39,26 +66,49 @@
 name: Marker-excluded Tests
 
 on:
-  # SCHEDULE INTENTIONALLY WITHHELD UNTIL THE SUITE IS GREEN (#13286).
+  # SCHEDULE STILL WITHHELD — and #13286 stays open for exactly one reason.
   #
-  # GitHub registers `schedule` AND `workflow_dispatch` from the DEFAULT branch
-  # only. This file lives on the integration branch, so while it stayed there
-  # neither trigger could fire: the workflow produced ZERO runs of any kind, and
-  # `gh run list --workflow=marker-tests.yml` answered "could not find any
-  # workflows named marker-tests.yml" because GitHub had never registered it.
+  # A permanently red scheduled workflow is not a signal; it is noise that trains
+  # everyone to ignore the one place marker-excluded regressions would show up.
+  # GitHub registers `schedule` from the DEFAULT branch only, so on the
+  # integration branch a cron here would be inert until promotion — which is
+  # precisely why it has to be *correct* before promotion rather than after.
   #
-  # That changes the moment the integration branch is promoted to the default
-  # branch — the cron would start firing immediately. Its one observed run is
-  # RED (11 failed, 7 passed, 40 errors), so registering it as-is would install
-  # a nightly that fails every night against the default branch. A permanently
-  # red scheduled workflow is not a signal; it is noise that trains everyone to
-  # ignore the one place marker-excluded regressions would show up.
+  # Everything else this issue needed is done. The suite now covers its whole
+  # population and every defect it surfaced was FIXED, not excluded:
+  #   * #14930 triaged the 38 non-passes the backend invocation carried.
+  #   * #13286 added the third invocation, and its first-ever run of
+  #     `autobot-infrastructure/shared/tests` and `libs` produced 5 failures and
+  #     1 collection error. All fixed: `autobot_sdk` was importable from nowhere
+  #     (`pytest.ini` `pythonpath`), `utils.redis_client` and `utils.redis_helper`
+  #     named modules that exist in no tree (repointed at their canonical
+  #     successors), a table count asserted 6 where SQLite reports 7, and a
+  #     `PRAGMA foreign_keys` read on the test's own fresh connection could never
+  #     have returned 1. That invocation is now 12 collected / 10 passed / 0 failed.
+  #   * `test_celery_worker_status` demanded a Celery log on a host running no
+  #     services; it now shares the module's live-backend probe.
   #
-  # So the cron is commented rather than deleted — it is correct, and it is what
-  # #13286 exists to deliver. Restore it as the closing step of that issue, once
-  # the 11 failures and 40 collection errors are triaged and the suite is green.
-  # `workflow_dispatch` below stays live, so the suite remains runnable on demand
-  # to verify exactly that.
+  # WHAT STILL BLOCKS THE CRON:
+  #   * #15054 — the multimodal startup this suite exercises is taking an error
+  #     branch: `resume_download` was removed in the pinned transformers 5.15.0,
+  #     so CLIP loading raises `TypeError` at all ten call sites.
+  #   * Ten consecutive green runs, cited by run id. #15055 is fixed but the
+  #     cron is not turned on against an argument — it is turned on against
+  #     observations.
+  #
+  # #15055 IS FIXED. `system_benchmarks_performance_test.py` no longer compares
+  # wall-clock milliseconds against a hardcoded constant anywhere. It had 20 such
+  # assertions; the one that fired here PASSED on run 32837489748 and FAILED on
+  # 32839088246 (547.2ms) and 33154304714 (538.9ms) against the same 500ms
+  # constant, the last of those on the commit after a green one whose entire
+  # diff this run deselects. All 20 are now ratios against a work unit measured
+  # in the same process, so a uniformly slow runner scales both sides. Each site
+  # prints its measured units on every run — read those, do not guess.
+  #
+  # Turn the cron on as the closing step of #13286 once #15054 lands and ten
+  # runs are green, and set MARKER_MIN_PASSED to the figure those runs report.
+  # `workflow_dispatch` below stays live so the suite remains runnable on demand,
+  # and the `pull_request` trigger means a change to this file is still observed.
   #
   # schedule:
   #   # 03:20 UTC daily — off the */15 dispatch-watchdog and */30 runner-health
@@ -118,6 +168,36 @@ jobs:
       # Single source for the marker expression: the schedule uses the default,
       # a manual dispatch may narrow it to one marker while triaging.
       MARKER_EXPRESSION: ${{ github.event.inputs.markers || 'integration or slow or distributed or performance' }}
+      # Floor for the number of marker-carrying tests that must PASS (#14930).
+      # This is a ratchet, not a target: raise it when the suite genuinely
+      # covers more, and lower it only with a stated reason for which tests
+      # stopped running. A silent drop is the failure mode it exists to catch —
+      # the suite ran 35 passing tests while reading as an undifferentiated red,
+      # so nobody would have noticed the number falling to 3.
+      #
+      # Set to the figure actual runs report, not to a round number: a floor
+      # chosen for comfort is a floor that catches nothing.
+      #
+      # `backend` measured 35 passed on run 32837489748 and 34 on 32839088246 —
+      # the difference was #15055's wall-clock assertion flipping on runner load,
+      # not a change in coverage. The floor is therefore 34, the lower of the two
+      # OBSERVED figures. #15055 has since landed, so the backend figure should
+      # settle at 35 and stop moving — its harness guards live unmarked in
+      # `autobot_shared/perf_work_budget_test.py`, in the normal gate, and are
+      # deliberately NOT in this selection. The floor is raised to the number a
+      # green run actually reports, not to that prediction. `infra` measured 12
+      # collected / 10 passed on both.
+      #
+      # #13543: the floors below are applied PER INVOCATION, never to their sum.
+      # `marker_suite_report.py` used to compare the total against one floor, so
+      # `backend` collapsing to zero was invisible for as long as any sibling
+      # still collected — the same union-floor shape that left an earlier sweep
+      # here blind to ~44% of its population. `slm=0` is therefore written down
+      # explicitly rather than absorbed: `autobot-slm-backend` carries no
+      # marker-selected test today, and
+      # repo_tests/marker_suite_root_coverage_test.py fails the moment it gains
+      # one, which is what forces this declaration back up.
+      MARKER_MIN_PASSED: '34'
 
     steps:
       - uses: actions/checkout@v7
@@ -175,13 +255,88 @@ jobs:
       - name: Run marked tests — backend, shared, tts-worker, repo_tests
         run: |
           echo "Selecting: $MARKER_EXPRESSION"
-          # Exit 5 is pytest's "no tests collected". For a marker selection that
-          # is a legitimate outcome (no test currently carries the marker in this
-          # tree), not a failure — anything else propagates.
+          # Exit 5 is pytest's "no tests collected". Tolerated here ONLY so the
+          # second invocation still runs and the report step still gets both
+          # files — it is NOT accepted as an outcome: "Report marker coverage"
+          # below fails the job when the two invocations collected nothing
+          # between them. Before #14930 this line was the whole story, and an
+          # empty selection was indistinguishable from a passing one.
+          #
+          # #14917: `tools scripts pipeline-scripts` were wired into ci.yml by #13368,
+          # #13653, #13879 and #13880 and into none of the other invocations. The four
+          # root lists must agree — repo_tests/hook_suites_run_in_ci_test.py compares
+          # them to each other, so a fifth invocation is checked on arrival.
+          # Until now scripts/check_script_exec_bits_test.py's
+          # @pytest.mark.integration case was selected by NO workflow at all.
+          # #14986: `.claude/skills/claims-audit` -- 42 tests of the claims-audit skill
+          # that no workflow collected, because pytest.ini's testpaths is an allowlist
+          # and `.claude` was not on it. Six were red against real defects in the
+          # verifiers; all six are fixed and all 42 pass, so this is a wiring fix, not a
+          # quarantine. Named in all four carriers because they are required to agree
+          # (#14917). Narrow on purpose: `.claude/` as a whole is harness territory.
+          # #15051: `autobot-infrastructure/shared/tests` and `libs` were named by no
+          # pytest invocation at all -- not here, not ci.yml, not coverage.yml, not
+          # test-durations.yml -- so a bare local `pytest` and every CI shard skipped
+          # them in silence. Named here to keep the four `repo_tests`-carrying root
+          # lists in agreement (#14917), which is the only reason this invocation
+          # needs them: this selects the MARKED subset, and "Run marked tests —
+          # infrastructure, libs and frontend" below already selects the same two
+          # roots under the identical `$MARKER_EXPRESSION`. That overlap is
+          # deliberate, not a bug -- splitting these two roots out into a fifth
+          # invocation just to avoid it would itself violate the four-way agreement
+          # this comment exists to preserve, for a nightly/on-demand workflow where a
+          # few dozen tests running twice costs nothing. The 17 tests these roots
+          # carry that run in NO workflow at all are the unmarked ones, picked up by
+          # this same root list in ci.yml, coverage.yml and test-durations.yml, which
+          # all deselect markers instead of selecting them.
           python -m pytest \
-            autobot-backend autobot_shared autobot-tts-worker repo_tests \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit autobot-infrastructure/shared/tests libs \
             -n auto --dist loadscope \
             -m "$MARKER_EXPRESSION" \
+            --junitxml=marker-report-backend.xml \
+            --tb=short \
+            --durations=25 \
+            -q || [ $? -eq 5 ]
+
+      # #13543: `autobot-infrastructure/shared/tests` and `libs` were named by
+      # NO pytest invocation in any workflow, so the 12 marker-carrying tests
+      # living there — 6 in `tests/distributed/test_db_initialization.py`, 2 in
+      # `tests/integration/test_architecture_compliance.py` and 4 in
+      # `libs/autobot-sdk-python/tests/test_integration.py` — were selected by
+      # nothing at all, exactly as #13286 describes.
+      #
+      # A THIRD invocation rather than extra roots on the first: the four
+      # `repo_tests`-carrying invocations (ci, coverage, test-durations,
+      # marker-tests) must name identical root lists, which
+      # repo_tests/hook_suites_run_in_ci_test.py asserts. Widening only this one
+      # would break that agreement; widening all four would put these trees'
+      # UNMARKED tests into the PR gate, which is a separate decision with its
+      # own blast radius and is filed rather than smuggled in here.
+      #
+      # #14979 added `autobot-frontend/tests` to this same invocation rather
+      # than opening a fourth. That directory holds exactly one tracked Python
+      # module — `frontend_comprehensive_corrected_test.py`, with no conftest
+      # and no `__init__.py` — so it brings no collection surface of its own.
+      # It cannot ride the frontend workflow: that suite is npm/vitest and its
+      # path filter never fires on a `.py` file, so a Python invocation has to
+      # name it or its ten `integration`-marked tests are selected by nothing,
+      # which is precisely what repo_tests/marker_suite_root_coverage_test.py
+      # fails on (#13286). A fourth invocation would have needed its own
+      # `--min-passed frontend=0` — those ten tests probe a live frontend and
+      # skip without one — and a `name=0` floor is read by that same guard as
+      # "this tree carries no marked test", which is false here. Sharing this
+      # invocation's floors states the truth instead: the bucket keeps
+      # collecting more than it passes, and `infra=10` still holds because
+      # skips do not reduce passes.
+      - name: Run marked tests — infrastructure, libs and frontend
+        if: ${{ !cancelled() }}
+        run: |
+          echo "Selecting: $MARKER_EXPRESSION"
+          python -m pytest \
+            autobot-infrastructure/shared/tests libs autobot-frontend/tests \
+            -n auto --dist loadscope \
+            -m "$MARKER_EXPRESSION" \
+            --junitxml=marker-report-infra.xml \
             --tb=short \
             --durations=25 \
             -q || [ $? -eq 5 ]
@@ -196,6 +351,58 @@ jobs:
             autobot-slm-backend \
             -n auto --dist loadscope \
             -m "$MARKER_EXPRESSION" \
+            --junitxml=marker-report-slm.xml \
             --tb=short \
             --durations=25 \
             -q || [ $? -eq 5 ]
+
+      # The one verdict pytest cannot give: "the selection still matches the
+      # tests it is supposed to match" (#14930).
+      #
+      # Runs on failure too — deliberately. A red pytest step that skipped this
+      # would hide exactly the case worth seeing: a suite whose coverage
+      # collapsed AND whose remainder failed. The counts are printed here and
+      # written to the run summary, so a drop from the recorded baseline is
+      # visible on the run page rather than buried in 4,000 lines of log.
+      #
+      # A missing report file is a hard failure inside the script, not a zero:
+      # a pytest that died before writing its XML must never read as "collected
+      # nothing", let alone as clean.
+      - name: Report marker coverage
+        if: ${{ !cancelled() }}
+        run: |
+          python pipeline-scripts/marker_suite_report.py \
+            backend=marker-report-backend.xml \
+            slm=marker-report-slm.xml \
+            infra=marker-report-infra.xml \
+            --min-collected 1 \
+            --min-collected slm=0 \
+            --min-passed "$MARKER_MIN_PASSED" \
+            --min-passed slm=0 \
+            --min-passed infra=10
+
+      # The floor above is judged per INVOCATION, and an invocation names
+      # several roots, so it is cleared by whichever root still works. With
+      # `autobot-infrastructure/shared/tests` collecting nothing,
+      # `--min-collected 1` and `--min-passed infra=10` are both satisfied by
+      # `libs` alone and the infra report is green over a root contributing zero
+      # — measured, not assumed (#15161).
+      #
+      # This step asks the one question that floor cannot: does pytest reach ANY
+      # test under each named root? Collection, not selection — `-m "integration
+      # or slow or ..."` legitimately matches nothing under `tools` or
+      # `scripts`, but a root that collects nothing at all is never legitimate.
+      # Roots are derived from this file, so a root added above is checked the
+      # moment it is added and none is listed twice.
+      - name: Every named pytest root must collect something
+        if: ${{ !cancelled() }}
+        run: python pipeline-scripts/pytest_root_collection_floor.py
+
+      - name: Upload marker reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: marker-suite-reports
+          path: marker-report-*.xml
+          if-no-files-found: error
+          retention-days: 14

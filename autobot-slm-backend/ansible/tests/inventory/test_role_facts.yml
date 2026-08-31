@@ -77,6 +77,30 @@ all:
       expected_role_slm_active: false
 
     # 5. AI Stack + LLM (co-located).
+    # #14682: chromadb grants ai_stack but is a vector database, not an LLM
+    # runtime. Gating role_llm_active on ai_stack meant declaring this ran the
+    # ollama installer under a root shell on that host.
+    test-chromadb-only-no-llm:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - chromadb
+      expected_role_ai_stack_active: true
+      expected_role_llm_active: false
+      expected_role_backend_active: false
+      expected_role_slm_active: false
+
+    # #14682: same shape via tts-worker — speech synthesis, not an LLM.
+    test-tts-worker-only-no-llm:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+      node_roles:
+        - tts-worker
+      expected_role_ai_stack_active: true
+      expected_role_llm_active: false
+      expected_role_backend_active: false
+      expected_role_slm_active: false
+
     test-ai-stack-and-llm:
       ansible_host: 127.0.0.1
       ansible_connection: local
@@ -180,6 +204,13 @@ all:
     main:
       hosts:
         test-empty-roles-via-group: {}
+    # #14682: chromadb and tts-worker both GRANT ai_stack, so this is the real
+    # shape — a node legitimately in ai_stack that must not run an LLM. Before
+    # the fix, role_llm_active gated on ai_stack membership and fired here.
+    ai_stack:
+      hosts:
+        test-chromadb-only-no-llm: {}
+        test-tts-worker-only-no-llm: {}
     # SLM Manager hosts must be in slm_server group (matches install.sh
     # localhost.yml + seed-fleet-nodes.yml inventory layout).
     slm_server:

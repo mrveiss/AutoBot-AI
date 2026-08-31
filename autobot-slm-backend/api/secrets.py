@@ -31,7 +31,11 @@ from services.auth import require_permission
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.hf_token_validator import probe_hf_token
-from services.system_secrets_vault import delete_vault_copy, retrieve_secret
+from services.system_secrets_vault import (
+    delete_vault_copy,
+    mirror_secret_to_vault,
+    retrieve_secret,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/secrets", tags=["secrets"])
@@ -99,6 +103,10 @@ async def create_secret(
     db.add(secret)
     await db.commit()
     await db.refresh(secret)
+
+    # #14759: the delete path already maintained the vault copy; create did not,
+    # so a migrated key edited later served its superseded value to vault readers.
+    await mirror_secret_to_vault(data.key, data.value)
 
     logger.info("System secret created: %s [%s]", data.key, data.category)
     response = SecretResponse.model_validate(secret)
@@ -184,6 +192,11 @@ async def update_secret(
 
     await db.commit()
     await db.refresh(secret)
+
+    # Only when the value moved: a category/description edit leaves the stored
+    # secret untouched, so re-writing the vault copy would be pure churn.
+    if data.value is not None:
+        await mirror_secret_to_vault(key, data.value)
 
     logger.info("System secret updated: %s", key)
     response = SecretResponse.model_validate(secret)

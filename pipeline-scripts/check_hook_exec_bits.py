@@ -45,6 +45,18 @@ from pathlib import Path
 
 import yaml
 
+# The scrubbed root resolver lives in ``autobot_shared`` and this script runs
+# from a pre-commit virtualenv that does not have the repository installed, so
+# the import path is bootstrapped from this file's own location -- the one
+# derivation an inherited GIT_DIR cannot confuse (#15176).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from autobot_shared.paths import (  # noqa: E402
+    GitRepoRootUnavailable,
+    git_repo_root,
+    scrubbed_git_env,
+)
+
 # Both copies, repo-relative. Resolved against the repo root at call time --
 # never against the process CWD, see _repo_root().
 _CONFIG_PATHS = (
@@ -91,16 +103,21 @@ def _repo_root() -> Path:
     of health over 16 real violations. ``pre-commit`` itself chdirs to the repo
     root before running a hook, so its own path was safe -- but a direct
     invocation was not, and this script's whole purpose is to not do that.
+
+    Resolved through ``autobot_shared.paths.git_repo_root``, which scrubs the
+    git environment first. A hook exports ``GIT_DIR`` without ``GIT_WORK_TREE``
+    and git then calls the *current directory* the work tree, so an unscrubbed
+    ``--show-toplevel`` hands back the caller's CWD instead (#15176).
+
+    Measured for #15176: run from ``repo_tests/`` with ``GIT_DIR`` exported, the
+    unscrubbed form resolved the root to ``repo_tests/``, found no
+    ``.pre-commit-config.yaml`` beneath it, and printed its success line having
+    read zero hook entries -- with a planted ``100644`` entry standing.
     """
-    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "rev-parse", "--show-toplevel"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        sys.exit(f"FATAL: cannot locate the repo root (git rev-parse exit {result.returncode}): {result.stderr.strip()}")
-    return Path(result.stdout.strip())
+    try:
+        return git_repo_root()
+    except GitRepoRootUnavailable as exc:
+        sys.exit(f"FATAL: cannot locate the repo root: {exc}")
 
 
 def _tracked_modes(root: Path) -> dict[str, str]:
@@ -111,6 +128,9 @@ def _tracked_modes(root: Path) -> dict[str, str]:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        # Same scrub as the root: an inherited GIT_DIR would enumerate one
+        # checkout's index while *root* names another (#15176).
+        env=scrubbed_git_env(),
     )
     if result.returncode != 0:
         # An empty listing and a failed listing look identical to every caller
@@ -179,13 +199,17 @@ def main(argv: list[str] | None = None) -> int:
     if known:
         # Printed on every run, pass or fail. A backlog nobody is reminded of is
         # indistinguishable from no backlog.
-        print(f"check-hook-exec-bits: {len(known)} hook(s) dormant and tracked in {_KNOWN_DORMANT_ISSUE}:")  # noqa: print
+        print(
+            f"check-hook-exec-bits: {len(known)} hook(s) dormant and tracked in {_KNOWN_DORMANT_ISSUE}:"
+        )  # noqa: print
         for item in known:
             print(f"  KNOWN  {item}")  # noqa: print
         print()  # noqa: print
 
     if not blocking:
-        print(f"check-hook-exec-bits: no new hook entry is missing its exec bit (expected {_REQUIRED_MODE})")  # noqa: print
+        print(
+            f"check-hook-exec-bits: no new hook entry is missing its exec bit (expected {_REQUIRED_MODE})"
+        )  # noqa: print
         return 0
 
     print(f"check-hook-exec-bits: {len(blocking)} hook entr(ies) not tracked executable\n")  # noqa: print

@@ -9,6 +9,8 @@ import asyncio
 import os
 import sys
 
+import pytest
+
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -18,7 +20,12 @@ from utils.semantic_chunker import AutoBotSemanticChunker, SemanticChunk
 class TestSemanticChunking:
     """Test cases for semantic chunking functionality."""
 
-    def __init__(self):
+    # #14927: this was ``__init__``. pytest refuses to collect a class that has a
+    # constructor -- it emits PytestCollectionWarning and moves on -- so every
+    # ``test_*`` method below was silently uncollected despite the class matching
+    # ``python_classes = Test*``. ``setup_method`` is pytest's own per-test hook and
+    # runs before each test, which is what this body always meant.
+    def setup_method(self):
         self.chunker = AutoBotSemanticChunker(
             embedding_model="all-MiniLM-L6-v2",
             percentile_threshold=95.0,
@@ -28,6 +35,11 @@ class TestSemanticChunking:
 
     async def test_basic_chunking(self):
         """Test basic semantic chunking functionality."""
+        # Real semantic splitting needs the embedding model; without it the
+        # chunker falls back to a single chunk and this asserts nothing about
+        # semantics. Declare the dependency rather than assert against a
+        # fallback (#14927).
+        pytest.importorskip("sentence_transformers")
         print("Testing basic semantic chunking...")  # noqa: print
 
         test_text = """

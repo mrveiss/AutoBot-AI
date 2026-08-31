@@ -53,7 +53,7 @@ ansible-playbook playbooks/deploy-full.yml --tags ai-stack --limit ai_stack_vm
 
 # Restart
 ansible-playbook playbooks/slm-service-control.yml \
-  -e "service=autobot-ai-stack action=restart"
+  -e "target=<group-or-host> service=autobot-ai-stack action=restart"
 
 # Manual sync
 ./infrastructure/shared/scripts/utilities/sync-to-vm.sh ai-stack autobot-ai-stack/

@@ -69,6 +69,13 @@ _MOCK_NAMES = [
     # audit model imported at module level by rbac_middleware (#11794)
     "user_management.models",
     "user_management.models.audit",
+    # The shared audit counter rbac_middleware imports at module level (#14750).
+    # Same reason as autobot_shared.logging_manager above (#13312): the parent
+    # `autobot_shared` here is a path-less MagicMock, so the import machinery
+    # cannot walk down to a submodule. Pre-registering the FULL dotted name
+    # works because _find_and_load returns early when the exact key is already
+    # in sys.modules, so no parent resolution is attempted at all.
+    "autobot_shared.monitoring.metrics.audit",
 ]
 for _name in _MOCK_NAMES:
     sys.modules[_name] = MagicMock()

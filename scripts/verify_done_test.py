@@ -18,13 +18,23 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 SCRIPT = Path(__file__).resolve().parent / "verify-done.sh"
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
+    """#15246: env scrubbed -- an inherited GIT_DIR would run every call this
+    suite makes, including `worktree add`, against the real repository
+    instead of the throwaway one at ``cwd``.
+    """
     return subprocess.run(
         ["git", "-c", "commit.gpgsign=false", *args],
-        cwd=cwd, capture_output=True, text=True, check=True,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=scrubbed_git_env(),
     )
 
 

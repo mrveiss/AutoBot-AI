@@ -9,6 +9,7 @@
 
 """Document processing pipeline for text documents, PDFs, DOCX, etc."""
 
+import asyncio
 import base64
 from typing import Any, Dict
 
@@ -53,8 +54,31 @@ class DocumentPipeline(BasePipeline):
         raw_bytes = self._decode_input(media_input.data)
         mime_type = (media_input.mime_type or "").lower()
 
+        # Imported here, as the OCR helpers below are: this module must load on a
+        # host without the optional document dependencies installed.
+        from media.document.ocr import extraction_timeout
+
+        deadline = extraction_timeout()
+
         try:
-            extracted = extract_document(raw_bytes, mime_type)
+            # #14754: extraction is blocking CPU work — PDF parsing plus
+            # pdfplumber layout analysis on every page — and this handler is
+            # async, so one large document stalled every other coroutine on the
+            # worker, health endpoints included. Same shape as the OCR fix in
+            # _recover_scanned_pages below (#13896), one function over.
+            extracted = await asyncio.wait_for(
+                asyncio.to_thread(extract_document, raw_bytes, mime_type),
+                timeout=deadline,
+            )
+        except asyncio.TimeoutError:
+            # to_thread frees the loop but does not bound the work: the default
+            # executor has a small, process-wide slot count that the OCR path's
+            # own bounded calls also draw from, so an extraction that never
+            # returns holds one forever. Degrading names the cause; without the
+            # deadline the request simply never completes (#14754).
+            reason = f"extraction exceeded {deadline}s"
+            logger.warning("Document extraction timed out after %ss", deadline)
+            return self._error_result(detect_format(raw_bytes, mime_type), reason, media_input.metadata)
         except DocumentDependencyError as exc:
             # A missing library is a deployment gap, not a bad upload — keep the
             # two distinguishable so one is never diagnosed as the other.
@@ -63,7 +87,8 @@ class DocumentPipeline(BasePipeline):
             logger.warning("Document extraction failed: %s", exc)
             return self._error_result(detect_format(raw_bytes, mime_type), str(exc), media_input.metadata)
 
-        return self._to_result(extracted, media_input.metadata)
+        extracted, ocr = await self._recover_scanned_pages(extracted, raw_bytes)
+        return self._to_result(extracted, media_input.metadata, ocr)
 
     # ------------------------------------------------------------------
     # Decoding helpers
@@ -86,7 +111,108 @@ class DocumentPipeline(BasePipeline):
     # Result adaptation
     # ------------------------------------------------------------------
 
-    def _to_result(self, extracted: ExtractedDocument, metadata: Dict) -> Dict[str, Any]:
+    async def _recover_scanned_pages(self, extracted: ExtractedDocument, raw_bytes: bytes):
+        """OCR the pages that produced no text, when there are any (#13896).
+
+        Runs only on pages that came back empty, so a born-digital document
+        rasterizes nothing. Returns the (possibly augmented) extraction and the
+        OCR outcome, which is reported either way — an attempt that recovered
+        nothing and an attempt that never happened are different answers.
+
+        #13896 review: rasterizing and running tesseract are blocking CPU work,
+        and this sits on an ingest path that accepts arbitrary uploads (`.pdf`
+        is an allowed extension). Called inline it would hold the worker's event
+        loop for the whole run — every other coroutine on that worker, health
+        endpoints included, stalls behind one scanned document. So it is
+        offloaded to a thread and bounded by a whole-document deadline.
+
+        The per-page timeout does not cover this: fifty pages each finishing
+        just inside it is still fifty times the budget.
+
+        A deadline breach degrades rather than fails. The upload already
+        produced a text-layer extraction; losing the OCR augmentation is worth
+        far less than losing the document, and `attempted=True` with a reason
+        keeps that distinguishable from "OCR never ran".
+
+        What this does NOT do: `wait_for` abandons the await, it does not kill
+        the thread. Tesseract keeps running until `ocr_page_timeout` bounds the
+        page it is on, so the worker slot is released later than the deadline.
+        The event loop is freed immediately, which is the availability problem
+        being fixed; reclaiming the thread promptly needs a killable subprocess
+        and is tracked separately.
+        """
+        from media.document.ocr import OcrResult, ocr_pdf_pages, ocr_timeout
+
+        if extracted.format != "pdf":
+            return extracted, OcrResult(attempted=False, reason="not a paginated PDF")
+
+        if not extracted.empty_page_numbers:
+            # #14751: "unreadable" here is strictly `page.text.strip() == ""`,
+            # while `has_usable_text_layer` — which drives the reported
+            # `no_text_layer` status — uses a ratio and a per-page floor. One
+            # stray character on every page (a page number, a Bates stamp) makes
+            # them disagree: the document is reported as having no usable text
+            # layer AND as having nothing to OCR.
+            #
+            # The trigger is deliberately left as-is; widening it to every
+            # document failing the ratio would OCR far more than intended. What
+            # changes is that the contradiction is now stated rather than
+            # reported as "no unreadable pages", which reads as agreement.
+            reason = (
+                "no page is empty, but the text layer is not usable — OCR reads only "
+                "wholly empty pages, so a page with a stamp or number is skipped"
+                if not extracted.has_usable_text_layer
+                else "no unreadable pages"
+            )
+            return extracted, OcrResult(attempted=False, reason=reason)
+
+        deadline = ocr_timeout()
+        try:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(ocr_pdf_pages, raw_bytes, extracted.empty_page_numbers),
+                timeout=deadline,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "OCR exceeded the %ss document deadline for %d unreadable page(s) — "
+                "returning the text-layer extraction without OCR augmentation",
+                deadline,
+                len(extracted.empty_page_numbers),
+            )
+            return extracted, OcrResult(
+                attempted=True,
+                reason=f"OCR exceeded the {deadline}s document deadline",
+                skipped_pages=tuple(extracted.empty_page_numbers),
+            )
+
+        if not result.recovered_any:
+            return extracted, result
+
+        return self._merge_ocr_text(extracted, result), result
+
+    def _merge_ocr_text(self, extracted: ExtractedDocument, result) -> ExtractedDocument:
+        """Fold recovered page text back into the extraction.
+
+        Rebuilt through the canonical renderer rather than string-appended, so
+        OCR text carries the same page markers and the same span arithmetic as
+        text-layer content — page provenance (#13894) must not depend on how a
+        page happened to be read.
+        """
+        from dataclasses import replace
+
+        from media.document.extraction import PageText, render_pages
+
+        pages = tuple(
+            (
+                PageText(number=page.number, text=result.pages.get(page.number, "") or page.text)
+                if not page.text.strip()
+                else page
+            )
+            for page in extracted.pages
+        )
+        return replace(extracted, pages=pages, text=render_pages(pages))
+
+    def _to_result(self, extracted: ExtractedDocument, metadata: Dict, ocr=None) -> Dict[str, Any]:
         """Adapt a canonical ExtractedDocument to this pipeline's result dict."""
         # Resolved once and threaded through, rather than each helper reading
         # ``has_usable_text_layer`` (and re-resolving the config knobs behind
@@ -103,7 +229,22 @@ class DocumentPipeline(BasePipeline):
         }
         result.update(self._format_fields(extracted))
         result.update(self._text_layer_fields(extracted, usable_content))
+        result.update(self._ocr_fields(ocr))
         return result
+
+    def _ocr_fields(self, ocr) -> Dict[str, Any]:
+        """Say what OCR did, including when it did nothing and why (#13896)."""
+        if ocr is None or (not ocr.attempted and not ocr.skipped_pages):
+            return {}
+
+        fields: Dict[str, Any] = {"ocr_attempted": ocr.attempted}
+        if ocr.attempted:
+            fields["ocr_pages"] = sorted(n for n, text in ocr.pages.items() if text.strip())
+        if ocr.reason:
+            fields["ocr_reason"] = ocr.reason
+        if ocr.skipped_pages:
+            fields["ocr_skipped_pages"] = list(ocr.skipped_pages)
+        return fields
 
     def _text_layer_fields(self, extracted: ExtractedDocument, usable_content: bool) -> Dict[str, Any]:
         """Report what was actually readable, so empty is never mistaken for blank.

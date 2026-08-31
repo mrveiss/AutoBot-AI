@@ -86,7 +86,8 @@ def test_redis_connection():
     # Test with Redis Database Manager
     logger.info("\n🗄️ Testing Redis Database Manager with Service Registry")
     try:
-        from utils.redis_database_manager import RedisDatabaseManager
+        # #14518: canonical home is autobot_shared/redis_client.py.
+        from autobot_shared.redis_client import RedisDatabaseManager
 
         manager = RedisDatabaseManager()
         logger.info("✅ Redis Database Manager initialized")

@@ -415,6 +415,16 @@
       {{ chromadb_auth_token
          if (chromadb_auth_token | default('') | trim | length > 0)
          else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    # #14758: the canonical envelope secret store's root key. Nothing generated
+    # it, so the store raised at import on every provisioned deployment and each
+    # consumer swallowed the failure — an absent store was indistinguishable
+    # from "that secret does not exist". `load_root_key` base64-DECODES this and
+    # requires exactly 32 bytes, so it is not interchangeable with the opaque
+    # 48-char secrets above: 32 chars b64-encoded decode back to 32 bytes.
+    autobot_secrets_root_key: >-
+      {{ autobot_secrets_root_key
+         if (autobot_secrets_root_key | default('') | trim | length > 0)
+         else (lookup('password', '/dev/null length=32 chars=ascii_letters,digits') | b64encode) | replace('+', '-') | replace('/', '_') }}
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']
@@ -489,6 +499,37 @@
   when:
     - slm_secrets_stat.stat.exists
     - _slm_chroma_tok_check.rc != 0
+  no_log: true
+  tags: ['slm', 'secrets']
+
+# #14758: same back-fill for the envelope root key. Every host provisioned
+# before this change already has the secrets file, so the template task above is
+# skipped and the key would never appear — which is the state the issue reports.
+#
+# Gated on the grep finding nothing, so it only ever ADDS. Rotating this value
+# silently would be worse than leaving it absent: the root key derives every
+# vault KEK, so a new one makes every already-encrypted secret undecryptable.
+- name: "SLM | Check if AUTOBOT_SECRETS_ROOT_KEY present in secrets file (#14758)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -q '^AUTOBOT_SECRETS_ROOT_KEY=.\+'
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+  register: _slm_root_key_check
+  changed_when: false
+  failed_when: false
+  when: slm_secrets_stat.stat.exists
+  no_log: true
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Add AUTOBOT_SECRETS_ROOT_KEY to existing secrets file (#14758)"
+  ansible.builtin.lineinfile:
+    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+    regexp: "^AUTOBOT_SECRETS_ROOT_KEY="
+    line: "AUTOBOT_SECRETS_ROOT_KEY={{ (lookup('password', '/dev/null length=32 chars=ascii_letters,digits') | b64encode) | replace('+', '-') | replace('/', '_') }}"
+    create: false
+  when:
+    - slm_secrets_stat.stat.exists
+    - _slm_root_key_check.rc != 0
   no_log: true
   tags: ['slm', 'secrets']
 
@@ -628,6 +669,11 @@
 # ==========================================================
 # SLM Admin UI health monitor service
 # ==========================================================
+# #14700: these two need root -- a systemd unit template and a systemd enable
+# with daemon_reload -- and relied on the calling play escalating. That is the
+# exact shape that broke in #14693 once a non-escalating caller appeared, and
+# #14699 means the config-level default has never applied, so nothing else would
+# catch it. Declared here so correctness does not depend on the caller.
 - name: "SLM | Deploy slm-admin-ui health monitor service"
   ansible.builtin.template:
     src: slm-admin-ui.service.j2
@@ -636,6 +682,7 @@
   notify:
     - reload systemd
   tags: ['slm', 'frontend', 'systemd']
+  become: true
 
 - name: "SLM | Enable slm-admin-ui service"
   ansible.builtin.systemd:
@@ -650,6 +697,7 @@
 # Auto-detect: if the user frontend code exists on this host,
 # enable co-located mode (SLM at /slm, user frontend at /).
 # ==========================================================
+  become: true
 - name: "SLM | Detect co-located user frontend (#3013)"
   ansible.builtin.stat:
     path: "{{ frontend_dist_dir | dirname }}/package.json"

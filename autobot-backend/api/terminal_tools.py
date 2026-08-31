@@ -15,21 +15,33 @@ Endpoints:
 - POST /validate-command - Validate command safety
 - GET /package-managers - Get available package managers
 
-These endpoints are imported into terminal.py via router inclusion.
+These endpoints are imported into terminal.py via router inclusion, and are
+also registered as a standalone top-level router
+(``initialization/router_registry/terminal_routers.py``). Gating must not
+depend on which parent mounts this router (#15084): install/check/validate
+run system commands and package installs, so the dependency lives here,
+on the router itself.
 """
 
 from typing import Any, Dict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from api.schemas_terminal import PackageManagersResponse, ToolInstallRequest
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
-# Create router for tool management endpoints
-router = APIRouter(tags=["terminal-tools"])
+# Create router for tool management endpoints. Carries its own admin gate
+# (#15084) so every mount point is protected by declaration, not by whichever
+# parent router happens to include it -- terminal.py's admin router also
+# carries this dependency, and FastAPI's dependency cache (same callable, same
+# security scopes, default use_cache=True) resolves it once per request even
+# when it appears on both routers, so declaring it here costs nothing extra
+# on that path while closing the direct, dependency-free top-level mount.
+router = APIRouter(tags=["terminal-tools"], dependencies=[Depends(check_admin_permission)])
 
 
 # Tool Management endpoints

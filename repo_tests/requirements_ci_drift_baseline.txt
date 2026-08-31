@@ -46,17 +46,6 @@
 # assuming "no test needs it" — and do not assume transitive resolution
 # without verifying the dependency actually declares it.
 
-# --- Tracked elsewhere, not a silent omission -----------------------------
-# pytesseract is the exact #13885 incident this guard exists to catch, and
-# belongs in requirements-ci/*.txt, not here — but it collides with #14510
-# (open as of this writing), which adds it to requirements-ci/document.txt
-# with its own rationale (the OCR rasterize-then-fallback feature, #13896).
-# Landing pytesseract in TWO CI files from two different PRs is worse than
-# a temporary baseline entry: whichever of #14550/#14551 or #14510 merges
-# second will find this line stale (pytesseract now present in CI) and the
-# audit will force its removal — self-correcting, not a place to leave it.
-pytesseract
-
 # --- SLM-backend SSO / auth / ops libraries -------------------------------
 # Declared in autobot-slm-backend/requirements.txt. The python-suite tests
 # covering these modules mock the network/subprocess boundary rather than
@@ -146,7 +135,8 @@ email-validator
 defusedxml
 pywebpush
 tenacity
-anthropic
+# anthropic REMOVED (#15016): it is now mirrored into requirements-ci/ai-ml.txt,
+# so CI installs the real SDK and the entry exempts nothing.
 boto3
 asyncpg
 praw

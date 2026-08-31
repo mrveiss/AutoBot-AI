@@ -150,6 +150,10 @@ class TestHireAgentNamedBindDict:
 
         with (
             patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
+            # #12681: hiring now also checks the adapter can actually run. This test
+            # is about SQL binds, and CI has no `claude` binary, so state that the
+            # adapter is available rather than letting the probe decide.
+            patch.object(mod, "adapter_unavailable_reason", return_value=None),
             patch.object(mod.BudgetService, "provision_budget", new=AsyncMock()),
         ):
             ctx = TenantContext(org_id=None, user_id=uuid.uuid4(), is_platform_admin=True)

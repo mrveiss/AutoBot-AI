@@ -15,7 +15,11 @@ Provides comprehensive browser automation capabilities:
 - Waiting (wait_for_selector)
 
 Security Model:
-- URL whitelist enforcement
+- URL admission by a DNS-resolving public-address guard, with an explicit
+  internal-host exception set whose fleet half comes from the SLM node
+  registry (services/browser_url_guard.py, services/fleet_registry.py).
+  There is no URL allowlist — #13236 step 5 removed the one that existed as
+  bypassable, and #15228 stopped the refusal text naming it.
 - Script validation and sanitization
 - Rate limiting for automation requests
 - Comprehensive audit logging
@@ -29,7 +33,6 @@ import json
 import re
 from datetime import datetime, timezone
 from typing import List
-from urllib.parse import urlparse
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException
@@ -80,6 +83,8 @@ from autobot_shared.time_utils import now_utc
 from autobot_shared.url_safety import is_public_url_async
 from constants.network_constants import NetworkConstants
 from research_browser_manager import get_research_browser_manager
+from services import browser_url_guard as _guard
+from services.fleet_registry import fleet_snapshot
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from services.web_pipeline.interceptor import XHRInterceptor
 from services.web_pipeline.snapshot import AccessibilitySnapshot
@@ -99,8 +104,22 @@ router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
 )
 
-# Performance optimization: O(1) lookup for allowed URL schemes (Issue #326)
-ALLOWED_URL_SCHEMES = {"http", "https"}
+# URL admission lives in services/browser_url_guard.py (#15228). Re-exported
+# here because chat_workflow/browser_tool_handler.py imports these from this
+# module lazily, and several tests patch them at api.browser_mcp.<name>.
+#: The complete vocabulary of ``browser_vm.status`` on GET /mcp/status. The SLM
+#: frontend maps exactly this set (autobot-slm-frontend/src/utils/
+#: browserVmStatus.ts); tests/unit/api/test_browser_status_contract.py fails if
+#: either side changes without the other (#15228).
+BROWSER_VM_HEALTHY = "healthy"
+BROWSER_VM_DEGRADED = "degraded"
+BROWSER_VM_UNAVAILABLE = "unavailable"
+BROWSER_VM_STATUS_VALUES = (BROWSER_VM_HEALTHY, BROWSER_VM_DEGRADED, BROWSER_VM_UNAVAILABLE)
+
+ALLOWED_URL_SCHEMES = _guard.ALLOWED_URL_SCHEMES
+INTERNAL_HOST_EXCEPTIONS = _guard.INTERNAL_HOST_EXCEPTIONS
+is_url_allowed = _guard.is_url_allowed
+classify_url = _guard.classify_url
 
 # Security Configuration
 BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
@@ -110,55 +129,6 @@ BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BRO
 # without an explicit session_id maps to this bucket, preserving prior
 # single-session behavior for a lone conversation.
 DEFAULT_BROWSER_SESSION_ID = "default"
-
-# URL Whitelist - Only these domains are allowed
-# Internal hosts this ADMIN surface may still reach (#13236 step 5).
-#
-# Replaces a regex allowlist over the whole URL, which was unsound: the
-# patterns were anchored at the start but not the end, so any attacker domain
-# prefixed with an allowlisted string passed —
-# ``https://github.com.evil.example/`` matched ``^https?://github\.com``.
-# Public hosts no longer need listing at all; they are permitted by the
-# DNS-resolving guard, so this list is only the internal exceptions.
-#
-# Kept because reaching internal services is what this surface is *for*:
-# pointing the browser at one and reading what the page requests is how wrong
-# API calls get found and callers mapped to the right routes. Matched against
-# the parsed hostname, never against the raw URL string.
-INTERNAL_HOST_EXCEPTIONS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1"})
-
-#: SSOT config keys naming the fleet's own hosts. The admin surface may reach
-#: these, resolved from ConfigRegistry rather than hardcoded — the old regex
-#: baked a /24 into the source, which is both a wider exemption than needed
-#: (a whole subnet, not the known hosts) and a fleet address in code.
-_FLEET_HOST_ATTRS = (
-    "MAIN_MACHINE_IP",
-    "FRONTEND_VM_IP",
-    "NPU_WORKER_VM_IP",
-    "REDIS_VM_IP",
-    "AI_STACK_VM_IP",
-    "BROWSER_VM_IP",
-    "SLM_VM_IP",
-)
-
-
-def fleet_host_exceptions() -> frozenset[str]:
-    """The fleet's own VM addresses, from SSOT config.
-
-    Read on each call rather than at import: ``NetworkConstants`` resolves
-    these lazily through ``ConfigRegistry``, so caching here would pin
-    whatever the values were at import time.
-    """
-    hosts = set()
-    for attr in _FLEET_HOST_ATTRS:
-        try:
-            value = getattr(NetworkConstants, attr, "")
-        except Exception:  # config unavailable — exempt nothing rather than guess
-            continue
-        if value:
-            hosts.add(str(value).strip().lower())
-    return frozenset(hosts)
-
 
 # Rate limiting: max requests per minute
 MAX_REQUESTS_PER_MINUTE = 60
@@ -185,59 +155,6 @@ BLOCKED_JS_PATTERNS = [
     r"window\[['\"]",  # Generic bracket access to window
     r"this\[['\"]eval",  # this["eval"] bypass
 ]
-
-
-def _is_excepted_internal_host(hostname: str) -> bool:
-    """True if *hostname* is an internal host this admin surface may reach.
-
-    Matches the **parsed hostname**, exactly or by network containment — never
-    a substring of the URL. That is the difference from the regex allowlist
-    this replaced, under which ``https://localhost.evil.example/`` was allowed.
-    """
-    host = (hostname or "").strip("[]").lower()
-    if not host:
-        return False
-    if host in INTERNAL_HOST_EXCEPTIONS:
-        return True
-
-    return host in fleet_host_exceptions()
-
-
-async def is_url_allowed(url: str) -> bool:
-    """Validate a URL for the admin browser surface (#13236 step 5).
-
-    Security measures:
-    - block non-HTTP schemes;
-    - permit any URL that resolves to a **public** address, via
-      ``is_public_url_async`` — the DNS-resolving guard, so a hostname that
-      resolves into private space is rejected however it is spelled;
-    - permit a **non**-public address only when its hostname is an explicit
-      internal exception, matched on the parsed host rather than by regex.
-
-    This replaces a prefix-matching regex allowlist that was bypassable: its
-    patterns had no end anchor, so ``https://github.com.evil.example/`` and
-    ``https://localhost.evil.example/`` both passed.
-    """
-    try:
-        parsed = urlparse(url)
-
-        if parsed.scheme not in ALLOWED_URL_SCHEMES:
-            logger.warning("Blocked non-HTTP scheme: %s", parsed.scheme)
-            return False
-
-        if await is_public_url_async(url):
-            return True
-
-        if _is_excepted_internal_host(parsed.hostname or ""):
-            logger.info("Allowing admin browser navigation to internal host: %s", parsed.hostname)
-            return True
-
-        logger.warning("Blocked browser navigation to non-public URL: %s", url)
-        return False
-
-    except Exception as e:
-        logger.error("URL validation error for %s: %s", url, e)
-        return False
 
 
 def is_script_safe(script: str) -> bool:
@@ -813,11 +730,12 @@ async def navigate_mcp(request: BrowserNavigateRequest) -> Metadata:
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    if not await is_url_allowed(request.url):
-        raise HTTPException(
-            status_code=403,
-            detail=f"URL not in whitelist: {request.url}",
-        )
+    # #15228: one refusal sentence used to answer for a non-HTTP scheme, a
+    # private-resolving address and a DNS failure alike, and it named a
+    # mechanism #13236 step 5 had already deleted. Each cause says its own now.
+    decision = await classify_url(request.url)
+    if not decision.allowed:
+        raise HTTPException(status_code=403, detail=decision.message)
 
     logger.info("Browser navigation to: %s", request.url)
 
@@ -1294,7 +1212,7 @@ async def hover_index_mcp(request: BrowserHoverIndexRequest) -> Metadata:
 async def get_browser_mcp_status() -> Metadata:
     """Get Browser MCP bridge status and statistics"""
     # Check Browser VM connectivity
-    vm_status = "unavailable"
+    vm_status = BROWSER_VM_UNAVAILABLE
     try:
         http_client = get_http_client()
         async with await http_client.get(
@@ -1302,11 +1220,13 @@ async def get_browser_mcp_status() -> Metadata:
             timeout=aiohttp.ClientTimeout(total=5),
         ) as response:
             if response.status == 200:
-                vm_status = "healthy"
+                vm_status = BROWSER_VM_HEALTHY
             else:
-                vm_status = "degraded"
+                vm_status = BROWSER_VM_DEGRADED
     except Exception:
-        vm_status = "unavailable"
+        vm_status = BROWSER_VM_UNAVAILABLE
+
+    fleet = await fleet_snapshot()
 
     # Thread-safe access to rate limit state
     async with _rate_limit_lock:
@@ -1325,7 +1245,12 @@ async def get_browser_mcp_status() -> Metadata:
             # not a pattern list. What remains configurable is the set of
             # internal hosts this admin surface may still reach.
             "url_validation": "dns_resolving_public_address_guard",
-            "internal_host_exceptions": len(INTERNAL_HOST_EXCEPTIONS) + len(fleet_host_exceptions()),
+            "internal_host_exceptions": len(INTERNAL_HOST_EXCEPTIONS) + len(fleet.hosts),
+            # #15227/#15228: membership is the SLM node registry's answer. A
+            # registry that could not be read degrades to the configured core
+            # hosts and says so here, so no surface shows a stale set as live.
+            "fleet_membership_source": fleet.source,
+            "fleet_nodes": fleet.node_count,
             "blocked_js_patterns": len(BLOCKED_JS_PATTERNS),
             "rate_limit": f"{MAX_REQUESTS_PER_MINUTE} requests/minute",
         },

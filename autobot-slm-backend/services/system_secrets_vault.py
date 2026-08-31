@@ -85,17 +85,48 @@ async def _legacy_get(session: AsyncSession, key: str) -> str | None:
     return decrypt_data(row.encrypted_value)
 
 
-async def _find_vault_id_by_name(name: str) -> uuid.UUID | None:
-    """Scan the System vault listing for an entry named *name* (no cached id available)."""
+async def _find_vault_entries_by_name(name: str) -> list[dict]:
+    """Every System vault entry named *name* (best-effort, never raises).
+
+    The vault namespace is FLAT and shared: `provider_key_vault` stores LLM
+    provider credentials under plain names like ``OPENAI_API_KEY`` with
+    ``secret_type="api_key"``. A name match alone therefore does not mean the
+    entry is ours, so callers that write must check the type (#14759).
+    """
     from user_management.services.vault_client import VaultClientError, vault_list
 
     try:
         entries = await vault_list()
     except VaultClientError:
-        return None
-    for entry in entries:
-        if entry.get("name") == name:
+        return []
+    return [e for e in entries if e.get("name") == name]
+
+
+async def _find_vault_id_by_name(name: str, *, expected_type: str | None = None) -> uuid.UUID | None:
+    """Id of the entry named *name*, optionally restricted to one secret type.
+
+    A malformed listing row is skipped rather than raised through: this is a
+    best-effort lookup and its callers document themselves as never raising.
+    """
+    for entry in await _find_vault_entries_by_name(name):
+        if expected_type is not None and entry.get("type") != expected_type:
+            continue
+        try:
             return uuid.UUID(entry["id"])
+        except (KeyError, ValueError, TypeError, AttributeError):
+            # uuid.UUID raises AttributeError on an int/list and TypeError on None,
+            # neither of which is a ValueError — a non-string id would otherwise
+            # propagate past db.commit() as a 500 from a best-effort lookup.
+            # The name is deliberately NOT logged here: CodeQL traces it from a
+            # secret source into this sink (py/clear-text-logging-sensitive-data).
+            # The entry's type is a label rather than a credential, and it is the
+            # more useful diagnostic anyway — the callers already log which key
+            # the operation was for.
+            logger.warning(
+                "system-secrets-vault: skipping a vault entry with a malformed id (type=%s)",
+                entry.get("type"),
+            )
+            continue
     return None
 
 
@@ -124,7 +155,7 @@ async def retrieve_secret(session: AsyncSession, key: str) -> str | None:
     if not is_configured():
         return None
 
-    vault_id = await _find_vault_id_by_name(key)
+    vault_id = await _find_vault_id_by_name(key, expected_type=_SECRET_TYPE)
     if vault_id is None:
         return None
     try:
@@ -156,7 +187,7 @@ async def delete_vault_copy(key: str) -> None:
 
     if not is_configured():
         return
-    vault_id = await _find_vault_id_by_name(key)
+    vault_id = await _find_vault_id_by_name(key, expected_type=_SECRET_TYPE)
     if vault_id is None:
         return
     try:
@@ -166,6 +197,78 @@ async def delete_vault_copy(key: str) -> None:
         pass  # already gone — idempotent
     except VaultClientError as exc:
         logger.warning("system-secrets-vault: delete failed key=%s: %s", key, type(exc).__name__)
+
+
+async def mirror_secret_to_vault(key: str, plaintext: str) -> bool:
+    """Keep *key*'s vault copy in step with a create or update (#14759).
+
+    The delete half of this already existed — :func:`delete_vault_copy` runs
+    whenever the legacy row is deleted — but create and update did not mirror at
+    all. A secret migrated to the vault and then edited kept serving its
+    pre-update value to anything reading the vault by name, with no error.
+    Reads from inside the SLM are legacy-first, so the divergence was invisible
+    from here; only an external vault reader saw it, and it saw a plausible
+    value rather than a failure.
+
+    Best-effort, never raises: the legacy row remains the live write path, so a
+    flaky vault must not make a secret un-editable.
+
+    On failure the vault copy is REMOVED rather than left behind. A reader that
+    gets nothing raises or falls back; a reader that gets last week's password
+    proceeds confidently with the wrong credential. Absent is recoverable,
+    stale is not detectable.
+    """
+    if not is_migratable(key):
+        return False
+
+    from user_management.services.vault_client import (
+        VaultClientError,
+        VaultSecretNotFound,
+        is_configured,
+        vault_create,
+        vault_rotate,
+    )
+
+    if not is_configured():
+        return False
+
+    entries = await _find_vault_entries_by_name(key)
+    ours = [e for e in entries if e.get("type") == _SECRET_TYPE]
+    if entries and not ours:
+        # The vault namespace is flat and shared. `provider_key_vault` stores
+        # live LLM provider credentials under plain names like OPENAI_API_KEY,
+        # and the SLM secret key is free text, so the names can collide. Taking
+        # the entry over would rotate a credential that belongs to another
+        # subsystem — and its reader treats absence as "no credential" and falls
+        # back to "", so a later failed mirror deleting it would be worse still.
+        logger.error(
+            "system-secrets-vault: refusing to mirror key=%s — a vault entry of type %r "
+            "already owns that name; the copy is left untouched",
+            key,
+            [e.get("type") for e in entries],
+        )
+        return False
+
+    try:
+        vault_id = await _find_vault_id_by_name(key, expected_type=_SECRET_TYPE)
+        if vault_id is None:
+            await vault_create(key, _SECRET_TYPE, plaintext)
+            logger.info("system-secrets-vault: created vault copy key=%s", key)
+        else:
+            await vault_rotate(vault_id, plaintext)
+            logger.info("system-secrets-vault: rotated vault copy key=%s", key)
+        return True
+    except (VaultClientError, VaultSecretNotFound) as exc:
+        # Logged at error, not warning: an unmirrored write is the defect this
+        # function exists to close, so it must not read as routine noise.
+        logger.error(
+            "system-secrets-vault: mirror failed key=%s: %s — dropping the vault copy "
+            "so no reader is served the superseded value",
+            key,
+            type(exc).__name__,
+        )
+        await delete_vault_copy(key)
+        return False
 
 
 async def migrate_key_to_vault(session: AsyncSession, key: str) -> bool:
@@ -185,7 +288,7 @@ async def migrate_key_to_vault(session: AsyncSession, key: str) -> bool:
     if not is_configured():
         return False
 
-    if await _find_vault_id_by_name(key) is not None:
+    if await _find_vault_id_by_name(key, expected_type=_SECRET_TYPE) is not None:
         logger.info("system-secrets-vault: migrate skip key=%s (already migrated)", key)
         return False
 

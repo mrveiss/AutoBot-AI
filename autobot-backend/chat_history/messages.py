@@ -175,6 +175,10 @@ class MessagesMixin:
         # If session_id provided, add to that session
         if session_id:
             if await self._add_message_to_session(session_id, message):
+                # #14820: the message is committed — now tell every other client
+                # watching this conversation, so a second tab or device does not
+                # silently diverge from the first.
+                await self._announce_message(session_id, message)
                 return
             # Fall through to add to default history on failure
 
@@ -183,6 +187,21 @@ class MessagesMixin:
         self._periodic_memory_check()
         await self._save_history()
         logger.debug("Added message from %s with type %s", sender, message_type)
+
+    @staticmethod
+    async def _announce_message(session_id: str, message: Dict[str, Any]) -> None:
+        """Publish an appended message on the conversation channel (#14820).
+
+        Import is deferred and failures are swallowed: notifying observers must
+        never fail a write that already succeeded, and ``chat_history`` must not
+        take a hard dependency on the API layer at import time.
+        """
+        try:
+            from api.session_events import publish_chat_message
+
+            await publish_chat_message(session_id, message)
+        except Exception as exc:
+            logger.debug("Could not announce message on chat channel: %s", exc)
 
     def get_all_messages(self) -> List[Dict[str, Any]]:
         """Returns the entire chat history."""

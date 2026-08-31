@@ -3826,7 +3826,17 @@
       "searchResultsStatus": "\"{query}\" کے لیے {count} نتائج ملے",
       "searchNoResults": "\"{query}\" کے لیے کوئی نتیجہ نہیں ملا",
       "fitToSelection": "انتخاب یا فلٹر کے مطابق فٹ کریں",
-      "minimapLabel": "کینوس کا جائزہ"
+      "minimapLabel": "کینوس کا جائزہ",
+      "undo": "کالعدم کریں",
+      "redo": "دوبارہ کریں",
+      "undoScope": "کالعدم کرنا اور دوبارہ کرنا اس کینوس پر نوڈز کو منتقل کرنے، شامل کرنے، ہٹانے اور جوڑنے کا احاطہ کرتے ہیں۔ نوڈ کے اندر ترامیم، اور سرور کو بھیجی جانے والی کوئی بھی کارروائی — محفوظ کرنا، منسلک کرنا، الگ کرنا — یہاں کالعدم نہیں کی جا سکتیں۔",
+      "selectionStatus": "{count} نوڈز منتخب کیے گئے",
+      "contextMenuLabel": "نوڈ کے اقدامات",
+      "contextMenuButtonLabel": "{name} کے اقدامات",
+      "contextMenuZoomToNode": "نوڈ پر زوم کریں",
+      "contextMenuFitSelection": "منظر کو انتخاب کے مطابق فٹ کریں",
+      "contextMenuDeleteSelection": "{count} منتخب نوڈز حذف کریں",
+      "contextMenuOpenWorkflow": "منسلک ورک فلو کھولیں"
     },
     "notifications": {
       "emailRecipients": "Email Recipients",
@@ -4743,7 +4753,8 @@
       "theme": "Theme"
     },
     "commandPermission": {
-      "executionFailed": "Command execution failed",
+      "executionFailed": "کمانڈ کا نفاذ ناکام ہو گیا",
+      "postExecutionFailed": "کمانڈ چل گئی، لیکن اس کے بعد کا ایک مرحلہ ناکام ہو گیا۔ اس کا آؤٹ پٹ دکھایا جا رہا ہے؛ کچھ اپ ڈیٹس غائب ہو سکتی ہیں۔",
       "allow": "Allow",
       "purposeLabel": "Purpose",
       "defaultPurpose": "System operation requested",
@@ -8041,6 +8052,8 @@
       "colRunDuration": "Run Duration",
       "colAction": "Action",
       "statusUnknown": "unknown",
+      "skipReasonLabel": "چھوڑ دیا گیا:",
+      "errorLabel": "خرابی:",
       "triggering": "Triggering...",
       "triggerNow": "Trigger Now",
       "runHistoryTitle": "Run History – {name}",
@@ -8291,6 +8304,12 @@
       "roleLensBanner": "ویو فلٹر: {role} — {total} میں سے {shown} نوڈز دکھائے جا رہے ہیں۔ رسائی تبدیل نہیں ہوتی۔",
       "roleLensEmpty": "ویو فلٹر: اس منظر میں \"{role}\" سے کوئی نوڈ میل نہیں کھاتا۔ رسائی تبدیل نہیں ہوتی — سب کو دیکھنے کے لیے فلٹر صاف کریں۔",
       "roleLensClear": "فلٹر صاف کریں",
+      "teamFilterLabel": "ٹیم کے مطابق فلٹر کریں",
+      "teamFilterAll": "تمام ٹیمیں",
+      "teamFilterBanner": "ٹیم فلٹر: {team} — {total} میں سے {shown} افراد دکھائے جا رہے ہیں۔ رسائی تبدیل نہیں ہوتی۔",
+      "toolFilterLabel": "ٹول کے مطابق فلٹر کریں",
+      "toolFilterAll": "تمام ٹولز",
+      "toolFilterBanner": "ٹول فلٹر: {tool} — {total} میں سے {shown} افراد دکھائے جا رہے ہیں۔ رسائی تبدیل نہیں ہوتی۔",
       "sidebar": {
         "owner": "مالک",
         "tools": "اوزار",
@@ -8332,6 +8351,7 @@
       "attachError": "یہ ورک فلو منسلک نہیں ہو سکا۔",
       "detachError": "یہ ورک فلو الگ نہیں ہو سکا۔",
       "processDetach": "{workflow} کو {role} سے الگ کریں",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "کردار لوڈ نہیں ہو سکے، اس لیے یہ فہرست نامکمل ہو سکتی ہے۔",
       "canvasGroupKind": "گروپ",
       "toolNodeLabel": "ٹول",
@@ -8340,6 +8360,7 @@
       "toolAttachError": "یہ ٹول منسلک نہیں ہو سکا۔",
       "toolDetachError": "یہ ٹول الگ نہیں ہو سکا۔",
       "toolDetach": "{tool} کو {role} سے الگ کریں",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "ٹول کی معلومات اس وقت دستیاب نہیں ہیں — یہ فہرست نامکمل ہو سکتی ہے۔",
       "canvasNoToolsDefined": "اس کمپنی میں کسی کردار کے ساتھ کوئی ٹول منسلک نہیں۔",
       "deepLinkNodeNotFound": "یہ لنک ایک ایسے نوڈ کی طرف اشارہ کرتا ہے جو یہاں نہیں ملا۔ ہو سکتا ہے یہ ہٹا دیا گیا ہو، یا آپ کو اس تک رسائی حاصل نہ ہو۔"
@@ -8432,6 +8453,8 @@
       "secretMappingIncomplete": "Fill in all secret values above before importing.",
       "importSuccess": "Import successful — company ID:",
       "warningsLabel": "Warnings:",
+      "droppedReportingLinesLabel": "Reporting lines that could not be kept:",
+      "droppedReportingLine": "{agent} was imported without a manager: {manager} was not created.",
       "importFailed": "Import failed:",
       "toastTemplateExported": "Template exported successfully",
       "toastTemplateExportFailed": "Template export failed",
@@ -8587,7 +8610,15 @@
       "unassigned": "کوئی کردار نہیں",
       "unassignedHint": "اس شعبے میں شامل، مگر کوئی کردار اس کی وضاحت نہیں کرتا",
       "inactive": "غیر فعال",
-      "inactiveHint": "غیر فعال یا ہٹا دیا گیا — پھر بھی دکھایا جاتا ہے کیونکہ اس کے کام اور کردار باقی ہیں، مگر نیا کام نہیں سونپا جا سکتا۔"
+      "inactiveHint": "غیر فعال یا ہٹا دیا گیا — پھر بھی دکھایا جاتا ہے کیونکہ اس کے کام اور کردار باقی ہیں، مگر نیا کام نہیں سونپا جا سکتا۔",
+      "editAriaLabel": "{name} کو ایڈیٹ کریں",
+      "fullNameLabel": "پورا نام",
+      "roleTitleLabel": "کردار / عہدہ",
+      "emailLabel": "ای میل",
+      "phoneLabel": "فون",
+      "saving": "محفوظ ہو رہا ہے…",
+      "save": "محفوظ کریں",
+      "contactSaveError": "رابطہ محفوظ نہیں ہو سکا۔"
     }
   },
   "code": {

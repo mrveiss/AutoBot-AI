@@ -6,7 +6,12 @@
 # Related to Issue #728
 
 - name: "SLM Get Service Logs"
-  hosts: target
+  # #13786: `target` is supplied by the caller at run time, and no shipped
+  # inventory defines it. As a bare name, a run that forgets to pass one matches
+  # nothing and Ansible skips the play silently -- ok=0, changed=0, exit 0 --
+  # which for a service-control playbook reads as "the restart succeeded".
+  # Templated, an unset variable is an undefined-variable error instead.
+  hosts: "{{ target }}"
   gather_facts: false
   become: true
 

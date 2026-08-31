@@ -13,6 +13,7 @@ importing the module proves only that the file parses.
 
 from __future__ import annotations
 
+from autobot_shared.api_routing.router_routes import effective_routes
 from llc.api import router as llc_router
 
 #: The assembled router carries prefix="/llc", so mounted paths include it.
@@ -50,27 +51,14 @@ _EXPECTED = {
 def _mounted() -> set:
     """(method, path) pairs reachable through the assembled LLC router.
 
-    This FastAPI version defers inclusion: ``router.routes`` holds
-    ``_IncludedRouter`` wrappers with no ``.path``, and the real routes live on
-    ``.original_router.routes``. Walking the top level alone finds one route out
-    of thirty-eight and reads as "nothing is mounted".
-
-    Same idiom as ``api/codebase_analytics/endpoints/impact_endpoint_test.py``
-    and ``api/self_capabilities_integration_test.py``, which both document this.
-    The sub-router paths are relative to the parent, so the ``/llc`` prefix is
-    prepended here rather than expected on the route itself.
+    ``effective_routes`` is the one traversal (#15093). What it replaces here was
+    correct in CI and broken locally: it walked ``.original_router.routes`` with
+    no fallback for the eager shape, and it prepended ``llc_router.prefix`` by
+    hand — which doubles to ``/llc/llc/...`` on a FastAPI that folds the prefix
+    in at include time. Both halves of that are now the helper's job, so this
+    file no longer encodes a FastAPI version.
     """
-    found = set()
-    for included in llc_router.routes:
-        original = getattr(included, "original_router", None)
-        subroutes = original.routes if original is not None else [included]
-        for sub in subroutes:
-            path = getattr(sub, "path", None)
-            if not path:
-                continue
-            for method in getattr(sub, "methods", set()) or set():
-                found.add((method, f"{llc_router.prefix}{path}"))
-    return found
+    return {(method, mounted.path) for mounted in effective_routes(llc_router) for method in mounted.methods}
 
 
 def test_every_role_route_is_mounted_on_the_llc_router() -> None:
@@ -87,17 +75,14 @@ def test_role_routes_require_authentication() -> None:
     """
     unguarded = []
     checked = 0
-    for included in llc_router.routes:
-        original = getattr(included, "original_router", None)
-        for sub in original.routes if original is not None else []:
-            path = f"{llc_router.prefix}{getattr(sub, 'path', '')}"
-            if not path.startswith(_PREFIX):
-                continue
-            checked += 1
-            dependant = getattr(sub, "dependant", None)
-            names = {getattr(dep.call, "__name__", "") for dep in getattr(dependant, "dependencies", [])}
-            if "get_current_user" not in names or "require_org_context" not in names:
-                unguarded.append((sorted(getattr(sub, "methods", []) or []), path, sorted(names)))
+    for mounted in effective_routes(llc_router):
+        if not mounted.path.startswith(_PREFIX):
+            continue
+        checked += 1
+        dependant = getattr(mounted.route, "dependant", None)
+        names = {getattr(dep.call, "__name__", "") for dep in getattr(dependant, "dependencies", [])}
+        if "get_current_user" not in names or "require_org_context" not in names:
+            unguarded.append((sorted(mounted.methods), mounted.path, sorted(names)))
     # Presence check first: with a wrong prefix this loop matches nothing and
     # the assertion below passes while having verified nothing at all — an
     # empty result reading as a clean result, which is how the first draft of

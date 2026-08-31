@@ -38,12 +38,6 @@ export interface SLMConfig {
     tlsBackend: number
     tlsRedis: number
   }
-  hosts: {
-    id: string
-    name: string
-    ip: string
-    description: string
-  }[]
 }
 
 // =============================================================================
@@ -124,16 +118,6 @@ const config: SLMConfig = {
     tlsBackend: getEnvNumber('VITE_TLS_BACKEND_PORT', 8443),
     tlsRedis: getEnvNumber('VITE_TLS_REDIS_PORT', 6380),
   },
-  // Derive IPs from vm object — single source, no duplication (#3049)
-  hosts: [
-    { id: 'main', name: 'Main Server', ip: vm.main, description: 'WSL Backend Server' },
-    { id: 'frontend', name: 'Frontend VM', ip: vm.frontend, description: 'Vue.js Frontend' },
-    { id: 'npu', name: 'NPU VM', ip: vm.npu, description: 'NPU Acceleration' },
-    { id: 'redis', name: 'Redis VM', ip: vm.redis, description: 'Redis Stack' },
-    { id: 'ai', name: 'AI VM', ip: vm.ai, description: 'AI Processing' },
-    { id: 'browser', name: 'Browser VM', ip: vm.browser, description: 'Playwright Automation' },
-    { id: 'slm', name: 'SLM Server', ip: vm.slm, description: 'Service Lifecycle Manager' },
-  ],
 }
 
 export function getConfig(): SLMConfig {
@@ -181,13 +165,14 @@ export function getBackendUrl(): string {
   return '/autobot-api'
 }
 
-/**
- * Get all configured hosts for terminal/SSH access
- * Related to Issue #729 - SSOT for hardcoded IPs
+/*
+ * #15227: `getHosts()` used to live here, returning a literal array of the
+ * seven VMs the fleet happened to have when it was written. It is gone rather
+ * than kept as a fallback: the SLM node registry is the fleet's definition,
+ * and a second answer that cannot see an enrolled node is not a safety net —
+ * it is the bug. Callers use the fleet store (`stores/fleet.ts`), which reads
+ * `GET /api/nodes` and reports a failed read as a failed read.
  */
-export function getHosts(): SLMConfig['hosts'] {
-  return config.hosts
-}
 
 /**
  * Get VNC-enabled hosts with port configuration.

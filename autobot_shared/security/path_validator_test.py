@@ -15,6 +15,7 @@ import pytest
 
 from autobot_shared.security.path_validator import (
     _DEFAULT_ALLOWED_ROOTS,
+    PROJECT_ALLOWED_ROOTS,
     SandboxPathError,
     require_path_string,
     resolve_within_sandbox,
@@ -30,10 +31,16 @@ from autobot_shared.security.path_validator import (
 class TestValidatePath:
     """Tests for validate_path()."""
 
-    def test_valid_path_under_default_root(self, tmp_path) -> None:
-        """Path under /tmp (a default root) resolves successfully."""
-        result = validate_path(str(tmp_path / "file.txt"))
-        assert isinstance(result, Path)
+    def test_tmp_path_rejected_by_default(self, tmp_path) -> None:
+        """#15238: a path under a world-writable shared root (/tmp, and
+        pytest's tmp_path lives under it on Linux) is rejected when the
+        caller passes no explicit allowed_roots.
+
+        Contrast: reintroducing "/tmp" into _DEFAULT_ALLOWED_ROOTS makes
+        this pass again -- that regression is exactly what this test pins.
+        """
+        with pytest.raises(ValueError, match="outside allowed directories"):
+            validate_path(str(tmp_path / "file.txt"))
 
     def test_valid_path_under_custom_root(self, tmp_path) -> None:
         """Path under a custom allowed root resolves successfully."""
@@ -112,14 +119,25 @@ class TestValidatePath:
                 allowed_roots=[str(tmp_path)],
             )
 
+    def test_default_allowed_roots_excludes_tmp(self) -> None:
+        """#15238: /tmp is world-writable and shared with every other
+        process on the host, so it must never be a default fallback root --
+        only an explicit, deliberate choice at a call site.
+        """
+        assert "/tmp" not in _DEFAULT_ALLOWED_ROOTS  # nosec B108
+
+    def test_project_allowed_roots_excludes_tmp(self) -> None:
+        """#15238: the shared "inside the AutoBot project" root that
+        call sites opt into explicitly must never resolve to /tmp either.
+        """
+        assert "/tmp" not in PROJECT_ALLOWED_ROOTS  # nosec B108
+        assert len(PROJECT_ALLOWED_ROOTS) == 1
+
     def test_default_allowed_roots_used_when_none(self) -> None:
         """When allowed_roots is None, _DEFAULT_ALLOWED_ROOTS is used."""
-        assert "/tmp" in _DEFAULT_ALLOWED_ROOTS  # nosec B108  # test/controlled code uses tmpdir intentionally
-        result = validate_path(
+        with pytest.raises(ValueError, match="outside allowed directories"):
             # Test/controlled code uses tmpdir intentionally.
-            "/tmp/test_path_validator_check"  # nosec B108
-        )
-        assert str(result).startswith("/tmp")  # nosec B108  # test/controlled code uses tmpdir intentionally
+            validate_path("/tmp/test_path_validator_check")  # nosec B108
 
     def test_symlink_escape(self, tmp_path) -> None:
         """Symlink pointing outside base directory is caught by realpath."""

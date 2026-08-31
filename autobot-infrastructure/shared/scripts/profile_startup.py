@@ -13,6 +13,16 @@ import os
 import pstats
 import sys
 import time
+from pathlib import Path
+
+# #14518: the first-party imports below carried a stale ``backend.`` package
+# prefix -- no ``backend`` package exists -- and autobot-backend was never on
+# sys.path, so this script raised ModuleNotFoundError on its own import block
+# before doing any work. Add the directory the way the other operator entry
+# points in this tree do (#14129).
+_BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
 
 
 def profile_startup():
@@ -30,7 +40,7 @@ def profile_startup():
     try:
         # Import main components
         print("Importing main modules...")
-        from backend import app_factory
+        import app_factory
 
         print("Creating FastAPI app...")
         app_factory.create_app()

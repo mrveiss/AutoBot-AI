@@ -29,11 +29,25 @@ import subprocess
 import sys
 from pathlib import Path
 
+from autobot_shared.paths import scrubbed_git_env
+
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-module-singletons"
 
 
+def _test_git_env() -> dict[str, str]:
+    """#15246: env for every git subprocess this suite spawns.
+
+    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    GIT_DIR pointing at the worktree it is pushing (every checkout here is
+    one), and an unscrubbed `git init`/`git add`/`git commit` in a
+    fixture then operates on THAT repository instead of tmp_path's. See
+    autobot_shared/paths_test.py and #15246 for the reproduced incident.
+    """
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+
+
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True)
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env())
 
 
 def _init_repo(tmp_path: Path) -> Path:
@@ -56,6 +70,7 @@ def _run_hook(repo: Path, *args: str) -> subprocess.CompletedProcess:
         cwd=repo,
         capture_output=True,
         text=True,
+        env=_test_git_env(),
     )
 
 
@@ -97,3 +112,54 @@ class TestFailsClosedOnGitFailure:
 
         result = _run_hook(repo)
         assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"
+
+
+class TestArgvAndGitBranchesAgree:
+    """GH#14034: the file-type filter must apply to BOTH invocation paths.
+
+    pre-commit runs this hook with no arguments (it reads the index); CI runs
+    it through ``pipeline-scripts/check-pre-commit-hook-pr.sh``, which casts a
+    deliberately wide net across every source extension and passes the result
+    as argv, expecting each hook to apply its own allowlist. The ``.py``
+    filter used to live only on the git branch, so the argv branch handed
+    ``.ts``/``.vue``/``.yml`` paths straight to ``ast.parse`` — the identical
+    asymmetry that made ``get_staged_files`` report a Vue file as a direct
+    Redis connection.
+    """
+
+    def _make_tree(self, repo: Path) -> None:
+        (repo / "autobot_shared").mkdir(parents=True, exist_ok=True)
+        (repo / "autobot_shared" / "mod.py").write_text("_tracker = TrackerClass()\n", encoding="utf-8")
+        # Deliberately parseable as Python. A `<template>` payload would make
+        # this test un-mutatable: ``check_file`` swallows ``SyntaxError``, so
+        # reverting the fix would produce the same silent exit 0 and the test
+        # would stay green over the restored bug. Content that DOES parse is
+        # what makes the extension filter the only thing keeping this file out
+        # of the report, so removing the filter flips the result.
+        (repo / "autobot_shared" / "widget.vue").write_text(
+            "_tracker = TrackerClass()\n", encoding="utf-8"
+        )
+        _git(repo, "add", "autobot_shared/mod.py", "autobot_shared/widget.vue")
+
+    def test_argv_branch_drops_non_python_paths(self, tmp_path: Path) -> None:
+        repo = _init_repo(tmp_path)
+        self._make_tree(repo)
+        result = _run_hook(repo, "autobot_shared/widget.vue")
+        assert "widget.vue" not in result.stdout, (
+            "a non-Python path reached the checker through the argv branch: " + result.stdout
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_both_branches_report_the_same_violations(self, tmp_path: Path) -> None:
+        repo = _init_repo(tmp_path)
+        self._make_tree(repo)
+
+        from_git = _run_hook(repo)
+        from_argv = _run_hook(repo, "autobot_shared/mod.py", "autobot_shared/widget.vue")
+
+        assert from_git.returncode == from_argv.returncode != 0
+        assert from_git.stdout == from_argv.stdout, (
+            "the two documented invocation paths disagree:\n"
+            f"  git  branch: {from_git.stdout!r}\n"
+            f"  argv branch: {from_argv.stdout!r}"
+        )

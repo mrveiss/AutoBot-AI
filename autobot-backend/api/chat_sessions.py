@@ -37,6 +37,11 @@ from api.schemas_chat import (
     SessionUpdateData,
 )
 from api.schemas_common import DataResponse
+from api.session_events import (
+    publish_session_created,
+    publish_session_deleted,
+    publish_session_updated,
+)
 from auth_middleware import get_auth_middleware, get_current_user
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -414,8 +419,14 @@ async def list_sessions(
     if scope in ("org", "team"):
         return await _list_scoped_sessions(request, request_id, chat_history_manager, scope, team_id)
 
-    # Default: list all sessions (fast mode, no decryption)
+    # Default: list all sessions (fast mode)
     sessions = await chat_history_manager.list_sessions_fast()
+
+    # #12685: exclude company/agent-scoped conversations (e.g. LLC CEO chat)
+    # from the ordinary user list — first-class scoping fields, not a title
+    # parse. See _is_agent_scoped_session for the migration story on sessions
+    # created before this fix.
+    sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
 
     # Filter to authenticated user's own sessions
     username = current_user.get("username")
@@ -434,6 +445,34 @@ async def list_sessions(
         message="Sessions retrieved successfully",
         request_id=request_id,
     )
+
+
+def _is_agent_scoped_session(session: dict) -> bool:
+    """A company/agent conversation (e.g. LLC CEO chat), not an ordinary user chat.
+
+    #12685: the leak this closes — LLC agent heartbeat/CEO-chat conversations
+    were registered in the same session store as ordinary chats and returned by
+    the default ``GET /api/chat/sessions`` list with no company scoping. The
+    only thing distinguishing them was a display title ("CEO · <company_id>"),
+    which is exactly the fragility that let two companies' agent chats pile
+    into one flat list.
+
+    ``companyId`` / ``sessionKind`` are first-class metadata fields written at
+    session creation (``CeoChatView.vue`` -> ``POST /chat/sessions`` ->
+    ``create_session`` here) and surfaced by ``list_sessions_fast`` /
+    ``list_sessions`` (``chat_history/session_listing.py``). Either field being
+    set is sufficient — a session can carry a ``company_id`` without an
+    explicit ``session_kind`` (or vice versa for a future non-company agent).
+
+    Migration: sessions created before this fix have neither field. They are
+    NOT retroactively reclassified — there is no reliable non-title signal to
+    do that with, and title-matching is the bug this closes, not the fix for
+    it. Such legacy sessions keep showing in the general list exactly as they
+    did before (no data loss, no silent re-scoping). A backfill/admin cleanup
+    for pre-existing "CEO · <company_id>" sessions is a separate, explicit,
+    one-time operation — #14756, not folded into this filter.
+    """
+    return bool(session.get("companyId")) or session.get("sessionKind") == "agent"
 
 
 async def _filter_user_sessions(sessions: list, username: str) -> list:
@@ -862,6 +901,10 @@ async def create_session(session_data: SessionCreate, request: Request):
         outcome="success",
     )
 
+    # #14820: tell every other client this session now exists.  The backend is
+    # the authority for session state; observers render from what it publishes.
+    await publish_session_created(session_id, session if isinstance(session, dict) else {})
+
     return create_chat_response(
         data=session,
         message="Session created successfully",
@@ -922,6 +965,9 @@ async def update_session(
         session_id,
         {"title": session_data.title, "request_id": request_id},
     )
+
+    # #14820: a title change made in one client must show up in the others.
+    await publish_session_updated(session_id, {"title": session_data.title})
 
     return create_chat_response(
         data=updated_session,
@@ -1408,6 +1454,10 @@ async def delete_session(
         },
         outcome="success",
     )
+
+    # #14820: other clients must drop this session from their list rather than
+    # holding a reference to something the backend no longer has.
+    await publish_session_deleted(session_id)
 
     return _build_delete_session_response(
         session_id,

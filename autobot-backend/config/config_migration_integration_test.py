@@ -85,25 +85,23 @@ class TestConfigurationMigration:
         assert test_config.get("redis.password") == "test-password"
 
     def test_secrets_service_config_migration(self):
-        """Test that secrets service uses centralized configuration"""
-        # Create test config with security settings
+        """The secrets service reads its key from centralized configuration.
+
+        Two things are checked here and both can now fail. ``patch`` raises
+        AttributeError if ``services.secrets_service`` has no ``config_manager``
+        seam to substitute, which is the migration this test is named for; the
+        assertion then verifies the value the service would read back through
+        it.
+
+        Both used to sit under ``except Exception: pass``. That catches
+        AssertionError, so the assertion was inert and the test passed whichever
+        way it went — the #15189 shape, found by the #15195 sweep.
+        """
         test_config = ConfigManager()
         test_config.set("security.secrets_key", "test_secrets_key")
 
-        # Mock the config manager import
         with patch("services.secrets_service.config_manager", test_config):
-            pass
-
-            # Create secrets service - should use config for key
-            # Note: This might still try to create actual encryption, so we test carefully
-            try:
-                # Just test that config is accessible
-                secrets_key = test_config.get("security.secrets_key")
-                assert secrets_key == "test_secrets_key"
-            except Exception:
-                # If initialization fails, that's OK for this test
-                # We're just testing that config access works
-                pass
+            assert test_config.get("security.secrets_key") == "test_secrets_key"
 
     def test_config_environment_variable_priorities(self):
         """Env-var override is ConfigRegistry's job, via the AUTOBOT_ prefix.

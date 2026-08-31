@@ -394,8 +394,15 @@ describe('Contacts stay out of the reporting tree (#13938)', () => {
   it('offers no detail drawer for a contact — there is no hierarchy node to open', async () => {
     const wrapper = await mountPeople()
 
-    expect(personRow(wrapper, USER_NAME)!.find('button').exists()).toBe(true)
-    expect(personRow(wrapper, CONTACT_NAME)!.find('button').exists()).toBe(false)
+    // #14603: a contact row does get a button now (the inline edit
+    // affordance), so "any button" would falsely pass here regardless of the
+    // drawer. Scoped to the specific testid the drawer-opening button carries.
+    expect(personRow(wrapper, USER_NAME)!.find('[data-testid^="org-person-open-"]').exists()).toBe(
+      true,
+    )
+    expect(
+      personRow(wrapper, CONTACT_NAME)!.find('[data-testid^="org-person-open-"]').exists(),
+    ).toBe(false)
   })
 
   it('opens the same drawer the tree opens when a hierarchy member is clicked', async () => {

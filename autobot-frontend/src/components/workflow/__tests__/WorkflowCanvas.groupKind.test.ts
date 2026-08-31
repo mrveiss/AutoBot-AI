@@ -40,8 +40,12 @@ const TREE = [
 
 const TEAMS = [{ id: 't1', name: 'Sales', member_user_ids: ['lead'] }]
 
+// #14860: one shared instance for the whole file. A fresh createI18n per
+// mount re-ingested the ~400KB message bundle every time; nothing here
+// mutates the instance, so building it once is enough.
+const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+
 function mountCanvas(nodes: unknown[]) {
-  const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
   return mount(WorkflowCanvas, {
     props: { nodes, selectedNodeId: null, readonly: true },
     global: { plugins: [i18n] },

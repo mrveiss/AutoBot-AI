@@ -98,6 +98,21 @@
             {{ dimensionLabels[dimension] }}
           </button>
         </div>
+        <!-- #14612: multi-select status + clear control. The nodes themselves
+             already carry a visual cue for WHICH ones are selected
+             (`.multi-selected`, #13941-compliant — shape, not just hue), but
+             nothing said HOW MANY until this. Shown only once a second node
+             joins the selection: a lone selection is exactly what
+             `selectedNodeId`'s own `.selected` styling already communicates,
+             so a size-1 chip would only duplicate it. `role="status"` is an
+             implicit polite live region — a screen-reader user hears the
+             count change as the marquee/shift-click selection grows. -->
+        <div v-if="selectedIds.size > 1" class="canvas-selection-status" role="status" data-testid="canvas-selection-status">
+          <span>{{ $t('workflow.canvas.selectionStatus', { count: selectedIds.size }) }}</span>
+          <button type="button" class="canvas-selection-clear" data-testid="canvas-selection-clear" @click="clearSelection">
+            {{ $t('common.deselectAll') }}
+          </button>
+        </div>
         <template v-if="!readonly">
         <button class="tool-btn" @click="addStepNode" :title="$t('workflow.canvas.addStep')">
           <Icon name="plus" /> {{ $t('workflow.canvas.addStep') }}
@@ -139,6 +154,40 @@
         <!-- #14611: "fit to selection or filter" — a *second* control, the
              fixed-reset button above stays exactly as it was. -->
         <button class="tool-btn" @click="fitToSelectionOrView" :aria-label="$t('workflow.canvas.fitToSelection')" data-testid="canvas-fit-view"><Icon name="expand-arrows-alt" /></button>
+        <div class="toolbar-divider"></div>
+        <!-- #14612: undo/redo — never gated on `readonly` (same reasoning as
+             zoom/fit above it): the disabled state IS the scope statement —
+             a user who presses Undo and sees nothing happen would learn not
+             to trust it, so the button is only ever enabled when there is a
+             tracked mutation to reverse. `title` puts the boundary in front
+             of a sighted mouse user on hover; `aria-describedby` gives a
+             screen reader the same text every time either button is
+             announced. -->
+        <button
+          type="button"
+          class="tool-btn"
+          data-testid="canvas-undo"
+          :disabled="!canUndo"
+          :aria-label="$t('workflow.canvas.undo')"
+          :aria-describedby="undoScopeId"
+          :title="$t('workflow.canvas.undoScope')"
+          @click="undo"
+        >
+          <Icon name="undo" />
+        </button>
+        <button
+          type="button"
+          class="tool-btn"
+          data-testid="canvas-redo"
+          :disabled="!canRedo"
+          :aria-label="$t('workflow.canvas.redo')"
+          :aria-describedby="undoScopeId"
+          :title="$t('workflow.canvas.undoScope')"
+          @click="redo"
+        >
+          <Icon name="redo" />
+        </button>
+        <p :id="undoScopeId" class="sr-only">{{ $t('workflow.canvas.undoScope') }}</p>
         <template v-if="!readonly">
         <div class="toolbar-divider"></div>
         <button class="tool-btn primary" @click="saveWorkflow" :disabled="nodes.length === 0">
@@ -149,7 +198,7 @@
     </div>
 
     <!-- Canvas -->
-    <div ref="canvasRef" class="canvas-area" @pointerdown="startPan" @pointermove="onPointerMove"
+    <div ref="canvasRef" class="canvas-area" :style="canvasGridStyle" @pointerdown="startPan" @pointermove="onPointerMove"
          @pointerup="endInteraction" @pointercancel="endInteraction" @wheel.prevent="handleWheel">
       <div class="canvas-content" :style="canvasTransform">
         <!-- #14609: keyboard instructions for the canvas's own composite-widget
@@ -180,7 +229,7 @@
              instead of being hijacked as "select the node". -->
         <div v-for="node in nodes" :key="node.id" class="workflow-node"
              :ref="(el) => registerNodeEl(node.id, el as Element | null)"
-             :class="[node.type, { selected: selectedNodeId === node.id }, ...ruleClasses(node)]"
+             :class="[node.type, { selected: selectedNodeId === node.id, 'multi-selected': isMultiOnlySelected(node) }, ...ruleClasses(node)]"
              :data-rule-id="nodeRuleId(node)"
              :data-group-kind="groupKind(node)"
              :data-node-id="node.id"
@@ -188,15 +237,37 @@
              role="button"
              :tabindex="rovingTabStopId === node.id ? 0 : -1"
              :aria-label="nodeAriaLabel(node)"
-             :aria-pressed="selectedNodeId === node.id"
+             :aria-pressed="isNodeSelected(node)"
              :aria-describedby="instructionsId"
              @pointerdown="onNodePointerDown(node, $event)"
-             @click.stop="selectNode(node.id)"
+             @click.stop="selectNode(node.id, $event)"
+             @contextmenu.prevent.stop="onNodeContextMenu(node, $event)"
              @focus="focusedNodeId = node.id"
              @keydown="onNodeKeydown(node, $event)">
           <div class="node-header">
+            <!-- #14612: shape+icon signal for multi-selection, not colour
+                 alone (#13941) — deliberately distinct from `.selected`'s own
+                 solid ring so the two states never read as the same thing. -->
+            <span v-if="isMultiOnlySelected(node)" class="multi-select-badge" data-testid="node-multi-badge" aria-hidden="true">
+              <Icon name="check-circle" />
+            </span>
             <Icon :name="nodeIcons[node.type]" />
             <span>{{ nodeTitle(node) }}</span>
+            <!-- #14612: context menu's pointer/touch/keyboard-tab entry point
+                 — right-click and the ContextMenu/Shift+F10 key (see
+                 `onNodeKeydown`) reach the same menu, but neither is
+                 discoverable by touch or by a keyboard user who has not
+                 memorised the shortcut. A real `<button>` is reachable by Tab
+                 and activated by Enter/Space like any other control. -->
+            <button
+              type="button"
+              class="node-menu-btn"
+              data-testid="node-menu-btn"
+              :aria-label="$t('workflow.canvas.contextMenuButtonLabel', { name: nodeTitle(node) })"
+              @click.stop="onNodeContextMenu(node, $event)"
+            >
+              <Icon name="ellipsis-h" />
+            </button>
             <button v-if="!readonly" class="delete-btn" @click.stop="deleteNode(node.id)" :aria-label="$t('common.delete')"><Icon name="times" /></button>
           </div>
           <div class="node-body">
@@ -364,6 +435,12 @@
         </div>
       </div>
 
+      <!-- #14612: marquee (rubber-band) selection — a screen-space rectangle
+           drawn over whatever the viewport currently shows, so it lives
+           outside `.canvas-content` next to the legend/minimap rather than
+           inside it (it must never inherit the pan/zoom transform). -->
+      <div v-if="marqueeActive" class="canvas-marquee" :style="marqueeStyle" data-testid="canvas-marquee"></div>
+
       <!-- GH#13941: legend — derived from the same evaluation the nodes use, so
            it lists exactly the rules that won on a node currently drawn. Sits
            outside `.canvas-content` so panning and zooming never move it. -->
@@ -415,10 +492,58 @@
       </div>
     </div>
 
+    <!-- #14612: context menu. Every action re-invokes a handler that already
+         exists elsewhere on this card (select, zoom, fit, detach, delete) —
+         see `contextMenuActions` — so the menu can never drift from what the
+         card/sidebar themselves offer. The backdrop closes it on any outside
+         press or right-click; the menu itself closes on Escape and restores
+         focus to the node it was opened on. -->
+    <div
+      v-if="contextMenu.open"
+      class="context-menu-backdrop"
+      data-testid="canvas-context-menu-backdrop"
+      @pointerdown="closeContextMenu"
+      @contextmenu.prevent="closeContextMenu"
+    ></div>
+    <ul
+      v-if="contextMenu.open"
+      ref="contextMenuEl"
+      class="canvas-context-menu"
+      role="menu"
+      tabindex="-1"
+      :aria-label="$t('workflow.canvas.contextMenuLabel')"
+      :style="contextMenuStyle"
+      data-testid="canvas-context-menu"
+      @keydown.esc="closeContextMenuAndRestoreFocus"
+    >
+      <li v-for="action in contextMenuActions" :key="action.id" role="none">
+        <button
+          type="button"
+          role="menuitem"
+          class="canvas-context-menu-item"
+          :data-testid="`canvas-context-menu-item-${action.id}`"
+          @click="runContextMenuAction(action)"
+        >
+          {{ action.label }}
+        </button>
+      </li>
+    </ul>
+
     <!-- Save Dialog -->
     <div v-if="showSaveDialog" class="dialog-overlay" @click.self="showSaveDialog = false">
-      <div class="dialog">
-        <h3><Icon name="save" /> {{ $t('workflow.canvas.saveWorkflow') }}</h3>
+      <!-- #14689: a modal without a focus trap lets Tab walk out of it into
+           the canvas behind. The helpers are the same ones CanvasNodeSidebar
+           uses (#14609) — this is wiring, not a second implementation. -->
+      <div
+        ref="saveDialogRef"
+        class="dialog"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="saveDialogTitleId"
+        @keydown="onSaveDialogKeydown"
+        @keydown.escape="showSaveDialog = false"
+      >
+        <h3 :id="saveDialogTitleId"><Icon name="save" /> {{ $t('workflow.canvas.saveWorkflow') }}</h3>
         <input v-model="saveName" :placeholder="$t('workflow.canvas.workflowName')" />
         <textarea v-model="saveDesc" :placeholder="$t('workflow.canvas.description')" rows="3"></textarea>
         <div class="dialog-actions">
@@ -432,11 +557,20 @@
 
 <script setup lang="ts">
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
-import { ref, reactive, computed, nextTick, useId, watch } from 'vue';
+import { ref, reactive, computed, nextTick, useId, watch, toRaw } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
-import { CANVAS_NODE_WIDTH } from './canvasNode';
+import {
+  CANVAS_NODE_WIDTH,
+  CANVAS_NODE_HEIGHT,
+  CANVAS_NODE_PORT_Y,
+  CANVAS_GRID_SIZE,
+  CANVAS_FIT_PADDING,
+  snapToGrid,
+  nextGridline,
+} from './canvasNode';
+import { useFocusTrap, useFocusRestore, useInitialFocus } from '@autobot/ui';
 import type { CanvasNode, CanvasNodeType, CanvasTab } from './canvasNode';
 import {
   SELECTABLE_RULE_DIMENSIONS,
@@ -490,6 +624,10 @@ const emit = defineEmits<{
   // #14597: an org-tool node's own per-role detach control, same reasoning —
   // this component only ever emits the LLC mutation, never performs it.
   (e: 'tool-detached', roleId: string, toolName: string): void;
+  // #14612: undo's inverse of `nodes-connected` — wires `useWorkflowBuilder`'s
+  // `disconnectNodes`, exported since it was written but never called from
+  // anywhere, in for the first time.
+  (e: 'nodes-disconnected', sourceId: string, targetId: string): void;
 }>();
 
 const showVisionDropdown = ref(false);
@@ -559,6 +697,21 @@ function nodeFlag(node: CanvasNode, key: string): boolean {
 }
 
 /**
+ * The "{kind}: {name}" text shared by a node's accessible name and the
+ * canvas search result label (#14611) — one construction of it, not two.
+ *
+ * #14657: `name` is `nodeDisplayName`, not `nodeTitle` — for org-process and
+ * org-tool, `nodeTitle` is the generic type caption (the same string `kind`
+ * already carries), which announced e.g. "Process: Process" with nothing
+ * identifying which node it was.
+ */
+function nodeKindAndName(node: CanvasNode): string {
+  const kind = nodeKindLabel(node);
+  const name = nodeDisplayName(node);
+  return kind ? t('workflow.canvas.nodeAriaLabel', { kind, name }) : name;
+}
+
+/**
  * Accessible name for a node (#14609): kind, name and — for an org-person,
  * the only node type carrying a status concept — its current state.
  *
@@ -568,12 +721,13 @@ function nodeFlag(node: CanvasNode, key: string): boolean {
  * legend happens to be colouring by.
  */
 function nodeAriaLabel(node: CanvasNode): string {
-  const kind = nodeKindLabel(node);
-  const name = nodeTitle(node);
   const state = nodeStatusLabel(node);
-  return state
-    ? t('workflow.canvas.nodeAriaLabelWithState', { kind, name, state })
-    : t('workflow.canvas.nodeAriaLabel', { kind, name });
+  if (!state) return nodeKindAndName(node);
+  return t('workflow.canvas.nodeAriaLabelWithState', {
+    kind: nodeKindLabel(node),
+    name: nodeDisplayName(node),
+    state,
+  });
 }
 
 /** The "kind" component of a node's accessible name. */
@@ -642,6 +796,12 @@ function nodeStyle(node: CanvasNode): Record<string, string> {
   const style: Record<string, string> = {
     left: `${node.position.x}px`,
     top: `${node.position.y}px`,
+    // #14726: the rendered width comes from the same constant `connections`,
+    // `nodeCenter`, the drop hit test and `nodeExtent` compute against. It
+    // used to be a `width: 240px` literal in the CSS — the one copy the user
+    // could actually see — with every one of those computations attempting to
+    // predict it. `org-group` still overrides it from `data` below.
+    width: `${CANVAS_NODE_WIDTH}px`,
   };
   if (node.type !== 'org-group') return style;
   const data = node.data as Record<string, unknown>;
@@ -794,6 +954,19 @@ function exceedsMoveThreshold(e: PointerEvent): boolean {
 const panStart = reactive({ x: 0, y: 0 });
 const dragNode = ref<CanvasNode | null>(null);
 const dragOffset = reactive({ x: 0, y: 0 });
+/**
+ * #14612: per-node starting position for the drag gesture in progress —
+ * populated once in `startDrag`, read (and cleared) in `endInteraction` so a
+ * whole drag collapses into ONE undo entry instead of one per `pointermove`
+ * tick. More than one entry only when the dragged node is part of a
+ * multi-selection (a bulk drag); a lone drag has exactly one.
+ */
+const dragStartPositions = new Map<string, { x: number; y: number }>();
+/** The latest position emitted for each node this drag — read alongside
+ *  `dragStartPositions` at gesture end to build the history entry's 'after'
+ *  side without re-deriving it from `props.nodes`, which a synchronous test
+ *  may not have caught up with yet. */
+const dragLatestPositions = new Map<string, { x: number; y: number }>();
 const drawingLine = ref(false);
 const lineStart = reactive({ nodeId: '', x: 0, y: 0 });
 const mousePos = reactive({ x: 0, y: 0 });
@@ -859,6 +1032,91 @@ function capturePointer(e: PointerEvent): void {
 }
 
 /* ------------------------------------------------------------------ *
+ * #14612: marquee (rubber-band) multi-select.
+ *
+ * A left-press starting on genuinely empty canvas drags out a selection
+ * rectangle (`startPan` hands off to `startMarquee` below). Mouse only: a
+ * one-finger touch press is already claimed for pan (#14610), and
+ * shift/middle-click are already claimed for pan too (#13996) — this only
+ * ever starts in the one gesture slot nothing else uses. It therefore always
+ * REPLACES the current selection rather than adding to it — there is no
+ * modifier key left to spell "additive marquee" that pan has not already
+ * claimed.
+ * ------------------------------------------------------------------ */
+
+const marqueeAnchor = reactive({ x: 0, y: 0 });
+const marqueeCurrent = reactive({ x: 0, y: 0 });
+/** True from the press until either the gesture ends or it turns into an
+ *  active marquee — distinct from `marqueeActive` so a plain click (press,
+ *  no movement, release) never draws a rectangle or touches the selection,
+ *  the same "decide at the threshold, not on pointerdown" rule #14625
+ *  already established for pan/drag. */
+const marqueePending = ref(false);
+const marqueeActive = ref(false);
+
+function startMarquee(e: PointerEvent): void {
+  marqueePending.value = true;
+  marqueeAnchor.x = e.clientX;
+  marqueeAnchor.y = e.clientY;
+  marqueeCurrent.x = e.clientX;
+  marqueeCurrent.y = e.clientY;
+}
+
+/** The marquee rectangle in screen space, relative to the canvas area's own
+ *  box — deliberately never converted into canvas-content space: the
+ *  rectangle is a lasso drawn over whatever the viewport currently shows,
+ *  independent of pan/zoom, which is also why it is rendered as a sibling of
+ *  `.canvas-content` rather than inside it. */
+const marqueeStyle = computed(() => {
+  const rect = canvasRef.value?.getBoundingClientRect();
+  const originX = rect?.left ?? 0;
+  const originY = rect?.top ?? 0;
+  const left = Math.min(marqueeAnchor.x, marqueeCurrent.x) - originX;
+  const top = Math.min(marqueeAnchor.y, marqueeCurrent.y) - originY;
+  return {
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${Math.abs(marqueeCurrent.x - marqueeAnchor.x)}px`,
+    height: `${Math.abs(marqueeCurrent.y - marqueeAnchor.y)}px`,
+  };
+});
+
+interface ScreenRect { left: number; top: number; right: number; bottom: number }
+
+/** `node`'s bounding box in the SAME screen space `marqueeStyle` draws in —
+ *  canvas-space position/extent transformed by the current pan/zoom, then
+ *  offset by the canvas area's own on-screen position. */
+function nodeScreenRect(node: CanvasNode): ScreenRect {
+  const rect = canvasRef.value?.getBoundingClientRect();
+  const originX = rect?.left ?? 0;
+  const originY = rect?.top ?? 0;
+  const { width, height } = nodeExtent(node);
+  const left = originX + pan.x + node.position.x * zoom.value;
+  const top = originY + pan.y + node.position.y * zoom.value;
+  return { left, top, right: left + width * zoom.value, bottom: top + height * zoom.value };
+}
+
+function rectsIntersect(a: ScreenRect, b: ScreenRect): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+/** Recomputed on every marquee move so the selection previews live, the same
+ *  way a desktop file manager's own rubber-band select does. */
+function applyMarqueeSelection(): void {
+  const box: ScreenRect = {
+    left: Math.min(marqueeAnchor.x, marqueeCurrent.x),
+    top: Math.min(marqueeAnchor.y, marqueeCurrent.y),
+    right: Math.max(marqueeAnchor.x, marqueeCurrent.x),
+    bottom: Math.max(marqueeAnchor.y, marqueeCurrent.y),
+  };
+  const next = new Set<string>();
+  for (const node of props.nodes) {
+    if (rectsIntersect(nodeScreenRect(node), box)) next.add(node.id);
+  }
+  selectedIds.value = next;
+}
+
+/* ------------------------------------------------------------------ *
  * GH#14609: keyboard operation — a roving-tabindex node graph.
  *
  * `focusedNodeId` is only ever written by user-driven focus (Tab landing on
@@ -911,14 +1169,89 @@ const rovingTabStopId = computed<string | null>(() => {
 
 const canvasTransform = computed(() => ({ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom.value})` }));
 
+/* ------------------------------------------------------------------ *
+ * #14765 / #14726: canvas metrics the TEMPLATE binds, so the rendered
+ * value is produced from the constant instead of restated in CSS.
+ *
+ * #14726 records that the direction of this dependency used to be
+ * backwards: `.workflow-node { width: 240px }` was the width the browser
+ * actually rendered, and every TypeScript computation (`connections`,
+ * `nodeCenter`, the drop hit test, `nodeExtent`) was an attempt to predict
+ * it. Changing one without the other detached every edge from every node
+ * and failed no test, because the constants still agreed with each other.
+ * ------------------------------------------------------------------ */
+
+/**
+ * #14765: the grid is world content, not chrome.
+ *
+ * It is painted on `.canvas-area` — the fixed viewport — while the pan/zoom
+ * transform lives on its child `.canvas-content`, so without these two
+ * bindings the grid neither pans nor zooms: at 2x the squares stay 20 screen
+ * px while every node doubles, and panning slides the nodes across a
+ * stationary backdrop.
+ *
+ * A world point `w` lands at `pan + w * zoom` under `.canvas-content`'s
+ * transform, so gridlines at multiples of `CANVAS_GRID_SIZE` are
+ * `CANVAS_GRID_SIZE * zoom` apart on screen, with the origin at `pan`. The
+ * 1px line widths in the gradients are deliberately NOT scaled — a hairline
+ * should stay a hairline at every zoom.
+ *
+ * This is the one metric that belongs INSIDE the camera transform. The
+ * legend, minimap and instructions block are deliberately outside it (see
+ * their comments in the template) because they are chrome; the grid was
+ * grouped with them by accident.
+ */
+const canvasGridStyle = computed(() => {
+  const pitch = CANVAS_GRID_SIZE * zoom.value;
+  return {
+    backgroundSize: `${pitch}px ${pitch}px`,
+    backgroundPosition: `${pan.x}px ${pan.y}px`,
+  };
+});
+
+/**
+ * #14768: quantise a world position to the grid the canvas draws.
+ *
+ * `free` (Alt/Option held) bypasses it, matching the modifier convention in
+ * other canvas editors — the grid is a default, not a cage.
+ */
+function snapPosition(pos: { x: number; y: number }, free: boolean): { x: number; y: number } {
+  return free ? pos : { x: snapToGrid(pos.x), y: snapToGrid(pos.y) };
+}
+
+/**
+ * Edge geometry for every drawn connection.
+ *
+ * #14766: the target of each edge is resolved through an index built once per
+ * recompute, not by scanning `props.nodes` per edge. The scan made this
+ * O(N x E), and it runs on the drag hot path: `onPointerMove` emits
+ * `node-moved` for every node in `dragStartPositions` on EVERY pointer event,
+ * the consumer writes `node.position`, and this computed re-resolves all E
+ * edges against all N nodes for each of those ticks.
+ *
+ * The index costs one O(N) pass, which is strictly cheaper than the scan for
+ * any E >= 1. The same structure already existed a few hundred lines below
+ * (`orgFacts` keys nodes by id) — this was a missed application of it, not an
+ * unfamiliar technique.
+ *
+ * Note the drop hit-test in `endInteraction` still uses a linear `find`, and
+ * deliberately so: it runs once per drop rather than once per edge, and a
+ * geometric hit-test cannot be answered by an id lookup anyway.
+ */
 const connections = computed(() => {
   const result: { id: string; path: string }[] = [];
+  // FIRST occurrence wins, exactly as `props.nodes.find(...)` did. A plain
+  // `byId.set(node.id, node)` would keep the LAST, so a list carrying a
+  // duplicate id would silently re-anchor its edges to the other node — a
+  // behaviour change smuggled in under a performance fix.
+  const byId = new Map<string, CanvasNode>();
+  for (const node of props.nodes) if (!byId.has(node.id)) byId.set(node.id, node);
   props.nodes.forEach(node => {
     node.connections.forEach(targetId => {
-      const target = props.nodes.find(n => n.id === targetId);
+      const target = byId.get(targetId);
       if (target) {
-        const x1 = node.position.x + 240, y1 = node.position.y + 50;
-        const x2 = target.position.x, y2 = target.position.y + 50;
+        const x1 = node.position.x + CANVAS_NODE_WIDTH, y1 = node.position.y + CANVAS_NODE_PORT_Y;
+        const x2 = target.position.x, y2 = target.position.y + CANVAS_NODE_PORT_Y;
         const mx = (x1 + x2) / 2;
         result.push({ id: `${node.id}-${targetId}`, path: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}` });
       }
@@ -934,6 +1267,182 @@ const drawingLinePath = computed(() => {
   return `M${lineStart.x},${lineStart.y} C${mx},${lineStart.y} ${mx},${ty} ${tx},${ty}`;
 });
 
+/* ------------------------------------------------------------------ *
+ * #14612: multi-select.
+ *
+ * `selectedNodeId` (the prop) keeps its exact pre-#14612 meaning — "the one
+ * node whose detail drawer/edit state is open" — and is never repurposed:
+ * `OrgChart.vue` still reads it for `CanvasNodeSidebar`, `WorkflowBuilderView`
+ * still reads it to know which node's inline fields to treat as active, and
+ * neither had to change for this to land. Multi-selection is new, purely
+ * local state (`selectedIds`) that coexists alongside it:
+ *   - a plain click/Enter replaces both — `selectedIds` becomes a size-1 set
+ *     containing the same id `node-selected` carries, so the two never
+ *     disagree for the single-selection case every existing consumer already
+ *     handles.
+ *   - a shift-click/shift-Enter/marquee only ever touches `selectedIds`. When
+ *     that leaves exactly one id, `node-selected` is re-emitted with it (a
+ *     shift-click down to a single survivor still opens its drawer, matching
+ *     plain-click semantics); otherwise `node-selected(null)` is emitted —
+ *     every existing consumer already treats `null` as "no single node is
+ *     open" (`OrgChart.closeDrawer`, `WorkflowBuilderView`'s own null branch),
+ *     so a multi-selection reads as "nothing to show a detail drawer for"
+ *     rather than requiring either consumer to learn a new shape.
+ * ------------------------------------------------------------------ */
+
+const selectedIds = ref<Set<string>>(new Set());
+
+/** Every mutation to `selectedIds` goes through here — `ref<Set>` does not
+ *  make Set mutation itself reactive, so every change replaces the value
+ *  with a new Set rather than calling `.add`/`.delete` on the existing one. */
+function mutateSelection(mutator: (ids: Set<string>) => void): void {
+  const next = new Set(selectedIds.value);
+  mutator(next);
+  selectedIds.value = next;
+}
+
+function clearSelection(): void {
+  selectedIds.value = new Set();
+}
+
+/** True when `node` is selected by either mechanism — the union `aria-pressed`
+ *  announces, so a screen-reader user gets one consistent "selected" signal
+ *  regardless of which one put it there. */
+function isNodeSelected(node: CanvasNode): boolean {
+  return props.selectedNodeId === node.id || selectedIds.value.has(node.id);
+}
+
+/** Multi-select-only membership — the visual badge/outline must stay visually
+ *  distinct from `.selected`'s own solid ring (#13941: colour is never the
+ *  only signal), so it is driven by this rather than by `isNodeSelected`,
+ *  which would double the treatment on a node that is both. */
+function isMultiOnlySelected(node: CanvasNode): boolean {
+  return selectedIds.value.has(node.id) && props.selectedNodeId !== node.id;
+}
+
+/** A click/Enter/Space's selection intent — shared by the pointer and
+ *  keyboard paths (#14609's own "every mouse action needs a keyboard
+ *  equivalent" rule, extended to multi-select). `additive` toggles `id` into
+ *  or out of `selectedIds` (shift-click / shift-Enter); otherwise the
+ *  selection is replaced with just `id` (a plain click/Enter). */
+function applySelectionIntent(id: string, additive: boolean): void {
+  if (additive) {
+    mutateSelection((ids) => {
+      if (ids.has(id)) ids.delete(id);
+      else ids.add(id);
+    });
+    const ids = selectedIds.value;
+    emit('node-selected', ids.size === 1 ? [...ids][0] : null);
+    return;
+  }
+  selectedIds.value = new Set([id]);
+  emit('node-selected', id);
+}
+
+/* ------------------------------------------------------------------ *
+ * #14612: undo/redo.
+ *
+ * Scope (stated in the UI via `undoScope`/`title`/`aria-describedby` on the
+ * Undo/Redo buttons, not only here in code — a user who presses Undo and
+ * sees nothing happen learns not to trust it, so the buttons are disabled
+ * whenever there is nothing tracked to reverse): moving, adding, removing and
+ * connecting a node on THIS canvas. Nothing else ever reaches
+ * `pushHistory` — an edit inside a node's own inline fields (`node.data.*`
+ * via `v-model`) is not a canvas mutation, and neither is anything that
+ * reaches the server (`save-workflow`, `process-detached`, `tool-detached`):
+ * the server has already committed those by the time this component could
+ * react, so "undoing" them here would show a reverted card while the backend
+ * disagreed with it.
+ *
+ * This component never owns `nodes` — it's a prop — so undo/redo works by
+ * re-emitting the same intents `deleteNode`/`addStepNode`/a drag/a connect
+ * already emit (or their inverse), never by mutating anything locally.
+ * ------------------------------------------------------------------ */
+
+type CanvasAtomicAction =
+  | { kind: 'move'; nodeId: string; before: { x: number; y: number }; after: { x: number; y: number } }
+  | { kind: 'add'; node: CanvasNode }
+  | { kind: 'remove'; node: CanvasNode }
+  | { kind: 'connect'; sourceId: string; targetId: string };
+
+interface CanvasHistoryEntry {
+  actions: CanvasAtomicAction[];
+}
+
+/** A session-long, unbounded stack is a memory leak nobody asked for — each
+ *  entry is already one whole user gesture (a drag, an add, a bulk delete),
+ *  so 100 of them is a deep history in practice. */
+const MAX_HISTORY_ENTRIES = 100;
+
+const undoStack = ref<CanvasHistoryEntry[]>([]);
+const redoStack = ref<CanvasHistoryEntry[]>([]);
+const canUndo = computed(() => undoStack.value.length > 0);
+const canRedo = computed(() => redoStack.value.length > 0);
+
+/** Records one user gesture as a single undo step. A gesture that produced no
+ *  tracked action (e.g. `clearCanvas` on an already-empty canvas) pushes
+ *  nothing, so `canUndo` never lies about there being something to reverse. */
+function pushHistory(actions: CanvasAtomicAction[]): void {
+  if (actions.length === 0) return;
+  undoStack.value.push({ actions });
+  if (undoStack.value.length > MAX_HISTORY_ENTRIES) undoStack.value.shift();
+  // A fresh mutation invalidates whatever redo branch existed — the same rule
+  // a browser text field's own undo stack already follows.
+  redoStack.value = [];
+}
+
+/**
+ * A fresh plain copy of a node held in the history stack (#14612).
+ *
+ * `toRaw` first, and that is the whole point. The stacks are plain `ref`s, so
+ * Vue deeply proxies whatever is pushed into them — the plain object cloned at
+ * record time comes back out as a reactive Proxy, and `structuredClone`
+ * refuses a Proxy with `DataCloneError`. Thrown inside a click handler, that
+ * exception swallowed the emit: undo appeared to do nothing, while the history
+ * entry itself was correctly recorded and the button correctly enabled.
+ *
+ * Cloning (rather than handing back the raw object) keeps the stored snapshot
+ * independent of whatever the parent does to the node it receives.
+ */
+function cloneStoredNode(node: CanvasNode): WorkflowNode {
+  return structuredClone(toRaw(node)) as unknown as WorkflowNode;
+}
+
+function applyAtomicAction(action: CanvasAtomicAction, direction: 'undo' | 'redo'): void {
+  if (action.kind === 'move') {
+    emit('node-moved', action.nodeId, direction === 'undo' ? action.before : action.after);
+  } else if (action.kind === 'add') {
+    if (direction === 'undo') emit('node-removed', action.node.id);
+    else emit('node-added', cloneStoredNode(action.node));
+  } else if (action.kind === 'remove') {
+    if (direction === 'undo') emit('node-added', cloneStoredNode(action.node));
+    else emit('node-removed', action.node.id);
+  } else {
+    if (direction === 'undo') emit('nodes-disconnected', action.sourceId, action.targetId);
+    else emit('nodes-connected', action.sourceId, action.targetId);
+  }
+}
+
+function undo(): void {
+  const entry = undoStack.value.pop();
+  if (!entry) return;
+  for (let i = entry.actions.length - 1; i >= 0; i -= 1) applyAtomicAction(entry.actions[i], 'undo');
+  redoStack.value.push(entry);
+}
+
+function redo(): void {
+  const entry = redoStack.value.pop();
+  if (!entry) return;
+  for (const action of entry.actions) applyAtomicAction(action, 'redo');
+  undoStack.value.push(entry);
+}
+
+/** Reuses the same `_uid` `navInstructionsId`/`moveInstructionsId` are keyed
+ *  off (declared above, in the #14609 keyboard-operation section) — one
+ *  mount-unique id source for the whole component, not a second `useId()`
+ *  call for a single new string. */
+const undoScopeId = `workflow-canvas-undo-scope-${_uid}`;
+
 const genId = () => `node_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 function addStepNode() {
@@ -945,6 +1454,7 @@ function addStepNode() {
   };
   emit('node-added', node);
   emit('node-selected', node.id);
+  pushHistory([{ kind: 'add', node: structuredClone(node) }]);
 }
 
 function addConditionNode() {
@@ -955,6 +1465,7 @@ function addConditionNode() {
   };
   emit('node-added', node);
   emit('node-selected', node.id);
+  pushHistory([{ kind: 'add', node: structuredClone(node) }]);
 }
 
 function addSwitchNode() {
@@ -965,6 +1476,7 @@ function addSwitchNode() {
   };
   emit('node-added', node);
   emit('node-selected', node.id);
+  pushHistory([{ kind: 'add', node: structuredClone(node) }]);
 }
 
 function addCase(node: CanvasNode) {
@@ -999,23 +1511,39 @@ function addVisionNode(type: WorkflowNode['type']) {
   };
   emit('node-added', node);
   emit('node-selected', node.id);
+  pushHistory([{ kind: 'add', node: structuredClone(node) }]);
   showVisionDropdown.value = false;
 }
 
 function deleteNode(id: string) {
+  const node = props.nodes.find((n) => n.id === id);
   emit('node-removed', id);
   if (props.selectedNodeId === id) emit('node-selected', null);
+  if (selectedIds.value.has(id)) mutateSelection((ids) => ids.delete(id));
+  if (node) pushHistory([{ kind: 'remove', node: structuredClone(toRaw(node)) }]);
 }
 
-function selectNode(id: string) {
+/**
+ * A click/tap's selection intent (#14079's pan-click suppression still
+ * applies first). `event` is optional — the context menu's own "select"
+ * action calls this with none, meaning "a plain selection" exactly like a
+ * modifier-free click.
+ */
+function selectNode(id: string, event?: MouseEvent) {
   // The click/tap that closes a pan or a node drag is not a selection
   // (#14079, generalised for touch drag by #14610).
   if (movedThisGesture.value) return;
-  emit('node-selected', id);
+  applySelectionIntent(id, event?.shiftKey ?? false);
 }
 
-/** Fixed-size step for a keyboard-driven node move — matches the background grid. */
-const NODE_KEYBOARD_MOVE_STEP = 20;
+/**
+ * Step for a keyboard-driven node move: exactly one grid cell.
+ *
+ * #14768: derived rather than written as `20`, so it cannot drift from the
+ * grid the user sees — the same reason `CANVAS_NODE_PORT_Y` is derived from
+ * `CANVAS_NODE_HEIGHT` (#14690).
+ */
+const NODE_KEYBOARD_MOVE_STEP = CANVAS_GRID_SIZE;
 
 type SpatialDirection = 'up' | 'down' | 'left' | 'right';
 
@@ -1048,9 +1576,9 @@ function isRtl(): boolean {
 }
 
 /** A node's approximate visual centre, in canvas space — same anchor the
- *  connection-line paths already use (`x + 240`, `y + 50`, see `connections`). */
+ *  connection-line paths already use (`CANVAS_NODE_WIDTH`, `CANVAS_NODE_PORT_Y`). */
 function nodeCenter(node: CanvasNode): { x: number; y: number } {
-  return { x: node.position.x + CANVAS_NODE_WIDTH / 2, y: node.position.y + 50 };
+  return { x: node.position.x + CANVAS_NODE_WIDTH / 2, y: node.position.y + CANVAS_NODE_PORT_Y };
 }
 
 /**
@@ -1100,10 +1628,45 @@ function moveNodeByKeyboard(node: CanvasNode, direction: SpatialDirection): void
     right: { x: NODE_KEYBOARD_MOVE_STEP, y: 0 },
   };
   const { x: dx, y: dy } = delta[direction];
-  emit('node-moved', node.id, {
-    x: Math.max(0, node.position.x + dx),
-    y: Math.max(0, node.position.y + dy),
-  });
+  // #14612: a Ctrl+arrow on a node that is part of a >1 multi-selection moves
+  // the whole selection together — the keyboard counterpart of a bulk drag
+  // (`startDrag` below), keyboard parity requiring it for the same reason
+  // #14609/#14610 already established for single-node move and touch.
+  const group = selectedIds.value.has(node.id) && selectedIds.value.size > 1
+    ? selectedIds.value
+    : new Set([node.id]);
+  // #14768: the press lands the focused node on the ADJACENT gridline rather
+  // than at `position + step`. From an off-grid node, `position + step` would
+  // stay off-grid forever; `snapToGrid(position + step)` would overshoot the
+  // line it was reaching for (x=10 would jump to 40, skipping 20). So the
+  // first press aligns, and every press after it advances exactly one cell.
+  // `NODE_KEYBOARD_MOVE_STEP` still states the intent — one grid cell — and
+  // `nextGridline` supplies the alignment; only the sign of the delta is read.
+  // `nextGridline` returns its axis unchanged for a 0 delta, so a horizontal
+  // press never quietly re-aligns the vertical axis.
+  //
+  // The whole group then moves by the delta the FOCUSED node's alignment
+  // produced, not by each node's own alignment — snapping every node
+  // independently would deform the selection and break the invariant #14612
+  // established, that every other node moves by the SAME delta.
+  const anchor = {
+    x: Math.max(0, nextGridline(node.position.x, dx)),
+    y: Math.max(0, nextGridline(node.position.y, dy)),
+  };
+  const appliedX = anchor.x - node.position.x;
+  const appliedY = anchor.y - node.position.y;
+  const moves: CanvasAtomicAction[] = [];
+  for (const id of group) {
+    const n = props.nodes.find((candidate) => candidate.id === id);
+    if (!n) continue;
+    const before = { x: n.position.x, y: n.position.y };
+    const after = id === node.id
+      ? anchor
+      : { x: Math.max(0, n.position.x + appliedX), y: Math.max(0, n.position.y + appliedY) };
+    emit('node-moved', id, after);
+    moves.push({ kind: 'move', nodeId: id, before, after });
+  }
+  pushHistory(moves);
 }
 
 /**
@@ -1119,14 +1682,27 @@ function moveNodeByKeyboard(node: CanvasNode, direction: SpatialDirection): void
 function onNodeKeydown(node: CanvasNode, e: KeyboardEvent): void {
   if (e.target !== e.currentTarget) return;
 
+  // #14612: Shift+Enter/Shift+Space is shift-click's keyboard equivalent —
+  // toggles `node` into/out of the multi-selection instead of replacing it.
   if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
     e.preventDefault();
-    selectNode(node.id);
+    applySelectionIntent(node.id, e.shiftKey);
     return;
   }
   if (e.key === 'Escape') {
     e.preventDefault();
+    clearSelection();
     emit('node-selected', null);
+    return;
+  }
+  // #14612: the ContextMenu key (and Shift+F10, the pre-ContextMenu-key
+  // convention many keyboards and screen readers still send) is the
+  // keyboard's own way to open a context menu — anchored on the node's own
+  // element, since a keyboard gesture carries no pointer position.
+  if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+    e.preventDefault();
+    const rect = nodeEls.get(node.id)?.getBoundingClientRect();
+    openContextMenuAt(node.id, rect ? rect.left + rect.width / 2 : 0, rect ? rect.top + rect.height / 2 : 0);
     return;
   }
 
@@ -1147,15 +1723,24 @@ function onNodeKeydown(node: CanvasNode, e: KeyboardEvent): void {
 
 async function clearCanvas() {
   if (props.nodes.length && (await confirm({ title: t('common.confirm'), message: t('workflow.canvas.clearConfirm') }))) {
+    const removed: CanvasAtomicAction[] = props.nodes.map((n) => ({ kind: 'remove', node: structuredClone(toRaw(n)) }));
     props.nodes.forEach(n => emit('node-removed', n.id));
     emit('node-selected', null);
+    clearSelection();
+    pushHistory(removed);
   }
 }
 
 function autoLayout() {
+  const moves: CanvasAtomicAction[] = [];
   props.nodes.forEach((node, i) => {
-    emit('node-moved', node.id, { x: 100 + (i % 3) * 300, y: 100 + Math.floor(i / 3) * 180 });
+    const after = { x: 100 + (i % 3) * 300, y: 100 + Math.floor(i / 3) * 180 };
+    if (node.position.x !== after.x || node.position.y !== after.y) {
+      moves.push({ kind: 'move', nodeId: node.id, before: { x: node.position.x, y: node.position.y }, after });
+    }
+    emit('node-moved', node.id, after);
   });
+  pushHistory(moves);
 }
 
 /** Zoom clamp shared by every way of changing it — buttons, wheel, pinch. */
@@ -1189,14 +1774,24 @@ watch(searchQuery, () => { searchActiveIndex.value = -1; });
  * A node's own name, independent of its type's generic caption.
  *
  * `nodeTitle` returns the *type* label ("Process", "Tool") for an org-process
- * or org-tool node — correct for the node's header, wrong for search, which
- * needs the workflow's role or the tool's name to find anything.
+ * or org-tool node — correct for the node's header, wrong for search and for
+ * the accessible name (#14657), both of which need something identifying
+ * *which* node this is: the workflow (and role) a process runs, or the tool
+ * name (and the roles carrying it).
  */
 function nodeDisplayName(node: CanvasNode): string {
   const label = nodeText(node, 'label');
   if (label) return label;
-  if (node.type === 'org-process') return nodeText(node, 'role_name');
-  if (node.type === 'org-tool') return nodeText(node, 'tool_name');
+  if (node.type === 'org-process') {
+    const workflow = nodeText(node, 'workflow_id');
+    const role = nodeText(node, 'role_name');
+    return role ? t('llc.orgChart.processDisplayName', { workflow, role }) : workflow;
+  }
+  if (node.type === 'org-tool') {
+    const tool = nodeText(node, 'tool_name');
+    const roles = toolRoles(node).map((role) => role.role_name).join(', ');
+    return roles ? t('llc.orgChart.toolDisplayName', { tool, roles }) : tool;
+  }
   return nodeTitle(node);
 }
 
@@ -1209,11 +1804,11 @@ function nodeSearchText(node: CanvasNode): string {
   return parts.filter(Boolean).join(' ');
 }
 
-/** The result list's visible (and screen-reader-read) label for `node`. */
+/** The result list's visible (and screen-reader-read) label for `node` —
+ *  the same "{kind}: {name}" text as the node's own accessible name (#14657),
+ *  not a second construction of it. */
 function nodeSearchLabel(node: CanvasNode): string {
-  const kind = nodeKindLabel(node);
-  const name = nodeDisplayName(node);
-  return kind ? `${kind}: ${name}` : name;
+  return nodeKindAndName(node);
 }
 
 const searchHasQuery = computed(() => searchQuery.value.trim().length > 0);
@@ -1291,10 +1886,14 @@ function onSearchKeydown(e: KeyboardEvent): void {
  * ------------------------------------------------------------------ */
 
 /** Node footprint the layout builders assume, for a node type that carries no
- *  size of its own — the same 100px row `endInteraction` below already uses
+ *  size of its own — the same row height `endInteraction` below already uses
  *  for its connection-drop hit test, and `org-group`'s own `data.width`/
- *  `data.height` (`nodeStyle` above) when the node IS sized. */
-const NODE_APPROX_HEIGHT = 100;
+ *  `data.height` (`nodeStyle` above) when the node IS sized.
+ *
+ *  #14690: this was a second, independent `100`. The comment already said it
+ *  was "the same" height as the hit test, which is exactly the claim a shared
+ *  constant should be making instead of prose. */
+const NODE_APPROX_HEIGHT = CANVAS_NODE_HEIGHT;
 
 /** A zoom level comfortable for looking at one node up close — fixed, rather
  *  than a maximal fit, so repeatedly jumping between search hits or deep
@@ -1304,7 +1903,7 @@ const FOCUS_ZOOM = 1;
 
 /** Padding, in canvas px, kept around a fitted bounding box so a fitted node
  *  or selection is never drawn flush against the canvas edge. */
-const FIT_PADDING = 60;
+const FIT_PADDING = CANVAS_FIT_PADDING;
 
 /** The width/height a node occupies for bounding-box math (fit, minimap) —
  *  `org-group` carries its own from `data`, every other type is the fixed
@@ -1384,13 +1983,22 @@ function fitToNodes(nodesToFit: CanvasNode[]): void {
  * deliberately a *second* control, not a change to `resetZoom`: that button's
  * fixed pan(50,50)/zoom(1) stays exactly as it was.
  *
- * Fits the selected node when there is one; otherwise fits every node
- * `props.nodes` currently carries. That second case IS "fit to the active
- * filter" for free — a role lens or a unit tab narrows `props.nodes` itself
- * (`OrgChart.vue`'s `lensedCanvasNodes`/`visibleRoots`), so fitting to
- * whatever is actually drawn can never disagree with what the filter shows.
+ * #14612 extended this rather than duplicating it: a multi-selection
+ * (`selectedIds`) is now preferred over the single `selectedNodeId` prop when
+ * one exists, so "fit to selection" means the whole bulk selection once one
+ * exists. Falls back to the prop-driven single selection (unchanged from
+ * #14611, and still how a fresh mount with no local multi-select behaves —
+ * see the zoomFit tests), then to every node `props.nodes` currently
+ * carries. That last case IS "fit to the active filter" for free — a role
+ * lens or a unit tab narrows `props.nodes` itself (`OrgChart.vue`'s
+ * `lensedCanvasNodes`/`visibleRoots`), so fitting to whatever is actually
+ * drawn can never disagree with what the filter shows.
  */
 function fitToSelectionOrView(): void {
+  if (selectedIds.value.size > 0) {
+    fitToNodes(props.nodes.filter((n) => selectedIds.value.has(n.id)));
+    return;
+  }
   const selected = props.nodes.filter((n) => n.id === props.selectedNodeId);
   fitToNodes(selected.length > 0 ? selected : props.nodes);
 }
@@ -1531,7 +2139,16 @@ function startPan(e: PointerEvent) {
   // press starting on empty canvas (or an org container, handed on below) is
   // always a pan — mirrors the mouse's shift/middle-click modifier.
   const isTouchPan = e.pointerType === 'touch';
-  if (isTouchPan || e.button === 1 || e.shiftKey) { isPanning.value = true; panStart.x = e.clientX - pan.x; panStart.y = e.clientY - pan.y; }
+  if (isTouchPan || e.button === 1 || e.shiftKey) {
+    isPanning.value = true; panStart.x = e.clientX - pan.x; panStart.y = e.clientY - pan.y;
+    return;
+  }
+  // #14612: a plain left-press reaching here started on genuinely empty
+  // canvas — a node's own `onNodePointerDown` always stops propagation for a
+  // plain press (only shift/middle-click bubble here instead, both handled
+  // above) — so this is the one gesture slot marquee-select can claim
+  // without taking anything away from pan, drag or touch.
+  if (e.button === 0) startMarquee(e);
 }
 
 /**
@@ -1588,6 +2205,22 @@ function startDrag(node: CanvasNode, e: PointerEvent) {
   dragNode.value = node;
   dragOffset.x = e.clientX - node.position.x * zoom.value - pan.x;
   dragOffset.y = e.clientY - node.position.y * zoom.value - pan.y;
+  // #14612: dragging a node that is part of a >1 multi-selection moves the
+  // whole selection together — every other selected node's own position is
+  // derived from the SAME pointer delta as the node the gesture grabbed (see
+  // `onPointerMove`'s `dragNode` branch). Captured once, here, rather than
+  // read fresh on every `pointermove`, so the 'before' side of the eventual
+  // undo entry is the position each node had when the gesture STARTED, not
+  // wherever it happened to be on the last tick.
+  dragStartPositions.clear();
+  dragLatestPositions.clear();
+  const group = selectedIds.value.has(node.id) && selectedIds.value.size > 1
+    ? selectedIds.value
+    : new Set([node.id]);
+  for (const id of group) {
+    const n = props.nodes.find((candidate) => candidate.id === id);
+    if (n) dragStartPositions.set(id, { x: n.position.x, y: n.position.y });
+  }
 }
 
 function startConnect(nodeId: string, port: string, e: PointerEvent) {
@@ -1595,8 +2228,8 @@ function startConnect(nodeId: string, port: string, e: PointerEvent) {
   const node = props.nodes.find(n => n.id === nodeId);
   if (node) {
     lineStart.nodeId = nodeId;
-    lineStart.x = node.position.x + (port === 'out' ? 240 : 0);
-    lineStart.y = node.position.y + 50;
+    lineStart.x = node.position.x + (port === 'out' ? CANVAS_NODE_WIDTH : 0);
+    lineStart.y = node.position.y + CANVAS_NODE_PORT_Y;
   }
   mousePos.x = e.clientX; mousePos.y = e.clientY;
   capturePointer(e);
@@ -1619,11 +2252,48 @@ function onPointerMove(e: PointerEvent) {
   else if (dragNode.value) {
     const x = (e.clientX - dragOffset.x - pan.x) / zoom.value;
     const y = (e.clientY - dragOffset.y - pan.y) / zoom.value;
-    emit('node-moved', dragNode.value.id, { x: Math.max(0, x), y: Math.max(0, y) });
+    // #14768: the PRIMARY node snaps, and the rest of a multi-selection then
+    // moves by the delta that snapping produced. Snapping each node's own
+    // position independently would land them all on the grid but deform the
+    // selection, breaking #14612's stated invariant that every other node
+    // moves by the SAME delta as the dragged one. Snapping the leader keeps
+    // the group rigid and still puts it on the grid.
+    const primary = snapPosition({ x: Math.max(0, x), y: Math.max(0, y) }, e.altKey);
+    // #14612: every other node in `dragStartPositions` (the rest of a
+    // multi-selection, if any — a lone drag has exactly one entry, itself,
+    // making this loop identical to the pre-#14612 single-emit behaviour)
+    // moves by the SAME delta the primary dragged node just moved, from ITS
+    // OWN start position, each still clamped to stay on-canvas individually.
+    const start = dragStartPositions.get(dragNode.value.id);
+    const dx = start ? primary.x - start.x : 0;
+    const dy = start ? primary.y - start.y : 0;
+    for (const [id, startPos] of dragStartPositions) {
+      const pos = id === dragNode.value.id
+        ? primary
+        : { x: Math.max(0, startPos.x + dx), y: Math.max(0, startPos.y + dy) };
+      emit('node-moved', id, pos);
+      dragLatestPositions.set(id, pos);
+    }
     // #14610/#14625: a drag that actually moved the node past the threshold
     // must not also select it when the gesture ends — the drag counterpart
     // of the pan case above.
     if (exceedsMoveThreshold(e)) movedThisGesture.value = true;
+  }
+  else if (marqueePending.value) {
+    marqueeCurrent.x = e.clientX;
+    marqueeCurrent.y = e.clientY;
+    if (!marqueeActive.value && exceedsMoveThreshold(e)) marqueeActive.value = true;
+    if (marqueeActive.value) {
+      applyMarqueeSelection();
+      // #14612: mirrors the pan/drag suppression above (#14079/#14610/#14625)
+      // — `capturePointer` retargets `pointerup` to `.canvas-area`, but not
+      // the browser's synthesized `click`, which still hit-tests normally
+      // and can land on whichever node the marquee happened to end over.
+      // Without this, that click reached `selectNode` with `movedThisGesture`
+      // still false and collapsed the whole marquee selection down to just
+      // that one node.
+      movedThisGesture.value = true;
+    }
   }
 }
 
@@ -1633,10 +2303,40 @@ function endInteraction(e: PointerEvent) {
     if (rect) {
       const x = (e.clientX - rect.left - pan.x) / zoom.value;
       const y = (e.clientY - rect.top - pan.y) / zoom.value;
-      const target = props.nodes.find(n => x >= n.position.x && x <= n.position.x + 240 && y >= n.position.y && y <= n.position.y + 100);
-      if (target && target.id !== lineStart.nodeId) emit('nodes-connected', lineStart.nodeId, target.id);
+      // Geometry from the shared constants (#14690); the connect is recorded
+      // so it can be undone (#14612). Both sides of this merge were wanted.
+      const target = props.nodes.find(n => x >= n.position.x && x <= n.position.x + CANVAS_NODE_WIDTH && y >= n.position.y && y <= n.position.y + CANVAS_NODE_HEIGHT);
+      if (target && target.id !== lineStart.nodeId) {
+        emit('nodes-connected', lineStart.nodeId, target.id);
+        pushHistory([{ kind: 'connect', sourceId: lineStart.nodeId, targetId: target.id }]);
+      }
     }
   }
+  // #14612: one undo step per drag GESTURE, not per `pointermove` tick —
+  // `dragStartPositions`/`dragLatestPositions` were populated once at
+  // `startDrag` and kept in step on every move; only a node that actually
+  // ended up somewhere different becomes a history entry.
+  if (dragNode.value && movedThisGesture.value && dragStartPositions.size > 0) {
+    const moves: CanvasAtomicAction[] = [];
+    for (const [id, before] of dragStartPositions) {
+      const after = dragLatestPositions.get(id) ?? before;
+      if (after.x !== before.x || after.y !== before.y) moves.push({ kind: 'move', nodeId: id, before, after });
+    }
+    pushHistory(moves);
+  }
+  dragStartPositions.clear();
+  dragLatestPositions.clear();
+  // #14612: the marquee's selection was already applied live in
+  // `onPointerMove` as the rectangle grew — this just ends the gesture and
+  // (unlike a plain click on empty canvas, which stays a no-op) tells the
+  // consumer about the selection it just built, mirroring what a click or
+  // shift-click already does when it leaves exactly one id selected.
+  if (marqueeActive.value) {
+    const ids = selectedIds.value;
+    emit('node-selected', ids.size === 1 ? [...ids][0] : null);
+  }
+  marqueePending.value = false;
+  marqueeActive.value = false;
   // #14610: lifting one finger of a pinch leaves the other still down; it
   // does not resume as a one-finger pan — the user has to lift fully and
   // start a fresh gesture, same as releasing mid-drag does for a mouse.
@@ -1644,8 +2344,191 @@ function endInteraction(e: PointerEvent) {
   isPanning.value = false; dragNode.value = null; drawingLine.value = false;
 }
 
+/**
+ * Focus management for the save dialog (#14689).
+ *
+ * `useFocusRestore` is given `showSaveDialog` rather than being called bare:
+ * the bare form saves focus on *mount*, and this dialog lives inside an
+ * always-mounted component, so it would have captured whatever was focused
+ * when the canvas appeared instead of what the user was on when they opened
+ * the dialog. The reactive form saves on false→true and restores on
+ * true→false, which is what a `v-if` dialog needs.
+ */
+const saveDialogRef = ref<HTMLElement | null>(null);
+const saveDialogTitleId = useId();
+const { onKeydown: onSaveDialogKeydown } = useFocusTrap(saveDialogRef);
+useFocusRestore(showSaveDialog);
+const { focusFirst: focusSaveDialog } = useInitialFocus(saveDialogRef);
+
+watch(showSaveDialog, (open) => {
+  if (open) void focusSaveDialog();
+});
+
 function saveWorkflow() { showSaveDialog.value = true; }
 function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); showSaveDialog.value = false; saveName.value = ''; saveDesc.value = ''; }
+
+/* ------------------------------------------------------------------ *
+ * #14612: context menu.
+ *
+ * Every action below re-invokes a handler that already exists elsewhere on
+ * this card — `selectNode`, `zoomToNode`, `fitToNodes`, the `process-detached`
+ * /`tool-detached` emits the card's own detach buttons already use, and
+ * `deleteNode` — rather than a second implementation of any of them. That is
+ * what keeps the menu from ever drifting from the sidebar/card's own action
+ * set: there is only ever one function that performs each action, and the
+ * menu is one more caller of it.
+ * ------------------------------------------------------------------ */
+
+interface CanvasContextMenuAction {
+  id: string;
+  label: string;
+  run: () => void;
+}
+
+const contextMenu = reactive<{ open: boolean; x: number; y: number; nodeId: string | null }>({
+  open: false,
+  x: 0,
+  y: 0,
+  nodeId: null,
+});
+const contextMenuEl = ref<HTMLElement | null>(null);
+
+/** Matches the menu's own `min-width`/`max-height` below — used only to keep
+ *  the menu on-screen, so an approximation is enough; a real measurement
+ *  would need a render pass between "open" and "position" for no visible
+ *  benefit. */
+const CONTEXT_MENU_WIDTH = 220;
+const CONTEXT_MENU_MAX_HEIGHT = 280;
+
+/**
+ * Opens the menu anchored at `(clientX, clientY)`, clamped to stay fully
+ * on-screen. Deliberately direction-agnostic (#14612 RTL requirement): the
+ * clamp is against `window.innerWidth`/`innerHeight`, physical viewport
+ * bounds that mean the same thing regardless of document direction, rather
+ * than any LTR/RTL-specific offset math — a menu opened near the trailing
+ * edge in either direction simply flips to stay inside the same physical
+ * bounds either way.
+ */
+function openContextMenuAt(nodeId: string, clientX: number, clientY: number): void {
+  const maxX = Math.max(8, window.innerWidth - CONTEXT_MENU_WIDTH - 8);
+  const maxY = Math.max(8, window.innerHeight - CONTEXT_MENU_MAX_HEIGHT - 8);
+  contextMenu.x = Math.max(8, Math.min(clientX, maxX));
+  contextMenu.y = Math.max(8, Math.min(clientY, maxY));
+  contextMenu.nodeId = nodeId;
+  contextMenu.open = true;
+  void nextTick(() => contextMenuEl.value?.focus());
+}
+
+function closeContextMenu(): void {
+  contextMenu.open = false;
+  contextMenu.nodeId = null;
+}
+
+/** Escape's own close path — also returns keyboard focus to the node the
+ *  menu was opened on, so a keyboard user is not dropped onto the document
+ *  body. Not used by the backdrop/action-selected paths: those already have
+ *  an obvious next focus target (whatever the user clicked, or the action's
+ *  own effect), and forcing focus back to the node there would fight it. */
+function closeContextMenuAndRestoreFocus(): void {
+  const nodeId = contextMenu.nodeId;
+  closeContextMenu();
+  if (nodeId) void nextTick(() => nodeEls.get(nodeId)?.focus());
+}
+
+const contextMenuStyle = computed(() => ({ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }));
+
+/**
+ * Right-click (`@contextmenu`) or the node's own "…" button
+ * (`.node-menu-btn`, for touch/keyboard-tab users who cannot right-click) —
+ * both reach this. A node not already part of the multi-selection has the
+ * selection replaced with just itself first (the same convention a file
+ * manager or spreadsheet uses), so the menu always acts on a selection that
+ * includes the node it was opened on.
+ */
+function onNodeContextMenu(node: CanvasNode, e: MouseEvent): void {
+  if (!selectedIds.value.has(node.id)) {
+    selectedIds.value = new Set([node.id]);
+    emit('node-selected', node.id);
+  }
+  openContextMenuAt(node.id, e.clientX, e.clientY);
+}
+
+/**
+ * The action set for whichever node the menu is currently open on — never a
+ * hand-maintained list that could drift from what the card/sidebar actually
+ * offer (#14612 acceptance). `select`/`open-workflow` are omitted for
+ * `org-group`/`org-tool`: selecting either is already a dead click today
+ * (`OrgChart.onCanvasNodeSelected` finds no matching tree node for either
+ * id), and a menu item that does nothing is worse than an absent one.
+ */
+const contextMenuActions = computed<CanvasContextMenuAction[]>(() => {
+  const nodeId = contextMenu.nodeId;
+  if (!nodeId) return [];
+  const node = props.nodes.find((n) => n.id === nodeId);
+  if (!node) return [];
+  const bulk = selectedIds.value.has(nodeId) && selectedIds.value.size > 1;
+  const actions: CanvasContextMenuAction[] = [];
+
+  if (node.type === 'org-process') {
+    actions.push({
+      id: 'open-workflow',
+      label: t('workflow.canvas.contextMenuOpenWorkflow'),
+      run: () => selectNode(node.id),
+    });
+  } else if (node.type !== 'org-group' && node.type !== 'org-tool') {
+    actions.push({ id: 'select', label: t('common.select'), run: () => selectNode(node.id) });
+  }
+
+  actions.push({
+    id: 'zoom',
+    label: t('workflow.canvas.contextMenuZoomToNode'),
+    run: () => zoomToNode(node.id),
+  });
+
+  if (bulk) {
+    actions.push({
+      id: 'fit-selection',
+      label: t('workflow.canvas.contextMenuFitSelection'),
+      run: () => fitToNodes(props.nodes.filter((n) => selectedIds.value.has(n.id))),
+    });
+  }
+
+  if (node.type === 'org-process') {
+    actions.push({
+      id: 'detach-process',
+      label: processDetachLabel(node),
+      run: () => emit('process-detached', nodeText(node, 'role_id'), nodeText(node, 'workflow_id')),
+    });
+  }
+  if (node.type === 'org-tool') {
+    for (const role of toolRoles(node)) {
+      actions.push({
+        id: `detach-tool-${role.role_id}`,
+        label: toolDetachLabel(node, role),
+        run: () => emit('tool-detached', role.role_id, nodeText(node, 'tool_name')),
+      });
+    }
+  }
+
+  if (!props.readonly && node.type !== 'org-group') {
+    actions.push({
+      id: 'delete',
+      label: bulk
+        ? t('workflow.canvas.contextMenuDeleteSelection', { count: selectedIds.value.size })
+        : t('common.delete'),
+      run: () => {
+        for (const id of bulk ? [...selectedIds.value] : [node.id]) deleteNode(id);
+      },
+    });
+  }
+
+  return actions;
+});
+
+function runContextMenuAction(action: CanvasContextMenuAction): void {
+  action.run();
+  closeContextMenu();
+}
 </script>
 
 <style scoped>
@@ -1664,7 +2547,12 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 /* #14610: `touch-action: none` on every custom-gesture surface — without it, the
    browser's own touch scroll/pinch-zoom competes with our own pan/pinch/drag
    handling for the same one- and two-finger gestures. */
-.canvas-area { flex: 1; position: relative; overflow: hidden; background: linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px); background-size: 20px 20px; cursor: grab; touch-action: none; }
+/* #14765: the gradients live here but their SIZE and ORIGIN come from
+   `canvasGridStyle`, bound in the template, so the grid pans and zooms with
+   `.canvas-content`. Painted on the fixed viewport with static metrics, as it
+   was, the grid stops describing the plane the nodes sit on. The 1px gradient
+   stops stay 1px on purpose — a hairline at every zoom. */
+.canvas-area { flex: 1; position: relative; overflow: hidden; background: linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px); cursor: grab; touch-action: none; }
 .canvas-area:active { cursor: grabbing; }
 .canvas-content { position: absolute; min-width: 100%; min-height: 100%; transform-origin: 0 0; }
 
@@ -1672,7 +2560,10 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .connection-line { fill: none; stroke: var(--color-primary); stroke-width: 2; }
 .drawing-line { fill: none; stroke: var(--color-primary); stroke-width: 2; stroke-dasharray: 5; opacity: 0.6; }
 
-.workflow-node { position: absolute; width: 240px; background: var(--bg-secondary); border: 2px solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); cursor: move; user-select: none; touch-action: none; }
+/* #14726: no `width` here — `nodeStyle()` supplies it from
+   `CANVAS_NODE_WIDTH`, so the value the browser renders and the value the
+   geometry code predicts cannot drift apart. */
+.workflow-node { position: absolute; background: var(--bg-secondary); border: 2px solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); cursor: move; user-select: none; touch-action: none; }
 .workflow-node:hover { box-shadow: var(--shadow-md); }
 .workflow-node.selected { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-bg); }
 /* #14609: keyboard focus indicator — nodes carry no native focus styling of
@@ -1793,7 +2684,7 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .canvas-search-clear { display: flex; align-items: center; padding: var(--spacing-0); background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; }
 .canvas-search-clear:hover { color: var(--text-primary); }
 .canvas-search-clear:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
-.canvas-search-results { position: absolute; top: 100%; inset-inline-start: 0; z-index: 10; margin-top: var(--spacing-1); width: 260px; max-height: 260px; overflow-y: auto; list-style: none; padding: var(--spacing-1) var(--spacing-0); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.canvas-search-results { position: absolute; top: 100%; inset-inline-start: 0; z-index: 10; margin-top: var(--spacing-1); width: 260px; max-height: 260px; overflow-y: auto; list-style: none; padding: var(--spacing-1) var(--spacing-0); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
 .canvas-search-result { padding: var(--spacing-2) var(--spacing-3); font-size: var(--text-sm); color: var(--text-primary); cursor: pointer; }
 .canvas-search-result:hover, .canvas-search-result.active { background: var(--bg-tertiary); }
 .canvas-search-empty { padding: var(--spacing-2) var(--spacing-3); font-size: var(--text-sm); color: var(--text-tertiary); font-style: italic; }
@@ -1805,7 +2696,7 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .canvas-minimap-viewport { position: absolute; border: 1px solid var(--color-primary); background: var(--color-primary-bg); pointer-events: none; }
 
 .dropdown-container { position: relative; display: inline-block; }
-.dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 10; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--spacing-1) var(--spacing-0); min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 10; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--spacing-1) var(--spacing-0); min-width: 180px; box-shadow: var(--shadow-lg); }
 .dropdown-menu button { display: flex; align-items: center; gap: var(--spacing-2); width: 100%; padding: var(--spacing-2) var(--spacing-3); border: none; background: none; color: var(--text-primary); cursor: pointer; font-size: 0.85rem; }
 .dropdown-menu button:hover { background: var(--bg-tertiary); }
 .target-label { font-size: var(--text-xs); color: var(--text-secondary); }
@@ -1814,7 +2705,7 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .node-header { display: flex; align-items: center; gap: var(--spacing-2); padding: var(--spacing-2) var(--spacing-3); color: var(--text-on-primary); border-radius: var(--radius-lg) var(--radius-lg) 0 0; font-size: var(--text-sm); font-weight: 600; }
 .node-header span { flex: 1; }
 .delete-btn { position: relative; padding: var(--spacing-1); background: transparent; border: none; color: inherit; cursor: pointer; opacity: 0.7; border-radius: var(--radius-default); }
-.delete-btn:hover { opacity: 1; background: rgba(255,255,255,0.2); }
+.delete-btn:hover { opacity: 1; background: var(--bg-overlay-light); }
 /* #14610: same WCAG 2.5.5 touch-target widening as `.port`, for the same reason
    — the visible icon stays compact inside the node header on a mouse. */
 @media (pointer: coarse) {
@@ -1867,7 +2758,7 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .empty-state h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
 .empty-state p { margin: var(--spacing-0) var(--spacing-0) var(--spacing-5); color: var(--text-tertiary); }
 
-.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: var(--z-modal-backdrop); }
+.dialog-overlay { position: fixed; inset: 0; background: var(--bg-overlay); display: flex; align-items: center; justify-content: center; z-index: var(--z-modal-backdrop); }
 .dialog { width: 400px; background: var(--bg-secondary); border-radius: var(--radius-xl); padding: var(--spacing-6); }
 .dialog h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-5); display: flex; align-items: center; gap: var(--spacing-2-5); color: var(--text-primary); }
 .dialog h3 i { color: var(--color-primary); }
@@ -1954,4 +2845,40 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
+
+/* #14612: multi-select status chip — mirrors `.rule-mode`'s existing
+   toolbar-left status-readout styling. */
+.canvas-selection-status { display: flex; align-items: center; gap: var(--spacing-2); padding: var(--spacing-1) var(--spacing-2); background: var(--bg-tertiary); border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: var(--text-xs); color: var(--text-secondary); }
+.canvas-selection-clear { padding: var(--spacing-0-5) var(--spacing-2); background: transparent; border: 1px solid var(--border-default); border-radius: var(--radius-default); color: var(--text-secondary); cursor: pointer; font-size: var(--text-xs); }
+.canvas-selection-clear:hover { background: var(--bg-hover); color: var(--text-primary); }
+.canvas-selection-clear:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* #14612: a multi-selected node must differ by more than hue (#13941) — a
+   dashed double outline (shape) plus a corner badge (icon), never colour
+   alone, and deliberately distinct from `.selected`'s own solid ring so the
+   two states never look identical on the same node. */
+.workflow-node.multi-selected { outline: 2px dashed var(--color-info); outline-offset: 2px; }
+.multi-select-badge { display: inline-flex; color: var(--color-info); }
+
+/* #14612: the node's own context-menu trigger — mirrors `.delete-btn`'s
+   existing header-icon-button styling. */
+.node-menu-btn { padding: var(--spacing-1); background: transparent; border: none; color: inherit; cursor: pointer; opacity: 0.7; border-radius: var(--radius-default); }
+.node-menu-btn:hover { opacity: 1; background: var(--bg-overlay-light); }
+.node-menu-btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* #14612: marquee — screen-space, a sibling of `.canvas-content` so it never
+   inherits the pan/zoom transform (see the template comment above it). */
+.canvas-marquee { position: absolute; border: 1px dashed var(--color-primary); background: var(--color-primary-bg); pointer-events: none; z-index: 5; }
+
+/* #14612: context menu — fixed-position, clamped to the viewport in script.
+   The clamp works identically in LTR and RTL (it is measured against
+   `window.innerWidth`, a physical bound with no notion of direction), so no
+   direction-specific CSS is needed here for the "opens on the correct side"
+   requirement. */
+.context-menu-backdrop { position: fixed; inset: 0; z-index: var(--z-modal-backdrop); background: transparent; }
+.canvas-context-menu { position: fixed; z-index: var(--z-modal); min-width: 200px; max-width: 280px; margin: var(--spacing-0); padding: var(--spacing-1) var(--spacing-0); list-style: none; background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
+.canvas-context-menu:focus-visible { outline: none; }
+.canvas-context-menu-item { display: block; width: 100%; padding: var(--spacing-2) var(--spacing-3); background: none; border: none; color: var(--text-primary); text-align: start; cursor: pointer; font-size: var(--text-sm); }
+.canvas-context-menu-item:hover { background: var(--bg-tertiary); }
+.canvas-context-menu-item:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
 </style>

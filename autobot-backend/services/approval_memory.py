@@ -51,6 +51,7 @@ from typing import Any, Dict, List
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
+from autobot_shared.status_enums import CommandRisk
 
 logger = get_logger(__name__)
 
@@ -105,14 +106,16 @@ class ApprovalMemoryManager:
         enabled: Whether approval memory is enabled
     """
 
-    # Risk level ordering for comparison
-    RISK_LEVELS = {
-        "safe": 0,
-        "moderate": 1,
-        "high": 2,
-        "critical": 3,
-        "forbidden": 4,
-    }
+    # Risk-level ordering for comparison, keyed by the wire value that is
+    # actually stored in the Redis approval records.
+    #
+    # #13845: derived from ``CommandRisk.rank`` rather than hand-written. The
+    # literal table this replaces named five members and so had no entry for
+    # ``DANGEROUS`` — the sixth, which arrived when the executor's risk enum
+    # was unioned with the terminal schema's. Only the relative order matters
+    # here (both sides of the comparison come from this same table) and the
+    # order is unchanged; the absolute integers are never persisted.
+    RISK_LEVELS = {risk.value: risk.rank for risk in CommandRisk}
 
     def __init__(
         self,

@@ -402,6 +402,7 @@ import { useTransientError } from '@/composables/useTransientError'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebouncedFn } from '@/composables/useDebounce'
 import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
+import { isReducedMotion } from '@/composables/useReducedMotion'
 const KnowledgeGraph3D = defineAsyncComponent(() =>
   import('@/components/knowledge/KnowledgeGraph3D.vue')
 )
@@ -835,7 +836,9 @@ function runLayout(): void {
   const layoutOptions = layoutMode.value === 'force'
     ? {
         name: 'fcose',
-        animate: true,
+        // #14770: see FunctionCallGraph — the layout still runs, it just does
+        // not animate its way there.
+        animate: !isReducedMotion(),
         animationDuration: 500,
         fit: true,
         padding: 50,
@@ -847,7 +850,7 @@ function runLayout(): void {
       }
     : {
         name: 'grid',
-        animate: true,
+        animate: !isReducedMotion(),
         animationDuration: 300,
         fit: true,
         padding: 50,
@@ -987,11 +990,13 @@ function focusOnEntity(entity: Entity): void {
 
   const node = cy.value.getElementById(entity.id)
   if (node.length) {
+    // #14770: the viewport still ends up centred on the node either way —
+    // a zero duration jumps there instead of gliding.
     cy.value.animate({
       center: { eles: node },
       zoom: 1.5
     }, {
-      duration: 300
+      duration: isReducedMotion() ? 0 : 300
     })
   }
 }

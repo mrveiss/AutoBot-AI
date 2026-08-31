@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.models.enums import ActivityEventType, LLCCompanyStatus
 from llc.models.export import LLCExportArtifact
 from llc.models.goal import LLCGoal
@@ -235,6 +236,12 @@ class PortabilityService(LLCServiceBase):
         skipped: Dict[str, List[str]] = {"agents": [], "goals": [], "work_items": []}
         warnings: List[str] = []
 
+        # Reporting lines the import could not honour because the manager was
+        # not created (#14811). Structured rather than folded into `warnings`:
+        # those are server-composed English f-strings the UI cannot translate,
+        # and this has to be renderable in every shipped locale.
+        dropped_links: List[Dict[str, str]] = []
+
         sp = await self.session.begin_nested()
         try:
             company_id = await self._resolve_or_create_company(template, target_company_id, remapping_options, warnings)
@@ -246,13 +253,26 @@ class PortabilityService(LLCServiceBase):
                 a.get("agent_id", ""): str(uuid.uuid4()) for a in agents_list if a.get("agent_id")
             }
 
-            # Pass 2: insert agents with remapped reports_to
+            # Pass 2: insert agents. `reports_to` is deliberately NOT resolved
+            # here — which agents land is decided in this loop (an existing name
+            # in the target company, an adapter that cannot run on this host, or
+            # a duplicate name inside the template itself), while the pass-1 map
+            # was built before any of those decisions. Resolving against the map
+            # inline wrote a pre-minted UUID for a row that was never created
+            # (#14811).
+            landed: Dict[str, str] = {}
             for agent in agents_list:
                 agent_id = await self._import_agent(agent, company_id, secret_mapping, warnings, agent_id_map)
                 if agent_id:
                     created_entities["agents"].append(agent_id)
+                    if agent.get("agent_id"):
+                        landed[str(agent["agent_id"])] = agent_id
                 else:
                     skipped["agents"].append(agent.get("name", ""))
+
+            # Pass 3: attach every reporting line whose manager actually landed,
+            # and name the ones that did not instead of pointing at nothing.
+            await self._link_reporting_lines(agents_list, landed, dropped_links, company_id)
 
             # goals
             for goal in template.get("goals", []):
@@ -287,6 +307,7 @@ class PortabilityService(LLCServiceBase):
             "company_id": str(company_id),
             "created_entities": created_entities,
             "skipped": skipped,
+            "dropped_reporting_lines": dropped_links,
             "warnings": warnings,
         }
 
@@ -618,6 +639,89 @@ class PortabilityService(LLCServiceBase):
                 return candidate
         raise TemplateImportError(f"Cannot find free issue_prefix for {prefix!r}")
 
+    @staticmethod
+    def _adapter_runnable_or_warn(name: str, declared: Optional[str], warnings: List[str]) -> bool:
+        """False when *declared* names an adapter this deployment cannot run (#14800).
+
+        Only a DECLARED type is checked. An omitted `adapter_type` is not a
+        `claude_code` agent — the scheduler reads a missing value as
+        `autobot_agent`, which runs in-process, is deliberately absent from the
+        registry, and needs no CLI. Defaulting to `claude_code` here would have
+        spuriously skipped every ordinary in-process agent in a template
+        re-imported onto a host without that CLI, which is a regression on a
+        normal export/import round trip rather than a fix.
+
+        Skipped with a warning rather than failing the import: a template may
+        legitimately be imported onto a host provisioned afterwards, and the
+        response already carries `warnings` and `skipped`.
+        """
+        if not declared:
+            return True
+        if declared not in registered_adapter_types():
+            warnings.append(f"Agent {name!r} names unknown adapter_type {declared!r} — skipped")
+            return False
+        unavailable = adapter_unavailable_reason(declared)
+        if unavailable:
+            warnings.append(
+                f"Agent {name!r} needs adapter {declared!r}, which cannot run on this "
+                f"deployment: {unavailable} — skipped"
+            )
+            return False
+        return True
+
+    async def _link_reporting_lines(
+        self,
+        agents_list: List[Dict[str, Any]],
+        landed: Dict[str, str],
+        dropped_links: List[Dict[str, str]],
+        company_id: Any,
+    ) -> None:
+        """Attach reports_to for agents whose manager was actually inserted (#14811).
+
+        Runs inside execute_import's savepoint, so a failure here rolls the whole
+        import back with everything else.
+
+        A manager that was skipped leaves its subordinate as a root rather than
+        pointing at a row that does not exist. That is not a silent downgrade:
+        the unresolvable edge is recorded in `dropped_links` and returned to the
+        caller. The alternative — keeping the pointer — made the subordinate
+        vanish from the org tree entirely, because that tree matches children by
+        agent_id and roots by a NULL reports_to, so an agent referencing a
+        nonexistent manager is neither.
+        """
+        names_by_source_id = {str(a["agent_id"]): a.get("name", "") for a in agents_list if a.get("agent_id")}
+
+        for agent in agents_list:
+            source_id = str(agent.get("agent_id") or "")
+            manager_source_id = str(agent.get("reports_to") or "")
+            if not source_id or not manager_source_id or source_id not in landed:
+                continue
+
+            manager_dest_id = landed.get(manager_source_id)
+            if manager_dest_id is None:
+                dropped_links.append(
+                    {
+                        "agent_name": agent.get("name", ""),
+                        "agent_id": landed[source_id],
+                        "manager_name": names_by_source_id.get(manager_source_id, ""),
+                        "manager_source_agent_id": manager_source_id,
+                    }
+                )
+                continue
+
+            # Scoped by company as well as agent_id. `agent_id` carries a
+            # table-wide UNIQUE constraint today, so the company clause is
+            # redundant — but that constraint is declared in a migration three
+            # files away, and if it ever became per-company (the natural change
+            # when two tenants want the same agent slug) this UPDATE would
+            # silently start crossing tenants. Every sibling query on this table
+            # scopes by company_id; this one was the outlier.
+            await self.session.execute(
+                text(
+                    "UPDATE agent_org_nodes SET reports_to = :mgr " "WHERE agent_id = :aid AND company_id = :cid"
+                ).bindparams(mgr=manager_dest_id, aid=landed[source_id], cid=company_id)
+            )
+
     async def _import_agent(
         self,
         agent: Dict[str, Any],
@@ -633,15 +737,18 @@ class PortabilityService(LLCServiceBase):
             warnings.append(f"Agent {name!r} already exists — skipped")
             return None
 
+        if not self._adapter_runnable_or_warn(name, agent.get("adapter_type"), warnings):
+            return None
+
         # Use pre-minted ID from two-pass map if available
         old_id = agent.get("agent_id", "")
         new_agent_id = (agent_id_map or {}).get(old_id) or str(uuid.uuid4())
 
-        # Remap reports_to from source UUID to destination UUID
-        old_reports_to = agent.get("reports_to")
+        # reports_to is attached in pass 3, once the set of agents that actually
+        # landed is known. Resolving it here used the pass-1 prediction, which
+        # named a row that a later skip decision meant was never inserted
+        # (#14811). There is no FK on this column, so nothing rejected it.
         reports_to: Optional[str] = None
-        if old_reports_to and agent_id_map:
-            reports_to = agent_id_map.get(str(old_reports_to))
 
         adapter_config = self._resolve_secrets(agent.get("adapter_config") or {}, secret_mapping, name, warnings)
 

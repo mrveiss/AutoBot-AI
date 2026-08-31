@@ -20,6 +20,7 @@ import requests
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from autobot_shared.live_service_probe import require_live_endpoint
 from autobot_shared.paths import project_root
 from constants.network_constants import ServiceURLs
 
@@ -28,13 +29,48 @@ pytestmark = pytest.mark.integration
 BASE_URL = f"{ServiceURLs.BACKEND_API}/api/iac"
 
 
+# #13286: there is deliberately NO exemption list here any more.
+#
+# `test_celery_worker_status` used to be exempt, on the reasoning that it reads
+# `logs/celery-worker.log` off disk and issues no HTTP, so a backend being down
+# should not stop it. Running the marker suite on a GitHub-hosted runner falsified
+# that: the check is not really about HTTP, it is about whether THIS HOST RUNS
+# AUTOBOT SERVICES, and on a runner it does not. It reported the absent worker as
+# a defect.
+#
+# Two file-based discriminators were tried and both are unsound. "Does `logs/`
+# exist" fails because the workflows run `mkdir -p logs` before pytest. "Does
+# `logs/` hold a service log" fails because `logs/backend.log` is created when the
+# logging manager is imported, not when a service runs — measured on run
+# 32837489748, where that file was the only thing in the directory.
+#
+# A listening backend is the honest probe for "this host runs AutoBot services",
+# so every check in this module now shares one precondition and there is no
+# allowlist left to rot. An empty exemption tuple would have been worse than
+# none: it exempts nothing while still looking like a considered decision.
+
+
+@pytest.fixture(autouse=True)
+def _require_live_backend() -> None:
+    """Skip when no backend is listening, instead of failing on a refused socket (#14930).
+
+    The six checks that dial ``BASE_URL`` over real HTTP reported
+    ``ConnectionRefusedError`` as test failures on a runner with no backend up —
+    a red result that says nothing about the code under test and trained the
+    whole marker-excluded suite to be ignored. A skip naming the absent service
+    is the honest report; they still run, and still fail for real, wherever a
+    backend is actually up.
+    """
+    require_live_endpoint(ServiceURLs.BACKEND_API, what="the AutoBot backend API")
+
+
 def test_health():
     """Test 1: Health Check"""
     response = requests.get(f"{BASE_URL}/health")  # nosec B113
     data = response.json()
     print("✅ Test 1: Health Check - PASSED")  # noqa: print
     print(f"   Status: {data['status']}, Database: {data['database']}, Hosts: {data['total_hosts']}")  # noqa: print
-    return True
+    return
 
 
 def test_list_roles():
@@ -44,7 +80,7 @@ def test_list_roles():
     role_names = [r["name"] for r in data]
     print("✅ Test 2: List Roles - PASSED")  # noqa: print
     print(f"   Found {len(data)} roles: {role_names}")  # noqa: print
-    return True
+    return
 
 
 def test_statistics():
@@ -55,7 +91,7 @@ def test_statistics():
     print(  # noqa: print
         f"   Hosts: {data['total_hosts']}, Roles: {data['total_roles']}, Deployments: {data['total_deployments']}"
     )
-    return True
+    return
 
 
 def test_list_hosts_empty():
@@ -64,7 +100,7 @@ def test_list_hosts_empty():
     data = response.json()
     print("✅ Test 4: List Hosts (Empty) - PASSED")  # noqa: print
     print(f"   Pagination: page={data['pagination']['page']}, total={data['pagination']['total']}")  # noqa: print
-    return True
+    return
 
 
 def test_create_host():
@@ -115,7 +151,7 @@ def test_list_hosts_after_create():
     first_host = data["hosts"][0]["hostname"] if data["hosts"] else "None"
     print("✅ Test 7: List Hosts After Creation - PASSED")  # noqa: print
     print(f"   Total hosts: {data['pagination']['total']}, First host: {first_host}")  # noqa: print  # noqa: print
-    return True
+    return
 
 
 def check_delete_host(host_id):
@@ -131,26 +167,60 @@ def check_delete_host(host_id):
     return True
 
 
+# What the worker writes to its log when it has come up. Both tokens are
+# required: "ready" alone appears in lines other processes write, and the
+# service name alone appears before the worker has finished starting.
+_WORKER_READY_MARKERS = ("autobot-worker", "ready")
+
+
 def test_celery_worker_status():
-    """Test 9: Celery Worker Status"""
-    # Check if Celery worker is running by checking logs
-    try:
-        with open(
-            str(project_root() / "logs" / "celery-worker.log"),
-            "r",
-            encoding="utf-8",
-        ) as f:
-            logs = f.read()
-            if "ready" in logs and "autobot-worker" in logs:
-                print("✅ Test 9: Celery Worker - PASSED")  # noqa: print
-                print("   Worker is running with queues: celery, deployments")  # noqa: print
-                return True
-            else:
-                print("❌ Test 9: Celery Worker - FAILED")  # noqa: print
-                return False
-    except Exception as e:
-        print(f"❌ Test 9: Celery Worker - ERROR: {e}")  # noqa: print
-        return False
+    """Test 9: Celery Worker Status — the worker's own log is the only evidence.
+
+    #14941: this used to wrap its whole body in ``try/except Exception`` and end
+    every path with ``return True`` or ``return False``. pytest discards a test's
+    return value, so no log content, no service state and no raised exception
+    could make it fail — it reported pass unconditionally, in a marker set that
+    until #14930 ran in no gating workflow at all.
+
+    The only thing that legitimately excuses this check is a host that does not
+    run AutoBot services, and #13286 established that a listening backend — not
+    the presence of a `logs/` directory, and not the presence of a log file in it
+    — is what decides that. See the comment above the module fixture for the two
+    file-based discriminators that were tried and why both were unsound. Once the
+    backend is up, an absent worker log means the worker never started, and that
+    is a failure rather than a non-result.
+
+    ``main()`` calls this bare and discards whatever it returns, so unlike the
+    npu_code_search drivers (#14920) there is no truthiness contract to keep and
+    the function returns nothing at all.
+    """
+    log_directory = project_root() / "logs"
+    log_file = log_directory / "celery-worker.log"
+
+    # The module-wide fixture has already established that a backend is listening,
+    # so this host really does run AutoBot services (#13286). A missing `logs/`
+    # after that is a genuine anomaly rather than "not a deployment".
+    if not log_directory.is_dir():
+        pytest.skip(
+            f"{log_directory} does not exist on a host whose backend is up — nothing here " "has written a log to read"
+        )
+
+    assert log_file.is_file(), (
+        f"{log_file} is absent while {log_directory} exists and this host's backend is up — "
+        "the Celery worker has never written a log, so it never started"
+    )
+
+    logs = log_file.read_text(encoding="utf-8", errors="replace")
+    assert logs.strip(), f"{log_file} is empty — the worker process produced no output at all, " "so it did not come up"
+
+    missing = [marker for marker in _WORKER_READY_MARKERS if marker not in logs]
+    assert not missing, (
+        f"{log_file} never mentions {missing} — the Celery worker did not report "
+        f"itself ready ({len(logs)} bytes of log read)"
+    )
+
+    print("✅ Test 9: Celery Worker - PASSED")  # noqa: print
+    print("   Worker is running with queues: celery, deployments")  # noqa: print
 
 
 def main():

@@ -676,12 +676,12 @@ async def add_text_to_knowledge(
 
     # GH#8598: block sub-company agents from writing to parent-company KB
     if organization_id:
-        from llc.kb.write_guard import assert_not_writing_to_ancestor_kb
+        from llc.kb.write_guard import CROSS_ORG_KB_ROLES, assert_not_writing_to_ancestor_kb
         from user_management.database import get_async_session_factory
 
         _requester = get_auth_middleware().get_user_from_request(req)
         _requester_role = (_requester or {}).get("role", "")
-        if _requester_role not in ("platform_admin", "superadmin"):
+        if _requester_role not in CROSS_ORG_KB_ROLES:  # #12786: the guard's own set, not a third copy
             _requester_org_id = (_requester or {}).get("org_id")
             _session_factory = get_async_session_factory()
             async with _session_factory() as _session:
@@ -1314,7 +1314,31 @@ async def upload_file_to_knowledge(
     category = form.get("category", "uploads")
     tags = _parse_upload_tags(form.get("tags", "[]"))
 
-    content, extracted_doc = _extract_file_content(filename, file_content)
+    # #14754: _extract_file_content does blocking CPU work — PDF parsing plus
+    # pdfplumber layout analysis on every page — and this handler is async, so a
+    # large upload held the worker's event loop for the whole extraction and
+    # stalled every other coroutine on it, health endpoints included.
+    from media.document.ocr import extraction_timeout
+
+    _deadline = extraction_timeout()
+    try:
+        content, extracted_doc = await asyncio.wait_for(
+            asyncio.to_thread(_extract_file_content, filename, file_content),
+            timeout=_deadline,
+        )
+    except asyncio.TimeoutError:
+        # The deadline is what makes the offload safe: to_thread frees the loop
+        # but the default executor's slots are process-wide and shared with the
+        # OCR path, so an extraction that never returns holds one indefinitely.
+        # Reported as a rejected upload rather than left to hang (#14754).
+        logger.warning("Extraction of %s exceeded %ss", filename, _deadline)
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Could not read {filename!r} within {_deadline}s. The document may be "
+                "unusually large or complex; try splitting it."
+            ),
+        )
     if not _has_usable_content(content, extracted_doc):
         # #13884: distinguish "we could not read it" from "it is empty". A scanned
         # PDF parses fine and yields nothing, and a generic message left the user
@@ -3114,8 +3138,16 @@ def _resolve_target_org_id(current_user: dict, override_org_id: str | None) -> s
     mode — the service uses the ``__default__`` sentinel.
     """
     if override_org_id:
+        from autobot_shared.auth.permissions import is_admin_role  # noqa: PLC0415
+        from llc.kb.write_guard import CROSS_ORG_KB_ROLES  # noqa: PLC0415
+
         role = (current_user or {}).get("role", "")
-        if role not in ("admin", "platform_admin", "superadmin"):
+        # #12786: the same two sets this file already depends on, unioned
+        # explicitly rather than re-spelled as a third literal tuple that
+        # nothing keeps in step. Membership is unchanged:
+        # {admin, superadmin} | {platform_admin, superadmin}
+        #     = {admin, platform_admin, superadmin}.
+        if not (is_admin_role(role) or role in CROSS_ORG_KB_ROLES):
             raise HTTPException(status_code=403, detail="Only admins may target another org")
         return override_org_id
     return (current_user or {}).get("org_id")

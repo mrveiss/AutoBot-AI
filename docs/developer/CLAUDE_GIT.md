@@ -69,6 +69,8 @@ merge.
    (#4969).
 2. `git stash list` — if it is non-empty, **ask before proceeding**. The stash stack is shared
    across every worktree in the clone, so an entry may belong to another session.
+   See [Never Stash](#never-stash-14078) below — reading the stack is safe, writing to it
+   is not.
 3. `git fetch origin Dev_new_gui` — do this *before* step 4, or the check below reads a stale
    ref and reports work as unlanded when it already merged.
 4. Verify the issue isn't already resolved:
@@ -82,6 +84,31 @@ merge.
 6. Confirm Bash is approved in the main session — sub-agents inherit from the parent.
 7. No stale worktree already claims the target path (see the preflight above).
 8. For architectural decisions, state them in 1–2 sentences and wait for confirmation.
+
+---
+
+## Never Stash (#14078)
+
+**`git stash` is a shared, repo-wide stack — not a per-worktree one.** Every worktree in the clone
+pushes onto and pops from the same stack, and entries carry no owner, no branch and no issue link.
+
+- **Never `git stash`.** Park work as a `wip:` commit on your own branch instead. It is owned,
+  named, pushable, and cannot be consumed by anyone else.
+- **Never `git stash pop`, `drop`, `clear` or `apply`.** The entry you take is very likely another
+  session's, and popping it destroys their work with no recovery path.
+- **Never `git restore --staged --worktree`.** Not a shared-stack hazard — a different one: it
+  resets your own index and worktree from HEAD, discarding uncommitted work with no recovery.
+  Back files up before reverting an experiment.
+
+This is not hypothetical. #14078 found **113 stash entries** spanning three months, unowned and
+unlinked. Rescuing them to branches and triaging them one by one took a full session; 17 of the 18
+that looked stranded turned out to be work that had already landed, and the eighteenth was a
+security fix nobody knew was sitting there (#15023).
+
+**If you find a non-empty stack:** inventory it, never sweep it. Rescue an entry to a branch
+(`git branch rescued/stash-<date>-<sha> <stash-sha>`) and open an issue naming the branch. Dropping
+an entry is only correct once its content is demonstrably present in `Dev_new_gui`, and that is a
+deliberate, evidenced act — not cleanup.
 
 ---
 
@@ -135,7 +162,9 @@ Before committing any change to `.claude/hooks/block-dangerous-commands.sh`, run
 ```bash
 bash .claude/hooks/block-dangerous-commands_test.sh
 ```
-Must be 27/27. Add test cases for new rules. Use `bash` (GNU grep 3.7), not interactively — the shell `grep` alias is `ugrep` (PCRE2) which has different variable-length lookbehind support. See #8262.
+Must be 0 failed, with at least 60 cases run — the suite asserts that floor itself, so a sandbox that failed to build cannot report clean (#15296). Add test cases for new rules. Use `bash` (GNU grep 3.7), not interactively — the shell `grep` alias is `ugrep` (PCRE2) which has different variable-length lookbehind support. See #8262.
+
+CI runs it too, via `repo_tests/shell_lib_test.py`; before #15296 no workflow invoked it and it had been dormant since it was written. A new `*_test.sh` under `.claude/hooks/` or `scripts/lib/` must be registered in that file's `SHELL_SUITES` or it silently never runs.
 
 ---
 

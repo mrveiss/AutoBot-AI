@@ -171,7 +171,10 @@ def _build_fallback_config() -> Dict[str, Any]:
             "timeouts": _build_timeouts_config(api_config.get("timeouts", {})),
         },
         "websocket": {
-            "url": f"ws://{backend_config.get('host')}:{backend_config.get('port')}/api/ws",
+            # #14822: advertise the channel socket. Telling clients to use the
+            # legacy broadcast endpoint would undo the migration for anyone who
+            # reads their WebSocket URL from this config rather than hard-coding it.
+            "url": f"ws://{backend_config.get('host')}:{backend_config.get('port')}/api/ws/live",
             "reconnect_attempts": websocket_config.get("reconnect_attempts", 5),
             "reconnect_delay": websocket_config.get("reconnect_delay", 1000),
         },

@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { memoizeByLocale } from '@/test/utils/i18n-cache'
 import en from '@/i18n/locales/en.json'
 import ar from '@/i18n/locales/ar.json'
 
@@ -31,13 +32,21 @@ const SHARED_TOOL_NODES = buildToolCanvasNodes(
   0,
 )
 
-function mountCanvas(nodes = ONE_ROLE_TOOL_NODES, locale: 'en' | 'ar' = 'en') {
-  const i18n = createI18n({
+// #14860: memoized per locale. This helper ran on EVERY mount and each call
+// re-ingested the ~400KB `en` and `ar` message bundles. The locale is a real
+// parameter here, so a blind hoist would be wrong — one instance per locale
+// is not. Nothing in this file mutates the returned instance.
+const makeI18n = memoizeByLocale((locale: string) =>
+  createI18n({
     legacy: false,
     locale,
     fallbackLocale: 'en',
     messages: { en, ar },
-  })
+  }),
+)
+
+function mountCanvas(nodes = ONE_ROLE_TOOL_NODES, locale: 'en' | 'ar' = 'en') {
+  const i18n = makeI18n(locale)
   return mount(WorkflowCanvas, {
     props: { nodes, selectedNodeId: null, readonly: true },
     global: { plugins: [i18n] },

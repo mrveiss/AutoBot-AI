@@ -175,20 +175,103 @@ class TestHelpCommand:
 
 
 class TestStatusCommand:
-    """Test /status command execution."""
+    """/status must never assert health it has not measured (#14851).
+
+    The command imported ``services.consolidated_health_service``, which has
+    never existed in this repo. The import is function-local, so it raised
+    ModuleNotFoundError on every call, and the surrounding ``except Exception``
+    answered "Status: ✅ Running / The chat system is operational" — with no
+    check behind it. The real branch was unreachable, so a user asking /status
+    during an outage was told everything was fine.
+    """
+
+    # Words that assert a working system. None may appear in an answer that
+    # measured nothing.
+    _HEALTH_CLAIMS = ("operational", "running", "healthy")
 
     def setup_method(self):
         """Set up test fixtures."""
         self.handler = SlashCommandHandler()
 
     @pytest.mark.asyncio
-    async def test_status_returns_info(self):
-        """Test /status returns system info."""
+    async def test_an_unreachable_health_source_is_reported_as_unknown(self, monkeypatch):
+        """The reproduction, with the failure the original code actually hit."""
+        import slash_command_handler as module
+
+        async def unreachable():
+            raise ModuleNotFoundError("No module named 'services.consolidated_health_service'")
+
+        monkeypatch.setattr(module.StatusCommand, "_measure_health", staticmethod(unreachable))
+
+        result = await self.handler.execute("/status")
+
+        assert result.command_type == CommandType.STATUS
+        assert result.success is False, "a status that could not be determined must not report success"
+        assert "UNKNOWN" in result.content
+        assert "could not be determined" in result.content
+        assert "ModuleNotFoundError" in result.content, "the reason must reach the user, not only the log"
+
+        lowered = result.content.lower()
+        for claim in self._HEALTH_CLAIMS:
+            assert claim not in lowered, f"/status claimed {claim!r} having measured nothing"
+
+    @pytest.mark.asyncio
+    async def test_an_empty_probe_registry_is_not_reported_as_healthy(self, monkeypatch):
+        """The aggregator answers "ok" with no probes registered — nothing was checked.
+
+        That answer is right for its own contract and wrong as a health report,
+        so /status clamps it. Without this the fix would reproduce the original
+        bug through a different route.
+        """
+        health_module = pytest.importorskip("api.system_health")
+        monkeypatch.setattr(health_module, "_PROBES", {})
+
+        result = await self.handler.execute("/status")
+
+        assert result.success is False
+        assert "no health probes are registered" in result.content
+        lowered = result.content.lower()
+        for claim in self._HEALTH_CLAIMS:
+            assert claim not in lowered
+
+    @pytest.mark.asyncio
+    async def test_a_measured_failure_is_reported_as_a_failure(self, monkeypatch):
+        """A down component must reach the user, and the answer must say it measured."""
+        health_module = pytest.importorskip("api.system_health")
+
+        async def redis_probe(request=None):
+            return health_module.ComponentHealth(name="redis", status="down", detail="connection refused")
+
+        async def kb_probe(request=None):
+            return health_module.ComponentHealth(name="knowledge", status="ok")
+
+        monkeypatch.setattr(health_module, "_PROBES", {"redis": redis_probe, "knowledge": kb_probe})
+
+        result = await self.handler.execute("/status")
+
+        # success=True here is the *measurement* succeeding — the content is what
+        # carries the verdict. Asserting both pins which branch ran.
+        assert result.success is True
+        assert "DOWN" in result.content, "the overall verdict does not reflect the down component"
+        assert "redis" in result.content and "knowledge" in result.content
+        assert "Components checked:** 2" in result.content
+        assert "UNKNOWN" not in result.content
+
+    @pytest.mark.asyncio
+    async def test_a_healthy_measurement_is_reported_as_healthy(self, monkeypatch):
+        """Negative control: the fix must not make a working system read as broken."""
+        health_module = pytest.importorskip("api.system_health")
+
+        async def kb_probe(request=None):
+            return health_module.ComponentHealth(name="knowledge", status="ok")
+
+        monkeypatch.setattr(health_module, "_PROBES", {"knowledge": kb_probe})
+
         result = await self.handler.execute("/status")
 
         assert result.success is True
-        assert result.command_type == CommandType.STATUS
-        assert "Status" in result.content
+        assert "OK" in result.content
+        assert "DOWN" not in result.content and "UNKNOWN" not in result.content
 
 
 class TestUnknownCommand:

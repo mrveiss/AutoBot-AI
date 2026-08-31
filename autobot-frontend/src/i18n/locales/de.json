@@ -4387,7 +4387,17 @@
       "searchResultsStatus": "{count} Treffer für „{query}“",
       "searchNoResults": "Keine Treffer für „{query}“",
       "fitToSelection": "An Auswahl oder Filter anpassen",
-      "minimapLabel": "Canvas-Übersicht"
+      "minimapLabel": "Canvas-Übersicht",
+      "undo": "Rückgängig",
+      "redo": "Wiederholen",
+      "undoScope": "Rückgängig machen und Wiederholen umfassen das Verschieben, Hinzufügen, Entfernen und Verbinden von Knoten auf dieser Canvas. Änderungen innerhalb eines Knotens sowie alles, was an den Server gesendet wird — Speichern, Anhängen, Trennen —, können hier nicht rückgängig gemacht werden.",
+      "selectionStatus": "{count} Knoten ausgewählt",
+      "contextMenuLabel": "Knotenaktionen",
+      "contextMenuButtonLabel": "Aktionen für {name}",
+      "contextMenuZoomToNode": "Auf Knoten zoomen",
+      "contextMenuFitSelection": "Ansicht an Auswahl anpassen",
+      "contextMenuDeleteSelection": "{count} ausgewählte Knoten löschen",
+      "contextMenuOpenWorkflow": "Verknüpften Workflow öffnen"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -5608,7 +5618,8 @@
       "executing": "Executing...",
       "securityNote": "Commands are executed in a sandboxed environment with limited permissions.",
       "missingSessionId": "Missing session ID for command execution",
-      "executionFailed": "Command execution failed",
+      "executionFailed": "Befehlsausführung fehlgeschlagen",
+      "postExecutionFailed": "Der Befehl wurde ausgeführt, aber ein Folgeschritt ist fehlgeschlagen. Die Ausgabe wird angezeigt; einige Aktualisierungen fehlen möglicherweise.",
       "enterComment": "Please enter a comment before submitting"
     },
     "darkModeToggle": {
@@ -8041,6 +8052,8 @@
       "colRunDuration": "Laufdauer",
       "colAction": "Aktion",
       "statusUnknown": "unbekannt",
+      "skipReasonLabel": "Übersprungen:",
+      "errorLabel": "Fehler:",
       "triggering": "Wird ausgelöst...",
       "triggerNow": "Jetzt auslösen",
       "runHistoryTitle": "Laufverlauf – {name}",
@@ -8291,6 +8304,12 @@
       "roleLensBanner": "Ansichtsfilter: {role} — zeigt {shown} von {total} Knoten. Der Zugriff bleibt unverändert.",
       "roleLensEmpty": "Ansichtsfilter: Keine Knoten entsprechen „{role}“ in dieser Ansicht. Der Zugriff bleibt unverändert — Filter zurücksetzen, um alle zu sehen.",
       "roleLensClear": "Filter zurücksetzen",
+      "teamFilterLabel": "Nach Team filtern",
+      "teamFilterAll": "Alle Teams",
+      "teamFilterBanner": "Teamfilter: {team} — zeigt {shown} von {total} Personen. Der Zugriff bleibt unverändert.",
+      "toolFilterLabel": "Nach Werkzeug filtern",
+      "toolFilterAll": "Alle Werkzeuge",
+      "toolFilterBanner": "Werkzeugfilter: {tool} — zeigt {shown} von {total} Personen. Der Zugriff bleibt unverändert.",
       "sidebar": {
         "owner": "Inhaber",
         "tools": "Werkzeuge",
@@ -8332,6 +8351,7 @@
       "attachError": "Dieser Workflow konnte nicht zugeordnet werden.",
       "detachError": "Dieser Workflow konnte nicht entfernt werden.",
       "processDetach": "{workflow} von {role} entfernen",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "Rollen konnten nicht geladen werden, daher ist diese Liste möglicherweise unvollständig.",
       "canvasGroupKind": "Gruppe",
       "toolNodeLabel": "Werkzeug",
@@ -8340,6 +8360,7 @@
       "toolAttachError": "Dieses Werkzeug konnte nicht zugeordnet werden.",
       "toolDetachError": "Dieses Werkzeug konnte nicht entfernt werden.",
       "toolDetach": "{tool} von {role} entfernen",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Werkzeuginformationen sind derzeit nicht verfügbar — diese Liste ist möglicherweise unvollständig.",
       "canvasNoToolsDefined": "Diesem Unternehmen sind keiner Rolle Werkzeuge zugeordnet.",
       "deepLinkNodeNotFound": "Dieser Link verweist auf einen Knoten, der hier nicht gefunden werden konnte. Er wurde möglicherweise entfernt, oder Sie haben keinen Zugriff darauf."
@@ -8432,6 +8453,8 @@
       "secretMappingIncomplete": "Füllen Sie alle Geheimniswerte oben aus, bevor Sie importieren.",
       "importSuccess": "Import erfolgreich — Unternehmens-ID:",
       "warningsLabel": "Warnungen:",
+      "droppedReportingLinesLabel": "Berichtslinien, die nicht übernommen werden konnten:",
+      "droppedReportingLine": "{agent} wurde ohne Vorgesetzten importiert: {manager} wurde nicht erstellt.",
       "importFailed": "Import fehlgeschlagen:",
       "toastTemplateExported": "Vorlage erfolgreich exportiert",
       "toastTemplateExportFailed": "Vorlagenexport fehlgeschlagen",
@@ -8587,7 +8610,15 @@
       "unassigned": "keine Rolle",
       "unassignedHint": "Dieser Abteilung zugeordnet, aber keine Rolle erklärt die Zugehörigkeit",
       "inactive": "Inaktiv",
-      "inactiveHint": "Deaktiviert oder entfernt — weiterhin angezeigt, da Arbeitselemente und Rolle bestehen bleiben, aber es kann keine neue Arbeit zugewiesen werden."
+      "inactiveHint": "Deaktiviert oder entfernt — weiterhin angezeigt, da Arbeitselemente und Rolle bestehen bleiben, aber es kann keine neue Arbeit zugewiesen werden.",
+      "editAriaLabel": "{name} bearbeiten",
+      "fullNameLabel": "Vollständiger Name",
+      "roleTitleLabel": "Rolle / Titel",
+      "emailLabel": "E-Mail",
+      "phoneLabel": "Telefon",
+      "saving": "Wird gespeichert…",
+      "save": "Speichern",
+      "contactSaveError": "Der Kontakt konnte nicht gespeichert werden."
     }
   },
   "code": {

@@ -1,5 +1,8 @@
 # Agent Belief-State A/B Benchmark Results
 
+> **Freshness:** historical — 2026-08-30. Completed A/B benchmark results informing a ship/scope-down/shelve decision. Candidate for `docs/research/` or `docs/audit/` per #15192's issue body, but not resolved by an owner decision on #15190 — left in place rather than guessed at.
+
+
 > **Purpose**: Inform the ship / scope-down / shelve decision for the assertion-based belief state prototype ([MVA-1407](/MVA/issues/MVA-1407)).
 > **Decision gate** ([MVA-1405](/MVA/issues/MVA-1405) Section 7): ship if ≥2/5 tasks show ≥10% token reduction with no hallucination regression.
 

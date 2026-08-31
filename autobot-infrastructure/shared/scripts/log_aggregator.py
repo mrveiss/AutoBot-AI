@@ -787,7 +787,14 @@ class LogAggregator:
             "disable_existing_loggers": False,
             "formatters": {
                 "json": {
-                    "class": "pythonjsonlogger.jsonlogger.JsonFormatter",
+                    # python-json-logger moved this class to `pythonjsonlogger.json` in
+                    # 3.x; the old path still resolves in the pinned 4.2.0 but is
+                    # deprecated, so this was heading for a removal rather than
+                    # already broken. This config is dumped as YAML for other
+                    # services to load, so nothing here resolves it — the failure
+                    # would land on whoever reads it, which is why no check saw it
+                    # (#14745).
+                    "class": "pythonjsonlogger.json.JsonFormatter",
                     "format": "%(asctime)s %(name)s %(levelname)s %(message)s",
                 },
                 "standard": {"format": "%(asctime)s [%(name)s] %(levelname)s: %(message)s"},

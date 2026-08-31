@@ -19,6 +19,7 @@ import wave
 import pytest
 import requests
 
+from autobot_shared.live_service_probe import require_live_endpoint
 from autobot_shared.ssot_config import config
 
 # #12510: these tests hit a live backend + TTS worker over real HTTP, so they
@@ -31,6 +32,21 @@ pytestmark = pytest.mark.integration
 BACKEND_URL = config.backend_url
 TTS_WORKER_URL = config.tts_worker_url
 LATENCY_BUDGET_SEC = 5.0  # STT → TTS round-trip target
+
+
+@pytest.fixture(autouse=True)
+def _require_live_voice_stack() -> None:
+    """Skip when the backend or the TTS worker is absent (#14930).
+
+    All ten tests here drive the real pipeline over HTTP. On a GitHub-hosted
+    runner neither service exists, so each failed with a refused connection —
+    ten red results that measured the runner's inventory, not the voice
+    pipeline. Both endpoints are checked because the module drives both
+    directly, and a skip that named only one would misreport which half of the
+    stack was missing.
+    """
+    require_live_endpoint(BACKEND_URL, what="the AutoBot backend API")
+    require_live_endpoint(TTS_WORKER_URL, what="the AutoBot TTS worker")
 
 
 # ------------------------------------------------------------------ #

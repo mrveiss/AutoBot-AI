@@ -61,6 +61,21 @@ jobs:
       # directory and combined without collision. `coverage combine` picks up
       # `.coverage.*` by convention.
       COVERAGE_FILE: .coverage.shard-${{ matrix.shard }}
+      # Use CPython's sys.monitoring backend instead of coverage.py's legacy
+      # settrace tracer (#15336).
+      #
+      # #10691 measured instrumentation as the dominant cost of this suite — 336s
+      # without `--cov` against 35m11s with it — and moved coverage off the PR gate
+      # on that basis. That number was taken with the settrace tracer, which is the
+      # only backend coverage.py had before PEP 669. This repository now runs
+      # Python 3.14, where `COVERAGE_CORE=sysmon` uses the interpreter's own
+      # monitoring hooks and costs a fraction of the old tracer.
+      #
+      # This changes nothing about WHERE coverage runs; it only makes the nightly
+      # cheaper and produces the measurement needed to revisit #10691 honestly.
+      # Whether coverage can afford to gate PRs is then a question with a current
+      # number behind it, rather than one inherited from a superseded tracer.
+      COVERAGE_CORE: sysmon
 
     steps:
       - uses: actions/checkout@v7
@@ -73,8 +88,23 @@ jobs:
       # --cov-append on the second merges its data onto the first's.
       - name: Run unit tests with coverage — backend, shared, tts-worker, repo_tests
         run: |
+          # #14917: `tools scripts pipeline-scripts` were wired into ci.yml by #13368,
+          # #13653, #13879 and #13880 and into none of the other invocations. The four
+          # root lists must agree — repo_tests/hook_suites_run_in_ci_test.py compares
+          # them to each other, so a fifth invocation is checked on arrival.
+          # Until now their lines counted toward no coverage gate.
+          # #14986: `.claude/skills/claims-audit` -- 42 tests of the claims-audit skill
+          # that no workflow collected, because pytest.ini's testpaths is an allowlist
+          # and `.claude` was not on it. Six were red against real defects in the
+          # verifiers; all six are fixed and all 42 pass, so this is a wiring fix, not a
+          # quarantine. Named in all four carriers because they are required to agree
+          # (#14917). Narrow on purpose: `.claude/` as a whole is harness territory.
+          # #15051: `autobot-infrastructure/shared/tests` and `libs` were named by no
+          # pytest invocation in any workflow -- 17 of their test functions ran
+          # nowhere at all, ever. Named in all four `repo_tests`-carrying invocations
+          # together so hook_suites_run_in_ci_test.py's root-set agreement stays true.
           python -m pytest \
-            autobot-backend autobot_shared autobot-tts-worker repo_tests \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit autobot-infrastructure/shared/tests libs \
             -n auto --dist loadscope \
             --splits 12 --group ${{ matrix.shard }} \
             --durations-path .test_durations \

@@ -105,6 +105,14 @@ export interface OrgPerson {
    * explain who those items belong to.
    */
   isInactive: boolean
+  /**
+   * Raw contact channels, kept separate from the merged display-only
+   * `channel` above (#14603) — editing needs email and phone as two
+   * independent fields, not whichever one `channel` picked to show. `null`
+   * for `agent`/`user`, which have no contact record behind them.
+   */
+  contactEmail: string | null
+  contactPhone: string | null
 }
 
 /** A team's people, or the honest "not in a team" bucket. */
@@ -137,6 +145,26 @@ function userIdOf(node: OrgChartPersonSource): string | null {
   return node.id.startsWith(USER_NODE_PREFIX) ? node.id.slice(USER_NODE_PREFIX.length) : null
 }
 
+/**
+ * `contact:<id>` — the one place this prefix is spelled out (#14603). Both
+ * `buildOrgPeople` (below) and the People list's inline editor need it, and a
+ * second literal `'contact:'` is how the two drift.
+ */
+const CONTACT_KEY_PREFIX = 'contact:'
+
+/** The `llc_contacts` id inside a `contact:<id>` person key. */
+export function contactIdOfKey(key: string): string {
+  return key.startsWith(CONTACT_KEY_PREFIX) ? key.slice(CONTACT_KEY_PREFIX.length) : key
+}
+
+/** The editable fields `PATCH /api/llc/contacts/{company_id}/{contact_id}` accepts (#14603). */
+export interface ContactEditPatch {
+  full_name: string
+  role_title: string
+  email: string
+  phone: string
+}
+
 /** Flatten the org-chart forest into people, parents before children. */
 function collectOrgPeople(nodes: OrgChartPersonSource[], out: OrgPerson[]): void {
   for (const node of nodes) {
@@ -152,6 +180,9 @@ function collectOrgPeople(nodes: OrgChartPersonSource[], out: OrgPerson[]): void
       // does a server that predates it. Treating absent as inactive would mark
       // every agent and every person during a rolling update.
       isInactive: node.is_active === false,
+      // Not a contact — no raw channel data exists to carry.
+      contactEmail: null,
+      contactPhone: null,
     })
     if (node.children?.length) collectOrgPeople(node.children, out)
   }
@@ -172,7 +203,7 @@ export function buildOrgPeople(
   collectOrgPeople(orgNodes, people)
   for (const contact of contacts) {
     people.push({
-      key: `contact:${contact.id}`,
+      key: `${CONTACT_KEY_PREFIX}${contact.id}`,
       kind: 'contact',
       name: contact.full_name,
       subtitle: contact.role_title ?? '',
@@ -182,6 +213,8 @@ export function buildOrgPeople(
       orgNodeId: null,
       // A contact has no account, so there is no account to deactivate.
       isInactive: false,
+      contactEmail: contact.email ?? null,
+      contactPhone: contact.phone ?? null,
     })
   }
   return people

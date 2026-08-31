@@ -32,6 +32,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from api.venv_reconcile import (
+    EXPLICIT_LIST_COMPONENTS,
+)
+from api.venv_reconcile import install_pip_deps_for_component as _install_pip_deps_for_component
+from api.venv_reconcile import install_slm_pip_dependencies as _install_slm_pip_dependencies
+from api.venv_reconcile import (
+    reconcile_component,
+    refuse_explicit_list,
+)
 from autobot_shared.db_url import assemble_postgres_url
 from autobot_shared.security.redaction import redact_mapping
 from autobot_shared.ssot_config import config
@@ -266,6 +275,73 @@ def _with_blocked_paths(message: str, blocked: List[str]) -> str:
     return f"{message} Paths: {', '.join(shown)}{suffix}"
 
 
+async def _mark_resolve_job_running(job_id: str, db_service) -> None:
+    """Requeued jobs arrive as 'queued' — mark running for status pollers (#11437)."""
+    async with db_service.session() as db:
+        result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
+        job_row = result.scalar_one_or_none()
+        if job_row and job_row.status != "running":
+            job_row.status = "running"
+            await db.commit()
+
+
+async def _check_resolve_deletion_guard(
+    job_id: str, component: str, source_root: str, excludes, source_dir: str, deployed_dir: str, force: bool
+) -> bool:
+    """Same delete guard as the sync endpoint (#13851). True to proceed; False after already failing the job."""
+    if force:
+        return True
+    allowed, blocked, guard_msg = await _resolve_deletion_guard(
+        component, source_root, excludes, source_dir, deployed_dir
+    )
+    if allowed:
+        return True
+    await _fail_resolve_job(
+        job_id,
+        _with_blocked_paths(guard_msg, blocked),
+        status=RESOLVE_STATUS_BLOCKED,
+        post_steps=blocked,
+    )
+    logger.error("component resolve job %s: %s", job_id, guard_msg)
+    return False
+
+
+async def _commit_resolve_job_result(
+    job_id: str, component: str, pip_ok: bool, deps_changed: bool, post_steps: List[str], db_service
+) -> None:
+    """Commit the job row BEFORE the restart — the whole point of the async path (#11303)."""
+    async with db_service.session() as db:
+        result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
+        job_row = result.scalar_one_or_none()
+        if job_row:
+            job_row.status = "completed" if pip_ok else "failed"
+            job_row.success = pip_ok
+            job_row.deps_changed = deps_changed
+            job_row.post_steps = "\n".join(post_steps)
+            job_row.message = (
+                f"Resynced {component} from code_source" if pip_ok else "pip install failed — see post_steps"
+            )
+            job_row.completed_at = datetime.now(timezone.utc)
+            await db.commit()
+
+
+async def _persist_resolve_job_exception(job_id: str, exc: Exception) -> None:
+    """Best-effort: record an unexpected exception on the job row."""
+    try:
+        from services.database import db_service as _db_svc
+
+        async with _db_svc.session() as db:
+            result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
+            job_row = result.scalar_one_or_none()
+            if job_row:
+                job_row.status = "failed"
+                job_row.message = str(exc)
+                job_row.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+    except Exception as inner:
+        logger.error("component resolve job %s: failed to persist error state: %s", job_id, inner)
+
+
 async def _run_component_resolve_job(job_id: str, component: str, force: bool = False) -> None:
     """Background executor for an async component drift/resolve job (#11303).
 
@@ -283,13 +359,7 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
     from services.database import db_service
 
     try:
-        # Requeued jobs arrive as 'queued' — mark running for status pollers (#11437).
-        async with db_service.session() as db:
-            result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
-            job_row = result.scalar_one_or_none()
-            if job_row and job_row.status != "running":
-                job_row.status = "running"
-                await db.commit()
+        await _mark_resolve_job_running(job_id, db_service)
         try:
             source_dir = get_default_source_dir(component)
         except ValueError as exc:
@@ -299,41 +369,17 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
 
         deployed_dir = get_default_deployed_dir(component)
         source_root = str(Path(source_dir).parent)
-
         excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
-        excludes = excludes_map.get(
-            component,
-            [],  # artifacts excluded universally at the rsync chokepoint (#11459)
-        )
+        excludes = excludes_map.get(component, [])  # universal excludes at the rsync chokepoint (#11459)
 
         logger.info(
-            "component resolve job %s: rsync source=%s/%s deployed=%s",
-            job_id,
-            source_root,
-            component,
-            deployed_dir,
+            "component resolve job %s: rsync source=%s/%s deployed=%s", job_id, source_root, component, deployed_dir
         )
 
-        # #13851: same delete guard as the sync endpoint, before anything is
-        # touched. This path ALSO rebuilt the rsync paths from the component
-        # name, discarding the #12872 fix — for a path-overridden component
-        # (ai-stack, slm-agent) that pointed the delete-style sync at a
-        # directory that is not the component's source.
-        if not force:
-            allowed, blocked, guard_msg = await _resolve_deletion_guard(
-                component, source_root, excludes, source_dir, deployed_dir
-            )
-            if not allowed:
-                # post_steps carries the FULL path list; the message inlines a
-                # capped preview so a text-only reader still sees what is at stake.
-                await _fail_resolve_job(
-                    job_id,
-                    _with_blocked_paths(guard_msg, blocked),
-                    status=RESOLVE_STATUS_BLOCKED,
-                    post_steps=blocked,
-                )
-                logger.error("component resolve job %s: %s", job_id, guard_msg)
-                return
+        if not await _check_resolve_deletion_guard(
+            job_id, component, source_root, excludes, source_dir, deployed_dir, force
+        ):
+            return
 
         # #11611: autobot_shared-first — sync the shared library BEFORE this
         # component's own rsync + restart so a newly-added `from autobot_shared.X`
@@ -353,13 +399,8 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
             return
 
         ok, msg = await _rsync_component_local(
-            source_root,
-            component,
-            excludes,
-            source_dir=source_dir,
-            dest_dir=deployed_dir,
+            source_root, component, excludes, source_dir=source_dir, dest_dir=deployed_dir
         )
-
         if not ok:
             await _fail_resolve_job(job_id, msg or "rsync failed")
             logger.error("component resolve job %s: rsync failed: %s", job_id, msg)
@@ -368,33 +409,12 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
         deps_changed, post_steps, pip_ok = await _run_post_sync_steps(
             component, source_dir, deployed_dir, restart=False
         )
-
-        # Commit the job row BEFORE the restart — the whole point of this async
-        # path.  If the restart kills this process the row is already durable.
-        async with db_service.session() as db:
-            result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
-            job_row = result.scalar_one_or_none()
-            if job_row:
-                job_row.status = "completed" if pip_ok else "failed"
-                job_row.success = pip_ok
-                job_row.deps_changed = deps_changed
-                job_row.post_steps = "\n".join(post_steps)
-                if pip_ok:
-                    job_row.message = f"Resynced {component} from code_source"
-                else:
-                    job_row.message = "pip install failed — see post_steps"
-                job_row.completed_at = datetime.now(timezone.utc)
-                await db.commit()
-
+        await _commit_resolve_job_result(job_id, component, pip_ok, deps_changed, post_steps, db_service)
         if not pip_ok:
             logger.error("component resolve job %s: pip install failed", job_id)
             return
 
-        logger.info(
-            "component resolve job %s: completed; triggering deferred restart for %s",
-            job_id,
-            component,
-        )
+        logger.info("component resolve job %s: completed; triggering deferred restart for %s", job_id, component)
         # Deferred restart — may kill this process for autobot-slm-backend; that
         # is fine because the job row is already committed above.
         steps2: List[str] = []
@@ -407,19 +427,7 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
 
     except Exception as exc:
         logger.error("component resolve job %s: unexpected error: %s", job_id, exc, exc_info=True)
-        try:
-            from services.database import db_service as _db_svc
-
-            async with _db_svc.session() as db:
-                result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
-                job_row = result.scalar_one_or_none()
-                if job_row:
-                    job_row.status = "failed"
-                    job_row.message = str(exc)
-                    job_row.completed_at = datetime.now(timezone.utc)
-                    await db.commit()
-        except Exception as inner:
-            logger.error("component resolve job %s: failed to persist error state: %s", job_id, inner)
+        await _persist_resolve_job_exception(job_id, exc)
     finally:
         _running_tasks.pop(job_id, None)
 
@@ -627,6 +635,19 @@ async def _get_tracker_for_db(db: AsyncSession):
 # Never hard-code a cache TTL — read it from the environment so a frequently
 # polled status endpoint doesn't re-checksum every deployed component per call.
 _STALE_COMPONENTS_TTL_SECONDS = int(os.getenv("SLM_STALE_COMPONENTS_TTL_SECONDS", "60"))
+
+# #14683: how long the update-all orchestration waits for a fired self-update
+# play to report a completion before giving up on it. Generous: the play covers
+# every deployed role on the box. The poll floor is 1s so a misconfigured
+# interval cannot turn the wait into a busy loop.
+_SELF_UPDATE_WATCH_TIMEOUT_SECONDS = max(1, int(os.getenv("SLM_SELF_UPDATE_WATCH_TIMEOUT_SECONDS", "3600")))
+_SELF_UPDATE_WATCH_POLL_SECONDS = max(1, int(os.getenv("SLM_SELF_UPDATE_WATCH_POLL_SECONDS", "15")))
+
+# #14703: how long an update-all job may make no progress before a new one may
+# supersede it. Generous on purpose -- every stage transition and every fleet
+# node stamps progress, so this bounds the gap between two signs of life, not
+# the job's total duration.
+_UPDATE_ALL_STALE_SECONDS = max(60, int(os.getenv("SLM_UPDATE_ALL_STALE_SECONDS", "1800")))
 _stale_components_cache: dict = {"ts": -_STALE_COMPONENTS_TTL_SECONDS - 1.0, "value": []}
 
 
@@ -878,6 +899,62 @@ async def get_file_drift(
     return FileDriftReport(**report)
 
 
+async def _drift_resolve_check_deletion_guard(
+    request: DriftResolveRequest, source_root: str, excludes: List[str], source_dir: str, deployed_dir: str
+) -> Optional[DriftResolveResponse]:
+    """#13851: preview what a resolve would remove; refuse unless forced. Failure response when blocked, else None."""
+    if request.force:
+        return None
+    allowed, blocked, guard_msg = await _resolve_deletion_guard(
+        request.component, source_root, excludes, source_dir, deployed_dir
+    )
+    if allowed:
+        return None
+    return DriftResolveResponse(
+        success=False,
+        component=request.component,
+        message=guard_msg,
+        source_dir=source_dir,
+        deployed_dir=deployed_dir,
+        blocked_deletions=blocked,
+    )
+
+
+async def _drift_resolve_check_shared_sync(
+    request: DriftResolveRequest, source_dir: str, deployed_dir: str
+) -> Optional[DriftResolveResponse]:
+    """#11611: sync autobot_shared before this component's rsync + restart. Failure response on failure, else None."""
+    shared_ok, shared_msg, shared_blocked = await _ensure_autobot_shared_synced(request.component, request.force)
+    if shared_ok:
+        return None
+    return DriftResolveResponse(
+        success=False,
+        component=request.component,
+        message=shared_msg,
+        source_dir=source_dir,
+        deployed_dir=deployed_dir,
+        blocked_deletions=shared_blocked,
+    )
+
+
+async def _drift_resolve_rsync_or_fail(
+    request: DriftResolveRequest, source_root: str, excludes: List[str], source_dir: str, deployed_dir: str
+) -> Optional[DriftResolveResponse]:
+    """#12872: rsync using the resolved paths verbatim. Returns a failure response on error, None on success."""
+    ok, msg = await _rsync_component_local(
+        source_root, request.component, excludes, source_dir=source_dir, dest_dir=deployed_dir
+    )
+    if ok:
+        return None
+    return DriftResolveResponse(
+        success=False,
+        component=request.component,
+        message=msg or "rsync failed",
+        source_dir=source_dir,
+        deployed_dir=deployed_dir,
+    )
+
+
 @router.post("/drift/resolve", response_model=DriftResolveResponse)
 async def resolve_drift(
     request: DriftResolveRequest,
@@ -951,58 +1028,17 @@ async def resolve_drift(
         deployed_dir,
     )
 
-    # #13851: a resolve deletes. Preview what it would remove and refuse unless
-    # the caller explicitly forced it — the drift signal that prompts a resolve
-    # has itself reported foreign files as stale. This runs BEFORE the shared
-    # sync below so a refusal leaves the host untouched.
-    if not request.force:
-        allowed, blocked, guard_msg = await _resolve_deletion_guard(
-            request.component, source_root, excludes, source_dir, deployed_dir
-        )
-        if not allowed:
-            return DriftResolveResponse(
-                success=False,
-                component=request.component,
-                message=guard_msg,
-                source_dir=source_dir,
-                deployed_dir=deployed_dir,
-                blocked_deletions=blocked,
-            )
+    guard_response = await _drift_resolve_check_deletion_guard(request, source_root, excludes, source_dir, deployed_dir)
+    if guard_response is not None:
+        return guard_response
 
-    # #11611: autobot_shared-first — sync the shared library BEFORE this
-    # component's own rsync + restart so a newly-added `from autobot_shared.X`
-    # import resolves at startup and the control plane cannot crash-loop on a
-    # half-deployed shared tree. Fail the resolve if it cannot be synced.
-    shared_ok, shared_msg, shared_blocked = await _ensure_autobot_shared_synced(request.component, request.force)
-    if not shared_ok:
-        return DriftResolveResponse(
-            success=False,
-            component=request.component,
-            message=shared_msg,
-            source_dir=source_dir,
-            deployed_dir=deployed_dir,
-            blocked_deletions=shared_blocked,
-        )
+    shared_response = await _drift_resolve_check_shared_sync(request, source_dir, deployed_dir)
+    if shared_response is not None:
+        return shared_response
 
-    # #12872: pass the resolved paths verbatim. source_dir/deployed_dir already
-    # honour _NONSTANDARD_COMPONENT_PATHS; reconstructing them from the
-    # component name discarded that and pointed rsync at a nonexistent dir.
-    ok, msg = await _rsync_component_local(
-        source_root,
-        request.component,
-        excludes,
-        source_dir=source_dir,
-        dest_dir=deployed_dir,
-    )
-
-    if not ok:
-        return DriftResolveResponse(
-            success=False,
-            component=request.component,
-            message=msg or "rsync failed",
-            source_dir=source_dir,
-            deployed_dir=deployed_dir,
-        )
+    rsync_response = await _drift_resolve_rsync_or_fail(request, source_root, excludes, source_dir, deployed_dir)
+    if rsync_response is not None:
+        return rsync_response
 
     # --- Post-sync: install deps / rebuild / restart so synced code goes live (#9982) ---
     deps_changed, post_steps, pip_ok = await _run_post_sync_steps(request.component, source_dir, deployed_dir)
@@ -1513,13 +1549,13 @@ _COMPONENT_PIP_PATHS: Dict[str, Tuple[str, str]] = {
     ),
 }
 
-# Target CPython interpreter per backend component (#11323).
-# NPU worker uses py3.11 (OpenVINO ABI); every other Python service uses py3.14.
-# This is the single authoritative mapping — do not hardcode elsewhere.
+# Target CPython interpreter for the components code-sync provisions (#11323).
+# Authoritative for _COMPONENT_PIP_PATHS keys ONLY — both readers are reached
+# from that branch alone, so any other key would be unread (#15075). The NPU
+# worker targets 3.14 too (#13747), decided in roles/npu-worker/tasks/main.yml.
 _COMPONENT_PYTHON_TARGET: Dict[str, str] = {
     "autobot-backend": "python3.14",
     "autobot-slm-backend": "python3.14",
-    "autobot-npu-worker": "python3.11",
 }
 
 # Ansible assets that provision the target interpreter on THIS host (#11343).
@@ -1585,7 +1621,7 @@ _WORKER_COMPONENTS: frozenset = frozenset(
 # an explicit package LIST rather than a requirements file, so there is nothing
 # a code sync can legitimately re-install:
 #   - autobot-npu-worker: roles/npu-worker/tasks/main.yml:188-218 pip-installs a
-#     named list (FastAPI + OpenVINO) into its py3.11 venv. The repo does ship
+#     named list (FastAPI + OpenVINO) into its py3.14 venv (#13747). The repo does ship
 #     autobot-npu-worker/requirements.txt, but ansible never uses it — installing
 #     from it could pull a different OpenVINO build and brick the NPU worker.
 #   - autobot-browser-worker: roles/browser/tasks/main.yml:132-140 installs
@@ -1600,6 +1636,15 @@ _WORKER_COMPONENT_PIP: Dict[str, Tuple[str, str]] = {
         "/opt/autobot/autobot-ai-stack/venv/bin/pip",
     ),
 }
+
+# #15063: reconcile_component's lock file is keyed off pip.parents[1] (the
+# venv directory) — if two components ever mapped to the same venv, one's
+# reconcile would compute the other's declared packages as removal
+# candidates. Nothing else enforces that these paths stay distinct; this does.
+_ALL_COMPONENT_PIP_BINS = [pip_bin for _req, pip_bin in {**_COMPONENT_PIP_PATHS, **_WORKER_COMPONENT_PIP}.values()]
+assert len(_ALL_COMPONENT_PIP_BINS) == len(
+    set(_ALL_COMPONENT_PIP_BINS)
+), "_COMPONENT_PIP_PATHS/_WORKER_COMPONENT_PIP map two components to the same venv (#15063)"
 
 # Timeout (seconds) for `npm ci` (dependency install).  Windows-generated
 # package-lock.json on WSL can be slow; 300 s default matches pip (#11351).
@@ -1949,61 +1994,6 @@ async def _recreate_venv(component: str, python_bin: str, pip_bin: str, steps: L
         steps.append(f"venv: create error: {exc}")
 
 
-async def _install_pip_deps_for_component(component: str, steps: List[str]) -> bool:
-    """Install Python deps from the component's requirements.txt into its venv (#9982).
-
-    Unconditional — pip is fast when nothing changed (same rationale as #1603).
-    Appends human-readable step notes to *steps*.
-    Returns True on success, False when pip exits non-zero so callers can surface
-    the failure (previously the non-zero rc was swallowed — #11322).
-    """
-    # #12450: worker components carry their own (req, pip) pair — ai-stack's file
-    # is requirements-ai.txt, not requirements.txt.
-    paths = _COMPONENT_PIP_PATHS.get(component) or _WORKER_COMPONENT_PIP.get(component)
-    if paths is None:
-        return True
-    req_path, pip_bin = paths
-    if not Path(req_path).exists():
-        steps.append(f"pip: no requirements file at {req_path} — skipped")
-        return True
-    if component in _WORKER_COMPONENT_PIP and not Path(pip_bin).exists():
-        # Worker-only relaxation: a worker venv is provisioned by ansible, never
-        # by code-sync, so a missing one means "not deployed here" rather than a
-        # broken install — the code rsync + restart is still valid on its own.
-        # Backends deliberately keep the original behaviour (attempt the exec so
-        # a genuine pip failure surfaces via pip_ok=False, #11322).
-        steps.append(f"pip: no venv pip at {pip_bin} — skipped (provisioned by ansible)")
-        return True
-    steps.append(f"pip: installing {req_path} into {Path(pip_bin).parent}")
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            pip_bin,
-            "install",
-            "-r",
-            req_path,
-            "--quiet",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        if proc.returncode == 0:
-            logger.info("drift resolve: pip install ok for %s", component)
-            steps.append("pip: install succeeded")
-            return True
-        out = stdout.decode(errors="replace")[:300] if stdout else ""
-        logger.error("drift resolve: pip install failed (%d) for %s: %s", proc.returncode, component, out)
-        steps.append(f"pip: install failed (rc={proc.returncode}): {out[:150]}")
-        return False
-    except asyncio.TimeoutError:
-        logger.error("drift resolve: pip install timed out for %s", component)
-        steps.append("pip: install timed out after 300s")
-        return False
-    except Exception as exc:
-        logger.error("drift resolve: pip install error for %s: %s", component, exc)
-        steps.append(f"pip: install error: {exc}")
-        return False
-
-
 # Components whose deployed tree ships Alembic migrations, keyed to the
 # alembic.ini path RELATIVE to the deployed dir. `upgrade heads` (plural)
 # tolerates multiple heads from parallel branch migrations.
@@ -2046,10 +2036,12 @@ _HEALTH_POLL_CONNECT_TIMEOUT: float = float(
 # than a literal buried in the loop.
 _DEFAULT_HEALTH_POLL_INTERVAL_S = "2"
 _HEALTH_POLL_INTERVAL: float = float(os.environ.get("AUTOBOT_HEALTH_POLL_INTERVAL", _DEFAULT_HEALTH_POLL_INTERVAL_S))
-# Per-component health URLs (localhost only — never egress).
+# Per-component health URLs (localhost only — never egress). Pre-existing
+# hardcoded ports, not touched by #15063 — resolving these through
+# ssot_config is separate, tracked work under the canonical-debt umbrella.
 _COMPONENT_HEALTH_URLS: Dict[str, str] = {
-    "autobot-backend": "http://127.0.0.1:8001/api/health",
-    "autobot-slm-backend": "http://127.0.0.1:8000/slm/api/code-sync/status",
+    "autobot-backend": "http://127.0.0.1:8001/api/health",  # canonical: ignore py-hardcoded-url (#10569)
+    "autobot-slm-backend": "http://127.0.0.1:8000/slm/api/code-sync/status",  # canonical:ignore py-hardcoded-url
     "autobot-frontend": "http://127.0.0.1/",
     "autobot-slm-frontend": "http://127.0.0.1/slm/",
 }
@@ -2344,7 +2336,7 @@ async def _npm_install_if_needed(frontend_dir: str, component: str, steps: List[
     if current_hash:
         marker = Path(frontend_dir) / "node_modules" / _NPM_LOCK_HASH_MARKER
         marker.parent.mkdir(parents=True, exist_ok=True)
-        marker.write_text(current_hash, encoding="utf-8")
+        await asyncio.to_thread(marker.write_text, current_hash, encoding="utf-8")
     steps.append("npm ci: succeeded")
     return True
 
@@ -2870,6 +2862,122 @@ async def _ensure_autobot_shared_synced(component: str, force: bool = False) -> 
     return False, f"autobot_shared-first: resync failed before {component}: {msg} (#11611)", []
 
 
+async def _run_post_sync_backend_branch(
+    component: str,
+    source_dir: str,
+    deployed_dir: str,
+    snapshot: Optional[str],
+    steps: List[str],
+    restart: bool,
+) -> bool:
+    """Backend branch of _run_post_sync_steps: constraints/venv/pip/reconcile/alembic/symlink/restart (#9982,#15063)."""
+    source_root = str(Path(source_dir).parent)
+    await _deploy_constraints_dir(source_root, steps)
+    await _deploy_repo_root_requirements(source_root, steps)
+    await _ensure_target_python_installed(component, steps)
+    venv_recreated = await _ensure_venv_python(component, steps)
+    pip_ok = await _install_pip_deps_for_component(component, steps)
+    if not pip_ok:
+        await _rollback_component(component, snapshot, steps, None)
+        return False
+    req_path, pip_bin = _COMPONENT_PIP_PATHS[component]
+    await reconcile_component(component, req_path, pip_bin, steps)
+    alembic_ok = await _run_alembic_migrations(component, deployed_dir, steps)
+    # Extract the dump path recorded during _run_alembic_migrations for rollback msg.
+    last_dump_path = next(
+        (s.split("→")[-1].strip() for s in steps if "pg_dump: backup ok" in s),
+        None,
+    )
+    if not alembic_ok:
+        await _rollback_component(component, snapshot, steps, last_dump_path)
+        return False
+    await _ensure_autobot_shared_symlink(component, steps)
+    if not restart:
+        steps.append("post-sync: restart deferred")
+        return True
+    await _restart_component_services(component, steps)
+    # #11458: a just-recreated venv cold-starts slowly → full health-poll
+    # window; a warm restart uses the shorter fast window.
+    healthy = await _wait_component_healthy(component, steps, slow_start=venv_recreated)
+    if not healthy:
+        await _rollback_component(component, snapshot, steps, last_dump_path)
+        steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
+        return False
+    return True
+
+
+async def _run_post_sync_frontend_branch(
+    component: str, snapshot: Optional[str], steps: List[str], restart: bool
+) -> bool:
+    """Frontend branch of _run_post_sync_steps: npm ci (conditional) + build +
+    nginx reload + health (#9982)."""
+    npm_ok = await _build_npm_frontend_for_component(component, steps)
+    if not npm_ok:
+        await _rollback_component(component, snapshot, steps, None)
+        return False
+    if not restart:
+        steps.append("post-sync: restart deferred")
+        return True
+    await _restart_component_services(component, steps)
+    # Frontend keeps the full health-poll window (#11458 review): the fast
+    # window is only for warm pip-backend restarts. A fresh nginx worker
+    # after a large asset swap can lag past 60s, and the generous window
+    # avoids logging an otherwise-healthy frontend as "check manually".
+    healthy = await _wait_component_healthy(component, steps, slow_start=True)
+    if not healthy:
+        await _rollback_component(component, snapshot, steps, None)
+        steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
+        return False
+    return True
+
+
+async def _run_post_sync_worker_branch(
+    component: str, snapshot: Optional[str], steps: List[str], restart: bool
+) -> bool:
+    """Worker branch of _run_post_sync_steps (#12450,#15063). ai-stack only; others refuse+report (AC4)."""
+    pip_ok = await _install_pip_deps_for_component(component, steps)
+    if not pip_ok:
+        await _rollback_component(component, snapshot, steps, None)
+        return False
+    if component in EXPLICIT_LIST_COMPONENTS:
+        refuse_explicit_list(component, steps)
+    else:
+        worker_paths = _WORKER_COMPONENT_PIP.get(component)
+        if worker_paths is not None:
+            await reconcile_component(component, *worker_paths, steps)
+    if not restart:
+        steps.append("post-sync: restart deferred")
+        return True
+    await _restart_component_services(component, steps)
+    # Workers have no health URL, so _wait_component_healthy returns True
+    # immediately and rollback is gated purely on the systemd unit entering
+    # 'failed'. Note _is_systemd_unit_failed watches the FIRST unit in the
+    # component's _COMPONENT_SERVICES list.
+    healthy = await _wait_component_healthy(component, steps, slow_start=True)
+    if not healthy:
+        await _rollback_component(component, snapshot, steps, None)
+        steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
+        return False
+    return True
+
+
+async def _run_post_sync_shared_branch(
+    component: str, snapshot: Optional[str], steps: List[str], restart: bool
+) -> bool:
+    """autobot_shared branch of _run_post_sync_steps: restore BOTH backends'
+    symlinks (#10912) + restart dependents (self last) + per-dependent
+    health + rollback (#11496)."""
+    for backend in sorted(_BACKEND_COMPONENTS):
+        await _ensure_autobot_shared_symlink(backend, steps)
+    if not restart:
+        steps.append("post-sync: restart deferred")
+        return True
+    # #11496: was the only sync path with no post-restart health poll or
+    # rollback — a shared-lib change that broke a backend import restarted
+    # onto a dead service undetected.
+    return await _restart_dependents_with_health(component, snapshot, steps)
+
+
 async def _run_post_sync_steps(
     component: str,
     source_dir: str,
@@ -2893,20 +3001,16 @@ async def _run_post_sync_steps(
     autobot-slm-backend).  All other steps still run; restart=True (default) keeps
     the existing synchronous behaviour for all current callers.
 
-    Component routing:
+    Component routing — one branch helper each, so this dispatcher and every
+    branch stay under the function-length guideline (Issue #620):
       - Python backend (autobot-backend, autobot-slm-backend):
-          constraints deploy (#11322) + venv version check (#11323) +
-          pip install + symlink restore (#10912) + alembic + restart + health
-      - Frontend (autobot-frontend, autobot-slm-frontend): npm ci (conditional) + build + nginx reload + health
+          _run_post_sync_backend_branch
+      - Frontend (autobot-frontend, autobot-slm-frontend): _run_post_sync_frontend_branch
       - Workers (#12450 — ai-stack, npu-worker, browser-worker, slm-agent):
-          optional pip install (ai-stack only) + restart of the unit(s) that
-          component's ansible role actually installs. No constraints/alembic/
-          venv-recreation/symlink work — none of it applies to a worker.
-      - autobot_shared: restore BOTH backends' symlinks (#10912) + restart
-          dependents (self last) + per-dependent health + rollback (#11496)
+          _run_post_sync_worker_branch
+      - autobot_shared: _run_post_sync_shared_branch
     """
     steps: List[str] = []
-    pip_ok = True
 
     # Compute deps_changed post-rsync (source == deployed now; any prior delta
     # is gone, so this is always False after a successful rsync — but we check
@@ -2916,100 +3020,17 @@ async def _run_post_sync_steps(
 
     # #11377: snapshot the deployed dir BEFORE any mutation for rollback.
     snapshot = await _snapshot_component(component)
-    # Track the last pg_dump path for rollback failure messages (#11376+#11377).
-    last_dump_path: Optional[str] = None
 
     if component in _COMPONENT_PIP_PATHS:
-        source_root = str(Path(source_dir).parent)
-        await _deploy_constraints_dir(source_root, steps)
-        await _deploy_repo_root_requirements(source_root, steps)
-        await _ensure_target_python_installed(component, steps)
-        venv_recreated = await _ensure_venv_python(component, steps)
-        pip_ok = await _install_pip_deps_for_component(component, steps)
-        if not pip_ok:
-            await _rollback_component(component, snapshot, steps, last_dump_path)
-            return deps_changed, steps, False
-        alembic_ok = await _run_alembic_migrations(component, deployed_dir, steps)
-        # Extract the dump path recorded during _run_alembic_migrations for rollback msg.
-        last_dump_path = next(
-            (s.split("→")[-1].strip() for s in steps if "pg_dump: backup ok" in s),
-            None,
-        )
-        if not alembic_ok:
-            await _rollback_component(component, snapshot, steps, last_dump_path)
-            return deps_changed, steps, False
-        await _ensure_autobot_shared_symlink(component, steps)
-        if restart:
-            await _restart_component_services(component, steps)
-            # #11458: a just-recreated venv cold-starts slowly → full health-poll
-            # window; a warm restart uses the shorter fast window.
-            healthy = await _wait_component_healthy(component, steps, slow_start=venv_recreated)
-            if not healthy:
-                await _rollback_component(component, snapshot, steps, last_dump_path)
-                steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
-                pip_ok = False
-        else:
-            steps.append("post-sync: restart deferred")
+        pip_ok = await _run_post_sync_backend_branch(component, source_dir, deployed_dir, snapshot, steps, restart)
     elif component in _COMPONENT_FRONTEND_DIRS:
-        npm_ok = await _build_npm_frontend_for_component(component, steps)
-        if not npm_ok:
-            await _rollback_component(component, snapshot, steps, None)
-            pip_ok = False
-        elif restart:
-            await _restart_component_services(component, steps)
-            # Frontend keeps the full health-poll window (#11458 review): the fast
-            # window is only for warm pip-backend restarts. A fresh nginx worker
-            # after a large asset swap can lag past 60s, and the generous window
-            # avoids logging an otherwise-healthy frontend as "check manually".
-            healthy = await _wait_component_healthy(component, steps, slow_start=True)
-            if not healthy:
-                await _rollback_component(component, snapshot, steps, None)
-                steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
-                pip_ok = False
-        else:
-            steps.append("post-sync: restart deferred")
+        pip_ok = await _run_post_sync_frontend_branch(component, snapshot, steps, restart)
     elif component in _WORKER_COMPONENTS:
-        # #12450: worker components. Only ai-stack has a re-installable
-        # requirements file; for the rest this is deliberately code-only
-        # (rsync already happened) plus a restart of the correct unit — see
-        # _WORKER_COMPONENT_PIP for why each is or isn't dep-installable.
-        #
-        # No constraints deploy, no interpreter provisioning, no venv
-        # recreation, no alembic, no autobot_shared symlink: none apply to a
-        # worker, and venv recreation in particular would wipe the venv the
-        # chroma binary lives in (MVA-79).
-        pip_ok = await _install_pip_deps_for_component(component, steps)
-        if not pip_ok:
-            await _rollback_component(component, snapshot, steps, None)
-            return deps_changed, steps, False
-        if restart:
-            await _restart_component_services(component, steps)
-            # Workers have no health URL, so _wait_component_healthy returns
-            # True immediately and rollback is gated purely on the systemd unit
-            # entering 'failed'. Note _is_systemd_unit_failed watches the FIRST
-            # unit in the component's _COMPONENT_SERVICES list.
-            healthy = await _wait_component_healthy(component, steps, slow_start=True)
-            if not healthy:
-                await _rollback_component(component, snapshot, steps, None)
-                steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
-                pip_ok = False
-        else:
-            steps.append("post-sync: restart deferred")
+        pip_ok = await _run_post_sync_worker_branch(component, snapshot, steps, restart)
     elif component in _COMPONENT_SERVICES:
-        # Library component (autobot_shared): no build step, but every service
-        # that imports it must restart so the new shared code is loaded (#10248).
-        # Restore both backends' symlinks first so services start cleanly (#10912).
-        for backend in sorted(_BACKEND_COMPONENTS):
-            await _ensure_autobot_shared_symlink(backend, steps)
-        if restart:
-            # #11496: was the only sync path with no post-restart health poll
-            # or rollback — a shared-lib change that broke a backend import
-            # restarted onto a dead service undetected.
-            if not await _restart_dependents_with_health(component, snapshot, steps):
-                pip_ok = False
-        else:
-            steps.append("post-sync: restart deferred")
+        pip_ok = await _run_post_sync_shared_branch(component, snapshot, steps, restart)
     else:
+        pip_ok = True
         steps.append(f"post-sync: no service or build step for {component}")
 
     return deps_changed, steps, pip_ok
@@ -3097,40 +3118,6 @@ async def _restart_slm_service(service: str) -> None:
         logger.warning("Failed to restart %s: %s", service, exc)
 
 
-async def _install_slm_pip_dependencies() -> None:
-    """Install Python dependencies from requirements.txt into the SLM venv.
-
-    Runs unconditionally after rsync — pip is fast when nothing changed (#1603).
-    """
-    req_path = "/opt/autobot/autobot-slm-backend/requirements.txt"
-    pip_bin = "/opt/autobot/autobot-slm-backend/venv/bin/pip"
-
-    if not Path(req_path).exists():
-        logger.debug("No requirements.txt at %s — skipping pip install", req_path)
-        return
-
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            pip_bin,
-            "install",
-            "-r",
-            req_path,
-            "--quiet",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        if proc.returncode == 0:
-            logger.info("SLM pip install completed successfully")
-        else:
-            output = stdout.decode(errors="replace")[:500] if stdout else ""
-            logger.error("SLM pip install failed (rc=%d): %s", proc.returncode, output)
-    except asyncio.TimeoutError:
-        logger.error("SLM pip install timed out after 300s")
-    except Exception as exc:
-        logger.error("SLM pip install error: %s", exc)
-
-
 async def _fetch_code_source_connection_info(
     db_service,
 ) -> Tuple[str, str, str] | None:
@@ -3199,13 +3186,19 @@ async def _mark_slm_node_up_to_date(db_service, node_id: str) -> None:
         logger.warning("SLM self-sync: could not update node status: %s", db_err)
 
 
-async def _sync_slm_from_code_source(node_id: str) -> None:
+async def _sync_slm_from_code_source(node_id: str, job_id: str) -> None:
     """Pull SLM components from the code source node and restart services.
 
     Used when the GUI triggers a sync for the SLM server itself (#913).
     The Ansible playbook cannot be used because it runs rsync FROM the
     controller (SLM server) but the source path only exists on the dev machine.
     This function reverses the direction: SLM server PULLS from the code source.
+
+    *job_id* is needed only to persist the dependency-reconciliation steps
+    (#15063) — the fleet-sync job row is already marked complete before this
+    runs (a self-restart may kill this process), so that write is the last
+    reliable place for the removal set to reach the job's own output rather
+    than only a log an operator must go find.
 
     NOTE: Must create its own DB session — the request-scoped session passed
     from sync_node is closed by FastAPI before this background task runs.
@@ -3248,7 +3241,15 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         return
 
     # --- Phase 2b: install Python dependencies if requirements.txt changed (#1603) ---
-    await _install_slm_pip_dependencies()
+    req_path, pip_bin = _COMPONENT_PIP_PATHS["autobot-slm-backend"]
+    reconcile_steps: List[str] = []
+    if await _install_slm_pip_dependencies(req_path, pip_bin):
+        await reconcile_component("autobot-slm-backend", req_path, pip_bin, reconcile_steps)
+    if reconcile_steps:
+        # #15063: written now, while a process is still alive to write it —
+        # Phase 4 below may self-restart this service before anything after
+        # it can run.
+        await _update_node_state_db(job_id, node_id, message="; ".join(reconcile_steps))
 
     # --- Phase 2c: rebuild SLM frontend (#1607) ---
     await _build_slm_frontend()
@@ -3550,7 +3551,7 @@ async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSy
             if is_local_source:
                 await _ansible_self_update(slm_self_node.node_id)
             else:
-                await _sync_slm_from_code_source(slm_self_node.node_id)
+                await _sync_slm_from_code_source(slm_self_node.node_id, job.job_id)
         else:
             # No code source — fall back to Ansible
             await _ansible_self_update(slm_self_node.node_id)
@@ -4566,6 +4567,14 @@ _active_update_all: Dict[str, Any] = {}
 
 # Module-level references to tasks created by the update-all pipeline (M3).
 _update_all_task: Optional[asyncio.Task] = None
+
+# #14703 review: `start_update_all` reads the current job, may retire it, then
+# creates and stores a new one — with awaits in between. Without a lock two
+# concurrent POSTs can both judge the same job stale, both retire it, and both
+# start an orchestration against the same live nodes. That is strictly worse
+# than the lockout this retirement exists to fix, so the whole
+# decide-retire-create sequence is serialised.
+_update_all_start_lock = asyncio.Lock()
 _resume_task: Optional[asyncio.Task] = None
 
 
@@ -4604,6 +4613,41 @@ class UpdateAllJob(BaseModel):
     created_at: str = ""
     completed_at: Optional[str] = None
     failure_reason: Optional[str] = None
+    #: #14703: when this job last actually did something. Judged on progress
+    #: rather than age: a legitimate fleet update across many nodes can outlive
+    #: any fixed age bound, and reaping a job that is still working would be
+    #: worse than the lockout it is meant to cure.
+    last_progress_at: Optional[str] = None
+
+
+def _mark_progress(job: "UpdateAllJob") -> None:
+    """Stamp that *job* is still doing something (#14703)."""
+    job.last_progress_at = utc_timestamp()
+
+
+def _job_is_stale(job: "UpdateAllJob") -> bool:
+    """True when *job* claims to be running but has shown no sign of life.
+
+    A job's status is only ever advanced by its own orchestration, so one that
+    stopped advancing stays "running" forever and 409s every future update.
+    There is no cancel path, so without this the builtin updater is disabled
+    until the process restarts -- an out-of-band action to recover from a stuck
+    update, which is exactly what should not be needed.
+
+    Falls back to `created_at` for a job that never stamped progress. An
+    unparseable or absent timestamp is NOT treated as stale: a job that is
+    genuinely running must never be reaped on a bad reading.
+    """
+    marker = job.last_progress_at or job.created_at
+    if not marker:
+        return False
+    try:
+        seen = datetime.fromisoformat(marker)
+    except (ValueError, TypeError):
+        return False
+    if seen.tzinfo is None:
+        seen = seen.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - seen).total_seconds() > _UPDATE_ALL_STALE_SECONDS
 
 
 def _short_sha(sha: Optional[str]) -> Optional[str]:
@@ -4765,7 +4809,7 @@ async def _get_slm_deployed_commit() -> Optional[str]:
     """
     marker = Path(get_default_deployed_dir("autobot-slm-backend")) / ".deployed_commit"
     try:
-        commit = marker.read_text(encoding="utf-8").strip()
+        commit = (await asyncio.to_thread(marker.read_text, encoding="utf-8")).strip()
     except OSError:
         return None
     return commit or None
@@ -5316,7 +5360,11 @@ async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
     executor = get_playbook_executor()
     slm_own_ip = urlparse(settings.external_url).hostname or ""
 
+    _mark_progress(job)
     for node_id in node_ids:
+        # #14703: every node is a sign of life, so a long fleet update across
+        # many nodes never looks stale however long it legitimately takes.
+        _mark_progress(job)
         _stage_log(stage, f"Syncing fleet node {node_id} ...")
         try:
             cont = await _sync_fleet_node(executor, node_id, job, stage, slm_own_ip)
@@ -5440,6 +5488,185 @@ async def _run_fleet_stage_or_already_current(
     job.completed_at = utc_timestamp()
 
 
+def _completion_is_newer_than(completed_at: Optional[str], since: Optional[str]) -> bool:
+    """True when *completed_at* dates a play that finished after *since*.
+
+    The comparison is the whole point (#14683): "no play is running" is also
+    true a moment after firing, before the detached play has started, so a bare
+    not-running reading would report an instant, false completion. Only a
+    completion strictly newer than the moment we fired proves our play ended.
+
+    An unparseable or absent timestamp is NOT a completion.
+    """
+    if not completed_at or not since:
+        return False
+    try:
+        done = datetime.fromisoformat(completed_at)
+        fired = datetime.fromisoformat(since)
+    except (ValueError, TypeError):
+        return False
+    if done.tzinfo is None:
+        done = done.replace(tzinfo=timezone.utc)
+    if fired.tzinfo is None:
+        fired = fired.replace(tzinfo=timezone.utc)
+    return done > fired
+
+
+def _rotated_completion_time() -> Optional[str]:
+    """When the last verdict came from the ROTATED log, when that log was rotated.
+
+    Returns None when the verdict came from the live log (the normal case) or
+    cannot be read.
+
+    #14804: the live log's mtime dates a `copytruncate`, not a play, which is why
+    a rotated reading must not be taken at face value. But refusing it outright
+    made the condition permanent: if the play's recap lands right at the rotation
+    boundary it exists only in the `.1` file, the process has already exited, and
+    nothing will ever write to the live log again for that run. Every later poll
+    saw the same signal, so a genuinely successful self-update waited out the full
+    timeout and was reported FAILED.
+
+    The rotated file's own mtime does date the completion, so it is the honest
+    timestamp to resolve on rather than a reason to keep waiting.
+    """
+    try:
+        from services.playbook_executor import SELF_UPDATE_LOG_PATH
+        from services.self_update_log_reader import read_self_update_verdict
+
+        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
+        if getattr(verdict, "from_rotated_log", False) is not True:
+            return None
+        # Only a run that reached its recap is a completion. `complete` is a real
+        # bool on the verdict; a stub returns a Mock, which must not pass.
+        if getattr(verdict, "complete", False) is not True:
+            return None
+        mtime = getattr(verdict, "rotated_log_mtime", None)
+        return mtime if isinstance(mtime, str) and mtime else None
+    except Exception as exc:  # pragma: no cover - must never break the wait
+        logger.debug("update-all: could not read the rotated-log completion time (%s)", exc)
+        return None
+
+
+async def _await_self_update_completion(job: "UpdateAllJob", since: Optional[str]) -> Optional[str]:
+    """Wait for the fired self-update play to finish. Returns its completion time.
+
+    Returns None on timeout. If the play restarts this service — the case the
+    orchestration was originally written for — this coroutine simply dies with
+    the process and the startup resume hook takes over, exactly as before.
+    """
+    deadline = time.monotonic() + _SELF_UPDATE_WATCH_TIMEOUT_SECONDS
+    while True:
+        await asyncio.sleep(_SELF_UPDATE_WATCH_POLL_SECONDS)
+        activity = await read_deploy_activity()
+        # #14703 interaction: waiting IS progress. This loop runs up to
+        # _SELF_UPDATE_WATCH_TIMEOUT_SECONDS (3600s default) and the staleness
+        # rule retires a job after _UPDATE_ALL_STALE_SECONDS (1800s default) of
+        # silence -- exactly half. Without a stamp per poll, a healthy
+        # self-update that takes longer than 1800s is retired as stale at the
+        # halfway point of its own permitted wait. The reconcile path is the
+        # no-restart case, so it deliberately persists no resume plan, and the
+        # resume plan is the only other thing that stays the staleness rule.
+        _mark_progress(job)
+        # in_progress is None means the unit could not be queried — unknown is
+        # not "finished", so keep waiting rather than resolving on a guess.
+        if activity.in_progress is False and _completion_is_newer_than(activity.last_completed_play_at, since):
+            rotated_at = _rotated_completion_time()
+            if rotated_at is None:
+                return activity.last_completed_play_at
+            # #14804: the reading came from the rotated log, so the live mtime
+            # above dates a truncation rather than a play. Resolve on the
+            # rotated file's own mtime when that post-dates our firing -- it is
+            # the one timestamp here that describes a real completion. Waiting
+            # instead made this condition permanent and turned a successful
+            # self-update into a FAILED job an hour later.
+            if _completion_is_newer_than(rotated_at, since):
+                logger.warning(
+                    "update-all: self-update recap landed in the rotated log; resolving on its rotation time %s",
+                    rotated_at,
+                )
+                return rotated_at
+            logger.warning("update-all: rotated-log verdict pre-dates this run — still waiting")
+        # Checked after polling, never before: a misconfigured timeout must not
+        # produce a verdict from zero observations.
+        if time.monotonic() >= deadline:
+            return None
+
+
+async def _reconcile_self_update_stage(
+    job: UpdateAllJob,
+    remote_commit: str,
+    outdated_node_ids: List[str],
+) -> None:
+    """Resolve a fired self-update stage when this process was NOT restarted.
+
+    #14683: the stage used to have no completion path in this process at all.
+    It fired the play, returned, and relied on the restart killing us so the
+    startup resume hook would continue the fleet stage. When the play finished
+    without replacing the service, nothing ever ran again: the stage stayed
+    RUNNING and the fleet stage stayed PENDING forever, so no node was updated
+    and the job could neither complete nor fail.
+    """
+    stage = _get_stage(job, "slm_self_update")
+    completed_at = await _await_self_update_completion(job, stage.started_at)
+
+    if completed_at is None:
+        reason = (
+            f"self-update play reported no completion within {_SELF_UPDATE_WATCH_TIMEOUT_SECONDS}s — "
+            "not continuing to the fleet stage"
+        )
+        logger.error("update-all: %s", reason)
+        stage.status = _StageStatus.FAILED
+        stage.message = reason[:300]
+        stage.completed_at = utc_timestamp()
+        job.status = "failed"
+        job.failure_reason = reason[:300]
+        job.completed_at = utc_timestamp()
+        await _clear_resume_plan()
+        return
+
+    # #12959: the raw log read only says whether the PLAYBOOK finished. A run
+    # can reach its recap with zero failures and still deliver nothing
+    # role-owned, which `_read_last_self_update_verdict` folds in via
+    # probe_role_delivery and `/status` already gates on. Resolving this stage
+    # on the weaker check would let a degraded self-update be reported as
+    # resolved and then deploy to the fleet on the strength of it.
+    verdict = _read_last_self_update_verdict()
+    if verdict.degraded:
+        # Carry the reason into the stage: the count alone gave an operator
+        # nothing to act on.
+        reason = verdict.reason or (
+            f"self-update play finished with {verdict.failed_hosts} failed and "
+            f"{verdict.unreachable_hosts} unreachable host(s)"
+        )
+        logger.error("update-all: %s", reason)
+        stage.status = _StageStatus.FAILED
+        stage.message = reason[:300]
+        stage.completed_at = utc_timestamp()
+        job.status = "failed"
+        job.failure_reason = reason[:300]
+        job.completed_at = utc_timestamp()
+        await _clear_resume_plan()
+        return
+
+    # The completion signal is box-global: the log path and the systemd unit are
+    # shared by every self-update trigger (POST /self-update, the fleet sync
+    # job), none of which check for an update-all in flight. A play that is not
+    # ours can therefore satisfy the wait above. Verifying the deployed commit
+    # is what makes the outcome ours, and it is the same check the restart path
+    # already performs via _resume_verify_slm_stage before touching the fleet.
+    if not await _resume_verify_slm_stage(job, remote_commit):
+        await _clear_resume_plan()
+        return
+
+    _stage_log(stage, "Self-update play completed without restarting this service — continuing")
+    stage.status = _StageStatus.SUCCESS
+    stage.sha = _short_sha(remote_commit)
+    stage.message = f"SLM self-update completed at {_short_sha(remote_commit)} (no restart required)"
+    stage.completed_at = utc_timestamp()
+    await _run_fleet_stage_or_already_current(job, outdated_node_ids, remote_commit)
+    await _clear_resume_plan()
+
+
 async def _run_update_all_orchestration(job: UpdateAllJob, db_service_ref) -> None:
     """Background task: run the 4-stage one-click update pipeline (M4).
 
@@ -5454,21 +5681,34 @@ async def _run_update_all_orchestration(job: UpdateAllJob, db_service_ref) -> No
     """
     job.status = "running"
 
+    _mark_progress(job)
+
     remote_commit = await _run_github_stage(job, db_service_ref)
     if remote_commit is None:
         return
+    _mark_progress(job)
 
     pulled_commit = await _run_pull_stage(job, db_service_ref)
     if pulled_commit is None:
         return
+    _mark_progress(job)
 
     outdated_node_ids = await _collect_outdated_node_ids(job, remote_commit, db_service_ref)
+    _mark_progress(job)
 
     slm_fired = await _run_slm_stage(job, remote_commit, outdated_node_ids, db_service_ref)
+    _mark_progress(job)
     if job.status == "failed":
         return
     if slm_fired:
-        return  # process restarts; resume hook handles fleet stage
+        # #14683: previously an unconditional return, on the assumption that the
+        # restart would kill this process and the startup resume hook would pick
+        # the fleet stage up. That holds only when the play actually replaces the
+        # service. If we are still alive when the play finishes, nothing else will
+        # ever advance the job, so reconcile it here. When the restart DOES happen
+        # this coroutine dies mid-wait and the resume hook runs exactly as before.
+        await _reconcile_self_update_stage(job, remote_commit, outdated_node_ids)
+        return
 
     await _run_fleet_stage_or_already_current(job, outdated_node_ids, remote_commit)
 
@@ -5655,9 +5895,57 @@ async def start_update_all(
     exists (self-update in flight) — prevents double-orchestration race (C3-b).
     Returns 202 Accepted with the initial job state (polling via GET /update-all/status).
     """
+    async with _update_all_start_lock:
+        return await _start_update_all_locked()
+
+
+def _retire_stale_job(existing: UpdateAllJob) -> None:
+    """Mark a stalled job failed so a new run can start (#14703).
+
+    #14703: a job that stopped advancing used to 409 forever, disabling the
+    builtin updater until someone restarted the process. Retiring it lets the
+    next request through, so recovering from a stuck update needs no
+    out-of-band action.
+
+    Callers MUST establish that no resume plan is live before calling this —
+    a detached self-update stops stamping progress and is otherwise
+    indistinguishable from a dead job.
+    """
+    logger.warning(
+        "update-all: job %s has made no progress since %s — retiring it as stale so a new run can start",
+        existing.job_id,
+        existing.last_progress_at or existing.created_at,
+    )
+    existing.status = "failed"
+    existing.failure_reason = (
+        f"No progress for over {_UPDATE_ALL_STALE_SECONDS}s — retired so a new update could run (#14703)"
+    )
+    existing.completed_at = utc_timestamp()
+
+
+async def _start_update_all_locked() -> UpdateAllJob:
+    """Decide, retire, and start — serialised by `_update_all_start_lock`."""
     global _update_all_task
 
     existing = _get_update_all_job()
+
+    # #14703 review: read the resume plan BEFORE any staleness decision. A
+    # persisted plan means a self-update is genuinely in flight, and the
+    # `slm_self_update` stage detaches the playbook and stops stamping
+    # progress the moment it fires — so a healthy long self-update looks
+    # exactly like a dead job to `_job_is_stale`. Retiring first also called
+    # `_clear_resume_plan()`, which deleted the very evidence the C3-b guard
+    # below reads, letting a second orchestration start against nodes the
+    # first one was still updating.
+    plan_exists = await _check_persisted_plan_exists()
+
+    if existing and existing.status in ("pending", "running") and not plan_exists and _job_is_stale(existing):
+        _retire_stale_job(existing)
+        # No plan exists on this path (checked above), so this only clears
+        # partial residue — it can no longer destroy a live plan.
+        await _clear_resume_plan()
+        existing = None
+
     if existing and existing.status in ("pending", "running"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -5665,7 +5953,7 @@ async def start_update_all(
         )
 
     # C3-b: also block when a persisted resume plan is present (restart in flight)
-    if await _check_persisted_plan_exists():
+    if plan_exists:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="SLM self-update is in flight (persisted resume plan found) — wait for restart to complete",

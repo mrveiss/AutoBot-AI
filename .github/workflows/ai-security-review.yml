@@ -30,10 +30,15 @@ on:
     # run that never starts cannot block a merge. Mirrors the `reviewable` filter
     # in `changes` below exactly; previously every docs-only pull request paid a
     # checkout and a queue slot only to skip `review`. Keep the two lists in sync.
+    #
+    # #12986: the backend-Python entries are the canonical `backend-python` set
+    # from .github/filters/backend-python-paths.yml; GitHub cannot include a file here, so
+    # pipeline-scripts/check_workflow_path_filters.py enforces the match.
     paths:
       - 'autobot-backend/**/*.py'
       - 'autobot-slm-backend/**/*.py'
       - 'autobot_shared/**/*.py'
+      - '.github/filters/backend-python-paths.yml'
       - 'ansible/**'
       - '.github/workflows/ai-security-review.yml'
 
@@ -57,13 +62,8 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
-          filters: |
-            reviewable:
-              - 'autobot-backend/**/*.py'
-              - 'autobot-slm-backend/**/*.py'
-              - 'autobot_shared/**/*.py'
-              - 'ansible/**'
-              - '.github/workflows/ai-security-review.yml'
+          # #12986: `reviewable` is defined in the canonical filter file.
+          filters: .github/filters/backend-python-paths.yml
 
   review:
     name: Security Review

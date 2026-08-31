@@ -20,11 +20,12 @@ detection and page structure rather than reimplementing either.
 """
 
 import asyncio
+import uuid
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 
 logger = get_logger(__name__)
@@ -141,7 +142,7 @@ class DocumentAnalysisSkill(BaseSkill):
         # allowed roots, rather than denylisting ".." in the raw string — #14050
         # records why a raw-string denylist is the wrong check.
         try:
-            path = validate_path(raw_path)
+            path = validate_path(raw_path, allowed_roots=PROJECT_ALLOWED_ROOTS)
         except ValueError as exc:
             logger.warning("Rejected document path: %s", exc)
             return None, {"success": False, "error": f"Invalid file_path: {exc}"}
@@ -236,23 +237,122 @@ class DocumentAnalysisSkill(BaseSkill):
     async def _summarize(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Summarize document content.
 
-        Extraction is real; summarization is not backed yet. Rather than return
-        the extracted text dressed up as a summary — or a fabricated success —
-        this reports exactly what it did and did not do, and hands back the text
-        so the caller can summarize it itself.
+        Extraction is real and so is the summary now (#14258): the text goes to
+        SummarizationAgent, which builds the prompt and calls
+        ``services.llm_service`` — the same backend skill_router already reaches.
+        Going through the agent rather than the service directly keeps prompt
+        construction (style, length) in one place instead of a second copy here.
+
+        When the backend is unreachable this returns ``success: False`` with the
+        extracted text, never a summary that is really just the document. The
+        #13897 invariant holds: no handler reports success for work that did not
+        happen.
         """
         extracted, error = await self._load(params)
         if error:
             return error
 
+        max_length = params.get("max_length", "medium")
+        summary, failure = await self._summarize_text(extracted.text, max_length, params.get("style", "concise"))
+        if failure:
+            return {
+                "success": False,
+                "error": failure,
+                "file_path": params["file_path"],
+                "max_length": max_length,
+                "extracted_text": extracted.text,
+                "char_count": extracted.char_count,
+            }
+
         return {
-            "success": False,
-            "error": (
-                "Summarization is not wired to a backend yet (#14258). The document was "
-                "extracted successfully and its text is returned for the caller to summarize."
-            ),
+            "success": True,
             "file_path": params["file_path"],
-            "max_length": params.get("max_length", 500),
-            "extracted_text": extracted.text,
+            "max_length": max_length,
+            "summary": summary,
             "char_count": extracted.char_count,
         }
+
+    async def _summarize_text(self, text: str, max_length: Any, style: str):
+        """Return ``(summary, None)`` or ``(None, reason)``.
+
+        The agent is imported at call time and guarded: a skill must not fail to
+        load because an optional backend is absent, and the layer waiver below is
+        narrower if it is not evaluated at module import.
+        """
+        try:
+            # The published skill surface has no summarizer. skill_router.py
+            # reaches services.llm_service the same way; SummarizationAgent sits
+            # on top of that identical service, so this is one route to one
+            # backend rather than a second path to the same thing (#14258).
+            from agents.base_agent import AgentRequest  # nosemgrep: extension-no-core-internals
+            from agents.summarization_agent import get_summarization_agent  # nosemgrep: extension-no-core-internals
+        except ImportError as exc:
+            logger.warning("Summarization backend unavailable: %s", exc)
+            return None, f"Summarization backend is unavailable: {exc}"
+
+        request = AgentRequest(
+            request_id=f"document-analysis-{uuid.uuid4()}",
+            agent_type="summarization",
+            action="summarize",
+            payload={"text": text, "max_length": max_length, "style": style},
+        )
+
+        try:
+            result = await get_summarization_agent().handle_summarize(request)
+        except Exception as exc:
+            logger.warning("Summarization failed: %s", exc)
+            return None, f"Summarization failed: {exc}"
+
+        failure = self._agent_failure(result)
+        if failure:
+            return None, failure
+
+        summary = self._summary_text(result)
+        if not summary:
+            # A backend that returned nothing is a failure, not an empty summary.
+            return None, "The summarization backend returned no text"
+        return summary, None
+
+    @staticmethod
+    def _agent_failure(result: Any) -> str:
+        """Return why *result* is not a successful summary, or ``""`` if it is.
+
+        ``BaseModalityAgent.process_query`` does not re-raise: on any error it
+        returns ``{"status": "error", "response": QUERY_ERROR_MESSAGE, ...}``.
+        For SummarizationAgent that message is the human-readable string
+        "Error generating summary. Please try again." — a perfectly non-empty
+        value under a key ``_summary_text`` happily accepts. Reading the text
+        without first reading the status therefore reports ``success: True``
+        with an error notice presented as the document's summary, which is the
+        exact outcome the #13897 invariant exists to prevent.
+
+        So the status is checked first, and an unrecognised shape is a failure
+        rather than a fall-through: a result this function cannot classify is
+        one it cannot vouch for.
+        """
+        if not isinstance(result, dict):
+            return f"The summarization backend returned an unrecognised result type: {type(result).__name__}"
+
+        status = result.get("status")
+        if status is None:
+            return "The summarization backend returned no status field"
+        if status != "success":
+            # `response_text` carries the underlying exception; `response` is
+            # the user-facing notice. Prefer the specific one.
+            detail = result.get("response_text") or result.get("response") or status
+            return f"Summarization failed: {detail}"
+        return ""
+
+    @staticmethod
+    def _summary_text(result: Any) -> str:
+        """Pull the summary out of an agent result already known to be a success.
+
+        Only reached after :meth:`_agent_failure` has cleared the status, so the
+        key-priority walk below can no longer pick up an error notice.
+        """
+        if isinstance(result, dict):
+            for key in ("summary", "response", "result", "text", "content"):
+                value = result.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+        return ""

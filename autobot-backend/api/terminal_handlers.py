@@ -31,27 +31,22 @@ from typing import Awaitable, Callable, Dict
 from fastapi import WebSocket
 
 # Import models from dedicated module (Issue #185)
-from api.schemas_terminal import (
-    CommandRiskLevel,
-    SecurityLevel,
-)
+from api.schemas_terminal import SecurityLevel
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import CommandRisk
 from chat_history import ChatHistoryManager
 from constants.path_constants import PATH
-from constants.terminal_constants import (
-    MODERATE_RISK_PATTERNS,
-    RISKY_COMMAND_PATTERNS,
-)
+from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 from constants.threshold_constants import TimingConstants
 from services.simple_pty import simple_pty_manager
 from services.terminal_completion_service import TerminalCompletionService
 
+# Issue #14961: session_configs moved to Redis so any uvicorn worker can
+# resolve a session another worker created; see that module's docstring.
+from services.terminal_session_store import SessionConfigStore
+
 # Import extracted modules (Issue #290)
-from services.terminal_websocket import (
-    HIGH_RISK_COMMAND_LEVELS,
-    LOGGING_SECURITY_LEVELS,
-    SHELL_OPERATORS,
-)
+from services.terminal_websocket import HIGH_RISK_COMMAND_LEVELS, LOGGING_SECURITY_LEVELS, SHELL_OPERATORS
 
 # Issue #380: Module-level frozenset for terminal close event types
 _TERMINAL_CLOSE_EVENTS = frozenset({"eo", "close"})
@@ -1064,32 +1059,35 @@ class TerminalWebSocket:
             logger.error("Error sending signal: %s", e)
             await self._send_signal_error("Error sending signal")
 
-    def _assess_command_risk(self, command: str) -> CommandRiskLevel:
+    def _assess_command_risk(self, command: str) -> CommandRisk:
         """Assess the security risk level of a command"""
         command_lower = command.lower().strip()
 
         # Check for dangerous patterns
         for pattern in RISKY_COMMAND_PATTERNS:
             if pattern in command_lower:
-                return CommandRiskLevel.DANGEROUS
+                return CommandRisk.DANGEROUS
 
         # Check for moderate risk patterns
         for pattern in MODERATE_RISK_PATTERNS:
             if pattern in command_lower:
-                return CommandRiskLevel.MODERATE
+                return CommandRisk.MODERATE
 
         # Special checks for high-risk operations (Issue #326: O(1) lookups)
         if any(x in command_lower for x in SHELL_OPERATORS):
-            return CommandRiskLevel.HIGH
+            return CommandRisk.HIGH
 
-        return CommandRiskLevel.SAFE
+        return CommandRisk.SAFE
 
-    async def _should_block_command(self, command: str, risk_level: CommandRiskLevel) -> bool:
+    async def _should_block_command(self, command: str, risk_level: CommandRisk) -> bool:
         """Determine if command should be blocked based on security level"""
         if self.security_level == SecurityLevel.RESTRICTED:
             return risk_level in HIGH_RISK_COMMAND_LEVELS
         elif self.security_level == SecurityLevel.ELEVATED:
-            return risk_level == CommandRiskLevel.DANGEROUS
+            # #13845: ``.blocks`` covers FORBIDDEN as well as DANGEROUS. The
+            # equality check this replaces let the executor's own blocking
+            # verdict through once both enums became one.
+            return risk_level.blocks
 
         return False  # STANDARD level allows most commands
 
@@ -1300,7 +1298,9 @@ class TerminalManager:
 
     def __init__(self):
         """Initialize manager with session tracking dictionaries."""
-        self.session_configs = {}  # session_id -> config
+        # Issue #14961: Redis-backed, not a process-local dict -- shared
+        # across every uvicorn worker. See services/terminal_session_store.py.
+        self.session_configs = SessionConfigStore()  # session_id -> config
         self.active_connections = {}  # session_id -> TerminalWebSocket
         self.session_stats = {}  # session_id -> statistics
         self._lock = asyncio.Lock()  # CRITICAL: Protect concurrent dictionary access

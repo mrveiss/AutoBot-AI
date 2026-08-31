@@ -63,9 +63,25 @@ jobs:
           # a rule without this arm would reject a third of normal work.
           bot_ident_re='\[bot\]@users\.noreply\.github\.com|\[bot\]>'
           coauthor_re='^[[:space:]]*Co-authored-by:'
+          # Ratchet of commits that predate the identity fix (#15310 session).
+          # Entries may only be REMOVED. See the file header for why these four
+          # exist and why rewriting shared history was rejected.
+          baseline_file='.github/commit-trailer-baseline.txt'
+          baseline=''
+          if [ -f "${baseline_file}" ]; then
+            baseline="$(sed 's/#.*//' "${baseline_file}" | tr -d '[:blank:]' | grep -v '^$' || true)"
+            echo "Baseline exemptions: $(printf '%s\n' "${baseline}" | grep -c . || true)"
+          fi
+
           bad=()
           while IFS= read -r sha; do
             [ -z "${sha}" ] && continue
+            # Exempt only on an EXACT full-SHA match, so a short or partial entry
+            # cannot silently widen the exemption to other commits.
+            if [ -n "${baseline}" ] && printf '%s\n' "${baseline}" | grep -qxF "${sha}"; then
+              echo "Baselined, skipping: ${sha}"
+              continue
+            fi
             body="$(git log -1 --format='%B' "${sha}")"
             subject="$(git log -1 --format='%s' "${sha}")"
 

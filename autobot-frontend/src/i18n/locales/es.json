@@ -4387,7 +4387,17 @@
       "searchResultsStatus": "{count} resultados para \"{query}\"",
       "searchNoResults": "Sin coincidencias para \"{query}\"",
       "fitToSelection": "Ajustar a la selección o al filtro",
-      "minimapLabel": "Vista general del lienzo"
+      "minimapLabel": "Vista general del lienzo",
+      "undo": "Deshacer",
+      "redo": "Rehacer",
+      "undoScope": "Deshacer y rehacer cubren mover, añadir, eliminar y conectar nodos en este lienzo. Las ediciones dentro de un nodo, y cualquier acción enviada al servidor — guardar, adjuntar, separar — no se pueden deshacer aquí.",
+      "selectionStatus": "{count} nodos seleccionados",
+      "contextMenuLabel": "Acciones del nodo",
+      "contextMenuButtonLabel": "Acciones de {name}",
+      "contextMenuZoomToNode": "Ampliar al nodo",
+      "contextMenuFitSelection": "Ajustar vista a la selección",
+      "contextMenuDeleteSelection": "Eliminar {count} nodos seleccionados",
+      "contextMenuOpenWorkflow": "Abrir flujo de trabajo vinculado"
     },
     "editStep": {
       "title": "Edit Step {step}",
@@ -5608,7 +5618,8 @@
       "executing": "Executing...",
       "securityNote": "Commands are executed in a sandboxed environment with limited permissions.",
       "missingSessionId": "Missing session ID for command execution",
-      "executionFailed": "Command execution failed",
+      "executionFailed": "Error al ejecutar el comando",
+      "postExecutionFailed": "El comando se ejecutó, pero falló un paso posterior. Se muestra su salida; puede que falten algunas actualizaciones.",
       "enterComment": "Please enter a comment before submitting"
     },
     "darkModeToggle": {
@@ -8041,6 +8052,8 @@
       "colRunDuration": "Duración de la ejecución",
       "colAction": "Acción",
       "statusUnknown": "desconocido",
+      "skipReasonLabel": "Omitido:",
+      "errorLabel": "Error:",
       "triggering": "Activando...",
       "triggerNow": "Activar ahora",
       "runHistoryTitle": "Historial de ejecuciones – {name}",
@@ -8291,6 +8304,12 @@
       "roleLensBanner": "Filtro de vista: {role} — mostrando {shown} de {total} nodos. El acceso no cambia.",
       "roleLensEmpty": "Filtro de vista: ningún nodo coincide con «{role}» en esta vista. El acceso no cambia — borra el filtro para ver a todos.",
       "roleLensClear": "Borrar filtro",
+      "teamFilterLabel": "Filtrar por equipo",
+      "teamFilterAll": "Todos los equipos",
+      "teamFilterBanner": "Filtro de equipo: {team} — mostrando {shown} de {total} personas. El acceso no cambia.",
+      "toolFilterLabel": "Filtrar por herramienta",
+      "toolFilterAll": "Todas las herramientas",
+      "toolFilterBanner": "Filtro de herramienta: {tool} — mostrando {shown} de {total} personas. El acceso no cambia.",
       "sidebar": {
         "owner": "Propietario",
         "tools": "Herramientas",
@@ -8332,6 +8351,7 @@
       "attachError": "No se pudo adjuntar ese flujo.",
       "detachError": "No se pudo quitar ese flujo.",
       "processDetach": "Quitar {workflow} de {role}",
+      "processDisplayName": "{workflow} ({role})",
       "attachRolesUnavailable": "No se pudieron cargar los roles, por lo que esta lista puede estar incompleta.",
       "canvasGroupKind": "Grupo",
       "toolNodeLabel": "Herramienta",
@@ -8340,6 +8360,7 @@
       "toolAttachError": "No se pudo adjuntar esa herramienta.",
       "toolDetachError": "No se pudo quitar esa herramienta.",
       "toolDetach": "Quitar {tool} de {role}",
+      "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "La información de herramientas no está disponible ahora mismo: esta lista puede estar incompleta.",
       "canvasNoToolsDefined": "No hay herramientas adjuntas a ningún rol en esta empresa.",
       "deepLinkNodeNotFound": "Este enlace apunta a un nodo que no se pudo encontrar aquí. Puede que se haya eliminado o que no tengas acceso a él."
@@ -8432,6 +8453,8 @@
       "secretMappingIncomplete": "Complete todos los valores de secretos anteriores antes de importar.",
       "importSuccess": "Importación exitosa — ID de empresa:",
       "warningsLabel": "Advertencias:",
+      "droppedReportingLinesLabel": "Líneas de reporte que no se pudieron conservar:",
+      "droppedReportingLine": "{agent} se importó sin responsable: {manager} no se creó.",
       "importFailed": "La importación falló:",
       "toastTemplateExported": "Plantilla exportada correctamente",
       "toastTemplateExportFailed": "Error al exportar la plantilla",
@@ -8587,7 +8610,15 @@
       "unassigned": "sin rol",
       "unassignedHint": "Figura en este departamento, pero ningún rol explica su presencia",
       "inactive": "Inactivo",
-      "inactiveHint": "Desactivado o eliminado: se sigue mostrando porque sus elementos de trabajo y su rol permanecen, pero no se le puede asignar trabajo nuevo."
+      "inactiveHint": "Desactivado o eliminado: se sigue mostrando porque sus elementos de trabajo y su rol permanecen, pero no se le puede asignar trabajo nuevo.",
+      "editAriaLabel": "Editar a {name}",
+      "fullNameLabel": "Nombre completo",
+      "roleTitleLabel": "Rol / cargo",
+      "emailLabel": "Correo electrónico",
+      "phoneLabel": "Teléfono",
+      "saving": "Guardando…",
+      "save": "Guardar",
+      "contactSaveError": "No se pudo guardar el contacto."
     }
   },
   "code": {

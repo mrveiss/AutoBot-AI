@@ -9,7 +9,11 @@ _PROJECT_ROOT="$SCRIPT_DIR"
 while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
     _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
 done
-source "$_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "$_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" || {
+    echo "FATAL: $_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh could not be sourced -- refusing to run on hardcoded config fallbacks (#14172)" >&2
+    return 1 2>/dev/null || exit 1
+}
 
 SERVICE_NAME="autobot-ai-stack"
 HEALTH_PORT=8080

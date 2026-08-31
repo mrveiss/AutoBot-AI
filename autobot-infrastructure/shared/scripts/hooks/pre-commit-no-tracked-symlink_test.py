@@ -23,11 +23,25 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-tracked-symlink"
 
 
+def _test_git_env() -> dict[str, str]:
+    """#15246: env for every git subprocess this suite spawns.
+
+    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    GIT_DIR pointing at the worktree it is pushing (every checkout here is
+    one), and an unscrubbed `git init`/`git add`/`git commit` in a
+    fixture then operates on THAT repository instead of tmp_path's. See
+    autobot_shared/paths_test.py and #15246 for the reproduced incident.
+    """
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+
+
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True)
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env())
 
 
 def _init_repo(tmp_path: Path) -> Path:
@@ -54,6 +68,7 @@ def _stage_symlink(repo: Path, path: str, target: str) -> None:
         capture_output=True,
         text=True,
         check=True,
+        env=_test_git_env(),
     ).stdout.strip()
     _git(repo, "update-index", "--add", "--cacheinfo", f"120000,{blob},{path}")
 
@@ -66,7 +81,7 @@ def _stage_file(repo: Path, path: str, content: str = "hello\n") -> None:
 
 
 def _run_hook(repo: Path, *argv: str) -> subprocess.CompletedProcess:
-    return subprocess.run([str(HOOK_PATH), *argv], cwd=repo, capture_output=True, text=True)
+    return subprocess.run([str(HOOK_PATH), *argv], cwd=repo, capture_output=True, text=True, env=_test_git_env())
 
 
 # === Ordinary files must not be blocked ===
@@ -262,7 +277,7 @@ class TestTheGuardFailsClosedWhenItCannotRun:
         hook_copy.write_bytes(HOOK_PATH.read_bytes())
         hook_copy.chmod(0o755)
 
-        result = subprocess.run([str(hook_copy)], cwd=repo, capture_output=True, text=True)
+        result = subprocess.run([str(hook_copy)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
 
         assert result.returncode != 0, "the hook reported clean with a staged symlink and no dependency"
 

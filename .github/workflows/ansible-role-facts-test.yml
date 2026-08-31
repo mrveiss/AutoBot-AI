@@ -69,6 +69,10 @@ on:
 # of 39 completed base runs, 26 were cancelled and NONE succeeded. Six of the
 # workflows this was applied to also trigger on push to Dev_new_gui, so the guard
 # is load-bearing there and harmless where it is not.
+# Least privilege (#15331). Checks out and runs ansible assertions only.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -86,16 +90,20 @@ jobs:
           sudo apt-get install -y ansible-core
 
       # #14678: tests/inventory/group_vars/all.yml is GENERATED, not tracked.
-      # It was a tracked copy kept byte-equal by a diff guard; the guard caught
-      # real drift but enforcing three copies is not a fix. Copied rather than
-      # symlinked on purpose -- #14149: core.symlinks=false checkouts (WSL2)
-      # materialise a tracked symlink as a plain-text path string, and the
-      # playbook then silently resolves zero variables.
+      # It was a third tracked copy of the role-active facts kept byte-equal by
+      # a diff guard. Copied rather than symlinked: #14149 -- a tracked symlink
+      # is materialised as a plain-text path string on core.symlinks=false
+      # checkouts, and the playbook then resolves zero variables.
       - name: "Generate the test inventory's group_vars from the single source (#14678)"
         working-directory: autobot-slm-backend/ansible
         run: |
           mkdir -p tests/inventory/group_vars
           cp inventory/group_vars/all.yml tests/inventory/group_vars/all.yml
+
+      - name: "Assert that copy is fresh and is a real file (#14678)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          python3 tests/check_test_inventory_is_generated.py
 
       - name: Run role_*_active facts test (group_vars codepath)
         working-directory: autobot-slm-backend/ansible
@@ -107,16 +115,28 @@ jobs:
       # core.symlinks=true, so the playbook run above passed here even while it
       # silently resolved to zero variables on core.symlinks=false checkouts.
       # This asserts the test inventory actually resolves a known group_vars key.
-      - name: "Assert the test group_vars is a fresh copy of the single source (#14678)"
-        working-directory: autobot-slm-backend/ansible
-        run: |
-          python3 tests/check_test_inventory_is_generated.py
-
       - name: "Assert test inventory resolves group_vars (#14149)"
         working-directory: autobot-slm-backend/ansible
         run: |
           python3 tests/check_test_inventory_group_vars.py
 
+      - name: Run role_*_active facts test (deploy.yml's vars_files codepath, #14678)
+        working-directory: autobot-slm-backend/ansible
+        # #7094 named this the SLM-triggered provision path; that shape no longer
+        # exists (#11781, #14286 link group_vars/ beside every dynamic inventory).
+        # It now stands in for deploy.yml's actual callers (services/deployment.py,
+        # services/blue_green.py), which invoke deploy.yml with a bare `-i "<host>,"`
+        # string -- not a directory, so no group_vars discovery either (#14678).
+        # tests/inventory_dynamic/ is a copy of tests/inventory/ WITHOUT the
+        # group_vars/all.yml symlink, so the playbook MUST succeed loading facts
+        # via vars_files alone.
+        run: |
+          ansible-playbook -i tests/inventory_dynamic/test_role_facts.yml tests/playbooks/test_role_active_facts_no_group_vars.yml
+
+      - name: "Diff guard: the two tracked role_*_active copies stay in sync (#14678)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          python3 tests/check_role_facts_synced.py
 
       # #13746: three producers built /opt/autobot/venv with two interpreters.
       # Co-location puts them on one host, and the loser's site-packages
@@ -134,11 +154,21 @@ jobs:
         run: |
           ansible-playbook --check --connection=local -i 'localhost,' tests/playbooks/test_clean_yml_loops.yml
 
+      # #13747 AC4: "verified by deliberate failure: the guard rejects a venv
+      # left at the old version." Runs for real (not --check) against a
+      # fabricated venv, so it needs no NPU hardware and no python3.14 binary
+      # on the runner — see the playbook header for what it proves.
+      - name: "Run ensure_venv_version deliberate-failure test (#13747)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          ansible-playbook --connection=local -i 'localhost,' tests/playbooks/test_ensure_venv_version.yml
+
       - name: Lint test playbook + inventory YAML
         working-directory: autobot-slm-backend/ansible
         run: |
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts_no_group_vars.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_clean_yml_loops.yml'))"
+          python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_ensure_venv_version.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/inventory/test_role_facts.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/inventory/group_vars/all.yml'))"

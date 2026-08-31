@@ -2556,6 +2556,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/memory/lifecycle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Memory Lifecycle
+         * @description Aggregate the fleet's memory lifecycle views. Never raises to the client.
+         */
+        get: operations["get_memory_lifecycle_api_memory_lifecycle_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/metrics": {
         parameters: {
             query?: never;
@@ -7527,15 +7547,16 @@ export interface components {
         /**
          * BackupCreate
          * @description Backup request.
+         *
+         *     #13578: ``service_type`` is the enum, not a bare string, so FastAPI rejects
+         *     an unknown engine with 422 *before* ``_run_backup`` writes a ``Backup`` row
+         *     that would otherwise sit there as a FAILED record for a typo.
          */
         BackupCreate: {
             /** Node Id */
             node_id: string;
-            /**
-             * Service Type
-             * @default redis
-             */
-            service_type: string;
+            /** @default redis */
+            service_type: components["schemas"]["BackupServiceType"];
         } & {
             [key: string]: unknown;
         };
@@ -7600,6 +7621,24 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * BackupServiceType
+         * @description Data service a backup, replication or verification targets (#13578).
+         *
+         *     ``service_type`` was the outlier among the eight sibling enums in this
+         *     module: a bare ``String(32)`` with no constraint anywhere. The cost landed
+         *     the moment a second engine arrived — the dispatch table in
+         *     ``api/stateful.py`` had to accept two spellings of the same engine, and an
+         *     unknown value was not rejected at the API boundary at all. It reached
+         *     ``_run_backup``, wrote a ``Backup`` row, and only then failed, leaving a
+         *     ``BackupStatus.FAILED`` row for a typo that is indistinguishable from one
+         *     for a real failure.
+         *
+         *     The column stays a string at rest (#13578: existing rows keep working);
+         *     this enum is the boundary that decides what may enter.
+         * @enum {string}
+         */
+        BackupServiceType: "redis" | "postgres";
         /**
          * BlueGreenActionResponse
          * @description Blue-green action response.
@@ -8311,16 +8350,13 @@ export interface components {
         };
         /**
          * DataVerifyRequest
-         * @description Data verification request.
+         * @description Data verification request (#13578: enum-constrained service_type).
          */
         DataVerifyRequest: {
             /** Node Id */
             node_id: string;
-            /**
-             * Service Type
-             * @default redis
-             */
-            service_type: string;
+            /** @default redis */
+            service_type: components["schemas"]["BackupServiceType"];
         } & {
             [key: string]: unknown;
         };
@@ -10277,6 +10313,8 @@ export interface components {
             ssh_user: string | null;
             /** Status */
             status: string;
+            /** Unreachable Roles */
+            unreachable_roles?: string[];
             /**
              * Updated At
              * Format: date-time
@@ -10323,6 +10361,8 @@ export interface components {
              * @default not_installed
              */
             status: string;
+            /** Unreachable Roles */
+            unreachable_roles?: string[];
         } & {
             [key: string]: unknown;
         };
@@ -10939,14 +10979,11 @@ export interface components {
         };
         /**
          * ReplicationCreate
-         * @description Replication request.
+         * @description Replication request (#13578: enum-constrained service_type).
          */
         ReplicationCreate: {
-            /**
-             * Service Type
-             * @default redis
-             */
-            service_type: string;
+            /** @default redis */
+            service_type: components["schemas"]["BackupServiceType"];
             /** Source Node Id */
             source_node_id: string;
             /** Target Node Id */
@@ -13112,6 +13149,8 @@ export interface components {
             failure_reason?: string | null;
             /** Job Id */
             job_id: string;
+            /** Last Progress At */
+            last_progress_at?: string | null;
             /**
              * Skipped Fleet Nodes
              * @default 0
@@ -18391,6 +18430,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MaintenanceWindowResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_memory_lifecycle_api_memory_lifecycle_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -24477,7 +24549,7 @@ export interface operations {
         parameters: {
             query?: {
                 node_id?: string | null;
-                service_type?: string | null;
+                service_type?: components["schemas"]["BackupServiceType"] | null;
                 status?: string | null;
                 page?: number;
                 per_page?: number;

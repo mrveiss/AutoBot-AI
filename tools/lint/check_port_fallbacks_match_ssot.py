@@ -32,6 +32,18 @@ import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
 
+# The scrubbed root resolver lives in ``autobot_shared`` and this script runs
+# from a pre-commit virtualenv that does not have the repository installed, so
+# the import path is bootstrapped from this file's own location -- the one
+# derivation an inherited GIT_DIR cannot confuse (#15176).
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from autobot_shared.paths import (  # noqa: E402
+    GitRepoRootUnavailable,
+    git_repo_root,
+    scrubbed_git_env,
+)
+
 _FALLBACK = re.compile(r"\$\{(AUTOBOT_[A-Z0-9_]*PORT):-([0-9]+)\}")
 _SSOT_FIELD = re.compile(r'Field\(\s*default=(\d+)[^)]*alias="(AUTOBOT_[A-Z0-9_]*PORT)"')
 
@@ -51,13 +63,20 @@ _ALLOWLIST = frozenset(
 
 
 def _repo_root() -> Path:
-    """Absolute repo root, or die — every path below is resolved against it."""
-    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, encoding="utf-8"
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        sys.exit(f"FATAL: cannot locate the repo root: {result.stderr.strip()}")
-    return Path(result.stdout.strip())
+    """Absolute repo root, or die — every path below is resolved against it.
+
+    Scrubbed of the ambient git environment first (#15176). This entry is a
+    pre-commit hook, and a hook exports ``GIT_DIR`` without ``GIT_WORK_TREE``,
+    which makes git call the caller's CWD the work tree. Measured before the
+    scrub: run from ``repo_tests/`` with ``GIT_DIR`` exported, this exited 1
+    with ``FATAL: autobot_shared/ssot_config.py not found`` — loud, unlike its
+    two sibling hooks, because the SSOT guard below refuses to report clean
+    without the file.
+    """
+    try:
+        return git_repo_root()
+    except GitRepoRootUnavailable as exc:
+        sys.exit(f"FATAL: cannot locate the repo root: {exc}")
 
 
 def _ssot_ports(root: Path) -> dict[str, str]:
@@ -93,7 +112,14 @@ def _ssot_ports(root: Path) -> dict[str, str]:
 def _shell_files(root: Path) -> list[str]:
     """Tracked shell scripts, or die rather than scan nothing."""
     result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "*.sh"], cwd=str(root), capture_output=True, text=True, encoding="utf-8"
+        ["git", "ls-files", "*.sh"],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        # Same scrub as the root: an inherited GIT_DIR would enumerate one
+        # checkout's index while *root* names another (#15176).
+        env=scrubbed_git_env(),
     )
     if result.returncode != 0:
         sys.exit(f"FATAL: git ls-files failed: {result.stderr.strip()}")

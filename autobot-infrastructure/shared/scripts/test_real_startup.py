@@ -10,6 +10,20 @@ Test real AutoBot startup time without importing heavy libraries
 import os
 import sys
 import time
+from pathlib import Path
+
+# #14518: the first-party imports below carried a stale ``backend.`` package
+# prefix -- no ``backend`` package exists -- and autobot-backend was never on
+# sys.path, so this script raised ModuleNotFoundError on its own import block
+# before doing any work. Add the directory the way the other operator entry
+# points in this tree do (#14129).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_BACKEND_DIR = _REPO_ROOT / "autobot-backend"
+for _path in (_BACKEND_DIR, _REPO_ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
+from autobot_shared.api_routing.router_routes import effective_route_count  # noqa: E402
 
 
 def test_backend_import():
@@ -22,13 +36,13 @@ def test_backend_import():
     # Add project root to path
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-    print("📦 Importing backend.main (with lazy loading)...")
+    print("📦 Importing backend main (with lazy loading)...")
     import_start = time.time()
-    from backend import main
+    import main
 
     import_duration = time.time() - import_start
 
-    print(f"✅ backend.main imported in: {import_duration:.3f}s")
+    print(f"✅ backend main imported in: {import_duration:.3f}s")
 
     # Test that the app isn't created yet
     print(f"📋 App type: {type(main.app)}")
@@ -62,21 +76,24 @@ def test_uvicorn_startup():
 
     # This is what uvicorn roughly does:
     # 1. Import the module
-    from backend import main
+    import main
 
     import_time = time.time() - start_time
 
     # 2. Access app attributes (this should trigger lazy creation)
     access_start = time.time()
     app_type = type(main.app)  # This might trigger app creation
-    routes = len(main.app.routes) if hasattr(main.app, "routes") else 0  # This definitely will
+    # Counted through the mount-aware traversal (#15093): `len(main.app.routes)`
+    # counts deferred include_router entries, not endpoints, so it under-reports
+    # by orders of magnitude on the declared fastapi floor.
+    routes = effective_route_count(main.app)  # accessing app.routes is what triggers creation
     access_time = time.time() - access_start
 
     total_time = time.time() - start_time
 
     print(f"✅ Module import      : {import_time:6.3f}s")
     print(f"✅ App access/creation: {access_time:6.3f}s")
-    print(f"📋 App has {routes} routes")
+    print(f"📋 App has {routes} routes ({app_type.__module__}.{app_type.__name__})")
     print(f"🎯 Total uvicorn-style: {total_time:6.3f}s")
 
     return total_time

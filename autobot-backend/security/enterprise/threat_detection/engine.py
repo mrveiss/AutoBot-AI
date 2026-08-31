@@ -16,16 +16,16 @@ import json
 import threading
 from collections import defaultdict, deque
 from datetime import timedelta
-from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
-import yaml
 from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
+from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
@@ -148,18 +148,17 @@ class ThreatDetectionEngine:
             self.learner = None
 
     def _load_config(self) -> Dict:
-        """Load threat detection configuration"""
-        try:
-            if Path(self.config_path).exists():
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    return yaml.safe_load(f)
-            else:
-                default_config = self._get_default_config()
-                self._save_config(default_config)
-                return default_config
-        except Exception as e:
-            logger.error("Failed to load threat detection config: %s", e)
-            return self._get_default_config()
+        """Load threat detection configuration, recording whether the file was actually found.
+
+        #14892: the miss branch used to write these defaults back to the path it
+        had just failed to read, so the next boot loaded the decoy and reported
+        success. It now warns and writes nothing; ``self.config_source`` carries
+        the same fact for callers.
+        """
+        loaded = load_config_file(self.config_path, self._get_default_config, "threat detection")
+        self.config_source = loaded.source
+        self.config_searched_path = loaded.searched_path
+        return loaded.values
 
     def _get_default_config(self) -> Dict:
         """Return default threat detection configuration"""
@@ -203,59 +202,49 @@ class ThreatDetectionEngine:
             },
         }
 
-    def _save_config(self, config: Dict):
-        """Save configuration to file (thread-safe, Issue #378)"""
-        with self._file_lock:
-            try:
-                Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
-                with open(self.config_path, "w", encoding="utf-8") as f:
-                    yaml.dump(config, f, default_flow_style=False)
-            except Exception as e:
-                logger.error("Failed to save threat detection config: %s", e)
-
     def _load_injection_patterns(self) -> List[Dict]:
         """Load command injection detection patterns"""
         return [
             {
                 "pattern": r"[;&|`$(){}[\]\\]",
                 "description": "Shell metacharacters",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "category": "shell_injection",
             },
             {
                 "pattern": r"(rm\s+-rf|del\s+/[sf]|format\s+c:)",
                 "description": "Destructive file operations",
-                "severity": "critical",
+                "severity": Severity.CRITICAL.value,
                 "category": "destructive_commands",
             },
             {
                 "pattern": r"(wget|curl|nc|netcat)\s+",
                 "description": "Network tools for data exfiltration",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "category": "network_tools",
             },
             {
                 "pattern": r"(base64|xxd|hexdump)\s+",
                 "description": "Encoding tools for obfuscation",
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
                 "category": "encoding_tools",
             },
             {
                 "pattern": r"(sudo|su|chmod\s+777|chown)",
                 "description": "Privilege escalation attempts",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "category": "privilege_escalation",
             },
             {
                 "pattern": r"(/etc/passwd|/etc/shadow|/etc/hosts)",
                 "description": "System file access",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
                 "category": "system_file_access",
             },
             {
                 "pattern": r"(python\s+-c|perl\s+-e|ruby\s+-e)",
                 "description": "Inline script execution",
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
                 "category": "script_injection",
             },
         ]
@@ -292,24 +281,24 @@ class ThreatDetectionEngine:
                 "pattern": "rapid_sequential_requests",
                 "description": "Rapid API requests indicating automation",
                 "threshold": 50,  # requests per minute
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
             },
             {
                 "pattern": "unusual_endpoint_access",
                 "description": "Access to rarely used endpoints",
                 "threshold": 0.05,  # 5% of normal usage
-                "severity": "medium",
+                "severity": Severity.MEDIUM.value,
             },
             {
                 "pattern": "bulk_data_download",
                 "description": "Large data download operations",
                 "threshold": 1000,  # MB downloaded
-                "severity": "high",
+                "severity": Severity.HIGH.value,
             },
             {
                 "pattern": "privilege_boundary_crossing",
                 "description": "Accessing resources beyond normal permissions",
-                "severity": "high",
+                "severity": Severity.HIGH.value,
             },
         ]
 

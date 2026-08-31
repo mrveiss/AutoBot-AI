@@ -18,7 +18,9 @@ import redis
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from utils.redis_database_manager import RedisDatabase
+# #14518: `utils.redis_database_manager` exists nowhere; the RedisDatabase enum
+# is re-exported by autobot_shared/redis_client.py (see its __all__).
+from autobot_shared.redis_client import RedisDatabase
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

@@ -11,4 +11,4 @@ ddgs>=9.14.4
 # #14551: production dep (autobot-backend/requirements.txt, #10932 content-reach
 # YouTube caption extraction, lazy). tests/content_reach/sources/test_youtube.py
 # gates on pytest.importorskip("yt_dlp") — silently skipping without this.
-yt-dlp>=2026.7.4
+yt-dlp>=2026.8.19

@@ -12,7 +12,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 # Import the modules to test
-from secure_command_executor import CommandRisk, SecureCommandExecutor, SecurityPolicy
+from autobot_shared.status_enums import CommandRisk
+from secure_command_executor import SecureCommandExecutor, SecurityPolicy
 
 
 class TestSecurityPolicy:

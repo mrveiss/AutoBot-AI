@@ -1,5 +1,8 @@
 # Memory Graph Chat Integration - Implementation Summary
 
+> **Freshness:** historical — 2026-08-30. Completion record, not architecture; relocation out of `docs/architecture/` is #15191's scope, tracked there.
+
+
 ## Overview
 
 Successfully integrated the AutoBot Memory Graph system with the existing chat workflow to enable automatic entity creation, relationship tracking, and semantic search across conversations.

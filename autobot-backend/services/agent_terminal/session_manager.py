@@ -164,15 +164,22 @@ class SessionManager:
             logger.info(f"Reusing existing ALIVE PTY session {pty_session_id} " f"for agent terminal {session_id}")
             return pty_session_id
 
-    def _register_pty_with_terminal_manager(self, pty_session_id: str, conversation_id: str) -> None:
+    def _register_pty_with_terminal_manager(self, pty_session_id: str, conversation_id: str, owner: str | None) -> None:
         """
         Register PTY session with terminal session_manager for WebSocket logging.
 
         Issue #281: Extracted helper for PTY registration.
+        Issue #14989: stamps `owner` -- the authenticated creator's username --
+        so api.terminal._lookup_terminal_session (#14960) recognises the
+        session's creator as its owner. Without this, this writer's own
+        connections were denied by the ownership gate: this session_configs
+        entry is the same in-process dict api.terminal.terminal_websocket
+        reads, and an entry with no "owner" key is unowned by construction.
 
         Args:
             pty_session_id: PTY session ID to register
             conversation_id: Conversation ID for logging linkage
+            owner: Authenticated creator's username, or None if unresolved
         """
         try:
             from api.terminal import session_manager
@@ -180,6 +187,7 @@ class SessionManager:
             session_manager.session_configs[pty_session_id] = {
                 "security_level": "standard",
                 "conversation_id": conversation_id,
+                "owner": owner,
             }
             logger.info(
                 f"Registered PTY session {pty_session_id} with " f"conversation_id {conversation_id} for logging"
@@ -191,6 +199,7 @@ class SessionManager:
         self,
         session_id: str,
         conversation_id: str | None,
+        owner: str | None = None,
     ) -> str | None:
         """Helper for create_session. Ref: #1088.
 
@@ -199,6 +208,7 @@ class SessionManager:
         Args:
             session_id: Agent session ID
             conversation_id: Optional conversation ID for logging linkage
+            owner: Authenticated creator's username (#14989/#14960)
 
         Returns:
             PTY session ID if successful, None otherwise
@@ -207,7 +217,7 @@ class SessionManager:
             desired_pty_id = conversation_id or session_id
             pty_session_id = self._create_or_reuse_pty_session(desired_pty_id, session_id)
             if pty_session_id and conversation_id:
-                self._register_pty_with_terminal_manager(pty_session_id, conversation_id)
+                self._register_pty_with_terminal_manager(pty_session_id, conversation_id, owner)
             return pty_session_id
         except Exception as e:
             logger.error("Error creating PTY session: %s", e)
@@ -220,6 +230,7 @@ class SessionManager:
         conversation_id: str | None = None,
         host: str = "main",
         metadata: Metadata | None = None,
+        owner: str | None = None,
     ) -> AgentTerminalSession:
         """
         Create a new agent terminal session with PTY integration.
@@ -233,12 +244,13 @@ class SessionManager:
             conversation_id: Optional chat conversation ID to link
             host: Target host for command execution
             metadata: Additional session metadata
+            owner: Authenticated creator's username (#14989/#14960)
 
         Returns:
             Created session
         """
         session_id = str(uuid.uuid4())
-        pty_session_id = await self._setup_pty_for_session(session_id, conversation_id)
+        pty_session_id = await self._setup_pty_for_session(session_id, conversation_id, owner)
 
         session = AgentTerminalSession(
             session_id=session_id,

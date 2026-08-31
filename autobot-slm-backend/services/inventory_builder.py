@@ -49,6 +49,7 @@ import logging
 import os
 import re
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -208,7 +209,89 @@ def _role_tokens_to_groups(role_tokens: list[str]) -> set[str]:
                 groups |= key_groups
             elif not key.endswith("-") and token == key:
                 groups |= key_groups
+
+    # #14676: an unmatched token is deliberately NOT reported from here. This
+    # function sees only `_ROLE_TO_GROUPS`, which is one of three ways a role
+    # can reach a deploy path -- see `unmatched_role_tokens()`, which knows all
+    # three. Reporting on this map alone cries wolf on roles that deploy fine.
     return groups
+
+
+def _registry_deploy_paths() -> tuple[dict, set[str]] | None:
+    """The registry's two non-group deploy routes, or None if it cannot be read.
+
+    Returns `(ROLE_ANSIBLE_GROUPS, roles_with_a_dedicated_playbook)`.
+
+    None means "cannot judge", and the caller must then report nothing. This
+    distinction is the difference between a useful report and a harmful one: if
+    an unreadable registry degraded to empty maps, every role that is not in
+    `_ROLE_TO_GROUPS` -- including `vnc` and `docker`, which deploy fine --
+    would be reported as deploying nothing. Being unable to check must never
+    look like having checked and found a problem.
+    """
+    try:
+        # ssot-config-exempt: local import avoids a cycle -- role_registry
+        # imports nothing from here, but the reverse would form one at module
+        # scope.
+        from services.role_registry import DEFAULT_ROLES, ROLE_ANSIBLE_GROUPS
+    except Exception as exc:  # pragma: no cover - registry unavailable in some harnesses
+        logger.debug("role deploy-path report unavailable: registry could not be read (%s)", exc)
+        return None
+
+    # The import succeeding is not the same as getting the real registry. Test
+    # harnesses stub `services.*`, and a Mock imports cleanly, iterates as
+    # empty, and answers `.get()` with another Mock -- which is truthy, so every
+    # role would look matched and nothing would ever be reported. Checking the
+    # types makes that case "cannot judge" honestly, instead of a silent
+    # all-clear that reads exactly like a clean result.
+    if not isinstance(ROLE_ANSIBLE_GROUPS, Mapping) or not isinstance(DEFAULT_ROLES, (list, tuple)):
+        logger.debug("role deploy-path report unavailable: registry is not the expected shape")
+        return None
+
+    with_playbook = {
+        str(role["name"]).strip().lower()
+        for role in DEFAULT_ROLES
+        if isinstance(role, dict) and role.get("name") and str(role.get("ansible_playbook") or "").strip()
+    }
+    return ROLE_ANSIBLE_GROUPS, with_playbook
+
+
+def unmatched_role_tokens(role_tokens: list[str]) -> set[str]:
+    """Tokens with no deploy path at all (#14676).
+
+    A role reaches deployment three different ways, and a report that knows
+    only one of them is worse than no report: it would flag working roles.
+
+      1. `_ROLE_TO_GROUPS` here, exact or prefix,
+      2. the legacy `ROLE_ANSIBLE_GROUPS`, which is the ONLY route for `vnc`
+         (#14638),
+      3. a dedicated `ansible_playbook` in the registry, which is how `docker`
+         deploys without joining any group.
+
+    What is left is a role that exists as far as the operator is concerned and
+    that nothing anywhere will act on -- the silent no-op this issue is about.
+
+    Returns an empty set when the registry cannot be read: not being able to
+    check must not be reported as having found a problem.
+    """
+    paths = _registry_deploy_paths()
+    if paths is None:
+        return set()
+    role_ansible_groups, with_playbook = paths
+
+    unmatched: set[str] = set()
+    for token in role_tokens:
+        token = token.strip().lower()
+        if not token:
+            continue
+        if _role_tokens_to_groups([token]):
+            continue
+        if role_ansible_groups.get(token):
+            continue
+        if token in with_playbook:
+            continue
+        unmatched.add(token)
+    return unmatched
 
 
 def _union_roles(node: Any) -> list[str]:

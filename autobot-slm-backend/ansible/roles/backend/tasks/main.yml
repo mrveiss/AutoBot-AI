@@ -211,10 +211,45 @@
   no_log: true
   tags: ['backend', 'config']
 
+# #14758: the envelope secret store raised at import on every provisioned
+# deployment because nothing ever wrote its root key, and each consumer swallowed
+# the failure, so an entirely absent store looked like "that secret does not
+# exist". slm_manager generates it into slm-secrets.env; read it here so both
+# services derive the same vault KEKs. The SLM's SSO vault migration states
+# outright that it needs the BACKEND's root key, so two values would be a silent
+# decryption failure rather than a config nuisance.
+- name: "Backend | Read AUTOBOT_SECRETS_ROOT_KEY from slm-secrets.env (#14758)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_SECRETS_ROOT_KEY=\K.*'
+      /etc/autobot/slm-secrets.env 2>/dev/null || true
+  register: _backend_secrets_root_key
+  changed_when: false
+  failed_when: false
+  when: _slm_secrets_stat.stat.exists | default(false)
+  no_log: true
+  tags: ['backend', 'config']
+
+- name: "Backend | Align autobot_secrets_root_key with slm-secrets.env when present (#14758)"
+  ansible.builtin.set_fact:
+    autobot_secrets_root_key: "{{ _backend_secrets_root_key.stdout | trim }}"
+  when: (_backend_secrets_root_key.stdout | default('') | trim) | length > 0
+  no_log: true
+  tags: ['backend', 'config']
+
 # #9914: Deploy the systemd unit BEFORE any stop/start so a fresh VM provisions
 # out-of-box. Previously the unit was deployed after the MVA-1633 start task, so
 # first-run on a clean node failed: "Could not find the requested service
 # autobot-backend". Tagged backend,config so tag-filtered runs register it too.
+# #13765: the unit below derives MemoryHigh/MemoryMax from ansible_memtotal_mb.
+# A full role run normally has facts, but this role is also reached with
+# gather_facts disabled, and an absent fact renders NO limits while looking
+# exactly like a deliberately-unlimited small host. Same include as
+# unit_only.yml so there is one place that guarantees the fact.
+- name: "Backend | Resolve host memory before rendering the unit (#13765)"
+  ansible.builtin.include_tasks: memory_limits.yml
+  tags: ['backend', 'config']
+
 - name: "Backend | Deploy backend systemd service (#9914)"
   ansible.builtin.template:
     src: autobot-backend.service.j2
@@ -266,6 +301,117 @@
 # handles the task-failure/mid-deploy-error case, which is what left the backend
 # dead today.
 # ============================================================
+# Placed BEFORE the restart-guarded window below on purpose (#12681): these
+# tasks reach two third-party apt repos, and inside that block a transient
+# outage would abort the whole deploy — code sync, config, workers, nginx and
+# the health check — after the service was already stopped. Out here a repo
+# hiccup fails this feature loudly and leaves a running backend running.
+# #12681: the LLC agent CLIs. docker/backend/Dockerfile installs `claude` and
+# `gh` from signed apt repos and proves both resolve at build time, but NOTHING
+# installed them on an ansible-provisioned host. `resolve_cli_binary` therefore
+# returned None for every claude_code / copilot_local agent hired on a systemd
+# deployment, so the agent could be hired and could never run — which is the
+# "provisioning fails invisibly" symptom the issue reports.
+#
+# Same signed repos as the image, fetched with get_url rather than piped to a
+# shell. Failing loudly here is deliberate: a host that cannot install the CLI
+# should fail provisioning rather than come up hosting agents that cannot run.
+- name: "Backend | Ensure the apt keyring directory exists (#12681)"
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  become: true
+  tags: ['backend', 'packages', 'llc']
+
+- name: "Backend | Read the dpkg architecture for the CLI apt sources (#12681)"
+  ansible.builtin.command:
+    cmd: dpkg --print-architecture
+  register: _backend_dpkg_arch
+  changed_when: false
+  tags: ['backend', 'packages', 'llc']
+
+- name: "Backend | Install the agent CLI repository signing keys (#12681)"
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "{{ item.dest }}"
+    mode: "0644"
+    # #2835 precedent: bound the fetch. lock_timeout below bounds the dpkg lock,
+    # not a hung TCP connection to a third-party host — an unbounded fetch stalls
+    # the whole play rather than failing it.
+    timeout: 120
+  loop:
+    - url: https://cli.github.com/packages/githubcli-archive-keyring.gpg
+      dest: /etc/apt/keyrings/githubcli-archive-keyring.gpg
+    - url: https://downloads.claude.ai/keys/claude-code.asc
+      dest: /etc/apt/keyrings/claude-code.asc
+  loop_control:
+    label: "{{ item.dest }}"
+  become: true
+  register: _backend_cli_keys
+  tags: ['backend', 'packages', 'llc']
+
+- name: "Backend | Add the agent CLI apt sources (#12681)"
+  ansible.builtin.copy:
+    dest: "/etc/apt/sources.list.d/{{ item.file }}"
+    content: "{{ item.line }}\n"
+    mode: "0644"
+  loop:
+    - file: github-cli.list
+      line: >-
+        deb [arch={{ _backend_dpkg_arch.stdout | trim }}
+        signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg]
+        https://cli.github.com/packages stable main
+    - file: claude-code.list
+      line: >-
+        deb [signed-by=/etc/apt/keyrings/claude-code.asc]
+        https://downloads.claude.ai/claude-code/apt/stable stable main
+  loop_control:
+    label: "{{ item.file }}"
+  become: true
+  register: _backend_cli_sources
+  tags: ['backend', 'packages', 'llc']
+
+# Also refreshed when a version is pinned: the keys and sources only change on
+# first install, so a converged host would otherwise never refresh, and pinning a
+# newly-released version would fail against a stale cache — defeating the point
+# of the pin.
+- name: "Backend | Refresh apt after adding the agent CLI sources (#12681)"
+  ansible.builtin.apt:
+    update_cache: true
+    lock_timeout: 60
+  become: true
+  when: >-
+    _backend_cli_sources is changed
+    or _backend_cli_keys is changed
+    or (backend_claude_cli_version | default('') | trim | length > 0)
+  tags: ['backend', 'packages', 'llc']
+
+# An empty version takes the current stable-channel build; set
+# backend_claude_cli_version to pin an exact package version.
+- name: "Backend | Install the LLC agent CLIs (#12681)"
+  ansible.builtin.apt:
+    name: "{{ ['gh'] + ['claude-code' + ('=' + backend_claude_cli_version if (backend_claude_cli_version | default('') | trim | length > 0) else '')] }}"
+    state: present
+    install_recommends: false
+    lock_timeout: 60
+  become: true
+  tags: ['backend', 'packages', 'llc']
+
+# The image runs `claude --version` at build time so an install regression
+# fails the build instead of silently breaking dispatch. The equivalent here is
+# to resolve them on the host: a task that installs without checking would let
+# a broken PATH look identical to a successful provision.
+- name: "Backend | Verify the agent CLIs resolve on PATH (#12681)"
+  ansible.builtin.command:
+    cmd: "{{ item }} --version"
+  loop:
+    - gh
+    - claude
+  changed_when: false
+  tags: ['backend', 'packages', 'llc']
+
+
 - name: "Backend | Restart-guarded env-update + heavy-work window (#12139)"
   block:
   # MVA-1633: Prevent systemd Restart=always race during env updates.
@@ -393,7 +539,7 @@
 
   - name: Sync autobot-backend code from code_source
     ansible.posix.synchronize:
-      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/"
+      src: "{{ code_source_dir }}/autobot-backend/"
       dest: "{{ backend_code_dir }}/"
       rsync_opts:
         - "--exclude=__pycache__"
@@ -443,7 +589,7 @@
 
   - name: Sync backend config directory from code_source
     ansible.posix.synchronize:
-      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/config/"
+      src: "{{ code_source_dir }}/autobot-backend/config/"
       dest: "{{ backend_code_dir }}/config/"
       rsync_opts:
         - "--exclude=__pycache__"
@@ -458,7 +604,7 @@
   # generation, kb-event, etc.) silently failed to register. Sync them into place.
   - name: Sync plugins directory from code_source (#10294)
     ansible.posix.synchronize:
-      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/plugins/"
+      src: "{{ code_source_dir }}/plugins/"
       dest: "{{ backend_code_dir }}/plugins/"
       rsync_opts:
         - "--exclude=__pycache__"
@@ -513,7 +659,7 @@
   # path is now a symlink to this directory, so syncing here is sufficient for all consumers.
   - name: "Backend | Sync autobot_shared to standalone PYTHONPATH dir (#3649)"
     ansible.posix.synchronize:
-      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot_shared/"
+      src: "{{ code_source_dir }}/autobot_shared/"
       dest: "{{ backend_shared_standalone_dir }}/"
       rsync_opts:
         - "--exclude=__pycache__"
@@ -535,7 +681,7 @@
 
   - name: "Backend | Sync docs directory from code_source (#4100)"
     ansible.posix.synchronize:
-      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/docs/"
+      src: "{{ code_source_dir }}/docs/"
       dest: "{{ backend_install_dir }}/../docs/"
       delete: true
       rsync_opts:
@@ -716,9 +862,9 @@
   - name: Create filtered backend requirements file
     ansible.builtin.shell:
       cmd: >-
-        bash {{ code_source_dir | default('/opt/autobot/code_source') }}/scripts/build-filtered-requirements.sh
+        bash {{ code_source_dir }}/scripts/build-filtered-requirements.sh
         {{ backend_code_dir }}/requirements.txt
-        {{ code_source_dir | default('/opt/autobot/code_source') }}
+        {{ code_source_dir }}
         > /tmp/requirements-filtered.txt
     become_user: "{{ backend_user }}"
 
@@ -736,40 +882,87 @@
     timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
     register: pip_install_result
 
-  # GPU / vLLM extras (#10288): vllm was moved to an opt-in requirements-gpu.txt
-  # (#10251/#10287) to keep the default CPU image lean. Install it ONLY on a
-  # GPU-enabled backend that opts into vLLM, so CPU deploys stay slim.
-  - name: "Backend | Detect NVIDIA GPU for vLLM extras (#10288)"
+  # GPU / CUDA-torch / vLLM extras (#10288, #15162): the GPU probe and the
+  # CUDA-torch install answer "does this host have an NVIDIA GPU", which is
+  # independent of "does this host run in-process vLLM". Coupling them meant a
+  # GPU host that left vLLM disabled (the default) was never even probed, and
+  # silently kept the CPU-only torch from requirements.txt. vllm itself stays
+  # opt-in (#10251/#10287) since it drags the CUDA toolkit + extra wheels, but
+  # CUDA torch/torchvision install whenever a GPU is present, vLLM or not.
+  - name: "Backend | Detect NVIDIA GPU (#10288, #15162)"
     ansible.builtin.command:
       cmd: nvidia-smi --query-gpu=name --format=csv,noheader
     register: backend_nvidia_smi_result
     changed_when: false
     # nvidia-smi exits rc != 0 when no GPU is present; the result only gates the
-    # optional GPU-reqs install below, so a non-zero rc is expected on CPU nodes.
+    # optional GPU-reqs installs below, so a non-zero rc is expected on CPU nodes.
     failed_when: false
-    when:
-      - backend_vllm_enabled | bool
-      - backend_has_gpu == "auto"
+    when: backend_has_gpu == "auto"
 
-  - name: "Backend | Resolve GPU availability for vLLM extras (#10288)"
+  - name: "Backend | Resolve GPU availability (#10288, #15162)"
     ansible.builtin.set_fact:
       backend_gpu_available: "{{ (backend_nvidia_smi_result.rc | default(1)) == 0 and (backend_nvidia_smi_result.stdout | default('') | trim | length > 0) if backend_has_gpu == 'auto' else (backend_has_gpu | bool) }}"
-    when: backend_vllm_enabled | bool
 
-  # Install GPU/vLLM requirements only when vLLM is enabled AND a GPU is present.
-  # Uses the repo-root requirements-gpu.txt from code_source (sibling of the
-  # autobot-backend subtree; not part of the backend code rsync).
-  - name: "Backend | Install GPU/vLLM requirements (requirements-gpu.txt) (#10288)"
+  # Install CUDA-built torch/torchvision whenever a GPU is present, regardless
+  # of vLLM. This is the fix for #15162: a GPU host that does not opt into
+  # vLLM used to keep the CPU-only torch from requirements.txt with nothing
+  # reporting the downgrade. Uses the repo-root requirements-gpu-torch.txt from
+  # code_source (sibling of the autobot-backend subtree; not part of the
+  # backend code rsync).
+  - name: "Backend | Install CUDA torch requirements (requirements-gpu-torch.txt) (#15162)"
     ansible.builtin.pip:
-      requirements: "{{ code_source_dir | default('/opt/autobot/code_source') }}/requirements-gpu.txt"
+      requirements: "{{ code_source_dir }}/requirements-gpu-torch.txt"
       virtualenv: "{{ backend_code_dir }}/venv"
     become_user: "{{ backend_user }}"
     environment:
       PIP_DEFAULT_TIMEOUT: "120"
-    timeout: 1800  # CUDA-built torch + vllm wheels are large
+    timeout: 1800  # CUDA-built torch is large
+    when: backend_gpu_available | default(false) | bool
+
+  # Install vLLM only when vLLM is enabled AND a GPU is present. vLLM remains
+  # genuinely opt-in (#10251/#10287); it pins the same torch build the task
+  # above already installs whenever backend_gpu_available is true, so no
+  # duplicate CUDA-torch download happens here.
+  - name: "Backend | Install GPU/vLLM requirements (requirements-gpu.txt) (#10288)"
+    ansible.builtin.pip:
+      requirements: "{{ code_source_dir }}/requirements-gpu.txt"
+      virtualenv: "{{ backend_code_dir }}/venv"
+    become_user: "{{ backend_user }}"
+    environment:
+      PIP_DEFAULT_TIMEOUT: "120"
+    timeout: 1800  # vllm wheels are large
     when:
       - backend_vllm_enabled | bool
       - backend_gpu_available | default(false) | bool
+
+  # Silence is the actual defect (#15162): report exactly which torch variant
+  # this deploy chose and why, so an operator can see the decision instead of
+  # inferring it from performance later.
+  - name: "Backend | Resolve GPU/CUDA-torch deploy decision (#15162)"
+    ansible.builtin.set_fact:
+      backend_cuda_torch_installed: "{{ backend_gpu_available | default(false) | bool }}"
+      backend_vllm_installed: >-
+        {{ (backend_vllm_enabled | bool) and
+           (backend_gpu_available | default(false) | bool) }}
+      # "no GPU detected" only applies to the auto-probe path; an explicit
+      # backend_has_gpu override that still resolves to no GPU names the
+      # override itself, so the operator sees the actual reason rather than
+      # a probe result that never ran.
+      backend_gpu_skip_reason: >-
+        {{ 'no GPU detected' if backend_has_gpu == 'auto'
+           else 'backend_has_gpu=' ~ backend_has_gpu }}
+
+  - name: "Backend | Report GPU/CUDA-torch deploy decision (#15162)"
+    ansible.builtin.debug:
+      msg: >-
+        GPU deploy decision: gpu_available={{ backend_gpu_available | default(false) }}
+        (backend_has_gpu={{ backend_has_gpu }}) ->
+        cuda_torch={{ 'installed' if backend_cuda_torch_installed
+          else 'skipped (' ~ backend_gpu_skip_reason ~ ')' }};
+        vllm_enabled={{ backend_vllm_enabled | bool }} ->
+        vllm={{ 'installed' if backend_vllm_installed
+          else ('skipped (vLLM disabled)' if not (backend_vllm_enabled | bool)
+          else 'skipped (' ~ backend_gpu_skip_reason ~ ')') }}
 
   - name: Deploy aioredis compatibility shim for Python 3.14
     ansible.builtin.template:

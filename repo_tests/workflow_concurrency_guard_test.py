@@ -14,9 +14,16 @@ wasted load stopped being merely slow and became *failures* on unrelated pull
 requests (#14444), because each redundant job made its own attempt against an
 endpoint returning errors.
 
-Two workflows are deliberately exempt, and the exemption is by name with its reason
-attached rather than a silent allowlist - a bare list of filenames is how an
-exemption outlives the thing that justified it.
+Three workflows are deliberately exempt, and the exemption is by name with its
+reason attached rather than a silent allowlist - a bare list of filenames is how
+an exemption outlives the thing that justified it.
+
+#15302: a required-context shim needs TWO edits - the workflow, and its entry in
+DELIBERATELY_EXEMPT - and nothing pointed the author of the first at the second.
+#15300 landed the first half only, and this guard failed on every pull request
+against the base branch until someone traced the assertion back here by hand. The
+failure message below now names the second edit directly, so the next shim's
+author reads it there instead of rediscovering it under time pressure.
 """
 
 from pathlib import Path
@@ -38,8 +45,11 @@ DELIBERATELY_EXEMPT = {
         "publishes the required 'Unit & Integration Tests' context; cancelling a "
         "superseded run would leave it unreported and deadlock the pull request"
     ),
-    "python-required-context.yml": (
-        "publishes the required 'python-suite' context; same deadlock (#14353)"
+    "python-required-context.yml": ("publishes the required 'python-suite' context; same deadlock (#14353)"),
+    # Landed by #15300 with the rationale spelled out inline and the exemption
+    # never added here, so the guard failed on every pull request until #15302.
+    "docker-smoke-required-context.yml": (
+        "publishes the required 'docker-smoke-required-context' context; same deadlock (#15300)"
     ),
 }
 
@@ -101,7 +111,12 @@ def test_a_pull_request_workflow_cancels_superseded_runs(path):
     assert concurrency, (
         f"{path.name} triggers on pull_request with no `concurrency:` group, so every "
         "push leaves its predecessors queued. Each redundant run still fetches its "
-        "actions (#14434, #14444)."
+        "actions (#14434, #14444). If this is deliberate -- a required-context shim "
+        "that must survive a superseded run rather than be cancelled with it, the "
+        f"same shape as {sorted(DELIBERATELY_EXEMPT)} -- the fix is a SECOND edit, "
+        f"not a maybe: add {path.name!r} to DELIBERATELY_EXEMPT above with the reason "
+        "(#15302). Adding the workflow alone is what left this guard red on every "
+        "pull request last time (#15300)."
     )
     assert concurrency.get("group"), f"{path.name}: concurrency group is empty"
 
@@ -150,11 +165,7 @@ def test_base_branch_cancellation_does_not_spread():
     A new offender - e.g. copying `cancel-in-progress: true` from a neighbour -
     must fail here, not accumulate until the next audit finds it.
     """
-    offenders = {
-        path.name
-        for path, doc in _pull_request_workflows()
-        if _cancels_base_branch_runs_unguarded(path, doc)
-    }
+    offenders = {path.name for path, doc in _pull_request_workflows() if _cancels_base_branch_runs_unguarded(path, doc)}
 
     assert not offenders, (
         f"{sorted(offenders)} trigger on push and cancel unconditionally, so a merge "

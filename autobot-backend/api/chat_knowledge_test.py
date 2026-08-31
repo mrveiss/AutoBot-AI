@@ -18,7 +18,7 @@ from unittest.mock import create_autospec
 
 import pytest
 
-from api.chat_knowledge import ChatKnowledgeManager
+from api.chat_knowledge_manager import ChatKnowledgeManager
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
 

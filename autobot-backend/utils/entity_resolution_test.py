@@ -26,7 +26,12 @@ from utils.entity_resolver import EntityResolver
 class TestEntityResolution:
     """Test cases for entity resolution functionality."""
 
-    def __init__(self):
+    # #14927: this was ``__init__``. pytest refuses to collect a class that has a
+    # constructor -- it emits PytestCollectionWarning and moves on -- so every
+    # ``test_*`` method below was silently uncollected despite the class matching
+    # ``python_classes = Test*``. ``setup_method`` is pytest's own per-test hook and
+    # runs before each test, which is what this body always meant.
+    def setup_method(self):
         self.resolver = EntityResolver()
 
         # Test entities with known duplicates
@@ -136,7 +141,7 @@ class TestEntityResolution:
 
         print("✓ Similarity detection working correctly")  # noqa: print
 
-        return True
+        return
 
     async def test_entity_type_classification(self):
         """Test automatic entity type classification."""

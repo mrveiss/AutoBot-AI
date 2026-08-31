@@ -3,4 +3,4 @@ prometheus-client==0.26.0
 structlog==26.1.0
 rich==15.0.0
 tqdm==4.70.0
-python-json-logger==4.1.0
+python-json-logger==4.2.0

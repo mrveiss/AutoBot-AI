@@ -25,6 +25,8 @@ import { createLogger } from '@/utils/debugUtils'
 import { useChatStore } from '@/stores/useChatStore'
 import { usePermissionStore } from '@/stores/usePermissionStore'
 import { getApiBase } from '@/config/ssot-config'
+import { getRiskSeverity, type RiskSeverity } from '@/utils/riskLevel'
+import i18n from '@/i18n'
 
 const logger = createLogger('useCommandApproval')
 
@@ -49,9 +51,35 @@ export interface CommandResult {
 }
 
 export interface ApprovalResponse {
-  status: 'approved' | 'denied' | 'error' | string
+  /** `completed_with_errors` (#15073): the command ran, a step after it failed. */
+  status: 'approved' | 'denied' | 'error' | 'completed_with_errors' | string
   comment?: string
+  /** Developer-facing detail. English, untranslated — for the log, not the toast. */
   error?: string
+  /** Stable identifier for the outcome; the only thing safe to translate on. */
+  error_code?: string
+  /** Set with `completed_with_errors`: which post-execution step raised. */
+  post_execution_error?: string
+  result?: Record<string, unknown>
+}
+
+/**
+ * Backend `error_code` -> translation key (#15073).
+ *
+ * Explicit, not interpolated: an unknown code must fall back to the prose the
+ * backend sent, never render a raw `ui.commandPermission.<code>` path at a
+ * user.
+ */
+const APPROVAL_ERROR_CODE_KEYS: Record<string, string> = {
+  executionFailed: 'ui.commandPermission.executionFailed',
+  postExecutionFailed: 'ui.commandPermission.postExecutionFailed'
+}
+
+/** Translate a backend outcome, falling back to its untranslated detail. */
+export function translateApprovalOutcome(code?: string, detail?: string): string {
+  const key = code ? APPROVAL_ERROR_CODE_KEYS[code] : undefined
+  if (key) return i18n.global.t(key)
+  return detail || i18n.global.t('ui.commandPermission.executionFailed')
 }
 
 export function useCommandApproval() {
@@ -262,7 +290,7 @@ export function useCommandApproval() {
               // The output will appear naturally through the WebSocket/streaming flow
             } else if (pollResult.state === 'failed') {
               logger.error('Command failed:', pollResult.stderr)
-              notify('Command execution failed', 'error')
+              notify(i18n.global.t('ui.commandPermission.executionFailed'), 'error')
             } else if (pollResult.state === 'timeout') {
               logger.warn('Polling timed out')
               notify('Command execution timed out', 'warning')
@@ -302,9 +330,19 @@ export function useCommandApproval() {
         rememberForProject.value = false
         // Issue #680: Clear pending approval flag to allow polling to resume
         chatStore.setPendingApproval(false)
+      } else if (result.status === 'completed_with_errors') {
+        // #15073: the command RAN. Its output is real and already in `result`;
+        // only the bookkeeping after it is incomplete, so there is nothing to
+        // poll for and this is a warning, not an execution failure.
+        logger.error('Post-execution failure:', result.post_execution_error)
+        notify(translateApprovalOutcome(result.error_code, result.error), 'warning')
+        if (onMessageUpdate) {
+          onMessageUpdate(terminal_session_id, 'approved', comment || result.comment)
+        }
+        chatStore.setPendingApproval(false)
       } else if (result.status === 'error') {
         logger.error('Approval error:', result.error)
-        notify(`Approval failed: ${result.error}`, 'error')
+        notify(translateApprovalOutcome(result.error_code, result.error), 'error')
         // Issue #680: Clear pending approval flag on error too
         chatStore.setPendingApproval(false)
       }
@@ -378,13 +416,14 @@ export function useCommandApproval() {
    * Get risk level CSS class
    */
   const getRiskClass = (riskLevel: string): string => {
-    const riskClasses: Record<string, string> = {
-      LOW: 'text-green-600',
-      MODERATE: 'text-yellow-600',
-      HIGH: 'text-orange-600',
-      DANGEROUS: 'text-red-600'
+    const riskClasses: Record<RiskSeverity, string> = {
+      low: 'text-green-600',
+      medium: 'text-yellow-600',
+      high: 'text-orange-600',
+      critical: 'text-red-600'
     }
-    return riskClasses[riskLevel] || 'text-gray-600'
+    const severity = getRiskSeverity(riskLevel)
+    return severity ? riskClasses[severity] : 'text-gray-600'
   }
 
   /**

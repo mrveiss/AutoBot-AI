@@ -22,6 +22,11 @@ from fastapi import HTTPException, Request
 from auth_middleware import get_auth_middleware
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_30_DAYS
+from security.enforcement_mode import (
+    ResolvedEnforcementMode,
+    resolve_enforcement_mode,
+    resolve_enforcement_mode_for_request,
+)
 
 logger = get_logger(__name__)
 
@@ -233,24 +238,19 @@ class SessionOwnershipValidator:
 
         return user_data
 
-    async def _get_enforcement_mode(self) -> str:
+    async def _get_enforcement_mode(self) -> ResolvedEnforcementMode:
+        """The global enforcement mode, with whether it was determined or degraded to.
+
+        Issue #281 extracted this helper; #15159 moved its body to
+        ``security/enforcement_mode.py`` and widened the answer from a bare mode
+        string to the mode plus its provenance, so a decision record can say
+        which of the two ``log_only`` states produced it.
         """
-        Get enforcement mode from feature flags with safe default.
+        return await resolve_enforcement_mode(self.feature_flags)
 
-        Issue #281: Extracted helper for enforcement mode retrieval.
-
-        Returns:
-            Enforcement mode string: "disabled", "log_only", or "enforced"
-        """
-        if not self.feature_flags:
-            return "disabled"
-
-        try:
-            mode_enum = await self.feature_flags.get_enforcement_mode()
-            return mode_enum.value
-        except Exception as e:
-            logger.error(f"Failed to get enforcement mode: {e}, defaulting to disabled")
-            return "disabled"
+    async def _get_enforcement_mode_for_request(self, request: Request) -> ResolvedEnforcementMode:
+        """Global mode, tightened by any stricter per-endpoint override (#15086)."""
+        return await resolve_enforcement_mode_for_request(self.feature_flags, request)
 
     def _audit_log_violation(
         self,
@@ -356,12 +356,13 @@ class SessionOwnershipValidator:
         stored_owner: str,
         user_data: Dict,
         request: Request,
-        enforcement_mode: str,
+        enforcement: ResolvedEnforcementMode,
     ) -> Dict:
         """Handle ownership mismatch with org admin bypass.
 
         Helper for validate_ownership (#684).
         """
+        enforcement_mode = enforcement.mode
         # Issue #684: Org admins can access any session in their org
         if await self._is_org_admin_access(user_data, session_id):
             logger.info(
@@ -397,7 +398,7 @@ class SessionOwnershipValidator:
             stored_owner,
             user_data,
             request,
-            enforcement_mode,
+            enforcement,
         )
 
     async def _is_org_admin_access(self, user_data: Dict, session_id: str) -> bool:
@@ -419,12 +420,18 @@ class SessionOwnershipValidator:
         stored_owner: str,
         user_data: Dict,
         request: Request,
-        enforcement_mode: str,
+        enforcement: ResolvedEnforcementMode,
     ) -> Dict:
         """
         Handle unauthorized access attempt based on enforcement mode.
 
         Issue #281: Extracted helper for unauthorized access handling.
+
+        The allowed-anyway record carries the resolution's provenance (#15159): a
+        ``log_only`` reached because the flag store could not be read reports a
+        distinct ``reason`` from one an operator is sitting in, so a #14010 AC4
+        measurement can exclude violations counted during an outage. It changes
+        nothing about which requests are allowed.
 
         Args:
             username: User attempting access
@@ -432,7 +439,7 @@ class SessionOwnershipValidator:
             stored_owner: Actual owner of session
             user_data: Authenticated user data
             request: FastAPI request object
-            enforcement_mode: Current enforcement mode
+            enforcement: Current enforcement mode and how it was resolved
 
         Returns:
             Dict with authorization result (for log_only mode)
@@ -440,6 +447,7 @@ class SessionOwnershipValidator:
         Raises:
             HTTPException: 403 if enforced mode
         """
+        enforcement_mode = enforcement.mode
         logger.warning(
             f"[{enforcement_mode.upper()} MODE] Unauthorized access: "
             f"user {username} tried to access session {session_id[:8]}... owned by {stored_owner}"
@@ -458,7 +466,8 @@ class SessionOwnershipValidator:
             return {
                 "authorized": True,
                 "user_data": user_data,
-                "reason": "log_only_mode",
+                "reason": enforcement.reason("log_only_mode"),
+                "enforcement_degraded": enforcement.degraded,
                 "violation_logged": True,
                 "actual_owner": stored_owner,
             }
@@ -468,16 +477,12 @@ class SessionOwnershipValidator:
                 detail="You do not have permission to access this conversation",
             )
 
-    async def _resolve_fast_paths(
-        self,
-        session_id: str,
-        user_data: Dict,
-    ) -> Dict | None:
+    async def _resolve_fast_paths(self, session_id: str, user_data: Dict, enforcement_mode: str) -> Dict | None:
         """Helper for validate_ownership. Ref: #1088.
 
         Checks the two early-exit conditions that bypass ownership lookup:
         1. Auth is disabled globally (development mode).
-        2. Enforcement mode is "disabled".
+        2. Enforcement mode is "disabled" (resolved by the caller, incl. #15086 overrides).
 
         Returns the result dict when a fast path applies, or None to signal
         that the caller should proceed to the full ownership check.
@@ -489,8 +494,6 @@ class SessionOwnershipValidator:
                 "user_data": user_data,
                 "reason": "auth_disabled",
             }
-
-        enforcement_mode = await self._get_enforcement_mode()
 
         if enforcement_mode == "disabled":
             logger.debug(f"[DISABLED MODE] Skipping ownership validation for session {session_id[:8]}...")
@@ -566,7 +569,7 @@ class SessionOwnershipValidator:
         username: str,
         user_data: Dict,
         request: Request,
-        enforcement_mode: str,
+        enforcement: ResolvedEnforcementMode,
     ) -> Dict:
         """Helper for validate_ownership. Ref: #1088.
 
@@ -581,11 +584,12 @@ class SessionOwnershipValidator:
             username: Authenticated username
             user_data: Authenticated user data dict
             request: FastAPI request object
-            enforcement_mode: Current enforcement mode string
+            enforcement: Current enforcement mode and how it was resolved
 
         Returns:
             Dict with authorization result and user data
         """
+        enforcement_mode = enforcement.mode
         stored_owner = await self.get_session_owner(session_id)
 
         if not stored_owner:
@@ -595,7 +599,7 @@ class SessionOwnershipValidator:
 
         if stored_owner != username:
             return await self._check_ownership_mismatch(
-                username, session_id, stored_owner, user_data, request, enforcement_mode
+                username, session_id, stored_owner, user_data, request, enforcement
             )
 
         logger.debug(
@@ -629,13 +633,13 @@ class SessionOwnershipValidator:
         """
         user_data = self._get_authenticated_user(session_id, request)
         username = user_data["username"]
+        enforcement = await self._get_enforcement_mode_for_request(request)
 
-        fast_path_result = await self._resolve_fast_paths(session_id, user_data)
+        fast_path_result = await self._resolve_fast_paths(session_id, user_data, enforcement.mode)
         if fast_path_result is not None:
             return fast_path_result
 
-        enforcement_mode = await self._get_enforcement_mode()
-        return await self._resolve_ownership(session_id, username, user_data, request, enforcement_mode)
+        return await self._resolve_ownership(session_id, username, user_data, request, enforcement)
 
     async def get_user_sessions(self, username: str) -> list[str]:
         """
@@ -809,7 +813,11 @@ async def validate_session_ownership(session_id: str, request: Request) -> Dict:
     try:
         feature_flags = await get_feature_flags()
     except Exception as e:
-        logger.warning("Feature flags unavailable, defaulting to disabled mode: %s", e)
+        logger.warning(
+            "Feature flags unavailable, degrading ownership enforcement to log_only "
+            "(checks still run, violations still recorded): %s",
+            e,
+        )
         feature_flags = None
 
     # Get metrics service (optional)

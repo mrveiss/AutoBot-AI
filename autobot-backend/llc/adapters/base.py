@@ -15,7 +15,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Protocol, runtime_checkable
 
+from autobot_shared.logging_manager import get_logger
 from llc.models.enums import LLCRunStatus
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -73,6 +76,40 @@ def get_adapter(adapter_type: str) -> LLCAdapter:
     if adapter_type not in _registry:
         raise KeyError(f"No LLC adapter registered for type {adapter_type!r}. " f"Known types: {sorted(_registry)}")
     return _registry[adapter_type]
+
+
+def adapter_unavailable_reason(adapter_type: str) -> Optional[str]:
+    """Why *adapter_type* cannot run on this deployment, or None when it can.
+
+    Registered is not the same as runnable: a type can be in the registry while
+    its CLI is absent from the service PATH, and every heartbeat then skips —
+    the agent looks degraded forever with no indication why (#12681).
+
+    Decides from the same signal as ``GET /adapters``:
+    ``implemented = hasattr(adapter, "is_cli_available")``, and an unimplemented
+    adapter is not available. Among registered adapters a missing probe means
+    "not implemented" rather than "in-process with nothing to check" —
+    ``codex_subscription`` is a stub whose ``invoke`` raises
+    ``NotImplementedError`` and is the only registered type without one.
+
+    Lives here rather than in the hire route so every path that creates a
+    runnable agent can ask the same question of the same code (#14800).
+    """
+    adapter = get_adapter(adapter_type)
+    probe = getattr(adapter, "is_cli_available", None)
+    if not callable(probe):
+        return "it is registered but not implemented on this build"
+    try:
+        if probe():
+            return None
+    except Exception as exc:
+        # Fail CLOSED, matching GET /adapters, which reports available=False when
+        # the probe raises. Failing open would let a create succeed for an adapter
+        # the UI is simultaneously showing as unavailable.
+        logger.warning("adapter %s availability probe failed: %s", adapter_type, type(exc).__name__)
+        return f"its availability could not be determined ({type(exc).__name__})"
+    message = getattr(adapter, "cli_not_found_message", None)
+    return message() if callable(message) else f"{adapter_type} is not available"
 
 
 def registered_adapter_types() -> list[str]:

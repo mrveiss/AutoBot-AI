@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from api.schemas_common import MAX_THOUGHT_COUNT, SuccessDataResponse, SuccessMessageResponse
+from api.schemas_secrets import StorableSecretType
 from api.system_health import HealthStatus
 from constants.threshold_constants import RetryConfig
 from services.audit_logger import AuditResult
@@ -3507,25 +3508,12 @@ class ChatSecretScope(str, Enum):
     ORGANIZATION = "organization"
 
 
-class SecretType(str, Enum):
-    """Secret type enumeration."""
-
-    SSH_KEY = "ssh_key"
-    PASSWORD = "password"  # nosec B105  # enum value  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
-    API_KEY = "api_key"  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
-    TOKEN = "token"  # nosec B105  # enum value  # nosemgrep: autobot-hardcoded-secret-key  # nosemgrep
-    CERTIFICATE = "certificate"
-    DATABASE_URL = "database_url"
-    INFRASTRUCTURE_HOST = "infrastructure_host"
-    OTHER = "other"
-
-
 class SecretModel(BaseModel):
     """Secret data model."""
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
-    type: SecretType
+    type: StorableSecretType
     scope: ChatSecretScope
     chat_id: str | None = None
     description: str | None = ""
@@ -3540,7 +3528,7 @@ class SecretCreateRequest(BaseModel):
     """Request model for creating secrets."""
 
     name: str = Field(..., min_length=1, max_length=256)
-    type: SecretType
+    type: StorableSecretType
     scope: ChatSecretScope
     value: str = Field(..., min_length=1, max_length=65536)
     chat_id: str | None = Field(None, max_length=128)

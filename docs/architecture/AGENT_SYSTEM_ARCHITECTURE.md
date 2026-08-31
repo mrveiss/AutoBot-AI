@@ -1,5 +1,7 @@
 # AutoBot Agent System Architecture
 
+> **Freshness:** current — 2026-08-30. Structural description of the system as built; classified and location-reviewed under #15192, not re-verified claim-by-claim.
+
 ## 🤖 Overview
 
 AutoBot's agent system represents a revolutionary approach to AI automation, featuring a sophisticated multi-agent orchestration architecture that intelligently coordinates specialized AI agents to handle complex tasks autonomously.

@@ -73,6 +73,16 @@
                 {{ computeDuration(run.started_at, run.finished_at) }}
               </span>
             </div>
+            <div v-if="run.error" class="run-reason" :class="`reason-${run.status}`">
+              <span class="reason-label">
+                {{
+                  run.status === 'skipped'
+                    ? $t('llc.heartbeat.skipReasonLabel')
+                    : $t('llc.heartbeat.errorLabel')
+                }}
+              </span>
+              <span class="reason-text">{{ run.error }}</span>
+            </div>
             <div class="run-actions">
               <button class="toggle-payload" @click="toggleRun(run.id)">
                 {{ expandedRuns.has(run.id) ? $t('llc.heartbeat.hideContext') : $t('llc.heartbeat.showContext') }}
@@ -180,6 +190,8 @@ interface Agent {
 interface AgentRun {
   id: string
   status: string
+  /** Skip reason for SKIPPED runs, failure text for FAILED ones (#12681). */
+  error?: string | null
   started_at: string
   finished_at?: string
   completed_at?: string
@@ -512,6 +524,8 @@ onUnmounted(() => {
 .status-failed.status-dot { background: var(--color-error); }
 .status-timed_out { color: var(--color-error); }
 .status-timed_out.status-dot { background: var(--color-error); }
+.status-skipped { color: var(--color-warning); }
+.status-skipped.status-dot { background: var(--color-warning); }
 .status-unknown { color: var(--text-secondary); }
 .status-unknown.status-dot { background: var(--border-default); }
 
@@ -595,6 +609,25 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
+}
+
+.run-reason {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.run-reason .reason-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.run-reason.reason-failed .reason-label {
+  color: var(--color-error);
 }
 
 .run-date,

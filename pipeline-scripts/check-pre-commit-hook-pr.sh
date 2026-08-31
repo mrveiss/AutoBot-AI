@@ -136,52 +136,31 @@ fi
 
 # ── Changed-file set ─────────────────────────────────────────────────────────
 
+# Canonical base/head resolution and changed-file scoping (#13984).
+# shellcheck source=scripts/lib/git-scope.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../scripts/lib/git-scope.sh" || {
+    echo "FATAL: cannot load scripts/lib/git-scope.sh — refusing to report clean" >&2
+    exit 1
+}
+
 BASE_SHA="${BASE_SHA:-}"
 HEAD_SHA="${HEAD_SHA:-${GITHUB_SHA:-HEAD}}"
 
-if [ -z "$BASE_SHA" ]; then
-    # On a pull_request event HEAD_SHA is the MERGE commit: ^1 is the base tip
-    # as of the event and ^2 is the PR head, so ^1..HEAD is exactly this PR's
-    # changes. Resolving origin/<base> instead uses the base's CURRENT tip, so
-    # every PR merged in between shows up as a changed file here — worst on a
-    # re-run, where HEAD_SHA is frozen but origin/<base> is fetched fresh
-    # (#13880). This path was dead under fetch-depth: 1 and would have become
-    # live the moment full history arrived.
-    if git cat-file -e "${HEAD_SHA}^2^{commit}" 2>/dev/null; then
-        BASE_SHA="${HEAD_SHA}^1"
-    elif [ -n "${GITHUB_BASE_REF:-}" ]; then
-        BASE_SHA=$(git rev-parse "origin/${GITHUB_BASE_REF}" 2>/dev/null || true)
-    fi
-fi
-
-if [ -n "$BASE_SHA" ]; then
-    base="$BASE_SHA"
-else
-    base="${HEAD_SHA}^"
-fi
-
-# A guard that cannot compute its scope must FAIL, never report "nothing
-# changed" (#13880). actions/checkout defaults to fetch-depth: 1, so the PR
-# base commit is absent, `git diff` fatals, the old `|| true` swallowed it, and
-# an empty file list printed "No changed source files — skipping" and exited 0.
-# Four CI steps were green no-ops for exactly this reason.
-for _ref in "$base" "$HEAD_SHA"; do
-    if ! git cat-file -e "${_ref}^{commit}" 2>/dev/null; then
-        echo "FATAL: '${_ref}' does not resolve in this clone." >&2
-        echo "  A shallow checkout cannot diff against the base — set 'fetch-depth: 0'" >&2
-        echo "  on actions/checkout. Refusing to report 'no changed files' for a" >&2
-        echo "  scope that could not be computed." >&2
-        exit 1
-    fi
-done
+# Base/head resolution and the status-checked diff both come from the canonical
+# resolver (#13984). The merge-commit rule, the payload fallback, the
+# origin/<base> branch-name fallback, the HEAD^ last resort and "an
+# unresolvable ref is FATAL, never 'nothing changed'" all live there now —
+# they used to be written out here and in four other places, so the next
+# correction had to be applied five times or the copies drifted.
+# BASE_SHA here is set deliberately by the caller, so it is authoritative: an
+# unresolvable one must FAIL rather than fall through to a different scope.
+base=$(git_scope_resolve_base_explicit "$HEAD_SHA" "$BASE_SHA") || exit 1
+git_scope_require_commits "$base" "$HEAD_SHA" || exit 1
 
 # Cast a wide net (all relevant source extensions); the hook/validator itself
 # applies its category-specific allowlist. Quoted array expansion — git must
 # receive the globs verbatim and do its own pathspec matching.
-if ! raw_files=$(git diff --name-only "$base" "$HEAD_SHA" -- "${EXT_PATHSPEC[@]}"); then
-    echo "FATAL: git diff failed for ${base}..${HEAD_SHA} — refusing to report clean." >&2
-    exit 1
-fi
+raw_files=$(git_scope_diff_names "$base" "$HEAD_SHA" -- "${EXT_PATHSPEC[@]}") || exit 1
 
 # Deleted paths still appear in the diff; keep only files that exist on disk.
 # The trailing `|| true` normalises the while-loop's EOF exit status (1) under
@@ -206,7 +185,7 @@ fi
 # local `pre-commit run` respectively.
 files=$(printf '%s\n' "$raw_files" \
     | grep -Ev '(^|/)(_generated|generated)/' \
-    | while read -r f; do [ -n "$f" ] && [ -f "$f" ] && printf '%s\n' "$f"; done \
+    | git_scope_existing_files \
     || true)
 
 if [ -z "$files" ]; then
@@ -265,7 +244,18 @@ else
 
     # Partition the hook's violation blocks. A block starts at a VIOLATION
     # header carrying "path:line" and runs to the next blank line.
-    filtered=$(printf '%s\n' "$hook_output" | ADDED="$added_lines" awk '
+    # The added-line set is passed through a FILE, not the environment.
+    # ``ADDED="$added_lines" awk`` counted every added line against ARG_MAX
+    # (E2BIG covers argv *and* envp), so a large PR died with
+    # "/usr/bin/awk: Argument list too long" and exit 126 — a checker crash that
+    # blocked the PR while reporting nothing about its actual content. Scales
+    # with diff size now instead of breaking at it.
+    added_file=$(mktemp)
+    # shellcheck disable=SC2064 -- expand $added_file now, not at trap time.
+    trap "rm -f '$added_file'" EXIT
+    printf '%s\n' "$added_lines" > "$added_file"
+
+    filtered=$(printf '%s\n' "$hook_output" | awk -v added_file="$added_file" '
         # is_violation distinguishes a real violation block from the hook'"'"'s
         # banner and trailer. Counting those as kept reported "6 violations on
         # lines this PR added" for a PR that added one clean line — the summary
@@ -295,8 +285,10 @@ else
             return 0
         }
         BEGIN {
-            split(ENVIRON["ADDED"], a, "\n")
-            for (i in a) if (a[i] != "") added[a[i]] = 1
+            # Read the set line by line rather than splitting one giant string:
+            # no single value has to fit in an environment slot or an awk field.
+            while ((getline line < added_file) > 0) if (line != "") added[line] = 1
+            close(added_file)
             keep = 1
         }
         {

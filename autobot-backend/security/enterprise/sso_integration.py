@@ -16,11 +16,9 @@ import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from pathlib import Path
 from typing import Dict, List
 from uuid import uuid4
 
-import yaml
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import (
@@ -28,6 +26,7 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_public_key,
 )
 
+from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
@@ -136,18 +135,17 @@ class SSOIntegrationFramework:
         logger.info("SSO Integration Framework initialized")
 
     def _load_config(self) -> Dict:
-        """Load SSO configuration"""
-        try:
-            if Path(self.config_path).exists():
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    return yaml.safe_load(f)
-            else:
-                default_config = self._get_default_config()
-                self._save_config(default_config)
-                return default_config
-        except Exception as e:
-            logger.error("Failed to load SSO config: %s", e)
-            return self._get_default_config()
+        """Load SSO configuration, recording whether the file was actually found.
+
+        #14892: the miss branch used to write these defaults back to the path it
+        had just failed to read, so the next boot loaded the decoy and reported
+        success. It now warns and writes nothing; ``self.config_source`` carries
+        the same fact for callers.
+        """
+        loaded = load_config_file(self.config_path, self._get_default_config, "SSO")
+        self.config_source = loaded.source
+        self.config_searched_path = loaded.searched_path
+        return loaded.values
 
     def _get_default_saml_config(self) -> Dict:
         """
@@ -223,16 +221,6 @@ class SSOIntegrationFramework:
                 "token_lifetime_minutes": 60,  # nosec B105  # config key for token TTL in minutes, not a credential
             },
         }
-
-    def _save_config(self, config: Dict):
-        """Save configuration to file (thread-safe, Issue #378)"""
-        with self._file_lock:
-            try:
-                Path(self.config_path).parent.mkdir(parents=True, exist_ok=True)
-                with open(self.config_path, "w", encoding="utf-8") as f:
-                    yaml.dump(config, f, default_flow_style=False)
-            except Exception as e:
-                logger.error("Failed to save SSO config: %s", e)
 
     def _load_providers(self):
         """Load SSO providers from storage"""

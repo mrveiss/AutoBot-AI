@@ -5,10 +5,14 @@ name: Phase Validation Integration
 on:
   push:
     branches: [ main, Dev_new_gui ]
+    # #12986: the backend-Python entries are the canonical `backend-python`
+    # set from .github/filters/backend-python-paths.yml; GitHub cannot include a file in an event path filter,
+    # so pipeline-scripts/check_workflow_path_filters.py enforces the match.
     paths: &phase_paths
       - 'autobot-backend/**/*.py'
       - 'autobot-slm-backend/**/*.py'
       - 'autobot_shared/**/*.py'
+      - '.github/filters/backend-python-paths.yml'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
       - 'pipeline-scripts/**'
@@ -119,7 +123,11 @@ jobs:
 
         # Display results summary
         echo "## Phase Validation Results" >> "$GITHUB_STEP_SUMMARY"
-        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); print(f"**Overall System Maturity:** {r.get(\"overall_maturity\", 0):.1f}%")' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "Results not available" >> "$GITHUB_STEP_SUMMARY"
+        # No backslashes: `sh` passes them through a single-quoted argument
+        # verbatim, and a backslash inside an f-string expression is a
+        # SyntaxError on every Python version (#15122). The maturity value is
+        # bound to a name first so the format spec needs no nested quoting.
+        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); m=r.get("overall_maturity", 0); print("**Overall System Maturity:** {:.1f}%".format(m))' >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "Results not available" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Generate Validation Dashboard
       env:

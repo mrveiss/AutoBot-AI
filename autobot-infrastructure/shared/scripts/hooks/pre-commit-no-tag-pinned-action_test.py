@@ -19,19 +19,43 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-tag-pinned-action"
 
 
+def _test_git_env() -> dict[str, str]:
+    """#15246: env for every git subprocess this suite spawns.
+
+    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    GIT_DIR pointing at the worktree it is pushing (every checkout here is
+    one), and an unscrubbed `git init`/`git add`/`git commit` in a
+    fixture then operates on THAT repository instead of tmp_path's. See
+    autobot_shared/paths_test.py and #15246 for the reproduced incident.
+    """
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+
+
 def _run(tmp_path: Path, content: str, rel: str = ".github/workflows/test.yml") -> subprocess.CompletedProcess:
-    """Write a workflow file and invoke the hook via argv mode."""
+    r"""Write a workflow file and invoke the hook via argv mode.
+
+    The path goes in REPO-RELATIVE with cwd at its root, because that is the
+    only shape a real caller produces: pre-commit and the CI wrappers both hand
+    the hook paths relative to the repository root.
+
+    GH#14884: this used to pass ``str(f)`` — an absolute ``/tmp/pytest-.../...``
+    path. GH#13936 made ``get_staged_files`` apply the caller's own pattern to
+    the argv branch as well as the staged branch, and this hook's pattern is
+    anchored: ``^\.github/(workflows|actions)/.*\.ya?ml$``. An absolute path
+    cannot match that anchor, so the hook received an empty file list, took its
+    ``[ -z "$files" ] && exit 0`` path and reported clean. The seven "must
+    reject" tests read that as a missing rejection and went red; worse, the
+    three "must allow" tests went green having exercised nothing at all.
+    """
     f = tmp_path / rel
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(content, encoding="utf-8")
-    return subprocess.run(
-        [str(HOOK_PATH), str(f)],
-        capture_output=True,
-        text=True,
-    )
+    return subprocess.run([str(HOOK_PATH), rel], cwd=tmp_path, capture_output=True, text=True, env=_test_git_env())
 
 
 # === Allowed forms ===
@@ -139,8 +163,8 @@ def test_no_staged_files_in_a_real_repo_exits_cleanly(tmp_path):
     that is not "no files staged", it is git itself failing to answer the
     question — now covered by TestFailsClosedWhenGitCannotAnswer below
     (GH#14151)."""
-    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
-    result = subprocess.run([str(HOOK_PATH)], cwd=tmp_path, capture_output=True, text=True)
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True, env=_test_git_env())
+    result = subprocess.run([str(HOOK_PATH)], cwd=tmp_path, capture_output=True, text=True, env=_test_git_env())
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -169,7 +193,7 @@ def test_actions_path_rejects_third_party_tag(tmp_path):
 
 
 def _git(repo, *args):
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True)
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env())
 
 
 def _init_repo(tmp_path):
@@ -209,7 +233,7 @@ class TestFailsClosedWhenGitCannotAnswer:
         hook_copy.write_bytes(HOOK_PATH.read_bytes())
         hook_copy.chmod(0o755)
 
-        result = subprocess.run([str(hook_copy)], cwd=repo, capture_output=True, text=True)
+        result = subprocess.run([str(hook_copy)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
         assert result.returncode != 0, "the hook reported clean with a staged violation and no dependency"
 
     def test_a_git_failure_does_not_report_clean(self, tmp_path):
@@ -218,5 +242,5 @@ class TestFailsClosedWhenGitCannotAnswer:
         # Corrupt the index so git errors rather than returning an empty answer.
         (repo / ".git" / "index").write_text("garbage", encoding="utf-8")
 
-        result = subprocess.run([str(HOOK_PATH)], cwd=repo, capture_output=True, text=True)
+        result = subprocess.run([str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
         assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"

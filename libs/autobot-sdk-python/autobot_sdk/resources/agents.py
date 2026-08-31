@@ -2,14 +2,23 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Agent resource operations."""
+"""Agent resource operations.
+
+Paths are written without the ``/api`` root — ``AutoBotClient`` adds it.
+
+The agent surface spans two mounts, which is why a blanket prefix would not
+have been enough (#15053): the agent router is registered under ``/agent`` and
+per-agent configuration under ``/agent_config``, so ``/health/detailed`` is
+served at ``/api/agent/health/detailed``, two segments short of where the SDK
+used to ask for it.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
 from ..client import AutoBotClient
-from ..models import AgentConfig, AgentHealth, DataResponse
+from ..models import AgentConfig, AgentHealth
 
 
 class AgentsResource:
@@ -17,16 +26,26 @@ class AgentsResource:
         self._c = client
 
     async def health(self) -> AgentHealth:
-        raw = await self._c.get("/health/detailed")
+        raw = await self._c.get("/agent/health/detailed")
         return AgentHealth.model_validate(raw)
 
-    async def get_config(self) -> DataResponse[AgentConfig]:
-        raw = await self._c.get("/agent/config")
-        return DataResponse[AgentConfig].model_validate(raw)
+    async def get_config(self, agent_id: str) -> AgentConfig:
+        """Configuration of one agent.
 
-    async def update_config(self, **fields: Any) -> DataResponse[AgentConfig]:
-        raw = await self._c.put("/agent/config", fields)
-        return DataResponse[AgentConfig].model_validate(raw)
+        The response is a flat document, not a ``DataResponse`` envelope.
+        """
+        raw = await self._c.get(f"/agent_config/agents/{agent_id}")
+        return AgentConfig.model_validate(raw)
+
+    async def set_model(self, agent_id: str, model: str, provider: str | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {"agent_id": agent_id, "model": model}
+        if provider:
+            body["provider"] = provider
+        return await self._c.post(f"/agent_config/agents/{agent_id}/model", body)
+
+    async def set_enabled(self, agent_id: str, enabled: bool) -> dict[str, Any]:
+        action = "enable" if enabled else "disable"
+        return await self._c.post(f"/agent_config/agents/{agent_id}/{action}")
 
     async def send_command(self, command: str, session_id: str | None = None) -> dict[str, Any]:
         body: dict[str, Any] = {"command": command}

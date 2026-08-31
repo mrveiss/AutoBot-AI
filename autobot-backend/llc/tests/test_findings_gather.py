@@ -24,13 +24,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.status_enums import Severity
+
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
 
 _HIGH = {
     "type": "bug",
-    "severity": "high",
+    "severity": Severity.HIGH.value,
     "file_path": "a.py",
     "line_number": 1,
     "description": "d1",
@@ -38,7 +40,7 @@ _HIGH = {
 }
 _MEDIUM = {
     "type": "style",
-    "severity": "medium",
+    "severity": Severity.MEDIUM.value,
     "file_path": "b.py",
     "line_number": 2,
     "description": "d2",
@@ -46,7 +48,7 @@ _MEDIUM = {
 }
 _LOW = {
     "type": "smell",
-    "severity": "low",
+    "severity": Severity.LOW.value,
     "file_path": "c.py",
     "line_number": 3,
     "description": "d3",

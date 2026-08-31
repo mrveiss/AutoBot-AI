@@ -1,4 +1,7 @@
 # Code Vectorization Architecture Documentation
+
+> **Freshness:** superseded — 2026-08-30. "Ready for Implementation" is stale: this shipped. See `autobot-backend/api/codebase_analytics/`, `code_embedding_generator.py`, `npu_semantic_search.py`.
+
 **Version**: 1.0 | **Status**: Ready for Implementation | **Date**: 2025-10-25
 
 ---
@@ -66,7 +69,7 @@ Perfect for: Frontend developers, API consumers, integration testing
 ---
 
 ### 4️⃣ **Project Plan** - 8-Week Implementation
-📄 `architecture/CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md`
+📄 `planning/CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md`
 
 **25-minute read** | Phased timeline, tasks, deliverables, resources
 
@@ -337,7 +340,7 @@ GET /api/analytics/code/reuse-opportunities
 ### To Start Implementation
 1. Provision infrastructure (ChromaDB, Redis)
 2. Assign development team
-3. Follow `CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md`
+3. Follow `../planning/CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md`
 4. Begin Phase 1: Foundation
 
 ### For Technical Deep Dive
@@ -354,7 +357,7 @@ GET /api/analytics/code/reuse-opportunities
 | `CODE_VECTORIZATION_SUMMARY.md` | Executive overview | Management | 10 min |
 | `CODE_VECTORIZATION_ARCHITECTURE.md` | Technical design | Architects | 30 min |
 | `CODE_VECTORIZATION_API.md` | API reference | Developers | 20 min |
-| `CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md` | Project plan | PMs | 25 min |
+| `../planning/CODE_VECTORIZATION_IMPLEMENTATION_PLAN.md` | Project plan | PMs | 25 min |
 | `CODE_VECTORIZATION_DATA_FLOWS.md` | Visual flows | Engineers | 15 min |
 | `CODE_VECTORIZATION_PERFORMANCE_RISK.md` | Ops guide | DevOps | 30 min |
 | `INDEX.md` | Navigation guide | All | 5 min |

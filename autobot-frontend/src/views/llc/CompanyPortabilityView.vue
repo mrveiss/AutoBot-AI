@@ -186,6 +186,14 @@
             <ul v-if="importResult.created_entities" class="result-counts">
               <li v-for="(v, k) in importResult.created_entities" :key="k">{{ k }}: {{ v }}</li>
             </ul>
+            <div v-if="importResult.droppedReportingLines.length > 0" class="dropped-reporting-lines">
+              <p>{{ t('llc.portability.droppedReportingLinesLabel') }}</p>
+              <ul>
+                <li v-for="(link, i) in importResult.droppedReportingLines" :key="i">
+                  {{ t('llc.portability.droppedReportingLine', { agent: link.agent_name, manager: link.manager_name }) }}
+                </li>
+              </ul>
+            </div>
             <div v-if="importResult.warnings.length > 0">
               <p>{{ t('llc.portability.warningsLabel') }}</p>
               <ul><li v-for="(w, i) in importResult.warnings" :key="i">{{ w }}</li></ul>
@@ -256,11 +264,22 @@ interface ImportPreview {
   warnings: string[]
 }
 
+interface DroppedReportingLine {
+  agent_name: string
+  agent_id: string
+  manager_name: string
+  manager_source_agent_id: string
+}
+
 interface ImportResultDisplay {
   ok: boolean
   company_id?: string
   created_entities?: Record<string, number>
   warnings: string[]
+  // Reporting lines the import could not honour (#14811). Kept structured so it
+  // can be rendered in the operator's locale; `warnings` is server-composed
+  // English and cannot be translated.
+  droppedReportingLines: DroppedReportingLine[]
   error?: string
 }
 
@@ -433,6 +452,7 @@ async function executeImport(): Promise<void> {
       importResult.value = {
         ok: false,
         warnings: [],
+        droppedReportingLines: [],
         error: (errBody.detail as string) ?? `${res.status} ${res.statusText}`,
       }
       showToast(t('llc.portability.toastImportFailed'), 'error')
@@ -444,12 +464,13 @@ async function executeImport(): Promise<void> {
       company_id: body.company_id as string,
       created_entities: body.created_entities as Record<string, number>,
       warnings: (body.warnings as string[]) ?? [],
+      droppedReportingLines: (body.dropped_reporting_lines as DroppedReportingLine[]) ?? [],
     }
     showToast(t('llc.portability.toastImportCompleted'), 'success')
   } catch (e) {
     const msg = e instanceof Error ? e.message : t('llc.portability.toastImportFailed')
     logger.error('Import execute failed:', e)
-    importResult.value = { ok: false, warnings: [], error: msg }
+    importResult.value = { ok: false, warnings: [], droppedReportingLines: [], error: msg }
     showToast(t('llc.portability.toastImportFailedMsg', { msg }), 'error')
   } finally {
     executingImport.value = false

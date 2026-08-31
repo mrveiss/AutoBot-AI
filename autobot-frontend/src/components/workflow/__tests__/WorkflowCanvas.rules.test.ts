@@ -15,6 +15,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { memoizeByLocale } from '@/test/utils/i18n-cache'
 import en from '@/i18n/locales/en.json'
 import ar from '@/i18n/locales/ar.json'
 
@@ -72,12 +73,18 @@ const WORKFLOW_NODES: CanvasNode[] = [
   },
 ]
 
+// #14860: memoized per locale. This helper ran on EVERY mount and each call
+// re-ingested the ~400KB `en` and `ar` message bundles. The locale is a real
+// parameter here, so a blind hoist would be wrong — one instance per locale
+// is not. Nothing in this file mutates the returned instance.
+const makeI18n = memoizeByLocale((locale: string) =>
+  createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: { en, ar } }),
+)
+
 function mountCanvas(props: Record<string, unknown>, locale: 'en' | 'ar' = 'en') {
   return mount(WorkflowCanvas, {
     props: { selectedNodeId: null, readonly: true, ...props },
-    global: {
-      plugins: [createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: { en, ar } })],
-    },
+    global: { plugins: [makeI18n(locale)] },
   })
 }
 
@@ -270,12 +277,13 @@ describe('workflow authoring is untouched by the rule layer (#13941)', () => {
     expect(step.classes().some((cls) => cls.startsWith('rule-'))).toBe(false)
   })
 
-  it('keeps the four pan/zoom/fit buttons the org canvas relies on', () => {
+  it('keeps the six pan/zoom/fit/undo buttons the org canvas relies on', () => {
     // The colour-by control lives in the left half deliberately: #13939 pins
     // the right half at exactly three buttons in read-only mode — #14611
-    // added a fourth (fit to selection/filter), still gated the same way.
+    // added a fourth (fit to selection/filter), and #14612 added undo/redo as
+    // a fifth and sixth, all still gated the same way (never on `readonly`).
     const wrapper = mountCanvas({ nodes: ORG_NODES })
 
-    expect(wrapper.findAll('.toolbar-right .tool-btn')).toHaveLength(4)
+    expect(wrapper.findAll('.toolbar-right .tool-btn')).toHaveLength(6)
   })
 })

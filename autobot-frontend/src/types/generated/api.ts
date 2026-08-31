@@ -1590,7 +1590,7 @@ export interface paths {
         };
         /**
          * Dynamic endpoint capability discovery
-         * @description Returns a dynamically derived list of all registered API endpoints, grouped by OpenAPI tag and operation type.  The result is derived from the live FastAPI OpenAPI schema (not hardcoded) and is cached with a 5-minute TTL that resets on route changes.
+         * @description Returns a dynamically derived list of all registered API endpoints, grouped by OpenAPI tag and operation type.  The result is derived from the live FastAPI OpenAPI schema (not hardcoded) and is cached with a 5-minute TTL that resets when the served route table changes.
          */
         get: operations["get_capabilities_api_capabilities_get"];
         put?: never;
@@ -3722,6 +3722,40 @@ export interface paths {
         get: operations["get_device_identity_api_devices_me_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/devices/{device_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Device
+         * @description Soft-revoke one paired device (#14964).
+         *
+         *     Distinct from ``DELETE /{device_id}``, which unpairs by deleting the row.
+         *     Revocation keeps the record — the pairing history and anything referencing
+         *     the device survive — while denying the credential every capability and
+         *     every future authentication. Scoped to one row, so the user's other
+         *     devices are untouched.
+         *
+         *     Takes effect on the **next** handshake: ``validate_device_jwt`` reads this
+         *     per authentication, and the existence cache is invalidated here so there is
+         *     no TTL to wait out. A session already established stays up until it closes;
+         *     a running socket is never re-authenticated.
+         *
+         *     Idempotent — revoking an already-revoked device keeps the original
+         *     ``revoked_at`` rather than moving the recorded time.
+         */
+        post: operations["revoke_device_api_devices__device_id__revoke_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -26885,6 +26919,149 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent-terminal/host-selection/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Host Selection
+         * @description Agent requests host selection for SSH action.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     This endpoint creates a pending host selection request that the frontend
+         *     will display to the user. The user selects from available infrastructure
+         *     hosts, and the selection is returned via the /host-selection/{request_id}
+         *     endpoint.
+         *
+         *     Flow:
+         *     1. Agent calls POST /host-selection/request with command/purpose
+         *     2. Backend returns request_id with status="pending_selection"
+         *     3. Frontend shows HostSelectionDialog to user
+         *     4. User selects host and calls POST /host-selection/{request_id}/select
+         *     5. Agent polls GET /host-selection/{request_id} to get selection result
+         */
+        post: operations["request_host_selection_api_agent_terminal_host_selection_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/host-selection/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Host Selection
+         * @description Get the status/result of a host selection request.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     Agent polls this endpoint to check if user has made a selection.
+         *
+         *     Returns:
+         *     - status: "pending_selection", "selected", or "cancelled"
+         *     - If selected: includes host details and connection info
+         */
+        get: operations["get_host_selection_api_agent_terminal_host_selection__request_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/host-selection/{request_id}/select": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Host Selection
+         * @description User submits their host selection.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     Called by frontend when user selects a host from the dialog.
+         *
+         *     Args:
+         *         request_id: The pending selection request ID
+         *         host_id: Selected host ID from secrets
+         *         host_name: Display name of the host
+         *         host: Hostname or IP address
+         *         ssh_port: SSH port number
+         *         username: SSH username
+         *         remember_choice: Whether to use this host for future SSH commands
+         */
+        post: operations["submit_host_selection_api_agent_terminal_host_selection__request_id__select_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/host-selection/{request_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Host Selection
+         * @description User cancels host selection.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     Called by frontend when user closes the dialog without selecting.
+         */
+        post: operations["cancel_host_selection_api_agent_terminal_host_selection__request_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-terminal/host-selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Pending Host Selections
+         * @description List all pending host selection requests.
+         *
+         *     Issue #744: Requires authenticated user.
+         *
+         *     Frontend uses this to show any pending selection dialogs on page load.
+         */
+        get: operations["list_pending_host_selections_api_agent_terminal_host_selection_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent-terminal/sessions": {
         parameters: {
             query?: never;
@@ -27201,149 +27378,6 @@ export interface paths {
          *     Issue #744: Requires authenticated user.
          */
         get: operations["agent_terminal_info_api_agent_terminal__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection/request": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Request Host Selection
-         * @description Agent requests host selection for SSH action.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     This endpoint creates a pending host selection request that the frontend
-         *     will display to the user. The user selects from available infrastructure
-         *     hosts, and the selection is returned via the /host-selection/{request_id}
-         *     endpoint.
-         *
-         *     Flow:
-         *     1. Agent calls POST /host-selection/request with command/purpose
-         *     2. Backend returns request_id with status="pending_selection"
-         *     3. Frontend shows HostSelectionDialog to user
-         *     4. User selects host and calls POST /host-selection/{request_id}/select
-         *     5. Agent polls GET /host-selection/{request_id} to get selection result
-         */
-        post: operations["request_host_selection_api_agent_terminal_host_selection_request_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection/{request_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Host Selection
-         * @description Get the status/result of a host selection request.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     Agent polls this endpoint to check if user has made a selection.
-         *
-         *     Returns:
-         *     - status: "pending_selection", "selected", or "cancelled"
-         *     - If selected: includes host details and connection info
-         */
-        get: operations["get_host_selection_api_agent_terminal_host_selection__request_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection/{request_id}/select": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Submit Host Selection
-         * @description User submits their host selection.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     Called by frontend when user selects a host from the dialog.
-         *
-         *     Args:
-         *         request_id: The pending selection request ID
-         *         host_id: Selected host ID from secrets
-         *         host_name: Display name of the host
-         *         host: Hostname or IP address
-         *         ssh_port: SSH port number
-         *         username: SSH username
-         *         remember_choice: Whether to use this host for future SSH commands
-         */
-        post: operations["submit_host_selection_api_agent_terminal_host_selection__request_id__select_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection/{request_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Cancel Host Selection
-         * @description User cancels host selection.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     Called by frontend when user closes the dialog without selecting.
-         */
-        post: operations["cancel_host_selection_api_agent_terminal_host_selection__request_id__cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/agent-terminal/host-selection": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Pending Host Selections
-         * @description List all pending host selection requests.
-         *
-         *     Issue #744: Requires authenticated user.
-         *
-         *     Frontend uses this to show any pending selection dialogs on page load.
-         */
-        get: operations["list_pending_host_selections_api_agent_terminal_host_selection_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -27990,6 +28024,26 @@ export interface paths {
          *     p95 latency.  Extracted from monitoring_compat.py (Issue #1283).
          */
         get: operations["get_github_status_api_monitoring_github_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/lifecycle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Memory Lifecycle
+         * @description Read-only view of the memory lifecycle. Never mutates, never 500s.
+         */
+        get: operations["get_memory_lifecycle_api_memory_lifecycle_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -57091,9 +57145,44 @@ export interface components {
         };
         /**
          * AnalyticsPerformanceMetricsResponse
-         * @description Response for GET /analytics/performance/metrics — opaque collector result.
+         * @description Response for GET /analytics/performance/metrics.
+         *
+         *     Every block is written by ``AnalyticsController.collect_performance_metrics``
+         *     except ``historical_context``, which the route appends, and ``error``, which
+         *     replaces the rest when collection raises.
          */
         AnalyticsPerformanceMetricsResponse: {
+            /** System Performance */
+            system_performance?: {
+                [key: string]: unknown;
+            } | null;
+            /** Api Performance */
+            api_performance?: {
+                [key: string]: unknown;
+            } | null;
+            /** Advanced Metrics */
+            advanced_metrics?: {
+                [key: string]: unknown;
+            } | null;
+            /** Detailed Metrics */
+            detailed_metrics?: {
+                [key: string]: unknown;
+            } | null;
+            /** Hardware Performance */
+            hardware_performance?: {
+                [key: string]: unknown;
+            } | null;
+            /** Network Io */
+            network_io?: {
+                [key: string]: unknown;
+            } | null;
+            /** Historical Context */
+            historical_context?: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error?: string | null;
+        } & {
             [key: string]: unknown;
         };
         /**
@@ -57242,9 +57331,36 @@ export interface components {
         };
         /**
          * AnalyticsUsageStatisticsResponse
-         * @description Response for GET /analytics/usage/statistics — opaque controller result.
+         * @description Response for GET /analytics/usage/statistics.
+         *
+         *     Blocks come from ``AnalyticsController.get_usage_statistics``;
+         *     ``analysis_period`` is appended by the route and ``error`` replaces the rest
+         *     when collection raises.
          */
         AnalyticsUsageStatisticsResponse: {
+            /** Api Usage */
+            api_usage?: {
+                [key: string]: unknown;
+            } | null;
+            /** Websocket Usage */
+            websocket_usage?: {
+                [key: string]: unknown;
+            } | null;
+            /** System Usage */
+            system_usage?: {
+                [key: string]: unknown;
+            } | null;
+            /** Knowledge Base Usage */
+            knowledge_base_usage?: {
+                [key: string]: unknown;
+            } | null;
+            /** Analysis Period */
+            analysis_period?: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error?: string | null;
+        } & {
             [key: string]: unknown;
         };
         /** AnthropicContentBlock */
@@ -76504,6 +76620,13 @@ export interface components {
             skipped: {
                 [key: string]: string[];
             };
+            /**
+             * Dropped Reporting Lines
+             * @default []
+             */
+            dropped_reporting_lines: {
+                [key: string]: string;
+            }[];
             /** Warnings */
             warnings: string[];
         } & {
@@ -82620,6 +82743,18 @@ export interface components {
         /**
          * MembershipRole
          * @description Role of a human user within an LLC company (GH#8223).
+         *
+         *     NOT the platform RBAC vocabulary. Three unrelated enums use the word "role"
+         *     and share string values with nothing at the type level keeping them apart
+         *     (#14024) — this one answers "what is this person within this company?",
+         *     ``autobot_shared.auth.permissions.Role`` answers "what may this account do
+         *     on the platform?", and ``CategoryDefaults.ROLE_*`` answers "who wrote this
+         *     chat message?".
+         *
+         *     ``"admin"`` is in this vocabulary AND in ``auth.permissions.Role``, so a
+         *     company admin and a platform admin are the same string and different
+         *     authority. Never pass one where the other is expected; the overlap is
+         *     asserted in ``security/roles_do_not_collide_test.py``.
          *
          *     Member order matches the deployed (migration-built) enum label order so a
          *     create_all-built ``membershiprole`` sorts identically to a migration-built
@@ -92022,7 +92157,12 @@ export interface components {
         SecretCreateRequest: {
             /** Name */
             name: string;
-            type: components["schemas"]["SecretType"];
+            /**
+             * StorableSecretType
+             * @description A single credential kind. The canonical SecretType taxonomy without its 'any' wildcard, which quantifies over the taxonomy in agent requirements and is never a secret's own kind.
+             * @enum {string}
+             */
+            type: "ssh_key" | "password" | "api_key" | "token" | "oauth_refresh_token" | "connector_oauth_token" | "certificate" | "database_url" | "infrastructure_host" | "other";
             scope: components["schemas"]["ChatSecretScope"];
             /** Value */
             value: string;
@@ -92186,10 +92326,35 @@ export interface components {
         };
         /**
          * SecretType
-         * @description Secret type enumeration.
+         * @description What kind of credential a secret is (#13846).
+         *
+         *     Canonical union of three definitions that classified the same thing under
+         *     two names, in three layers:
+         *
+         *     * ``models.secret.SecretType`` — the persisted classification on the
+         *       ``secrets`` row. Had all nine concrete kinds.
+         *     * ``api.schemas_system.SecretType`` — the request/response vocabulary.
+         *       Had eight: no ``OAUTH_REFRESH_TOKEN``, so ``POST /secrets`` could not
+         *       accept the one kind the row could already store.
+         *     * ``services.agent_secrets_integration.SecretRequirement`` — what an agent
+         *       type may request. Had six of the nine, duplicated verbatim down to the
+         *       identical ``# nosec B105`` / ``# nosemgrep`` comments, plus ``ANY``.
+         *       With no ``OAUTH_REFRESH_TOKEN`` member, an ``AgentSecretMapping`` could
+         *       only describe an OAuth-authenticating agent as ``ANY`` — the blanket
+         *       "every available secret" grant standing in for the most specific one.
+         *
+         *     Every member of every side is here. ``str`` subclass so the persisted
+         *     ``secrets.type`` column, which stores these values, keeps comparing and
+         *     serializing exactly as before.
+         *
+         *     ``ANY`` is the odd one out: a wildcard *quantifier* over the taxonomy, not
+         *     a kind of credential. It is legal in a requirement (an agent that may use
+         *     any secret) and illegal at rest — nothing may be stored with type "any".
+         *     Use :meth:`concrete` for every persistence or presentation surface, and
+         *     :meth:`expand` to resolve a requirement set into concrete kinds.
          * @enum {string}
          */
-        SecretType: "ssh_key" | "password" | "api_key" | "token" | "certificate" | "database_url" | "infrastructure_host" | "other";
+        SecretType: "ssh_key" | "password" | "api_key" | "token" | "oauth_refresh_token" | "connector_oauth_token" | "certificate" | "database_url" | "infrastructure_host" | "other" | "any";
         /**
          * SecretTypesData
          * @description Response data for get_secret_types.
@@ -93531,9 +93696,26 @@ export interface components {
          *     "unknown", "info", "minimal") and consolidates 10+ duplicate enums
          *     (#6689): Severity, IssueSeverity, DFASeverity, ImpactLevel, CostLevel,
          *     DebtSeverity, RiskLevel — all collapse to this enum.
+         *
+         *     #14956 added WARNING, DEGRADED and ERROR. They are not synonyms of an
+         *     existing rung and were NOT folded into one, because each is a value the
+         *     platform already emits across a boundary that would change if it moved:
+         *
+         *     * ``warning`` is a Prometheus label value — ``PerformanceMonitor``
+         *       publishes ``update_active_alerts("warning", ...)`` and the shipped
+         *       alert rules carry ``severity: warning``. Mapping it to ``medium``
+         *       would rename a scraped label.
+         *     * ``degraded`` is serialised into the causal-analysis API response and
+         *       grades partial impact between ``warning`` and ``critical``.
+         *     * ``error`` is the rung the capability audit grades findings at, kept
+         *       distinct from ``warning`` because the two are counted separately.
+         *
+         *     So this enum is the severity *vocabulary*. Numeric risk grading uses the
+         *     narrower ``score_ladder()`` — see that method for why the distinction is
+         *     load-bearing rather than cosmetic.
          * @enum {string}
          */
-        Severity: "unknown" | "info" | "minimal" | "low" | "medium" | "high" | "critical";
+        Severity: "unknown" | "info" | "minimal" | "low" | "warning" | "medium" | "degraded" | "high" | "error" | "critical";
         /**
          * SeveritySummary
          * @description Summary of issues by severity.
@@ -108542,6 +108724,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeviceIdentityResponse"];
+                };
+            };
+        };
+    };
+    revoke_device_api_devices__device_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -137868,6 +138079,159 @@ export interface operations {
             };
         };
     };
+    request_host_selection_api_agent_terminal_host_selection_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TerminalHostSelectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalHostSelectionRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_host_selection_api_agent_terminal_host_selection__request_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalHostSelectionGetResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_host_selection_api_agent_terminal_host_selection__request_id__select_post: {
+        parameters: {
+            query?: {
+                host_id?: string;
+                host_name?: string;
+                host?: string;
+                ssh_port?: number;
+                username?: string;
+                remember_choice?: boolean;
+            };
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalHostSelectionSubmitResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_host_selection_api_agent_terminal_host_selection__request_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalHostSelectionCancelResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_pending_host_selections_api_agent_terminal_host_selection_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTerminalPendingSelectionsResponse"];
+                };
+            };
+        };
+    };
     list_agent_terminal_sessions_api_agent_terminal_sessions_get: {
         parameters: {
             query?: {
@@ -138309,159 +138673,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentTerminalInfoResponse"];
-                };
-            };
-        };
-    };
-    request_host_selection_api_agent_terminal_host_selection_request_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["TerminalHostSelectionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalHostSelectionRequestResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_host_selection_api_agent_terminal_host_selection__request_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                request_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalHostSelectionGetResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    submit_host_selection_api_agent_terminal_host_selection__request_id__select_post: {
-        parameters: {
-            query?: {
-                host_id?: string;
-                host_name?: string;
-                host?: string;
-                ssh_port?: number;
-                username?: string;
-                remember_choice?: boolean;
-            };
-            header?: never;
-            path: {
-                request_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalHostSelectionSubmitResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cancel_host_selection_api_agent_terminal_host_selection__request_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                request_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalHostSelectionCancelResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_pending_host_selections_api_agent_terminal_host_selection_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTerminalPendingSelectionsResponse"];
                 };
             };
         };
@@ -139216,6 +139427,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GitHubStatusResponse"];
+                };
+            };
+        };
+    };
+    get_memory_lifecycle_api_memory_lifecycle_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

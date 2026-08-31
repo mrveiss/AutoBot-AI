@@ -40,6 +40,15 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+# Canonical base/head resolution (#13984). This script's own base check used to
+# be a fifth hand-written copy of the same rule. Absolute path, sourced BEFORE
+# the `cd`: ${BASH_SOURCE[0]} is relative to the invoking shell's cwd.
+# shellcheck source=scripts/lib/git-scope.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-scope.sh" || {
+  echo "FATAL: cannot load scripts/lib/git-scope.sh — refusing to report clean" >&2
+  exit 1
+}
+
 cd "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || { echo "not a git repo" >&2; exit 2; }
 [ -n "$BRANCH" ] || BRANCH=$(git branch --show-current 2>/dev/null)
 
@@ -49,61 +58,59 @@ ok()   { printf '  ok    %s\n' "$1"; }
 info() { printf '  --    %s\n' "$1"; }
 
 # The base must resolve before ANY verdict is possible. Without this the audit
-# below silently degrades into "everything looks landed".
-if ! git rev-parse --verify --quiet "${BASE}^{commit}" >/dev/null; then
-  echo "FATAL: base ref '${BASE}' does not resolve in this clone." >&2
-  echo "  Every landed/unlanded verdict depends on it, and a failed comparison" >&2
-  echo "  is indistinguishable from 'no unlanded commits'. Refusing to emit a" >&2
-  echo "  delete instruction from a comparison that could not run." >&2
+# below silently degrades into "everything looks landed". The check is the
+# shared one (#13984), so its behaviour cannot drift from the other guards'.
+if ! git_scope_require_base_ref "$BASE"; then
+  echo "  Refusing to emit a delete instruction from a comparison that could not run." >&2
   exit 1
 fi
 
 echo "verify-done: branch '${BRANCH:-<none>}' against '$BASE'"
 
-# ── landed? ──────────────────────────────────────────────────────────────────
-# Returns: 0 landed | 1 unlanded | 2 no commits | 3 unverifiable
-#          4 patch-ids say landed, but the base has since changed the same
-#            files, so content equality cannot confirm it — keep, verify by hand
-branch_state() {
-  local dir="$1" br="refs/heads/$2" ahead cherry rc line mark sha substantive=0 unlanded=0 wt_dirty
-  ahead=$(git -C "$dir" rev-list --count "${BASE}..${br}" 2>/dev/null) || return 3
+# ── landed? — six named predicates, then the decision that combines them ────
+# Commits ahead of base. Prints the count; 3 when git cannot answer.
+_bs_commits_ahead() {
+  local ahead
+  ahead=$(git -C "$1" rev-list --count "${BASE}..$2" 2>/dev/null) || return 3
   [ -n "$ahead" ] || return 3
-  # "Nothing ahead of base" is NOT landed. A freshly created worktree and a
-  # fast-forward-merged branch are indistinguishable here — both have every
-  # commit reachable from base. The ambiguity is resolved conservatively:
-  # keeping a removable worktree costs disk, deleting an active one costs work.
-  # Squash merges (how this repo lands) leave the branch ahead with matching
-  # patch-ids, so the real landed case is still detected below.
-  [ "$ahead" -eq 0 ] && return 2
+  printf '%s\n' "$ahead"
+}
 
-  # MERGE COMMITS ARE INVISIBLE TO `git cherry` (#13879). It omits them
-  # entirely, so content that exists ONLY in a merge — a conflict resolution
-  # when a branch is updated off base, or an evil merge — is represented by no
-  # line below and cannot be judged. A live branch here carries 5 such files.
-  # Unjudgeable is not landed: report "cannot verify" rather than authorize a
-  # deletion of work no signal has looked at.
-  local m mfiles mlist unlock_hint
-  mlist=$(git -C "$dir" rev-list --merges "${BASE}..${br}" 2>/dev/null) || return 3
+# 0 when every merge commit is judgeable, 3 when one is not.
+#
+# MERGE COMMITS ARE INVISIBLE TO `git cherry` (#13879). It omits them entirely,
+# so content that exists ONLY in a merge — a conflict resolution when a branch
+# is updated off base, or an evil merge — is represented by no line in the
+# cherry output and cannot be judged. A live branch here carries 5 such files.
+# Unjudgeable is not landed: report "cannot verify" rather than authorize a
+# deletion of work no signal has looked at.
+_bs_merges_are_judgeable() {
+  local m mfiles mlist
+  mlist=$(git -C "$1" rev-list --merges "${BASE}..$2" 2>/dev/null) || return 3
   for m in $mlist; do
-    mfiles=$(git -C "$dir" diff-tree -c -r --no-commit-id --name-only "$m" 2>/dev/null) || return 3
+    mfiles=$(git -C "$1" diff-tree -c -r --no-commit-id --name-only "$m" 2>/dev/null) || return 3
     [ -z "$mfiles" ] || return 3
   done
+}
 
-  # Patch-id equivalence per commit. `+` = no equivalent upstream, `-` = present.
-  # Subject text is never consulted: a generic `docs:`/`chore:` subject collides
-  # across branches and is not evidence of anything.
-  cherry=$(git -C "$dir" cherry "$BASE" "$br" 2>/dev/null); rc=$?
+# Prints "<substantive> <unlanded>"; 3 when the tally cannot be computed.
+#
+# Patch-id equivalence per commit. `+` = no equivalent upstream, `-` = present.
+# Subject text is never consulted: a generic `docs:`/`chore:` subject collides
+# across branches and is not evidence of anything.
+#
+# EMPTY COMMITS ARE NOT EVIDENCE (#13879). An empty commit has an empty patch,
+# so `git cherry` marks it `-` against ANY empty commit upstream — and the
+# worktree rules mandate an empty claim commit on creation, while empty commits
+# reach the base routinely (3 of the last 300, one of them a claim commit).
+# Counting those as "landed" reports a just-claimed worktree as deletable: the
+# precise failure this script exists to prevent, reborn. Only commits that
+# actually change something can testify either way.
+_bs_cherry_tally() {
+  local cherry rc line mark sha names substantive=0 unlanded=0
+  cherry=$(git -C "$1" cherry "$BASE" "$2" 2>/dev/null); rc=$?
   [ "$rc" -eq 0 ] || return 3
   [ -z "$cherry" ] && return 3          # no output at all is unverifiable
-
-  # EMPTY COMMITS ARE NOT EVIDENCE (#13879). An empty commit has an empty
-  # patch, so `git cherry` marks it `-` against ANY empty commit upstream —
-  # and the worktree rules mandate an empty claim commit on creation, while
-  # empty commits reach the base routinely (3 of the last 300, one of them a
-  # claim commit). Counting those as "landed" reports a just-claimed worktree
-  # as deletable: the precise failure this script exists to prevent, reborn.
-  # Only commits that actually change something can testify either way.
-  local names
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     mark=${line%% *}; sha=${line##* }
@@ -116,67 +123,111 @@ branch_state() {
     # import, shallow-clone boundary) and the branch would read as landed.
     # `git cherry` judges root commits with full-tree semantics, so this makes
     # the two agree.
-    names=$(git -C "$dir" diff-tree --root -r --no-commit-id --name-only "$sha" 2>/dev/null) || return 3
+    names=$(git -C "$1" diff-tree --root -r --no-commit-id --name-only "$sha" 2>/dev/null) || return 3
     [ -n "$names" ] || continue
     substantive=$((substantive + 1))
     [ "$mark" = "+" ] && unlanded=$((unlanded + 1))
   done <<< "$cherry"
+  printf '%s %s\n' "$substantive" "$unlanded"
+}
 
+# Fills the BS_TOUCHED array with `:(literal)`-quoted pathspecs; 3 on failure.
+#
+# An array cannot be returned through stdout without re-splitting paths that may
+# contain whitespace, so this writes one global — named for its owner, set on
+# every call, and read only by _bs_content_in_base immediately afterwards.
+# Append every path each commit in $2 touches to the NUL-delimited file $3.
+#
+# ONE COMMIT PER CALL. `git diff-tree` accepts at most two tree-ishes: with
+# three or more it exits 0 and prints NOTHING (verified), so passing the whole
+# rev-list left `touched` empty and skipped the content guard entirely — inert
+# on 8 of 18 live worktrees and wrong on 12, including the branch that
+# introduced it (ahead=9). Two revs is just as bad: it diffs the two trees and
+# reports only the tip. -m makes merges contribute their own diff.
+_bs_collect_diff_paths() {
+  local c
+  for c in $2; do
+    git -C "$1" diff-tree -r --root -m --no-commit-id --name-only -z "$c" >>"$3" 2>/dev/null || return 3
+  done
+}
+
+_bs_touched_paths() {
+  local rl tf f
+  BS_TOUCHED=()
+  rl=$(git -C "$1" rev-list "${BASE}..$2" 2>/dev/null) || return 3
+  [ -n "$rl" ] || return 0
+  tf=$(mktemp) || return 3
+  if ! _bs_collect_diff_paths "$1" "$rl" "$tf"; then
+    rm -f "$tf"; return 3
+  fi
+  # sort -zu: `-m` emits a merge's paths once per parent, and a long-lived
+  # branch that merges base repeatedly accumulates thousands of duplicates —
+  # enough to cross ARG_MAX and degrade the guard to "keep" permanently.
+  sort -zu "$tf" -o "$tf" 2>/dev/null || true
+  while IFS= read -r -d '' f; do
+    # :(literal) — a path beginning with ':' is otherwise parsed as pathspec
+    # magic even after --, and silently compares equal.
+    [ -n "$f" ] && BS_TOUCHED+=(":(literal)$f")
+  done < "$tf"
+  rm -f "$tf"
+  # The caller has already proven substantive > 0, so a non-empty rev-list with
+  # nothing touched is impossible unless a git call misbehaved. Treat it as
+  # unverifiable rather than letting it fall through to "landed".
+  [ "${#BS_TOUCHED[@]}" -eq 0 ] && return 3
+  return 0
+}
+
+# 0 when the branch's own paths match the base, 4 when the base has moved on.
+#
+# PATCH-ID EQUIVALENCE IS NOT CONTENT EQUIVALENCE (#13879). Two failures:
+#
+#   * `git patch-id` STRIPS WHITESPACE, so a whitespace-only fix — semantic in
+#     Python, YAML, Makefiles — collides with any upstream commit whose stripped
+#     diff matches. Verified: a 4-space dedent and an unrelated retab of the
+#     same line share patch-id 04e3cb9a…, and `git cherry` calls the branch
+#     commit landed while base still holds the bug.
+#   * `git cherry` answers "was this patch ever applied", not "is it in the base
+#     NOW". Work that merged and was later reverted reads as landed forever —
+#     and the merged-PR signal is true then too, so the two signals are not
+#     independent for that case.
+#
+# So confirm the content actually is in the base tree before saying landed. The
+# verdict stays conservative (never delete), but the REASON must be accurate:
+# "has unlanded commits" would be a false statement about a branch whose work
+# landed and whose files the base has simply moved on in. Distinct code 4.
+_bs_content_in_base() {
+  [ "${#BS_TOUCHED[@]}" -gt 0 ] || return 0
+  git -C "$1" diff --quiet "$BASE" "$2" -- "${BS_TOUCHED[@]}" 2>/dev/null || return 4
+}
+
+# ── landed? ──────────────────────────────────────────────────────────────────
+# Returns: 0 landed | 1 unlanded | 2 no commits | 3 unverifiable
+#          4 patch-ids say landed, but the base has since changed the same
+#            files, so content equality cannot confirm it — keep, verify by hand
+#
+# Six distinct decisions, one named predicate each (#13984). The predicates are
+# what changed; not one rule did.
+branch_state() {
+  local dir="$1" br="refs/heads/$2" ahead tally substantive unlanded
+  ahead=$(_bs_commits_ahead "$dir" "$br") || return 3
+  # "Nothing ahead of base" is NOT landed. A freshly created worktree and a
+  # fast-forward-merged branch are indistinguishable here — both have every
+  # commit reachable from base. The ambiguity is resolved conservatively:
+  # keeping a removable worktree costs disk, deleting an active one costs work.
+  # Squash merges (how this repo lands) leave the branch ahead with matching
+  # patch-ids, so the real landed case is still detected below.
+  [ "$ahead" -eq 0 ] && return 2
+
+  _bs_merges_are_judgeable "$dir" "$br" || return 3
+
+  tally=$(_bs_cherry_tally "$dir" "$br") || return 3
+  substantive=${tally%% *}; unlanded=${tally##* }
   # Only empty commits ahead of base — a claimed but unworked worktree.
   [ "$substantive" -eq 0 ] && return 2
   [ "$unlanded" -gt 0 ] && return 1
 
-  # PATCH-ID EQUIVALENCE IS NOT CONTENT EQUIVALENCE (#13879). Two failures:
-  #
-  #   * `git patch-id` STRIPS WHITESPACE, so a whitespace-only fix — semantic
-  #     in Python, YAML, Makefiles — collides with any upstream commit whose
-  #     stripped diff matches. Verified: a 4-space dedent and an unrelated
-  #     retab of the same line share patch-id 04e3cb9a…, and `git cherry`
-  #     calls the branch commit landed while base still holds the bug.
-  #   * `git cherry` answers "was this patch ever applied", not "is it in the
-  #     base NOW". Work that merged and was later reverted reads as landed
-  #     forever — and the merged-PR signal is true then too, so the two
-  #     signals are not independent for that case.
-  #
-  # So confirm the content actually is in the base tree before saying landed.
-  local -a touched=()
-  local rl c tf
-  rl=$(git -C "$dir" rev-list "${BASE}..${br}" 2>/dev/null) || return 3
-  if [ -n "$rl" ]; then
-    # ONE COMMIT PER CALL. `git diff-tree` accepts at most two tree-ishes: with
-    # three or more it exits 0 and prints NOTHING (verified), so passing the
-    # whole rev-list left `touched` empty and skipped this guard entirely —
-    # inert on 8 of 18 live worktrees and wrong on 12, including the branch
-    # that introduced it (ahead=9). Two revs is just as bad: it diffs the two
-    # trees and reports only the tip. -m makes merges contribute their own diff.
-    tf=$(mktemp) || return 3
-    for c in $rl; do
-      if ! git -C "$dir" diff-tree -r --root -m --no-commit-id --name-only -z "$c" >>"$tf" 2>/dev/null; then
-        rm -f "$tf"; return 3
-      fi
-    done
-    # sort -zu: `-m` emits a merge's paths once per parent, and a long-lived
-    # branch that merges base repeatedly accumulates thousands of duplicates —
-    # enough to cross ARG_MAX and degrade the guard to "keep" permanently.
-    sort -zu "$tf" -o "$tf" 2>/dev/null || true
-    while IFS= read -r -d '' f; do
-      # :(literal) — a path beginning with ':' is otherwise parsed as pathspec
-      # magic even after --, and silently compares equal.
-      [ -n "$f" ] && touched+=(":(literal)$f")
-    done < "$tf"
-    rm -f "$tf"
-    # The function has already proven substantive > 0, so a non-empty rev-list
-    # with nothing touched is impossible unless a git call misbehaved. Treat it
-    # as unverifiable rather than letting it fall through to "landed".
-    [ "${#touched[@]}" -eq 0 ] && return 3
-  fi
-  # Verdict stays conservative (never delete), but the REASON must be accurate:
-  # "has unlanded commits" would be a false statement about a branch whose work
-  # landed and whose files the base has simply moved on in. Distinct code 4.
-  if [ "${#touched[@]}" -gt 0 ]; then
-    git -C "$dir" diff --quiet "$BASE" "$br" -- "${touched[@]}" 2>/dev/null || return 4
-  fi
-  return 0
+  _bs_touched_paths "$dir" "$br" || return 3
+  _bs_content_in_base "$dir" "$br"
 }
 
 if [ "$LEFTOVERS_ONLY" -eq 0 ]; then

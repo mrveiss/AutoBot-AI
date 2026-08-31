@@ -34,7 +34,20 @@ on:
       # so the guard could not fire on the change it exists to catch.
       - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
       - '.github/actions/**'
-      - 'docs/developer/**'
+      # #15309: the watchdog inventory + systemd templates
+      # tools/lint/check_runner_watchdog_schedule.py --audit reads, so a PR
+      # touching only one of them still runs code-quality.
+      - 'scripts/runner-watchdog-inventory.yaml'
+      - 'scripts/systemd/runner-watchdog@.service'
+      - 'scripts/systemd/runner-watchdog@.timer'
+      # #15208: the documentation fleet-addressing guard reads every Markdown file
+      # under docs/ and takes its pattern from scripts/lib/hardcoded-value-rules.sh.
+      # 'docs/developer/**' (added for the guards that read that folder) is subsumed
+      # by 'docs/**'. Without the wider entry a docs-only PR -- the exact shape that
+      # reintroduces an address -- skips code-quality, and a skipped required job
+      # satisfies branch protection.
+      - 'docs/**'
+      - 'scripts/lib/**'
       - '.github/workflows/code-quality.yml'
   # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
   # required-check context ("code-quality") always reports a conclusion. A
@@ -89,13 +102,61 @@ jobs:
               - 'autobot-backend/static/error_messages.yaml'
               - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
               - '.github/actions/**'
-              - 'docs/developer/**'
+              # #15309: the watchdog inventory + systemd templates
+              # tools/lint/check_runner_watchdog_schedule.py --audit reads.
+              - 'scripts/runner-watchdog-inventory.yaml'
+              - 'scripts/systemd/runner-watchdog@.service'
+              - 'scripts/systemd/runner-watchdog@.timer'
+              # #15208: see the on.push.paths list above -- docs/ and the shared rule
+              # set are the documentation guard's inputs.
+              - 'docs/**'
+              - 'scripts/lib/**'
               - '.github/workflows/code-quality.yml'
 
   code-quality:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest  # Temporary: self-hosted runner offline (MVA-2605)
+    # Back on self-hosted (#15310). The MVA-2605 outage this was moved away from
+    # is over: both runners are online. This job is the slowest in the set at
+    # ~601s average and is a single unsharded job, so its wall-clock is one job's
+    # duration on either runner type — it gives up no parallelism by moving,
+    # unlike the sharded suites which stay hosted deliberately.
+    runs-on: [self-hosted, Linux, X64]
+    # Fail fast on self-hosted rather than GitHub's ~360min default (#11077).
+    #
+    # 60, not 30. The 30 came from a ~601s measurement taken on a GitHub-hosted
+    # runner against a small diff, and it does not generalise: this job's work
+    # scales with the number of changed files, and self-hosted hardware is slower
+    # than the hosted image. The release PR (2195 files) was CANCELLED at exactly
+    # 30m19s — a self-inflicted failure that looked like a real one.
+    #
+    # 60 still fails fast against GitHub's ~360min default, while leaving room for
+    # a full release-sized diff. Revisit from a measurement on THIS runner class
+    # and a large diff, not from a hosted small-diff number.
+    # 180 is a MEASUREMENT BOUND, not a considered limit — see below before
+    # lowering it to a number that feels tidier.
+    #
+    # This value has been wrong twice. 30 came from a ~601s average measured on a
+    # GitHub-hosted runner against a small diff; the release PR was cancelled at
+    # 30m19s. 60 was the same mistake with a bigger number; it was cancelled again
+    # at 60m00s. Both readings were taken from a workload that does not resemble
+    # the one that fails.
+    #
+    # What the evidence actually shows is two populations, not one:
+    #
+    #   push on Dev_new_gui, small diff    10m54s   success
+    #   pull_request into main, 2195 files >60m     cancelled (twice)
+    #
+    # This job's cost scales with the number of changed files, so normal work
+    # finishes in ~11 minutes and only a release-sized promotion is pathological.
+    # The true ceiling for that case is unknown, because the job has never been
+    # allowed to finish.
+    #
+    # 180 exists to let exactly one release run complete and produce that number.
+    # Once it does, set this from THAT measurement — on this runner class, against
+    # a release-sized diff — and record it here. Do not re-derive it from a small
+    # diff again.
+    timeout-minutes: 180
 
     steps:
     - name: Checkout code
@@ -115,11 +176,17 @@ jobs:
         # PRs merged onto the base in the meantime.
         fetch-depth: 2
 
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v7
+    # #15313: routed through the shared composite action rather than a raw
+    # actions/setup-python step, so this job works unchanged whichever runner
+    # type it lands on -- self-hosted skips the tool-cache download that has
+    # no build for this runner OS release and uses the interpreter already on
+    # PATH instead (see .github/actions/setup-python-ci/action.yml). Also
+    # fixes this step's own name, which named 3.12 while requesting 3.14 --
+    # harmless, but sent debugging here to the wrong version first (#15313 aside).
+    - name: Set up Python 3.14
+      uses: ./.github/actions/setup-python-ci
       with:
         python-version: '3.14'
-        cache: 'pip'
         cache-dependency-path: |
           requirements*.txt
           autobot-backend/requirements*.txt
@@ -129,7 +196,21 @@ jobs:
         python -m pip install --upgrade pip
         # Pin versions to match .pre-commit-config.yaml (Issue #2128)
         python -m pip install black==26.3.1 isort==8.0.1 flake8==7.3.0 autoflake==2.3.3 'bandit[toml]==1.9.4'
-        # mypy and stubs (GH#7105)
+        # mypy and stubs (GH#7105).
+        #
+        # This version is pinned in two places -- here and as the mirrors-mypy
+        # rev in .pre-commit-config.yaml. repo_tests/mypy_pin_parity_test.py
+        # fails if they diverge, so a bump either moves both or is rejected by
+        # name; the same test pins the stub list below (#15134).
+        #
+        # What the version is NOT is load-bearing. Measured on python 3.14.6
+        # against autobot_shared/: mypy 1.16.0, 2.1.0 and 2.3.0 report the same
+        # findings for the same installed packages. What changes the result is
+        # the dependency set -- this step installs stubs only, so every type
+        # flowing from redis or sqlalchemy is Any here and errors that a local
+        # CI-parity venv sees are invisible to this gate. #15134 fixed the
+        # seven that were hiding behind that; read it before widening the
+        # install list, which would surface more of them at once.
         python -m pip install \
           mypy==1.16.0 \
           pydantic-settings \
@@ -178,38 +259,19 @@ jobs:
         # #13880 — the "59" this comment used to claim was long stale).
         # After #5263 closes, swap to full-scan mode (no argv).
         #
-        # Resolve through HEAD's parents, exactly as
-        # pipeline-scripts/check-pre-commit-hook-pr.sh does (#13880). The event
-        # payload's base.sha is NOT guaranteed to be in the clone under
-        # fetch-depth: 2, whereas HEAD^1 always is — and on a pull_request
-        # HEAD^1..HEAD is precisely this PR's changes.
-        if git cat-file -e "${HEAD_SHA}^2^{commit}" 2>/dev/null; then
-          base="${HEAD_SHA}^1"
-        elif [ -n "${BASE_SHA:-}" ] && git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-          base="$BASE_SHA"
-        else
-          base="${HEAD_SHA}^"
-        fi
-        # A guard that cannot compute its scope must FAIL, not report "no
-        # changed files" (#13880) — see the same fix in
-        # pipeline-scripts/check-pre-commit-hook-pr.sh.
-        for _ref in "$base" "$HEAD_SHA"; do
-          git cat-file -e "${_ref}^{commit}" 2>/dev/null || {
-            echo "::error::'${_ref}' does not resolve — shallow clone cannot diff against the base. Refusing to report no-changes for an uncomputed scope."
-            exit 1
-          }
-        done
-        # `git diff --name-only` may return non-existent paths (deleted
-        # files); filter to existing .py files before passing to the hook.
-        if ! raw_files=$(git diff --name-only "$base" "$HEAD_SHA" -- '*.py'); then
-          echo "::error::git diff failed for ${base}..${HEAD_SHA} — refusing to report clean."
-          exit 1
-        fi
-        # `|| true` normalises the while-loop's EOF status under `set -e`; it is
-        # scoped to the filter only, since git's status is checked above.
-        files=$(printf '%s\n' "$raw_files" \
-          | while read -r f; do [ -n "$f" ] && [ -f "$f" ] && printf '%s\n' "$f"; done \
-          || true)
+        # Base/head resolution is the canonical one (#13984) — the merge-commit
+        # rule, the payload fallback, the branch-name fallback, the last-resort
+        # parent and "an unresolvable ref is FATAL, never 'nothing changed'".
+        # This was one of five hand-written copies.
+        # shellcheck source=scripts/lib/git-scope.sh
+        source scripts/lib/git-scope.sh
+        base=$(git_scope_resolve_base "$HEAD_SHA" "${BASE_SHA:-}")
+        git_scope_require_commits "$base" "$HEAD_SHA"
+        raw_files=$(git_scope_diff_names "$base" "$HEAD_SHA" -- '*.py')
+        # git names deleted paths too; `|| true` normalises the filter's EOF
+        # status under `set -e` and is scoped to the filter only, since git's
+        # own status is checked inside git_scope_diff_names.
+        files=$(printf '%s\n' "$raw_files" | git_scope_existing_files || true)
         if [ -z "$files" ]; then
           echo "No changed Python files — skipping #5178 regression check."
           exit 0
@@ -286,28 +348,25 @@ jobs:
         # is-shallow-repository false -> true), which would silently strip the
         # history that later steps in this same job depend on. fetch-depth: 2
         # on the checkout already provides both parents.
-        have() { git cat-file -e "${1}^{commit}" 2>/dev/null; }
-        if have 'HEAD^2' && have 'HEAD^1'; then
-          RANGE="HEAD^1..HEAD"          # merge ref: exactly this PR's changes
-        elif have "${PR_BASE_SHA:-x}" && have "${PR_HEAD_SHA:-x}"; then
-          RANGE="${PR_BASE_SHA}..${PR_HEAD_SHA}"
-        elif have 'HEAD~1'; then
-          RANGE="HEAD~1..HEAD"
-        else
-          echo "::error::cannot resolve a diff range — refusing to scan 0 files and report clean"
-          git log --oneline -3 2>&1 | sed 's/^/  /' || true
-          exit 1
-        fi
+        # Base/head resolution is the canonical one (#13984) — the merge-commit
+        # rule, the payload fallback, the branch-name fallback, the last-resort
+        # parent and "an unresolvable ref is FATAL, never 'nothing changed'".
+        # This was one of five hand-written copies.
+        # shellcheck source=scripts/lib/git-scope.sh
+        source scripts/lib/git-scope.sh
+        BASE_REF=$(git_scope_resolve_base HEAD "${PR_BASE_SHA:-}")
+        git_scope_require_commits "$BASE_REF" HEAD
+        RANGE="${BASE_REF}...HEAD"
+        # Counted with the SAME three-dot semantics lint-conventions.sh applies
+        # to this range, so the anti-no-op guard below measures the scope that
+        # will actually be scanned rather than a neighbouring one.
+        CHANGED=$(git_scope_diff_names_symmetric "$BASE_REF" HEAD | grep -c . || true)
+        echo "conventions scope: $RANGE ($CHANGED file(s))"
         # Anti-no-op guard. The original defect was a broken range yielding
         # "0 file(s) in scope" and three green checks. Any change set reaches
         # this job with at least one file, so 0 means the range is wrong —
         # fail red rather than pass having scanned nothing.
-        CHANGED=$(git diff --name-only "$RANGE" | wc -l)
-        echo "conventions scope: $RANGE ($CHANGED file(s))"
-        if [ "$CHANGED" -eq 0 ]; then
-          echo "::error::0 files in scope for '$RANGE' — the range is wrong. Refusing to report clean on an unscanned tree."
-          exit 1
-        fi
+        git_scope_require_nonempty "$CHANGED" "$RANGE"
         if [ -n "${CONVENTIONS_DENYLIST_CONTENT:-}" ]; then
           CONVENTIONS_DENYLIST=$(mktemp)
           export CONVENTIONS_DENYLIST
@@ -517,6 +576,24 @@ jobs:
         # cannot strand an exemption. There is no growable baseline.
         python3 tools/lint/check_no_shell_placeholder_paths.py --audit
 
+    - name: Audit documentation for fleet node addressing (#15208)
+      run: |
+        # #3315 replaced the fleet's literal node addresses in docs/architecture/ with
+        # role placeholders. Nothing watched the rest of the tree: the same addressing --
+        # role-to-host mappings and database endpoints, which together read as a network
+        # map -- survived in docs/archives/plans/ one folder across, because
+        # HV_SCAN_EXTENSIONS in `scripts/lib/hardcoded-value-rules.sh` is
+        # py|ts|vue|js|sh|yml|yaml and Markdown is not in it. This has to run in a
+        # REQUIRED check for the same directional reason as #14419/#14405/#14489: a
+        # document that stops being scanned reports fewer findings, so the failure goes
+        # greener rather than redder. It parses its pattern out of the shared rule set
+        # rather than restating it, aborts if that cannot be read, and fails below a
+        # discovery floor -- #15208 exists because a sweep that never looked at
+        # docs/archives/ reported a comfortable zero. Deliberate counter-examples are
+        # exempted by an in-document block marker, and a marker covering no address is
+        # itself a finding, so no exemption outlives its reason.
+        python3 tools/lint/check_docs_no_fleet_addressing.py --audit
+
     - name: Audit MCP tool permission coverage (#14494)
       run: |
         # The under-grant guard used to infer "this tool mutates state" from a
@@ -535,13 +612,18 @@ jobs:
         # as clean having asserted nothing.
         python3 tools/lint/check_mcp_tool_permission_coverage.py --audit
 
-    - name: Audit the python-file-size ceilings for drift (#14236)
+    - name: Audit the python-file-size ceilings for drift (#14236, #14547)
       run: |
         # The pre-commit hook only sees staged files, so a grandfathered entry
         # whose file shrank, moved, or was deleted would sit there exempting
         # nothing until somebody happened to touch it. This applies the ratchet
         # to every entry: over its ceiling, under it, or already compliant all
-        # fail, and the run reports how many entries it reached.
+        # fail. #14547: the audit used to iterate KNOWN_LARGE's own keys, so it
+        # could only re-check a file someone had already added — it had no way
+        # to discover one that crossed 600 lines and was never added at all
+        # (autobot-slm-backend/services/reconciler.py reached 2000+ lines this
+        # way). It now walks every in-scope tracked *.py file instead, and the
+        # run reports how many files that walk reached.
         python3 scripts/check_python_file_size.py --audit-ceilings
 
     - name: Audit requirements-ci for silent drift from production (#14551)
@@ -555,6 +637,18 @@ jobs:
         # which only ever shrinks: a new undeclared omission, or a baseline entry
         # that no longer describes a real one, both fail.
         python3 tools/lint/check_requirements_ci_drift.py --audit
+
+    - name: Audit protobuf-style pins declared in both requirements files (#15070)
+      run: |
+        # autobot-backend/requirements.txt `-r`-includes requirements.txt and
+        # still re-declares four packages. pip resolves a doubly-declared
+        # package against the INTERSECTION of the two specifiers, so a diverged
+        # pair either silently tightens the constraint or fails the install with
+        # a traceback naming neither file. #15070: the protobuf note said the
+        # cap was <7.0 while the line said <8.0.0, so the obvious "fix" was to
+        # revert one file into exactly that state. Fails on any shared package
+        # whose specifiers differ -- and on an empty comparison (#15087).
+        python3 tools/lint/check_requirements_pin_parity.py --audit
 
     - name: Audit CI system-package provisioning against ansible (#14550)
       run: |
@@ -579,6 +673,23 @@ jobs:
         # small, stable allowed-key set directly so a push never reaches a
         # runner with an invalid composite action again.
         python3 tools/lint/check_composite_action_step_keys.py --audit
+
+    - name: Audit the runner watchdog schedule (#15309)
+      run: |
+        # Both self-hosted runners had no watchdog scheduled anywhere: the
+        # only entry was an untracked cron line on a host that no longer ran
+        # a runner, and its log redirect was unwritable there too -- a gap
+        # that produced zero signal for months. This cannot observe a live
+        # host from CI, so it verifies the half that IS in the repo: the
+        # runner inventory lists at least one runner (a reach floor -- an
+        # emptied inventory must fail, not pass having asserted nothing), each
+        # entry's systemd service name actually names its own runner rather
+        # than a stale one (#15309 fault #2's exact shape), the systemd
+        # templates operators are told to install actually exist, and no
+        # entry's last-verified date has gone stale past its floor -- forcing
+        # periodic re-confirmation against `gh api .../actions/runners`
+        # rather than trusting a doc nobody revisits.
+        python3 tools/lint/check_runner_watchdog_schedule.py --audit
 
     - name: Audit that the changes filter covers what the new guards read (#14550/#14551)
       run: |
