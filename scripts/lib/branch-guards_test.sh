@@ -91,6 +91,18 @@ check "issue branch is not archival"  "no"  "$r"
 branch_is_archival 'rescued-but-not-really' && r=yes || r=no
 check "prefix needs its separator"    "no"  "$r"
 
+echo "== branch_sweep_assert_reach =="
+# A sweep whose enumeration broke must FAIL, not publish "0 problems found".
+BRANCH_SWEEP_MIN_ENUMERATED=5
+branch_sweep_assert_reach 0 t 2>/dev/null && r=pass || r=fail
+check "zero enumerated fails"         "fail" "$r"
+branch_sweep_assert_reach 4 t 2>/dev/null && r=pass || r=fail
+check "below the floor fails"         "fail" "$r"
+branch_sweep_assert_reach 5 t 2>/dev/null && r=pass || r=fail
+check "at the floor passes"           "pass" "$r"
+branch_sweep_assert_reach 76 t 2>/dev/null && r=pass || r=fail
+check "above the floor passes"        "pass" "$r"
+
 # ---------------------------------------------------------------------------
 # Content tests run against a real, throwaway repository.
 #
@@ -106,6 +118,7 @@ git -C "$TESTREPO" config user.email t@example.invalid
 git -C "$TESTREPO" config user.name t
 printf 'alpha_line_one\nalpha_line_two\n' > "$TESTREPO/kept.txt"
 printf 'moved_line_one\n' > "$TESTREPO/moved.txt"
+printf 'doomed_line_one\n' > "$TESTREPO/doomed.txt"
 git -C "$TESTREPO" add -A
 git -C "$TESTREPO" commit -qm 'chore(seed): initial tree (#13224)'
 
@@ -122,6 +135,20 @@ git -C "$TESTREPO" commit -qam 'base gains the same line'
 git -C "$TESTREPO" checkout -q -b truly-stranded base
 printf 'delta_never_landed_anywhere\nepsilon_never_landed_either\n' >> "$TESTREPO/kept.txt"
 git -C "$TESTREPO" commit -qam 'stranded work'
+STRANDED_TIP=$(git -C "$TESTREPO" rev-parse truly-stranded)
+STRANDED_PARENT=$(git -C "$TESTREPO" rev-parse 'truly-stranded^')
+
+# A branch that only DELETES. Its diff has no added lines at all, so content
+# cannot be measured -- which is not the same as having landed.
+git -C "$TESTREPO" checkout -q -b deletes-only base
+git -C "$TESTREPO" rm -q doomed.txt
+git -C "$TESTREPO" commit -qm 'remove the doomed file'
+
+# A branch whose every added line is below BRANCH_CONTENT_MIN_LINE_CHARS.
+# Single-line hotfixes and config bumps look exactly like this.
+git -C "$TESTREPO" checkout -q -b short-adds base
+printf 'x=1\ny=2\n' >> "$TESTREPO/kept.txt"
+git -C "$TESTREPO" commit -qam 'tiny config bump'
 
 # A branch touching a path base has since removed.
 git -C "$TESTREPO" checkout -q -b touches-gone-path base
@@ -131,8 +158,31 @@ git -C "$TESTREPO" checkout -q base
 git -C "$TESTREPO" rm -q moved.txt
 git -C "$TESTREPO" commit -qm 'retire moved.txt'
 
-# A branch that adds nothing at all.
+# Two sibling lanes off ONE umbrella issue, touching different files. Base
+# gains lane B's work only. This is the shape of this repository's own
+# multi-lane decomposition.
+git -C "$TESTREPO" checkout -q -b issue-77001-lane-a base
+printf 'lane_a_unlanded_content\n' > "$TESTREPO/lane_a.txt"
+git -C "$TESTREPO" add -A && git -C "$TESTREPO" commit -qm 'lane A work'
+git -C "$TESTREPO" checkout -q -b issue-77001-lane-b base
+printf 'lane_b_content_here\n' > "$TESTREPO/lane_b.txt"
+git -C "$TESTREPO" add -A && git -C "$TESTREPO" commit -qm 'lane B work'
+git -C "$TESTREPO" checkout -q base
+printf 'lane_b_content_here\n' > "$TESTREPO/lane_b.txt"
+git -C "$TESTREPO" add -A
+git -C "$TESTREPO" commit -qm 'feat(lane): land lane B only (#77001)'
+
+# A branch that adds nothing at all -- its tree IS base's tree.
 git -C "$TESTREPO" branch -q empty-branch base
+
+# A branch on a wholly unrelated history: `git merge-base` finds nothing.
+git -C "$TESTREPO" checkout -q --orphan orphan-history
+git -C "$TESTREPO" rm -rq --cached . 2>/dev/null || true
+rm -f "$TESTREPO"/*.txt
+printf 'orphan_substantial_content_line\northo_second_content_line\n' > "$TESTREPO/orphan.txt"
+git -C "$TESTREPO" add -A
+git -C "$TESTREPO" commit -qm 'orphan work nobody merged'
+git -C "$TESTREPO" checkout -q base
 
 echo "== base_commit_for_issue =="
 sha=$(cd "$TESTREPO" && base_commit_for_issue base 13224)
@@ -144,28 +194,74 @@ check "absent issue finds nothing"     "no"  "$([ -n "$sha" ] && echo yes || ech
 sha=$(cd "$TESTREPO" && base_commit_for_issue base "")
 check "empty issue finds nothing"      "no"  "$([ -n "$sha" ] && echo yes || echo no)"
 
+echo "== branch_tree_matches_base =="
+(cd "$TESTREPO" && branch_tree_matches_base base empty-branch) && r=yes || r=no
+check "identical tree detected"        "yes" "$r"
+(cd "$TESTREPO" && branch_tree_matches_base base truly-stranded) && r=yes || r=no
+check "diverged tree not identical"    "no"  "$r"
+(cd "$TESTREPO" && branch_tree_matches_base base no-such-ref) && r=yes || r=no
+check "missing ref is not identical"   "no"  "$r"
+
 echo "== branch_content_presence =="
-check "landed content counted present" "1 1 0" "$(cd "$TESTREPO" && branch_content_presence base already-there)"
-check "stranded content counted absent" "0 2 0" "$(cd "$TESTREPO" && branch_content_presence base truly-stranded)"
-check "removed path reported gone"     "0 1 1" "$(cd "$TESTREPO" && branch_content_presence base touches-gone-path)"
-check "no additions is all-zero"       "0 0 0" "$(cd "$TESTREPO" && branch_content_presence base empty-branch)"
+check "landed content counted present" "1 1 0 measured"   "$(cd "$TESTREPO" && branch_content_presence base already-there)"
+check "stranded content counted absent" "0 2 0 measured"  "$(cd "$TESTREPO" && branch_content_presence base truly-stranded)"
+check "removed path reported gone"     "0 1 1 measured"   "$(cd "$TESTREPO" && branch_content_presence base touches-gone-path)"
+# BLOCKING 1 -- three different roads to a zero measurement, each named.
+check "no diff at all is unmeasurable" "0 0 0 no-added-lines"   "$(cd "$TESTREPO" && branch_content_presence base empty-branch)"
+check "deletions-only is unmeasurable" "0 0 0 no-added-lines"   "$(cd "$TESTREPO" && branch_content_presence base deletes-only)"
+check "short lines are unmeasurable"   "0 0 0 short-lines-only" "$(cd "$TESTREPO" && branch_content_presence base short-adds)"
+check "no merge base is unmeasurable"  "0 0 0 no-merge-base"    "$(cd "$TESTREPO" && branch_content_presence base orphan-history)"
+
+echo "== branch_paths_covered_for_issue =="
+(cd "$TESTREPO" && branch_paths_covered_for_issue base issue-77001-lane-b 77001) && r=yes || r=no
+check "landed lane's paths are covered" "yes" "$r"
+(cd "$TESTREPO" && branch_paths_covered_for_issue base issue-77001-lane-a 77001) && r=yes || r=no
+check "sibling lane's paths are NOT"    "no"  "$r"
+(cd "$TESTREPO" && branch_paths_covered_for_issue base empty-branch 13224) && r=yes || r=no
+check "a branch changing nothing is not" "no" "$r"
 
 echo "== branch_landing_evidence =="
-# `gh` is stubbed so no test reaches the network; only `with-merged-pr` has one.
+# `gh` is stubbed so no test reaches the network. It answers in the real shape:
+# a merged PR carries the SHA it merged and the base it targeted.
 gh() {
     case "$*" in
-        *"--head with-merged-pr"*) echo "4242" ;;
-        *) echo "" ;;
+        *"--head tip-matches-pr"*)
+            printf '[{"number":4242,"headRefOid":"%s","baseRefName":"base"}]' "$STRANDED_TIP" ;;
+        *"--head tip-moved-past-pr"*)
+            printf '[{"number":4243,"headRefOid":"%s","baseRefName":"base"}]' "$STRANDED_PARENT" ;;
+        *"--head pr-merged-elsewhere"*)
+            printf '[{"number":4244,"headRefOid":"%s","baseRefName":"some-other-base"}]' "$STRANDED_TIP" ;;
+        *) printf '[]' ;;
     esac
 }
 ev=$(cd "$TESTREPO" && branch_landing_evidence base 'rescued/stash-x' 'base')
 check "archival short-circuits"        "archival" "${ev%%|*}"
-ev=$(cd "$TESTREPO" && branch_landing_evidence base 'with-merged-pr' 'truly-stranded')
-check "merged PR on the head ref wins" "landed"   "${ev%%|*}"
-ev=$(cd "$TESTREPO" && branch_landing_evidence base 'issue-13224' 'truly-stranded')
-check "base commit carrying (#issue)"  "landed"   "${ev%%|*}"
 ev=$(cd "$TESTREPO" && branch_landing_evidence base 'empty-branch')
-check "adding nothing is landed"       "landed"   "${ev%%|*}"
+check "identical tree is landed"       "landed"   "${ev%%|*}"
+
+# BLOCKING 3 -- a merged PR proves nothing unless it accounts for THIS tip.
+ev=$(cd "$TESTREPO" && branch_landing_evidence base 'tip-matches-pr' 'truly-stranded')
+check "PR head equals the tip"         "landed"   "${ev%%|*}"
+ev=$(cd "$TESTREPO" && branch_landing_evidence base 'tip-moved-past-pr' 'truly-stranded')
+check "tip pushed past the merged PR"  "unproven" "${ev%%|*}"
+ev=$(cd "$TESTREPO" && branch_landing_evidence base 'pr-merged-elsewhere' 'truly-stranded')
+check "PR merged into another base"    "unproven" "${ev%%|*}"
+
+# BLOCKING 2 -- sibling lanes off one umbrella must not alias to each other.
+ev=$(cd "$TESTREPO" && branch_landing_evidence base 'issue-77001-lane-b' 'issue-77001-lane-b')
+check "the lane that landed is landed" "landed"   "${ev%%|*}"
+ev=$(cd "$TESTREPO" && branch_landing_evidence base 'issue-77001-lane-a' 'issue-77001-lane-a')
+check "its unmerged sibling is NOT"    "unproven" "${ev%%|*}"
+
+# BLOCKING 1 -- absence of a measurement is never a landing.
+ev=$(cd "$TESTREPO" && branch_landing_evidence base 'deletes-only')
+check "deletions-only is unproven"     "unproven" "${ev%%|*}"
+check "and says why"                   "no content could be measured (no-added-lines)" "${ev#*|}"
+ev=$(cd "$TESTREPO" && branch_landing_evidence base 'short-adds')
+check "short-lines-only is unproven"   "unproven" "${ev%%|*}"
+ev=$(cd "$TESTREPO" && branch_landing_evidence base 'orphan-history')
+check "unrelated history is unproven"  "unproven" "${ev%%|*}"
+check "and names the merge-base gap"   "no content could be measured (no-merge-base)" "${ev#*|}"
 
 # THE CONTRAST. A branch with no PR, no issue number, and content absent from
 # base must still be reported -- that is the only reason the sweep exists.
@@ -188,7 +284,7 @@ strict=$(bash -c '
     cd "'"$TESTREPO"'"
     branch_content_presence base truly-stranded
 ' 2>/dev/null || echo "ABORTED")
-check "zero matches survives pipefail" "0 2 0" "$strict"
+check "zero matches survives pipefail" "0 2 0 measured" "$strict"
 
 echo ""
 echo "Passed: ${pass}  Failed: ${fail}"

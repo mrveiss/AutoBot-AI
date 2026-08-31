@@ -151,6 +151,47 @@ def test_reporting_sweeps_use_the_shared_landing_evidence() -> None:
     )
 
 
+def test_reporting_sweeps_have_a_failing_vacuity_floor() -> None:
+    """A broken enumeration must fail the job, not publish "0 problems found".
+
+    Both sweeps report a count. Zero is what a healthy repository reports AND
+    what an enumeration that scanned nothing reports, and the issue body cannot
+    tell them apart -- `stale-branches-warning` goes further and *closes* its
+    tracking issue on zero. A ``::warning::`` annotation does not stop any of
+    that; only a non-zero exit does, which is why the floor is asserted to be a
+    call to ``branch_sweep_assert_reach`` under ``set -e``.
+    """
+    offenders: list[str] = []
+    for name in _REPORTING_SWEEPS:
+        bodies = _shell_bodies(_WORKFLOWS / name)
+        joined = "\n".join(bodies)
+        if "branch_sweep_assert_reach" not in joined:
+            offenders.append(f"{name}: no call to branch_sweep_assert_reach")
+        if not any("set -euo pipefail" in body or "set -e" in body for body in bodies):
+            offenders.append(f"{name}: no `set -e`, so a failing floor would not abort")
+    assert not offenders, (
+        "reporting sweeps whose vacuity floor cannot fail the job:\n" + "\n".join(offenders)
+    )
+
+
+def test_the_floor_helper_actually_fails() -> None:
+    """``branch_sweep_assert_reach`` must return non-zero below the floor.
+
+    Asserted here as well as in the bash suite because the workflows' whole
+    protection is this one exit code, and a refactor that made the helper always
+    succeed would leave both `set -e` guards above passing while protecting
+    nothing.
+    """
+    text = _GUARD_LIB.read_text(encoding="utf-8")
+    assert "branch_sweep_assert_reach()" in text, "the floor helper is gone"
+    assert "BRANCH_SWEEP_MIN_ENUMERATED" in text, "the floor constant is gone"
+    body = text.split("branch_sweep_assert_reach()", 1)[1].split("\n}", 1)[0]
+    assert "return 1" in body, (
+        "branch_sweep_assert_reach no longer returns non-zero; under `set -e` "
+        "the sweeps would carry on over an enumeration that scanned nothing"
+    )
+
+
 def test_the_guard_actually_reads_shell() -> None:
     """A parse that yields nothing would make every assertion above vacuous."""
     for name in _REPORTING_SWEEPS:
@@ -159,9 +200,17 @@ def test_the_guard_actually_reads_shell() -> None:
             f"{name}: only {len(bodies)} run: script(s) parsed, expected at least "
             f"{_MIN_SHELL_BODIES} -- the YAML parse broke and this guard inspects nothing"
         )
-        assert "git branch -r" in "\n".join(bodies), (
-            f"{name}: no longer enumerates remote branches; either it was rewritten "
+        joined = "\n".join(bodies)
+        assert "refs/remotes/origin/" in joined, (
+            f"{name}: no longer enumerates refs/remotes/origin; either it was rewritten "
             "(update this guard deliberately) or the parse broke"
+        )
+        assert "git branch -r" not in joined, (
+            f"{name}: enumerates with `git branch -r`, which spans EVERY configured "
+            "remote. Stripping only the `origin/` prefix then leaves another remote's "
+            "branch as `<remote>/<branch>`, which the sweep re-prefixes into the "
+            "unresolvable `origin/<remote>/<branch>` -- and classifies from the "
+            "resulting git failures instead of skipping it."
         )
 
 
@@ -172,6 +221,9 @@ def test_landing_evidence_helpers_are_defined() -> None:
         "branch_landing_evidence()",
         "branch_content_presence()",
         "branch_is_archival()",
+        "branch_tree_matches_base()",
+        "branch_paths_covered_for_issue()",
+        "branch_sweep_assert_reach()",
         "merged_pr_for_branch()",
         "base_commit_for_issue()",
     )

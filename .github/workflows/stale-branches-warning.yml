@@ -69,21 +69,29 @@ jobs:
           CUTOFF_DATE=$(date -d "$DAYS_STALE days ago" +%s)
           stale_branches=""
           count=0
+          candidates=0
           scanned=0
           suppressed=0
 
           echo "Looking for branches with no commits for $DAYS_STALE+ days and no landing evidence..."
 
           # Get all remote branches
-          all_branches=$(git branch -r \
-            | sed 's|^ *origin/||' \
-            | grep -v "HEAD\|main\|master\|Dev_new_gui" || true)
+          # ONLY refs/remotes/origin. `git branch -r` spans every configured
+          # remote, and stripping just the `origin/` prefix left another
+          # remote's branch named `<remote>/<branch>`, which the sweep then
+          # re-prefixed to the unresolvable `origin/<remote>/<branch>`. Every
+          # git question about it failed, and the branch was classified from
+          # those failures rather than skipped.
+          all_branches=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
+            | sed 's|^origin/||' \
+            | grep -vx "HEAD\|main\|master\|Dev_new_gui" || true)
 
           if [ -z "$all_branches" ]; then
             echo "No candidate branches found."
           else
             while IFS= read -r branch; do
               [ -z "$branch" ] && continue
+              candidates=$((candidates + 1))
 
               # Get last commit timestamp
               last_commit_ts=$(git log -1 --format=%ct "origin/$branch" 2>/dev/null || echo "0")
@@ -107,13 +115,15 @@ jobs:
             done <<< "$all_branches"
           fi
 
-          echo "stale-by-age: $scanned | suppressed as landed/archival: $suppressed | reported: $count"
+          echo "enumerated: $candidates | stale-by-age: $scanned |" \
+               "suppressed as landed/archival: $suppressed | reported: $count"
 
-          # A sweep that suppressed everything and reported nothing is
-          # indistinguishable from a sweep whose enumeration broke. Say which.
-          if [ "$scanned" -eq 0 ]; then
-            echo "::warning::no branch was even stale by age -- verify the enumeration still works"
-          fi
+          # VACUITY FLOOR, and it FAILS rather than warns. A sweep whose
+          # enumeration broke reports zero stale branches, which is exactly what
+          # a healthy repository reports -- the run then closes the tracking
+          # issue as resolved, having inspected nothing. A warning does not stop
+          # that; only a non-zero exit does. `set -e` is on, so this aborts.
+          branch_sweep_assert_reach "$candidates" "stale-branches-warning"
 
           # Output formatted for issue body
           echo "count=$count" >> "$GITHUB_OUTPUT"

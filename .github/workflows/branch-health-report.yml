@@ -66,7 +66,10 @@ jobs:
 
           # Count branches
           total_local=$(git branch | wc -l)
-          total_remote=$(git branch -r | wc -l)
+          # refs/remotes/origin only, matching the classification loop below --
+          # `git branch -r` spans every configured remote, so the two would
+          # otherwise report over different populations.
+          total_remote=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ | wc -l)
 
           # Count stale branches (30+ days), and split every candidate by
           # landing evidence rather than by ancestry (#15036).
@@ -77,9 +80,15 @@ jobs:
           archival_count=0
           unproven_count=0
 
-          all_branches=$(git branch -r \
-            | sed 's|^ *origin/||' \
-            | grep -v "HEAD\|main\|master\|Dev_new_gui" || true)
+          # ONLY refs/remotes/origin. `git branch -r` spans every configured
+          # remote, and stripping just the `origin/` prefix left another
+          # remote's branch named `<remote>/<branch>`, which the sweep then
+          # re-prefixed to the unresolvable `origin/<remote>/<branch>`. Every
+          # git question about it failed, and the branch was classified from
+          # those failures rather than skipped.
+          all_branches=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
+            | sed 's|^origin/||' \
+            | grep -vx "HEAD\|main\|master\|Dev_new_gui" || true)
 
           while IFS= read -r branch; do
             [ -z "$branch" ] && continue
@@ -94,6 +103,14 @@ jobs:
               *)        unproven_count=$((unproven_count + 1)) ;;
             esac
           done <<< "$all_branches"
+
+          # VACUITY FLOOR, and it FAILS rather than warns. Without it a broken
+          # enumeration publishes a report reading "0 landed, 0 archival,
+          # 0 unproven" -- which is not "no problems found", it is "nothing was
+          # looked at", and the two are indistinguishable in the issue body.
+          # `set -e` is on, so this aborts the job.
+          classified=$((landed_count + archival_count + unproven_count))
+          branch_sweep_assert_reach "$classified" "branch-health-report"
 
           # Count worktrees
           worktree_count=0
