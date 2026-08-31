@@ -11,6 +11,16 @@
 # under test are all about what git actually does with merge commits, shallow
 # clones and unresolvable refs, so a stub would only re-assert this file's own
 # assumptions about git -- the exact way #13880's four green no-ops survived.
+#
+# This suite runs `git init`, `git commit` and `git checkout` against tmp
+# directories it builds below. An inherited GIT_DIR/GIT_WORK_TREE -- exactly
+# what a pre-commit/pre-push hook hands its children -- sends every one of
+# those writes to the REAL repository instead (#15246): reproduced live while
+# fixing #15245, where an unscrubbed run of this exact file committed onto the
+# real checkout and left a stray user.email/core.bare in its shared config.
+# Scrub first, same list as .claude/hooks/block-dangerous-commands_test.sh.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
+unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 
 set -uo pipefail
 

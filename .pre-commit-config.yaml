@@ -282,13 +282,15 @@ repos:
       # tree and the flag answers with the CWD -- silently. Three of the six
       # were hook entries; two of those printed their success line having
       # inspected nothing, one of them over a deliberately planted violation.
+      # #15245 extended the same scanner to shell (text-based, not AST) after
+      # sixteen more sites turned up there.
       - id: git-toplevel-env-scrubbed
-        name: "Asking git for the repo root must scrub GIT_DIR first (#15176)"
+        name: "Asking git for the repo root must scrub GIT_DIR first (#15176, #15245)"
         entry: tools/lint/check_git_toplevel_env_scrubbed.py
         language: python
-        files: \.py$
+        files: \.(py|sh)$
         stages: [pre-commit]
-        description: "An inherited GIT_DIR makes --show-toplevel answer with the caller's CWD; resolve the root with autobot_shared.paths.git_repo_root()"
+        description: "An inherited GIT_DIR makes --show-toplevel answer with the caller's CWD; resolve the root with autobot_shared.paths.git_repo_root() (Python) or scripts/lib/git-root.sh's git_repo_root() (shell)"
 
       # #15246: a test that shells out to `git init`/`add`/`commit`/`checkout`/
       # etc. in a tmp_path fixture, with subprocess.run's default of inheriting
