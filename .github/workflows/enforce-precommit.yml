@@ -29,7 +29,12 @@ jobs:
     # this runner's OS release. Python and shell only — no Docker, no service
     # containers — and a single unsharded job at ~462s, so moving it forfeits
     # no parallelism.
-    runs-on: [self-hosted, Linux, X64]
+    # ubuntu-latest (#15395). This job publishes a REQUIRED context, and a
+    # required context pinned to a two-machine pool cannot report when that
+    # pool is down -- the #13401 deadlock, recurring as #15185 and #14444.
+    # Nothing here needs self-hosted hardware: the pins carried only the
+    # generic [self-hosted, Linux, X64] labels, never an npu/gpu/cuda one.
+    runs-on: ubuntu-latest
     # Fail fast on self-hosted, not GitHub's ~360min default (#11077 precedent in
     # frontend-test.yml). This is a required, non-path-filtered context: without a
     # bound, a runner outage queues it for hours and wedges every open PR.
@@ -270,7 +275,7 @@ jobs:
 
   check-instructions:
     # Self-hosted (#15310) — same reasoning as verify-precommit-config above.
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout code

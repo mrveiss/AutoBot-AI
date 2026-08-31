@@ -128,13 +128,16 @@ jobs:
   code-quality:
     needs: changes
     if: github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true'
-    # Back on self-hosted (#15310). The MVA-2605 outage this was moved away from
-    # is over: both runners are online. This job is the slowest in the set at
-    # ~601s average and is a single unsharded job, so its wall-clock is one job's
-    # duration on either runner type — it gives up no parallelism by moving,
-    # unlike the sharded suites which stay hosted deliberately.
-    runs-on: [self-hosted, Linux, X64]
-    # Fail fast on self-hosted rather than GitHub's ~360min default (#11077).
+    # ubuntu-latest (#15395). This job publishes a REQUIRED context, and a
+    # required context pinned to a two-machine pool cannot report when that
+    # pool is down -- the #13401 deadlock, recurring as #15185 and #14444.
+    # Nothing here needs self-hosted hardware: the pins carried only the
+    # generic [self-hosted, Linux, X64] labels, never an npu/gpu/cuda one.
+    # It is the slowest job in the set (~601s self-hosted, unmeasured hosted --
+    # #15395 tracks recording the delta) and single unsharded, so it gives up
+    # no parallelism either way.
+    runs-on: ubuntu-latest
+    # Fail fast rather than GitHub's ~360min default (#11077).
     #
     # 60, not 30. The 30 came from a ~601s measurement taken on a GitHub-hosted
     # runner against a small diff, and it does not generalise: this job's work

@@ -97,8 +97,13 @@ jobs:
     name: Unit & Integration Tests
     needs: changes
     if: github.event_name == 'merge_group' || needs.changes.outputs.frontend == 'true'
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30  # #11077: fail fast (self-hosted); not GitHub's 24h default
+    # ubuntu-latest (#15395). This job publishes a REQUIRED context, and a
+    # required context pinned to a two-machine pool cannot report when that
+    # pool is down -- the #13401 deadlock, recurring as #15185 and #14444.
+    # Nothing here needs self-hosted hardware: the pins carried only the
+    # generic [self-hosted, Linux, X64] labels, never an npu/gpu/cuda one.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # #11077: fail fast; not GitHub's 24h default
     # vue-tsc (the `type-check` and `check-ts-delta` steps) is near the default
     # V8 old-space ceiling on this project and intermittently OOMs
     # ("Reached heap limit … JavaScript heap out of memory"), flaking this
@@ -255,8 +260,8 @@ jobs:
     name: Security Scan
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 20  # #11077: fail fast (self-hosted); not GitHub's 24h default
+    runs-on: ubuntu-latest
+    timeout-minutes: 20  # #11077: fail fast; not GitHub's 24h default
 
     steps:
       - name: Checkout code
@@ -367,8 +372,8 @@ jobs:
   # Job 3: Build Test
   build-test:
     name: Build Test
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30  # #11077: fail fast (self-hosted); not GitHub's 24h default
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # #11077: fail fast; not GitHub's 24h default
     # `changes` added so the dependency graph is consistent; build-test already
     # self-skips when unit-tests skips (path-untouched PRs).
     needs: [changes, unit-tests]
@@ -413,8 +418,8 @@ jobs:
   # Job 4: Test Summary and Reporting
   test-summary:
     name: Test Summary
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 15  # #11077: fail fast (self-hosted); not GitHub's 24h default
+    runs-on: ubuntu-latest
+    timeout-minutes: 15  # #11077: fail fast; not GitHub's 24h default
     needs: [changes, unit-tests, security-scan, build-test]
     # `always()` so the summary still reports when a test job FAILED, but gated
     # on the same `changes` output as the jobs it summarises. Without the gate
