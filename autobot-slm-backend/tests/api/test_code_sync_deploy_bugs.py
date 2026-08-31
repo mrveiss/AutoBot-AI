@@ -69,6 +69,7 @@ from api.code_sync import (  # noqa: E402
     _prune_old_backups,
     _prune_old_snapshots,
     _resolve_pg_db_url,
+    _restore_component_snapshot,
     _rollback_component,
     _run_alembic_migrations,
     _run_post_sync_steps,
@@ -1421,13 +1422,69 @@ def test_rollback_skips_dump_path_when_no_backup_sentinel(tmp_path) -> None:
     assert not any("NO_BACKUP" in s for s in steps), "NO_BACKUP sentinel must not leak into steps"
 
 
-def test_rollback_noop_when_no_snapshot() -> None:
-    """_rollback_component is a no-op (warning) when snapshot is None (#11377)."""
+def test_rollback_restarts_even_when_no_snapshot(tmp_path) -> None:
+    """#15323: no snapshot must still restart — the previous no-op left the
+    post-sync (broken) tree on disk with the OLD code still loaded in memory,
+    a silent divergence between what is deployed and what is running. The
+    restart now surfaces that state loudly (crash/unhealthy) instead of
+    hiding it behind a "failed" job row."""
     steps: list[str] = []
     with patch("api.code_sync._restart_component_services", AsyncMock()) as restart:
         _run(_rollback_component("autobot-backend", None, steps))
-    restart.assert_not_called()
+    restart.assert_awaited_once()
     assert any("no snapshot" in s for s in steps)
+
+
+def test_rollback_restarts_even_when_restore_rsync_fails(tmp_path) -> None:
+    """#15323: a failed restore rsync must not silently skip the restart —
+    the deployed tree is left on the still-broken post-sync code, and only a
+    restart makes that state observable rather than leaving old code loaded
+    over new code on disk."""
+    deployed = tmp_path / "deployed"
+    deployed.mkdir()
+    backup = tmp_path / "snapshots" / "autobot-backend_ts"
+    backup.mkdir(parents=True)
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.returncode = 23
+        proc.communicate = AsyncMock(return_value=(b"rsync error", b""))
+        return proc
+
+    with (
+        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        patch("api.code_sync._restart_component_services", AsyncMock()) as restart,
+    ):
+        steps: list[str] = []
+        _run(_rollback_component("autobot-backend", str(backup), steps))
+
+    restart.assert_awaited_once()
+    assert any("rsync restore failed" in s for s in steps)
+
+
+def test_restore_component_snapshot_returns_false_on_timeout(tmp_path) -> None:
+    """#15323: the extracted restore helper reports failure on timeout so the
+    (now-unconditional) caller's restart-either-way logic has a real signal
+    to log, rather than the restart happening with no record of why."""
+    deployed = tmp_path / "deployed"
+    deployed.mkdir()
+
+    async def _fake_exec(*cmd, **kw):
+        proc = MagicMock()
+        proc.communicate = AsyncMock(side_effect=TimeoutError())
+        return proc
+
+    with (
+        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        patch("asyncio.wait_for", side_effect=__import__("asyncio").TimeoutError),
+    ):
+        steps: list[str] = []
+        result = _run(_restore_component_snapshot("autobot-backend", str(tmp_path / "snap"), steps))
+
+    assert result is False
+    assert any("timed out" in s for s in steps)
 
 
 def test_run_post_sync_steps_rolls_back_on_pip_failure() -> None:
