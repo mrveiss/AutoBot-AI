@@ -48,8 +48,13 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-scope.sh" || {
   echo "FATAL: cannot load scripts/lib/git-scope.sh — refusing to report clean" >&2
   exit 1
 }
+# shellcheck source=scripts/lib/git-root.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh" || {
+  echo "FATAL: cannot load scripts/lib/git-root.sh — refusing to report clean" >&2
+  exit 1
+}
 
-cd "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || { echo "not a git repo" >&2; exit 2; }
+cd "$(git_repo_root)" 2>/dev/null || { echo "not a git repo" >&2; exit 2; }
 [ -n "$BRANCH" ] || BRANCH=$(git branch --show-current 2>/dev/null)
 
 FAILURES=0
@@ -311,7 +316,7 @@ echo "[5] worktree evidence"
 #
 # So: print the evidence, mark candidates, and let the operator decide.
 CANDIDATES=0; SEEN=0
-SELF=$(git rev-parse --show-toplevel)
+SELF=$(git_repo_root) || { fail "cannot resolve repository root"; SELF=""; }
 
 if ! WT_LIST=$(git worktree list --porcelain 2>&1); then
   fail "cannot enumerate worktrees: $WT_LIST"
