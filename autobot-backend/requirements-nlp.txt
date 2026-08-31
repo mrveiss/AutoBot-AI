@@ -9,4 +9,4 @@
 #   python -m spacy download en_core_web_sm
 #
 # Re-fold into requirements.txt once spaCy/blis publish cp314 wheels.
-spacy>=3.8.15                  # Issue #2025: NLP entity extraction
+spacy>=3.8.16                  # Issue #2025: NLP entity extraction
