@@ -243,8 +243,13 @@ for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_M
 #                      exactly the regression the counterweight test exists
 #                      to catch. Needs ``ansible_utils`` (also real-loaded,
 #                      above) for ``_extract_failure_summary``.
+#   process_divergence #15323 — ``compute_process_divergence()`` is awaited by
+#                      ``api/code_sync.py``; a bare MagicMock is not
+#                      awaitable, and this module's whole job is to never
+#                      collapse "cannot tell" into "healthy" — a stub cannot
+#                      exercise that guarantee.
 #
-# All seven are dependency-light (stdlib plus at most yaml/httpx/autobot_shared),
+# All eight are dependency-light (stdlib plus at most yaml/httpx/autobot_shared),
 # which is the bar for being loadable here at all.
 import importlib.util as _importlib_util  # noqa: E402
 
@@ -257,6 +262,7 @@ _REAL_SERVICE_MODULES = (
     "service_extra_data",
     "ansible_utils",
     "provision_progress",
+    "process_divergence",
 )
 
 for _name in _REAL_SERVICE_MODULES:
