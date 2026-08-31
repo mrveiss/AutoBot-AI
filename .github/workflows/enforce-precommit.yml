@@ -7,6 +7,13 @@ name: Enforce Pre-commit Hooks
 on:
   pull_request:
     branches: [ main, Dev_new_gui, develop ]
+  # #15358: the repo-wide sweep moves here. On a pull request the hooks run
+  # against the diff only; whole-tree drift is still caught, nightly, off the
+  # critical path. Without this trigger, diff-scoping would silently drop
+  # whole-tree coverage rather than relocate it.
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
     # No `paths:` filter — this workflow is a REQUIRED status check (#12174), and
     # a required check that is path-filtered out never reports, wedging any PR
     # that touches only non-matching files (docs, .sh, .css, .json). Running on
@@ -125,8 +132,10 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Run pre-commit on all files
+      - name: Run pre-commit over the change under review
         if: steps.filter.outputs.code == 'true'
+        env:
+          IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
         run: |
           # #14181: this used to swallow the result entirely with
           # `|| { echo "::warning::..."; exit 0; }`. The comment said the goal was
@@ -144,7 +153,23 @@ jobs:
           # broken pipes, which was inaccurate -- there is no pipe to break. The
           # step runs under `bash -e`, so the trailing `cat` fails the step if the
           # capture file is ever missing, which is the fail-closed behaviour wanted.
-          pre-commit run --all-files --show-diff-on-failure > precommit-output.txt 2>&1 || {
+          # #15358: on a pull request this sweep is scoped to the change under
+          # review. Measured at 1008s of the job's 1142s on a one-file PR
+          # (#15299), diff-blind: a one-line change linted the whole tree.
+          #
+          # HEAD^1/HEAD^2, not origin/${GITHUB_BASE_REF}: the checkout above is
+          # fetch-depth: 2, so the base BRANCH ref is never fetched, but both
+          # parents of the pull_request merge commit are present -- HEAD^1 is
+          # the base tip and HEAD^2 the PR head. The #14137 symlink step below
+          # already depends on exactly that pair, so this adds no new
+          # requirement on the checkout.
+          if [ "${IS_PULL_REQUEST}" = "true" ]; then
+            scope="--from-ref HEAD^1 --to-ref HEAD^2"
+          else
+            scope="--all-files"
+          fi
+          # shellcheck disable=SC2086  # $scope is two or three known flags
+          pre-commit run $scope --show-diff-on-failure > precommit-output.txt 2>&1 || {
             echo "::warning::Pre-commit hooks found issues. Developers should run 'pre-commit run --all-files' locally."
             echo "::warning::Findings are informational here; hooks that could not RUN are enforced in the next step."
           }
@@ -158,6 +183,29 @@ jobs:
           # is a second thing to go stale (#14202). As each is woken both guards
           # tighten together, and this becomes absolute when the baseline empties.
           python3 pipeline-scripts/check_precommit_hooks_executed.py precommit-output.txt
+
+      # #15358: the gating hooks get their own FULL-SCOPE invocation. The sweep
+      # above is now diff-scoped, and pre-commit reports `Skipped` for any hook
+      # whose file types the diff does not touch -- which check_gating_precommit
+      # _hooks.py treats as a failure, deliberately and correctly (#14878: "an
+      # absent or Skipped result fails rather than reading as clean"). Feeding
+      # it the diff-scoped log would therefore turn a required context red on
+      # every pull request that does not happen to touch a gating hook's files.
+      #
+      # Separate file, not appended to precommit-output.txt: hook_result() takes
+      # the WORST status when a name appears twice, so a `Skipped` from the diff
+      # sweep would outrank the real `Passed` from this run.
+      #
+      # One hook today (ssot-config-lib-guard, a shell test suite); the ids come
+      # from the script so this stays a single source of truth.
+      - name: Run the behavioural gating hooks at full scope (#14878)
+        if: steps.filter.outputs.code == 'true'
+        run: |
+          ids="$(python3 pipeline-scripts/check_gating_precommit_hooks.py --print-ids)"
+          echo "gating hooks: ${ids}"
+          # shellcheck disable=SC2086  # deliberate word-splitting: one hook id per line
+          pre-commit run --all-files ${ids} > precommit-gating.txt 2>&1 || true
+          cat precommit-gating.txt
 
       - name: Fail when a behavioural hook reported a finding (#14878)
         if: steps.filter.outputs.code == 'true'
@@ -188,7 +236,7 @@ jobs:
           # that leaves .pre-commit-config.yaml fails rather than silently
           # exempting itself, and an absent or Skipped result fails rather than
           # reading as clean. Criterion for adding one is in the script's header.
-          python3 pipeline-scripts/check_gating_precommit_hooks.py precommit-output.txt
+          python3 pipeline-scripts/check_gating_precommit_hooks.py precommit-gating.txt
 
       - name: Workflow path filters must match the canonical set (#12986)
         run: |
