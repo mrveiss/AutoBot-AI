@@ -712,6 +712,41 @@ def _invalidate_stale_components_cache() -> None:
     _stale_components_cache["ts"] = -_STALE_COMPONENTS_TTL_SECONDS - 1.0
 
 
+async def _compute_process_divergence() -> Dict[str, str]:
+    """Per-component stale/healthy/unknown verdict for GET /status (#15323).
+
+    Wraps services.process_divergence.compute_process_divergence with the
+    live _COMPONENT_SERVICES / get_default_deployed_dir wiring this module
+    already owns — keeps the generic detector layering-clean (services/
+    never imports api/, see process_divergence.py's module docstring).
+
+    Passes EVERY unit in _COMPONENT_SERVICES[component], not just the first
+    (#15323 review): autobot_shared alone restarts 6 units and
+    autobot-ai-stack's first-listed unit (autobot-chromadb) is a compiled
+    binary that never loads the .py tree being scanned — checking only
+    svcs[0] silently verified the wrong process, or 1-of-6 processes, and
+    could report "healthy" while the real Python unit stayed stale.
+
+    Frontend components (unit list == ["nginx"]) are excluded: nginx loads
+    no Python, so a deploy-time comparison against it would be meaningless —
+    the detector already answers "unknown" for them via the empty-scan path,
+    but skipping them here keeps that intentional, not incidental.
+
+    Wrapped in try/except (#15323 review) to match _compute_stale_components'
+    invariant: a failure computing this signal must degrade /status, never
+    break it.
+    """
+    try:
+        from services.process_divergence import compute_process_divergence
+
+        units_by_component = {c: svcs for c, svcs in _COMPONENT_SERVICES.items() if svcs and svcs != ["nginx"]}
+        deployed_dirs = {c: get_default_deployed_dir(c) for c in units_by_component}
+        return await compute_process_divergence(units_by_component, deployed_dirs)
+    except Exception:  # noqa: BLE001 - a bad scan must not break /status
+        logger.exception("process-divergence: /status scan failed")
+        return {}
+
+
 @router.get("/status", response_model=CodeSyncStatusResponse)
 async def get_sync_status(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -771,6 +806,11 @@ async def get_sync_status(
     # so the endpoint never reads "up to date" while a managed component is stale.
     stale_components = await _compute_stale_components()
 
+    # #15323: surface whether each running service actually LOADED the code
+    # now on disk — distinct from stale_components (source vs deployed files),
+    # this is deployed files vs the process's in-memory state.
+    process_divergence = await _compute_process_divergence()
+
     # #12776: the self-update path restarts this backend mid-run, so nothing
     # in-process can assert the playbook finished. Read the verdict off the log
     # instead, so a run that died before Play 2 stops being reported as success.
@@ -784,6 +824,7 @@ async def get_sync_status(
         outdated_nodes=outdated_nodes,
         total_nodes=total_nodes,
         stale_components=stale_components,
+        process_divergence=process_divergence,
         self_update_incomplete=verdict.degraded,
         self_update_detail=verdict.reason,
     )
@@ -2496,9 +2537,10 @@ async def _snapshot_component(component: str) -> Optional[str]:
     """Rsync the deployed dir to a timestamped backup before mutation (#11404).
 
     Deployed dirs are rsync copies — not git repos — so `git rev-parse HEAD`
-    always fails, leaving snapshot=None and rollback printing "manual recovery".
-    Instead: rsync the deployed dir to a snapshot under _SNAPSHOT_BASE_DIR,
-    prune old snapshots, and return the backup path.
+    always fails, leaving snapshot=None and rollback restarting onto the
+    post-sync tree unrevertable (#15323). Instead: rsync the deployed dir to
+    a snapshot under _SNAPSHOT_BASE_DIR, prune old snapshots, and return the
+    backup path.
 
     Returns the backup dir path string on success, None on failure.
     """
@@ -2538,25 +2580,16 @@ async def _snapshot_component(component: str) -> Optional[str]:
         return None
 
 
-async def _rollback_component(
-    component: str,
-    snapshot: Optional[str],
-    steps: List[str],
-    dump_path: Optional[str] = None,
-) -> None:
-    """Restore *component* from the filesystem snapshot after a failed post-sync step (#11404).
+async def _restore_component_snapshot(component: str, snapshot: str, steps: List[str]) -> bool:
+    """Rsync *snapshot* back over the deployed dir for *component* (#11404).
 
-    Rsyncs from the backup dir created by _snapshot_component() back over the
-    deployed dir, then restarts services.  Does NOT restore the DB — operators
-    use the pg_dump at *dump_path*.
+    Split out of _rollback_component (#15323) so the caller can restart
+    UNCONDITIONALLY afterwards — this only reports whether the revert itself
+    landed, it never decides whether to restart.
 
-    No-op (logs warning) when *snapshot* is None.
+    Returns True on a clean rsync (rc=0); False on a failed/timed-out/errored
+    restore, each case logged and recorded in *steps*.
     """
-    if snapshot is None:
-        steps.append("rollback: no snapshot available — manual recovery required")
-        logger.warning("rollback: no snapshot for %s — cannot auto-revert", component)
-        return
-
     deployed_dir = get_default_deployed_dir(component)
     steps.append(f"rollback: restoring {component} from {snapshot}")
     try:
@@ -2574,18 +2607,46 @@ async def _rollback_component(
         if proc.returncode == 0:
             steps.append(f"rollback: restored from {snapshot}")
             logger.info("rollback: %s restored from %s", component, snapshot)
-        else:
-            steps.append(f"rollback: rsync restore failed (rc={proc.returncode}): {out[:200]}")
-            logger.error("rollback: rsync restore failed for %s: %s", component, out[-300:])
-            return
+            return True
+        steps.append(f"rollback: rsync restore failed (rc={proc.returncode}): {out[:200]}")
+        logger.error("rollback: rsync restore failed for %s: %s", component, out[-300:])
+        return False
     except asyncio.TimeoutError:
         steps.append("rollback: rsync restore timed out after 120s")
         logger.error("rollback: rsync restore timed out for %s", component)
-        return
+        return False
     except Exception as exc:
         steps.append(f"rollback: rsync restore error: {exc}")
         logger.error("rollback: rsync restore error for %s: %s", component, exc)
-        return
+        return False
+
+
+async def _rollback_component(
+    component: str,
+    snapshot: Optional[str],
+    steps: List[str],
+    dump_path: Optional[str] = None,
+) -> None:
+    """Restore *component* from its filesystem snapshot after a failed post-sync step (#11404).
+
+    #15323: the restart below is now UNCONDITIONAL. The previous version
+    returned early — without restarting — whenever the revert itself could
+    not complete (no snapshot, rsync failure/timeout/error), leaving the
+    deployed tree holding the broken post-sync code while the running
+    process kept the old code loaded: on-disk and in-memory code diverged
+    with no signal, and the job row simply read "failed". Restarting in
+    every case closes that window: when the revert succeeded the restart
+    loads the reverted, last-known-good tree (silent recovery); when it did
+    not, the restart instead loads the still-broken post-sync tree, and the
+    resulting crash or failed health poll is the loud signal that replaces
+    the previous silence. Does NOT restore the DB — operators use the
+    pg_dump at *dump_path*.
+    """
+    if snapshot is None:
+        steps.append("rollback: no snapshot available — restarting onto the post-sync tree instead (#15323)")
+        logger.warning("rollback: no snapshot for %s — restarting without revert", component)
+    else:
+        await _restore_component_snapshot(component, snapshot, steps)
 
     await _restart_component_services(component, steps)
     if dump_path and dump_path != "NO_BACKUP":
