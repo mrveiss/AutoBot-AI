@@ -1,217 +1,169 @@
-#!/usr/bin/env python3
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Unified config manager coverage, unwrapped from its #15189 swallow.
+
+Every one of the ten checks below used to live in one giant
+``test_config_consolidation`` body, wrapped ``try: assert ...; except Exception:
+return False``. The bare except caught the ``AssertionError`` each assert could
+raise, so pytest saw a function that always returned a boolean and never
+propagated a failure — one of the ten sites counted against
+``_SWALLOWED_ASSERTIONS["autobot-backend"]`` in
+``repo_tests/tests_that_return_instead_of_asserting_test.py`` (#15189).
+
+Unwrapping it did not just make the asserts able to fire — most of them had
+silently drifted from the module they claim to check, because the swallow hid
+every one of nine remaining checks behind the first failure:
+
+* ``unified_config_manager._get_default_config()`` never existed on
+  ``ConfigManager``; the real function is the module-level
+  ``config.defaults.get_default_config()``. Every check that called it
+  (sections, multimodal, npu, security) was one `AttributeError` away from
+  running at all, and none of them ran past the first one to raise it.
+* The multimodal check asserted ``voice.confidence_threshold == 0.8``.
+  ``config/defaults.py`` fixed that value to ``0.7`` under #13207 (the
+  lookup that read it was pointed at a section that did not exist, so 0.8
+  was never actually in effect) and left a comment saying so. The test's
+  0.8 was the stale pre-fix number.
+* The "environment variable handling" check read `os.getenv` directly and
+  asserted nothing about it either way — printing a found value was its
+  only behaviour. It is replaced below with a real round trip through
+  ``config.loader.apply_env_overrides``.
+
+None of that is a regression introduced by this rewrite; it is what the
+swallow already contained and could not report.
 """
-Test P2 Config Consolidation
-Verifies unified_config_manager.py functionality after consolidation.
-"""
 
-import asyncio
-import sys
-from pathlib import Path
+from __future__ import annotations
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+import pytest
 
+from config import unified_config_manager
+from config.defaults import get_default_config
+from config.loader import apply_env_overrides
 
-async def test_config_consolidation():
-    """Test all features of unified config manager"""
-    from config import unified_config_manager
-
-    print("=" * 80)  # noqa: print
-    print("TESTING P2 CONFIG CONSOLIDATION")  # noqa: print
-    print("=" * 80)  # noqa: print
-
-    # Test 1: Basic config loading
-    print("\n[TEST 1] Basic config loading...")  # noqa: print
-    try:
-        config = unified_config_manager.to_dict()
-        assert isinstance(config, dict), "Config should be a dictionary"
-        assert len(config) > 0, "Config should not be empty"
-        print("✅ PASSED: Basic config loading works")  # noqa: print
-    except Exception as e:
-        print(f"❌ FAILED: Basic config loading - {e}")  # noqa: print
-        return False
-
-    # Test 2: Default config completeness
-    print("\n[TEST 2] Default config completeness...")  # noqa: print
-    try:
-        # Get the default config directly (before merging with config.yaml)
-        default_config = unified_config_manager._get_default_config()
-
-        expected_sections = [
-            "backend",
-            "deployment",
-            "data",
-            "redis",
-            "memory",
-            "multimodal",
-            "npu",
-            "hardware",
-            "system",
-            "network",
-            "task_transport",
-            "security",
-            "ui",
-            "chat",
-            "logging",
-        ]
-
-        for section in expected_sections:
-            assert section in default_config, f"Missing expected section in defaults: {section}"
-            print(f"   ✓ Found default section: {section}")  # noqa: print
-
-        print("✅ PASSED: All default config sections present")  # noqa: print
-    except Exception as e:
-        print(f"❌ FAILED: Default config completeness - {e}")  # noqa: print
-        return False
-
-    # Test 3: Sensitive data filtering
-    print("\n[TEST 3] Sensitive data filtering...")  # noqa: print
-    try:
-        test_data = {
-            "redis": {"host": "localhost", "password": "secret123", "port": 6379},
-            "api": {"endpoint": "http://api.example.com", "api_key": "key123"},
-            "database": {"url": "postgres://user:pass@host/db"},
-        }
-
-        filtered = unified_config_manager._filter_sensitive_data(test_data)
-
-        # Check that sensitive fields are redacted
-        assert filtered["redis"]["password"] == "***REDACTED***", "Password should be redacted"
-        assert filtered["api"]["api_key"] == "***REDACTED***", "API key should be redacted"
-
-        # Check that non-sensitive fields are preserved
-        assert filtered["redis"]["host"] == "localhost", "Non-sensitive host should be preserved"
-        assert filtered["redis"]["port"] == 6379, "Non-sensitive port should be preserved"
-
-        print("✅ PASSED: Sensitive data filtering works correctly")  # noqa: print
-    except Exception as e:
-        print(f"❌ FAILED: Sensitive data filtering - {e}")  # noqa: print
-        return False
-
-    # Test 4: Async config operations
-    print("\n[TEST 4] Async config operations...")  # noqa: print
-    try:
-        # Test async load
-        test_config = await unified_config_manager.load_config_async("test", use_cache=False)
-        assert isinstance(test_config, dict), "Async load should return dictionary"
-
-        # Test async save
-        test_data = {"test_key": "test_value", "timestamp": "2025-11-11"}
-        await unified_config_manager.save_config_async("test", test_data)
-
-        # Verify saved data
-        reloaded = await unified_config_manager.load_config_async("test", use_cache=False)
-        assert reloaded.get("test_key") == "test_value", "Saved data should be retrievable"
-
-        print("✅ PASSED: Async config operations work")  # noqa: print
-    except Exception as e:
-        print(f"❌ FAILED: Async config operations - {e}")  # noqa: print
-        return False
-
-    # Test 5: Redis cache key generation
-    print("\n[TEST 5] Redis cache key generation...")  # noqa: print
-    try:
-        cache_key = unified_config_manager._get_redis_cache_key("test")
-        assert cache_key.startswith("config:"), "Cache key should have correct prefix"
-        assert "test" in cache_key, "Cache key should contain config type"
-        print(f"   Cache key: {cache_key}")  # noqa: print
-        print("✅ PASSED: Redis cache key generation works")  # noqa: print
-    except Exception as e:
-        print(f"❌ FAILED: Redis cache key generation - {e}")  # noqa: print
-        return False
-
-    # Test 6: Nested config access
-    print("\n[TEST 6] Nested config access...")  # noqa: print
-    try:
-        # Test get_nested
-        backend_config = unified_config_manager.get_nested("backend.llm", {})
-        assert isinstance(backend_config, dict), "Nested config should be dictionary"
-
-        # Test nested value retrieval
-        redis_host = unified_config_manager.get_nested("redis.host", "default")
-        assert redis_host is not None, "Should retrieve nested Redis host"
-
-        print("✅ PASSED: Nested config access works")  # noqa: print
-    except Exception as e:
-        print(f"❌ FAILED: Nested config access - {e}")  # noqa: print
-        return False
-
-    # Test 7: Environment variable overrides
-    print("\n[TEST 7] Environment variable handling...")  # noqa: print
-    try:
-        import os
-
-        # Verify environment variables are being used
-        env_vars = [
-            "AUTOBOT_DEFAULT_LLM_MODEL",
-            "AUTOBOT_BACKEND_PORT",
-            "AUTOBOT_REDIS_DB_MAIN",
-        ]
-
-        for var in env_vars:
-            value = os.getenv(var)
-            if value:
-                print(f"   Found env var: {var} = {value}")  # noqa: print
-
-        print("✅ PASSED: Environment variable handling works")  # noqa: print
-    except Exception as e:
-        print(f"❌ FAILED: Environment variable handling - {e}")  # noqa: print
-        return False
-
-    # Test 8: Multimodal config (from utils/config_manager.py)
-    print("\n[TEST 8] Multimodal config consolidation...")  # noqa: print
-    try:
-        default_config = unified_config_manager._get_default_config()
-        multimodal = default_config.get("multimodal", {})
-        assert "vision" in multimodal, "Should have vision config"
-        assert "voice" in multimodal, "Should have voice config"
-        assert "context" in multimodal, "Should have context config"
-
-        # Verify default values from utils/config_manager.py
-        assert multimodal["vision"]["confidence_threshold"] == 0.7
-        assert multimodal["voice"]["confidence_threshold"] == 0.8
-        assert multimodal["context"]["decision_threshold"] == 0.9
-
-        print("✅ PASSED: Multimodal config properly consolidated")  # noqa: print
-    except Exception as e:
-        print(f"❌ FAILED: Multimodal config - {e}")  # noqa: print
-        return False
-
-    # Test 9: NPU config (from utils/config_manager.py)
-    print("\n[TEST 9] NPU config consolidation...")  # noqa: print
-    try:
-        default_config = unified_config_manager._get_default_config()
-        npu = default_config.get("npu", {})
-        assert npu["enabled"] is False, "NPU should be disabled by default"
-        assert npu["device"] == "CPU", "Default device should be CPU"
-        assert npu["optimization_level"] == "PERFORMANCE"
-
-        print("✅ PASSED: NPU config properly consolidated")  # noqa: print
-    except Exception as e:
-        print(f"❌ FAILED: NPU config - {e}")  # noqa: print
-        return False
-
-    # Test 10: Security config (from utils/config_manager.py)
-    print("\n[TEST 10] Security config consolidation...")  # noqa: print
-    try:
-        default_config = unified_config_manager._get_default_config()
-        security = default_config.get("security", {})
-        assert security["enable_sandboxing"] is True
-        assert "rm -rf" in security["blocked_commands"]
-
-        print("✅ PASSED: Security config properly consolidated")  # noqa: print
-    except Exception as e:
-        print(f"❌ FAILED: Security config - {e}")  # noqa: print
-        return False
-
-    print("\n" + "=" * 80)  # noqa: print
-    print("ALL TESTS PASSED! ✅")  # noqa: print
-    print("=" * 80)  # noqa: print
-    return True
+EXPECTED_DEFAULT_SECTIONS = (
+    "backend",
+    "deployment",
+    "data",
+    "redis",
+    "memory",
+    "multimodal",
+    "npu",
+    "hardware",
+    "system",
+    "network",
+    "task_transport",
+    "security",
+    "ui",
+    "chat",
+    "logging",
+)
 
 
-if __name__ == "__main__":
-    success = asyncio.run(test_config_consolidation())
-    sys.exit(0 if success else 1)
+def test_basic_config_loading() -> None:
+    """``to_dict()`` returns the live, non-empty runtime config."""
+    config = unified_config_manager.to_dict()
+    assert isinstance(config, dict), "to_dict() should return a dictionary"
+    assert len(config) > 0, "the runtime config should not be empty"
+
+
+def test_default_config_completeness() -> None:
+    """Every section the rest of this module depends on is present."""
+    defaults = get_default_config()
+    missing = [section for section in EXPECTED_DEFAULT_SECTIONS if section not in defaults]
+    assert not missing, f"missing expected default sections: {missing}"
+
+
+def test_sensitive_data_filtering() -> None:
+    """Passwords and API keys are redacted; ordinary fields are untouched."""
+    test_data = {
+        "redis": {"host": "localhost", "password": "secret123", "port": 6379},
+        "api": {"endpoint": "http://api.example.com", "api_key": "key123"},
+    }
+    filtered = unified_config_manager._filter_sensitive_data(test_data)
+    assert filtered["redis"]["password"] == "***REDACTED***"
+    assert filtered["api"]["api_key"] == "***REDACTED***"
+    assert filtered["redis"]["host"] == "localhost"
+    assert filtered["redis"]["port"] == 6379
+
+
+@pytest.mark.asyncio
+async def test_async_config_operations(tmp_path, monkeypatch) -> None:
+    """Async save/load round-trips through disk without touching the repo.
+
+    ``ConfigManager.config_dir`` resolves from ``PATH.PROJECT_ROOT``, which is
+    this repo's root when tests run from it — the original body wrote a real
+    ``config/test.json`` at the repo root on every execution. `monkeypatch`
+    redirects it to `tmp_path` for the duration of this test only, restored
+    automatically afterward, so no state leaks to a sibling test (#13224's
+    class of defect).
+    """
+    monkeypatch.setattr(unified_config_manager, "config_dir", tmp_path)
+    loaded = await unified_config_manager.load_config_async("test", use_cache=False)
+    assert isinstance(loaded, dict), "async load should return a dictionary"
+
+    payload = {"test_key": "test_value", "timestamp": "2025-11-11"}
+    await unified_config_manager.save_config_async("test", payload)
+    reloaded = await unified_config_manager.load_config_async("test", use_cache=False)
+    assert reloaded.get("test_key") == "test_value", "saved data should be retrievable"
+
+
+def test_redis_cache_key_generation() -> None:
+    """The cache key carries the configured prefix and the config type."""
+    cache_key = unified_config_manager._get_redis_cache_key("test")
+    assert cache_key.startswith("config:"), "cache key should have the correct prefix"
+    assert "test" in cache_key, "cache key should contain the config type"
+
+
+def test_nested_config_access() -> None:
+    """``get_nested`` reaches a dict section and a leaf value."""
+    backend_config = unified_config_manager.get_nested("backend.llm", {})
+    assert isinstance(backend_config, dict), "nested config should be a dictionary"
+
+    redis_host = unified_config_manager.get_nested("redis.host", "default")
+    assert redis_host is not None, "should retrieve the nested Redis host"
+
+
+def test_environment_variable_overrides_apply_to_config(monkeypatch) -> None:
+    """``AUTOBOT_`` env vars land at the mapped path, converted to the right type.
+
+    The original check only printed whichever of three env vars happened to
+    be set in the OS environment and asserted nothing — the vacuous "return
+    True either way" shape this file exists to remove, just without the
+    swallow to hide it. `apply_env_overrides` is the real consumer.
+    """
+    monkeypatch.setenv("AUTOBOT_BACKEND_PORT", "9999")
+    overridden = apply_env_overrides({})
+    assert overridden == {"backend": {"server_port": 9999}}, (
+        "AUTOBOT_BACKEND_PORT should override backend.server_port as an int"
+    )
+
+
+def test_multimodal_config_consolidation() -> None:
+    """Vision/voice/context thresholds match the values #13207 actually set."""
+    multimodal = get_default_config()["multimodal"]
+    assert "vision" in multimodal
+    assert "voice" in multimodal
+    assert "context" in multimodal
+
+    assert multimodal["vision"]["confidence_threshold"] == 0.7
+    # 0.7, not the pre-#13207 0.8 this test used to assert — see module docstring.
+    assert multimodal["voice"]["confidence_threshold"] == 0.7
+    assert multimodal["context"]["decision_threshold"] == 0.9
+
+
+def test_npu_config_consolidation() -> None:
+    """NPU defaults come up disabled, on CPU, at max optimization."""
+    npu = get_default_config()["npu"]
+    assert npu["enabled"] is False, "NPU should be disabled by default"
+    assert npu["device"] == "CPU", "default device should be CPU"
+    assert npu["optimization_level"] == "PERFORMANCE"
+
+
+def test_security_config_consolidation() -> None:
+    """Sandboxing is on and destructive commands are blocked by default."""
+    security = get_default_config()["security"]
+    assert security["enable_sandboxing"] is True
+    assert "rm -rf" in security["blocked_commands"]
