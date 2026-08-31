@@ -147,17 +147,33 @@ def test_the_sweep_actually_reached_the_hook_directories() -> None:
         "no longer reaching the hook directories"
     )
     # Floors sit AT the measured count rather than below it for headroom, so a
-    # retired hook has to come here and say so. #15127 is the first change to
-    # come here and say so: it retired utilities/ollama_thread_utility.sh (its
-    # only setting is owned by the Ansible llm role's unit template, and it
-    # could not run from any directory) together with the companion
-    # utilities/ollama.service.new that nothing else named. Both sat under
-    # utilities/, so _MODES and _UTILITIES each drop by two; only the .sh of the
-    # pair carries a shebang, so _SHEBANGED drops by one; both have a suffix, so
-    # the extensionless count is unchanged. Measured on this branch:
-    # 125 tracked (79 of them under utilities/), 46 shebanged and read as a
-    # claim, 22 of those extensionless.
-    assert len(_SHEBANGED) >= 46, (
+    # retired hook has to come here and say so. #15127's first change did
+    # exactly that: it retired utilities/ollama_thread_utility.sh together with
+    # the companion utilities/ollama.service.new that nothing else named, and
+    # dropped both floors by their exact delta (see git blame for that count).
+    #
+    # #15127's later batch retired eleven more unreferenced infrastructure
+    # scripts, two of them under utilities/: batch-configure-vms.sh (its three
+    # subcommands are superseded by real Ansible playbooks) and
+    # complete-vm-sync-templates.sh (named paths that no longer exist and
+    # duplicated tools the project's own single-frontend ADR names as the real
+    # ones). That dropped _SHEBANGED to 45 (floor 46) and _UTILITIES to 77
+    # (floor 79), both below floor, and both had to be fixed in the same PR
+    # that dropped them — a stale floor here isn't a free pass, it's a reach
+    # guard that would otherwise let every assertion below it pass vacuously.
+    #
+    # Floor-at-exact-count taught the wrong lesson at PR-review time: lowering
+    # it to the new exact count again would go red on the very next legitimate
+    # retirement and teach whoever hits that to lower it again without
+    # thinking, rather than to look at what dropped and why. So these two
+    # floors now sit with real headroom instead of sitting at the measured
+    # count — small enough that a reader regression (which drops the count
+    # toward zero) or a directory falling out of _HOOK_DIRS (which drops
+    # _UTILITIES to zero, #15264) still trips them, large enough that the next
+    # single small retirement doesn't. Measured on this branch after #15127:
+    # 125 tracked (77 of them under utilities/), 45 shebanged and read as a
+    # claim, 23 of those extensionless.
+    assert len(_SHEBANGED) >= 40, (
         f"only {len(_SHEBANGED)} files declare a shebang read as a claim — the "
         "reader has regressed and every assertion below would pass having "
         "checked nothing"
@@ -171,7 +187,7 @@ def test_the_sweep_actually_reached_the_hook_directories() -> None:
         "narrowed to files with a suffix, which is exactly the gap #14891 closed"
     )
 
-    assert len(_UTILITIES) >= 79, (
+    assert len(_UTILITIES) >= 70, (
         f"only {len(_UTILITIES)} tracked files found under "
         f"{_PY_SHEBANG_NOT_A_CLAIM_UNDER!r} — the walk has stopped reaching "
         "utilities/, which is exactly where #15253's 22 stale modes lived (#15264)"

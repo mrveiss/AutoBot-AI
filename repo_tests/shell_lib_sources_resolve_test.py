@@ -287,10 +287,11 @@ def test_the_sweep_actually_reached_the_tree() -> None:
     # the distinct-script floor below: this stays AT the current count so it still
     # catches a regressed matcher, and each legitimate retirement comes here and
     # says which script it removed.
-    assert len(_SITES) >= 77, (
-        f"only found {len(_SITES)} lib source sites — expected >= 77 "
+    assert len(_SITES) >= 76, (
+        f"only found {len(_SITES)} lib source sites — expected >= 76 "
         "(#14041 enumerated 56 scripts; #14891 added 17 sites in 16 extensionless "
-        "hooks; #15127 retired one); the matcher has regressed"
+        "hooks; #15127 retired batch-configure-vms.sh and "
+        "complete-vm-sync-templates.sh, a measured delta of 1); the matcher has regressed"
     )
     rels = {site.rel for site in _SITES}
     # 55, not 56: #14371 retired
@@ -305,7 +306,13 @@ def test_the_sweep_actually_reached_the_tree() -> None:
     # assertion above it fails first and ends the function — a reminder that a
     # single red line in a multi-assert test is a floor, not a census of what
     # broke.
-    assert len(rels) >= 70, f"only {len(rels)} distinct scripts"
+    #
+    # 69, not 70: #15127's later batch retired batch-configure-vms.sh and
+    # complete-vm-sync-templates.sh. This happened again exactly as the note
+    # above predicts — CI reported only the site-count floor, and this one
+    # surfaced from the pre-push hook after that was fixed. When lowering one
+    # floor here, re-run the whole function rather than the failing line.
+    assert len(rels) >= 69, f"only {len(rels)} distinct scripts"
     assert (
         "autobot-infrastructure/shared/scripts/vm-management/status-all-vms.sh" in rels
     ), "the walk no longer reaches a known call site"
@@ -369,7 +376,7 @@ def test_every_lib_source_resolves_to_a_real_file() -> None:
 
     # 72, not 73: the one lib source site #15127 retired with
     # sync-grafana-dashboards.sh. Non-vacuity floor, not a census.
-    assert checked >= 72, (
+    assert checked >= 71, (
         f"only resolved {checked} source sites — the expander has regressed and "
         "this test would pass having checked almost nothing"
     )
@@ -406,7 +413,7 @@ def test_a_missing_lib_is_never_swallowed() -> None:
     """The `|| true` shape that made #14041 invisible may not come back (#14172)."""
     offenders, checked = _shape_offenders()
     # 72, not 73: see the site-count note in test_the_sweep_actually_reached_the_tree (#15127).
-    assert checked >= 72, f"only checked {checked} sites — this would pass vacuously"
+    assert checked >= 71, f"only checked {checked} sites — this would pass vacuously"
     assert not offenders, (
         "a lib bootstrap whose failure is discarded turns a deployment error "
         "into a wrong-value-at-runtime. The final attempt in the chain must keep "
@@ -474,7 +481,7 @@ def test_the_non_blocking_category_is_earned_and_bounded() -> None:
     """
     decisive = [s for s in _SITES if s.is_last]
     # 72, not 73: see the site-count note in test_the_sweep_actually_reached_the_tree (#15127).
-    assert len(decisive) >= 72, f"only {len(decisive)} decisive sites — vacuous"
+    assert len(decisive) >= 71, f"only {len(decisive)} decisive sites — vacuous"
 
     non_blocking = [s for s in decisive if _classify(s) == "non-blocking"]
     assert non_blocking, (
