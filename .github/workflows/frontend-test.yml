@@ -1,5 +1,7 @@
 # Frontend Testing Suite workflow
-# Uses self-hosted runner to avoid GitHub Actions quota limits
+# Runs on ubuntu-latest (#15395). It used self-hosted runners until that issue
+# found nothing in CI needed the hardware -- and that three required contexts
+# were hostage to a two-machine pool.
 
 name: Frontend Testing Suite
 
@@ -43,7 +45,7 @@ on:
     # required is the separate owner-confirmed follow-up (#10022).
     branches: [main, develop, 'Dev_*']
 
-# Only the heavy, self-hosted half of the frontend CI lives in this workflow, so
+# Only the heavy half of the frontend CI lives in this workflow, so
 # superseding a predecessor is the right default: the runner is a singleton and
 # re-testing a stale head wastes the only machine that can test the new one.
 #
