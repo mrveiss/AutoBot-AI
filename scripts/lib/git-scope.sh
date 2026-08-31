@@ -13,9 +13,11 @@
 # and scripts/verify-done.sh. All of them encode the same hard-won rules, so the
 # next correction had to be applied five times or the copies drifted.
 #
-# Source this file -- do not execute it:
+# Source this file -- do not execute it. Resolve it from your own location
+# (${BASH_SOURCE[0]}), not via `git rev-parse` -- an ambient GIT_DIR makes
+# that answer the caller's CWD instead of the repository root (#15245):
 #
-#     source "$(git rev-parse --show-toplevel)/scripts/lib/git-scope.sh"
+#     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../scripts/lib/git-scope.sh"
 #
 # THE RULES, and what each one cost to learn
 # ------------------------------------------

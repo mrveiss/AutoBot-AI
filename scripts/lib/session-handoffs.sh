@@ -16,8 +16,10 @@
 # describes work that did not land, and is reported for a human to turn into an
 # issue -- never deleted.
 #
-# Source this file -- do not execute it:
-#     source "$(git rev-parse --show-toplevel)/scripts/lib/session-handoffs.sh"
+# Source this file -- do not execute it. Resolve it from your own location
+# (${BASH_SOURCE[0]}), not via `git rev-parse` -- an ambient GIT_DIR makes
+# that answer the caller's CWD instead of the repository root (#15245):
+#     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../scripts/lib/session-handoffs.sh"
 
 # Branch name a handoff file belongs to: `HANDOFF-issue-1234.md` -> `issue-1234`.
 handoff_branch_name() {
