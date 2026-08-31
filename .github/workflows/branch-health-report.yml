@@ -2,10 +2,17 @@
 #
 # This workflow generates a comprehensive report on branch health metrics:
 # - Total branches (local/remote)
-# - Merged vs. active branches
+# - Landed vs. unproven branches
 # - Stale branches
 # - Worktree status
 # - Recommendations
+#
+# WHY NOT `git branch --merged` (#15036). This repository squash-merges, so the
+# base branch is never a descendant of a merged branch's commits. `--merged`
+# (and `--is-ancestor`) therefore report ~0 merged branches no matter how much
+# has landed, and the "merged branches to clean up" recommendation built on it
+# was never actionable. The landed/unproven split below uses
+# `branch_landing_evidence` from scripts/lib/branch-guards.sh instead.
 #
 # Reports via GitHub Issue for visibility and historical tracking.
 #
@@ -29,6 +36,8 @@ jobs:
     permissions:
       contents: read
       issues: write
+      # branch_landing_evidence asks whether a merged PR had this branch as its head.
+      pull-requests: read
 
     steps:
       - name: Checkout repository
@@ -43,24 +52,43 @@ jobs:
       - name: Collect metrics
         id: metrics
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # Relative to the checkout, as branch-cleanup.yml does: asking git for
+          # the toplevel is the unscrubbed-GIT_DIR hazard of #15176/#15245.
+          # shellcheck source=scripts/lib/branch-guards.sh
+          source scripts/lib/branch-guards.sh
+
+          # The PR base for this repository, which is not the GitHub default branch.
+          BASE_REF=origin/Dev_new_gui
+
           # Count branches
           total_local=$(git branch | wc -l)
-          total_remote=$(git branch -r | wc -l)
+          # refs/remotes/origin only, matching the classification loop below --
+          # `git branch -r` spans every configured remote, so the two would
+          # otherwise report over different populations.
+          total_remote=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ | wc -l)
 
-          # Count merged branches
-          merged_count=$(git branch -r --merged origin/Dev_new_gui \
-            | grep -cv "HEAD\|main\|master\|Dev_new_gui")
-
-          # Count stale branches (30+ days)
+          # Count stale branches (30+ days), and split every candidate by
+          # landing evidence rather than by ancestry (#15036).
           DAYS_STALE=30
           CUTOFF_DATE=$(date -d "$DAYS_STALE days ago" +%s)
           stale_count=0
+          landed_count=0
+          archival_count=0
+          unproven_count=0
 
-          all_branches=$(git branch -r \
-            | sed 's|^ *origin/||' \
-            | grep -v "HEAD\|main\|master\|Dev_new_gui" || true)
+          # ONLY refs/remotes/origin. `git branch -r` spans every configured
+          # remote, and stripping just the `origin/` prefix left another
+          # remote's branch named `<remote>/<branch>`, which the sweep then
+          # re-prefixed to the unresolvable `origin/<remote>/<branch>`. Every
+          # git question about it failed, and the branch was classified from
+          # those failures rather than skipped.
+          all_branches=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
+            | sed 's|^origin/||' \
+            | grep -vx "HEAD\|main\|master\|Dev_new_gui" || true)
 
           while IFS= read -r branch; do
             [ -z "$branch" ] && continue
@@ -68,7 +96,21 @@ jobs:
             if [ "$last_commit_ts" -lt "$CUTOFF_DATE" ]; then
               stale_count=$((stale_count + 1))
             fi
+            evidence=$(branch_landing_evidence "$BASE_REF" "$branch" "origin/$branch")
+            case "${evidence%%|*}" in
+              landed)   landed_count=$((landed_count + 1)) ;;
+              archival) archival_count=$((archival_count + 1)) ;;
+              *)        unproven_count=$((unproven_count + 1)) ;;
+            esac
           done <<< "$all_branches"
+
+          # VACUITY FLOOR, and it FAILS rather than warns. Without it a broken
+          # enumeration publishes a report reading "0 landed, 0 archival,
+          # 0 unproven" -- which is not "no problems found", it is "nothing was
+          # looked at", and the two are indistinguishable in the issue body.
+          # `set -e` is on, so this aborts the job.
+          classified=$((landed_count + archival_count + unproven_count))
+          branch_sweep_assert_reach "$classified" "branch-health-report"
 
           # Count worktrees
           worktree_count=0
@@ -91,7 +133,9 @@ jobs:
           {
             echo "total_local=$total_local"
             echo "total_remote=$total_remote"
-            echo "merged=$merged_count"
+            echo "landed=$landed_count"
+            echo "archival=$archival_count"
+            echo "unproven=$unproven_count"
             echo "stale=$stale_count"
             echo "worktrees=$worktree_count"
             echo "open_prs=$open_prs"
@@ -103,7 +147,9 @@ jobs:
         env:
           TOTAL_LOCAL: ${{ steps.metrics.outputs.total_local }}
           TOTAL_REMOTE: ${{ steps.metrics.outputs.total_remote }}
-          MERGED: ${{ steps.metrics.outputs.merged }}
+          LANDED: ${{ steps.metrics.outputs.landed }}
+          ARCHIVAL: ${{ steps.metrics.outputs.archival }}
+          UNPROVEN: ${{ steps.metrics.outputs.unproven }}
           STALE: ${{ steps.metrics.outputs.stale }}
           WORKTREES: ${{ steps.metrics.outputs.worktrees }}
           OPEN_PRS: ${{ steps.metrics.outputs.open_prs }}
@@ -113,7 +159,9 @@ jobs:
           script: |
             const totalLocal = process.env.TOTAL_LOCAL;
             const totalRemote = process.env.TOTAL_REMOTE;
-            const merged = process.env.MERGED;
+            const landed = process.env.LANDED;
+            const archival = process.env.ARCHIVAL;
+            const unproven = process.env.UNPROVEN;
             const stale = process.env.STALE;
             const worktrees = process.env.WORKTREES;
             const openPrs = process.env.OPEN_PRS;
@@ -136,7 +184,9 @@ jobs:
               '|--------|-------|\n' +
               '| Local branches | ' + totalLocal + ' |\n' +
               '| Remote branches | ' + totalRemote + ' |\n' +
-              '| Merged branches | ' + merged + ' |\n' +
+              '| Landed (merged PR, or base carries its issue) | ' + landed + ' |\n' +
+              '| Archival (rescued/, release/changelog-) | ' + archival + ' |\n' +
+              '| Unproven landing | ' + unproven + ' |\n' +
               '| Stale branches (30+ days) | ' + stale + ' |\n' +
               '| Active worktrees | ' + worktrees + ' |\n' +
               '| Open PRs | ' + openPrs + ' |\n' +
@@ -146,11 +196,15 @@ jobs:
               '\n' +
               'Active development: ' + openPrs + ' open PRs, ' + openIssues + ' open issues\n' +
               '\n' +
-              'Branch cleanup: ' + merged + ' merged, ' + stale + ' stale\n' +
+              'Branch cleanup: ' + landed + ' landed, ' + unproven + ' unproven, ' + stale + ' stale\n' +
+              '\n' +
+              'Landing is decided by merged-PR head ref, or by a commit on the base carrying the\n' +
+              'branch\'s `(#issue)`. It is NOT decided by ancestry: this repository squash-merges,\n' +
+              'so `git branch --merged` is false for every branch it has ever merged (#15036).\n' +
               '\n' +
               '### Recommendations\n' +
               '\n' +
-              '1. Review ' + merged + ' merged branches for cleanup\n' +
+              '1. Read the ' + unproven + ' unproven branches against base and record a verdict each\n' +
               '2. Investigate ' + stale + ' stale branches\n' +
               '3. Manage ' + worktrees + ' active worktrees\n' +
               '4. Address ' + openPrs + ' open PRs\n' +
@@ -174,7 +228,8 @@ jobs:
         env:
           TOTAL_LOCAL: ${{ steps.metrics.outputs.total_local }}
           TOTAL_REMOTE: ${{ steps.metrics.outputs.total_remote }}
-          MERGED: ${{ steps.metrics.outputs.merged }}
+          LANDED: ${{ steps.metrics.outputs.landed }}
+          UNPROVEN: ${{ steps.metrics.outputs.unproven }}
           STALE: ${{ steps.metrics.outputs.stale }}
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
@@ -183,7 +238,8 @@ jobs:
           **Summary:**
           - Total local branches: $TOTAL_LOCAL
           - Total remote branches: $TOTAL_REMOTE
-          - Merged branches: $MERGED
+          - Landed branches: $LANDED
+          - Unproven landing: $UNPROVEN
           - Stale branches: $STALE
 
           See generated GitHub Issue for full details.
