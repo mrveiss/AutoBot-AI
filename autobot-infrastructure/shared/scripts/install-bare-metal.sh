@@ -382,7 +382,13 @@ Group=${AUTOBOT_GROUP}
 WorkingDirectory=${chromadb_dir}
 Environment="PYTHONUNBUFFERED=1"
 Environment="ANONYMIZED_TELEMETRY=FALSE"
-EnvironmentFile=-${INSTALL_DIR}/.env
+# #14100 / #12513: no \`-\` prefix, on purpose. The optional form is why a
+# missing credential file produced a running-but-unauthenticated chroma instead
+# of a unit that refuses to start. The installer writes this file itself
+# (write_env_file), so a missing one means the install did not complete and
+# starting anyway is the wrong answer. Both ansible templates are already
+# mandatory; this was the last optional writer of the same unit path.
+EnvironmentFile=${INSTALL_DIR}/.env
 ExecStart=${venv_dir}/bin/chroma run \\
     --host 127.0.0.1 \\
     --port ${CHROMADB_PORT} \\
@@ -591,6 +597,15 @@ create_systemd_service() {
 Description=AutoBot ${service_name}
 After=network.target redis-server.service
 Wants=redis-server.service
+# #14100 / #4090: every unit this factory emits sets Restart=on-failure with
+# RestartSec=10 below, so without a start limit a unit whose ExecStart can never
+# succeed restarts forever, never reaches \`failed\`, and never appears in
+# \`systemctl --failed\` - the #4090 outage shape, invisible. systemd\'s defaults
+# cannot catch it: DefaultStartLimitIntervalSec=10s with burst 5 needs five
+# restarts inside ten seconds while RestartSec spaces them ten apart. The
+# window must exceed RestartSec * StartLimitBurst to be reachable at all.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
