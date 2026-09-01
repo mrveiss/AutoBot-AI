@@ -54,6 +54,7 @@ asserted is the direction of the number, not its absolute truth.
 from __future__ import annotations
 
 import collections
+import functools
 import re
 from pathlib import Path
 
@@ -202,7 +203,14 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+@functools.lru_cache(maxsize=1)
 def _measure() -> dict[str, int]:
+    """Cached: 52 parametrised cases would otherwise each rescan ~1100 files.
+
+    Without this the suite walks the frontend once per test and the whole file
+    takes minutes — the pre-push hook timed out at 120s on the uncached
+    version. The tree does not change during a run, so one scan is correct.
+    """
     button_files = 0
     button_names: set[str] = set()
     zindex = 0
