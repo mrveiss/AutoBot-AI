@@ -770,6 +770,18 @@ repos:
         stages: [pre-commit]
         description: "Blocks new ad-hoc *Status(Enum) declarations outside autobot_shared/status_enums.py; lifecycle-shaped enums must use canonical TaskStatus/JobStatus/WorkflowStatus aliases"
 
+  # No cross-GUI duplicate composable/type outside the shared kit (Issues #14907, #14908)
+  - repo: local
+    hooks:
+      - id: no-cross-gui-duplicate
+        name: 'No Cross-GUI Duplicate Composable/Type Outside @autobot/ui (Issues #14907, #14908)'
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-cross-gui-duplicate
+        language: python
+        types_or: [ts, vue]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks a composable filename or a utils/types export name declared in both autobot-frontend and autobot-slm-frontend without going through libs/autobot-ui"
+
   # Lint GitHub Actions workflow files with actionlint (Issue #7083)
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
