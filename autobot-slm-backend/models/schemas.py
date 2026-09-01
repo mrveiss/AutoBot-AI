@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+
 from .database import BackupServiceType, NodeStatus
 
 # =============================================================================
@@ -457,28 +458,6 @@ class RoleListResponse(BaseModel):
 # =============================================================================
 # Health Schemas
 # =============================================================================
-
-
-class HealthResponse(BaseModel):
-    """Health check response."""
-
-    status: str
-    version: str
-    uptime_seconds: float
-    database: str
-    # #15462: the served UI was not represented here either. `/slm/` answered
-    # 403 for hours — no index.html in the build output — while this response
-    # said "healthy", because every field described a process and none
-    # described the artifact a user actually loads. Same defect shape as the
-    # Redis omission below, one layer further out.
-    frontend: str = "unknown"
-    # #14299: Redis was never part of this response — a backend with an open
-    # circuit breaker on its main database still reported itself healthy, as
-    # long as Postgres answered. Required (not Optional): the single caller
-    # (api/health.py::health_check) always sets it.
-    redis: str
-    nodes_online: int
-    nodes_total: int
 
 
 class SystemMetrics(BaseModel):

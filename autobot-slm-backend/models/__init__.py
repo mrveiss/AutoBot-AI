@@ -20,13 +20,13 @@ from .database import (
     NodeStatus,
     Setting,
 )
+from .schemas_health import HealthResponse
 from .schemas import (
     BackupCreate,
     BackupResponse,
     DeploymentCreate,
     DeploymentListResponse,
     DeploymentResponse,
-    HealthResponse,
     HeartbeatRequest,
     NodeCreate,
     NodeListResponse,

@@ -468,7 +468,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/api/updates.py": 1129,
     "autobot-slm-backend/main.py": 796,
     "autobot-slm-backend/models/database.py": 1234,
-    "autobot-slm-backend/models/schemas.py": 2351,
+    "autobot-slm-backend/models/schemas.py": 2337,
     "autobot-slm-backend/monitoring/advanced_apm_system.py": 877,
     "autobot-slm-backend/monitoring/ai_performance_analytics.py": 830,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,

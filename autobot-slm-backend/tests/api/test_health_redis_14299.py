@@ -43,7 +43,11 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 # models.database still stubbed makes that annotation a MagicMock, and
 # pydantic cannot build a validator for it. Both must be real together,
 # exactly like tests/api/test_drift_resolve.py's swap list.
-_SWAP_KEYS = ("models.database", "models.schemas")
+# #15462: `models.schemas` re-exports HealthResponse from `models.schemas_health`
+# (the response outgrew its file's size ceiling), so the sibling must be loaded
+# as a real module here too — with `models` stubbed, neither a relative nor an
+# absolute import of it can resolve on its own.
+_SWAP_KEYS = ("models.database", "models.schemas", "models.schemas_health")
 
 
 def _is_swap_key(name: str) -> bool:
@@ -66,6 +70,7 @@ try:
         importlib.import_module(_name)
 
     _load_real_module("models.database", _BACKEND_ROOT / "models" / "database.py")
+    _load_real_module("models.schemas_health", _BACKEND_ROOT / "models" / "schemas_health.py")
     _load_real_module("models.schemas", _BACKEND_ROOT / "models" / "schemas.py")
 
     _health_spec = importlib.util.spec_from_file_location("_health_redis_test", _BACKEND_ROOT / "api" / "health.py")

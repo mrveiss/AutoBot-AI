@@ -17,7 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from models.database import Node, NodeStatus
-from models.schemas import HealthResponse, SystemMetrics
+from models.schemas import SystemMetrics
+from models.schemas_health import HealthResponse
 from services.auth import get_current_user
 from services.database import get_db
 from services.frontend_bundle_health import frontend_bundle_status
