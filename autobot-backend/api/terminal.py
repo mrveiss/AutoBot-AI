@@ -161,6 +161,7 @@ from autobot_shared.status_enums import CommandRisk
 from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 from security.session_ownership import build_owner_metadata
+from services.agent_terminal.utils import command_assessment_payload
 from services.simple_pty import simple_pty_manager
 
 # Import terminal secrets service for SSH key integration (Issue #211)
@@ -561,14 +562,8 @@ async def execute_single_command(
     # Log command execution attempt
     logger.info(f"Single command execution: {request.command} (risk: {risk_level.value})")
 
-    # For now, return the assessment (actual execution would need subprocess)
-    return {
-        "command": request.command,
-        "risk_level": risk_level.value,
-        "status": "assessed",
-        "message": f"Command assessed as {risk_level.value} risk",
-        "requires_confirmation": risk_level != CommandRisk.SAFE,
-    }
+    # #14992: the log line above keeps the raw member deliberately.
+    return command_assessment_payload(request.command, risk_level)
 
 
 @admin_router.post("/sessions/{session_id}/input", response_model=TerminalInputResponse)
