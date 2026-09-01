@@ -13,6 +13,16 @@ not an option. Re-dispatching is: a re-run turns an infrastructure conclusion
 back into a pending check, and red goes back to meaning "something executed and
 failed".
 
+WHY THIS SWEEPS OPEN PULL REQUESTS RATHER THAN ONE SHA. The workflow step that
+drives this tool fires on ``schedule``/``push``/``workflow_dispatch`` -- never
+on ``pull_request``, where a PR's own unreviewed copy of this file would be
+executing with `actions: write` -- and none of those events carries a pull
+request in their payload. A single ``--sha`` therefore had nothing to resolve
+to but the base branch tip, which is never the head a real PR is red on. The
+sibling ``ci_dispatch_watchdog.py --check dispatch`` sweep already solves this
+the same way: list every open pull request against the base branch and act on
+each head. This module follows that pattern instead of inventing a second one.
+
 WHY THIS IS A SEPARATE MODULE FROM ci_red_cause.py. That module states, and
 depends on, never writing anything back -- which is why the workflow can run it
 BEFORE the self-modification guard, where a pull request's own copy of the code
@@ -27,7 +37,9 @@ guessing:
 
   * unknown rate-limit budget is treated as no budget, never as headroom
   * an in-progress count at the ceiling stops the sweep entirely
-  * the per-sweep budget is small and fixed, not per-pull-request
+  * the re-run budget is small, fixed, and spent ACROSS THE WHOLE SWEEP -- not
+    reset per pull request, which is exactly how sweeping N PRs instead of one
+    sha would turn a single outage into a rate-limit exhaustion
   * a run that has already been re-dispatched keeps its red
 
 That last one matters most: a SECOND non-dispatch is a capacity or configuration
@@ -40,10 +52,14 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from ci_dispatch_watchdog import (  # noqa: E402
+    DEFAULT_BASE_BRANCH,
+    collect_heads,
+)
 from ci_red_cause import (  # noqa: E402
     INFRASTRUCTURE_CAUSES,
     build_api,
@@ -157,71 +173,100 @@ def retry_candidates(report: Any) -> List[Any]:
             if red.cause in INFRASTRUCTURE_CAUSES and red.job_id]
 
 
-def redispatch(api: Any, candidates: Sequence[Any], limits: Dict[str, int],
+class PrCandidate(NamedTuple):
+    """One infrastructure-caused red, tagged with the pull request it came from."""
+
+    pr_number: int
+    red: Any
+
+
+def collect_candidates(api: Any, heads: Sequence[Any]) -> List[PrCandidate]:
+    """Classify every open PR head and flatten to infrastructure-caused reds.
+
+    Head order in, head order out: the per-sweep budget in :func:`redispatch`
+    is spent walking this list, so the order here is the order PRs get a
+    re-dispatch before the budget runs out.
+    """
+    candidates: List[PrCandidate] = []
+    for head in heads:
+        report = classify_commit(api, head.sha)
+        candidates.extend(PrCandidate(head.number, red) for red in retry_candidates(report))
+    return candidates
+
+
+def redispatch(api: Any, candidates: Sequence[PrCandidate], limits: Dict[str, int],
                dry_run: bool) -> Tuple[int, List[str]]:
-    """Re-dispatch up to the sweep budget. Returns ``(count, lines)``."""
+    """Re-dispatch up to the sweep budget, spent across ALL candidates -- not
+    reset per pull request. Returns ``(count, lines)``."""
     lines: List[str] = []
     done = 0
-    for red in candidates:
+    for item in candidates:
+        pr, red = item.pr_number, item.red
         if done >= limits["max_reruns"]:
-            lines.append(f"  budget spent ({limits['max_reruns']}) — {red.check_name} left red")
+            lines.append(f"  budget spent ({limits['max_reruns']}) — PR #{pr} {red.check_name} left red")
             break
         run_id, attempt = job_run_context(api, red.job_id)
         if run_id is None:
-            lines.append(f"  {red.check_name}: could not resolve its run — left red")
+            lines.append(f"  PR #{pr} {red.check_name}: could not resolve its run — left red")
             continue
         if attempt >= limits["max_attempts"]:
-            lines.append(f"  {red.check_name}: attempt {attempt} — a repeat is not transient, left red")
+            lines.append(f"  PR #{pr} {red.check_name}: attempt {attempt} — a repeat is not transient, left red")
             continue
         if dry_run:
-            lines.append(f"  would re-dispatch {red.check_name} (run {run_id}, attempt {attempt}, {red.cause})")
+            lines.append(f"  would re-dispatch PR #{pr} {red.check_name} (run {run_id}, attempt {attempt}, {red.cause})")
             done += 1
             continue
         status, message = rerun_run(api, run_id)
         if 200 <= status < 300:
-            lines.append(f"  re-dispatched {red.check_name} (run {run_id}, was {red.cause})")
+            lines.append(f"  re-dispatched PR #{pr} {red.check_name} (run {run_id}, was {red.cause})")
             done += 1
         else:
-            lines.append(f"  {red.check_name}: re-run refused ({status}) {message}".rstrip())
+            lines.append(f"  PR #{pr} {red.check_name}: re-run refused ({status}) {message}".rstrip())
     return done, lines
 
 
-def run(sha: str, dry_run: bool) -> int:
-    api = build_api()
-    limits = {
+def _sweep_limits() -> Dict[str, int]:
+    return {
         "ceiling": _env_int("CI_RETRY_CAPACITY_CEILING", DEFAULT_CAPACITY_CEILING),
         "max_reruns": _env_int("CI_RETRY_MAX_RERUNS", DEFAULT_MAX_RERUNS),
         "max_attempts": _env_int("CI_RETRY_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS),
         "reserve": _env_int("CI_RETRY_RATE_RESERVE", DEFAULT_RATE_RESERVE),
     }
-    _emit(f"ci-dispatch-retry: {sha}")
 
+
+def run(dry_run: bool, base_branch: str = DEFAULT_BASE_BRANCH) -> int:
+    api = build_api()
+    limits = _sweep_limits()
+    _emit(f"ci-dispatch-retry: sweeping open PRs targeting {base_branch}")
     blocked = budget_blocked(api, limits["reserve"]) or capacity_blocked(api, limits["ceiling"])
     if blocked:
         _emit(f"  holding off — {blocked}")
         _emit("  nothing re-dispatched; the reds stand and stay visible.")
         return 0
-
-    report = classify_commit(api, sha)
-    candidates = retry_candidates(report)
-    if not candidates:
-        _emit(f"  {len(report.reds)} red check(s), none infrastructure-caused — nothing to re-dispatch.")
+    heads = collect_heads(api.open_pull_requests(base_branch), api.repository)
+    if not heads:
+        _emit(f"  no open PRs targeting {base_branch} — nothing to sweep.")
         return 0
-
+    candidates = collect_candidates(api, heads)
+    if not candidates:
+        _emit(f"  {len(heads)} open PR(s) swept, none carrying infrastructure-caused reds.")
+        return 0
     done, lines = redispatch(api, candidates, limits, dry_run)
     for line in lines:
         _emit(line)
-    _emit(f"  {done} of {len(candidates)} infrastructure-caused red(s) re-dispatched.")
+    _emit(f"  {done} of {len(candidates)} infrastructure-caused red(s) re-dispatched across {len(heads)} PR(s).")
     return 0
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Re-dispatch infrastructure-caused red checks (#15139)")
-    parser.add_argument("--sha", required=True, help="head commit to sweep")
+    parser = argparse.ArgumentParser(description="Re-dispatch infrastructure-caused red checks across open PRs (#15139)")
+    parser.add_argument("--base", default=None,
+                         help="PR base branch to sweep (default: $WATCHDOG_BASE_BRANCH or Dev_new_gui)")
     parser.add_argument("--dry-run", action="store_true", help="classify and report, re-dispatch nothing")
     args = parser.parse_args(argv)
+    base_branch = args.base or os.environ.get("WATCHDOG_BASE_BRANCH", "").strip() or DEFAULT_BASE_BRANCH
     try:
-        return run(args.sha, args.dry_run)
+        return run(args.dry_run, base_branch)
     except Exception as exc:  # noqa: BLE001 - a watchdog must not take the sweep down
         _emit(f"ci-dispatch-retry: could not complete — {exc}")
         return 0
