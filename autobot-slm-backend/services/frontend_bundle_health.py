@@ -25,14 +25,13 @@ nginx needs: a directory containing an `index.html` with content in it.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional
-
 # stdlib logging, not autobot_shared.logging_manager: this package's test
 # harness mocks the config that LoggingManager reads at import time, so the
 # managed logger raises during collection. Same reason api/health.py next door
 # uses stdlib, and the exception CLAUDE.md records for config-mocking harnesses.
 import logging
+from pathlib import Path
+from typing import Optional
 
 from autobot_shared.ssot_config import config
 
