@@ -54,7 +54,7 @@ from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.status_enums import SecretType
 from autobot_shared.time_utils import parse_utc_iso
 from middleware.proxy_utils import get_client_ip
-from security.secrets_store_errors import SecretsStoreUnavailable
+from security.secrets_store_reader import load_secrets_json
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 from services.json_secrets_read import load_imported_json_secret
 from services.provider_key_vault import mirror_provider_key_best_effort
@@ -222,28 +222,12 @@ class SecretsManager:
                 # Return deep copy to prevent race conditions
                 return deepcopy(self._secrets_cache)
 
-            # Cache miss or invalidated - reload from disk
-            try:
-                with open(self.secrets_file, "r", encoding="utf-8") as f:
-                    self._secrets_cache = json.load(f)
-                    self._cache_mtime = current_mtime
-                    return deepcopy(self._secrets_cache)
-            except FileNotFoundError:
-                # Raced against a delete between the exists() check above and
-                # the open(). An absent store is a legitimate fresh install.
-                self._secrets_cache = {}
-                self._cache_mtime = None
-                return deepcopy(self._secrets_cache)
-            except json.JSONDecodeError as e:
-                # #14126: corruption used to land here too and return {} - the
-                # same "a broken store reads as no configuration" defect this
-                # issue is about, one layer below the callers it was found in.
-                # Two consequences, and the second is worse than the first:
-                # every caller saw an empty, healthy-looking store; and the
-                # next `_save_secrets` would write that {} over the file,
-                # turning a recoverable parse error into permanent data loss.
-                logger.error("Secrets file is not valid JSON: %s", e)
-                raise SecretsStoreUnavailable("secrets file is not valid JSON") from e
+            # Cache miss or invalidated - reload from disk. #14126: absence and
+            # corruption are different answers; see security/secrets_store_reader.
+            loaded = load_secrets_json(self.secrets_file)
+            self._secrets_cache = {} if loaded is None else loaded
+            self._cache_mtime = None if loaded is None else current_mtime
+            return deepcopy(self._secrets_cache)
 
     def _save_secrets(self, secrets: Dict[str, Dict]):
         """
