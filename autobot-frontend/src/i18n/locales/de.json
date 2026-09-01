@@ -8619,6 +8619,12 @@
       "saving": "Wird gespeichert…",
       "save": "Speichern",
       "contactSaveError": "Der Kontakt konnte nicht gespeichert werden."
+    },
+    "board": {
+      "loadFailed": "Dieses Board konnte nicht geladen werden",
+      "retry": "Erneut versuchen",
+      "loadingItem": "Arbeitselement wird geladen…",
+      "itemLoadFailed": "Dieses Arbeitselement konnte nicht geladen werden"
     }
   },
   "code": {

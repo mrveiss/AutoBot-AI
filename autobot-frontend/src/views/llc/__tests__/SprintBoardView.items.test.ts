@@ -94,9 +94,34 @@ const BOARD_RESPONSE = {
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
+// GH#14074: the view now fetches the sprint and its burndown from the endpoints
+// that actually serve them, keyed off the board's `sprint_id`. Shapes copied
+// from the backend rather than invented — `sprint_planning.get_burndown`
+// returns `series` (not `points`), and each entry is
+// `{"date": <iso string>, "remaining": <int>}` (not `{ day: number }`).
+const SPRINT_RESPONSE = {
+  id: 's1',
+  name: 'Sprint 1',
+  status: 'active',
+  start_date: '2026-09-01',
+  end_date: '2026-09-14',
+}
+
+const BURNDOWN_RESPONSE = {
+  sprint_id: 's1',
+  sprint_name: 'Sprint 1',
+  total_points: 8,
+  series: [
+    { date: '2026-09-01T00:00:00', remaining: 8 },
+    { date: '2026-09-02T00:00:00', remaining: 5 },
+  ],
+}
+
 async function mountView() {
   get.mockImplementation((url: string) => {
     if (url.endsWith('/items')) return Promise.resolve(BOARD_ITEMS_RESPONSE)
+    if (url.endsWith('/burndown')) return Promise.resolve(BURNDOWN_RESPONSE)
+    if (url.includes('/sprints/')) return Promise.resolve(SPRINT_RESPONSE)
     return Promise.resolve(BOARD_RESPONSE)
   })
   const wrapper = mount(SprintBoardView, {
@@ -134,16 +159,39 @@ describe('SprintBoardView items wiring (GH#13993)', () => {
     expect(wrapper.findAll('.column-title').map(n => n.text())).toEqual(['Ready'])
   })
 
-  it('GH#14074 (known defect): the sprint header and burndown never render', async () => {
+  it('GH#14074: the sprint header and burndown render from their own endpoints', async () => {
     const wrapper = await mountView()
 
-    // Documented failing behaviour, not an endorsement. The board endpoint
-    // sends neither `sprint` nor `burndown`, and the view reads both from it,
-    // so `sprint` stays null and `burndown` stays []. The sprint data IS
-    // available — GET /api/llc/sprints/{id} and .../burndown both exist — the
-    // view simply never asks for it. Flip these assertions when GH#14074 lands.
-    expect(wrapper.find('.sprint-title').exists()).toBe(false)
-    expect(wrapper.find('.burndown-chart').exists()).toBe(false)
+    // Flipped from the documented failing behaviour. The view used to read
+    // `sprint` and `burndown` off GET /api/llc/boards/{id}, which has never
+    // carried either, so both reads fell to their null/[] branch and these
+    // panels were permanently empty. They now come from the endpoints that
+    // serve them.
+    expect(wrapper.find('.sprint-title').exists()).toBe(true)
+    expect(wrapper.find('.burndown-chart').exists()).toBe(true)
+    expect(wrapper.find('.chart-empty').exists()).toBe(false)
+  })
+
+  it('GH#14074: asks the sprint endpoints for the board\'s sprint_id', async () => {
+    await mountView()
+
+    const urls = get.mock.calls.map((call: unknown[]) => String(call[0]))
+    expect(urls).toContain('/api/llc/sprints/s1')
+    expect(urls).toContain('/api/llc/sprints/s1/burndown')
+  })
+
+  it('GH#14074: a board with no sprint_id asks for neither', async () => {
+    get.mockImplementation((url: string) => {
+      if (url.endsWith('/items')) return Promise.resolve(BOARD_ITEMS_RESPONSE)
+      return Promise.resolve({ ...BOARD_RESPONSE, sprint_id: null })
+    })
+    const wrapper = mount(SprintBoardView, {
+      global: { plugins: [i18n], stubs: { WorkItemDetail: true } },
+    })
+    await flushPromises()
+
+    const urls = get.mock.calls.map((call: unknown[]) => String(call[0]))
+    expect(urls.some(u => u.includes('/sprints/'))).toBe(false)
     expect(wrapper.find('.chart-empty').exists()).toBe(true)
   })
 })

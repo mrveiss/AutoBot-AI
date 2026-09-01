@@ -3,6 +3,16 @@
 <!-- Author: mrveiss -->
 <template>
   <div class="sprint-board-view">
+
+    <!-- #14064: a load failure used to be logged only, so the board rendered
+         empty — indistinguishable from a board with no cards. -->
+    <div v-if="loadError" class="board-load-error" role="alert">
+      <span class="board-load-error-text">{{ $t('llc.board.loadFailed') }}</span>
+      <span class="board-load-error-detail">{{ loadError }}</span>
+      <button type="button" class="board-load-error-retry" @click="fetchBoard()">
+        {{ $t('llc.board.retry') }}
+      </button>
+    </div>
     <!-- Sprint Header -->
     <div class="sprint-header" v-if="sprint">
       <div class="sprint-info">
@@ -112,8 +122,17 @@
       </div>
     </div>
 
+    <!-- #14044: the board holds summaries, so opening a card fetches the full
+         item. Show that it is happening, and show a failure rather than an
+         empty panel. -->
+    <div v-if="detailLoading" class="detail-fetch-state" role="status">
+      {{ $t('llc.board.loadingItem') }}
+    </div>
+    <div v-else-if="detailError" class="detail-fetch-state detail-fetch-error" role="alert">
+      {{ $t('llc.board.itemLoadFailed') }} — {{ detailError }}
+    </div>
     <WorkItemDetail
-      v-if="detailItem"
+      v-else-if="detailItem"
       :item="detailItem"
       :company-id="companyId"
       @close="detailItem = null"
@@ -146,7 +165,7 @@ const boardId = computed(() => route.params.boardId as string)
 const CHART_W = 200
 const CHART_H = 100
 
-import type { WorkItem } from './workItemTypes'
+import type { BoardCard, WorkItem, WorkItemSummary } from './workItemTypes'
 
 interface BoardColumn {
   id: string
@@ -168,25 +187,42 @@ interface Sprint {
   completed_points: number
 }
 
+/**
+ * #14074: what `GET /api/llc/sprints/{id}/burndown` actually sends per entry.
+ *
+ * `sprint_planning.get_burndown` builds `{"date": current.isoformat(),
+ * "remaining": max(0, total_points - cumulative_done)}`. The previous shape
+ * here was `{ day: number }`, which no endpoint has ever produced — it was
+ * never noticed because the panel was fed from a board response that carried
+ * no burndown at all, so the array was permanently empty and the chart never
+ * rendered a point.
+ */
 interface BurndownPoint {
-  day: number
+  date: string
   remaining: number
 }
 
 const columns = ref<BoardColumn[]>([])
-const items = ref<WorkItem[]>([])
+const items = ref<BoardCard[]>([])
+// #14064: a load failure was only logged, so it rendered as an empty board.
+const loadError = ref<string | null>(null)
 const sprint = ref<Sprint | null>(null)
 const burndown = ref<BurndownPoint[]>([])
 const isLoading = ref(false)
 const detailItem = ref<WorkItem | null>(null)
-const draggedItem = ref<WorkItem | null>(null)
+const detailLoading = ref(false)
+const detailError = ref<string | null>(null)
+const draggedItem = ref<BoardCard | null>(null)
 
 const burndownPoints = computed(() => {
   if (!burndown.value.length) return ''
-  const maxDay = burndown.value[burndown.value.length - 1].day
+  // #14074: the series is one entry per day in order, and `date` is an ISO
+  // string rather than an ordinal, so the x axis comes from the index. A
+  // single-point series would divide by zero, hence the `|| 1`.
+  const lastIndex = burndown.value.length - 1 || 1
   const maxRem = burndown.value[0].remaining || 1
   return burndown.value
-    .map(pt => `${(pt.day / maxDay) * CHART_W},${CHART_H - (pt.remaining / maxRem) * CHART_H}`)
+    .map((pt, i) => `${(i / lastIndex) * CHART_W},${CHART_H - (pt.remaining / maxRem) * CHART_H}`)
     .join(' ')
 })
 
@@ -212,16 +248,51 @@ function switchToTimeline() {
   })
 }
 
-function openDetail(item: WorkItem) {
-  detailItem.value = item
+/**
+ * #14044: the board only has an 11-field summary, so opening a card must
+ * fetch the item. Previously this assigned the summary straight into
+ * `detailItem`, and every detail-only field — description, labels,
+ * acceptance criteria, reviewers, linked PRs — read as undefined and rendered
+ * blank. The panel looked like a work item with nothing written in it.
+ */
+async function openDetail(summary: BoardCard) {
+  detailItem.value = null
+  detailError.value = null
+  detailLoading.value = true
+  try {
+    detailItem.value = await api.get<WorkItem>(`/api/llc/work-items/${summary.id}`)
+  } catch (err) {
+    logger.error('Failed to load work item', err)
+    detailError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    detailLoading.value = false
+  }
 }
 
+/**
+ * The detail panel emits a full item; the board list holds summaries. Copy
+ * across only the fields the summary declares, so a board card cannot start
+ * carrying detail fields that `WorkItemSummary` says are not there (#14075).
+ */
 function onItemUpdated(updated: WorkItem) {
   const idx = items.value.findIndex(i => i.id === updated.id)
-  if (idx !== -1) items.value[idx] = updated
+  if (idx === -1) return
+  const current = items.value[idx]
+  items.value[idx] = {
+    ...current,
+    title: updated.title,
+    type: updated.type,
+    status: updated.status,
+    priority: updated.priority,
+    story_points: updated.story_points,
+    assignee_agent_id: updated.assignee_agent_id ?? null,
+    assignee_user_id: updated.assignee_user_id ?? null,
+    assignee_type: updated.assignee_type ?? null,
+  }
+  if (detailItem.value?.id === updated.id) detailItem.value = updated
 }
 
-function onDragStart(item: WorkItem) {
+function onDragStart(item: BoardCard) {
   draggedItem.value = item
 }
 
@@ -256,19 +327,39 @@ function subscribeBoard() {
 
 async function fetchBoard() {
   isLoading.value = true
+  loadError.value = null
   try {
-    const [boardData, sprintData] = await Promise.all([
-      api.get<{ columns: BoardColumn[]; sprint: Sprint; burndown: BurndownPoint[] }>(`/api/llc/boards/${boardId.value}`),
-      // GH#13993: the board-items endpoint nests items inside each column —
-      // there is no top-level `items` key. Flatten before storing.
-      api.get<{ columns: Array<{ id: string; items: WorkItem[] }> }>(`/api/llc/boards/${boardId.value}/items`),
+    // #14074: the board endpoint returns id/company_id/project_id/sprint_id/
+    // type/name/created_at/updated_at/columns — it has never carried `sprint`
+    // or `burndown`, so both reads always fell to their null/[] branch and the
+    // panels rendered permanently empty. Fetch them from the endpoints that do
+    // serve them: sprints.py:850 and sprints.py:1082.
+    const board = await api.get<{ columns: BoardColumn[]; sprint_id: string | null }>(
+      `/api/llc/boards/${boardId.value}`,
+    )
+    columns.value = board.columns ?? []
+
+    // #14075: the endpoint sends an 11-field summary, not a WorkItem.
+    const itemsPromise = api.get<{ columns: Array<{ id: string; items: BoardCard[] }> }>(
+      `/api/llc/boards/${boardId.value}/items`,
+    )
+
+    const sprintId = board.sprint_id
+    const [itemsData, sprintDetail, burndownData] = await Promise.all([
+      itemsPromise,
+      sprintId ? api.get<Sprint>(`/api/llc/sprints/${sprintId}`) : Promise.resolve(null),
+      sprintId
+        ? api.get<{ series: BurndownPoint[] }>(`/api/llc/sprints/${sprintId}/burndown`)
+        : Promise.resolve(null),
     ])
-    columns.value = boardData.columns ?? []
-    sprint.value = boardData.sprint ?? null
-    burndown.value = boardData.burndown ?? []
-    items.value = (sprintData.columns ?? []).flatMap(col => col.items ?? [])
+
+    sprint.value = sprintDetail
+    burndown.value = burndownData?.series ?? []
+    items.value = (itemsData.columns ?? []).flatMap(col => col.items ?? [])
   } catch (err) {
+    // #14064: see KanbanBoardView — an empty board must not be how a failure looks.
     logger.error('Failed to load board', err)
+    loadError.value = err instanceof Error ? err.message : String(err)
   } finally {
     isLoading.value = false
   }
@@ -584,5 +675,34 @@ onMounted(async () => {
   color: var(--text-secondary);
   text-align: center;
   padding: 1rem 0;
+}
+
+.board-load-error {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-error-border);
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border-radius: 6px;
+}
+.board-load-error-detail {
+  opacity: 0.85;
+  font-size: 0.875rem;
+}
+.board-load-error-retry {
+  margin-inline-start: auto;
+  cursor: pointer;
+}
+
+.detail-fetch-state {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+.detail-fetch-error {
+  color: var(--color-error);
 }
 </style>

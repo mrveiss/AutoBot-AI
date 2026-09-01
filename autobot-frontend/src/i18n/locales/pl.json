@@ -8619,6 +8619,12 @@
       "saving": "Zapisywanie…",
       "save": "Zapisz",
       "contactSaveError": "Nie udało się zapisać kontaktu."
+    },
+    "board": {
+      "loadFailed": "Nie udało się wczytać tej tablicy",
+      "retry": "Ponów",
+      "loadingItem": "Wczytywanie elementu…",
+      "itemLoadFailed": "Nie udało się wczytać tego elementu"
     }
   },
   "code": {

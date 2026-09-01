@@ -8619,6 +8619,12 @@
       "saving": "Enregistrement…",
       "save": "Enregistrer",
       "contactSaveError": "Impossible d'enregistrer le contact."
+    },
+    "board": {
+      "loadFailed": "Impossible de charger ce tableau",
+      "retry": "Réessayer",
+      "loadingItem": "Chargement de l'élément…",
+      "itemLoadFailed": "Impossible de charger cet élément"
     }
   },
   "code": {
