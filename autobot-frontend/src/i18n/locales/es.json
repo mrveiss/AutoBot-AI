@@ -8618,7 +8618,15 @@
       "phoneLabel": "Teléfono",
       "saving": "Guardando…",
       "save": "Guardar",
-      "contactSaveError": "No se pudo guardar el contacto."
+      "contactSaveError": "No se pudo guardar el contacto.",
+      "addContact": "Añadir contacto",
+      "deleteAriaLabel": "Eliminar a {name}",
+      "deleteConfirm": "¿Eliminar este contacto?",
+      "fullNamePlaceholder": "Nombre completo",
+      "roleTitlePlaceholder": "Cargo",
+      "emailPlaceholder": "Correo electrónico",
+      "contactCreateError": "No se pudo añadir el contacto",
+      "contactDeleteError": "No se pudo eliminar el contacto"
     },
     "board": {
       "loadFailed": "No se pudo cargar este tablero",
