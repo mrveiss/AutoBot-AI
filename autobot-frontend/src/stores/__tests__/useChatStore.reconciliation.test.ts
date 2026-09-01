@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Write-ahead reconciliation in the chat store (#14820, #14821).
  *
