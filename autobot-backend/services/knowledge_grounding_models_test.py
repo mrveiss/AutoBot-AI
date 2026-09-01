@@ -60,6 +60,12 @@ def _tracked_python_files() -> list[str]:
     return [line for line in out.stdout.splitlines() if line]
 
 
+# This guard's own fixture data (VERIFICATION_METHOD_UNION, the wire-spelling
+# test) legitimately spells out every member value, so it is excluded from
+# its own scan the same way the enum definition itself is.
+_SELF = "autobot-backend/services/knowledge_grounding_models_test.py"
+
+
 def _bare_literal_files() -> set[str]:
     """Files (outside the enum definition) containing a bare vocabulary literal."""
     needles = tuple(f'"{value}"' for _, value in VERIFICATION_METHOD_UNION)
@@ -67,7 +73,7 @@ def _bare_literal_files() -> set[str]:
     for rel in _tracked_python_files():
         if not (rel.startswith("autobot-backend/") or rel.startswith("autobot_shared/")):
             continue
-        if rel == "autobot-backend/services/knowledge_grounding_models.py":
+        if rel in {"autobot-backend/services/knowledge_grounding_models.py", _SELF}:
             continue
         try:
             text = (REPO_ROOT / rel).read_text(encoding="utf-8")
