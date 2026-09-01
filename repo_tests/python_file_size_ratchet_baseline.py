@@ -171,7 +171,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/chat_workflow/graph.py": 1682,
     "autobot-backend/chat_workflow/llm_handler.py": 1358,
     "autobot-backend/chat_workflow/manager.py": 4068,
-    "autobot-backend/chat_workflow/tool_handler.py": 3694,
+    "autobot-backend/chat_workflow/tool_handler.py": 3693,
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/circuit_breaker.py": 689,

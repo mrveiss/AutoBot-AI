@@ -24,6 +24,7 @@ from autobot_shared.auth.mcp_tool_permissions import required_permission
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
+from chat_workflow.tool_permission_gate import permission_denial
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
 from chat_workflow.browser_tool_handler import (
     extract_browser_image,
@@ -2249,13 +2250,7 @@ class ToolHandlerMixin:
 
         Issue #665: Extracted from _process_tool_calls for single responsibility.
         Issue #654: Original respond tool handling logic.
-
-        #14529: stays ungated at ``BEFORE_TOOL_EXECUTE`` by decision — there is
-        nothing to gate. This is loop-control, not an external effect: it builds
-        a ``WorkflowMessage`` from LLM-supplied text and returns a
-        ``(break_loop, respond_content)`` tuple. No dispatch, no I/O, and it is
-        not even a coroutine. A permission on it would gate the agent's ability
-        to stop talking.
+        #14529: ungated by decision — see chat_workflow/tool_permission_gate.
 
         Returns:
             Tuple of (message, break_loop_requested, respond_content)
@@ -2297,20 +2292,8 @@ class ToolHandlerMixin:
         the subtask as a governed subagent (its ``forbidden_work`` constrains it) via
         the selected engine and returns the result. Yields WorkflowMessage(s).
 
-        #14529: spawning a subagent that can itself call tools is the strongest
-        thing at this seam, and it had no RBAC check of any kind — the fan-out
-        cap and the delegated agent's ``forbidden_work`` bound what a subagent
-        may do, never who may start one. ``Permission.AGENT_EXECUTE`` is the
-        tier the ``sequential_thinking``/``structured_thinking`` bridges already
-        use; admin and operator hold it.
-
-        The gate sits **above** the ``DELEGATION_ENABLED`` check on purpose,
-        which #14529 left as a choice. Gating below would make the permission
-        depend on a feature flag, so the day delegation is switched on the
-        enforcement seam moves — the flag is default-off today, and a gate that
-        only exists in the configuration nobody is running is not a gate. It
-        also keeps this branch uniform with every other one: deny before any
-        work, including the record-only write to ``execution_results``.
+        #14529: gated on AGENT_EXECUTE, ABOVE the DELEGATION_ENABLED check
+        on purpose — below it, the permission would depend on a feature flag.
         """
         from chat_workflow.delegation import (
             DELEGATION_ENABLED,
@@ -2322,21 +2305,11 @@ class ToolHandlerMixin:
         task = params.get("task", "")
         reason = params.get("reason", "Task delegation")
 
-        should_execute = await _emit_before_tool_execute(
-            "delegate",
-            params,
-            session_id,
-            tool_permission=Permission.AGENT_EXECUTE.value,
-            user_role=role,
+        denial = await permission_denial(
+            "delegate", params, session_id, Permission.AGENT_EXECUTE.value, role, execution_results
         )
-        if not should_execute:
-            logger.info("[#14529] delegate cancelled by permission hook (role=%s)", role)
-            execution_results.append({"tool": "delegate", "status": "error", "error": "permission_denied"})
-            yield WorkflowMessage(
-                type="error",
-                content="delegate execution cancelled",
-                metadata={"tool": "delegate", "cancelled_by_hook": True, "reason": "permission_denied"},
-            )
+        if denial is not None:
+            yield denial
             return
 
         if not DELEGATION_ENABLED:
@@ -2541,20 +2514,12 @@ class ToolHandlerMixin:
 
         # Issue #4261/#14469: Wire BEFORE_TOOL_EXECUTE hook for web_search,
         # declaring the browser-read permission it requires.
-        should_execute = await _emit_before_tool_execute(
-            "web_search",
-            params,
-            session_id,
-            tool_permission=Permission.MCP_BROWSER_READ.value,
-            user_role=role,
+        # #14529: folded onto the shared gate; also gains the execution_results record.
+        denial = await permission_denial(
+            "web_search", params, session_id, Permission.MCP_BROWSER_READ.value, role, execution_results
         )
-        if not should_execute:
-            logger.info("[Issue #4261] Web search cancelled by hook")
-            yield WorkflowMessage(
-                type="error",
-                content="Web search execution cancelled",
-                metadata={"tool": "web_search", "cancelled_by_hook": True, "reason": "permission_denied"},
-            )
+        if denial is not None:
+            yield denial
             return
 
         try:
@@ -2624,21 +2589,10 @@ class ToolHandlerMixin:
         # this tool name on the MCP-registry path — no bridge_name here (this
         # is the builtin path), so only the exact-name lookup can hit.
         declared_permission = required_permission(tool_name)
-        should_execute = await _emit_before_tool_execute(
-            tool_name,
-            params,
-            session_id,
-            tool_permission=declared_permission.value if declared_permission else None,
-            user_role=role,
-        )
-        if not should_execute:
-            logger.info("[#14491] Web research tool %s cancelled by permission hook (role=%s)", tool_name, role)
-            execution_results.append({"tool": tool_name, "status": "error", "error": "permission_denied"})
-            yield WorkflowMessage(
-                type="error",
-                content=f"{tool_name} execution cancelled",
-                metadata={"tool": tool_name, "cancelled_by_hook": True, "reason": "permission_denied"},
-            )
+        perm = declared_permission.value if declared_permission else None
+        denial = await permission_denial(tool_name, params, session_id, perm, role, execution_results)
+        if denial is not None:
+            yield denial
             return
 
         yield WorkflowMessage(
@@ -2697,21 +2651,11 @@ class ToolHandlerMixin:
         # context, never from LLM-supplied params.
         user_id = _cctx.get("user_id")
 
-        should_execute = await _emit_before_tool_execute(
-            tool_name,
-            params,
-            session_id,
-            tool_permission=Permission.WORKFLOW_CREATE.value,
-            user_role=role,
+        denial = await permission_denial(
+            tool_name, params, session_id, Permission.WORKFLOW_CREATE.value, role, execution_results
         )
-        if not should_execute:
-            logger.info("[#14491] LLC tool %s cancelled by permission hook (role=%s)", tool_name, role)
-            execution_results.append({"tool": tool_name, "status": "error", "error": "permission_denied"})
-            yield WorkflowMessage(
-                type="error",
-                content=f"{tool_name} execution cancelled",
-                metadata={"tool": tool_name, "cancelled_by_hook": True, "reason": "permission_denied"},
-            )
+        if denial is not None:
+            yield denial
             return
 
         try:
@@ -2848,36 +2792,17 @@ class ToolHandlerMixin:
         post-click, post-form-fill — so it works behind auth walls a fresh
         fetch could never reach.
 
-        #14529: that reach is exactly why the read needs a gate. This branch
-        never called ``BEFORE_TOOL_EXECUTE`` at all, so it was not "gated and
-        allowed" — the hook never fired. ``Permission.MCP_BROWSER_READ`` is the
-        tier ``navigate``/``page_snapshot``/``screenshot`` already carry, and
-        this reads the same session's page content, behind whatever auth wall
-        those tools drove it through. ``readonly`` is the one role withheld.
+        #14529: gated on MCP_BROWSER_READ — the hook never fired here at all.
         """
         params = tool_call.get("params", {})
         goal = params.get("goal", "")
         logger.info("[Issue #11540] extract_content: goal=%s", goal[:100])
 
-        should_execute = await _emit_before_tool_execute(
-            "extract_content",
-            params,
-            session_id,
-            tool_permission=Permission.MCP_BROWSER_READ.value,
-            user_role=role,
+        denial = await permission_denial(
+            "extract_content", params, session_id, Permission.MCP_BROWSER_READ.value, role, execution_results
         )
-        if not should_execute:
-            logger.info("[#14529] extract_content cancelled by permission hook (role=%s)", role)
-            execution_results.append({"tool": "extract_content", "status": "error", "error": "permission_denied"})
-            yield WorkflowMessage(
-                type="error",
-                content="extract_content execution cancelled",
-                metadata={
-                    "tool": "extract_content",
-                    "cancelled_by_hook": True,
-                    "reason": "permission_denied",
-                },
-            )
+        if denial is not None:
+            yield denial
             return
 
         yield WorkflowMessage(
@@ -2909,20 +2834,7 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
     ):
         """Re-read a window of a tool result that was spilled out of context (#13919).
-
-        #14529: stays ungated at ``BEFORE_TOOL_EXECUTE`` by decision. This reads
-        an artifact the *same run* already produced and already showed the model
-        an excerpt of; the anchor is bound server-side to its owning run and is
-        never taken from a caller-supplied run id. So there is no permission
-        boundary here that reading the turn's own prior output does not already
-        sit inside — any role that could see the excerpt can see the window.
-        Declaring a permission would mean inventing a tier below the chat access
-        the caller demonstrably already holds.
-
-        What this decision does **not** cover: anchor forgery or a cross-session
-        read, if the server-side binding above ever weakens. That is a different
-        risk class — RBAC would not address it either — and it is the thing to
-        re-check here, not the permission declaration.
+        #14529: ungated by decision — see chat_workflow/tool_permission_gate.
 
         #13692 writes oversized tool output aside and leaves a bounded excerpt
         plus an anchor, and the excerpt's note tells the model to call this tool.
@@ -3694,26 +3606,7 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
         ctx: "LLMIterationContext | None",
     ):
-        """Handle the compose tool call — main chat agent only (GH#11568).
-
-        #14529: stays ungated at ``BEFORE_TOOL_EXECUTE``, deliberately, and this
-        is the decision rather than an oversight. Two mechanisms already govern
-        it and a third would be redundant:
-
-        * ``_guard_compose`` runs an AST pass over the program and rejects any
-          reference to a ``forbidden_work`` tool before a line executes, and
-          ``_reject_delegated_compose`` confines the tool to the main chat agent.
-        * ``_approve_compose`` puts it behind a WORKFLOW_GATE human approval,
-          auto-approving only when every shim it touches is read-only and the
-          flag is on.
-
-        More to the point, a compose script does not reach tools through some
-        side door: ``_build_compose_dispatch`` routes back through
-        ``_dispatch_tool_call``, this same seam. A script calling ``create_task``
-        or ``crawl_site`` hits the #14491 gates on the way, with the caller's
-        own role. Gating ``compose`` itself would gate the *interpreter*, not
-        the effects, and the effects are where the permissions live.
-        """
+        """Handle the compose tool call (GH#11568). #14529: ungated — see tool_permission_gate."""
         program: str = tool_call.get("params", {}).get("program", "")
         agent_id: str | None = ctx.agent_context.agent_id if (ctx and ctx.agent_context) else None
         subagent_msg = self._reject_delegated_compose(agent_id)
