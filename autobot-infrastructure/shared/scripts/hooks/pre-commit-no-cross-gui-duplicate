@@ -1,0 +1,238 @@
+#!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025-2026 mrveiss
+# Author: mrveiss
+#
+# Pre-commit Hook: No Cross-GUI Duplicate Composable/Type/Util Outside the Kit
+# ==============================================================================
+#
+# Issues #14907 (composables) / #14908 (type vocabularies + utility files) —
+# consolidates code duplicated across autobot-frontend and
+# autobot-slm-frontend into libs/autobot-ui (`@autobot/ui`).
+#
+# Two checks, both FULL-TREE (not diff-based): "a duplicate exists somewhere
+# in the repo" is a property of the whole tree, not of what one commit
+# touched, so a pre-existing duplicate must still fail every commit until
+# it is fixed or explicitly grandfathered below.
+#
+#   1. COMPOSABLE FILENAME collisions — the same basename under both apps'
+#      src/composables/ trees (recursive). A colliding filename PASSES if
+#      BOTH copies are thin re-export shims onto an `@autobot/` package (the
+#      useVncControls/useToast precedent, #12931/#14907) — detected by an
+#      `@autobot/` import/export within the file's first 20 lines. Anything
+#      else is an undetected fork.
+#
+#   2. EXPORTED TYPE NAME collisions, scoped to `src/utils/*.ts` and
+#      `src/types/*.ts` (TOP-LEVEL only, not recursive) in both apps —
+#      `export type X = ...` / `export interface X {` declared under BOTH
+#      with the same name. `export type { X } from '...'` (a re-export)
+#      does NOT count — that is the fix, not the fork.
+#
+#      This scope is deliberate, not exhaustive: a repo-wide scan of every
+#      `export type`/`export interface` in both apps' full `src/` trees
+#      also catches structurally-generated OpenAPI contract types
+#      (`components`, `paths`, `operations`, per-endpoint response shapes)
+#      that legitimately share names because both apps' clients describe
+#      overlapping backend surface — false positives, not vocabulary forks.
+#      `utils/` and top-level `types/` are where #14908's actual findings
+#      (LogLevel, ToastType, DurationStyle, HealthStatus) all live. The full
+#      "same-concept/different-name" sweep #14907/#14908 call out as
+#      "not covered here" stays a separate, filed piece of work.
+#
+# Suppression: add the filename/type name to the matching ALLOWLIST with a
+# comment explaining why and a tracking issue. Last resort only.
+
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+# Below this many total files scanned across both apps, something is broken
+# (a moved directory, a bad glob) — fail closed instead of reporting a false
+# "no violations found". Actual counts at authoring time: ~260 composables,
+# ~35 top-level utils/types files.
+MIN_COMPOSABLE_FILES_SCANNED = 50
+MIN_VOCAB_FILES_SCANNED = 15
+
+APPS = ("autobot-frontend", "autobot-slm-frontend")
+VOCAB_SUBDIRS = ("utils", "types")
+
+# Composable FILENAMES known to collide and already tracked.
+FILENAME_ALLOWLIST = {
+    # #14907: shared TYPES extracted to the kit (prometheus-metrics.ts); the
+    # composable itself stays per-app — polling/transport logic legitimately
+    # differs (main uses useApiClient + useWebSocket, SLM uses slmApiClient).
+    "usePrometheusMetrics.ts",
+}
+
+# Exported TYPE NAMES (in src/utils/*.ts + src/types/*.ts, top-level) known
+# to collide and already tracked.
+TYPE_NAME_ALLOWLIST = {
+    # #14908: ApiClient consolidation is explicitly its own PR (auth-path
+    # review required) — not folded into the composables/types sweep.
+    "ErrorInfo",
+    "RequestOptions",
+    # #14908: DurationStyle (the identical one) already moved to the kit;
+    # these three remain per-app pending a full formatHelpers.ts diff/merge
+    # (577 vs 215 lines) — tracked under #14908's own acceptance criteria,
+    # not silently permitted.
+    "FormatBytesOptions",
+    "FormatDurationOptions",
+    "FormatUptimeOptions",
+    # #14908 (SystemRepository.ts vs types/slm.ts) + #15401 (a third,
+    # incompatible HealthStatus in types/settings.ts, plus ServiceHealth /
+    # ServiceStatus name collisions with unrelated shapes). Each needs a
+    # decision verified against its backend's wire format before merging —
+    # explicitly "a decision, not a merge", not a mechanical promotion.
+    "HealthStatus",
+    "ServiceHealth",
+    "ServiceStatus",
+}
+
+
+def _find_repo_root(start: Path) -> Path:
+    """Walk up from *start* looking for `.git` (dir in a normal clone, file in a worktree)."""
+    for candidate in (start, *start.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    print("FATAL: could not locate repo root (no .git found) — refusing to report clean", file=sys.stderr)
+    sys.exit(1)
+
+
+def _is_own_test_or_meta(name: str) -> bool:
+    return any(marker in name for marker in (".test.", ".spec.", ".stories.", ".d.ts"))
+
+
+def _iter_ts_files(root: Path, *, recursive: bool) -> list[Path]:
+    if not root.is_dir():
+        return []
+    pattern = root.rglob("*.ts") if recursive else root.glob("*.ts")
+    out = []
+    for path in pattern:
+        if _is_own_test_or_meta(path.name):
+            continue
+        if "__tests__" in path.parts or "node_modules" in path.parts:
+            continue
+        out.append(path)
+    return out
+
+
+def _is_kit_shim(path: Path) -> bool:
+    try:
+        head = "\n".join(path.read_text(encoding="utf-8").splitlines()[:20])
+    except OSError:
+        return False
+    return "@autobot/" in head
+
+
+_TYPE_DECL_RE = re.compile(r"^export\s+(?:type|interface)\s+([A-Za-z_][A-Za-z0-9_]*)\s*[={]")
+
+
+def _exported_type_names(path: Path) -> set[str]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    return {m.group(1) for line in text.splitlines() if (m := _TYPE_DECL_RE.match(line))}
+
+
+def _composable_map(app_src: Path) -> dict[str, Path]:
+    comp_dir = app_src / "composables"
+    return {p.name: p for p in _iter_ts_files(comp_dir, recursive=True)}
+
+
+def collect_composable_violations(repo_root: Path) -> tuple[list[str], int]:
+    maps = {app: _composable_map(repo_root / app / "src") for app in APPS}
+    total_scanned = sum(len(m) for m in maps.values())
+    a, b = maps[APPS[0]], maps[APPS[1]]
+    violations = []
+    for name in sorted(set(a) & set(b)):
+        if name in FILENAME_ALLOWLIST:
+            continue
+        if _is_kit_shim(a[name]) and _is_kit_shim(b[name]):
+            continue
+        violations.append(
+            f"composable filename collision: {name} exists in both "
+            f"{APPS[0]}/src/composables/ and {APPS[1]}/src/composables/ "
+            "and is not a shared-kit re-export shim"
+        )
+    return violations, total_scanned
+
+
+def _vocab_files(app: str, repo_root: Path) -> list[Path]:
+    files: list[Path] = []
+    for sub in VOCAB_SUBDIRS:
+        files.extend(_iter_ts_files(repo_root / app / "src" / sub, recursive=False))
+    return files
+
+
+def collect_type_violations(repo_root: Path) -> tuple[list[str], int]:
+    all_files: list[Path] = []
+    names_by_app: dict[str, set[str]] = {}
+    for app in APPS:
+        files = _vocab_files(app, repo_root)
+        all_files.extend(files)
+        names: set[str] = set()
+        for f in files:
+            names |= _exported_type_names(f)
+        names_by_app[app] = names
+    common = names_by_app[APPS[0]] & names_by_app[APPS[1]]
+    violations = [
+        f"type name collision: `{name}` declared (not re-exported) in both apps' "
+        "top-level src/utils or src/types"
+        for name in sorted(common)
+        if name not in TYPE_NAME_ALLOWLIST
+    ]
+    return violations, len(all_files)
+
+
+def _check_vacuity(comp_scanned: int, vocab_scanned: int) -> int | None:
+    if comp_scanned < MIN_COMPOSABLE_FILES_SCANNED:
+        print(
+            f"FATAL: only scanned {comp_scanned} composable files (expected >= "
+            f"{MIN_COMPOSABLE_FILES_SCANNED}) — a directory likely moved; refusing to report clean",
+            file=sys.stderr,
+        )
+        return 1
+    if vocab_scanned < MIN_VOCAB_FILES_SCANNED:
+        print(
+            f"FATAL: only scanned {vocab_scanned} utils/types files (expected >= "
+            f"{MIN_VOCAB_FILES_SCANNED}) — a directory likely moved; refusing to report clean",
+            file=sys.stderr,
+        )
+        return 1
+    return None
+
+
+def main() -> int:
+    # pre-commit invokes local hooks with cwd already at the repo root; anchoring
+    # on cwd (not Path(__file__)) is also what makes this testable against a
+    # scratch repo via subprocess(cwd=...) rather than always resolving to
+    # wherever this script physically lives on disk.
+    repo_root = _find_repo_root(Path.cwd())
+
+    comp_violations, comp_scanned = collect_composable_violations(repo_root)
+    type_violations, vocab_scanned = collect_type_violations(repo_root)
+
+    vacuity_exit = _check_vacuity(comp_scanned, vocab_scanned)
+    if vacuity_exit is not None:
+        return vacuity_exit
+
+    violations = comp_violations + type_violations
+    if not violations:
+        print(f"No cross-GUI duplicates found ({comp_scanned} composables, {vocab_scanned} utils/types files scanned).")
+        return 0
+
+    print("COMMIT BLOCKED: cross-GUI duplicate(s) found outside the shared kit (#14907, #14908)")
+    print("=" * 78)
+    for v in violations:
+        print(f"  VIOLATION: {v}")
+    print("=" * 78)
+    print("Fix: promote to libs/autobot-ui (@autobot/ui) and re-export from each app,")
+    print("or add to FILENAME_ALLOWLIST / TYPE_NAME_ALLOWLIST with a tracking issue.")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
