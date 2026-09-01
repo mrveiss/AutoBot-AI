@@ -8621,12 +8621,21 @@
       "contactSaveError": "No se pudo guardar el contacto.",
       "addContact": "Añadir contacto",
       "deleteAriaLabel": "Eliminar a {name}",
-      "deleteConfirm": "¿Eliminar este contacto?",
+      "deleteConfirm": "¿Eliminar este contacto de forma permanente? Su nombre y datos de contacto se borran del almacenamiento y no se pueden recuperar.",
       "fullNamePlaceholder": "Nombre completo",
       "roleTitlePlaceholder": "Cargo",
       "emailPlaceholder": "Correo electrónico",
       "contactCreateError": "No se pudo añadir el contacto",
-      "contactDeleteError": "No se pudo eliminar el contacto"
+      "contactDeleteError": "No se pudo eliminar el contacto",
+      "validation": {
+        "fullNameRequired": "Se requiere un nombre completo.",
+        "fullNameTooLong": "El nombre completo debe tener 255 caracteres o menos.",
+        "emailTooLong": "El correo debe tener 320 caracteres o menos.",
+        "phoneInvalid": "El teléfono solo puede contener dígitos, espacios y ( ) - . y un + inicial opcional.",
+        "phoneTooLong": "El teléfono debe tener 64 caracteres o menos.",
+        "roleTitleTooLong": "El cargo debe tener 255 caracteres o menos.",
+        "notesTooLong": "Las notas deben tener 2000 caracteres o menos."
+      }
     },
     "board": {
       "loadFailed": "No se pudo cargar este tablero",

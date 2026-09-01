@@ -8621,12 +8621,21 @@
       "contactSaveError": "امکان ذخیرهٔ مخاطب وجود نداشت.",
       "addContact": "افزودن مخاطب",
       "deleteAriaLabel": "حذف {name}",
-      "deleteConfirm": "این مخاطب حذف شود؟",
+      "deleteConfirm": "این مخاطب برای همیشه حذف شود؟ نام و اطلاعات تماس از حافظه پاک می‌شود و قابل بازیابی نیست.",
       "fullNamePlaceholder": "نام کامل",
       "roleTitlePlaceholder": "عنوان شغلی",
       "emailPlaceholder": "ایمیل",
       "contactCreateError": "افزودن مخاطب ممکن نشد",
-      "contactDeleteError": "حذف مخاطب ممکن نشد"
+      "contactDeleteError": "حذف مخاطب ممکن نشد",
+      "validation": {
+        "fullNameRequired": "نام کامل الزامی است.",
+        "fullNameTooLong": "نام کامل باید ۲۵۵ نویسه یا کمتر باشد.",
+        "emailTooLong": "ایمیل باید ۳۲۰ نویسه یا کمتر باشد.",
+        "phoneInvalid": "تلفن فقط می‌تواند شامل ارقام، فاصله و ( ) - . و یک + اختیاری در ابتدا باشد.",
+        "phoneTooLong": "تلفن باید ۶۴ نویسه یا کمتر باشد.",
+        "roleTitleTooLong": "نقش یا عنوان باید ۲۵۵ نویسه یا کمتر باشد.",
+        "notesTooLong": "یادداشت‌ها باید ۲۰۰۰ نویسه یا کمتر باشد."
+      }
     },
     "board": {
       "loadFailed": "بارگذاری این تخته ممکن نشد",

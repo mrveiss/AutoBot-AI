@@ -13,9 +13,11 @@
 // the flat layout to imply it.
 
 import { computed, reactive, ref, watch } from 'vue'
+
 import { useI18n } from 'vue-i18n'
 import { UNGROUPED_TEAM_ID, contactIdOfKey } from '@/composables/llc/orgPeople'
 import type { ContactEditPatch, OrgPeopleGroup, OrgPerson, PersonKind } from '@/composables/llc/orgPeople'
+import { contactErrorList, isValidContact } from './contactValidation'
 
 const props = defineProps<{
   groups: OrgPeopleGroup[]
@@ -104,8 +106,13 @@ function cancelCreating(): void {
   creating.value = false
 }
 
+/** #14105: the API's own rules, checked before the round trip so the user is
+ *  told which field is wrong instead of receiving an unattributable 422. */
+const newDraftErrors = computed(() => contactErrorList(newDraft))
+const draftErrors = computed(() => contactErrorList(draft))
+
 function submitCreate(): void {
-  if (!newDraft.full_name.trim()) return
+  if (!isValidContact(newDraft)) return
   emit('create-contact', { ...newDraft, full_name: newDraft.full_name.trim() })
   creating.value = false
 }
@@ -342,11 +349,21 @@ function groupLabel(group: OrgPeopleGroup): string {
                   :disabled="isSavingContact(person)"
                 />
               </label>
+              <!-- #14105: the same field errors as the add form — an edit can
+                   break a rule the create form enforced. -->
+              <p
+                v-for="error in draftErrors"
+                :key="error.field"
+                class="w-full text-xs text-autobot-danger"
+                :data-testid="`org-person-edit-field-error-${error.field}-${person.key}`"
+              >
+                {{ t(error.messageKey) }}
+              </p>
               <button
                 type="submit"
                 class="rounded border border-autobot-primary px-2 py-1 text-xs font-semibold text-autobot-primary disabled:opacity-50"
                 :data-testid="`org-person-edit-save-${person.key}`"
-                :disabled="isSavingContact(person) || !draft.full_name.trim()"
+                :disabled="isSavingContact(person) || !isValidContact(draft)"
               >
                 {{ isSavingContact(person) ? t('llc.orgPeople.saving') : t('llc.orgPeople.save') }}
               </button>
@@ -443,7 +460,9 @@ function groupLabel(group: OrgPeopleGroup): string {
               {{ t('common.delete') }}
             </button>
             <span v-if="confirmingDeleteKey === person.key" class="flex shrink-0 items-center gap-2">
-              <span class="text-xs text-autobot-text-muted">{{ t('llc.orgPeople.deleteConfirm') }}</span>
+              <span class="text-xs text-autobot-text-muted" data-testid="org-person-delete-confirm">{{
+                t('llc.orgPeople.deleteConfirm')
+              }}</span>
               <button
                 type="button"
                 class="rounded border border-autobot-border px-2 py-1 text-xs text-autobot-text-primary"
@@ -501,10 +520,19 @@ function groupLabel(group: OrgPeopleGroup): string {
           :placeholder="t('llc.orgPeople.emailPlaceholder')"
           data-testid="org-person-add-email"
         />
+        <!-- #14105: the field the user must fix, named, before any round trip. -->
+        <p
+          v-for="error in newDraftErrors"
+          :key="error.field"
+          class="w-full text-xs text-autobot-danger"
+          :data-testid="`org-person-add-error-${error.field}`"
+        >
+          {{ t(error.messageKey) }}
+        </p>
         <button
           type="submit"
           class="rounded border border-autobot-primary px-2 py-1 text-xs text-autobot-text-primary disabled:opacity-50"
-          :disabled="!newDraft.full_name.trim()"
+          :disabled="!isValidContact(newDraft)"
           data-testid="org-person-add-submit"
         >
           {{ t('common.save') }}

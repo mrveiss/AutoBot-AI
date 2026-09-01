@@ -8621,12 +8621,21 @@
       "contactSaveError": "Der Kontakt konnte nicht gespeichert werden.",
       "addContact": "Kontakt hinzufügen",
       "deleteAriaLabel": "{name} löschen",
-      "deleteConfirm": "Diesen Kontakt löschen?",
+      "deleteConfirm": "Diesen Kontakt endgültig löschen? Name und Kontaktdaten werden aus dem Speicher gelöscht und können nicht wiederhergestellt werden.",
       "fullNamePlaceholder": "Vollständiger Name",
       "roleTitlePlaceholder": "Rollenbezeichnung",
       "emailPlaceholder": "E-Mail",
       "contactCreateError": "Kontakt konnte nicht hinzugefügt werden",
-      "contactDeleteError": "Kontakt konnte nicht gelöscht werden"
+      "contactDeleteError": "Kontakt konnte nicht gelöscht werden",
+      "validation": {
+        "fullNameRequired": "Ein vollständiger Name ist erforderlich.",
+        "fullNameTooLong": "Der vollständige Name darf höchstens 255 Zeichen lang sein.",
+        "emailTooLong": "Die E-Mail-Adresse darf höchstens 320 Zeichen lang sein.",
+        "phoneInvalid": "Die Telefonnummer darf nur Ziffern, Leerzeichen und ( ) - . sowie ein führendes + enthalten.",
+        "phoneTooLong": "Die Telefonnummer darf höchstens 64 Zeichen lang sein.",
+        "roleTitleTooLong": "Rolle oder Titel darf höchstens 255 Zeichen lang sein.",
+        "notesTooLong": "Notizen dürfen höchstens 2000 Zeichen lang sein."
+      }
     },
     "board": {
       "loadFailed": "Dieses Board konnte nicht geladen werden",
