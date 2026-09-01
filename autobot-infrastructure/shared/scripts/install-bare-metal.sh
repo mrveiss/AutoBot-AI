@@ -362,6 +362,18 @@ install_chromadb() {
 Description=AutoBot ChromaDB - Vector Database
 Documentation=https://github.com/mrveiss/AutoBot-AI
 After=network.target
+# #14100: without these, a crash-looping chromadb restarts forever and never
+# reaches `failed`, so it never appears in \`systemctl --failed\` and nothing
+# alerts. systemd's defaults cannot catch it: DefaultStartLimitIntervalSec=10s
+# with DefaultStartLimitBurst=5 needs five restarts inside ten seconds, while
+# RestartSec=10 below spaces them ten seconds apart — the window must exceed
+# RestartSec * StartLimitBurst for the limit to be reachable at all. The
+# ansible unit hit NRestarts=4399 while still showing `activating` before it
+# was given the same values (roles/redis/templates/autobot-chromadb.service.j2).
+# They belong in [Unit], not [Service]: systemd rejects them in [Service] with
+# "Unknown key name".
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
 Type=simple
