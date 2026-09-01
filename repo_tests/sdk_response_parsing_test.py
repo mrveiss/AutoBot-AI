@@ -44,10 +44,9 @@ from api.schemas_analytics_collector import AnalyticsPerformanceMetricsResponse,
 from api.schemas_chat import (
     SessionCreateData,
     SessionDeleteData,
-    SessionListData,
-    SessionMessagesData,
     SessionUpdateData,
 )
+from api.schemas_chat_rows import SessionListData, SessionMessagesData
 from api.schemas_common import DataResponse
 from knowledge.schemas.entries import KnowledgeEntriesResponse
 from knowledge.schemas.entries import KnowledgeEntry as BackendKnowledgeEntry

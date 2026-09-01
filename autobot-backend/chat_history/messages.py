@@ -212,6 +212,7 @@ class MessagesMixin:
         session_id: str,
         limit: int | None = None,
         model_name: str | None = None,
+        offset: int = 0,
     ) -> List[Dict[str, Any]]:
         """
         Gets messages for a specific session with model-aware limits.
@@ -237,7 +238,17 @@ class MessagesMixin:
             logger.debug(f"Using model-aware limit: {limit} messages for model " f"{model_name or 'default'}")
 
         if limit > 0:
-            return messages[-limit:]  # Return last N messages
+            # #15186: the window walks BACKWARDS from the newest message, because
+            # that is what `limit` alone already meant here -- `messages[-limit:]`
+            # is the most recent N. Page 1 must keep returning exactly that, so
+            # `offset` counts messages back from the end rather than forward from
+            # the start. Reversing the direction instead would silently change
+            # what every existing caller passing only `limit` receives.
+            end = len(messages) - offset
+            if end <= 0:
+                # Paged past the beginning of the conversation.
+                return []
+            return messages[max(0, end - limit) : end]
         return messages
 
     async def get_session_message_count(self, session_id: str) -> int:
