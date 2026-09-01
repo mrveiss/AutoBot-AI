@@ -41,7 +41,11 @@ vi.mock('@/components/ui/Icon.vue', () => ({
 
 // Stub BaseModal so its visibility is observable from the DOM: it renders its
 // body slot only when `modelValue` (the modal's `isVisible`) is true.
-vi.mock('@autobot/ui', () => ({
+// #14908 moved `log`/`createLogger` into @autobot/ui, so a full-replacement
+// mock of this module now hides them from every importer of debugUtils.
+// importOriginal keeps the real surface and stubs only the component.
+vi.mock('@autobot/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   BaseModal: {
     name: 'BaseModal',
     props: ['modelValue', 'title'],

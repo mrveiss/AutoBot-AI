@@ -16,16 +16,6 @@ const resolvedViteConfig = typeof viteConfig === 'function'
 export default mergeConfig(
   resolvedViteConfig as UserConfig,
   defineConfig({
-    resolve: {
-      // #14908: this app now consumes the `file:` workspace package @autobot/ui.
-      // Without preserveSymlinks the package resolves through its REAL
-      // ../libs/autobot-ui path and walks up from there for its vue/pinia peers,
-      // missing this app's node_modules — so every importer of debugUtils failed
-      // at import time. autobot-slm-frontend's vitest.config.ts already sets this
-      // for the same reason (MVA-893); this mirrors it rather than inventing a
-      // second approach.
-      preserveSymlinks: true,
-    },
     test: {
       // Test environment setup
       environment: 'jsdom',
