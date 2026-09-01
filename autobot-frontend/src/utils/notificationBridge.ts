@@ -17,8 +17,12 @@
  * @copyright 2025 mrveiss
  */
 
-// Dynamic import to avoid circular dependency with composables
+// Dynamic import of useToast() itself (the VALUE) still avoids the circular
+// dependency at runtime — see initialize() below. The TYPE is erased at
+// compile time, so importing it statically carries no runtime cycle; the
+// prior local re-declaration (#14908) was an unnecessary workaround.
 import { createLogger } from '@/utils/debugUtils'
+import type { ToastType } from '@/composables/useToast'
 
 const logger = createLogger('NotificationBridge')
 
@@ -27,7 +31,7 @@ const logger = createLogger('NotificationBridge')
 // ========================================
 
 export type NotificationType = 'error' | 'warning' | 'info' | 'success'
-export type ToastType = 'error' | 'warning' | 'info' | 'success' // Defined locally to avoid circular import
+export type { ToastType }
 
 interface NotificationConfig {
   /** Default duration for each notification type (ms) */
