@@ -8621,12 +8621,21 @@
       "contactSaveError": "Nie udało się zapisać kontaktu.",
       "addContact": "Dodaj kontakt",
       "deleteAriaLabel": "Usuń {name}",
-      "deleteConfirm": "Usunąć ten kontakt?",
+      "deleteConfirm": "Trwale usunąć ten kontakt? Imię i dane kontaktowe zostaną usunięte z pamięci i nie będzie można ich odzyskać.",
       "fullNamePlaceholder": "Imię i nazwisko",
       "roleTitlePlaceholder": "Stanowisko",
       "emailPlaceholder": "E-mail",
       "contactCreateError": "Nie udało się dodać kontaktu",
-      "contactDeleteError": "Nie udało się usunąć kontaktu"
+      "contactDeleteError": "Nie udało się usunąć kontaktu",
+      "validation": {
+        "fullNameRequired": "Imię i nazwisko jest wymagane.",
+        "fullNameTooLong": "Imię i nazwisko może mieć maksymalnie 255 znaków.",
+        "emailTooLong": "Adres e-mail może mieć maksymalnie 320 znaków.",
+        "phoneInvalid": "Telefon może zawierać tylko cyfry, spacje oraz ( ) - . i opcjonalny + na początku.",
+        "phoneTooLong": "Telefon może mieć maksymalnie 64 znaki.",
+        "roleTitleTooLong": "Rola lub stanowisko może mieć maksymalnie 255 znaków.",
+        "notesTooLong": "Notatki mogą mieć maksymalnie 2000 znaków."
+      }
     },
     "board": {
       "loadFailed": "Nie udało się wczytać tej tablicy",

@@ -8609,12 +8609,21 @@
       "contactSaveError": "Could not save the contact.",
       "addContact": "Add contact",
       "deleteAriaLabel": "Delete {name}",
-      "deleteConfirm": "Delete this contact?",
+      "deleteConfirm": "Delete this contact permanently? Their name and contact details are erased from storage and cannot be recovered.",
       "fullNamePlaceholder": "Full name",
       "roleTitlePlaceholder": "Role title",
       "emailPlaceholder": "Email",
       "contactCreateError": "Could not add the contact",
-      "contactDeleteError": "Could not delete the contact"
+      "contactDeleteError": "Could not delete the contact",
+      "validation": {
+        "fullNameRequired": "A full name is required.",
+        "fullNameTooLong": "Full name must be 255 characters or fewer.",
+        "emailTooLong": "Email must be 320 characters or fewer.",
+        "phoneInvalid": "Phone may contain only digits, spaces and ( ) - . and an optional leading +.",
+        "phoneTooLong": "Phone must be 64 characters or fewer.",
+        "roleTitleTooLong": "Role or title must be 255 characters or fewer.",
+        "notesTooLong": "Notes must be 2000 characters or fewer."
+      }
     },
     "board": {
       "loadFailed": "Could not load this board",
