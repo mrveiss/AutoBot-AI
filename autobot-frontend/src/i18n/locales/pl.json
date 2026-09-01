@@ -8618,7 +8618,15 @@
       "phoneLabel": "Telefon",
       "saving": "Zapisywanie…",
       "save": "Zapisz",
-      "contactSaveError": "Nie udało się zapisać kontaktu."
+      "contactSaveError": "Nie udało się zapisać kontaktu.",
+      "addContact": "Dodaj kontakt",
+      "deleteAriaLabel": "Usuń {name}",
+      "deleteConfirm": "Usunąć ten kontakt?",
+      "fullNamePlaceholder": "Imię i nazwisko",
+      "roleTitlePlaceholder": "Stanowisko",
+      "emailPlaceholder": "E-mail",
+      "contactCreateError": "Nie udało się dodać kontaktu",
+      "contactDeleteError": "Nie udało się usunąć kontaktu"
     },
     "board": {
       "loadFailed": "Nie udało się wczytać tej tablicy",

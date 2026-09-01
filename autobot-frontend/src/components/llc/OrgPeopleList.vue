@@ -57,6 +57,10 @@ const emit = defineEmits<{
   select: [orgNodeId: string]
   /** A contact's edit form was submitted — the parent owns the PATCH and the refetch (#14603). */
   'save-contact': [contactId: string, patch: ContactEditPatch]
+  /** #14105: a new contact was submitted — the parent owns the POST and refetch. */
+  'create-contact': [draft: ContactEditPatch]
+  /** #14105: a contact was removed — the parent owns the DELETE and refetch. */
+  'delete-contact': [contactId: string]
 }>()
 
 /** True when no role explains this person's presence in the department. */
@@ -75,6 +79,49 @@ const editingKey = ref<string | null>(null)
 
 /** Draft field values for the open row, reset each time editing starts. */
 const draft = reactive<ContactEditPatch>({ full_name: '', role_title: '', email: '', phone: '' })
+
+// #14105: creating and removing. The backend has had both since the directory
+// landed (`POST /contacts/{company_id}`, `DELETE /contacts/{company_id}/{id}`);
+// only the read and the edit were ever wired, so a contact could be corrected
+// but never added or removed from the UI.
+
+/** True while the "add contact" form is open. */
+const creating = ref(false)
+
+/** Draft for the new contact. Same shape as an edit — `ContactCreate` accepts
+ *  exactly the fields `ContactEditPatch` carries. */
+const newDraft = reactive<ContactEditPatch>({ full_name: '', role_title: '', email: '', phone: '' })
+
+/** The contact awaiting delete confirmation, so removal is never one click. */
+const confirmingDeleteKey = ref<string | null>(null)
+
+function startCreating(): void {
+  Object.assign(newDraft, { full_name: '', role_title: '', email: '', phone: '' })
+  creating.value = true
+}
+
+function cancelCreating(): void {
+  creating.value = false
+}
+
+function submitCreate(): void {
+  if (!newDraft.full_name.trim()) return
+  emit('create-contact', { ...newDraft, full_name: newDraft.full_name.trim() })
+  creating.value = false
+}
+
+function confirmDelete(person: OrgPerson): void {
+  confirmingDeleteKey.value = person.key
+}
+
+function cancelDelete(): void {
+  confirmingDeleteKey.value = null
+}
+
+function submitDelete(person: OrgPerson): void {
+  emit('delete-contact', contactIdOfKey(person.key))
+  confirmingDeleteKey.value = null
+}
 
 function isEditingContact(person: { key: string; kind: string }): boolean {
   return person.kind === 'contact' && editingKey.value === person.key
@@ -381,10 +428,97 @@ function groupLabel(group: OrgPeopleGroup): string {
             >
               {{ t('common.edit') }}
             </button>
+
+            <!-- #14105: removal, contact-only for the same reason as edit. Two
+                 steps, because a contact deleted by mis-click cannot be undone
+                 from this screen. -->
+            <button
+              v-if="!isEditingContact(person) && person.kind === 'contact' && confirmingDeleteKey !== person.key"
+              type="button"
+              class="shrink-0 rounded border border-autobot-border px-2 py-1 text-xs text-autobot-text-muted hover:text-autobot-text-primary"
+              :data-testid="`org-person-delete-${person.key}`"
+              :aria-label="t('llc.orgPeople.deleteAriaLabel', { name: person.name })"
+              @click="confirmDelete(person)"
+            >
+              {{ t('common.delete') }}
+            </button>
+            <span v-if="confirmingDeleteKey === person.key" class="flex shrink-0 items-center gap-2">
+              <span class="text-xs text-autobot-text-muted">{{ t('llc.orgPeople.deleteConfirm') }}</span>
+              <button
+                type="button"
+                class="rounded border border-autobot-border px-2 py-1 text-xs text-autobot-text-primary"
+                :data-testid="`org-person-delete-confirm-${person.key}`"
+                @click="submitDelete(person)"
+              >
+                {{ t('common.confirm') }}
+              </button>
+              <button
+                type="button"
+                class="rounded border border-autobot-border px-2 py-1 text-xs text-autobot-text-muted"
+                :data-testid="`org-person-delete-cancel-${person.key}`"
+                @click="cancelDelete()"
+              >
+                {{ t('common.cancel') }}
+              </button>
+            </span>
           </li>
         </ul>
       </div>
     </template>
+
+    <!-- #14105: adding a contact. The endpoint has always existed; nothing
+         called it, so the directory could only ever grow from elsewhere. -->
+    <div class="flex flex-col gap-2">
+      <button
+        v-if="!creating"
+        type="button"
+        class="self-start rounded border border-autobot-border px-2 py-1 text-xs text-autobot-text-muted hover:text-autobot-text-primary"
+        data-testid="org-person-add"
+        @click="startCreating()"
+      >
+        {{ t('llc.orgPeople.addContact') }}
+      </button>
+      <form v-else class="flex flex-wrap items-center gap-2" data-testid="org-person-add-form" @submit.prevent="submitCreate()">
+        <input
+          v-model="newDraft.full_name"
+          type="text"
+          required
+          class="rounded border border-autobot-border bg-autobot-bg-primary px-2 py-1 text-xs"
+          :placeholder="t('llc.orgPeople.fullNamePlaceholder')"
+          data-testid="org-person-add-name"
+        />
+        <input
+          v-model="newDraft.role_title"
+          type="text"
+          class="rounded border border-autobot-border bg-autobot-bg-primary px-2 py-1 text-xs"
+          :placeholder="t('llc.orgPeople.roleTitlePlaceholder')"
+          data-testid="org-person-add-role"
+        />
+        <input
+          v-model="newDraft.email"
+          type="email"
+          class="rounded border border-autobot-border bg-autobot-bg-primary px-2 py-1 text-xs"
+          :placeholder="t('llc.orgPeople.emailPlaceholder')"
+          data-testid="org-person-add-email"
+        />
+        <button
+          type="submit"
+          class="rounded border border-autobot-primary px-2 py-1 text-xs text-autobot-text-primary disabled:opacity-50"
+          :disabled="!newDraft.full_name.trim()"
+          data-testid="org-person-add-submit"
+        >
+          {{ t('common.save') }}
+        </button>
+        <button
+          type="button"
+          class="rounded border border-autobot-border px-2 py-1 text-xs text-autobot-text-muted"
+          data-testid="org-person-add-cancel"
+          @click="cancelCreating()"
+        >
+          {{ t('common.cancel') }}
+        </button>
+      </form>
+    </div>
 
     <p
       v-if="counts.contact > 0"

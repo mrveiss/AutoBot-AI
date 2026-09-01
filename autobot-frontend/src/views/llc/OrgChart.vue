@@ -116,6 +116,9 @@ const peopleLoading = ref(false)
 // the People list is not saving stays interactive. Single-flight per the
 // same pattern as `processMutationInFlight`/`toolMutationInFlight` above:
 // one save at a time, guarded before the first await.
+// #14105: the create form has no contact id yet, so its in-flight and error
+// state is keyed by a sentinel rather than a real id.
+const CONTACT_CREATE_SENTINEL = '__create__'
 const savingContactId = ref<string | null>(null)
 const contactSaveError = ref<{ contactId: string; message: string } | null>(null)
 
@@ -433,6 +436,57 @@ async function reloadPeopleSources(): Promise<void> {
  * `reloadPeopleSources` re-reads from the server rather than patching the
  * row in place, same principle as the tool/process attach handlers above.
  */
+/**
+ * #14105: create. `POST /api/llc/contacts/{company_id}` has existed since the
+ * directory landed (`contacts.py:297`); nothing called it, so the People list
+ * could correct a contact but never add one.
+ */
+async function onCreateContact(draft: ContactEditPatch): Promise<void> {
+  if (!companyId.value || savingContactId.value !== null) return
+  savingContactId.value = CONTACT_CREATE_SENTINEL
+  contactSaveError.value = null
+  try {
+    await api.post(`/api/llc/contacts/${companyId.value}`, {
+      full_name: draft.full_name,
+      role_title: draft.role_title || null,
+      email: draft.email || null,
+      phone: draft.phone || null,
+    })
+    await reloadPeopleSources()
+  } catch (err: unknown) {
+    logger.error('Failed to create contact:', err)
+    contactSaveError.value = {
+      contactId: CONTACT_CREATE_SENTINEL,
+      message: describeError(err, 'llc.orgPeople.contactCreateError'),
+    }
+  } finally {
+    savingContactId.value = null
+  }
+}
+
+/**
+ * #14105: removal. `DELETE /api/llc/contacts/{company_id}/{contact_id}`
+ * (`contacts.py:353`). The confirmation step lives in the list component; by
+ * the time this runs the user has confirmed.
+ */
+async function onDeleteContact(contactId: string): Promise<void> {
+  if (!companyId.value || savingContactId.value !== null) return
+  savingContactId.value = contactId
+  contactSaveError.value = null
+  try {
+    await api.delete(`/api/llc/contacts/${companyId.value}/${contactId}`)
+    await reloadPeopleSources()
+  } catch (err: unknown) {
+    logger.error('Failed to delete contact:', err)
+    contactSaveError.value = {
+      contactId,
+      message: describeError(err, 'llc.orgPeople.contactDeleteError'),
+    }
+  } finally {
+    savingContactId.value = null
+  }
+}
+
 async function onSaveContact(contactId: string, patch: ContactEditPatch): Promise<void> {
   if (!companyId.value || savingContactId.value !== null) return
   savingContactId.value = contactId
@@ -1135,6 +1189,8 @@ onMounted(() => {
         :contact-save-error="contactSaveError"
         @select="onPersonSelected"
         @save-contact="onSaveContact"
+        @create-contact="onCreateContact"
+        @delete-contact="onDeleteContact"
       />
     </div>
 
