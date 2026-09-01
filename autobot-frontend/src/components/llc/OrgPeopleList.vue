@@ -17,7 +17,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UNGROUPED_TEAM_ID, contactIdOfKey } from '@/composables/llc/orgPeople'
 import type { ContactEditPatch, OrgPeopleGroup, OrgPerson, PersonKind } from '@/composables/llc/orgPeople'
-import { isValidContact, validateContact } from './contactValidation'
+import { contactErrorList, isValidContact } from './contactValidation'
 
 const props = defineProps<{
   groups: OrgPeopleGroup[]
@@ -108,8 +108,8 @@ function cancelCreating(): void {
 
 /** #14105: the API's own rules, checked before the round trip so the user is
  *  told which field is wrong instead of receiving an unattributable 422. */
-const newDraftErrors = computed(() => validateContact(newDraft))
-const draftErrors = computed(() => validateContact(draft))
+const newDraftErrors = computed(() => contactErrorList(newDraft))
+const draftErrors = computed(() => contactErrorList(draft))
 
 function submitCreate(): void {
   if (!isValidContact(newDraft)) return
@@ -349,11 +349,21 @@ function groupLabel(group: OrgPeopleGroup): string {
                   :disabled="isSavingContact(person)"
                 />
               </label>
+              <!-- #14105: the same field errors as the add form — an edit can
+                   break a rule the create form enforced. -->
+              <p
+                v-for="error in draftErrors"
+                :key="error.field"
+                class="w-full text-xs text-autobot-danger"
+                :data-testid="`org-person-edit-field-error-${error.field}-${person.key}`"
+              >
+                {{ t(error.messageKey) }}
+              </p>
               <button
                 type="submit"
                 class="rounded border border-autobot-primary px-2 py-1 text-xs font-semibold text-autobot-primary disabled:opacity-50"
                 :data-testid="`org-person-edit-save-${person.key}`"
-                :disabled="isSavingContact(person) || !draft.full_name.trim()"
+                :disabled="isSavingContact(person) || !isValidContact(draft)"
               >
                 {{ isSavingContact(person) ? t('llc.orgPeople.saving') : t('llc.orgPeople.save') }}
               </button>
@@ -512,12 +522,12 @@ function groupLabel(group: OrgPeopleGroup): string {
         />
         <!-- #14105: the field the user must fix, named, before any round trip. -->
         <p
-          v-for="(messageKey, field) in newDraftErrors"
-          :key="field"
+          v-for="error in newDraftErrors"
+          :key="error.field"
           class="w-full text-xs text-autobot-danger"
-          :data-testid="`org-person-add-error-${field}`"
+          :data-testid="`org-person-add-error-${error.field}`"
         >
-          {{ t(messageKey) }}
+          {{ t(error.messageKey) }}
         </p>
         <button
           type="submit"

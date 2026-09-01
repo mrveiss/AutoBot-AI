@@ -81,3 +81,17 @@ export function validateContact(draft: ContactDraft): ContactFieldErrors {
 export function isValidContact(draft: ContactDraft): boolean {
   return Object.keys(validateContact(draft)).length === 0
 }
+
+/**
+ * The same errors as a list, for rendering.
+ *
+ * `ContactFieldErrors` is a `Partial`, so iterating it in a template yields
+ * `string | undefined` and the message cannot be passed to `t()` without a
+ * cast. `flatMap` narrows instead, so the template gets concrete strings and
+ * the record keeps the shape callers index by field.
+ */
+export function contactErrorList(draft: ContactDraft): Array<{ field: string; messageKey: string }> {
+  return Object.entries(validateContact(draft)).flatMap(([field, messageKey]) =>
+    messageKey ? [{ field, messageKey }] : [],
+  )
+}

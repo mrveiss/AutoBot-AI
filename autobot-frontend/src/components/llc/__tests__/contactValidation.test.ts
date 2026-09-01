@@ -18,7 +18,7 @@ import { describe, it, expect } from 'vitest'
 
 import en from '@/i18n/locales/en.json'
 
-import { validateContact, isValidContact } from '../contactValidation'
+import { contactErrorList, isValidContact, validateContact } from '../contactValidation'
 
 const valid = { full_name: 'Ada Lovelace', role_title: 'Analyst', email: 'ada@example.com', phone: '+44 (20) 7946-0000' }
 
@@ -100,5 +100,27 @@ describe('#14105: the delete confirmation says what it destroys', () => {
     // confirming, which "Delete this contact?" did not tell them.
     expect(text.toLowerCase()).toContain('permanently')
     expect(text.toLowerCase()).toMatch(/erased|recover/)
+  })
+})
+
+describe('#14105: contactErrorList renders without a cast', () => {
+  it('yields concrete message strings, not string | undefined', () => {
+    const list = contactErrorList({ full_name: '', role_title: '', email: '', phone: 'bad' })
+
+    expect(list).toHaveLength(2)
+    for (const entry of list) {
+      expect(typeof entry.field).toBe('string')
+      expect(typeof entry.messageKey).toBe('string')
+    }
+  })
+
+  it('is empty for a valid draft', () => {
+    expect(contactErrorList(valid)).toEqual([])
+  })
+
+  it('carries the same fields the record form reports', () => {
+    const draft = { ...valid, phone: 'bad', full_name: '' }
+
+    expect(contactErrorList(draft).map((e) => e.field).sort()).toEqual(Object.keys(validateContact(draft)).sort())
   })
 })
