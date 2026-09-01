@@ -8269,7 +8269,7 @@
       "resumeAgent": "Resume Agent",
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
-      "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
+      "confirmTerminate": "عامل \"{name}\" خاتمه یابد؟ این کار آن را برای همیشه متوقف می‌کند و بازگشتی ندارد.",
       "terminatedNote": "This agent has been terminated.",
       "viewMode": "حالت نمایش",
       "viewTree": "درختی",

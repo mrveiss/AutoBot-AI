@@ -8269,7 +8269,7 @@
       "resumeAgent": "Resume Agent",
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
-      "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
+      "confirmTerminate": "إنهاء الوكيل \"{name}\"؟ سيؤدي ذلك إلى إيقافه نهائيًا دون إمكانية الاستعادة.",
       "terminatedNote": "This agent has been terminated.",
       "viewMode": "وضع العرض",
       "viewTree": "شجرة",

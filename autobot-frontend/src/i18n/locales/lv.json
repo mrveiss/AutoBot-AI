@@ -8269,7 +8269,7 @@
       "resumeAgent": "Resume Agent",
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
-      "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
+      "confirmTerminate": "Pārtraukt aģentu “{name}”? Tas to apturēs neatgriezeniski, bez atjaunošanas.",
       "terminatedNote": "This agent has been terminated.",
       "viewMode": "Skata režīms",
       "viewTree": "Koks",
