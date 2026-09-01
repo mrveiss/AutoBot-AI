@@ -6,12 +6,27 @@
 /**
  * Unified OrchestrationView - Complete orchestration management (Issue #850 Phase 4)
  *
- * Consolidates 4 pages into single 5-tab view:
- * 1. Per-Node Control (from ServicesView)
+ * Consolidates pages into a single tabbed view:
+ * 1. Per-Node Control (from ServicesView — live WebSocket status,
+ *    progress-tracked restart-all, Redis panel, category reassignment; #15224)
+ *
+ *    Capability diff vs the deleted ServicesView.vue, stated in full so that
+ *    "full parity" is a claim someone can check rather than take on trust:
+ *      - ported: expand/collapse all, status + category filters and counts,
+ *        auto-refresh, Redis panel, status/category badges, per-service action
+ *        buttons, category reassignment, failure reporting on every action.
+ *      - DROPPED ON PURPOSE: the fleet summary card row (Nodes / Total /
+ *        Running / Stopped / Failed, ServicesView.vue:510-535). The
+ *        Infrastructure tab already carries an equivalent grid, and per-node
+ *        counts survive on each NodeHealthCard, so restoring it here would be
+ *        a third copy of the same numbers. Recorded rather than silently lost.
+ *      - not a capability: ServicesView's `lastRefresh` was assigned but never
+ *        rendered.
  * 2. Fleet Operations (from OrchestrationView)
  * 3. Roles & Deployment (from RolesView)
  * 4. Migration & Advanced (from OrchestrationView)
- * 5. Infrastructure Overview (fleet status + service summary)
+ * 5. Replication (mounts ReplicationView.vue as-is; #15225)
+ * 6. Infrastructure Overview (fleet status + service summary)
  */
 
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
@@ -31,6 +46,8 @@ import ServiceActionButtons from '@/components/orchestration/ServiceActionButton
 import NodeHealthCard from '@/components/orchestration/NodeHealthCard.vue'
 import RestartConfirmDialog from '@/components/orchestration/RestartConfirmDialog.vue'
 import PostSyncActionBadges from '@/components/orchestration/PostSyncActionBadges.vue'
+import RedisServicePanel from '@/components/RedisServicePanel.vue'
+import ReplicationView from '@/views/ReplicationView.vue'
 import type { NodeStatus, ServiceStatus } from '@/types/slm'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
@@ -71,7 +88,9 @@ function getRoleOwnerLabel(roleName: string): string {
 // Tab Management (Issue #924: subroutes via :tab? param)
 // =============================================================================
 
-const VALID_TABS = ['per-node', 'fleet', 'roles', 'migration', 'infrastructure'] as const
+// Issue #15225: 'replication' added — consolidates /replications and the
+// /backups replications tab into a single orchestration tab.
+const VALID_TABS = ['per-node', 'fleet', 'roles', 'migration', 'replication', 'infrastructure'] as const
 type Tab = (typeof VALID_TABS)[number]
 
 function resolveTab(param: unknown): Tab {
@@ -91,13 +110,14 @@ function navigateToTab(tab: Tab): void {
   router.push({ name: 'orchestration', params: { tab } })
 }
 
-const tabs: { id: Tab; label: string; icon: string }[] = [
-  { id: 'per-node', label: 'Per-Node Control', icon: 'server' },
-  { id: 'fleet', label: 'Fleet Operations', icon: 'globe' },
-  { id: 'roles', label: 'Roles & Deployment', icon: 'cog' },
-  { id: 'migration', label: 'Migration', icon: 'arrows' },
-  { id: 'infrastructure', label: 'Overview', icon: 'chart' },
-]
+const tabs = computed<{ id: Tab; label: string; icon: string }[]>(() => [
+  { id: 'per-node', label: t('orchestrationView.tabPerNode'), icon: 'server' },
+  { id: 'fleet', label: t('orchestrationView.tabFleet'), icon: 'globe' },
+  { id: 'roles', label: t('orchestrationView.tabRoles'), icon: 'cog' },
+  { id: 'migration', label: t('orchestrationView.tabMigration'), icon: 'arrows' },
+  { id: 'replication', label: t('orchestrationView.tabReplication'), icon: 'replicate' },
+  { id: 'infrastructure', label: t('orchestrationView.tabInfrastructure'), icon: 'chart' },
+])
 
 // =============================================================================
 // Tab 1: Per-Node Control State
@@ -109,6 +129,14 @@ const statusFilter = ref<string>('all')
 const expandedNodes = ref<Set<string>>(new Set())
 const autoRefresh = ref(true)
 let refreshInterval: ReturnType<typeof setInterval> | null = null
+
+// Status filter options (parity with ServicesView.vue — #15224)
+const statusFilterOptions = computed(() => [
+  { value: 'all', label: t('orchestrationView.allServices') },
+  { value: 'running', label: t('orchestrationView.running') },
+  { value: 'stopped', label: t('orchestrationView.stopped') },
+  { value: 'failed', label: t('orchestrationView.failed') },
+])
 
 // Group services by node
 interface NodeServiceGroup {
@@ -511,10 +539,53 @@ async function handleServiceAction(
   }
 }
 
-// Restart All Services on Node
+// Per-service category reassignment (ported from ServicesView.vue — #15224
+// review: the consolidation had dropped this entirely, leaving
+// `orchestration.updateServiceCategory` exported but uncalled outside a test)
+const categoryMenuOpen = ref<string | null>(null)
+const isCategoryChanging = ref(false)
+
+function toggleCategoryMenu(key: string): void {
+  categoryMenuOpen.value = categoryMenuOpen.value === key ? null : key
+}
+
+async function handleCategoryChange(
+  serviceName: string,
+  newCategory: 'autobot' | 'system'
+): Promise<void> {
+  if (isCategoryChanging.value) return
+
+  isCategoryChanging.value = true
+  categoryMenuOpen.value = null
+
+  try {
+    const success = await orchestration.updateServiceCategory(serviceName, newCategory)
+    if (success) {
+      logger.info(`Service ${serviceName} category changed to ${newCategory}`)
+      await orchestration.fetchFleetServices()
+    }
+  } catch (error) {
+    logger.error(`Failed to update category for ${serviceName}:`, error)
+  } finally {
+    isCategoryChanging.value = false
+  }
+}
+
+function handleClickOutsideCategoryMenu(event: MouseEvent): void {
+  const target = event.target as HTMLElement
+  if (!target.closest('.category-menu-container')) {
+    categoryMenuOpen.value = null
+  }
+}
+
+// Restart All Services on Node (Issue #725 parity — #15224: single
+// progress-tracked call to /nodes/:id/services/restart-all, replacing the
+// former client-side serial loop over handleServiceAction)
 const restartAllNodeId = ref<string | null>(null)
 const restartAllHostname = ref<string | null>(null)
 const showRestartAllConfirm = ref(false)
+const isRestartingAll = ref(false)
+const restartAllProgress = ref<{ total: number; completed: number } | null>(null)
 
 // Issue #991: Fleet bulk-action confirmation dialog state
 const showBulkConfirm = ref(false)
@@ -526,21 +597,53 @@ async function handleRestartAllServices(nodeId: string, hostname: string): Promi
   showRestartAllConfirm.value = true
 }
 
+async function applyRestartAllResult(
+  result: Awaited<ReturnType<typeof orchestration.restartAllNodeServices>>,
+  hostname: string | null
+): Promise<void> {
+  if (!result) return
+
+  restartAllProgress.value = { total: result.total_services, completed: result.successful_restarts }
+  // Refresh first: fetchFleetServices() resets orchestration.error itself,
+  // which would otherwise wipe a partial-failure message set below before
+  // the banner (OrchestrationView template, orchestration.error) ever shows
+  // it — a real HTTP 200 + success:false shape ServicesView.vue surfaced
+  // via errorMessage and this consolidation had silently dropped (#15224 review).
+  await orchestration.fetchFleetServices()
+
+  if (result.success) {
+    logger.info(`Restarted all services on ${hostname}`)
+  } else {
+    const message = result.message || t('orchestrationView.restartAllPartiallyFailed', { hostname })
+    logger.error(`Restart all services partially failed on ${hostname}: ${result.message}`)
+    orchestration.setError(message)
+    showToast(message, 'error')
+  }
+}
+
 async function confirmRestartAll(): Promise<void> {
-  if (!restartAllNodeId.value) return
+  const nodeId = restartAllNodeId.value
+  const hostname = restartAllHostname.value
+  if (!nodeId || isRestartingAll.value) return
   showRestartAllConfirm.value = false
 
-  // Note: This would call a per-node restart-all endpoint
-  // For now, we'll restart each service individually
-  const nodeGroup = servicesByNode.value.find((n) => n.nodeId === restartAllNodeId.value)
-  if (nodeGroup) {
-    for (const service of nodeGroup.services) {
-      await handleServiceAction(restartAllNodeId.value, service.service_name, 'restart')
-    }
-  }
+  isRestartingAll.value = true
+  const nodeGroup = servicesByNode.value.find((n) => n.nodeId === nodeId)
+  restartAllProgress.value = { total: nodeGroup?.services.length ?? 0, completed: 0 }
 
-  restartAllNodeId.value = null
-  restartAllHostname.value = null
+  try {
+    const result = await orchestration.restartAllNodeServices(nodeId, {
+      category: categoryFilter.value === 'all' ? undefined : categoryFilter.value,
+    })
+    await applyRestartAllResult(result, hostname)
+  } catch (error) {
+    logger.error(`Failed to restart all services on ${hostname}:`, error)
+  } finally {
+    isRestartingAll.value = false
+    restartAllProgress.value = null
+    restartAllNodeId.value = null
+    restartAllHostname.value = null
+  }
 }
 
 function toggleNode(nodeId: string): void {
@@ -861,20 +964,24 @@ onMounted(async () => {
     categoryCounts: categoryCounts.value,
   })
 
+  // #15224: applyServiceStatusUpdate (wired inside initializeWebSocket) keeps
+  // orchestration.fleetServices current; this callback only logs.
   orchestration.initializeWebSocket((nodeId, data) => {
     logger.debug('Service status update:', nodeId, data.service_name, data.status)
-    // Status updates are reflected via reactive state
   })
 
   if (autoRefresh.value) {
     refreshInterval = setInterval(refresh, 15000)
   }
+
+  document.addEventListener('click', handleClickOutsideCategoryMenu)
 })
 
 onUnmounted(() => {
   if (refreshInterval) {
     clearInterval(refreshInterval)
   }
+  document.removeEventListener('click', handleClickOutsideCategoryMenu)
 })
 </script>
 
@@ -1025,6 +1132,19 @@ onUnmounted(() => {
               >{{ $t('orchestrationView.allValue0', { value0: categoryCounts.all }) }}</button>
             </div>
 
+            <!-- Status Filter (parity with ServicesView.vue — #15224) -->
+            <div class="flex items-center gap-2">
+              <label class="text-sm text-gray-600">{{ $t('orchestrationView.status') }}</label>
+              <select
+                v-model="statusFilter"
+                class="border-gray-300 rounded-lg text-sm focus:ring-primary-500 focus:border-primary-500"
+              >
+                <option v-for="option in statusFilterOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+
             <!-- Expand/Collapse -->
             <div class="flex items-center gap-2">
               <button @click="expandAll" class="text-sm text-primary-600 hover:text-primary-800">
@@ -1036,6 +1156,11 @@ onUnmounted(() => {
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- Redis Service Management (ported from ServicesView.vue — #15224) -->
+        <div class="mb-4">
+          <RedisServicePanel />
         </div>
 
         <!-- Services by Node -->
@@ -1053,6 +1178,8 @@ onUnmounted(() => {
               :isExpanded="expandedNodes.has(node.nodeId)"
               :showExpandIcon="true"
               :showRestartButton="true"
+              :isRestartingAll="isRestartingAll && restartAllNodeId === node.nodeId"
+              :restartProgress="restartAllNodeId === node.nodeId ? restartAllProgress : null"
               @toggle="toggleNode"
               @restartAll="handleRestartAllServices"
             />
@@ -1120,16 +1247,42 @@ onUnmounted(() => {
                       <span v-else class="text-xs text-gray-300">{{ $t('orchestrationView.mdash') }}</span>
                     </td>
                     <td class="px-4 py-2">
-                      <span
-                        :class="[
-                          'px-1.5 py-0.5 text-xs font-medium rounded-sm',
-                          service.category === 'autobot'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-gray-100 text-gray-700'
-                        ]"
-                      >
-                        {{ service.category === 'autobot' ? $t('orchestrationView.autoBot') : $t('orchestrationView.system') }}
-                      </span>
+                      <!-- Category reassignment (ported from ServicesView.vue — #15224 review) -->
+                      <div class="relative category-menu-container">
+                        <button
+                          @click.stop="toggleCategoryMenu(`${node.nodeId}-${service.service_name}`)"
+                          :class="[
+                            'inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded-sm cursor-pointer hover:opacity-80',
+                            service.category === 'autobot'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-gray-100 text-gray-700'
+                          ]"
+                        >
+                          {{ service.category === 'autobot' ? $t('orchestrationView.autoBot') : $t('orchestrationView.system') }}
+                          <svg class="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        <div
+                          v-if="categoryMenuOpen === `${node.nodeId}-${service.service_name}`"
+                          class="absolute left-0 mt-1 w-28 bg-white rounded-lg shadow-lg border border-gray-200 z-10"
+                        >
+                          <button
+                            @click="handleCategoryChange(service.service_name, 'autobot')"
+                            :disabled="isCategoryChanging"
+                            class="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 rounded-t-lg"
+                          >
+                            {{ $t('orchestrationView.autoBot') }}
+                          </button>
+                          <button
+                            @click="handleCategoryChange(service.service_name, 'system')"
+                            :disabled="isCategoryChanging"
+                            class="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 rounded-b-lg border-t border-gray-100"
+                          >
+                            {{ $t('orchestrationView.system') }}
+                          </button>
+                        </div>
+                      </div>
                     </td>
                     <td class="px-4 py-2">
                       <ServiceStatusBadge :status="service.status" />
@@ -1872,6 +2025,14 @@ onUnmounted(() => {
             class="mt-3 text-sm text-blue-600 hover:underline"
           >{{ $t('orchestrationView.migrateAnotherRole') }}</button>
         </div>
+      </div>
+
+      <!-- Tab: Replication (Issue #15225 — consolidated from the standalone
+           /replications route and the /backups replications tab). -m-6
+           cancels ReplicationView.vue's own p-6 root so it isn't double
+           padded inside this view's p-6 container. -->
+      <div v-if="activeTab === 'replication'" class="-m-6">
+        <ReplicationView />
       </div>
 
       <!-- Tab 5: Infrastructure Overview -->

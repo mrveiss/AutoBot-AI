@@ -22,4 +22,4 @@
 #
 # Requires: CUDA-compatible GPU, Python 3.12.
 
-vllm>=0.27.1
+vllm>=0.28.0

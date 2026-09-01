@@ -109,7 +109,7 @@ export REDIS_URL="redis://localhost:6379/0"
 ### NPU Support (Optional)
 ```bash
 # Install OpenVINO for Intel NPU acceleration (#14476: floor matches the SSOT)
-pip install "openvino>=2026.3.0"
+pip install "openvino>=2026.3.1"
 ```
 
 ## 📋 Detailed Usage

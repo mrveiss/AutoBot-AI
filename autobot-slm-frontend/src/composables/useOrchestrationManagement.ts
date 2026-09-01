@@ -30,6 +30,10 @@ import type {
   BulkActionResponse,
 } from '@/composables/useOrchestration'
 import type { components } from '@/types/generated/api'
+import type {
+  RestartAllServicesRequest,
+  RestartAllServicesResponse,
+} from '@/types/api-responses'
 
 const logger = createLogger('useOrchestrationManagement')
 
@@ -335,7 +339,16 @@ export function useOrchestrationManagement() {
         `/orchestration/services/${serviceName}/start`,
         options || {}
       )
-      logger.info(`Start service ${serviceName}:`, response.data.message)
+      // #15224: HTTP 200 with `success: false` is a real response shape
+      // (api/orchestration.py returns `success=success` at 200). The deleted
+      // ServicesView.vue set errorMessage on exactly this branch; without it the
+      // operator clicks the button, the action fails, and nothing appears.
+      if (!response.data.success) {
+        error.value = response.data.message || `Failed to start ${serviceName}`
+        logger.error(`Start service ${serviceName} failed:`, response.data.message)
+      } else {
+        logger.info(`Start service ${serviceName}:`, response.data.message)
+      }
       return response.data
     } catch (e) {
       error.value = extractErrorMessage(e, `Failed to start ${serviceName}`)
@@ -355,7 +368,16 @@ export function useOrchestrationManagement() {
         `/orchestration/services/${serviceName}/stop`,
         options || {}
       )
-      logger.info(`Stop service ${serviceName}:`, response.data.message)
+      // #15224: HTTP 200 with `success: false` is a real response shape
+      // (api/orchestration.py returns `success=success` at 200). The deleted
+      // ServicesView.vue set errorMessage on exactly this branch; without it the
+      // operator clicks the button, the action fails, and nothing appears.
+      if (!response.data.success) {
+        error.value = response.data.message || `Failed to stop ${serviceName}`
+        logger.error(`Stop service ${serviceName} failed:`, response.data.message)
+      } else {
+        logger.info(`Stop service ${serviceName}:`, response.data.message)
+      }
       return response.data
     } catch (e) {
       error.value = extractErrorMessage(e, `Failed to stop ${serviceName}`)
@@ -375,7 +397,16 @@ export function useOrchestrationManagement() {
         `/orchestration/services/${serviceName}/restart`,
         options || {}
       )
-      logger.info(`Restart service ${serviceName}:`, response.data.message)
+      // #15224: HTTP 200 with `success: false` is a real response shape
+      // (api/orchestration.py returns `success=success` at 200). The deleted
+      // ServicesView.vue set errorMessage on exactly this branch; without it the
+      // operator clicks the button, the action fails, and nothing appears.
+      if (!response.data.success) {
+        error.value = response.data.message || `Failed to restart ${serviceName}`
+        logger.error(`Restart service ${serviceName} failed:`, response.data.message)
+      } else {
+        logger.info(`Restart service ${serviceName}:`, response.data.message)
+      }
       return response.data
     } catch (e) {
       error.value = extractErrorMessage(e, `Failed to restart ${serviceName}`)
@@ -481,9 +512,61 @@ export function useOrchestrationManagement() {
     }
   }
 
+  // Restart All Services on a Node (Issue #725 parity — #15224)
+  async function restartAllNodeServices(
+    nodeId: string,
+    options?: RestartAllServicesRequest
+  ): Promise<RestartAllServicesResponse | null> {
+    error.value = null
+
+    try {
+      const response = await client.post<RestartAllServicesResponse>(
+        `/nodes/${nodeId}/services/restart-all`,
+        options || {}
+      )
+      // #15224 review: HTTP 200 with `success: false` is a real response
+      // shape (a partial restart) — ServicesView.vue set errorMessage on
+      // exactly this branch. Without it here, a partial failure was only
+      // ever logged, invisible to the operator watching the UI.
+      if (!response.data.success) {
+        error.value = response.data.message || `Restart all services on ${nodeId} partially failed`
+        logger.error(`Restart all services on ${nodeId} partially failed:`, response.data.message)
+      } else {
+        logger.info(`Restart all services on ${nodeId}:`, response.data.message)
+      }
+      return response.data
+    } catch (e) {
+      error.value = extractErrorMessage(e, `Failed to restart all services on ${nodeId}`)
+      logger.error(`Failed to restart all services on ${nodeId}:`, e)
+      return null
+    }
+  }
+
   // ===========================================================================
   // WebSocket Integration
   // ===========================================================================
+
+  /**
+   * Apply a single service's status update, received over the WebSocket, to
+   * the in-memory `fleetServices` list — mirrors ServicesView.vue's
+   * `handleServiceStatusUpdate` (#15224) so the per-node tab reflects live
+   * status instead of only showing it at the next poll/manual refresh.
+   */
+  function applyServiceStatusUpdate(
+    nodeId: string,
+    data: { service_name: string; status: string }
+  ): void {
+    const service = fleetServices.value.find((s) => s.service_name === data.service_name)
+    if (!service) return
+
+    const nodeInfo = service.nodes.find((n) => n.node_id === nodeId)
+    if (!nodeInfo) return
+
+    nodeInfo.status = data.status
+    service.running_count = service.nodes.filter((n) => n.status === 'running').length
+    service.stopped_count = service.nodes.filter((n) => n.status === 'stopped').length
+    service.failed_count = service.nodes.filter((n) => n.status === 'failed').length
+  }
 
   function initializeWebSocket(
     onStatusUpdate?: (nodeId: string, data: { service_name: string; status: string }) => void
@@ -491,9 +574,10 @@ export function useOrchestrationManagement() {
     connect()
     subscribeAll()
 
-    if (onStatusUpdate) {
-      onServiceStatus(onStatusUpdate)
-    }
+    onServiceStatus((nodeId, data) => {
+      applyServiceStatusUpdate(nodeId, data)
+      onStatusUpdate?.(nodeId, data)
+    })
   }
 
   // ===========================================================================
@@ -502,6 +586,19 @@ export function useOrchestrationManagement() {
 
   function clearError(): void {
     error.value = null
+  }
+
+  /**
+   * Set the error banner text directly.
+   *
+   * #15224 review: a caller that does its own refresh after an action (e.g.
+   * OrchestrationView's restart-all confirmation) can otherwise have its
+   * failure message wiped by that refresh's own `error.value = null` before
+   * the banner ever renders it. Refresh first, then call this to restore
+   * the message the user actually needs to see.
+   */
+  function setError(message: string): void {
+    error.value = message
   }
 
   function reset(): void {
@@ -577,12 +674,15 @@ export function useOrchestrationManagement() {
     startAllServices,
     stopAllServices,
     restartAllServices,
+    restartAllNodeServices,
 
     // WebSocket
     initializeWebSocket,
+    applyServiceStatusUpdate,
 
     // Utilities
     clearError,
+    setError,
     reset,
     setActiveAction,
     clearActiveAction,
