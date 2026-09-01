@@ -14,7 +14,6 @@ Tests the full grounding pipeline:
 - Tier 3 integration
 
 Issue: #4070 (Knowledge Grounding Tier 4)
-
 Test coverage:
 - End-to-end grounded response generation (40+ tests)
 - Claims from KB only
@@ -44,6 +43,7 @@ from services.grounded_agent import (
     VerifiedClaim,
     get_grounded_agent,
 )
+from services.knowledge_grounding_models import VerificationMethod
 
 
 @pytest.fixture
@@ -81,7 +81,7 @@ def sample_verified_claim(sample_claim):
         kb_source="fact-123",
         confidence=0.95,
         evidence=["Found in KB monitoring facts"],
-        verification_method="kb_lookup",
+        verification_method=VerificationMethod.KB_LOOKUP.value,
     )
 
 
@@ -201,7 +201,7 @@ async def test_classify_claim_found_in_kb(grounded_agent, sample_claim):
     assert verified.kb_status == ClaimStatus.IN_KB
     assert verified.confidence > 0.85
     assert verified.kb_source == "fact-123"
-    assert verified.verification_method == "kb_lookup"
+    assert verified.verification_method == VerificationMethod.KB_LOOKUP.value
 
 
 @pytest.mark.asyncio
@@ -634,7 +634,7 @@ def _sample_verified_claim() -> VerifiedClaim:
         kb_source="fact-1",
         confidence=0.9,
         evidence=["Found in KB monitoring facts"],
-        verification_method="kb_lookup",
+        verification_method=VerificationMethod.KB_LOOKUP.value,
     )
 
 
