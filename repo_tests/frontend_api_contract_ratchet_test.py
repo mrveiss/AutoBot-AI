@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Backend-contract sprawl in BOTH frontends may shrink, never grow (#12363, #12420).
+"""Backend-contract sprawl in BOTH frontends may shrink, never grow (#12363, #12420, #14062).
 
 The frontend has no single source of truth for talking to the backend. Eight
 HTTP-client classes reimplement request, error, auth and URL handling, **none
@@ -74,6 +74,7 @@ _BASELINES = {
         "raw_fetch": 17,
         "axios": 0,
         "responses": 187,
+        "inline_generics": 573,
     },
     "autobot-slm-frontend": {
         "clients": 1,
@@ -83,6 +84,7 @@ _BASELINES = {
         # The main frontend is already there.
         "axios": 1,
         "responses": 31,
+        "inline_generics": 87,
     },
 }
 
@@ -105,6 +107,16 @@ _CLIENT_CLASS_RE = re.compile(r"\bclass\s+([A-Za-z]+(?:ApiClient|ApiService|Clie
 _RAW_FETCH_RE = re.compile(r"(?<![.\w])(?:window\.)?fetch\(")
 _AXIOS_IMPORT_RE = re.compile(r"""from\s+['"]axios['"]""")
 _RESPONSE_INTERFACE_RE = re.compile(r"^\s*(?:export\s+)?interface\s+\w+Response\b", re.MULTILINE)
+
+# `api.get<Shape>(...)` is an assertion, not a check — TypeScript takes the
+# caller's word for what the endpoint returns. #14062 is the case in point: a
+# view and its test fixture shared the same wrong shape for
+# `/api/llc/boards/{board_id}/items`, so the two layers that should have
+# disagreed agreed, three tests passed, and every board rendered zero rows
+# (#13993). Counted separately from hand-typed interfaces because the fix is
+# different: these become checked by importing the generated contract, which
+# for LLC already exists and simply is not imported.
+_INLINE_GENERIC_RE = re.compile(r"\b\w*[aA]pi\w*\.(?:get|post|put|patch|delete)\s*<")
 
 
 def _is_test(path: Path) -> bool:
@@ -163,6 +175,11 @@ def _hand_typed_response_count(root: Path) -> int:
     return sum(len(_RESPONSE_INTERFACE_RE.findall(_read(path))) for path in _source_files(root))
 
 
+def _inline_generic_count(root: Path) -> int:
+    """Unverified response-shape assertions at the call site."""
+    return sum(len(_INLINE_GENERIC_RE.findall(_read(path))) for path in _source_files(root))
+
+
 def _measure(app: str) -> dict[str, int]:
     root = _APP_SRC[app]
     return {
@@ -170,6 +187,7 @@ def _measure(app: str) -> dict[str, int]:
         "raw_fetch": len(_raw_fetch_files(root)),
         "axios": len(_axios_importers(root)),
         "responses": _hand_typed_response_count(root),
+        "inline_generics": _inline_generic_count(root),
     }
 
 
@@ -178,6 +196,7 @@ _DIMENSION_ADVICE = {
     "raw_fetch": "Route the call through that app's transport client; a direct fetch builds its own URL, so no config fix reaches it.",
     "axios": "Use the transport client, not axios directly.",
     "responses": "Import the generated contract at `src/types/generated/api.ts` instead of declaring another response shape by hand.",
+    "inline_generics": "Type the call from the generated contract rather than asserting a shape inline — `api.get<Shape>` is a claim TypeScript cannot check.",
 }
 
 
