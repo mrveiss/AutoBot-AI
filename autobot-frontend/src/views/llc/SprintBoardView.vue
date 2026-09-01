@@ -165,7 +165,7 @@ const boardId = computed(() => route.params.boardId as string)
 const CHART_W = 200
 const CHART_H = 100
 
-import type { WorkItem, WorkItemSummary } from './workItemTypes'
+import type { BoardCard, WorkItem, WorkItemSummary } from './workItemTypes'
 
 interface BoardColumn {
   id: string
@@ -203,7 +203,7 @@ interface BurndownPoint {
 }
 
 const columns = ref<BoardColumn[]>([])
-const items = ref<WorkItemSummary[]>([])
+const items = ref<BoardCard[]>([])
 // #14064: a load failure was only logged, so it rendered as an empty board.
 const loadError = ref<string | null>(null)
 const sprint = ref<Sprint | null>(null)
@@ -212,7 +212,7 @@ const isLoading = ref(false)
 const detailItem = ref<WorkItem | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
-const draggedItem = ref<WorkItemSummary | null>(null)
+const draggedItem = ref<BoardCard | null>(null)
 
 const burndownPoints = computed(() => {
   if (!burndown.value.length) return ''
@@ -255,7 +255,7 @@ function switchToTimeline() {
  * acceptance criteria, reviewers, linked PRs — read as undefined and rendered
  * blank. The panel looked like a work item with nothing written in it.
  */
-async function openDetail(summary: WorkItemSummary) {
+async function openDetail(summary: BoardCard) {
   detailItem.value = null
   detailError.value = null
   detailLoading.value = true
@@ -292,7 +292,7 @@ function onItemUpdated(updated: WorkItem) {
   if (detailItem.value?.id === updated.id) detailItem.value = updated
 }
 
-function onDragStart(item: WorkItemSummary) {
+function onDragStart(item: BoardCard) {
   draggedItem.value = item
 }
 
@@ -340,7 +340,7 @@ async function fetchBoard() {
     columns.value = board.columns ?? []
 
     // #14075: the endpoint sends an 11-field summary, not a WorkItem.
-    const itemsPromise = api.get<{ columns: Array<{ id: string; items: WorkItemSummary[] }> }>(
+    const itemsPromise = api.get<{ columns: Array<{ id: string; items: BoardCard[] }> }>(
       `/api/llc/boards/${boardId.value}/items`,
     )
 

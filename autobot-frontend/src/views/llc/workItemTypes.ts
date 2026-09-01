@@ -61,6 +61,23 @@ export interface WorkItemSummary {
   column_id: string
 }
 
+/**
+ * What a board card renders (#14075).
+ *
+ * The summary the endpoint sends, widened by the two fields the card template
+ * reads but no endpoint currently supplies: `assignee_name` — which exists
+ * nowhere in the LLC backend, so the avatar's `v-if` has always been false —
+ * and `linked_pr_urls`, which `work_items.py` returns for a single item but
+ * `_work_item_summary` does not include.
+ *
+ * They are optional rather than removed: the card is written to display them
+ * and should keep doing so once the payload carries them (#15431). Declaring
+ * them optional is what makes "absent today" visible instead of a runtime
+ * undefined behind a truthiness check.
+ */
+export type BoardCard = WorkItemSummary &
+  Partial<Pick<WorkItem, 'assignee_name' | 'linked_pr_urls'>>
+
 export interface WorkItem {
   id: string
   identifier: string

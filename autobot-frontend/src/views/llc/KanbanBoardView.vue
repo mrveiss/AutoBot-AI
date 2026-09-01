@@ -155,7 +155,7 @@ const { t } = useI18n()
 const companyId = computed(() => route.params.companyId as string)
 const boardId = computed(() => route.params.boardId as string)
 
-import type { WorkItem, WorkItemSummary } from './workItemTypes'
+import type { BoardCard, WorkItem, WorkItemSummary } from './workItemTypes'
 
 interface BoardColumn {
   id: string
@@ -167,14 +167,14 @@ interface BoardColumn {
 }
 
 const columns = ref<BoardColumn[]>([])
-const items = ref<WorkItemSummary[]>([])
+const items = ref<BoardCard[]>([])
 // #14064: a load failure was only logged, so it rendered as an empty board.
 const loadError = ref<string | null>(null)
 const isLoading = ref(false)
 const detailItem = ref<WorkItem | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
-const draggedItem = ref<WorkItemSummary | null>(null)
+const draggedItem = ref<BoardCard | null>(null)
 const swimlaneEnabled = ref(false)
 
 function itemsByColumn(colId: string) {
@@ -207,7 +207,7 @@ function isWipExceeded(col: BoardColumn) {
  * acceptance criteria, reviewers, linked PRs — read as undefined and rendered
  * blank. The panel looked like a work item with nothing written in it.
  */
-async function openDetail(summary: WorkItemSummary) {
+async function openDetail(summary: BoardCard) {
   detailItem.value = null
   detailError.value = null
   detailLoading.value = true
@@ -244,7 +244,7 @@ function onItemUpdated(updated: WorkItem) {
   if (detailItem.value?.id === updated.id) detailItem.value = updated
 }
 
-function onDragStart(item: WorkItemSummary) {
+function onDragStart(item: BoardCard) {
   draggedItem.value = item
 }
 
@@ -287,7 +287,7 @@ async function fetchBoard() {
       // GH#13993: the board-items endpoint nests items inside each column —
       // there is no top-level `items` key. Flatten before storing.
       // #14075: the endpoint sends an 11-field summary, not a WorkItem.
-      api.get<{ columns: Array<{ id: string; items: WorkItemSummary[] }> }>(`/api/llc/boards/${boardId.value}/items`),
+      api.get<{ columns: Array<{ id: string; items: BoardCard[] }> }>(`/api/llc/boards/${boardId.value}/items`),
     ])
     columns.value = boardData.columns ?? []
     items.value = (itemsData.columns ?? []).flatMap(col => col.items ?? [])
@@ -303,7 +303,7 @@ async function fetchBoard() {
 
 // Inline card component to avoid extra file
 const KanbanCard = defineComponent({
-  props: { item: { type: Object as () => WorkItem, required: true } },
+  props: { item: { type: Object as () => BoardCard, required: true } },
   setup(props) {
     function initials(name: string) {
       return name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
