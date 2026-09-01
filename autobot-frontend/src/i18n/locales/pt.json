@@ -8619,6 +8619,12 @@
       "saving": "Salvando…",
       "save": "Salvar",
       "contactSaveError": "Não foi possível salvar o contato."
+    },
+    "board": {
+      "loadFailed": "Não foi possível carregar este quadro",
+      "retry": "Tentar novamente",
+      "loadingItem": "A carregar item de trabalho…",
+      "itemLoadFailed": "Não foi possível carregar este item"
     }
   },
   "code": {

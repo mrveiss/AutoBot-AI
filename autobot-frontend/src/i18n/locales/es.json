@@ -8619,6 +8619,12 @@
       "saving": "Guardando…",
       "save": "Guardar",
       "contactSaveError": "No se pudo guardar el contacto."
+    },
+    "board": {
+      "loadFailed": "No se pudo cargar este tablero",
+      "retry": "Reintentar",
+      "loadingItem": "Cargando elemento de trabajo…",
+      "itemLoadFailed": "No se pudo cargar este elemento de trabajo"
     }
   },
   "code": {
