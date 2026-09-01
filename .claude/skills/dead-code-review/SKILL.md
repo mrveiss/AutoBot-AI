@@ -92,6 +92,7 @@ git commit -m "chore: remove dead <name> — no callers, confirmed via grep + gi
 Unwired code is a feature that was built but never connected. This is an **implementation gap** — not a cleanup task, not an enhancement, not tech debt. It needs to be wired up to deliver the intended functionality.
 
 ```bash
+# file it, then attach it to its umbrella as a native sub-issue (`issue` skill, Step 4)
 gh issue create \
   --title "impl gap: wire up <name> — <what it does>" \
   --body "## Implementation Gap

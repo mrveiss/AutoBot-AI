@@ -67,7 +67,34 @@ EOF
   --label "<type>,<area>,<priority>"
 ```
 
-## Step 4 — Report and ask
+## Step 4 — Link relationships (native, not prose)
+
+A checklist item and a `Depends on: #N` line are prose — GitHub's hierarchy and dependency
+graphs cannot see them. Record the real edges immediately after creating the issue.
+`sub_issue_id` / `issue_id` take the issue's `id`, never its number.
+
+```bash
+REPO=mrveiss/AutoBot-AI
+
+# Attach to its umbrella
+gh api -X POST repos/$REPO/issues/$UMBRELLA/sub_issues \
+  -F sub_issue_id=$(gh api repos/$REPO/issues/$NEW -q .id)
+
+# One edge per blocker, recorded on the BLOCKED issue
+gh api -X POST repos/$REPO/issues/$NEW/dependencies/blocked_by \
+  -F issue_id=$(gh api repos/$REPO/issues/$BLOCKER -q .id)
+
+# Read back
+gh api repos/$REPO/issues/$UMBRELLA/sub_issues         -q '.[].number'
+gh api repos/$REPO/issues/$NEW/dependencies/blocked_by -q '.[].number'
+```
+
+- One parent per child — re-parenting is `DELETE .../sub_issue -F sub_issue_id=…` then POST.
+- A duplicate POST returns 422; that means already-linked, not a failure.
+- Hierarchy and dependency are separate graphs — never encode one as the other.
+- Issue *types* are an org-only GitHub feature and 404 here; labels stay the taxonomy.
+
+## Step 5 — Report and ask
 
 ```bash
 gh issue view <new-number>   # Confirm creation
@@ -77,6 +104,7 @@ Then report:
 ```
 Created #<number>: <title>
 Labels: <type> · <area> · <priority>
+Parent: #<umbrella> (native sub-issue) · Blocked by: #<n>, #<n>
 Should I: a) Fix now  b) Finish current issue first  c) Leave for later
 ```
 
