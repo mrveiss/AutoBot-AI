@@ -8269,7 +8269,7 @@
       "resumeAgent": "Resume Agent",
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
-      "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
+      "confirmTerminate": "ایجنٹ \"{name}\" ختم کریں؟ یہ اسے مستقل طور پر روک دے گا، بحالی ممکن نہیں۔",
       "terminatedNote": "This agent has been terminated.",
       "viewMode": "منظر کا انداز",
       "viewTree": "درخت",

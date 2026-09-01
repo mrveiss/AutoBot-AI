@@ -8269,7 +8269,7 @@
       "resumeAgent": "Resume Agent",
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
-      "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
+      "confirmTerminate": "לסיים את הסוכן \"{name}\"? הפעולה עוצרת אותו לצמיתות, ללא אפשרות שחזור.",
       "terminatedNote": "This agent has been terminated.",
       "viewMode": "מצב תצוגה",
       "viewTree": "עץ",

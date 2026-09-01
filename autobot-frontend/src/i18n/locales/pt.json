@@ -8269,7 +8269,7 @@
       "resumeAgent": "Retomar agente",
       "pauseAgent": "Pausar agente",
       "terminateAgent": "Terminate Agent",
-      "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
+      "confirmTerminate": "Terminar o agente \"{name}\"? Isto pára-o permanentemente, sem recuperação.",
       "terminatedNote": "This agent has been terminated.",
       "viewMode": "Modo de visualização",
       "viewTree": "Árvore",
