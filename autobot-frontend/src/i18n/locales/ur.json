@@ -8269,7 +8269,7 @@
       "resumeAgent": "Resume Agent",
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
-      "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
+      "confirmTerminate": "ایجنٹ \"{name}\" ختم کریں؟ یہ اسے مستقل طور پر روک دے گا، بحالی ممکن نہیں۔",
       "terminatedNote": "This agent has been terminated.",
       "viewMode": "منظر کا انداز",
       "viewTree": "درخت",
@@ -8621,12 +8621,21 @@
       "contactSaveError": "رابطہ محفوظ نہیں ہو سکا۔",
       "addContact": "رابطہ شامل کریں",
       "deleteAriaLabel": "{name} کو حذف کریں",
-      "deleteConfirm": "کیا یہ رابطہ حذف کریں؟",
+      "deleteConfirm": "کیا اس رابطے کو مستقل طور پر حذف کریں؟ نام اور رابطے کی تفصیلات اسٹوریج سے مٹا دی جائیں گی اور بحال نہیں کی جا سکتیں۔",
       "fullNamePlaceholder": "پورا نام",
       "roleTitlePlaceholder": "عہدہ",
       "emailPlaceholder": "ای میل",
       "contactCreateError": "رابطہ شامل نہیں کیا جا سکا",
-      "contactDeleteError": "رابطہ حذف نہیں کیا جا سکا"
+      "contactDeleteError": "رابطہ حذف نہیں کیا جا سکا",
+      "validation": {
+        "fullNameRequired": "مکمل نام درکار ہے۔",
+        "fullNameTooLong": "مکمل نام 255 حروف یا اس سے کم ہونا چاہیے۔",
+        "emailTooLong": "ای میل 320 حروف یا اس سے کم ہونی چاہیے۔",
+        "phoneInvalid": "فون میں صرف ہندسے، خالی جگہ اور ( ) - . اور ابتدا میں اختیاری + ہو سکتا ہے۔",
+        "phoneTooLong": "فون 64 حروف یا اس سے کم ہونا چاہیے۔",
+        "roleTitleTooLong": "کردار یا عہدہ 255 حروف یا اس سے کم ہونا چاہیے۔",
+        "notesTooLong": "نوٹس 2000 حروف یا اس سے کم ہونے چاہئیں۔"
+      }
     },
     "board": {
       "loadFailed": "یہ بورڈ لوڈ نہیں ہو سکا",

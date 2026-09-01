@@ -16,12 +16,19 @@ genuine, newly-fixed defect here.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
 from autobot_shared.paths import scrubbed_git_env
 
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
+
+# #14115 AC2: violations the hook finds over every tracked production file.
+# Shrink-only -- see TestScanCostAndRepoWideResult for why a silent shrink is
+# the bug this pins. Measured, not estimated; the issue's "50" was a staged
+# subset, not the tree.
+_KNOWN_REPO_VIOLATIONS = 504
 
 
 def _test_git_env() -> dict[str, str]:
@@ -120,3 +127,102 @@ class TestFailsClosedOnGitFailure:
 
         result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
         assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"
+
+
+class TestScanCostAndRepoWideResult:
+    """#14115 AC1/AC2: the two criteria the optimisation was measured against.
+
+    AC1 asked for a whole-repo scan "in well under a minute" and AC2 for the
+    violation set to come back unchanged. Neither is asserted by a crafted
+    single-line test, and neither is asserted here by a stopwatch: a wall-clock
+    threshold on a shared runner measures contention, not the property, and
+    fails the way that teaches people to re-run CI until green (#14157 was
+    exactly that defect, in a different suite).
+
+    So the cost claim is pinned structurally instead -- at the thing that made
+    it slow -- and the result claim is pinned as a count over the real tree.
+
+    The repo-wide case takes ~100s and deliberately carries no pytest selection
+    marker. ``repo_tests/hook_suites_run_in_ci_test.py`` derives which CI
+    invocations must run the hook suites by splitting on each invocation's own
+    ``-m`` expression, and marker-tests.yml selects a set of them; a hook test
+    carrying any marker in that set makes a marker-only invocation select it,
+    which breaks that guard's reasoning. It failed exactly that way when one
+    was added here -- and again when this note merely spelled the marker out,
+    because the guard scans the file as text. Cost is paid in the normal shard.
+    """
+
+    def test_no_subprocess_runs_before_the_raw_line_shortcut(self) -> None:
+        """The property that made the scan fast, stated so it cannot regress.
+
+        The old loop paid three subprocesses on EVERY line: an ``awk`` to strip
+        strings and two ``grep``s. The fix tests the raw line with bash's own
+        matcher first and bails before any of them, so the cost is now per
+        *candidate*, not per line -- and candidates are a tiny fraction of a
+        repository.
+
+        A command substitution still exists in the loop (``sig=$(...)``) and
+        should: stripping is genuinely needed once a line might match. What must
+        not come back is a subprocess reached before the shortcut. Asserting
+        "no subprocess in the loop" would be wrong and would fail today; the
+        real invariant is ordering.
+        """
+        hook = HOOK_PATH.read_text(encoding="utf-8")
+        start = hook.index("_scan_file_for_calls()")
+        body = hook[start : hook.index("\n}", start)]
+
+        shortcut = body.index('[[ "$line" =~ $match_regex ]] || continue')
+        before = body[:shortcut]
+
+        # `$((` is arithmetic expansion and spawns nothing -- the loop uses it
+        # for line_num. Only a real command substitution counts, so the lookahead
+        # is load-bearing rather than defensive.
+        spawns = re.findall(r"\$\((?!\()|`|\| *(?:grep|awk|sed)\b", before)
+        assert not spawns, (
+            "a subprocess is spawned before the raw-line shortcut in "
+            f"_scan_file_for_calls: {spawns}. That reinstates the per-line cost "
+            "#14115 removed -- the hook took minutes over the tree and could not "
+            "be used for a whole-repo scan at all."
+        )
+
+    def test_the_whole_repo_scan_completes_and_reports_a_known_set(self) -> None:
+        """AC2: the repo-wide violation set, pinned.
+
+        The crafted single-line tests prove the semantics on inputs chosen to
+        exercise them. They cannot show that the shortcut drops nothing across
+        real code, because a dropped detection looks exactly like a file with no
+        violations. This runs the hook over every production file in the tree
+        and pins the number it finds.
+
+        Shrink-only, in the repo's ratchet idiom: fixing a violation is expected
+        and must lower this number in the same commit. A *rise* is a new
+        violation; a shrink this constant did not authorise is the optimisation
+        silently losing a detection, which is the failure the AC exists to
+        catch.
+        """
+        repo_root = HOOK_PATH.resolve().parents[4]
+        tracked = subprocess.run(
+            ["git", "ls-files", "*.py", "*.ts", "*.vue"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=True,
+            env=_test_git_env(),
+        ).stdout.split()
+
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH), *tracked],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            env=_test_git_env(),
+        )
+
+        found = result.stdout.count("VIOLATION")
+        assert found == _KNOWN_REPO_VIOLATIONS, (
+            f"whole-repo scan reported {found} violations, expected "
+            f"{_KNOWN_REPO_VIOLATIONS}. Higher: new print()/console.* landed. "
+            "Lower: either they were fixed -- lower _KNOWN_REPO_VIOLATIONS in "
+            "the same commit -- or the scan stopped detecting something, which "
+            "is the regression this pins."
+        )

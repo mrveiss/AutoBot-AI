@@ -8269,7 +8269,7 @@
       "resumeAgent": "Resume Agent",
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
-      "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
+      "confirmTerminate": "إنهاء الوكيل \"{name}\"؟ سيؤدي ذلك إلى إيقافه نهائيًا دون إمكانية الاستعادة.",
       "terminatedNote": "This agent has been terminated.",
       "viewMode": "وضع العرض",
       "viewTree": "شجرة",
@@ -8621,12 +8621,21 @@
       "contactSaveError": "تعذّر حفظ جهة الاتصال.",
       "addContact": "إضافة جهة اتصال",
       "deleteAriaLabel": "حذف {name}",
-      "deleteConfirm": "حذف جهة الاتصال هذه؟",
+      "deleteConfirm": "هل تريد حذف جهة الاتصال هذه نهائيًا؟ سيتم محو الاسم وبيانات الاتصال من التخزين ولا يمكن استرجاعها.",
       "fullNamePlaceholder": "الاسم الكامل",
       "roleTitlePlaceholder": "المسمى الوظيفي",
       "emailPlaceholder": "البريد الإلكتروني",
       "contactCreateError": "تعذّرت إضافة جهة الاتصال",
-      "contactDeleteError": "تعذّر حذف جهة الاتصال"
+      "contactDeleteError": "تعذّر حذف جهة الاتصال",
+      "validation": {
+        "fullNameRequired": "الاسم الكامل مطلوب.",
+        "fullNameTooLong": "يجب ألا يتجاوز الاسم الكامل 255 حرفًا.",
+        "emailTooLong": "يجب ألا يتجاوز البريد الإلكتروني 320 حرفًا.",
+        "phoneInvalid": "يمكن أن يحتوي الهاتف على أرقام ومسافات و ( ) - . وعلامة + اختيارية في البداية فقط.",
+        "phoneTooLong": "يجب ألا يتجاوز رقم الهاتف 64 حرفًا.",
+        "roleTitleTooLong": "يجب ألا يتجاوز الدور أو المسمى 255 حرفًا.",
+        "notesTooLong": "يجب ألا تتجاوز الملاحظات 2000 حرف."
+      }
     },
     "board": {
       "loadFailed": "تعذّر تحميل هذه اللوحة",
