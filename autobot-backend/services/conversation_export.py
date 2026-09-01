@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
-from chat_history.session import SessionOwnerUnreadable
+from security.session_owner_errors import SessionOwnerUnreadable
 from security.session_ownership import build_owner_metadata
 
 logger = get_logger(__name__)

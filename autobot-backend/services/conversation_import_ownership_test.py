@@ -29,7 +29,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from chat_history.session import SessionOwnerUnreadable
+from security.session_owner_errors import SessionOwnerUnreadable
 from services.conversation_export import import_conversation
 
 _DOCUMENT: Dict[str, Any] = {
