@@ -8269,7 +8269,7 @@
       "resumeAgent": "Resume Agent",
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
-      "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
+      "confirmTerminate": "Pārtraukt aģentu “{name}”? Tas to apturēs neatgriezeniski, bez atjaunošanas.",
       "terminatedNote": "This agent has been terminated.",
       "viewMode": "Skata režīms",
       "viewTree": "Koks",
@@ -8621,12 +8621,21 @@
       "contactSaveError": "Neizdevās saglabāt kontaktu.",
       "addContact": "Pievienot kontaktu",
       "deleteAriaLabel": "Dzēst {name}",
-      "deleteConfirm": "Dzēst šo kontaktu?",
+      "deleteConfirm": "Vai neatgriezeniski dzēst šo kontaktpersonu? Vārds un kontaktinformācija tiek izdzēsti no krātuves, un tos nevar atjaunot.",
       "fullNamePlaceholder": "Pilns vārds",
       "roleTitlePlaceholder": "Amata nosaukums",
       "emailPlaceholder": "E-pasts",
       "contactCreateError": "Neizdevās pievienot kontaktu",
-      "contactDeleteError": "Neizdevās dzēst kontaktu"
+      "contactDeleteError": "Neizdevās dzēst kontaktu",
+      "validation": {
+        "fullNameRequired": "Nepieciešams pilns vārds.",
+        "fullNameTooLong": "Pilns vārds nedrīkst pārsniegt 255 rakstzīmes.",
+        "emailTooLong": "E-pasta adrese nedrīkst pārsniegt 320 rakstzīmes.",
+        "phoneInvalid": "Tālrunī drīkst būt tikai cipari, atstarpes un ( ) - . un neobligāts + sākumā.",
+        "phoneTooLong": "Tālruņa numurs nedrīkst pārsniegt 64 rakstzīmes.",
+        "roleTitleTooLong": "Loma vai amats nedrīkst pārsniegt 255 rakstzīmes.",
+        "notesTooLong": "Piezīmes nedrīkst pārsniegt 2000 rakstzīmju."
+      }
     },
     "board": {
       "loadFailed": "Neizdevās ielādēt šo tāfeli",
