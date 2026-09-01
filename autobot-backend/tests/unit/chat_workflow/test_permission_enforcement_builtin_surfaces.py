@@ -413,9 +413,7 @@ class TestExtractContentDenial:
         ):
             pass
 
-        assert results == [
-            {"tool": "extract_content", "status": "error", "error": "permission_denied"}
-        ]
+        assert results == [{"tool": "extract_content", "status": "error", "error": "permission_denied"}]
 
     @pytest.mark.asyncio
     async def test_a_role_holding_mcp_browser_read_is_allowed(self):
@@ -424,9 +422,7 @@ class TestExtractContentDenial:
         handler = _handler()
         handler._exec_extract_content = AsyncMock(return_value="extracted")
 
-        async for _msg in handler._handle_extract_content_tool(
-            self._tool_call(), [], session_id="sess-1", role="user"
-        ):
+        async for _msg in handler._handle_extract_content_tool(self._tool_call(), [], session_id="sess-1", role="user"):
             pass
 
         handler._exec_extract_content.assert_awaited_once()
@@ -454,9 +450,10 @@ class TestDelegateDenial:
     @pytest.mark.asyncio
     async def test_a_role_lacking_agent_execute_is_denied(self):
         handler = _handler()
-        with patch(
-            "chat_workflow.delegation.run_delegated_subtask", AsyncMock(return_value="done")
-        ) as mock_run, patch("chat_workflow.delegation.DELEGATION_ENABLED", True):
+        with (
+            patch("chat_workflow.delegation.run_delegated_subtask", AsyncMock(return_value="done")) as mock_run,
+            patch("chat_workflow.delegation.DELEGATION_ENABLED", True),
+        ):
             messages = [
                 msg
                 async for msg in handler._handle_delegate_tool(
@@ -473,9 +470,10 @@ class TestDelegateDenial:
     async def test_a_role_holding_agent_execute_is_allowed(self):
         """`operator` holds AGENT_EXECUTE — the control case."""
         handler = _handler()
-        with patch(
-            "chat_workflow.delegation.run_delegated_subtask", AsyncMock(return_value="done")
-        ) as mock_run, patch("chat_workflow.delegation.DELEGATION_ENABLED", True):
+        with (
+            patch("chat_workflow.delegation.run_delegated_subtask", AsyncMock(return_value="done")) as mock_run,
+            patch("chat_workflow.delegation.DELEGATION_ENABLED", True),
+        ):
             async for _msg in handler._handle_delegate_tool(
                 self._tool_call(), [], None, session_id="sess-1", role="operator"
             ):

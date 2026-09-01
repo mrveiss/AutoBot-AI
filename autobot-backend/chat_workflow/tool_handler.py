@@ -2868,9 +2868,7 @@ class ToolHandlerMixin:
         )
         if not should_execute:
             logger.info("[#14529] extract_content cancelled by permission hook (role=%s)", role)
-            execution_results.append(
-                {"tool": "extract_content", "status": "error", "error": "permission_denied"}
-            )
+            execution_results.append({"tool": "extract_content", "status": "error", "error": "permission_denied"})
             yield WorkflowMessage(
                 type="error",
                 content="extract_content execution cancelled",
