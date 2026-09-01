@@ -50,9 +50,7 @@ def _manager(*, exists: bool = False, owner: Any = None, owner_raises: bool = Fa
     # `_session_exists` calls load_session and treats a non-empty message list
     # as "exists" — mocking anything else makes every conflict test skip the
     # branch it is meant to exercise.
-    manager.load_session = AsyncMock(
-        return_value=[{"role": "user", "content": "existing"}] if exists else []
-    )
+    manager.load_session = AsyncMock(return_value=[{"role": "user", "content": "existing"}] if exists else [])
     if owner_raises:
         manager.get_session_owner = AsyncMock(side_effect=SessionOwnerUnreadable("sess-abc"))
     else:
@@ -79,9 +77,7 @@ async def test_an_import_stamps_the_importing_user_as_owner() -> None:
 async def test_replace_refuses_to_overwrite_another_users_session() -> None:
     manager = _manager(exists=True, owner="alice")
 
-    result = await import_conversation(
-        manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB
-    )
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
 
     assert result["success"] is False
     assert "another user" in result["message"]
@@ -92,9 +88,7 @@ async def test_replace_refuses_to_overwrite_another_users_session() -> None:
 async def test_replace_allows_the_owner_to_overwrite_their_own_session() -> None:
     manager = _manager(exists=True, owner="alice")
 
-    result = await import_conversation(
-        manager, dict(_DOCUMENT), on_conflict="replace", user_data=_ALICE
-    )
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_ALICE)
 
     assert result["success"] is True
     manager.save_session.assert_awaited()
@@ -109,9 +103,7 @@ async def test_replace_refuses_when_ownership_cannot_be_read() -> None:
     """
     manager = _manager(exists=True, owner_raises=True)
 
-    result = await import_conversation(
-        manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB
-    )
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
 
     assert result["success"] is False
     manager.save_session.assert_not_awaited()
@@ -122,9 +114,7 @@ async def test_replace_still_works_on_a_genuinely_unowned_session() -> None:
     """A real legacy session records no owner and stays replaceable."""
     manager = _manager(exists=True, owner=None)
 
-    result = await import_conversation(
-        manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB
-    )
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
 
     assert result["success"] is True
     manager.save_session.assert_awaited()
