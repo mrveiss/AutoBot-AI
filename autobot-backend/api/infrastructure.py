@@ -12,6 +12,7 @@ Issue #1310: Fleet/system VMs removed — they belong in SLM only.
 """
 
 from typing import Any, Dict, List
+from security.secrets_store_errors import SecretsStoreUnavailable
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -53,9 +54,13 @@ def _load_secrets_hosts() -> List[Dict[str, Any]]:
                 }
             )
         return hosts
-    except Exception:
+    except Exception as exc:
+        # #14126: returning [] here is indistinguishable from "the user has
+        # configured no hosts", so a broken or unreachable secrets store
+        # rendered as an empty, healthy-looking list. The operator saw nothing
+        # wrong and no host to connect to.
         logger.exception("Failed to load infrastructure host secrets")
-        return []
+        raise SecretsStoreUnavailable("infrastructure host secrets") from exc
 
 
 @router.get("/hosts", response_model=InfrastructureHostsResponse)
@@ -74,7 +79,11 @@ async def get_infrastructure_hosts(
     Issue #1310: Fleet/system hosts removed — they belong in SLM only.
     Only hosts explicitly added by the user via Secrets are returned.
     """
-    hosts = _load_secrets_hosts()
+    try:
+        hosts = _load_secrets_hosts()
+    except SecretsStoreUnavailable as exc:
+        # #14126: a store failure is not an empty configuration.
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     if capability:
         hosts = [h for h in hosts if capability in h.get("capabilities", [])]

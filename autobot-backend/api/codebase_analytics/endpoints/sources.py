@@ -15,6 +15,7 @@ import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from security.secrets_store_errors import SecretsStoreUnavailable
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -53,8 +54,11 @@ async def _resolve_token(credential_id: str) -> str | None:
         secret = await asyncio.to_thread(secrets_manager.get_secret, credential_id)
         return secret["value"] if secret else None
     except Exception as exc:
+        # #14126: returning None sent the caller to _build_clone_url, which
+        # then built a TOKEN-LESS url — a store fault silently downgraded an
+        # authenticated clone to an anonymous one.
         logger.warning("Failed to resolve credential %s: %s", credential_id, exc)
-        return None
+        raise SecretsStoreUnavailable(f"credential {credential_id}") from exc
 
 
 def _build_clone_url(repo: str, token: str | None) -> str:
