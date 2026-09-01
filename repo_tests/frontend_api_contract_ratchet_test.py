@@ -74,7 +74,9 @@ _BASELINES = {
         "raw_fetch": 17,
         "axios": 0,
         "responses": 187,
-        "inline_generics": 573,
+        # #15455: raised for the four typed detail fetches #15429 added. Same
+        # limitation — this counts assertions, and a correct new call is one.
+        "inline_generics": 577,
     },
     "autobot-slm-frontend": {
         "clients": 1,
