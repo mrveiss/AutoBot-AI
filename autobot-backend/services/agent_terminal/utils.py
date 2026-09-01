@@ -281,3 +281,31 @@ async def log_autobot_command(
             result=result,
             user_id=None,
         )
+
+
+def security_warning_payload(command: str, risk: CommandRisk) -> dict:
+    """The `security_warning` message a blocked command sends to the client (#14995).
+
+    Here rather than at the call site so the wire vocabulary is decided next to
+    ``map_risk_to_level``, which is where someone checking what the client
+    receives will look. The producers kept sending the raw ``CommandRisk``
+    precisely because the conversion lived somewhere else.
+    """
+    wire_risk = map_risk_to_level(risk).value
+    return {
+        "type": "security_warning",
+        "content": f"Command blocked due to {wire_risk} risk level: {command}",
+        "risk_level": wire_risk,
+    }
+
+
+def command_assessment_payload(command: str, risk: CommandRisk) -> dict:
+    """The `POST /terminal/command` assessment body (#14992). Same reasoning."""
+    wire_risk = map_risk_to_level(risk).value
+    return {
+        "command": command,
+        "risk_level": wire_risk,
+        "status": "assessed",
+        "message": f"Command assessed as {wire_risk} risk",
+        "requires_confirmation": risk != CommandRisk.SAFE,
+    }
