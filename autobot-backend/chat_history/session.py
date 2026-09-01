@@ -30,6 +30,21 @@ from constants.redis_constants import REDIS_KEY
 logger = get_logger(__name__)
 
 
+
+class SessionOwnerUnreadable(RuntimeError):
+    """Ownership could not be determined for a session (#14033).
+
+    Distinct from ``get_session_owner`` returning ``None``, which means the
+    session exists and genuinely records no owner. This means the answer is
+    unknown — the file could not be read or decrypted — and a caller must not
+    treat that as "unowned".
+    """
+
+    def __init__(self, session_id: str) -> None:
+        super().__init__(f"cannot determine ownership for session {session_id!r}")
+        self.session_id = session_id
+
+
 class SessionMixin:
     """
     Mixin providing session CRUD operations for chat history.
@@ -932,8 +947,20 @@ class SessionMixin:
                 return metadata.get("owner") or metadata.get("username")
 
         except OSError as e:
+            # #14033: previously returned None here, which callers cannot tell
+            # apart from "this session has no owner". Two of them read that as
+            # permission to proceed — conversation_files.py granted access to
+            # "legacy sessions" and websockets.py made the session visible — so
+            # a transient read error (permissions, corruption, a full disk)
+            # handed another user's conversation over. Raising keeps the
+            # ambiguity out of the return value: a caller that cannot read
+            # ownership must decide deliberately, not inherit "unowned".
             logger.warning("Failed to read session file %s: %s", chat_file, e)
+            raise SessionOwnerUnreadable(session_id) from e
         except Exception as e:
             logger.warning("Failed to get session owner for %s: %s", session_id, e)
+            raise SessionOwnerUnreadable(session_id) from e
 
+        # Reached only when the file genuinely does not exist, or exists and
+        # carries no owner/username: a real "no owner recorded" answer.
         return None

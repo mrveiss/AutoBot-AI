@@ -14,6 +14,7 @@ import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict
+from chat_history.session import SessionOwnerUnreadable
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -206,9 +207,24 @@ async def _verify_session_owner(chat_history_manager, session_id: str, current_u
     Raises:
         HTTPException: 403 if user doesn't own session
     """
-    session_owner = await chat_history_manager.get_session_owner(session_id)
+    try:
+        session_owner = await chat_history_manager.get_session_owner(session_id)
+    except SessionOwnerUnreadable:
+        # #14033: an unreadable session file used to arrive here as None and be
+        # waved through as a "legacy session". A read failure is not evidence of
+        # absent ownership, so it must deny.
+        logger.warning(
+            "Ownership unreadable for session %s - denying access to %s",
+            session_id,
+            current_user,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot verify session ownership",
+        ) from None
 
-    # If session has no owner set, allow access (legacy sessions)
+    # A session that genuinely records no owner predates ownership tracking and
+    # stays readable (#14026 stops new ownerless sessions being created).
     if session_owner is None:
         logger.info("Session %s has no owner - allowing access (legacy session)", session_id)
         return True
