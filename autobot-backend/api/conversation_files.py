@@ -45,6 +45,7 @@ from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from security.session_owner_errors import SessionOwnerUnreadable
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
@@ -206,21 +207,20 @@ async def _verify_session_owner(chat_history_manager, session_id: str, current_u
     Raises:
         HTTPException: 403 if user doesn't own session
     """
-    session_owner = await chat_history_manager.get_session_owner(session_id)
-
-    # If session has no owner set, allow access (legacy sessions)
+    try:
+        session_owner = await chat_history_manager.get_session_owner(session_id)
+    except SessionOwnerUnreadable:
+        # #14033: a read failure is not evidence of absent ownership.
+        logger.warning("Ownership unreadable for session %s - denying %s", session_id, current_user)
+        raise HTTPException(status_code=403, detail="Cannot verify session ownership") from None
+    # A genuinely unowned session predates ownership tracking (#14026).
     if session_owner is None:
         logger.info("Session %s has no owner - allowing access (legacy session)", session_id)
         return True
 
     # Verify current user matches session owner
     if session_owner != current_user:
-        logger.warning(
-            "Access denied: User %s attempted to access session %s owned by %s",
-            current_user,
-            session_id,
-            session_owner,
-        )
+        logger.warning("Access denied: %s wanted session %s owned by %s", current_user, session_id, session_owner)
         raise HTTPException(status_code=403, detail="Access denied: You do not own this session")
 
     logger.debug("User %s validated as owner of session %s", current_user, session_id)
