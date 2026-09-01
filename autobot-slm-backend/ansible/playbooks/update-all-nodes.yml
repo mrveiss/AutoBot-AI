@@ -144,7 +144,33 @@
       debug:
         msg: "8 deploy archives created from {{ deploy_ref }} ({{ deploy_info.stdout }})"
 
-    # --- Dependency change detection (#1603) ---
+    # --- Dependency change detection (#1603, #15430) ---
+    #
+    # #15430: this used to diff HEAD~1..HEAD — a ONE-COMMIT window — while a
+    # deploy moves the installed tree from `.deployed_commit` to HEAD, which is
+    # usually many commits. A manifest bump merged earlier than the last commit
+    # therefore fell outside the window: the flag read false, `npm ci` was
+    # skipped, and the build ran against a node_modules that no longer
+    # satisfied package.json. That took /slm/ down with a 403 (the build failed
+    # and left dist empty). The bump was 11 commits back when it happened.
+    #
+    # The marker is written AFTER the unarchive (see "Record deployed commit
+    # marker" below), so at pre-flight it still holds the PREVIOUS deployment —
+    # which is the correct base for "what is this deploy about to change".
+    - name: "[PRE-FLIGHT] Read the currently deployed commit (#15430)"
+      ansible.builtin.slurp:
+        src: /opt/autobot/autobot-slm-backend/.deployed_commit
+      register: deployed_commit_raw
+      failed_when: false
+
+    - name: "[PRE-FLIGHT] Resolve the dependency-diff base (#15430)"
+      set_fact:
+        # Empty when the marker is missing, unreadable, or blank — every one of
+        # which means "we cannot prove what is installed".
+        deps_diff_base: >-
+          {{ (deployed_commit_raw.content | default('') | b64decode | trim)
+             if (deployed_commit_raw.content is defined) else '' }}
+
     - name: "[PRE-FLIGHT] Get previous commit (before pull)"
       command: >-
         git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} rev-parse HEAD~1
@@ -155,8 +181,9 @@
     - name: "[PRE-FLIGHT] Check if Python deps changed"
       shell: >-
         git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} diff --name-only
-        {{ prev_commit.stdout | default('HEAD') }} HEAD
+        {{ deps_diff_base }} HEAD
         -- '*/requirements.txt' 'autobot_shared/pyproject.toml'
+      when: deps_diff_base | length > 0
       register: python_deps_diff
       changed_when: false
       failed_when: false
@@ -164,16 +191,46 @@
     - name: "[PRE-FLIGHT] Check if Node.js deps changed"
       shell: >-
         git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} diff --name-only
-        {{ prev_commit.stdout | default('HEAD') }} HEAD
+        {{ deps_diff_base }} HEAD
         -- '*/package.json' '*/package-lock.json'
+      when: deps_diff_base | length > 0
       register: node_deps_diff
+      changed_when: false
+      failed_when: false
+
+    # #15430 (recovery): a commit diff answers "did a manifest change in this
+    # span", which cannot see an install that is ALREADY out of sync. The host
+    # that went down is exactly that case — the bump sits behind the deployed
+    # commit, so no future diff will ever reveal it, and the build would keep
+    # failing on every subsequent deploy.
+    #
+    # Ask the installed tree directly instead. `npm ls` exits non-zero when
+    # node_modules does not satisfy package.json, which is the invariant that
+    # actually matters.
+    - name: "[PRE-FLIGHT] Check the installed node tree satisfies package.json (#15430)"
+      ansible.builtin.command:
+        cmd: npm ls --depth=0
+        chdir: /opt/autobot/autobot-slm-frontend
+      register: node_tree_check
       changed_when: false
       failed_when: false
 
     - name: "[PRE-FLIGHT] Set dependency change flags"
       set_fact:
-        python_deps_changed: "{{ python_deps_diff.stdout | default('') | length > 0 }}"
-        node_deps_changed: "{{ node_deps_diff.stdout | default('') | length > 0 }}"
+        # #15430: when the deployed commit is unknown — marker missing,
+        # unreadable, or blank — there is no way to prove what is installed, so
+        # install. Skipping is what took /slm/ down; a redundant install costs
+        # time and nothing else.
+        python_deps_changed: >-
+          {{ true if (deps_diff_base | length == 0)
+             else (python_deps_diff.stdout | default('') | length > 0) }}
+        # Either the manifests changed in this deployment span, OR the tree
+        # already on disk does not satisfy them. The second disjunct is what
+        # makes a drifted host self-heal instead of failing every deploy.
+        node_deps_changed: >-
+          {{ true if (deps_diff_base | length == 0)
+             else ((node_deps_diff.stdout | default('') | length > 0)
+                   or (node_tree_check.rc | default(0) != 0)) }}
 
     - name: "[PRE-FLIGHT] Display dependency change status"
       debug:
@@ -395,6 +452,7 @@
       command:
         cmd: /opt/autobot/autobot-slm-backend/venv/bin/pip install
              -r /opt/autobot/autobot-slm-backend/requirements.txt
+             -c {{ autobot.base_dir }}/code_source/constraints/shared.txt
              --quiet --timeout 120
       become: true
       become_user: autobot
@@ -415,15 +473,76 @@
       register: slm_npm_install
       tags: [slm, slm-frontend, deps]
 
-    - name: "[PLAY 1] SLM | Rebuild frontend production build"
+    # #15430: vite empties its outDir before writing, so a build that fails
+    # leaves `dist/` with nothing in it. nginx serves that directory with
+    # `try_files $uri $uri/ /slm/index.html` and autoindex off, so a missing
+    # index.html answers 403 for EVERY path under /slm/ — a build failure became
+    # a total outage of the dashboard, including the maintenance and code-sync
+    # screens an operator would use to recover.
+    #
+    # Build into a staging directory and publish only on success, so a failed
+    # build leaves the previous working bundle serving.
+    - name: "[PLAY 1] SLM | Rebuild frontend production build (staged, #15430)"
       command:
         # build:slm = "VITE_API_URL=/slm vite build" — the SLM frontend is served
         # under /slm, so a plain `npm run build` bakes in the wrong API base and
         # the SLM dashboard calls the wrong endpoints (#9563, #9710). Matches the
         # canonical ansible/update-all-nodes.yml.
-        cmd: npm run build:slm
+        cmd: npm run build:slm -- --outDir dist.staging --emptyOutDir
         chdir: /opt/autobot/autobot-slm-frontend
       register: slm_build
+      failed_when: false
+      tags: [slm, slm-frontend]
+
+    - name: "[PLAY 1] SLM | Fail loudly if the frontend build failed (#15430)"
+      ansible.builtin.fail:
+        # The build's own stderr, not just a non-zero exit: diagnosing the
+        # #15430 outage needed the filesystem because the unit exited 2 with no
+        # npm output anywhere in the journal.
+        msg: |
+          SLM frontend build failed (rc={{ slm_build.rc | default('?') }}).
+          The previous bundle is still being served — dist/ was not touched.
+          stderr:
+          {{ slm_build.stderr | default('(no stderr captured)') }}
+      when: slm_build.rc | default(1) != 0
+      tags: [slm, slm-frontend]
+
+    - name: "[PLAY 1] SLM | Verify the staged build produced an entrypoint (#15430)"
+      ansible.builtin.stat:
+        path: /opt/autobot/autobot-slm-frontend/dist.staging/index.html
+      register: slm_staged_index
+      tags: [slm, slm-frontend]
+
+    - name: "[PLAY 1] SLM | Refuse to publish a bundle with no index.html (#15430)"
+      ansible.builtin.fail:
+        msg: >-
+          SLM frontend build reported success but produced no index.html in
+          dist.staging — publishing it would make every /slm/ path 403.
+      when: not slm_staged_index.stat.exists
+      tags: [slm, slm-frontend]
+
+    - name: "[PLAY 1] SLM | Clear the previous bundle slot (#15430)"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-slm-frontend/dist.previous
+        state: absent
+      become: true
+      become_user: autobot
+      tags: [slm, slm-frontend]
+
+    - name: "[PLAY 1] SLM | Keep the current bundle as a fallback (#15430)"
+      ansible.builtin.command:
+        cmd: mv /opt/autobot/autobot-slm-frontend/dist /opt/autobot/autobot-slm-frontend/dist.previous
+        removes: /opt/autobot/autobot-slm-frontend/dist
+      become: true
+      become_user: autobot
+      tags: [slm, slm-frontend]
+
+    - name: "[PLAY 1] SLM | Publish the staged build (#15430)"
+      ansible.builtin.command:
+        cmd: mv /opt/autobot/autobot-slm-frontend/dist.staging /opt/autobot/autobot-slm-frontend/dist
+        creates: /opt/autobot/autobot-slm-frontend/dist
+      become: true
+      become_user: autobot
       tags: [slm, slm-frontend]
 
     # #11480/#11492: redeploy the slm-agent BEFORE the backend restart. The
@@ -662,6 +781,7 @@
       command:
         cmd: /opt/autobot/autobot-backend/venv/bin/pip install
              -r /opt/autobot/autobot-backend/requirements.txt
+             -c {{ autobot.base_dir }}/code_source/constraints/shared.txt
              --quiet --timeout 120
       become: true
       become_user: autobot
@@ -1100,6 +1220,7 @@
       command:
         cmd: /opt/autobot/autobot-npu-worker/venv/bin/pip install
              -r /opt/autobot/autobot-npu-worker/requirements.txt
+             -c {{ autobot.base_dir }}/code_source/constraints/shared.txt
              --quiet --timeout 120
       become: true
       become_user: autobot
