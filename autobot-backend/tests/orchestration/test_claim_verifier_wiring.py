@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from services.grounded_agent import Claim, ClaimStatus, GroundedAgent
+from services.knowledge_grounding_models import VerificationMethod
 
 
 def _make_claim(text: str = "test claim") -> Claim:
@@ -69,7 +70,7 @@ class TestEscalateToClaimVerifier:
         # confidence >= 0.8 → VERIFIED
         assert result.kb_status == ClaimStatus.VERIFIED
         assert result.confidence == pytest.approx(0.85)
-        assert result.verification_method == "claim_verifier_rag"
+        assert result.verification_method == VerificationMethod.CLAIM_VERIFIER_RAG.value
 
     @pytest.mark.asyncio
     async def test_flag_on_medium_confidence_returns_unknown(self, monkeypatch):

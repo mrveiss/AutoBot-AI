@@ -19,6 +19,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from services.gateway.egress_governor import EgressGovernor, EgressVerdict
+from services.gateway.ingest_governor import IngestVerdict
+from services.gateway.types import GovernanceVerdict
 
 
 @pytest.fixture
@@ -136,3 +138,15 @@ class TestVerdictShape:
         verdict = EgressVerdict(allowed=True)
         with pytest.raises(Exception):
             verdict.allowed = False
+
+    def test_ingest_and_egress_share_one_canonical_governance_type(self):
+        """#14905: both stages return the SAME type, not two shapes kept in sync by hand."""
+        assert EgressVerdict is GovernanceVerdict
+        assert IngestVerdict is GovernanceVerdict
+        assert IngestVerdict is EgressVerdict
+
+    def test_ingest_verdict_carries_the_fields_egress_added(self):
+        """The fork #14905 closed: ingest gets rule/safe_reason for free now."""
+        verdict = IngestVerdict(allowed=False, reason="duplicate", rule="duplicate")
+        assert verdict.rule == "duplicate"
+        assert verdict.safe_reason == "duplicate"  # defaults to reason, same as EgressVerdict

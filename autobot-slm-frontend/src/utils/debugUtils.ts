@@ -7,9 +7,16 @@
  * Debug Utilities
  *
  * Provides structured logging for the SLM Admin frontend.
+ *
+ * `LogLevel`'s four values are identical to @autobot/ui's canonical type
+ * (#14908) — imported rather than re-declared. `createLogger()` here is NOT
+ * a re-export: unlike the kit's always-log version, this one filters by
+ * `import.meta.env.DEV` (debug suppressed in production) — a capability the
+ * kit/main-app version does not have, so it stays local rather than being
+ * collapsed into the smaller-looking shared copy.
  */
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+import type { LogLevel } from '@autobot/ui'
 
 interface Logger {
   debug: (...args: unknown[]) => void

@@ -168,6 +168,11 @@ async def approve_fact(
     now = datetime.now(tz=timezone.utc).isoformat()
     update_meta = {
         "verification_status": "verified",
+        # NOT autobot_shared-style VerificationMethod (#15005): this is the
+        # fact-provenance field (auto_quality/user_approved/connector_trusted
+        # per api/schemas_knowledge.py:3146), a different vocabulary from
+        # VerifiedClaim.verification_method despite the shared field name —
+        # see the boundary note on VerificationMethod's docstring.
         "verification_method": "user_approved",
         "verified_by": body.user,
         "verified_at": now,
