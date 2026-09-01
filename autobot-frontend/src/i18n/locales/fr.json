@@ -8618,7 +8618,15 @@
       "phoneLabel": "Téléphone",
       "saving": "Enregistrement…",
       "save": "Enregistrer",
-      "contactSaveError": "Impossible d'enregistrer le contact."
+      "contactSaveError": "Impossible d'enregistrer le contact.",
+      "addContact": "Ajouter un contact",
+      "deleteAriaLabel": "Supprimer {name}",
+      "deleteConfirm": "Supprimer ce contact ?",
+      "fullNamePlaceholder": "Nom complet",
+      "roleTitlePlaceholder": "Intitulé du poste",
+      "emailPlaceholder": "E-mail",
+      "contactCreateError": "Impossible d'ajouter le contact",
+      "contactDeleteError": "Impossible de supprimer le contact"
     },
     "board": {
       "loadFailed": "Impossible de charger ce tableau",
