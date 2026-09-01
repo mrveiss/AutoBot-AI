@@ -30,6 +30,10 @@ import type {
   BulkActionResponse,
 } from '@/composables/useOrchestration'
 import type { components } from '@/types/generated/api'
+import type {
+  RestartAllServicesRequest,
+  RestartAllServicesResponse,
+} from '@/types/api-responses'
 
 const logger = createLogger('useOrchestrationManagement')
 
@@ -481,9 +485,52 @@ export function useOrchestrationManagement() {
     }
   }
 
+  // Restart All Services on a Node (Issue #725 parity — #15224)
+  async function restartAllNodeServices(
+    nodeId: string,
+    options?: RestartAllServicesRequest
+  ): Promise<RestartAllServicesResponse | null> {
+    error.value = null
+
+    try {
+      const response = await client.post<RestartAllServicesResponse>(
+        `/nodes/${nodeId}/services/restart-all`,
+        options || {}
+      )
+      logger.info(`Restart all services on ${nodeId}:`, response.data.message)
+      return response.data
+    } catch (e) {
+      error.value = extractErrorMessage(e, `Failed to restart all services on ${nodeId}`)
+      logger.error(`Failed to restart all services on ${nodeId}:`, e)
+      return null
+    }
+  }
+
   // ===========================================================================
   // WebSocket Integration
   // ===========================================================================
+
+  /**
+   * Apply a single service's status update, received over the WebSocket, to
+   * the in-memory `fleetServices` list — mirrors ServicesView.vue's
+   * `handleServiceStatusUpdate` (#15224) so the per-node tab reflects live
+   * status instead of only showing it at the next poll/manual refresh.
+   */
+  function applyServiceStatusUpdate(
+    nodeId: string,
+    data: { service_name: string; status: string }
+  ): void {
+    const service = fleetServices.value.find((s) => s.service_name === data.service_name)
+    if (!service) return
+
+    const nodeInfo = service.nodes.find((n) => n.node_id === nodeId)
+    if (!nodeInfo) return
+
+    nodeInfo.status = data.status
+    service.running_count = service.nodes.filter((n) => n.status === 'running').length
+    service.stopped_count = service.nodes.filter((n) => n.status === 'stopped').length
+    service.failed_count = service.nodes.filter((n) => n.status === 'failed').length
+  }
 
   function initializeWebSocket(
     onStatusUpdate?: (nodeId: string, data: { service_name: string; status: string }) => void
@@ -491,9 +538,10 @@ export function useOrchestrationManagement() {
     connect()
     subscribeAll()
 
-    if (onStatusUpdate) {
-      onServiceStatus(onStatusUpdate)
-    }
+    onServiceStatus((nodeId, data) => {
+      applyServiceStatusUpdate(nodeId, data)
+      onStatusUpdate?.(nodeId, data)
+    })
   }
 
   // ===========================================================================
@@ -577,9 +625,11 @@ export function useOrchestrationManagement() {
     startAllServices,
     stopAllServices,
     restartAllServices,
+    restartAllNodeServices,
 
     // WebSocket
     initializeWebSocket,
+    applyServiceStatusUpdate,
 
     // Utilities
     clearError,

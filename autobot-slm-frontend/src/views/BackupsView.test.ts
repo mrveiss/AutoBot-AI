@@ -72,7 +72,6 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 function routeBody(url: string) {
   if (url.includes('/stateful/backups')) return { backups: [COMPLETED_BACKUP, IN_PROGRESS_BACKUP], total: 2 }
-  if (url.includes('/stateful/replications')) return { replications: [], total: 0 }
   return { nodes: [], total: 0 }
 }
 
@@ -91,6 +90,18 @@ describe('BackupsView (#13307)', () => {
     fetchMock = vi.fn(async (url: string) => jsonResponse(routeBody(String(url))))
     vi.stubGlobal('fetch', fetchMock)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
+  })
+
+  // #15225: replication management moved to the Orchestration "replication"
+  // tab (which mounts ReplicationView.vue) — BackupsView.vue no longer owns
+  // a tab bar or a replications surface at all.
+  it('has no Replications tab or replication API calls (#15225)', async () => {
+    const wrapper = await mountBackups()
+
+    expect(wrapper.text()).not.toContain('Replications')
+    expect(
+      fetchMock.mock.calls.some((c) => String(c[0]).includes('/stateful/replications'))
+    ).toBe(false)
   })
 
   it('shows where each backup was written', async () => {
