@@ -35,19 +35,17 @@ export const RULE_DIMENSIONS = ['status', 'owner', 'tool'] as const
 export type CanvasRuleDimension = (typeof RULE_DIMENSIONS)[number]
 
 /**
- * The dimensions actually offered in the UI.
+ * #14190: `tool` is offered again. It was gated because the org-chart endpoint
+ * sent `org_role` in the field named `adapter_type` (#14109), so the legend
+ * would have titled `worker` / `manager` / `cto` as "Tool". #14109 has landed —
+ * `companies.py` now sets `adapter_type=row.adapter_type or ""` with the
+ * comment "the real ``adapter_type`` column, not ``org_role``" — so the
+ * precondition the gate named is met and the list it asked to delete is gone.
  *
- * `tool` is implemented and tested but **not offered yet**: the org-chart
- * endpoint sends `org_role` in the field named `adapter_type` (#14109), so the
- * control would title a legend reading `worker` / `manager` / `cto` as "Tool".
- * The rule layer is correct over the *declared* contract — when #14109 makes the
- * payload honest, delete this list and iterate `RULE_DIMENSIONS` again. Nothing
- * else needs to change.
- *
- * #13941 asked for status and owner; tool was additional scope, so gating it
- * costs none of the issue's acceptance criteria.
+ * The UI iterates `RULE_DIMENSIONS` directly, exactly as that note prescribed.
+ * No new translations are needed: tool rules label themselves with the raw
+ * adapter name (`labelText`), and only the fallback uses a key, which exists.
  */
-export const SELECTABLE_RULE_DIMENSIONS = ['status', 'owner'] as const satisfies readonly CanvasRuleDimension[]
 
 /**
  * The non-colour half of a rule's signal. Colour is never allowed to be the

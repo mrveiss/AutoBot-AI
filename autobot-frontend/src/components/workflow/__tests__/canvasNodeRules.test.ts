@@ -175,6 +175,14 @@ describe('legend derivation (#13941)', () => {
 })
 
 describe('dimension lookup (#13941)', () => {
+  it('#14190: every declared dimension is offered, none gated out', () => {
+    // The gate existed because the org chart sent `org_role` in the
+    // `adapter_type` field (#14109). That has landed, so nothing is withheld
+    // and the UI iterates RULE_DIMENSIONS directly. A reintroduced gate would
+    // make this fail rather than quietly shrinking the control.
+    expect([...RULE_DIMENSIONS]).toContain('tool')
+  })
+
   it('offers exactly status, owner and tool', () => {
     expect([...RULE_DIMENSIONS]).toEqual(['status', 'owner', 'tool'])
   })
