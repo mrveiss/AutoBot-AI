@@ -218,6 +218,26 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 
 **Commit format:** `<type>(scope): <description> (#issue-number)`
 
+**PR cadence — batch the scope, never block on CI.**
+
+A CI suite costs the same ~10-20 min on the singleton runner whether the PR carries one
+issue or five, so the default unit of delivery is a *batch*, and a running suite is never
+a reason to stop working.
+
+- **Group before branching.** Same files/module/layer, same kind of change, same risk →
+  one worktree, one branch, one PR, `Closes #A, #B, #C` in the body, one commit per issue.
+- **Every batched issue is fully delivered or dropped from the PR.** Partial delivery
+  closes nothing; an unfinished issue leaves the batch, it does not leave the checklist.
+- **Split when** the changes are independent, touch unrelated modules, carry different
+  risk (a migration beside a copy fix), when one is likely to go red and would hold the
+  rest hostage, or when the diff is past what one review pass can honestly cover.
+- **On push, sweep the others once** — approval gate, CI verdict, behind-ness across every
+  other open PR (`gh pr list --state open`) — merge/close what is ready, then pick the next
+  issue. Non-colliding = different files from every in-flight PR
+  (`gh pr view <n> --json files`); a colliding issue is deferred, not reordered.
+- **Never busy-poll.** The PR just pushed is not re-read until the next push-time sweep.
+  Its checks finish while the next batch is being built.
+
 **Update the issue as work progresses — not only at closure.** Post the pickup (what is being
 attempted, and the base SHA), any decision taken under a `Decision` heading, and the state you
 stopped in if the session dies. The issue is the only record that survives a lost worktree or
