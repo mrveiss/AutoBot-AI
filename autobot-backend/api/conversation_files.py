@@ -218,8 +218,10 @@ async def _verify_session_owner(chat_history_manager, session_id: str, current_u
             session_id,
             current_user,
         )
+        # Bare 403 to match this module's convention (see :106); `status` is
+        # not imported here.
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=403,
             detail="Cannot verify session ownership",
         ) from None
 
