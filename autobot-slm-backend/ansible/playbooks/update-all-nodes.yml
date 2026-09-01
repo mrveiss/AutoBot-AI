@@ -121,6 +121,16 @@
         - { name: slm-backend, path: autobot-slm-backend/ }
         - { name: slm-frontend, path: autobot-slm-frontend/ }
         - { name: shared, path: autobot_shared/ }
+        # #15462: both frontends declare `file:` dependencies on these two
+        # (@autobot/ui, @autobot/terminal, @autobot/vnc). npm installs them as
+        # symlinks INTO the deployed tree, so a frontend build resolves them
+        # from /opt/autobot/, not from the synced source. Never having shipped
+        # them was invisible for as long as nothing new was exported from
+        # them; #14907 moved the shared composables into @autobot/ui and the
+        # SLM frontend build then failed on MISSING_EXPORT for a symbol that
+        # existed in the repo and not on the host.
+        - { name: libs, path: libs/ }
+        - { name: plugins, path: autobot-plugins/ }
         - { name: backend, path: autobot-backend/ }
         - { name: frontend, path: autobot-frontend/ }
         - { name: npu-worker, path: autobot-npu-worker/ }
@@ -314,6 +324,22 @@
       become: true
       tags: [slm, shared]
 
+    # #15462: must land BEFORE the npm ci / build tasks below, which resolve
+    # @autobot/ui and the plugins through symlinks into these directories.
+    - name: "[PLAY 1] SLM | Deploy libs (workspace packages)"
+      unarchive:
+        src: "{{ deploy_tmp }}/libs.tar.gz"
+        dest: /opt/autobot/
+      become: true
+      tags: [slm, slm-frontend, libs]
+
+    - name: "[PLAY 1] SLM | Deploy autobot-plugins (workspace packages)"
+      unarchive:
+        src: "{{ deploy_tmp }}/plugins.tar.gz"
+        dest: /opt/autobot/
+      become: true
+      tags: [slm, slm-frontend, plugins]
+
     - name: "[PLAY 1] SLM | Fix ownership (unarchive runs as root)"
       file:
         path: "/opt/autobot/{{ item }}"
@@ -325,6 +351,8 @@
         - autobot-slm-backend
         - autobot-slm-frontend
         - autobot_shared
+        - libs
+        - autobot-plugins
       tags: [slm]
 
     # #12223 (#12202): the self-update path deploys the SLM backend via the
