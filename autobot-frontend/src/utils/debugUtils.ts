@@ -16,8 +16,12 @@
 // comment records that. Re-exported so the ~200 call sites across this app
 // that `import { createLogger } from '@/utils/debugUtils'` keep resolving.
 import { log, createLogger } from '@autobot/ui'
+// `export type { X } from '...'` re-exports without binding X in THIS module's
+// scope, so `ConsoleLogEntry.level: LogLevel` below could not see it (TS2304).
+// Import it, then re-export — callers keep the same public surface.
+import type { LogLevel } from '@autobot/ui'
 export { log, createLogger }
-export type { LogLevel } from '@autobot/ui'
+export type { LogLevel }
 
 /**
  * Storage type for browser storage operations
