@@ -90,6 +90,9 @@ gh api repos/$REPO/issues/$NEW/dependencies/blocked_by -q '.[].number'
 ```
 
 - One parent per child — re-parenting is `DELETE .../sub_issue -F sub_issue_id=…` then POST.
+- Backfilling from an existing checklist: a row owns **at most one** issue. Refs in parentheses,
+  or after `blocked by` / `depends on` / `unblocks` / `sub-tree` / `PR`, are commentary — linking
+  them re-parents another umbrella's child, and one-parent-per-child then blocks the real parent.
 - A duplicate POST returns 422; that means already-linked, not a failure.
 - Hierarchy and dependency are separate graphs — never encode one as the other.
 - Issue *types* are an org-only GitHub feature and 404 here; labels stay the taxonomy.
