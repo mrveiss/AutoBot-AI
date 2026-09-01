@@ -54,6 +54,7 @@ class KnownProbes(str, enum.Enum):
     CONTENT_REACH = "content_reach"  # #10932
     SLM_LINK = "slm_link"  # #12781
     SANDBOX = "sandbox"  # #14872
+    SECRETS_STORE = "secrets_store"  # #14126
 
 
 # Per-probe timeout. Probes slower than this become ``status="down"`` so a slow

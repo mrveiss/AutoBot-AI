@@ -122,7 +122,18 @@ INJECTION_PATTERNS = (
     r"--force",
 )
 
-# Dangerous command patterns (regex patterns)
+# Dangerous command patterns (regex patterns).
+#
+# #14042 - this is the one overlap that looks like duplication and is not
+# resolved here. These 17 patterns share 0 entries verbatim with the canonical
+# 21 in security/command_patterns.py, because they are written for a different
+# job: scoring *prompt text that may quote a command* rather than gating a
+# command about to run. Detection wants breadth and tolerates false positives
+# (a bare --force flag, reads of system credential files, an scp into the
+# working directory); an execution gate cannot afford them. Sourcing this tuple
+# from the canonical set would move every injection score, so consolidation
+# needs its own before/after verification and is filed separately rather than
+# smuggled into a documentation pass.
 DANGEROUS_PATTERNS = (
     # File system destruction
     r"rm\s+-r",

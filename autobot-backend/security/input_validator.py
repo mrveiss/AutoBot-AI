@@ -43,7 +43,15 @@ class InputValidationError(Exception):
 class WebResearchInputValidator:
     """Validates and sanitizes inputs for web research operations"""
 
-    # Dangerous patterns that could indicate malicious intent
+    # Dangerous patterns that could indicate malicious intent.
+    #
+    # #14042 - differs from security/command_patterns.py deliberately and
+    # completely: this validates *web-research text and URLs*, not shell
+    # commands. The patterns are XSS and SQL-injection shapes (script tags,
+    # javascript: URLs, inline event handlers, UNION SELECT). None of them
+    # describes a command, and none of the canonical command patterns describes
+    # web content, so there is nothing to share. The name collision is
+    # unfortunate; the scope is not.
     DANGEROUS_PATTERNS = [
         # Script injection patterns
         r"<script[^>]*>",
