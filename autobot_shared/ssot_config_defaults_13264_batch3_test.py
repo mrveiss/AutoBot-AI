@@ -84,9 +84,9 @@ class TestEnvGcPostgresTracingDefaultsRestored13264:
             assert cfg.postgres_db == "autobot"
             assert cfg.postgres_port == 5432
             assert cfg.postgres_user == "autobot"
-            assert all([cfg.postgres_db, cfg.postgres_port, cfg.postgres_user]), (
-                "an empty name/user or a port of 0 cannot form a valid DSN"
-            )
+            assert all(
+                [cfg.postgres_db, cfg.postgres_port, cfg.postgres_user]
+            ), "an empty name/user or a port of 0 cannot form a valid DSN"
 
     def test_tracing_is_not_sampled_out(self) -> None:
         from autobot_shared.ssot_config import MiscConfig
