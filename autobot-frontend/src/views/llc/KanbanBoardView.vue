@@ -565,32 +565,5 @@ onMounted(async () => {
   margin: 0.5rem;
 }
 
-.board-load-error {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--color-error-border);
-  background: var(--color-error-bg);
-  color: var(--color-error);
-  border-radius: 6px;
-}
-.board-load-error-detail {
-  opacity: 0.85;
-  font-size: 0.875rem;
-}
-.board-load-error-retry {
-  margin-inline-start: auto;
-  cursor: pointer;
-}
 
-.detail-fetch-state {
-  padding: 1rem;
-  text-align: center;
-  color: var(--text-muted);
-}
-.detail-fetch-error {
-  color: var(--color-error);
-}
 </style>
