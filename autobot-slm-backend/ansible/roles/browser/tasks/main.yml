@@ -124,15 +124,25 @@
   become: true
   tags: ['browser', 'packages']
 
+# Installed into the worker's own venv, not system-wide (#15417). Each of these
+# already has a declared home -- playwright in autobot-browser-worker/requirements.txt,
+# fastapi and uvicorn in the backend's -- and a second unpinned copy on the system
+# interpreter can satisfy `state: present` with a version below those floors.
+# fastapi's floor exists for a security reason (starlette >=0.52.1), so an unpinned
+# duplicate is not merely untidy. Constraints applied for the same reason every other
+# pip site applies them: without them a transitive pin can drag numpy below its floor
+# and force an unbuildable sdist (#14447).
 - name: "Browser | Install Playwright and FastAPI dependencies via pip"
   pip:
     name:
-      - playwright
+      - playwright>=1.62.0
       - playwright-stealth
-      - uvicorn
-      - fastapi
+      - uvicorn>=0.52.4
+      - fastapi>=0.141.1
     state: present
-    executable: pip3
+    virtualenv: "{{ browser_install_dir }}/venv"
+    virtualenv_python: python3.14
+    extra_args: "-c {{ autobot.base_dir }}/code_source/constraints/shared.txt"
   become: true
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
