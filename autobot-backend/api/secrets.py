@@ -27,6 +27,8 @@ from pathlib import Path
 from typing import Dict, List
 
 from cryptography.fernet import Fernet
+
+from security.secrets_store_errors import SecretsStoreUnavailable
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
@@ -227,11 +229,22 @@ class SecretsManager:
                     self._secrets_cache = json.load(f)
                     self._cache_mtime = current_mtime
                     return deepcopy(self._secrets_cache)
-            except (json.JSONDecodeError, FileNotFoundError) as e:
-                logger.warning("Secrets file corrupted or missing: %s, initializing empty", e)
+            except FileNotFoundError:
+                # Raced against a delete between the exists() check above and
+                # the open(). An absent store is a legitimate fresh install.
                 self._secrets_cache = {}
                 self._cache_mtime = None
                 return deepcopy(self._secrets_cache)
+            except json.JSONDecodeError as e:
+                # #14126: corruption used to land here too and return {} - the
+                # same "a broken store reads as no configuration" defect this
+                # issue is about, one layer below the callers it was found in.
+                # Two consequences, and the second is worse than the first:
+                # every caller saw an empty, healthy-looking store; and the
+                # next `_save_secrets` would write that {} over the file,
+                # turning a recoverable parse error into permanent data loss.
+                logger.error("Secrets file is not valid JSON: %s", e)
+                raise SecretsStoreUnavailable("secrets file is not valid JSON") from e
 
     def _save_secrets(self, secrets: Dict[str, Dict]):
         """

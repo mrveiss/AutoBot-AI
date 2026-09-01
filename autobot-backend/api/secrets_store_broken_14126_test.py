@@ -13,10 +13,26 @@ a value that reads as "everything is fine, there is simply nothing here":
 * the health surface said nothing at all, because no probe watched the store
 
 Each test below breaks the store deliberately and asserts the caller can *tell* -
-the property the issue asks for. Structured as three explicit failure modes
-rather than one, because they fail differently in production: a missing file is
-a fresh install, a permission error is a misconfigured deployment, and a decrypt
-failure is a rotated or corrupted key.
+the property the issue asks for.
+
+A **corrupted store file** gets its own set, because review of the first draft
+found the probe could not see the most likely real corruption at all:
+``SecretsManager._load_secrets`` caught ``json.JSONDecodeError`` and returned
+``{}``, so ``list_secrets`` succeeded and every surface above it - including
+this probe - reported a healthy, merely-empty store. That is the same defect
+this issue is about, one layer below the two callers it was originally found
+in, and it carried a second consequence: the next ``_save_secrets`` would write
+that ``{}`` over the file, turning a recoverable parse error into permanent
+data loss.
+
+What these tests deliberately do **not** cover: a *decrypt* failure - a valid
+new Fernet key against ciphertext written under the old one. ``list_secrets``
+never decrypts (it deletes ``encrypted_value`` and returns metadata), so no
+amount of testing here would surface it and the probe cannot detect it. A
+malformed key *file* is caught, because ``Fernet(key)`` construction runs in
+``ensure_initialized``. The rotation case needs a decrypt canary, which is a
+different design decision; tracked separately as #15460 rather than claimed
+here.
 """
 
 from __future__ import annotations
@@ -201,3 +217,88 @@ def test_the_probe_registers_under_the_canonical_name() -> None:
     from api.system_health import KnownProbes, list_registered_probes
 
     assert KnownProbes.SECRETS_STORE.value in list_registered_probes()
+
+
+# ---------------------------------------------------------------------------
+# A corrupted store file
+# ---------------------------------------------------------------------------
+
+
+def _manager_on(tmp_path, contents: str):
+    """A real SecretsManager pointed at a real file, so nothing is stubbed."""
+    from api.secrets import SecretsManager
+
+    store = tmp_path / "secrets.json"
+    store.write_text(contents, encoding="utf-8")
+    manager = SecretsManager()
+    # `ensure_initialized` resolves the canonical data dir and would overwrite
+    # `secrets_file` (secrets.py:158), so mark it done before pointing the
+    # manager at the fixture. No cipher is needed: `list_secrets` returns
+    # metadata and never decrypts.
+    manager._initialized = True
+    manager.secrets_file = str(store)
+    manager._secrets_cache = None
+    manager._cache_mtime = None
+    return manager, store
+
+
+def test_a_corrupted_store_raises_instead_of_reading_as_empty(tmp_path) -> None:
+    """The defect review found: truncated JSON returned `{}` and looked healthy."""
+    from security.secrets_store_errors import SecretsStoreUnavailable
+
+    manager, _ = _manager_on(tmp_path, '{"a": {"id": "a", "sco')
+
+    with pytest.raises(SecretsStoreUnavailable):
+        manager.list_secrets()
+
+
+def test_a_corrupted_store_is_not_overwritten_with_an_empty_one(tmp_path) -> None:
+    """The worse half: `{}` in the cache would be written back over the file.
+
+    A parse error is recoverable - the ciphertext is still on disk. Saving an
+    empty dict over it is not.
+    """
+    manager, store = _manager_on(tmp_path, '{"a": {"id": "a", "sco')
+    before = store.read_text(encoding="utf-8")
+
+    with pytest.raises(Exception):
+        manager.list_secrets()
+
+    assert store.read_text(encoding="utf-8") == before
+
+
+def test_an_absent_store_is_still_a_fresh_install(tmp_path) -> None:
+    """The boundary that must not move: absent is not corrupt."""
+    from api.secrets import SecretsManager
+
+    manager = SecretsManager()
+    manager._initialized = True
+    manager.secrets_file = str(tmp_path / "nothing-here.json")
+    manager._secrets_cache = None
+    manager._cache_mtime = None
+
+    assert manager.list_secrets() == []
+
+
+def test_the_probe_reports_degraded_for_a_corrupted_store(tmp_path, monkeypatch) -> None:
+    """End-to-end: the probe now sees the corruption it previously called ok."""
+    import api.secrets as secrets_module
+    from api.secrets_store_health import _secrets_store_health_probe
+
+    manager, _ = _manager_on(tmp_path, "not json at all")
+    monkeypatch.setattr(secrets_module, "secrets_manager", manager)
+
+    assert asyncio.run(_secrets_store_health_probe(None)).status == "degraded"
+
+
+def test_the_hosts_route_refuses_a_corrupted_store(tmp_path, monkeypatch) -> None:
+    from security.secrets_store_errors import SecretsStoreUnavailable
+
+    import api.secrets as secrets_module
+    import api.infrastructure as infra
+
+    manager, _ = _manager_on(tmp_path, "not json at all")
+    monkeypatch.setattr(secrets_module, "secrets_manager", manager)
+
+    with pytest.raises(SecretsStoreUnavailable):
+        infra._load_secrets_hosts()
