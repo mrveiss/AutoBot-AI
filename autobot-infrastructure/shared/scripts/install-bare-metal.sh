@@ -385,9 +385,10 @@ Environment="ANONYMIZED_TELEMETRY=FALSE"
 # #14100 / #12513: no \`-\` prefix, on purpose. The optional form is why a
 # missing credential file produced a running-but-unauthenticated chroma instead
 # of a unit that refuses to start. The installer writes this file itself
-# (write_env_file), so a missing one means the install did not complete and
-# starting anyway is the wrong answer. Both ansible templates are already
-# mandatory; this was the last optional writer of the same unit path.
+# (generate_env, line 451, which main() runs before start_services), so a
+# missing one means the install did not complete and starting anyway is the
+# wrong answer. Both ansible templates are already mandatory; this was the last
+# optional writer of the same unit path.
 EnvironmentFile=${INSTALL_DIR}/.env
 ExecStart=${venv_dir}/bin/chroma run \\
     --host 127.0.0.1 \\

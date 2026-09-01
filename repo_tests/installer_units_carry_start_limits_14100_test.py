@@ -39,8 +39,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = REPO_ROOT / "autobot-infrastructure/shared/scripts/install-bare-metal.sh"
 
 # `cat > <dest> <<EOF` ... `EOF`, the shape the installer uses for every unit.
+#
+# Deliberately the same expression as scripts/systemd_heredoc_expansion_test.py,
+# which already solved this: `<<-` (tab-stripping) is accepted, and the `(?P=q)`
+# backreference makes the opening and closing quote match instead of allowing
+# `<<"EOF'`. A weaker restatement here would silently return nothing for a
+# `<<-EOF` unit, and every assertion below would pass by finding no such unit.
 _HEREDOC = re.compile(
-    r"^\s*cat\s*>\s*\"?(?P<dest>[^\"\s]+\.service)\"?\s*<<\s*[\"']?(?P<tag>\w+)[\"']?\s*$",
+    r"""^\s*cat\s*>>?\s*["']?(?P<dest>\S*?\.service)["']?\s*<<-?\s*(?P<q>['"]?)(?P<tag>\w+)(?P=q)\s*$""",
     re.MULTILINE,
 )
 _RESTARTING = re.compile(r"^\s*Restart\s*=\s*(always|on-failure)\s*$", re.MULTILINE)
@@ -68,16 +74,22 @@ def _units() -> List[Tuple[str, str]]:
     return found
 
 
-def _section_of(body: str, directive: str) -> str:
-    """Which [Section] a directive appears under, or '' if it is absent."""
+def _sections_of(body: str, directive: str) -> List[str]:
+    """Every [Section] the directive appears under, in order.
+
+    Every occurrence, not the first: a correct `StartLimitBurst=` in [Unit]
+    followed by a stray duplicate in [Service] would otherwise pass, and the
+    stray is the one systemd rejects with "Unknown key name".
+    """
     section = ""
+    found: List[str] = []
     for line in body.splitlines():
         stripped = line.strip()
         if stripped.startswith("[") and stripped.endswith("]"):
             section = stripped
         elif stripped.startswith(directive + "="):
-            return section
-    return ""
+            found.append(section)
+    return found
 
 
 _UNITS = _units()
@@ -117,7 +129,10 @@ def test_the_start_limit_is_reachable(dest: str, body: str) -> None:
     interval = int(_INTERVAL.search(body).group(1))
     burst = int(_BURST.search(body).group(1))
     restart_sec_match = _RESTART_SEC.search(body)
-    restart_sec = int(restart_sec_match.group(1)) if restart_sec_match else 100
+    # systemd's default RestartSec is 100 *milliseconds*, so an omitted value
+    # makes the limit trivially reachable. Using 0.1 keeps the arithmetic honest
+    # rather than inventing a 100-second default that would fail a correct unit.
+    restart_sec = float(restart_sec_match.group(1)) if restart_sec_match else 0.1
     assert interval > restart_sec * burst, (
         f"{dest}: StartLimitIntervalSec={interval} but {burst} restarts spaced "
         f"RestartSec={restart_sec}s apart span {restart_sec * burst}s. The unit "
@@ -130,8 +145,10 @@ def test_the_start_limit_is_reachable(dest: str, body: str) -> None:
 def test_start_limit_directives_live_in_the_unit_section(dest: str, body: str) -> None:
     """systemd rejects these in [Service] with 'Unknown key name'."""
     for directive in ("StartLimitIntervalSec", "StartLimitBurst"):
-        assert _section_of(body, directive) == "[Unit]", (
-            f"{dest}: {directive} is under {_section_of(body, directive) or 'no section'}, "
+        sections = _sections_of(body, directive)
+        misplaced = [s for s in sections if s != "[Unit]"]
+        assert sections and not misplaced, (
+            f"{dest}: {directive} appears under {misplaced or 'no section'}, "
             "not [Unit]. systemd logs 'Unknown key name' and ignores it, so the "
             "unit looks protected in the file and is not protected at runtime."
         )
