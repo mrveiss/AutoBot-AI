@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The frontend's backend-contract sprawl may shrink, never grow (#12363).
+"""Backend-contract sprawl in BOTH frontends may shrink, never grow (#12363, #12420).
 
 The frontend has no single source of truth for talking to the backend. Eight
 HTTP-client classes reimplement request, error, auth and URL handling, **none
@@ -16,10 +16,19 @@ own response shape, nothing enforces that a path exists or that a response
 matches, so one config error lands in some clients and not others and features
 break inconsistently.
 
-Consolidating all of it is a long job spanning many PRs. This guard exists so
-the job is finite — it pins today's counts so the sprawl cannot grow while the
-consolidation proceeds. It is deliberately not a style rule: it says nothing
-about any individual file, only that the totals must move one way.
+The SLM frontend (#12420) had the same problem in a worse form — no client
+abstraction and no type generation at all. Steps 1 and 2 of that issue have
+since landed: `gen:types` is wired and `src/types/generated/api.ts` carries 305
+paths against a 306-endpoint backend, and `SlmApiClient` has 39 importers. What
+remains there is what remains here — hand-typed responses bypassing the
+generated contract, which have grown in both apps (74 -> 78 files in the main
+frontend, 23 -> 31 declarations in SLM) while the structural work was going on.
+
+This guard is step 4 of #12420's plan, applied to both frontends at once: forbid
+new raw transport and new hand-typed responses. Consolidating the rest is a long
+job spanning many PRs, and this exists so the job is finite. It is deliberately
+not a style rule: it says nothing about any individual file, only that the
+totals must move one way.
 
 **This ratchet fails in BOTH directions**, matching
 `repo_tests/python_file_size_ratchet_baseline.py`. Growth is a regression.
@@ -41,29 +50,52 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_FRONTEND_SRC = _REPO_ROOT / "autobot-frontend" / "src"
+
+_MAIN_SRC = _REPO_ROOT / "autobot-frontend" / "src"
+_SLM_SRC = _REPO_ROOT / "autobot-slm-frontend" / "src"
 
 # --- The ratchet ---------------------------------------------------------
 #
 # Lower these as consolidation lands. Never raise one to make a new file pass:
 # extend an existing client, or import the generated contract instead.
 
-# Distinct HTTP-client classes, none sharing a base (#12363). Test mocks are
-# excluded — a mock is not a transport.
-MAX_CLIENT_CLASSES = 8
+# Per app, because the two frontends are at different points on the same path
+# and one number would hide a regression in whichever app was improving slower.
+#
+# Each app's transport client is itself counted in the raw-fetch total — it is
+# the one file that *should* call fetch, so that count floors at 1 rather than
+# 0. The ratchet only asserts direction, so a floor is not a problem.
+_BASELINES = {
+    "autobot-frontend": {
+        "clients": 8,
+        "raw_fetch": 17,
+        "axios": 0,
+        "responses": 187,
+    },
+    "autobot-slm-frontend": {
+        "clients": 1,
+        "raw_fetch": 3,
+        # One holdout: `composables/useAutobotApi.ts` — a composable, not the
+        # transport client, so this one is a real bypass and should reach 0.
+        # The main frontend is already there.
+        "axios": 1,
+        "responses": 31,
+    },
+}
 
-# Files calling `fetch(` directly instead of going through a client.
-MAX_RAW_FETCH_FILES = 17
-
-# Direct `axios` importers. Already zero; pinned so it stays that way.
-MAX_AXIOS_IMPORTERS = 0
-
-# Hand-written `interface *Response` declarations that bypass the generated
-# contract at `src/types/generated/api.ts`.
-MAX_HAND_TYPED_RESPONSES = 187
+_APP_SRC = {
+    "autobot-frontend": _MAIN_SRC,
+    "autobot-slm-frontend": _SLM_SRC,
+}
 
 _SOURCE_SUFFIXES = (".ts", ".vue")
+
+# Floors, not censuses: a walk that stops matching must fail loudly rather than
+# pass by reaching nothing.
+_MIN_SOURCE_FILES = {"autobot-frontend": 500, "autobot-slm-frontend": 100}
 
 _CLIENT_CLASS_RE = re.compile(r"\bclass\s+([A-Za-z]+(?:ApiClient|ApiService|Client))\b")
 # No `\s*` before the paren: prose such as "a failed fetch (#14064)" or a test
@@ -85,13 +117,14 @@ def _is_test(path: Path) -> bool:
     return "__tests__" in path.parts or ".test." in path.name or ".spec." in path.name
 
 
-def _source_files() -> list[Path]:
+def _source_files(root: Path) -> list[Path]:
     return [
         path
-        for path in sorted(_FRONTEND_SRC.rglob("*"))
+        for path in sorted(root.rglob("*"))
         if path.suffix in _SOURCE_SUFFIXES
         and path.is_file()
         and "node_modules" not in path.parts
+        and "generated" not in path.parts
         and not _is_test(path)
     ]
 
@@ -100,94 +133,86 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
-def _client_class_names() -> set[str]:
+def _client_class_names(root: Path) -> set[str]:
     """Every HTTP-client class name, excluding test mocks."""
     names: set[str] = set()
-    for path in _source_files():
+    for path in _source_files(root):
         for name in _CLIENT_CLASS_RE.findall(_read(path)):
             if "Mock" not in name:
                 names.add(name)
     return names
 
 
-def _raw_fetch_files() -> list[str]:
+def _raw_fetch_files(root: Path) -> list[str]:
     return [
         path.relative_to(_REPO_ROOT).as_posix()
-        for path in _source_files()
+        for path in _source_files(root)
         if _RAW_FETCH_RE.search(_read(path))
     ]
 
 
-def _axios_importers() -> list[str]:
+def _axios_importers(root: Path) -> list[str]:
     return [
         path.relative_to(_REPO_ROOT).as_posix()
-        for path in _source_files()
+        for path in _source_files(root)
         if _AXIOS_IMPORT_RE.search(_read(path))
     ]
 
 
-def _hand_typed_response_count() -> int:
-    return sum(len(_RESPONSE_INTERFACE_RE.findall(_read(path))) for path in _source_files())
+def _hand_typed_response_count(root: Path) -> int:
+    return sum(len(_RESPONSE_INTERFACE_RE.findall(_read(path))) for path in _source_files(root))
 
 
-def test_the_tree_this_guard_reads_is_present() -> None:
-    """A moved frontend would make every count below zero, and zero passes."""
-    assert _FRONTEND_SRC.is_dir(), f"{_FRONTEND_SRC} is missing — this guard is pinned to the wrong path"
-    assert len(_source_files()) > 500, (
-        f"only {len(_source_files())} source file(s) found — the walk has stopped reaching the frontend, "
-        "which would make every ratchet below pass by counting nothing"
+def _measure(app: str) -> dict[str, int]:
+    root = _APP_SRC[app]
+    return {
+        "clients": len(_client_class_names(root)),
+        "raw_fetch": len(_raw_fetch_files(root)),
+        "axios": len(_axios_importers(root)),
+        "responses": _hand_typed_response_count(root),
+    }
+
+
+_DIMENSION_ADVICE = {
+    "clients": "Extend an existing client rather than adding another that shares no base with the others.",
+    "raw_fetch": "Route the call through that app's transport client; a direct fetch builds its own URL, so no config fix reaches it.",
+    "axios": "Use the transport client, not axios directly.",
+    "responses": "Import the generated contract at `src/types/generated/api.ts` instead of declaring another response shape by hand.",
+}
+
+
+@pytest.mark.parametrize("app", sorted(_BASELINES))
+def test_the_tree_this_guard_reads_is_present(app: str) -> None:
+    """A moved or renamed frontend would make every count zero, and zero passes."""
+    root = _APP_SRC[app]
+    assert root.is_dir(), f"{root} is missing — this guard is pinned to the wrong path"
+
+    found = len(_source_files(root))
+    assert found >= _MIN_SOURCE_FILES[app], (
+        f"{app}: only {found} source file(s) found, expected at least "
+        f"{_MIN_SOURCE_FILES[app]} — the walk has stopped reaching this app, which would "
+        "make every ratchet below pass by counting nothing"
     )
 
 
-def test_client_classes_do_not_multiply() -> None:
-    """Each new client is another copy of request/error/auth/URL handling."""
-    names = sorted(_client_class_names())
+@pytest.mark.parametrize("app", sorted(_BASELINES))
+@pytest.mark.parametrize("dimension", sorted(_DIMENSION_ADVICE))
+def test_contract_sprawl_only_shrinks(app: str, dimension: str) -> None:
+    """Growth is a regression; an unrecorded shrink is a stale baseline.
 
-    assert len(names) <= MAX_CLIENT_CLASSES, (
-        f"{len(names)} HTTP-client classes, ratchet allows {MAX_CLIENT_CLASSES} (#12363):\n"
-        f"  {', '.join(names)}\n"
-        "Extend an existing client rather than adding another that shares no base with the others."
+    Both directions fail, matching `python_file_size_ratchet_baseline.py`. A
+    baseline that silently drifts below the real number stops being evidence of
+    anything, so the constant must be lowered in the same commit that does the
+    work — that keeps it a claim someone made on purpose.
+    """
+    actual = _measure(app)[dimension]
+    baseline = _BASELINES[app][dimension]
+
+    assert actual <= baseline, (
+        f"{app}: {dimension} is {actual}, ratchet allows {baseline} (#12363, #12420).\n"
+        f"{_DIMENSION_ADVICE[dimension]}"
     )
-    assert len(names) == MAX_CLIENT_CLASSES, (
-        f"only {len(names)} client classes remain but MAX_CLIENT_CLASSES is still {MAX_CLIENT_CLASSES} — "
-        "lower it in the commit that removed one, so the number stays a deliberate claim"
-    )
-
-
-def test_raw_fetch_sites_do_not_multiply() -> None:
-    """A direct fetch builds its own URL, so no config fix can reach it."""
-    files = _raw_fetch_files()
-
-    assert len(files) <= MAX_RAW_FETCH_FILES, (
-        f"{len(files)} files call fetch() directly, ratchet allows {MAX_RAW_FETCH_FILES} (#12363). "
-        f"New since the baseline (or newly matching):\n  " + "\n  ".join(files[:20])
-    )
-    assert len(files) == MAX_RAW_FETCH_FILES, (
-        f"only {len(files)} raw-fetch file(s) remain but MAX_RAW_FETCH_FILES is still "
-        f"{MAX_RAW_FETCH_FILES} — lower it in the commit that removed one"
-    )
-
-
-def test_no_module_imports_axios_directly() -> None:
-    """Already zero. Pinned so a reintroduction is a failure, not a drift."""
-    importers = _axios_importers()
-
-    assert len(importers) <= MAX_AXIOS_IMPORTERS, (
-        f"{len(importers)} module(s) import axios directly, ratchet allows {MAX_AXIOS_IMPORTERS} "
-        f"(#12363):\n  " + "\n  ".join(importers)
-    )
-
-
-def test_hand_typed_responses_do_not_multiply() -> None:
-    """Every hand-typed response is a contract nothing checks against the backend."""
-    count = _hand_typed_response_count()
-
-    assert count <= MAX_HAND_TYPED_RESPONSES, (
-        f"{count} hand-written `interface *Response` declarations, ratchet allows "
-        f"{MAX_HAND_TYPED_RESPONSES} (#12363). Import the generated contract at "
-        "`src/types/generated/api.ts` instead of declaring another response shape by hand."
-    )
-    assert count == MAX_HAND_TYPED_RESPONSES, (
-        f"only {count} hand-typed response(s) remain but MAX_HAND_TYPED_RESPONSES is still "
-        f"{MAX_HAND_TYPED_RESPONSES} — lower it in the commit that removed one"
+    assert actual == baseline, (
+        f"{app}: {dimension} is down to {actual} but the baseline still says {baseline} — "
+        "lower it in the commit that did the work, so the number stays a deliberate claim"
     )
