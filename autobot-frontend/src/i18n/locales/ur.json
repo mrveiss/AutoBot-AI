@@ -8618,7 +8618,15 @@
       "phoneLabel": "فون",
       "saving": "محفوظ ہو رہا ہے…",
       "save": "محفوظ کریں",
-      "contactSaveError": "رابطہ محفوظ نہیں ہو سکا۔"
+      "contactSaveError": "رابطہ محفوظ نہیں ہو سکا۔",
+      "addContact": "رابطہ شامل کریں",
+      "deleteAriaLabel": "{name} کو حذف کریں",
+      "deleteConfirm": "کیا یہ رابطہ حذف کریں؟",
+      "fullNamePlaceholder": "پورا نام",
+      "roleTitlePlaceholder": "عہدہ",
+      "emailPlaceholder": "ای میل",
+      "contactCreateError": "رابطہ شامل نہیں کیا جا سکا",
+      "contactDeleteError": "رابطہ حذف نہیں کیا جا سکا"
     },
     "board": {
       "loadFailed": "یہ بورڈ لوڈ نہیں ہو سکا",

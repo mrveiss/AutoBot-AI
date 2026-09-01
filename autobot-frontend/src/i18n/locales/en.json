@@ -8606,7 +8606,15 @@
       "phoneLabel": "Phone",
       "saving": "Saving…",
       "save": "Save",
-      "contactSaveError": "Could not save the contact."
+      "contactSaveError": "Could not save the contact.",
+      "addContact": "Add contact",
+      "deleteAriaLabel": "Delete {name}",
+      "deleteConfirm": "Delete this contact?",
+      "fullNamePlaceholder": "Full name",
+      "roleTitlePlaceholder": "Role title",
+      "emailPlaceholder": "Email",
+      "contactCreateError": "Could not add the contact",
+      "contactDeleteError": "Could not delete the contact"
     },
     "board": {
       "loadFailed": "Could not load this board",
