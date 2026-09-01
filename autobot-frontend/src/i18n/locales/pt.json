@@ -8269,7 +8269,7 @@
       "resumeAgent": "Retomar agente",
       "pauseAgent": "Pausar agente",
       "terminateAgent": "Terminate Agent",
-      "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
+      "confirmTerminate": "Terminar o agente \"{name}\"? Isto pára-o permanentemente, sem recuperação.",
       "terminatedNote": "This agent has been terminated.",
       "viewMode": "Modo de visualização",
       "viewTree": "Árvore",
@@ -8621,12 +8621,21 @@
       "contactSaveError": "Não foi possível salvar o contato.",
       "addContact": "Adicionar contacto",
       "deleteAriaLabel": "Eliminar {name}",
-      "deleteConfirm": "Eliminar este contacto?",
+      "deleteConfirm": "Excluir este contacto permanentemente? O nome e os dados de contacto são apagados do armazenamento e não podem ser recuperados.",
       "fullNamePlaceholder": "Nome completo",
       "roleTitlePlaceholder": "Cargo",
       "emailPlaceholder": "E-mail",
       "contactCreateError": "Não foi possível adicionar o contacto",
-      "contactDeleteError": "Não foi possível eliminar o contacto"
+      "contactDeleteError": "Não foi possível eliminar o contacto",
+      "validation": {
+        "fullNameRequired": "É necessário um nome completo.",
+        "fullNameTooLong": "O nome completo deve ter 255 caracteres ou menos.",
+        "emailTooLong": "O e-mail deve ter 320 caracteres ou menos.",
+        "phoneInvalid": "O telefone só pode conter dígitos, espaços e ( ) - . e um + inicial opcional.",
+        "phoneTooLong": "O telefone deve ter 64 caracteres ou menos.",
+        "roleTitleTooLong": "A função ou cargo deve ter 255 caracteres ou menos.",
+        "notesTooLong": "As notas devem ter 2000 caracteres ou menos."
+      }
     },
     "board": {
       "loadFailed": "Não foi possível carregar este quadro",

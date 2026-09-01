@@ -8269,7 +8269,7 @@
       "resumeAgent": "Resume Agent",
       "pauseAgent": "Pause Agent",
       "terminateAgent": "Terminate Agent",
-      "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
+      "confirmTerminate": "לסיים את הסוכן \"{name}\"? הפעולה עוצרת אותו לצמיתות, ללא אפשרות שחזור.",
       "terminatedNote": "This agent has been terminated.",
       "viewMode": "מצב תצוגה",
       "viewTree": "עץ",
@@ -8621,12 +8621,21 @@
       "contactSaveError": "לא ניתן היה לשמור את איש הקשר.",
       "addContact": "הוספת איש קשר",
       "deleteAriaLabel": "מחיקת {name}",
-      "deleteConfirm": "למחוק את איש הקשר הזה?",
+      "deleteConfirm": "למחוק את איש הקשר לצמיתות? השם ופרטי הקשר יימחקו מהאחסון ולא ניתן יהיה לשחזר אותם.",
       "fullNamePlaceholder": "שם מלא",
       "roleTitlePlaceholder": "תפקיד",
       "emailPlaceholder": "דוא\"ל",
       "contactCreateError": "לא ניתן היה להוסיף את איש הקשר",
-      "contactDeleteError": "לא ניתן היה למחוק את איש הקשר"
+      "contactDeleteError": "לא ניתן היה למחוק את איש הקשר",
+      "validation": {
+        "fullNameRequired": "נדרש שם מלא.",
+        "fullNameTooLong": "השם המלא חייב להיות 255 תווים או פחות.",
+        "emailTooLong": "הדוא\"ל חייב להיות 320 תווים או פחות.",
+        "phoneInvalid": "הטלפון יכול להכיל רק ספרות, רווחים ו־( ) - . ו־+ אופציונלי בהתחלה.",
+        "phoneTooLong": "הטלפון חייב להיות 64 תווים או פחות.",
+        "roleTitleTooLong": "התפקיד או הכותרת חייבים להיות 255 תווים או פחות.",
+        "notesTooLong": "ההערות חייבות להיות 2000 תווים או פחות."
+      }
     },
     "board": {
       "loadFailed": "לא ניתן לטעון את הלוח הזה",

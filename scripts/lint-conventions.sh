@@ -81,7 +81,20 @@ if [ "$MODE" = "--commit-msg" ]; then
   # nested areas — `fix(llc/frontend):`, `test(hooks/guard):` — and 14 of the
   # last 400 commits on Dev_new_gui carry one. Without it this rule rejects
   # subjects the repository itself writes, so the linter was wrong, not them.
-  if ! printf '%s' "$SUBJECT" | grep -qE '^[a-z]+(\([a-z0-9._/-]+\))?: .+'; then
+  #
+  # The scope must still START with an alphanumeric. A bare character class
+  # accepts `fix(/llc):` and `fix(-llc):`, which no scope convention intends —
+  # widening for `/` should not also widen for a leading separator.
+  #
+  # Two more of the same defect, found by running this rule over real history
+  # rather than over its own test cases. The repo also writes hyphenated types
+  # (`a11y(...)`, `test-guard(...)`, `tech-debt(...)`) and comma-joined scopes
+  # (`docs(architecture,design)`), and `^[a-z]+` rejected every one. Over the
+  # last 400 commits on Dev_new_gui the rule rejected 12 subjects the project
+  # itself authored; it now rejects 1, and that one is genuinely malformed —
+  # capitalised, with no type at all. A linter whose own repository cannot
+  # satisfy it gets ignored, which is worse than not having it.
+  if ! printf '%s' "$SUBJECT" | grep -qE '^[a-z][a-z0-9-]*(\([a-z0-9][a-z0-9._/,-]*\))?: .+'; then
     echo "  FAIL  subject is not '<type>(scope): <description>'"; exit 1
   fi
   if ! printf '%s' "$SUBJECT" | grep -qE '#[0-9]{3,}'; then
@@ -233,7 +246,7 @@ else
       case "$author$email" in
         *'[bot]'*) continue ;;
       esac
-      if ! printf '%s' "$subj" | grep -qE '^[a-z]+(\([a-z0-9._/-]+\))?: .+'; then
+      if ! printf '%s' "$subj" | grep -qE '^[a-z][a-z0-9-]*(\([a-z0-9][a-z0-9._/,-]*\))?: .+'; then
         # #13921: the parsed author is echoed on failure. The previous version
         # rejected commits without saying who it thought wrote them, so a
         # non-firing exemption could only be diagnosed by inference.
