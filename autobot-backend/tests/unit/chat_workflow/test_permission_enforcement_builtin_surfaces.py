@@ -364,3 +364,158 @@ class TestWebResearchToolDenial:
             pass
 
         handler._exec_crawl_site.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# extract_content — Permission.MCP_BROWSER_READ (#14529)
+# ---------------------------------------------------------------------------
+
+
+class TestExtractContentDenial:
+    """#14529: this branch never called BEFORE_TOOL_EXECUTE at all.
+
+    It was not "gated and allowed" — the hook never fired, so
+    PermissionEnforcementExtension never ran for it. The tool reads the live
+    browser session's current page, behind whatever auth wall the browser tools
+    drove it through, which is why it takes the same tier as navigate/snapshot.
+    """
+
+    def _tool_call(self) -> dict:
+        return {"name": "extract_content", "params": {"goal": "read the page"}, "description": ""}
+
+    @pytest.mark.asyncio
+    async def test_a_role_lacking_mcp_browser_read_is_denied(self):
+        handler = _handler()
+        handler._exec_extract_content = AsyncMock(return_value="extracted")
+
+        messages = [
+            msg
+            async for msg in handler._handle_extract_content_tool(
+                self._tool_call(), [], session_id="sess-1", role="readonly"
+            )
+        ]
+
+        assert messages[-1].type == "error"
+        assert messages[-1].metadata.get("cancelled_by_hook") is True
+        assert messages[-1].metadata.get("reason") == "permission_denied"
+        # The point of the test: denial stops the read, not merely reports it.
+        handler._exec_extract_content.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_the_denial_is_recorded_for_the_model(self):
+        """A denial the model cannot see becomes a silent retry loop."""
+        handler = _handler()
+        handler._exec_extract_content = AsyncMock(return_value="extracted")
+        results: list[dict] = []
+
+        async for _msg in handler._handle_extract_content_tool(
+            self._tool_call(), results, session_id="sess-1", role="readonly"
+        ):
+            pass
+
+        assert results == [{"tool": "extract_content", "status": "error", "error": "permission_denied"}]
+
+    @pytest.mark.asyncio
+    async def test_a_role_holding_mcp_browser_read_is_allowed(self):
+        """`user` holds MCP_BROWSER_READ — the control case proving this
+        discriminates rather than always denying."""
+        handler = _handler()
+        handler._exec_extract_content = AsyncMock(return_value="extracted")
+
+        async for _msg in handler._handle_extract_content_tool(self._tool_call(), [], session_id="sess-1", role="user"):
+            pass
+
+        handler._exec_extract_content.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# delegate — Permission.AGENT_EXECUTE (#14529)
+# ---------------------------------------------------------------------------
+
+
+class TestDelegateDenial:
+    """#14529: spawning a subagent that can itself call tools had no RBAC check.
+
+    The per-turn fan-out cap and the delegated agent's ``forbidden_work``
+    manifest bound what a subagent may do; neither bounds *who may start one*.
+    """
+
+    def _tool_call(self) -> dict:
+        return {
+            "name": "delegate",
+            "params": {"task": "go do a thing", "reason": "because"},
+            "description": "",
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_role_lacking_agent_execute_is_denied(self):
+        handler = _handler()
+        with (
+            patch("chat_workflow.delegation.run_delegated_subtask", AsyncMock(return_value="done")) as mock_run,
+            patch("chat_workflow.delegation.DELEGATION_ENABLED", True),
+        ):
+            messages = [
+                msg
+                async for msg in handler._handle_delegate_tool(
+                    self._tool_call(), [], None, session_id="sess-1", role="user"
+                )
+            ]
+
+        assert messages[-1].type == "error"
+        assert messages[-1].metadata.get("cancelled_by_hook") is True
+        assert messages[-1].metadata.get("reason") == "permission_denied"
+        mock_run.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_role_holding_agent_execute_is_allowed(self):
+        """`operator` holds AGENT_EXECUTE — the control case."""
+        handler = _handler()
+        with (
+            patch("chat_workflow.delegation.run_delegated_subtask", AsyncMock(return_value="done")) as mock_run,
+            patch("chat_workflow.delegation.DELEGATION_ENABLED", True),
+        ):
+            async for _msg in handler._handle_delegate_tool(
+                self._tool_call(), [], None, session_id="sess-1", role="operator"
+            ):
+                pass
+
+        mock_run.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_the_gate_holds_with_delegation_disabled(self):
+        """The gate sits above the DELEGATION_ENABLED check on purpose.
+
+        Gating below would make the permission depend on a feature flag: the
+        enforcement seam would move on the day delegation is switched on, which
+        is the worst possible day for it to move. With the flag off, an
+        unpermitted caller must still be denied rather than getting the
+        record-only write.
+        """
+        handler = _handler()
+        results: list[dict] = []
+
+        with patch("chat_workflow.delegation.DELEGATION_ENABLED", False):
+            messages = [
+                msg
+                async for msg in handler._handle_delegate_tool(
+                    self._tool_call(), results, None, session_id="sess-1", role="user"
+                )
+            ]
+
+        assert messages[-1].metadata.get("reason") == "permission_denied"
+        # Not the "pending_delegation" record the ungated path would have written.
+        assert results == [{"tool": "delegate", "status": "error", "error": "permission_denied"}]
+
+    @pytest.mark.asyncio
+    async def test_a_permitted_caller_still_gets_the_record_only_path(self):
+        """The other direction: the gate must not break default-off behaviour."""
+        handler = _handler()
+        results: list[dict] = []
+
+        with patch("chat_workflow.delegation.DELEGATION_ENABLED", False):
+            async for _msg in handler._handle_delegate_tool(
+                self._tool_call(), results, None, session_id="sess-1", role="operator"
+            ):
+                pass
+
+        assert results[-1]["status"] == "pending_delegation"
