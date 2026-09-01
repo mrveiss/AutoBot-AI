@@ -7,7 +7,7 @@ asyncssh>=2.24.0,<3.0.0   # production dep (requirements.txt); pki/distributor.p
 # #14551: production dep (autobot-backend/requirements.txt, #10932 content-reach
 # keyless web search, lazy). tests/content_reach/sources/test_web_search.py
 # gates on pytest.importorskip/find_spec("ddgs") — silently skipping without this.
-ddgs>=9.14.4
+ddgs>=9.16.0
 # #14551: production dep (autobot-backend/requirements.txt, #10932 content-reach
 # YouTube caption extraction, lazy). tests/content_reach/sources/test_youtube.py
 # gates on pytest.importorskip("yt_dlp") — silently skipping without this.
