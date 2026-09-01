@@ -8618,7 +8618,15 @@
       "phoneLabel": "Tālrunis",
       "saving": "Saglabā…",
       "save": "Saglabāt",
-      "contactSaveError": "Neizdevās saglabāt kontaktu."
+      "contactSaveError": "Neizdevās saglabāt kontaktu.",
+      "addContact": "Pievienot kontaktu",
+      "deleteAriaLabel": "Dzēst {name}",
+      "deleteConfirm": "Dzēst šo kontaktu?",
+      "fullNamePlaceholder": "Pilns vārds",
+      "roleTitlePlaceholder": "Amata nosaukums",
+      "emailPlaceholder": "E-pasts",
+      "contactCreateError": "Neizdevās pievienot kontaktu",
+      "contactDeleteError": "Neizdevās dzēst kontaktu"
     },
     "board": {
       "loadFailed": "Neizdevās ielādēt šo tāfeli",

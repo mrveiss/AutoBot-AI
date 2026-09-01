@@ -8618,7 +8618,15 @@
       "phoneLabel": "Telefon",
       "saving": "Wird gespeichert…",
       "save": "Speichern",
-      "contactSaveError": "Der Kontakt konnte nicht gespeichert werden."
+      "contactSaveError": "Der Kontakt konnte nicht gespeichert werden.",
+      "addContact": "Kontakt hinzufügen",
+      "deleteAriaLabel": "{name} löschen",
+      "deleteConfirm": "Diesen Kontakt löschen?",
+      "fullNamePlaceholder": "Vollständiger Name",
+      "roleTitlePlaceholder": "Rollenbezeichnung",
+      "emailPlaceholder": "E-Mail",
+      "contactCreateError": "Kontakt konnte nicht hinzugefügt werden",
+      "contactDeleteError": "Kontakt konnte nicht gelöscht werden"
     },
     "board": {
       "loadFailed": "Dieses Board konnte nicht geladen werden",
