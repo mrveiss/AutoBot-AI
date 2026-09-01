@@ -88,7 +88,9 @@ def _ssot_ports(root: Path) -> dict[str, str]:
     if not parsed:
         sys.exit(f"FATAL: no AUTOBOT_*_PORT fields parsed from {_SSOT_PATH} — the pattern has drifted")
     # `default=0` is a "not configured" sentinel, not a port. `AUTOBOT_POSTGRES_PORT`
-    # and `AUTOBOT_SMTP_PORT` both use it. Comparing a shell fallback against 0
+    # uses it; `AUTOBOT_SMTP_PORT` did too until #13264 restored its real
+    # pre-#7437 default of 587, so it is now compared like any other port.
+    # Comparing a shell fallback against 0
     # would fail a perfectly correct `${AUTOBOT_POSTGRES_PORT:-5432}` — a guard
     # that blocks correct code is worse than the gap it closes, so a sentinel
     # default makes the variable unverifiable rather than wrong.
