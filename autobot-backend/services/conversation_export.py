@@ -15,11 +15,11 @@ Provides export and import operations for chat conversations:
 import json
 import time
 from typing import Any, Dict, List, Tuple
-from chat_history.session import SessionOwnerUnreadable
-from security.session_ownership import build_owner_metadata
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
+from chat_history.session import SessionOwnerUnreadable
+from security.session_ownership import build_owner_metadata
 
 logger = get_logger(__name__)
 
@@ -253,9 +253,7 @@ async def import_conversation(
                 existing_owner = _UNREADABLE_OWNER
 
             importer = (user_data or {}).get("username")
-            if existing_owner is _UNREADABLE_OWNER or (
-                existing_owner is not None and existing_owner != importer
-            ):
+            if existing_owner is _UNREADABLE_OWNER or (existing_owner is not None and existing_owner != importer):
                 logger.warning(
                     "Import refused: %s may not replace session %s",
                     importer or "<anonymous>",

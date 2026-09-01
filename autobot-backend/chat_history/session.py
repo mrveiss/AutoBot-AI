@@ -30,7 +30,6 @@ from constants.redis_constants import REDIS_KEY
 logger = get_logger(__name__)
 
 
-
 class SessionOwnerUnreadable(RuntimeError):
     """Ownership could not be determined for a session (#14033).
 
