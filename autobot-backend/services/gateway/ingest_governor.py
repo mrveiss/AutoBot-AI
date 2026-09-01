@@ -46,7 +46,6 @@ so the degradation is visible outside logs too, never silent.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict
 
 from autobot_shared.env_utils import blank_to_none
@@ -55,6 +54,7 @@ from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config, env
 from constants.ttl_constants import TTL_5_MINUTES
+from services.gateway.types import GovernanceVerdict
 
 logger = get_logger(__name__)
 
@@ -120,12 +120,11 @@ INGEST_CHAIN_WINDOW_SECONDS = _resolve_chain_window_seconds()
 BotIdResolver = Callable[[], Awaitable[str | None]]
 
 
-@dataclass(frozen=True)
-class IngestVerdict:
-    """Result of running the ingest governance stage on one inbound message."""
-
-    allowed: bool
-    reason: str = ""
+# #14905: IngestVerdict was a fork of the shape EgressVerdict later grew
+# (allowed, reason, rule, safe_reason) — this package's shared governance
+# type lives in services.gateway.types now; kept as a name so callers and
+# tests importing IngestVerdict from this module do not break.
+IngestVerdict = GovernanceVerdict
 
 
 class IngestGovernor:
@@ -177,7 +176,7 @@ class IngestGovernor:
                 platform,
                 channel_id,
             )
-            return IngestVerdict(False, "bot_self")
+            return IngestVerdict(False, "bot_self", rule="bot_self")
         return None
 
     async def _check_recursion(self, platform: str, channel_id: str) -> IngestVerdict | None:
@@ -214,7 +213,7 @@ class IngestGovernor:
                 depth,
                 INGEST_MAX_CHAIN_DEPTH,
             )
-            return IngestVerdict(False, "recursion_ceiling")
+            return IngestVerdict(False, "recursion_ceiling", rule="recursion_ceiling")
         return None
 
     async def _check_dedup(self, platform: str, channel_id: str, message_id: str) -> IngestVerdict:
@@ -237,7 +236,7 @@ class IngestGovernor:
             get_metrics_manager().record_error(
                 category="gateway_ingest", component="ingest_governor", error_code="dedup_redis_unavailable"
             )
-            return IngestVerdict(True, "redis_unavailable_fail_open")
+            return IngestVerdict(True, "redis_unavailable_fail_open", rule="dedup_fail_open")
 
         if not was_new:
             logger.warning(
@@ -246,8 +245,8 @@ class IngestGovernor:
                 channel_id,
                 message_id,
             )
-            return IngestVerdict(False, "duplicate")
-        return IngestVerdict(True)
+            return IngestVerdict(False, "duplicate", rule="duplicate")
+        return IngestVerdict(True, rule="dedup")
 
     async def record_agent_send(self, *, platform: str, channel_id: str) -> None:
         """Increment the per-(platform, channel) recursion counter.

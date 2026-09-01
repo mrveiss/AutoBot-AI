@@ -11,10 +11,17 @@
 // Types and Interfaces
 // ============================================================================
 
-/**
- * Log levels for console output
- */
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+// Canonical LogLevel/log/createLogger now live in @autobot/ui (#14908) — this
+// file's copy was byte-for-byte identical to the kit's; the kit's own doc
+// comment records that. Re-exported so the ~200 call sites across this app
+// that `import { createLogger } from '@/utils/debugUtils'` keep resolving.
+import { log, createLogger } from '@autobot/ui'
+// `export type { X } from '...'` re-exports without binding X in THIS module's
+// scope, so `ConsoleLogEntry.level: LogLevel` below could not see it (TS2304).
+// Import it, then re-export — callers keep the same public surface.
+import type { LogLevel } from '@autobot/ui'
+export { log, createLogger }
+export type { LogLevel }
 
 /**
  * Storage type for browser storage operations
@@ -70,55 +77,9 @@ export interface PerformanceMetrics {
 }
 
 // ============================================================================
-// Console Logging Utilities
+// Console Logging Utilities — log() / createLogger() re-exported above from
+// @autobot/ui; see that file's doc comment for the full behavior contract.
 // ============================================================================
-
-/**
- * Enhanced console logging with timestamps and formatting.
- * Supports variadic args so callers can use printf-style %s or pass multiple values.
- *
- * @param level - Log level (debug, info, warn, error)
- * @param message - Log message (may contain %s/%d/%o placeholders)
- * @param args - Additional data forwarded to console.*
- *
- * @example
- * ```ts
- * log('info', 'Component mounted')
- * log('error', 'Failed to load %s: %s', endpoint, error)
- * ```
- */
-export function log(level: LogLevel, message: string, ...args: unknown[]): void {
-  const timestamp = new Date().toISOString()
-  const prefix = `[${timestamp}] [${level.toUpperCase()}]`
-  const consoleFn = level === 'debug' ? console.debug
-    : level === 'info' ? console.info
-    : level === 'warn' ? console.warn
-    : console.error
-
-  consoleFn(prefix, message, ...args)
-}
-
-/**
- * Create a scoped logger with automatic prefix
- *
- * @param scope - Scope name (e.g., 'WorkflowComponent', 'API')
- * @returns Scoped logging functions
- *
- * @example
- * ```ts
- * const logger = createLogger('ChatComponent')
- * logger.info('User sent message')
- * logger.error('Failed to connect', error)
- * ```
- */
-export function createLogger(scope: string) {
-  return {
-    debug: (message: string, ...args: unknown[]) => log('debug', `[${scope}] ${message}`, ...args),
-    info: (message: string, ...args: unknown[]) => log('info', `[${scope}] ${message}`, ...args),
-    warn: (message: string, ...args: unknown[]) => log('warn', `[${scope}] ${message}`, ...args),
-    error: (message: string, ...args: unknown[]) => log('error', `[${scope}] ${message}`, ...args),
-  }
-}
 
 // ============================================================================
 // Storage Utilities

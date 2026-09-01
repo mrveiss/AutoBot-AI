@@ -492,7 +492,11 @@ export interface WorkflowResponse {
 // MessageSender re-exported from '@/types/api' above (Issue #2066)
 export type TaskStatus = AgentTask['status']
 export type TaskPriority = AgentTask['priority']
-export type LogLevel = 'debug' | 'info' | 'warning' | 'error' | 'critical'
+// #14908: this was an unused, orphaned duplicate (zero importers) with an
+// incompatible value set ('warning'/'critical' vs the canonical 'warn' —
+// the dangerous kind of vocabulary fork). Re-exported from the canonical
+// debugUtils type instead of re-declared; no consumer narrows as a result.
+export type { LogLevel } from '@/utils/debugUtils'
 export type TransportType = 'local' | 'redis'
 export type SystemHealth = DiagnosticsReport['system_health']
 export type IssueSeverity = DiagnosticIssue['severity']

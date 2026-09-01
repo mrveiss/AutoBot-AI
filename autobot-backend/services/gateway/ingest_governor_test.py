@@ -74,6 +74,7 @@ class TestBotSelfFilter:
 
         assert verdict.allowed is False
         assert verdict.reason == "bot_self"
+        assert verdict.rule == "bot_self"  # #14905: denial names the rule that fired
 
     @pytest.mark.asyncio
     async def test_noop_when_no_bot_id_configured(self, governor, monkeypatch):
@@ -134,6 +135,7 @@ class TestBotSelfFilter:
 
         assert verdict.allowed is False
         assert verdict.reason == "bot_self"
+        assert verdict.rule == "bot_self"  # #14905: denial names the rule that fired
 
     @pytest.mark.asyncio
     async def test_resolver_exception_falls_back_to_env_var(self, governor, monkeypatch):
@@ -148,6 +150,7 @@ class TestBotSelfFilter:
 
         assert verdict.allowed is False
         assert verdict.reason == "bot_self"
+        assert verdict.rule == "bot_self"  # #14905: denial names the rule that fired
 
 
 class TestRecursionGuard:
@@ -169,6 +172,7 @@ class TestRecursionGuard:
 
         assert verdict.allowed is False
         assert verdict.reason == "recursion_ceiling"
+        assert verdict.rule == "recursion_ceiling"  # #14905: denial names the rule that fired
 
     @pytest.mark.asyncio
     async def test_chain_at_ceiling_is_allowed(self, governor, monkeypatch):
@@ -234,6 +238,7 @@ class TestDedup:
         assert first.allowed is True
         assert second.allowed is False
         assert second.reason == "duplicate"
+        assert second.rule == "duplicate"  # #14905: denial names the rule that fired
 
     @pytest.mark.asyncio
     async def test_different_message_ids_both_pass(self, governor, monkeypatch):
@@ -330,6 +335,7 @@ class TestRedisUnavailable:
 
         assert verdict.allowed is False
         assert verdict.reason == "bot_self"
+        assert verdict.rule == "bot_self"  # #14905: denial names the rule that fired
 
 
 class TestNormalMessageStillRoutes:

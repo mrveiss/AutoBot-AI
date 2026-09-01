@@ -15,16 +15,10 @@
 
 // ==================== DURATION FORMATTING ====================
 
-/**
- * Numeric duration formatting style (see canonical formatHelpers for details).
- * - `msSeconds2dp`  (ms): `<1000` → "{n}ms" (0 decimals), else "{n/1000}s" (2 decimals)
- * - `secondsCompact` (s): `<1` → "{n*1000}ms", `<60` → "{n}s" (1 decimal),
- *                          else "{floor(n/60)}m {round(n%60)}s"
- * - `clock`          (s): "M:SS"
- * - `msMinutes`     (ms): `<1000` → "{n}ms" (raw), `<60000` → "{n/1000}s" (1 decimal),
- *                          else "{n/60000}m"
- */
-export type DurationStyle = 'msSeconds2dp' | 'secondsCompact' | 'clock' | 'msMinutes'
+// Shared with autobot-frontend's formatHelpers.ts (#14908) — the type was
+// declared identically in both; formatDuration()'s logic stays per-app.
+import type { DurationStyle } from '@autobot/ui'
+export type { DurationStyle } from '@autobot/ui'
 
 /** Options for the numeric form of {@link formatDuration}. */
 export interface FormatDurationOptions {

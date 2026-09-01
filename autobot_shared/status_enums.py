@@ -19,6 +19,18 @@ Usage:
     # String comparison still works
     if status.value == "completed":
         ...
+
+Plain ``Enum`` vs ``(str, Enum)`` (#13597 scope item 3): default to plain
+``Enum``. Reach for ``(str, Enum)`` only when a member must already behave
+like ``str`` at a boundary that does not go through an explicit ``.value``
+read — SQLAlchemy column coercion (``AgentLifecycleStatus``), a pre-existing
+``== "literal"`` comparison or JSON encoder that predates the enum
+(``ConnectionStatus``), or a persisted/wire value compared directly
+(``SecretType``). Everywhere else — Prometheus labels, dataclass defaults,
+dict serialization via ``.value`` (``Severity``, ``TaskStatus``,
+``Priority``, ``LLMProvider``, ``OperationOutcome``, ``HealthStatus``,
+``AgentStatus``) — plain ``Enum`` keeps identity comparison exact and forces
+callers to be explicit about when they want the string form.
 """
 
 from enum import Enum

@@ -339,7 +339,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/autoresearch/runner_test.py": 1155,
     "autobot-backend/services/autoresearch/store_chromadb_test.py": 664,
     "autobot-backend/services/captcha_human_loop.py": 636,
-    "autobot-backend/services/causal_inference_engine.py": 759,
+    "autobot-backend/services/causal_inference_engine.py": 756,
     "autobot-backend/services/chat_knowledge_service_test.py": 851,
     "autobot-backend/services/claim_verifier.py": 835,
     "autobot-backend/services/codebase_indexing_service.py": 1010,
