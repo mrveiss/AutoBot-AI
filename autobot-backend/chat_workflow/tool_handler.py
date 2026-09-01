@@ -2250,6 +2250,13 @@ class ToolHandlerMixin:
         Issue #665: Extracted from _process_tool_calls for single responsibility.
         Issue #654: Original respond tool handling logic.
 
+        #14529: stays ungated at ``BEFORE_TOOL_EXECUTE`` by decision — there is
+        nothing to gate. This is loop-control, not an external effect: it builds
+        a ``WorkflowMessage`` from LLM-supplied text and returns a
+        ``(break_loop, respond_content)`` tuple. No dispatch, no I/O, and it is
+        not even a coroutine. A permission on it would gate the agent's ability
+        to stop talking.
+
         Returns:
             Tuple of (message, break_loop_requested, respond_content)
         """
@@ -2280,6 +2287,8 @@ class ToolHandlerMixin:
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
         ctx: "LLMIterationContext" | None = None,
+        session_id: str = "",
+        role: str = "user",
     ):
         """Handle the 'delegate' tool (Issue #657; GH#11207 execution).
 
@@ -2287,6 +2296,21 @@ class ToolHandlerMixin:
         record-only behaviour — no change to the live chat path. When on, it runs
         the subtask as a governed subagent (its ``forbidden_work`` constrains it) via
         the selected engine and returns the result. Yields WorkflowMessage(s).
+
+        #14529: spawning a subagent that can itself call tools is the strongest
+        thing at this seam, and it had no RBAC check of any kind — the fan-out
+        cap and the delegated agent's ``forbidden_work`` bound what a subagent
+        may do, never who may start one. ``Permission.AGENT_EXECUTE`` is the
+        tier the ``sequential_thinking``/``structured_thinking`` bridges already
+        use; admin and operator hold it.
+
+        The gate sits **above** the ``DELEGATION_ENABLED`` check on purpose,
+        which #14529 left as a choice. Gating below would make the permission
+        depend on a feature flag, so the day delegation is switched on the
+        enforcement seam moves — the flag is default-off today, and a gate that
+        only exists in the configuration nobody is running is not a gate. It
+        also keeps this branch uniform with every other one: deny before any
+        work, including the record-only write to ``execution_results``.
         """
         from chat_workflow.delegation import (
             DELEGATION_ENABLED,
@@ -2297,6 +2321,23 @@ class ToolHandlerMixin:
         params = tool_call.get("params", {})
         task = params.get("task", "")
         reason = params.get("reason", "Task delegation")
+
+        should_execute = await _emit_before_tool_execute(
+            "delegate",
+            params,
+            session_id,
+            tool_permission=Permission.AGENT_EXECUTE.value,
+            user_role=role,
+        )
+        if not should_execute:
+            logger.info("[#14529] delegate cancelled by permission hook (role=%s)", role)
+            execution_results.append({"tool": "delegate", "status": "error", "error": "permission_denied"})
+            yield WorkflowMessage(
+                type="error",
+                content="delegate execution cancelled",
+                metadata={"tool": "delegate", "cancelled_by_hook": True, "reason": "permission_denied"},
+            )
+            return
 
         if not DELEGATION_ENABLED:
             logger.info("[Issue #657] Delegate tool invoked (record-only): task=%s, reason=%s", task[:100], reason)
@@ -2798,6 +2839,7 @@ class ToolHandlerMixin:
         tool_call: dict[str, Any],
         execution_results: list[dict[str, Any]],
         session_id: str = "",
+        role: str = "user",
     ):
         """Dispatch the extract_content builtin. Issue #11540.
 
@@ -2805,10 +2847,40 @@ class ToolHandlerMixin:
         whatever page the browser session is already on — post-login,
         post-click, post-form-fill — so it works behind auth walls a fresh
         fetch could never reach.
+
+        #14529: that reach is exactly why the read needs a gate. This branch
+        never called ``BEFORE_TOOL_EXECUTE`` at all, so it was not "gated and
+        allowed" — the hook never fired. ``Permission.MCP_BROWSER_READ`` is the
+        tier ``navigate``/``page_snapshot``/``screenshot`` already carry, and
+        this reads the same session's page content, behind whatever auth wall
+        those tools drove it through. ``readonly`` is the one role withheld.
         """
         params = tool_call.get("params", {})
         goal = params.get("goal", "")
         logger.info("[Issue #11540] extract_content: goal=%s", goal[:100])
+
+        should_execute = await _emit_before_tool_execute(
+            "extract_content",
+            params,
+            session_id,
+            tool_permission=Permission.MCP_BROWSER_READ.value,
+            user_role=role,
+        )
+        if not should_execute:
+            logger.info("[#14529] extract_content cancelled by permission hook (role=%s)", role)
+            execution_results.append(
+                {"tool": "extract_content", "status": "error", "error": "permission_denied"}
+            )
+            yield WorkflowMessage(
+                type="error",
+                content="extract_content execution cancelled",
+                metadata={
+                    "tool": "extract_content",
+                    "cancelled_by_hook": True,
+                    "reason": "permission_denied",
+                },
+            )
+            return
 
         yield WorkflowMessage(
             type="tool_execution",
@@ -2839,6 +2911,20 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
     ):
         """Re-read a window of a tool result that was spilled out of context (#13919).
+
+        #14529: stays ungated at ``BEFORE_TOOL_EXECUTE`` by decision. This reads
+        an artifact the *same run* already produced and already showed the model
+        an excerpt of; the anchor is bound server-side to its owning run and is
+        never taken from a caller-supplied run id. So there is no permission
+        boundary here that reading the turn's own prior output does not already
+        sit inside — any role that could see the excerpt can see the window.
+        Declaring a permission would mean inventing a tier below the chat access
+        the caller demonstrably already holds.
+
+        What this decision does **not** cover: anchor forgery or a cross-session
+        read, if the server-side binding above ever weakens. That is a different
+        risk class — RBAC would not address it either — and it is the thing to
+        re-check here, not the permission declaration.
 
         #13692 writes oversized tool output aside and leaves a bounded excerpt
         plus an anchor, and the excerpt's note tells the model to call this tool.
@@ -3333,7 +3419,9 @@ class ToolHandlerMixin:
         if tool_name == "delegate":
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
-            async for msg in self._handle_delegate_tool(tool_call, execution_results, ctx):
+            async for msg in self._handle_delegate_tool(
+                tool_call, execution_results, ctx, session_id=session_id, role=role
+            ):
                 yield msg
             return
 
@@ -3416,10 +3504,11 @@ class ToolHandlerMixin:
         the shared gate. Adding a builtin that follows the standard gate takes a
         schema entry plus one row here — no new branch at the dispatch seam.
 
-        Issue #14469/#14491: ``role`` is forwarded to every handler that
-        declares a ``tool_permission`` (browser, web_search, execute_command,
-        web research) — live-page-extract/read_spilled_output remain
-        undeclared, tracked separately (#14491's per-branch table).
+        Issue #14469/#14491/#14529: ``role`` is forwarded to every handler
+        that declares a ``tool_permission`` — browser, web_search,
+        execute_command, web research, and now live-page-extract.
+        ``read_spilled_output`` stays undeclared by decision, not by omission;
+        the reasoning is on the handler itself.
         """
         if tool_name in BROWSER_TOOL_NAMES:  # Issue #1368: route to browser VM
             return self._handle_browser_tool(tool_call, execution_results, session_id, role=role)
@@ -3428,7 +3517,7 @@ class ToolHandlerMixin:
         if tool_name in WEB_RESEARCH_TOOL_NAMES:  # Issue #7509
             return self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id, role=role)
         if tool_name in LIVE_PAGE_EXTRACT_TOOL_NAMES:  # Issue #11540
-            return self._handle_extract_content_tool(tool_call, execution_results, session_id)
+            return self._handle_extract_content_tool(tool_call, execution_results, session_id, role=role)
         if tool_name == "read_spilled_output":  # #13919: the excerpt's note names this
             return self._handle_read_spilled_output(tool_call, execution_results)
         if tool_name == "execute_command":
@@ -3607,7 +3696,26 @@ class ToolHandlerMixin:
         execution_results: list[dict[str, Any]],
         ctx: "LLMIterationContext | None",
     ):
-        """Handle the compose tool call — main chat agent only (GH#11568)."""
+        """Handle the compose tool call — main chat agent only (GH#11568).
+
+        #14529: stays ungated at ``BEFORE_TOOL_EXECUTE``, deliberately, and this
+        is the decision rather than an oversight. Two mechanisms already govern
+        it and a third would be redundant:
+
+        * ``_guard_compose`` runs an AST pass over the program and rejects any
+          reference to a ``forbidden_work`` tool before a line executes, and
+          ``_reject_delegated_compose`` confines the tool to the main chat agent.
+        * ``_approve_compose`` puts it behind a WORKFLOW_GATE human approval,
+          auto-approving only when every shim it touches is read-only and the
+          flag is on.
+
+        More to the point, a compose script does not reach tools through some
+        side door: ``_build_compose_dispatch`` routes back through
+        ``_dispatch_tool_call``, this same seam. A script calling ``create_task``
+        or ``crawl_site`` hits the #14491 gates on the way, with the caller's
+        own role. Gating ``compose`` itself would gate the *interpreter*, not
+        the effects, and the effects are where the permissions live.
+        """
         program: str = tool_call.get("params", {}).get("program", "")
         agent_id: str | None = ctx.agent_context.agent_id if (ctx and ctx.agent_context) else None
         subagent_msg = self._reject_delegated_compose(agent_id)
