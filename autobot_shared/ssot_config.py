@@ -1651,7 +1651,7 @@ class MiscConfig(RedactedSettings):
         default="",
         validation_alias=AliasChoices("AUTOBOT_ENCRYPTION_KEY", "ENCRYPTION_KEY"),
     )
-    env: str = Field(default="", alias="AUTOBOT_ENV")
+    env: str = Field(default="development", alias="AUTOBOT_ENV")  # #13264 batch 3
     error_resolved_ttl_seconds: str = Field(
         default="",
         alias="AUTOBOT_ERROR_RESOLVED_TTL_SECONDS",
@@ -1663,9 +1663,9 @@ class MiscConfig(RedactedSettings):
         ),
     )
     feature_routers_strict: str = Field(default="1", alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
-    gc_threshold_0: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_0")
-    gc_threshold_1: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_1")
-    gc_threshold_2: int = Field(default=0, alias="AUTOBOT_GC_THRESHOLD_2")
+    gc_threshold_0: int = Field(default=700, alias="AUTOBOT_GC_THRESHOLD_0")  # #13264 batch 3
+    gc_threshold_1: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_1")  # #13264 batch 3
+    gc_threshold_2: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_2")  # #13264 batch 3
     hnsw_construction_ef: str = Field(default="", alias="AUTOBOT_HNSW_CONSTRUCTION_EF")
     hnsw_m: str = Field(default="", alias="AUTOBOT_HNSW_M")
     hnsw_quantization_type: str = Field(
@@ -1783,11 +1783,11 @@ class MiscConfig(RedactedSettings):
     meta_agent_max_module_lines: int = Field(default=500, alias="AUTOBOT_META_AGENT_MAX_MODULE_LINES")
     meta_agent_test_timeout: int = Field(default=60, alias="AUTOBOT_META_AGENT_TEST_TIMEOUT")
     ollama_url: str = Field(default="", alias="AUTOBOT_OLLAMA_URL")
-    postgres_db: str = Field(default="", alias="AUTOBOT_POSTGRES_DB")
+    postgres_db: str = Field(default="autobot", alias="AUTOBOT_POSTGRES_DB")  # #13264 batch 3
     postgres_host: str = Field(default="", alias="AUTOBOT_POSTGRES_HOST")
     postgres_password: str = Field(default="", alias="AUTOBOT_POSTGRES_PASSWORD")
-    postgres_port: int = Field(default=0, alias="AUTOBOT_POSTGRES_PORT")
-    postgres_user: str = Field(default="", alias="AUTOBOT_POSTGRES_USER")
+    postgres_port: int = Field(default=5432, alias="AUTOBOT_POSTGRES_PORT")  # #13264 batch 3
+    postgres_user: str = Field(default="autobot", alias="AUTOBOT_POSTGRES_USER")  # #13264 batch 3
     project_root: str = Field(default="", alias="AUTOBOT_PROJECT_ROOT")
     project_state_db_path: str = Field(default="", alias="AUTOBOT_PROJECT_STATE_DB_PATH")
     prompt_compression_enabled: bool = Field(default=False, alias="AUTOBOT_PROMPT_COMPRESSION_ENABLED")
@@ -1896,7 +1896,7 @@ class MiscConfig(RedactedSettings):
     tls_cert_path: str = Field(default="", alias="AUTOBOT_TLS_CERT_PATH")
     tls_key_path: str = Field(default="", alias="AUTOBOT_TLS_KEY_PATH")
     trace_console: str = Field(default="", alias="AUTOBOT_TRACE_CONSOLE")
-    trace_sample_rate: float = Field(default=0.0, alias="AUTOBOT_TRACE_SAMPLE_RATE")
+    trace_sample_rate: float = Field(default=1.0, alias="AUTOBOT_TRACE_SAMPLE_RATE")  # #13264 batch 3
     tts_stream_probe_ttl: str = Field(
         default="",
         alias="AUTOBOT_TTS_STREAM_PROBE_TTL",
@@ -1990,7 +1990,7 @@ class MiscConfig(RedactedSettings):
     jenkins_url: str = Field(default="", alias="JENKINS_URL")
     keras_backend: str = Field(default="", alias="KERAS_BACKEND")
     layer_inference_model: str = Field(default="", alias="LAYER_INFERENCE_MODEL")
-    log_level: str = Field(default="", alias="LOG_LEVEL")
+    log_level: str = Field(default="INFO", alias="LOG_LEVEL")  # #13264 batch 3
     master_key: str = Field(default="", alias="MASTER_KEY")
     mcp_isolation_mode: str = Field(default="inprocess", alias="MCP_ISOLATION_MODE")
     mcp_registry_cache_enabled: bool = Field(default=True, alias="MCP_REGISTRY_CACHE_ENABLED")
