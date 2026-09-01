@@ -12,6 +12,11 @@
  * @module formatHelpers
  */
 
+// Shared with autobot-slm-frontend's formatHelpers.ts (#14908) — the type
+// was declared identically in both; formatDuration()'s logic stays per-app.
+import type { DurationStyle } from '@autobot/ui'
+export type { DurationStyle } from '@autobot/ui'
+
 // ==================== DATE & TIME FORMATTING ====================
 
 /**
@@ -207,8 +212,6 @@ export function formatTimeAgo(timestamp: Date | string | number): string {
  * - `msMinutes`     (ms): `<1000` → "{n}ms" (raw), `<60000` → "{n/1000}s" (1 decimal),
  *                          else "{n/60000}m"
  */
-export type DurationStyle = 'msSeconds2dp' | 'secondsCompact' | 'clock' | 'msMinutes'
-
 /**
  * Options for the numeric ({@link DurationStyle}) form of {@link formatDuration}.
  */
