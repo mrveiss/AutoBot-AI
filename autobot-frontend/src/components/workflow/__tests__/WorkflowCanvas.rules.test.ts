@@ -225,6 +225,7 @@ describe('the colour dimension is switchable (#13941)', () => {
     expect(buttons.map((button) => button.text())).toEqual([
       RULES.dimension.status,
       RULES.dimension.owner,
+      RULES.dimension.tool,
     ])
     expect(buttons[0].attributes('aria-pressed')).toBe('true')
   })
