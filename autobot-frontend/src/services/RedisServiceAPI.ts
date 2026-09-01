@@ -54,8 +54,14 @@ export interface ServiceLogs {
   [key: string]: unknown
 }
 
+// #14908: renamed from `LogLevel` — same name, incompatible value set as
+// the console-logging LogLevel ('debug'|'info'|'warn'|'error' in
+// debugUtils/@autobot/ui). This one is a backend Redis log-filter
+// parameter sent on the wire as-is; changing its values would be a wire
+// contract change requiring backend verification, so it stays separate —
+// only the confusing shared NAME is fixed here.
 /** Valid log-level filter values accepted by the getLogs endpoint. */
-export type LogLevel = 'error' | 'warning' | 'info'
+export type RedisLogLevel = 'error' | 'warning' | 'info'
 
 /** Parameters for the stopService method. */
 export interface StopServiceParams {
@@ -66,7 +72,7 @@ export interface StopServiceParams {
 export interface GetLogsParams {
   lines?: number
   since?: string | null
-  level?: LogLevel | null
+  level?: RedisLogLevel | null
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +191,7 @@ class RedisServiceAPI {
   async getLogs(
     lines = 50,
     since: string | null = null,
-    level: LogLevel | null = null,
+    level: RedisLogLevel | null = null,
   ): Promise<ServiceLogs> {
     try {
       const endpoint = this._buildLogsEndpoint(lines, since, level)
@@ -204,7 +210,7 @@ class RedisServiceAPI {
   private _buildLogsEndpoint(
     lines: number,
     since: string | null,
-    level: LogLevel | null,
+    level: RedisLogLevel | null,
   ): string {
     const params = new URLSearchParams()
     if (lines) params.append('lines', String(lines))
