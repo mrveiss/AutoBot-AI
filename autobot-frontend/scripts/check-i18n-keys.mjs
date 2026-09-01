@@ -93,11 +93,25 @@ const VALID_KEY_RE = /^[a-zA-Z_][\w.]*[\w]$/;
 // A dynamic key contains an unescaped ${ inside a backtick string.
 const DYNAMIC_RE = /\$\{/;
 
+// #14123: KEY_RE requires a quote straight after `t(`, so a key passed as a
+// VARIABLE — `t(rule.labelKey)` — matched nothing at all. Those calls were not
+// merely unresolvable, they were invisible: not checked, and not reported as
+// dynamic either, so a key built elsewhere and never added to a locale looked
+// like it had no usage. This finds them so the blind spot is at least visible.
+const VARIABLE_KEY_RE = /(?<![a-zA-Z0-9_])\$?t\(\s*([A-Za-z_$][\w$]*(?:\.[\w$]+)*)\s*[,)]/g;
+
 const usedKeys = new Map(); // key -> Set<file>
 const dynamicUsages = []; // { file, raw } for dynamic keys we can't check
+const variableUsages = []; // #14123: { file, raw } for `t(variable)` — key not visible here at all
 
 for (const file of sourceFiles) {
   const src = readFileSync(file, 'utf8');
+  // #14123: variable-argument calls, recorded before the literal pass so a file
+  // using only `t(someVar)` still reports something rather than nothing.
+  for (const match of src.matchAll(VARIABLE_KEY_RE)) {
+    variableUsages.push({ file, raw: match[0].trim() });
+  }
+
   for (const match of src.matchAll(KEY_RE)) {
     const quote = match[1];
     const raw = match[2];
@@ -147,6 +161,18 @@ if (!quiet) {
   console.log(`  Source files scanned : ${sourceFiles.length}`);
   console.log(`  Keys in en.json      : ${definedKeys.size}`);
   console.log(`  Unique keys used     : ${usedKeys.size}`);
+  if (variableUsages.length) {
+    // #14123: reported separately from dynamic template literals. A `${}` key
+    // at least shows its prefix; a variable shows nothing, so these are the
+    // ones where a missing translation is completely unobservable here.
+    console.log(`  Variable keys        : ${variableUsages.length} (key not visible at the call site)`);
+    for (const { file, raw } of variableUsages.slice(0, 10)) {
+      console.log(`    ${file}: ${raw}`);
+    }
+    if (variableUsages.length > 10) {
+      console.log(`    … and ${variableUsages.length - 10} more`);
+    }
+  }
   if (dynamicUsages.length) {
     console.log(`  Dynamic keys skipped : ${dynamicUsages.length} (cannot be statically analysed)`);
   }

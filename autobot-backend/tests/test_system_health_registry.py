@@ -271,24 +271,53 @@ def test_register_app_state_probe_one_liner_registers_under_name():
     assert "toy_state" in names
 
 
-def test_probes_run_concurrently_not_serially():
-    sleeps = [0.5, 0.5, 0.5]
+# Generous: it bounds a deadlock, not the work. A correct implementation
+# reaches the barrier immediately, so this never elapses in the passing case.
+_BARRIER_TIMEOUT_SECONDS = 5.0
 
-    for index, duration in enumerate(sleeps):
+
+def test_probes_run_concurrently_not_serially():
+    """#14157: proven by rendezvous, not by a stopwatch.
+
+    This asserted ``elapsed < 1.0`` against three 0.5s sleeps — serial is 1.5s,
+    concurrent is 0.5s, so the bound sat exactly at the midpoint. A loaded
+    runner failed it while the code was correct, and an implementation that ran
+    two probes concurrently and one serially landed on 1.0s, right on the
+    boundary. It also cost 0.5s of wall clock on every run.
+
+    A barrier decides it outright: all three probes must be inside the barrier
+    at once before any is released. Serial execution cannot reach the second
+    probe, so the first blocks and the wait times out. There is no slack to
+    tune and nothing for machine load to perturb.
+    """
+    probe_count = 3
+    state = {"arrived": 0}
+    # An Event rather than asyncio.Barrier: Barrier is 3.11+, and this suite
+    # also runs on older interpreters. The last probe to arrive releases them
+    # all, which is the same rendezvous.
+    all_arrived = asyncio.Event()
+
+    for index in range(probe_count):
 
         @register_health_probe(f"sleeper_{index}")
-        async def _probe(_request=None, _d=duration, _i=index):
-            await asyncio.sleep(_d)
+        async def _probe(_request=None, _i=index):
+            state["arrived"] += 1
+            if state["arrived"] == probe_count:
+                all_arrived.set()
+            # Only satisfiable if every probe is in flight together — exactly
+            # the serial case this test exists to reject.
+            await asyncio.wait_for(all_arrived.wait(), timeout=_BARRIER_TIMEOUT_SECONDS)
             return ComponentHealth(name=f"sleeper_{_i}", status="ok")
 
-    import time
+    try:
+        asyncio.run(collect_system_health())
+    except (TimeoutError, asyncio.TimeoutError) as exc:
+        raise AssertionError(
+            f"probes ran serially: only {state['arrived']} of {probe_count} were in flight "
+            f"together before the rendezvous timed out ({exc!r})"
+        ) from exc
 
-    started = time.perf_counter()
-    asyncio.run(collect_system_health())
-    elapsed = time.perf_counter() - started
-    # Serial would be sum(sleeps) == 1.5s. Concurrent should be ~0.5s. Allow
-    # generous slack for CI noise but reject the serial outcome.
-    assert elapsed < 1.0, f"probes ran serially: elapsed={elapsed:.2f}s"
+    assert state["arrived"] == probe_count, f"expected {probe_count} probes, saw {state['arrived']}"
 
 
 # ---------------------------------------------------------------------------
