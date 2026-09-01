@@ -9,14 +9,17 @@ implemented several incompatible ways and appearance varies by which view you
 happen to be in. #12731 records four dimensions of this. Measuring them found
 the picture is directionally right and, in one case, far worse than filed:
 
-* **Button classes.** #12731 describes "2 per-view button-class systems"
-  (`btn-primary` and `btn-action-primary`). The real shape is that there is no
-  canonical definition at all: 102 files declare a `.btn-*` rule, 380 rule
-  declarations in total, across 115 distinct class names — and shared
-  stylesheets (`assets/tailwind.css`, `assets/vue-notus.css`) already define
-  `btn-primary`, so every one of those views is redefining something that
-  exists. The counts have grown since filing, not shrunk (`btn-primary` usages
-  85 -> 210).
+* **Local CSS.** #12731 describes "2 per-view button-class systems". Buttons
+  turned out not to be a special case but a sample of the whole: **381 `.vue`
+  components declare their own styles against 16 shared stylesheets**, giving
+  5,622 distinct class names in 9,429 rule declarations. `btn` is 116 of those
+  names — about 2% of the problem. Other families are as bad or worse per
+  name: `status` 114 names, `card` 67, `badge` 58, `result` 56, `progress` 47.
+  `empty` (72 files) and `action` (54 files) are the very primitives #12730's
+  title names. Shared stylesheets already define `btn-primary`
+  (`assets/tailwind.css`, `assets/vue-notus.css`), so those views are
+  redefining what already exists, and usage has grown since filing rather than
+  shrunk (`btn-primary` 85 -> 210).
 * **Notification.** Four entry points — `useToast`, `useNotificationConfig`,
   `NotificationBridge`, `showNotification`. Smaller than #12731's figures,
   which counted word occurrences rather than modules; `useNotification` and
@@ -44,6 +47,7 @@ asserted is the direction of the number, not its absolute truth.
 
 from __future__ import annotations
 
+import collections
 import re
 from pathlib import Path
 
@@ -64,6 +68,14 @@ _MIN_SOURCE_FILES = 500
 # use the shared definition instead of declaring another local one.
 
 BASELINE = {
+    # `.vue` components carrying their own <style> rules. Target is a small
+    # number of shared stylesheets, not 381 components each with a private
+    # copy of the design system.
+    "components_declaring_styles": 381,
+    # Distinct class names declared anywhere in the frontend.
+    "distinct_class_names": 5622,
+    # Total CSS rule declarations.
+    "css_rule_declarations": 9429,
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
     "button_definition_files": 102,
@@ -79,7 +91,35 @@ BASELINE = {
     "hardcoded_zindex_declarations": 52,
 }
 
+# Families worth pinning individually, so a regression in one cannot hide
+# inside the repo-wide totals. `modal` and `dialog` are listed separately on
+# purpose: they are the same concept in two vocabularies (34 files, 39 names
+# between them for "a thing that opens over the page"), the same duplicate-
+# system shape as `btn` versus `btn-action`, and consolidating them should show
+# up as one number falling to zero rather than as noise in the total.
+FAMILY_BASELINE = {
+    "btn": 116,
+    "status": 114,
+    "card": 67,
+    "badge": 58,
+    "result": 56,
+    "progress": 47,
+    "stat": 38,
+    "panel": 34,
+    "form": 27,
+    "action": 27,
+    "modal": 26,
+    "empty": 23,
+    "table": 18,
+    "input": 18,
+    "dialog": 13,
+    "tab": 11,
+    "grid": 4,
+}
+
 _BTN_RULE_RE = re.compile(r"^\s*\.(btn-[a-z0-9-]+)\s*[,{]", re.MULTILINE)
+_ANY_RULE_RE = re.compile(r"^\s*\.([a-z][a-z0-9-]*)\s*[,{]", re.MULTILINE)
+_STYLE_SUFFIXES = (".vue", ".css", ".scss")
 _ZINDEX_RE = re.compile(r"^\s*z-index:\s*-?\d+", re.MULTILINE)
 
 _NOTIFICATION_ENTRY_POINTS = (
@@ -128,9 +168,23 @@ def _measure() -> dict[str, int]:
     zindex = 0
     notification: set[str] = set()
     dates: set[str] = set()
+    components_with_styles = 0
+    all_class_names: set[str] = set()
+    rule_declarations = 0
+    family_names: dict[str, set[str]] = collections.defaultdict(set)
 
     for path in _source_files():
         text = _read(path)
+
+        if path.suffix in _STYLE_SUFFIXES:
+            declared = _ANY_RULE_RE.findall(text)
+            if declared:
+                all_class_names.update(declared)
+                for declared_name in declared:
+                    family_names[declared_name.split("-")[0]].add(declared_name)
+                rule_declarations += len(declared)
+                if path.suffix == ".vue":
+                    components_with_styles += 1
 
         names = _BTN_RULE_RE.findall(text)
         if names:
@@ -148,15 +202,22 @@ def _measure() -> dict[str, int]:
                 dates.add(label)
 
     return {
+        "components_declaring_styles": components_with_styles,
+        "distinct_class_names": len(all_class_names),
+        "css_rule_declarations": rule_declarations,
         "button_definition_files": button_files,
         "button_class_names": len(button_names),
         "notification_entry_points": len(notification),
         "date_format_approaches": len(dates),
         "hardcoded_zindex_declarations": zindex,
+        **{f"family:{family}": len(names) for family, names in family_names.items()},
     }
 
 
 _ADVICE = {
+    "components_declaring_styles": "Put the rule in a shared stylesheet rather than another component-local <style> block.",
+    "distinct_class_names": "Reuse an existing class rather than coining another name for the same thing.",
+    "css_rule_declarations": "Reuse a shared rule rather than redeclaring it locally.",
     "button_definition_files": "Use the shared button styles rather than redeclaring `.btn-*` in another view.",
     "button_class_names": "Reuse an existing button class rather than inventing another name for the same role.",
     "notification_entry_points": "Route through the canonical notification API; additional entry points should be thin shims or removed.",
@@ -173,6 +234,27 @@ def test_the_tree_this_guard_reads_is_present() -> None:
     assert found >= _MIN_SOURCE_FILES, (
         f"only {found} source file(s) found, expected at least {_MIN_SOURCE_FILES} — the walk has "
         "stopped reaching the frontend, which would make every ratchet below pass by counting nothing"
+    )
+
+
+@pytest.mark.parametrize("family", sorted(FAMILY_BASELINE))
+def test_no_class_family_grows(family: str) -> None:
+    """Per-family, so a regression cannot hide inside the repo-wide totals.
+
+    `modal` and `dialog` name the same concept; both are pinned so that merging
+    them registers as one family reaching zero rather than as churn in the
+    aggregate.
+    """
+    actual = _measure().get(f"family:{family}", 0)
+    baseline = FAMILY_BASELINE[family]
+
+    assert actual <= baseline, (
+        f"`.{family}-*` declares {actual} distinct class names, ratchet allows {baseline} "
+        f"(#12730, #12731). Reuse an existing `.{family}-*` class rather than coining another."
+    )
+    assert actual == baseline, (
+        f"`.{family}-*` is down to {actual} distinct names but the baseline still says {baseline} — "
+        "lower it in the commit that did the work"
     )
 
 
