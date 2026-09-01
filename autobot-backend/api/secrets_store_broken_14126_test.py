@@ -292,10 +292,9 @@ def test_the_probe_reports_degraded_for_a_corrupted_store(tmp_path, monkeypatch)
 
 
 def test_the_hosts_route_refuses_a_corrupted_store(tmp_path, monkeypatch) -> None:
-    from security.secrets_store_errors import SecretsStoreUnavailable
-
-    import api.secrets as secrets_module
     import api.infrastructure as infra
+    import api.secrets as secrets_module
+    from security.secrets_store_errors import SecretsStoreUnavailable
 
     manager, _ = _manager_on(tmp_path, "not json at all")
     monkeypatch.setattr(secrets_module, "secrets_manager", manager)

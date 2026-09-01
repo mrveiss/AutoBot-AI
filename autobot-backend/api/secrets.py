@@ -27,8 +27,6 @@ from pathlib import Path
 from typing import Dict, List
 
 from cryptography.fernet import Fernet
-
-from security.secrets_store_errors import SecretsStoreUnavailable
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
@@ -56,6 +54,7 @@ from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.status_enums import SecretType
 from autobot_shared.time_utils import parse_utc_iso
 from middleware.proxy_utils import get_client_ip
+from security.secrets_store_errors import SecretsStoreUnavailable
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 from services.json_secrets_read import load_imported_json_secret
 from services.provider_key_vault import mirror_provider_key_best_effort
