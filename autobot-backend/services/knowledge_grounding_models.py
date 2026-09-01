@@ -52,6 +52,57 @@ class KBStatus(str, Enum):
     AMBIGUOUS = "ambiguous"
 
 
+class VerificationMethod(str, Enum):
+    """
+    How an extracted CLAIM was verified (#15005) — ``VerifiedClaim.verification_method``
+    in ``services/grounded_agent.py``, not the FACT-provenance field of the same name
+    (see the boundary note below; do not add that vocabulary here).
+
+    Lives here rather than beside ``VerificationStatus`` in
+    ``services/claim_verifier.py`` because that file is grandfathered at its
+    current line count in ``python_file_size_known_large.py`` and may not
+    grow; this module is already a shared import for that domain.
+
+    Two members are produced today — read the call site, not the #15005
+    issue body, which named a different three and missed one of these:
+
+    - KB_LOOKUP: matched directly against the knowledge base
+      (``services/grounded_agent.py::GroundedAgent._classify_claim`` and its
+      unverified fallback).
+    - CLAIM_VERIFIER_RAG: escalated to ``ClaimVerifier.kb_rag_search`` when KB
+      match confidence was too low
+      (``GroundedAgent._escalate_to_claim_verifier``).
+
+    Two members are reserved, not yet produced by anything: EXTERNAL_RESEARCH
+    and CAUSAL_INFERENCE name the research-agent and
+    ``CausalInferenceEngine`` escalation tiers documented in
+    ``VerifiedClaim.verification_method``'s original comment and in
+    ``api/knowledge_grounding.py``'s fabricated ``claim_sources`` breakdown
+    (#14981 — a separate bug: that endpoint currently returns hardcoded
+    ratios, not real counts). Kept as members so #14981's fix has a rung to
+    key its per-method counts on rather than inventing the spelling again;
+    do not treat their presence as evidence either tier is wired up.
+
+    Boundary, found while ground-truthing #15005 — do NOT fold this in: a
+    SECOND, unrelated ``verification_method`` field exists on facts
+    (``knowledge/facts.py``'s ``_PROVENANCE_DEFAULTS``,
+    ``api/knowledge_verification.py``, ``api/schemas_knowledge.py:3146``),
+    describing how a *fact's provenance* was verified
+    (``auto_quality``/``user_approved``/``connector_trusted``), not how a
+    *claim* was. The one real value it produces, ``"user_approved"``,
+    coincides with a spelling a human could also use for a claim, but the
+    two vocabularies do not otherwise overlap — a fact is never
+    ``kb_lookup``-verified and a claim is never ``connector_trusted``.
+    Merging them would be the wrong-enum mistake #14988 found in
+    ``command_patterns.py``, not a consolidation.
+    """
+
+    KB_LOOKUP = "kb_lookup"
+    CLAIM_VERIFIER_RAG = "claim_verifier_rag"
+    EXTERNAL_RESEARCH = "external_research"
+    CAUSAL_INFERENCE = "causal_inference"
+
+
 @dataclass
 class KBSource:
     """

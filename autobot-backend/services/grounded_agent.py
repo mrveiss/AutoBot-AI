@@ -9,7 +9,6 @@ Orchestrates claim classification → verification → conflict resolution → g
 generation. Integrates with Tier 3 (causal inference) to provide reasoning transparency.
 
 Issue: #4070 (Knowledge Grounding Tier 4)
-
 Core functionality:
 - Extract claims from agent responses
 - Classify each claim (IN_KB, UNKNOWN, CONTRADICTS)
@@ -44,6 +43,7 @@ from knowledge_factory import get_or_create_knowledge_base
 from llm_shared.types import LLMType
 from services.ai_stack_client import get_ai_stack_client
 from services.causal_inference_engine import CausalInferenceEngine
+from services.knowledge_grounding_models import VerificationMethod
 
 logger = get_logger(__name__)
 
@@ -100,7 +100,7 @@ class VerifiedClaim:
     kb_source: str | None = None  # KB fact ID if IN_KB
     confidence: float = 0.0  # Verification confidence (0.0-1.0)
     evidence: List[str] = field(default_factory=list)  # Supporting evidence
-    verification_method: str = ""  # "kb_lookup", "external_research", "causal_inference"
+    verification_method: str = ""  # a VerificationMethod value; see #15005
     resolved_at: float = field(default_factory=time.time)
 
 
@@ -451,7 +451,7 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
                 kb_source=fact_id,
                 confidence=match_confidence,
                 evidence=[best_match.get("content", "")[:200]],
-                verification_method="kb_lookup",
+                verification_method=VerificationMethod.KB_LOOKUP.value,
             )
 
         except Exception as e:
@@ -476,7 +476,7 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
                 kb_status=ClaimStatus.UNKNOWN,
                 confidence=0.0,
                 evidence=[kb_evidence] if kb_evidence else ["No matching KB facts found"],
-                verification_method="kb_lookup",
+                verification_method=VerificationMethod.KB_LOOKUP.value,
             )
 
         try:
@@ -496,7 +496,7 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
                     kb_status=status,
                     confidence=rag_result.confidence,
                     evidence=evidence,
-                    verification_method="claim_verifier_rag",
+                    verification_method=VerificationMethod.CLAIM_VERIFIER_RAG.value,
                 )
         except Exception as exc:
             logger.warning("ClaimVerifier escalation failed (non-fatal): %s", exc)
@@ -506,7 +506,7 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
             kb_status=ClaimStatus.UNKNOWN,
             confidence=0.0,
             evidence=[kb_evidence] if kb_evidence else [],
-            verification_method="kb_lookup",
+            verification_method=VerificationMethod.KB_LOOKUP.value,
         )
 
     async def _reconstruct_response(
