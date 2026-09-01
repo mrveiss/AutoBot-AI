@@ -18,7 +18,6 @@ import os
 import time
 import uuid
 from typing import Any, Dict, List
-from security.session_owner_errors import SessionOwnerUnreadable
 
 import aiofiles
 
@@ -27,6 +26,7 @@ from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
 from chat_history.file_io import run_in_chat_io_executor
 from constants.redis_constants import REDIS_KEY
+from security.session_owner_errors import SessionOwnerUnreadable
 
 logger = get_logger(__name__)
 
