@@ -225,14 +225,25 @@ _scan_file_for_calls() {
         [[ -z "$line" ]] && continue
         [[ "$line" =~ $skip_regex ]] && continue
 
+        # #14115: three subprocesses per line — one awk to strip strings, two
+        # greps — on every line of every staged file. Stripping only ever
+        # REMOVES content, so a line whose raw text cannot match the call
+        # pattern cannot match once stripped either. Testing the raw line first
+        # with bash's own matcher skips the awk entirely for the overwhelming
+        # majority of lines, and cannot introduce a false negative: the only
+        # lines it declines to strip are ones that had no candidate to begin
+        # with.
+        [[ "$line" =~ $match_regex ]] || continue
+
         # Strings (TS also: templates/regex bodies) stripped — a noqa or a
         # call MENTIONED inside one must not count (#14051 findings 1/2) —
         # comment kept; also what the call match below runs against.
         local sig
         sig=$("$noqa_fn" "$line")
-        printf '%s' "$sig" | grep -qE "$noqa_regex" && continue
+        # #14115: bash's own regex engine, not a grep subprocess. Same ERE.
+        [[ "$sig" =~ $noqa_regex ]] && continue
 
-        if printf '%s' "$sig" | grep -qE "$match_regex"; then
+        if [[ "$sig" =~ $match_regex ]]; then
             if suppressed_in_multiline_call lines "$idx" "$line" "$noqa_regex" \
                 "$line_num" "$balance_fn" "$noqa_fn"; then
                 continue
