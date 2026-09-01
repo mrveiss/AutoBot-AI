@@ -42,10 +42,9 @@ def _exploding(*_args: Any, **_kwargs: Any) -> Any:
 
 def test_the_hosts_loader_raises_rather_than_returning_an_empty_list(monkeypatch) -> None:
     """`[]` and "the store is broken" must not be the same answer."""
-    from security.secrets_store_errors import SecretsStoreUnavailable
-
-    import api.secrets as secrets_module
     import api.infrastructure as infra
+    import api.secrets as secrets_module
+    from security.secrets_store_errors import SecretsStoreUnavailable
 
     monkeypatch.setattr(secrets_module.secrets_manager, "list_secrets", _exploding)
 
@@ -63,8 +62,8 @@ def test_a_healthy_but_empty_store_still_returns_an_empty_list(monkeypatch) -> N
     A fresh install genuinely has no hosts. If this had been collapsed into the
     failure case, every new deployment would report a broken secrets store.
     """
-    import api.secrets as secrets_module
     import api.infrastructure as infra
+    import api.secrets as secrets_module
 
     monkeypatch.setattr(secrets_module.secrets_manager, "list_secrets", lambda *a, **k: [])
 
@@ -74,8 +73,8 @@ def test_a_healthy_but_empty_store_still_returns_an_empty_list(monkeypatch) -> N
 def test_only_infrastructure_host_secrets_become_hosts(monkeypatch) -> None:
     """Guard the guard: a loader that returned [] for everything would pass the
     empty-store test above while being just as broken as the original."""
-    import api.secrets as secrets_module
     import api.infrastructure as infra
+    import api.secrets as secrets_module
 
     monkeypatch.setattr(
         secrets_module.secrets_manager,
@@ -97,10 +96,9 @@ def test_only_infrastructure_host_secrets_become_hosts(monkeypatch) -> None:
 
 
 def test_a_clone_needing_a_token_fails_rather_than_going_anonymous(monkeypatch) -> None:
-    from security.secrets_store_errors import SecretsStoreUnavailable
-
     import api.secrets as secrets_module
     from api.codebase_analytics.endpoints import sources
+    from security.secrets_store_errors import SecretsStoreUnavailable
 
     monkeypatch.setattr(secrets_module.secrets_manager, "get_secret", _exploding)
 
@@ -188,10 +186,7 @@ def test_the_probe_module_is_imported_at_startup() -> None:
     """
     from pathlib import Path
 
-    registry = (
-        Path(__file__).resolve().parents[2]
-        / "autobot-backend/initialization/router_registry/core_routers.py"
-    )
+    registry = Path(__file__).resolve().parents[2] / "autobot-backend/initialization/router_registry/core_routers.py"
     source = registry.read_text(encoding="utf-8")
 
     assert "import api.secrets_store_health" in source, (
