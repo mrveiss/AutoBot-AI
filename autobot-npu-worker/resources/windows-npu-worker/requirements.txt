@@ -33,7 +33,7 @@ onnxruntime-openvino>=1.17.0
 # OpenVINO toolkit for device enumeration and advanced features
 # Required for Core().available_devices to detect NPU/GPU/CPU
 # #14476: floor raised to match the SSOT (autobot-npu-worker/requirements.txt).
-openvino>=2026.3.0
+openvino>=2026.3.1
 
 # HuggingFace for model downloading and tokenizers
 transformers>=4.36.0
