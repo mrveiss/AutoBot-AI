@@ -29,9 +29,17 @@ If not provided upfront, collect:
 | `testing` | Missing or broken tests |
 | `documentation` | Docs gap |
 
-### Area (pick one or more)
-`backend` · `frontend` · `devops` · `database` · `mcp` · `rag` · `deployment`
-`monitoring` · `configuration` · `error-handling` · `optimization`
+### Area — coarse (pick one or more)
+`backend` · `frontend` · `testing` · `infrastructure` · `docs` · `ci` · `security`
+`database` · `deployment` · `configuration` · `monitoring` · `mcp` · `rag` · `agents`
+`memory` · `analytics` · `ai-ml` · `error-handling` · `optimization`
+
+### Area — cluster (pick exactly one)
+Every issue also carries its `area: <cluster>` label from the backlog dependency waves —
+32 clusters, coloured by wave, listed with `gh label list --search "area: "`. The cluster
+says *which body of work* the issue belongs to; the coarse label says which part of the
+stack it touches. An issue that fits no existing cluster gets the coarse label only, and
+says so in the report.
 
 ### Priority (pick one)
 | Label | When |
