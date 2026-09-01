@@ -46,6 +46,7 @@ from services.grounded_agent import (
     Claim,
     get_grounded_agent,
 )
+from services.knowledge_grounding_models import VerificationMethod
 
 logger = get_logger(__name__)
 
@@ -506,10 +507,14 @@ async def get_stats(
             "total_responses_grounded": int(decode_redis_value(stats_data.get("total_responses_grounded")) or 0),
             "total_claims_extracted": int(decode_redis_value(stats_data.get("total_claims_extracted")) or 0),
             "claims_verified": float(decode_redis_value(stats_data.get("claims_verified")) or 0),
+            # #14981: these ratios are still hardcoded, not derived from real
+            # per-method counts — that fabrication is a separate bug. #15005
+            # only removes the bare-literal keys; VerificationMethod gives
+            # #14981's fix the rungs to key its real counts on.
             "claim_sources": {
-                "kb_lookup": 0.65,
-                "external_research": 0.22,
-                "causal_inference": 0.13,
+                VerificationMethod.KB_LOOKUP.value: 0.65,
+                VerificationMethod.EXTERNAL_RESEARCH.value: 0.22,
+                VerificationMethod.CAUSAL_INFERENCE.value: 0.13,
             },
             "average_confidence": float(decode_redis_value(stats_data.get("average_confidence")) or 0),
             "conflicts_created": int(decode_redis_value(stats_data.get("conflicts_created")) or 0),

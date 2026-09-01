@@ -27,6 +27,7 @@ so that writer/reader key drift breaks this suite instead of the endpoint.
 import pytest
 
 from api import knowledge_grounding
+from services.knowledge_grounding_models import VerificationMethod
 
 # A populated grounding hash exactly as a HINCRBY/HINCRBYFLOAT writer leaves it:
 # str field names, decimal-string values, delivered decoded by the shared client.
@@ -148,8 +149,8 @@ async def test_static_claim_source_breakdown_is_unchanged(monkeypatch):
     result = await _call()
 
     assert result["claim_sources"] == {
-        "kb_lookup": 0.65,
-        "external_research": 0.22,
-        "causal_inference": 0.13,
+        VerificationMethod.KB_LOOKUP.value: 0.65,
+        VerificationMethod.EXTERNAL_RESEARCH.value: 0.22,
+        VerificationMethod.CAUSAL_INFERENCE.value: 0.13,
     }
     assert result["period"] == "24h"
