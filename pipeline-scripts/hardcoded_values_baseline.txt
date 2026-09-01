@@ -753,7 +753,6 @@
 1|other|autobot-infrastructure/shared/mcp/servers/prometheus-mcp/server.py|30
 1|other|autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/embedded.py|10
 1|other|autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/server.py|10
-1|other|autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts|'user'
 1|other|autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/real-time-ingestion.ts|'assistant'
 1|other|autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/test-ingestion.ts|'assistant'
 1|other|autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/test-ingestion.ts|'user'
