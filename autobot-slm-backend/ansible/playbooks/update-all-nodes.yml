@@ -1228,7 +1228,7 @@
       command:
         cmd: /opt/autobot/autobot-browser-worker/venv/bin/pip install
              -r /opt/autobot/autobot-browser-worker/requirements.txt
-             -c {{ code_source_dir | default('/opt/autobot/code_source') }}/constraints/shared.txt
+             -c {{ autobot.base_dir }}/code_source/constraints/shared.txt
              --quiet --timeout 120
       become: true
       become_user: autobot

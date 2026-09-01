@@ -142,7 +142,7 @@
     state: present
     virtualenv: "{{ browser_install_dir }}/venv"
     virtualenv_python: python3.14
-    extra_args: "-c {{ code_source_dir | default('/opt/autobot/code_source') }}/constraints/shared.txt"
+    extra_args: "-c {{ autobot.base_dir }}/code_source/constraints/shared.txt"
   become: true
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
