@@ -74,13 +74,13 @@ _MIN_SOURCE_FILES = 500
 # Lower these as consolidation lands. Never raise one to make a new view pass:
 # use the shared definition instead of declaring another local one.
 
-# NOTE (#15454): `distinct_class_names` and `css_rule_declarations` count SIZE,
+# NOTE (#15455): `distinct_class_names` and `css_rule_declarations` count SIZE,
 # not duplication — a legitimate new component raises both, so they freeze the
 # design system rather than ratcheting sprawl down. `components_declaring_styles`
 # and the per-family counts are the duplication signals and behaved correctly:
 # when #15429 added the same banner to three views, this file caught it, and
 # consolidating into `assets/main.css` removed 67 lines. The two size metrics
-# are kept, at the post-consolidation figures, until #15454 replaces them with a
+# are kept, at the post-consolidation figures, until #15455 replaces them with a
 # duplication measure.
 BASELINE = {
     # `.vue` components carrying their own <style> rules. Target is a small
