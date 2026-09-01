@@ -339,7 +339,16 @@ export function useOrchestrationManagement() {
         `/orchestration/services/${serviceName}/start`,
         options || {}
       )
-      logger.info(`Start service ${serviceName}:`, response.data.message)
+      // #15224: HTTP 200 with `success: false` is a real response shape
+      // (api/orchestration.py returns `success=success` at 200). The deleted
+      // ServicesView.vue set errorMessage on exactly this branch; without it the
+      // operator clicks the button, the action fails, and nothing appears.
+      if (!response.data.success) {
+        error.value = response.data.message || `Failed to start ${serviceName}`
+        logger.error(`Start service ${serviceName} failed:`, response.data.message)
+      } else {
+        logger.info(`Start service ${serviceName}:`, response.data.message)
+      }
       return response.data
     } catch (e) {
       error.value = extractErrorMessage(e, `Failed to start ${serviceName}`)
@@ -359,7 +368,16 @@ export function useOrchestrationManagement() {
         `/orchestration/services/${serviceName}/stop`,
         options || {}
       )
-      logger.info(`Stop service ${serviceName}:`, response.data.message)
+      // #15224: HTTP 200 with `success: false` is a real response shape
+      // (api/orchestration.py returns `success=success` at 200). The deleted
+      // ServicesView.vue set errorMessage on exactly this branch; without it the
+      // operator clicks the button, the action fails, and nothing appears.
+      if (!response.data.success) {
+        error.value = response.data.message || `Failed to stop ${serviceName}`
+        logger.error(`Stop service ${serviceName} failed:`, response.data.message)
+      } else {
+        logger.info(`Stop service ${serviceName}:`, response.data.message)
+      }
       return response.data
     } catch (e) {
       error.value = extractErrorMessage(e, `Failed to stop ${serviceName}`)
@@ -379,7 +397,16 @@ export function useOrchestrationManagement() {
         `/orchestration/services/${serviceName}/restart`,
         options || {}
       )
-      logger.info(`Restart service ${serviceName}:`, response.data.message)
+      // #15224: HTTP 200 with `success: false` is a real response shape
+      // (api/orchestration.py returns `success=success` at 200). The deleted
+      // ServicesView.vue set errorMessage on exactly this branch; without it the
+      // operator clicks the button, the action fails, and nothing appears.
+      if (!response.data.success) {
+        error.value = response.data.message || `Failed to restart ${serviceName}`
+        logger.error(`Restart service ${serviceName} failed:`, response.data.message)
+      } else {
+        logger.info(`Restart service ${serviceName}:`, response.data.message)
+      }
       return response.data
     } catch (e) {
       error.value = extractErrorMessage(e, `Failed to restart ${serviceName}`)
