@@ -4613,6 +4613,11 @@
             "title": "Database",
             "type": "string"
           },
+          "frontend": {
+            "default": "unknown",
+            "title": "Frontend",
+            "type": "string"
+          },
           "nodes_online": {
             "title": "Nodes Online",
             "type": "integer"

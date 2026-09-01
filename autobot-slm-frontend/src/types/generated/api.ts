@@ -9032,6 +9032,11 @@ export interface components {
         HealthResponse: {
             /** Database */
             database: string;
+            /**
+             * Frontend
+             * @default unknown
+             */
+            frontend: string;
             /** Nodes Online */
             nodes_online: number;
             /** Nodes Total */
