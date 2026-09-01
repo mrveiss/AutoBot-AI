@@ -212,6 +212,10 @@ async def import_conversation_endpoint(
         chat_history_manager,
         document=body.document,
         on_conflict=body.on_conflict,
+        # #14026: without this the imported session carries no owner, and
+        # callers that read "no owner" as "legacy, allow" make it readable by
+        # anyone. It also gates `replace` against overwriting another user.
+        user_data=current_user,
     )
 
     logger.info(
