@@ -101,9 +101,7 @@ def test_a_row_from_each_scope_branch_round_trips_intact(branch, row, envelope) 
 
 
 def test_a_message_row_round_trips_intact() -> None:
-    payload = SessionMessagesData(
-        messages=[_message_row()], session_id="chat-1", total_count=1, page=1, per_page=50
-    )
+    payload = SessionMessagesData(messages=[_message_row()], session_id="chat-1", total_count=1, page=1, per_page=50)
 
     emitted = payload.model_dump()["messages"][0]
     row = _message_row()

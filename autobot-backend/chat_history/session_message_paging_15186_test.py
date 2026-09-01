@@ -45,9 +45,7 @@ def manager(monkeypatch):
 
 
 def _page(mgr, page: int, per_page: int) -> List[Dict[str, Any]]:
-    return asyncio.run(
-        mgr.get_session_messages("s1", limit=per_page, offset=(page - 1) * per_page)
-    )
+    return asyncio.run(mgr.get_session_messages("s1", limit=per_page, offset=(page - 1) * per_page))
 
 
 def test_page_one_is_unchanged_by_the_fix(manager) -> None:

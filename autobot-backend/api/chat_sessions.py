@@ -16,7 +16,6 @@ from typing import Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
-from api.schemas_chat_rows import SessionListData, SessionMessagesData
 from api.schemas_chat import (
     ActivityAddData,
     ActivityBatchCreate,
@@ -35,6 +34,7 @@ from api.schemas_chat import (
     SessionUpdate,
     SessionUpdateData,
 )
+from api.schemas_chat_rows import SessionListData, SessionMessagesData
 from api.schemas_common import DataResponse
 from api.session_events import (
     publish_session_created,
