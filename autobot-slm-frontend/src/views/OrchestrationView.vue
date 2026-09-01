@@ -7,8 +7,21 @@
  * Unified OrchestrationView - Complete orchestration management (Issue #850 Phase 4)
  *
  * Consolidates pages into a single tabbed view:
- * 1. Per-Node Control (from ServicesView — full parity: live WebSocket
- *    status, progress-tracked restart-all, Redis panel; #15224)
+ * 1. Per-Node Control (from ServicesView — live WebSocket status,
+ *    progress-tracked restart-all, Redis panel, category reassignment; #15224)
+ *
+ *    Capability diff vs the deleted ServicesView.vue, stated in full so that
+ *    "full parity" is a claim someone can check rather than take on trust:
+ *      - ported: expand/collapse all, status + category filters and counts,
+ *        auto-refresh, Redis panel, status/category badges, per-service action
+ *        buttons, category reassignment, failure reporting on every action.
+ *      - DROPPED ON PURPOSE: the fleet summary card row (Nodes / Total /
+ *        Running / Stopped / Failed, ServicesView.vue:510-535). The
+ *        Infrastructure tab already carries an equivalent grid, and per-node
+ *        counts survive on each NodeHealthCard, so restoring it here would be
+ *        a third copy of the same numbers. Recorded rather than silently lost.
+ *      - not a capability: ServicesView's `lastRefresh` was assigned but never
+ *        rendered.
  * 2. Fleet Operations (from OrchestrationView)
  * 3. Roles & Deployment (from RolesView)
  * 4. Migration & Advanced (from OrchestrationView)
