@@ -228,7 +228,7 @@
 - name: Install OpenVINO and dependencies
   ansible.builtin.pip:
     name:
-      - openvino>=2026.3.0
+      - openvino>=2026.3.1
       - numpy
       - pillow
       - transformers
