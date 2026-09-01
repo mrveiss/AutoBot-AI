@@ -124,6 +124,31 @@ def test_an_unknown_deployed_commit_installs_rather_than_skips() -> None:
         )
 
 
+def test_an_already_drifted_install_is_detected_without_a_manifest_change() -> None:
+    """A commit diff cannot see an install that is already stale (#15430).
+
+    The host that went down is exactly that case: the bump sits *behind* the
+    deployed commit, so no future span will contain it and the build would fail
+    on every subsequent deploy. `npm ls` exits non-zero when node_modules does
+    not satisfy package.json — the invariant that actually matters — so the
+    flag must consider it too, not only the diff.
+    """
+    tasks = {t["name"]: t for t in _tasks() if isinstance(t.get("name"), str)}
+
+    assert any("installed node tree" in name for name in tasks), (
+        "nothing checks whether the installed tree satisfies package.json, so a host that has "
+        "already drifted can never recover on its own (#15430)"
+    )
+
+    flag_task = next((t for n, t in tasks.items() if "Set dependency change flags" in n), None)
+    assert flag_task is not None
+    expression = str(flag_task.get("set_fact", {}).get("node_deps_changed", ""))
+    assert "node_tree_check" in expression, (
+        "node_deps_changed ignores the installed-tree check, so it still only answers "
+        f"'did a manifest change in this span': {expression}"
+    )
+
+
 def test_a_failed_frontend_build_cannot_publish_an_empty_bundle() -> None:
     """The outage was a failed build leaving dist/ empty behind nginx."""
     text = _text()

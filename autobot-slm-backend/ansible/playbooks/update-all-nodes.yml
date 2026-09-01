@@ -198,6 +198,23 @@
       changed_when: false
       failed_when: false
 
+    # #15430 (recovery): a commit diff answers "did a manifest change in this
+    # span", which cannot see an install that is ALREADY out of sync. The host
+    # that went down is exactly that case — the bump sits behind the deployed
+    # commit, so no future diff will ever reveal it, and the build would keep
+    # failing on every subsequent deploy.
+    #
+    # Ask the installed tree directly instead. `npm ls` exits non-zero when
+    # node_modules does not satisfy package.json, which is the invariant that
+    # actually matters.
+    - name: "[PRE-FLIGHT] Check the installed node tree satisfies package.json (#15430)"
+      ansible.builtin.command:
+        cmd: npm ls --depth=0
+        chdir: /opt/autobot/autobot-slm-frontend
+      register: node_tree_check
+      changed_when: false
+      failed_when: false
+
     - name: "[PRE-FLIGHT] Set dependency change flags"
       set_fact:
         # #15430: when the deployed commit is unknown — marker missing,
@@ -207,9 +224,13 @@
         python_deps_changed: >-
           {{ true if (deps_diff_base | length == 0)
              else (python_deps_diff.stdout | default('') | length > 0) }}
+        # Either the manifests changed in this deployment span, OR the tree
+        # already on disk does not satisfy them. The second disjunct is what
+        # makes a drifted host self-heal instead of failing every deploy.
         node_deps_changed: >-
           {{ true if (deps_diff_base | length == 0)
-             else (node_deps_diff.stdout | default('') | length > 0) }}
+             else ((node_deps_diff.stdout | default('') | length > 0)
+                   or (node_tree_check.rc | default(0) != 0)) }}
 
     - name: "[PRE-FLIGHT] Display dependency change status"
       debug:
