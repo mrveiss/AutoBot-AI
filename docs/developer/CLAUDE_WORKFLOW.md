@@ -10,6 +10,15 @@
 - **No browsers for CLI tasks:** Use `gh`, `curl`, or API calls instead of Playwright/Puppeteer
 - **3-command exploration limit:** If 3 commands haven't converged, write a hypothesis first
 - **Implementation first — clarify only on genuine ambiguity.** Default to a brief plan (max 10 lines) then implement. When the task *is* ambiguous, state the approach in 3 bullets and wait for confirmation (Rule 4 in [`CLAUDE_RULES.md`](CLAUDE_RULES.md)); inside a `/loop`, post the question with a recommendation and continue instead of blocking
+- **Acceptance criteria are ticked ONLY with code evidence — unbreakable.** A tick is a claim.
+  Verify the criterion against merged code from base (`git show origin/Dev_new_gui:<path>`) and quote
+  the file, symbol or count in the comment. Never tick to tidy a closed issue, to match a merged PR,
+  or because the work "was obviously done". Unverifiable from the diff → leave unchecked and say why.
+- **Issue relationships are native, never prose.** Every child is attached to its umbrella with
+  `gh api -X POST repos/$REPO/issues/$UMBRELLA/sub_issues -F sub_issue_id=$(gh api repos/$REPO/issues/$NEW -q .id)`
+  and every `Depends on:` with `.../issues/$NEW/dependencies/blocked_by -F issue_id=…`, at filing
+  time. The `- [ ]` checklist stays — it carries wave grouping and PR refs the native view cannot.
+  Full commands in the `issue` skill, Step 4. Issue *types* are org-only and unavailable here
 - For large features (backend + frontend), complete and commit backend fully first
 - Commit completed work incrementally
 - If approaching context limit: stop at phase boundary, commit, add GitHub comment with next steps

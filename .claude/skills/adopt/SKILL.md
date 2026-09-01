@@ -20,6 +20,7 @@ Pipeline: pre-flight → research → confirm → file → implement → evidenc
 2. **Research** — invoke the `research` skill on the source (Phase 1 → user gate → Phase 2). Its audit-first gate applies: nothing is adoptable without cited proof it doesn't already exist in AutoBot.
 3. **STOP — user confirms the adoption list.** No issues are filed and no code is written without explicit go-ahead on which gaps to adopt.
 4. **File issues** — one umbrella issue owning the adoption goal + one child issue per confirmed gap (use the `issue` skill; umbrella task-list format from global CLAUDE.md). Link each child to its Phase 2 evidence.
+   Each child is attached to the umbrella as a **native sub-issue** the moment it is filed, and every `Depends on:` becomes a `blocked_by` edge — the checklist alone is not a relationship (`issue` skill, Step 4).
 5. **Implement each child** — use the `implement` skill per child: own worktree `.worktrees/issue-XXXX/`, tests, PR to `Dev_new_gui`, CI green, merge, close, worktree cleanup. Max 3 children in flight.
 6. **Evidence report** — final table, one row per child:
 
