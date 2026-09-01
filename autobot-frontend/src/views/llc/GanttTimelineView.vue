@@ -820,9 +820,9 @@ onBeforeUnmount(() => {
   gap: 0.75rem;
   margin-bottom: 1rem;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--color-danger-border, #f5c2c7);
-  background: var(--color-danger-bg, #f8d7da);
-  color: var(--color-danger-text, #842029);
+  border: 1px solid var(--color-error-border);
+  background: var(--color-error-bg);
+  color: var(--color-error);
   border-radius: 6px;
 }
 .board-load-error-detail { opacity: 0.85; font-size: 0.875rem; }
