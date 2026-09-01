@@ -23,7 +23,10 @@ the picture is directionally right and, in one case, far worse than filed:
 * **Notification.** Four entry points — `useToast`, `useNotificationConfig`,
   `NotificationBridge`, `showNotification`. Smaller than #12731's figures,
   which counted word occurrences rather than modules; `useNotification` and
-  `$toast` are already gone.
+  `$toast` are already gone. The same split exists in the styles: `toast`,
+  `message`, `alert` and `notification` are four vocabularies for telling the
+  user something, 48 distinct class names across 18 files, so consolidating the
+  code without the CSS would leave the visual inconsistency in place.
 * **Date formatting.** Four approaches: `toLocaleString`, `formatDate`,
   `toLocaleDateString`, `Intl.DateTimeFormat`.
 * **z-index.** 52 hardcoded declarations, with no scale, so
@@ -100,6 +103,7 @@ BASELINE = {
 FAMILY_BASELINE = {
     "btn": 116,
     "status": 114,
+    "header": 24,
     "card": 67,
     "badge": 58,
     "result": 56,
@@ -114,7 +118,20 @@ FAMILY_BASELINE = {
     "input": 18,
     "dialog": 13,
     "tab": 11,
+    "label": 8,
     "grid": 4,
+    "title": 4,
+    "subtitle": 1,
+    # The notification concept splits four ways in CSS as well as in code:
+    # 48 distinct names across 18 files for "tell the user something". The
+    # code-level split is pinned separately as `notification_entry_points`;
+    # these four should collapse together with it.
+    "toast": 15,
+    "message": 15,
+    "alert": 13,
+    "notification": 5,
+    "tooltip": 4,
+    "hint": 2,
 }
 
 _BTN_RULE_RE = re.compile(r"^\s*\.(btn-[a-z0-9-]+)\s*[,{]", re.MULTILINE)
