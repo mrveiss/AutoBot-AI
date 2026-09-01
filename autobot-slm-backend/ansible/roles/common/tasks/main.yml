@@ -228,6 +228,12 @@
   failed_when: false
   tags: ['common', 'python']
 
+# Deliberately system-wide and deliberately unconstrained (#15417). This is the
+# bootstrap that makes every other venv possible -- a virtualenv cannot be created
+# before pip, setuptools and wheel exist on the system interpreter, so this task
+# cannot itself target one. It installs only those three build-time tools and no
+# runtime dependency, which is what keeps it from colliding with a venv's pins.
+# Recorded in the pip-isolation guard's exemption set; do not copy this shape.
 - name: "Common | Install Python packages (system-wide)"
   pip:
     name:
