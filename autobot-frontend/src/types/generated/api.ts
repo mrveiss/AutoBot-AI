@@ -93386,7 +93386,7 @@ export interface components {
          */
         SessionListData: {
             /** Sessions */
-            sessions: unknown[];
+            sessions: components["schemas"]["api__schemas_chat_rows__SessionSummary"][];
             /** Count */
             count: number;
             /** Scope */
@@ -93425,12 +93425,48 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SessionMessage
+         * @description One row of ``SessionMessagesData.messages`` (#15138).
+         *
+         *     Keys mirror ``ChatHistoryManager._build_message_dict``. Every field is
+         *     optional and ``extra="allow"`` is set on purpose: this route serialises
+         *     dictionaries assembled in several places over several years, and a model
+         *     that dropped an unlisted key would silently truncate a response that
+         *     currently round-trips intact. The point of declaring it is that the
+         *     contract becomes *readable* and a client can be generated from it —
+         *     not to start rejecting payloads the API already emits.
+         */
+        SessionMessage: {
+            /** Id */
+            id?: string | null;
+            /** Sender */
+            sender?: string | null;
+            /** Text */
+            text?: string | null;
+            /** Messagetype */
+            messageType?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Sources */
+            sources?: unknown[] | null;
+            /** Toolmarkers */
+            toolMarkers?: unknown[] | null;
+            /** Authorid */
+            authorId?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SessionMessagesData
          * @description data payload for GET /chat/sessions/{session_id}.
          */
         SessionMessagesData: {
             /** Messages */
-            messages: unknown[];
+            messages: components["schemas"]["SessionMessage"][];
             /** Session Id */
             session_id: string;
             /** Total Count */
@@ -93559,37 +93595,6 @@ export interface components {
             secret_id: string;
             /** Shared With Count */
             shared_with_count: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /** SessionSummary */
-        SessionSummary: {
-            /** Session Id */
-            session_id: string;
-            /** User Id */
-            user_id: string | null;
-            /** Model */
-            model: string;
-            /** Started At */
-            started_at: string;
-            /** Ended At */
-            ended_at: string | null;
-            /** Duration S */
-            duration_s: number;
-            /** Audio In S */
-            audio_in_s: number;
-            /** Audio Out S */
-            audio_out_s: number;
-            /** Input Tokens */
-            input_tokens: number;
-            /** Output Tokens */
-            output_tokens: number;
-            /** Tool Calls */
-            tool_calls: number;
-            /** Estimated Cost Usd */
-            estimated_cost_usd: number;
-            /** Disconnect Reason */
-            disconnect_reason: string;
         } & {
             [key: string]: unknown;
         };
@@ -102362,6 +102367,37 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** SessionSummary */
+        api__realtime_session__SessionSummary: {
+            /** Session Id */
+            session_id: string;
+            /** User Id */
+            user_id: string | null;
+            /** Model */
+            model: string;
+            /** Started At */
+            started_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Duration S */
+            duration_s: number;
+            /** Audio In S */
+            audio_in_s: number;
+            /** Audio Out S */
+            audio_out_s: number;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Tool Calls */
+            tool_calls: number;
+            /** Estimated Cost Usd */
+            estimated_cost_usd: number;
+            /** Disconnect Reason */
+            disconnect_reason: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * ApprovalDecision
          * @description Request body for approving or rejecting a skill approval record.
@@ -102433,6 +102469,52 @@ export interface components {
              * @description Retrieval relevance score (0–1)
              */
             score: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SessionSummary
+         * @description One row of ``SessionListData.sessions`` (#15138).
+         *
+         *     Keys mirror ``_build_session_entry``. Several are deliberate duplicates
+         *     (``id``/``chatId``, ``title``/``name``, ``createdAt``/``createdTime``,
+         *     ``updatedAt``/``lastModified``) that the frontend reads under both spellings;
+         *     they are declared rather than tidied, because narrowing the payload is a
+         *     separate decision from describing it.
+         */
+        api__schemas_chat_rows__SessionSummary: {
+            /** Id */
+            id?: string | null;
+            /** Chatid */
+            chatId?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Messages */
+            messages?: unknown[] | null;
+            /** Messagecount */
+            messageCount?: number | null;
+            /** Createdat */
+            createdAt?: string | null;
+            /** Createdtime */
+            createdTime?: string | null;
+            /** Updatedat */
+            updatedAt?: string | null;
+            /** Lastmodified */
+            lastModified?: string | null;
+            /** Updatedatepoch */
+            updatedAtEpoch?: number | null;
+            /** Isactive */
+            isActive?: boolean | null;
+            /** Filesize */
+            fileSize?: number | null;
+            /** Fast Mode */
+            fast_mode?: boolean | null;
+            /** Companyid */
+            companyId?: string | null;
+            /** Sessionkind */
+            sessionKind?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -175895,7 +175977,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionSummary"][];
+                    "application/json": components["schemas"]["api__realtime_session__SessionSummary"][];
                 };
             };
             /** @description Validation Error */

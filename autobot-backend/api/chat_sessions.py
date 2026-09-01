@@ -28,14 +28,13 @@ from api.schemas_chat import (
     SessionCreate,
     SessionCreateData,
     SessionDeleteData,
-    SessionListData,
-    SessionMessagesData,
     SessionShareData,
     SessionSharePreviewData,
     SessionShareRequest,
     SessionUpdate,
     SessionUpdateData,
 )
+from api.schemas_chat_rows import SessionListData, SessionMessagesData
 from api.schemas_common import DataResponse
 from api.session_events import (
     publish_session_created,
@@ -218,7 +217,7 @@ def _validate_pagination_params(page: int, per_page: int) -> None:
         raise ValidationError("Invalid pagination parameters")
 
 
-async def _fetch_session_messages_or_raise(chat_history_manager, session_id: str, limit: int) -> List:
+async def _fetch_session_messages_or_raise(chat_history_manager, session_id: str, limit: int, offset: int = 0) -> List:
     """
     Fetch session messages and raise ResourceNotFoundError if session not found.
 
@@ -229,6 +228,7 @@ async def _fetch_session_messages_or_raise(chat_history_manager, session_id: str
         chat_history_manager: Chat history manager instance
         session_id: Session ID to fetch messages for
         limit: Maximum messages to return
+        offset: Messages to skip, counting back from the newest (#15186)
 
     Returns:
         List of messages
@@ -247,7 +247,7 @@ async def _fetch_session_messages_or_raise(chat_history_manager, session_id: str
     ) = get_exceptions_lazy()
 
     try:
-        messages = await chat_history_manager.get_session_messages(session_id, limit=limit)
+        messages = await chat_history_manager.get_session_messages(session_id, limit=limit, offset=offset)
     except FileNotFoundError:
         logger.warning("Session file not found for session %s", session_id)
         raise ResourceNotFoundError(f"Session {session_id} not found")
@@ -359,7 +359,7 @@ async def get_session_messages(
 
     chat_history_manager = get_chat_history_manager(request)
 
-    messages = await _fetch_session_messages_or_raise(chat_history_manager, session_id, per_page)
+    messages = await _fetch_session_messages_or_raise(chat_history_manager, session_id, per_page, (page - 1) * per_page)
     total_count = await chat_history_manager.get_session_message_count(session_id)
 
     return create_chat_response(
