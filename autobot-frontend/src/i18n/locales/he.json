@@ -8618,7 +8618,15 @@
       "phoneLabel": "טלפון",
       "saving": "שומר…",
       "save": "שמור",
-      "contactSaveError": "לא ניתן היה לשמור את איש הקשר."
+      "contactSaveError": "לא ניתן היה לשמור את איש הקשר.",
+      "addContact": "הוספת איש קשר",
+      "deleteAriaLabel": "מחיקת {name}",
+      "deleteConfirm": "למחוק את איש הקשר הזה?",
+      "fullNamePlaceholder": "שם מלא",
+      "roleTitlePlaceholder": "תפקיד",
+      "emailPlaceholder": "דוא\"ל",
+      "contactCreateError": "לא ניתן היה להוסיף את איש הקשר",
+      "contactDeleteError": "לא ניתן היה למחוק את איש הקשר"
     },
     "board": {
       "loadFailed": "לא ניתן לטעון את הלוח הזה",

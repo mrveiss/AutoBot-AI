@@ -8618,7 +8618,15 @@
       "phoneLabel": "الهاتف",
       "saving": "جارٍ الحفظ…",
       "save": "حفظ",
-      "contactSaveError": "تعذّر حفظ جهة الاتصال."
+      "contactSaveError": "تعذّر حفظ جهة الاتصال.",
+      "addContact": "إضافة جهة اتصال",
+      "deleteAriaLabel": "حذف {name}",
+      "deleteConfirm": "حذف جهة الاتصال هذه؟",
+      "fullNamePlaceholder": "الاسم الكامل",
+      "roleTitlePlaceholder": "المسمى الوظيفي",
+      "emailPlaceholder": "البريد الإلكتروني",
+      "contactCreateError": "تعذّرت إضافة جهة الاتصال",
+      "contactDeleteError": "تعذّر حذف جهة الاتصال"
     },
     "board": {
       "loadFailed": "تعذّر تحميل هذه اللوحة",

@@ -8618,7 +8618,15 @@
       "phoneLabel": "تلفن",
       "saving": "در حال ذخیره…",
       "save": "ذخیره",
-      "contactSaveError": "امکان ذخیرهٔ مخاطب وجود نداشت."
+      "contactSaveError": "امکان ذخیرهٔ مخاطب وجود نداشت.",
+      "addContact": "افزودن مخاطب",
+      "deleteAriaLabel": "حذف {name}",
+      "deleteConfirm": "این مخاطب حذف شود؟",
+      "fullNamePlaceholder": "نام کامل",
+      "roleTitlePlaceholder": "عنوان شغلی",
+      "emailPlaceholder": "ایمیل",
+      "contactCreateError": "افزودن مخاطب ممکن نشد",
+      "contactDeleteError": "حذف مخاطب ممکن نشد"
     },
     "board": {
       "loadFailed": "بارگذاری این تخته ممکن نشد",
