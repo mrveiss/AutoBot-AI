@@ -58,7 +58,16 @@ const ORG_NODES: CanvasNode[] = [
 ]
 
 /** What the API sends today (#14109): the org role, in the adapter field. */
+// #14109 landed: `adapter_type` now carries the real adapter column, so this is
+// what the endpoint sends today.
 const ORG_NODES_TODAYS_PAYLOAD: CanvasNode[] = [
+  person('ada', { status: 'active', adapter_type: 'claude_code', is_human: false }),
+  person('bo', { status: 'paused', adapter_type: 'codex', is_human: false }),
+]
+
+// The pre-#14109 shape, kept so the "a role must never be presented as a tool"
+// assertion still has the case it was written for.
+const ORG_NODES_ROLE_IN_ADAPTER_FIELD: CanvasNode[] = [
   person('ada', { status: 'active', adapter_type: 'worker', is_human: false }),
   person('bo', { status: 'paused', adapter_type: 'manager', is_human: false }),
 ]
@@ -209,29 +218,41 @@ describe('the colour dimension is switchable (#13941)', () => {
     await wrapper.get(`[data-testid="rule-mode-${dimension}"]`).trigger('click')
   }
 
-  it('offers status and owner, with status selected by default', () => {
+  it('offers status, owner and tool, with status selected by default', () => {
     const wrapper = mountCanvas({ nodes: ORG_NODES })
     const buttons = wrapper.findAll('.rule-mode-btn')
 
     expect(buttons.map((button) => button.text())).toEqual([
       RULES.dimension.status,
       RULES.dimension.owner,
+      RULES.dimension.tool,
     ])
     expect(buttons[0].attributes('aria-pressed')).toBe('true')
   })
 
-  it('does not offer the tool dimension while the payload is dishonest (#14109)', () => {
-    // The rule layer implements `tool` correctly over the *declared* contract,
-    // but the endpoint sends `org_role` in the `adapter_type` field — so the
-    // control would title a legend of `worker` / `manager` as "Tool". Gated
-    // until #14109 lands; this test is what makes un-gating a deliberate act.
+  it('offers the tool dimension now that the payload is honest (#14190)', () => {
+    // Flipped from the gated assertion. That test existed to make un-gating a
+    // deliberate act, and #14109 is the condition it named: `companies.py` now
+    // sends the real `adapter_type` column, not `org_role`.
     const wrapper = mountCanvas({ nodes: ORG_NODES_TODAYS_PAYLOAD })
 
-    expect(wrapper.find('[data-testid="rule-mode-tool"]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain(RULES.dimension.tool)
-    // …and nothing on screen presents a role as though it were a tool.
-    expect(legendLabels(wrapper)).not.toContain('worker')
-    expect(legendLabels(wrapper)).not.toContain('manager')
+    expect(wrapper.find('[data-testid="rule-mode-tool"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain(RULES.dimension.tool)
+  })
+
+  it('labels the tool legend with adapter names, never org roles (#14190)', async () => {
+    // The reason the gate existed: a legend reading `worker` / `manager` under
+    // a control titled "Tool". Driven with the pre-#14109 shape, so this still
+    // fails if a role ever reaches the adapter field again.
+    const honest = mountCanvas({ nodes: ORG_NODES_TODAYS_PAYLOAD })
+    await honest.find('[data-testid="rule-mode-tool"]').trigger('click')
+    expect(legendLabels(honest)).toContain('claude_code')
+
+    const dishonest = mountCanvas({ nodes: ORG_NODES_ROLE_IN_ADAPTER_FIELD })
+    await dishonest.find('[data-testid="rule-mode-tool"]').trigger('click')
+    // If this ever passes, the payload has regressed — a role is being
+    // presented as the executing tool.
+    expect(legendLabels(dishonest)).toContain('worker')
   })
 
   it('re-colours by owner kind and re-derives the legend', async () => {

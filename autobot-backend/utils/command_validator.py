@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Pattern
 
 from autobot_shared.logging_manager import get_logger
+from security.command_patterns import _normalize_for_matching, check_dangerous_patterns
 
 # Issue #380: Pre-compiled dangerous patterns for command validation
 _DANGEROUS_PATTERNS: List[Pattern] = [
@@ -356,12 +357,34 @@ class CommandValidator:
             return self._invalid_result("Command validation error")
 
     def _check_dangerous_patterns(self, command: str) -> Dict[str, bool | str]:
-        """Check if command contains dangerous patterns."""
+        """Check if command contains dangerous patterns.
+
+        #14042: this matched the RAW command, so every bypass #14027 closed in
+        ``security/command_patterns.py`` still worked here — a homoglyph, an
+        ANSI-wrapped command, or one split by a NUL/C0 control character passed
+        every pattern below. Normalising first, through the same canonical
+        helper the security module uses, closes that.
+
+        The canonical check runs as well. The two pattern sets are NOT
+        equivalent: each carries several patterns the other lacks, in both
+        directions, so replacing either with the other would silently drop
+        protection. Both run until they are deliberately converged (#15449,
+        which lists the divergence).
+        """
+        normalized = _normalize_for_matching(command)
+
         # Issue #380: Use pre-compiled patterns from module level
         for compiled_pattern in _DANGEROUS_PATTERNS:
-            if compiled_pattern.search(command):
+            if compiled_pattern.search(normalized):
                 self.logger.warning(f"Dangerous pattern detected: {compiled_pattern.pattern} in command: " f"{command}")
                 return {"safe": False, "pattern": compiled_pattern.pattern}
+
+        canonical = check_dangerous_patterns(command)
+        if canonical:
+            description, _severity, matched = canonical[0]
+            self.logger.warning("Dangerous pattern detected: %s in command: %s", description, command)
+            return {"safe": False, "pattern": matched}
+
         return {"safe": True, "pattern": ""}
 
     def _validate_arguments(self, args: List[str], pattern: CommandPattern) -> Dict[str, bool | str]:
