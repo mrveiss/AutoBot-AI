@@ -27,6 +27,9 @@ the picture is directionally right and, in one case, far worse than filed:
   `message`, `alert` and `notification` are four vocabularies for telling the
   user something, 48 distinct class names across 18 files, so consolidating the
   code without the CSS would leave the visual inconsistency in place.
+* **Waiting states.** `loading` (30 names, 83 files), `skeleton` (26) and
+  `spinner` (4) are three vocabularies for the same thing, 60 names across 105
+  files. #12731 records this as "inconsistent loading"; these are the numbers.
 * **Date formatting.** Four approaches: `toLocaleString`, `formatDate`,
   `toLocaleDateString`, `Intl.DateTimeFormat`.
 * **z-index.** 52 hardcoded declarations, with no scale, so
@@ -114,6 +117,26 @@ FAMILY_BASELINE = {
     "action": 27,
     "modal": 26,
     "empty": 23,
+    "error": 35,
+    "section": 23,
+    "summary": 27,
+    "text": 28,
+    "toggle": 24,
+    "field": 20,
+    "icon": 16,
+    "checkbox": 9,
+    "sidebar": 9,
+    "dropdown": 9,
+    "nav": 7,
+    "breadcrumb": 7,
+    "chip": 5,
+    "pagination": 4,
+    # Three vocabularies for "the user is waiting": 60 distinct names across
+    # 105 files. #12731 records this as "inconsistent loading"; this is the
+    # measurement of it. They should collapse to one.
+    "loading": 30,
+    "skeleton": 26,
+    "spinner": 4,
     "table": 18,
     "input": 18,
     "dialog": 13,
