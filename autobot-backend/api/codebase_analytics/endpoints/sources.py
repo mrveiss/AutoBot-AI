@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from security.secrets_store_errors import SecretsStoreUnavailable
 
 from .. import source_service
 from ..source_models import (
@@ -53,8 +54,11 @@ async def _resolve_token(credential_id: str) -> str | None:
         secret = await asyncio.to_thread(secrets_manager.get_secret, credential_id)
         return secret["value"] if secret else None
     except Exception as exc:
+        # #14126: returning None sent the caller to _build_clone_url, which
+        # then built a TOKEN-LESS url — a store fault silently downgraded an
+        # authenticated clone to an anonymous one.
         logger.warning("Failed to resolve credential %s: %s", credential_id, exc)
-        return None
+        raise SecretsStoreUnavailable(f"credential {credential_id}") from exc
 
 
 def _build_clone_url(repo: str, token: str | None) -> str:
