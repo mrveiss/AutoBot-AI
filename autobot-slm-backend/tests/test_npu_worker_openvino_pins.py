@@ -27,8 +27,9 @@ Seven sites in the repo pin or install `openvino` independently of
    import path never touches `setup.py`. `setup.py`'s `extras_require["npu"]` and
    `install.sh`'s `--npu` pip line are still real, documented, human/CI-runnable install
    paths in their own right -- this guard reads both. `README.md`'s matching instruction
-   was fixed the same way but is prose, not a parseable spec, so it is outside this guard
-   (the same treatment given the other docs fixed in #14452/#14453/#14476).
+   is prose rather than a parseable spec, and was once excluded for that reason; it drifted
+   while unguarded (#15415) and is now covered by the documentation scan at the end of this
+   file, along with every other live document that pins openvino.
 
 Most of these drifted the same way: `openvino-dev` -- a deprecated meta-package frozen
 at 2024.6.0 with no release compatible with openvino 2026.x -- installed alongside a
@@ -362,3 +363,69 @@ def test_the_shared_constraints_are_applied(site_name: str):
     assert (
         "-c" in extra_args
     ), f"{site.label}: constraints/shared.txt is referenced but not passed as a `-c` constraints file"
+
+
+# --- Documentation sites (#15415) -------------------------------------------------
+#
+# The seven sites above are parseable specs. Prose was originally left outside this
+# guard for that reason, but a version pin is mechanically checkable whatever
+# surrounds it, and the exclusion had a cost: when #15406 raised the floor to
+# 2026.3.1, four documents kept publishing 2026.3.0 — including a `pip install`
+# command a reader runs, directly under a comment asserting the floor matched the
+# SSOT. Docs drift silently precisely because nothing reads them.
+#
+# Two document trees state past floors on purpose and must keep their original
+# values: `docs/audit/` records dated measurements ("Re-measured against PyPI on
+# 2026-08-25 ... the repo's floor is now openvino>=2026.3.0") and `docs/archives/`
+# stores superseded plans. Rewriting either would falsify a record rather than fix a
+# drift. The exclusion is by tree, not by filename, so a new dated audit is covered
+# without editing this guard.
+
+_HISTORICAL_DOC_TREES = ("docs/audit/", "docs/archives/")
+
+# One per live document that pins openvino today. A floor, not a census: it exists so
+# that a glob which silently stops matching fails loudly instead of guarding nothing.
+_MIN_LIVE_DOC_PINS = 4
+
+_DOC_PIN_RE = re.compile(r"openvino\s*>=\s*([0-9][0-9.]*)")
+
+
+def _live_doc_pins() -> list[tuple[str, int, str]]:
+    """Every `openvino>=` pin in Markdown outside the historical trees."""
+    found: list[tuple[str, int, str]] = []
+    for path in sorted(_REPO_ROOT.rglob("*.md")):
+        relative = path.relative_to(_REPO_ROOT).as_posix()
+        if relative.startswith(_HISTORICAL_DOC_TREES) or "node_modules/" in relative:
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            match = _DOC_PIN_RE.search(line)
+            if match:
+                found.append((relative, number, match.group(1)))
+    return found
+
+
+def test_the_documentation_scan_reaches_the_known_pins():
+    """A glob that matches nothing would make the drift check below vacuous."""
+    pins = _live_doc_pins()
+
+    assert len(pins) >= _MIN_LIVE_DOC_PINS, (
+        f"only {len(pins)} live documentation pin(s) found, expected at least "
+        f"{_MIN_LIVE_DOC_PINS} — this scan has stopped reaching the docs it guards"
+    )
+
+
+def test_no_document_publishes_a_floor_below_the_ssot():
+    """A stale install instruction sends a reader to a version the repo rejects.
+
+    Reported as a whole rather than one failure at a time: the floor moves in one
+    commit and every document that missed it is the same defect, so a first-failure
+    abort would hide the rest of the set behind a re-run.
+    """
+    ssot_floor = _ssot_openvino_floor()
+
+    drifted = [(path, number, pin) for path, number, pin in _live_doc_pins() if pin != ssot_floor]
+
+    assert not drifted, "documentation contradicts the SSOT openvino floor (#15415):\n" + "\n".join(
+        f"  {path}:{number} says >={pin}, {_SSOT_REQUIREMENTS.name} declares >={ssot_floor}"
+        for path, number, pin in drifted
+    )
