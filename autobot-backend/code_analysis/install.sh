@@ -74,7 +74,7 @@ if [ "$1" = "--npu" ]; then
     echo "🧠 Installing NPU support..."
     # #14476: floor raised to match the SSOT (autobot-npu-worker/requirements.txt),
     # constraints applied so no future dependency can drag numpy below its floor.
-    pip install -c ../../constraints/shared.txt "openvino>=2026.3.0" onnxruntime
+    pip install -c ../../constraints/shared.txt "openvino>=2026.3.1" onnxruntime
 fi
 
 # Create necessary directories
