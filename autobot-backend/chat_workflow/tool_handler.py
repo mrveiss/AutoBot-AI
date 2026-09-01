@@ -24,7 +24,6 @@ from autobot_shared.auth.mcp_tool_permissions import required_permission
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
-from chat_workflow.tool_permission_gate import permission_denial
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
 from chat_workflow.browser_tool_handler import (
     extract_browser_image,
@@ -57,6 +56,7 @@ from chat_workflow.tool_dispatch_guards import (
     enforce_repetition,
     enforce_work_item_approval,
 )
+from chat_workflow.tool_permission_gate import permission_denial
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException

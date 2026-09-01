@@ -52,9 +52,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from async_chat_workflow import WorkflowMessage
 from autobot_shared.logging_manager import get_logger
 from chat_workflow.llm_handler import _emit_before_tool_execute
-from async_chat_workflow import WorkflowMessage
 
 logger = get_logger(__name__)
 
@@ -78,9 +78,7 @@ async def permission_denial(
     waved through, so a caller that cannot name a permission is not thereby
     exempt from the gate.
     """
-    if await _emit_before_tool_execute(
-        tool_name, params, session_id, tool_permission=permission, user_role=role
-    ):
+    if await _emit_before_tool_execute(tool_name, params, session_id, tool_permission=permission, user_role=role):
         return None
 
     logger.info("[#14529] %s cancelled by permission hook (role=%s)", tool_name, role)
