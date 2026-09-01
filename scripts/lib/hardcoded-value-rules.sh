@@ -242,6 +242,13 @@ _HV_NOQA_RE='(#[[:space:]]*noqa|//[[:space:]]*noqa)'
 # accepted values, not a hardcoded default (detector 3, #14048).
 _HV_UNION_TYPE_RE="[\"'][[:space:]]*\|[[:space:]]*[\"']"
 
+# #14073: the pipe form above only covers TypeScript's `'a' | 'b'`. Zod spells
+# the same idea as `z.enum(['a', 'b'])` — still a declaration of the accepted
+# values, still not a hardcoded default — and the role rule flagged it. Matches
+# `z.enum([`, `z.union([` and a bare `enum([` so a re-export or alias is caught
+# too.
+_HV_ENUM_CALL_RE="(z\.)?(enum|union)\(\["
+
 # The call-argument shape `obj.get("field", value)` (detector 3, #14005/#14048).
 #
 # Every keyword-style regex below binds a field name to a literal with `=`/`:`.
@@ -423,6 +430,7 @@ Trace the consumer before replacing it; do not apply a suggestion blind."
 _hv_rule_role() {
     [[ $3 =~ $_HV_ROLE_SKIP_RE ]] && return 0
     [[ $3 =~ $_HV_UNION_TYPE_RE ]] && return 0
+    [[ $3 =~ $_HV_ENUM_CALL_RE ]] && return 0
     [[ $3 =~ $_HV_ROLE_KEYWORD_RE ]] || _hv_get_call_argument "$3" 'role' "$_HV_ROLE_VALUE_RE" || return 0
     _hv_match "$3" "$_HV_ROLE_VALUE_RE" || return 0
     local _hv_role_suggestion="$_HV_ROLE_CHAT_SUGGESTION"
@@ -434,6 +442,7 @@ _hv_rule_role() {
 _hv_rule_category() {
     [[ $3 =~ $_HV_CATEGORY_SKIP_RE ]] && return 0
     [[ $3 =~ $_HV_UNION_TYPE_RE ]] && return 0
+    [[ $3 =~ $_HV_ENUM_CALL_RE ]] && return 0
     [[ $3 =~ $_HV_CATEGORY_KEYWORD_RE ]] || _hv_get_call_argument "$3" 'category|search_mode|mode' "$_HV_CATEGORY_VALUE_RE" || return 0
     _hv_match "$3" "$_HV_CATEGORY_VALUE_RE" || return 0
     _hv_emit VIOLATION other "$1" "$2" "$HV_MATCH" "CategoryDefaults.GENERAL/SEARCH_MODE_HYBRID/UNKNOWN"

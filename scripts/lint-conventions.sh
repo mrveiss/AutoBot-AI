@@ -77,7 +77,11 @@ if [ "$MODE" = "--commit-msg" ]; then
     "Merge "*|"Revert "*|"fixup!"*|"squash!"*|chore:\ claim\ worktree*)
       echo "lint-conventions: subject exempt"; exit 0 ;;
   esac
-  if ! printf '%s' "$SUBJECT" | grep -qE '^[a-z]+(\([a-z0-9._-]+\))?: .+'; then
+  # #14076: `/` belongs in the scope class. The repo uses slashed scopes for
+  # nested areas — `fix(llc/frontend):`, `test(hooks/guard):` — and 14 of the
+  # last 400 commits on Dev_new_gui carry one. Without it this rule rejects
+  # subjects the repository itself writes, so the linter was wrong, not them.
+  if ! printf '%s' "$SUBJECT" | grep -qE '^[a-z]+(\([a-z0-9._/-]+\))?: .+'; then
     echo "  FAIL  subject is not '<type>(scope): <description>'"; exit 1
   fi
   if ! printf '%s' "$SUBJECT" | grep -qE '#[0-9]{3,}'; then
@@ -229,7 +233,7 @@ else
       case "$author$email" in
         *'[bot]'*) continue ;;
       esac
-      if ! printf '%s' "$subj" | grep -qE '^[a-z]+(\([a-z0-9._-]+\))?: .+'; then
+      if ! printf '%s' "$subj" | grep -qE '^[a-z]+(\([a-z0-9._/-]+\))?: .+'; then
         # #13921: the parsed author is echoed on failure. The previous version
         # rejected commits without saying who it thought wrote them, so a
         # non-firing exemption could only be diagnosed by inference.
