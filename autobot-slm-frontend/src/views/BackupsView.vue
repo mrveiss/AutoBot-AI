@@ -4,20 +4,24 @@
 // Author: mrveiss
 
 /**
- * Backups & Replications View
+ * Backups View
  *
- * Manages backups and replications for stateful services (Phase 4 - Issue #726).
+ * Manages backups for stateful services (Phase 4 - Issue #726).
+ *
+ * Issue #15225: the replications tab was removed from here — replication
+ * management is consolidated into the Orchestration "replication" tab,
+ * which mounts the full ReplicationView.vue surface (list, create, start,
+ * stop, verify-sync, promote). /backups/replications now redirects there.
  */
 
 import { ref, computed, onMounted } from 'vue'
 import { formatBytes } from '@/utils/formatHelpers'
-import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { formatDateTime } from '@/composables/useTimezone'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
-import type { Backup, BackupRequest, Replication, ReplicationRequest } from '@/types/slm'
+import type { Backup, BackupRequest } from '@/types/slm'
 
 const { showToast } = useToast()
 // #13307: confirm/error strings go through i18n like the rest of the view;
@@ -26,18 +30,6 @@ const { t } = useI18n()
 
 const api = useSlmApi()
 const fleetStore = useFleetStore()
-const route = useRoute()
-const router = useRouter()
-
-// Active tab — route-based
-type Tab = 'backups' | 'replications'
-function resolveTab(param: unknown): Tab {
-  return param === 'replications' ? 'replications' : 'backups'
-}
-const activeTab = computed(() => resolveTab(route.params.tab))
-function navigateToTab(tab: Tab): void {
-  router.push({ name: 'backups', params: { tab } })
-}
 
 // Backups state
 const backups = ref<Backup[]>([])
@@ -48,17 +40,6 @@ const newBackup = ref<BackupRequest>({
   service_type: 'redis',
 })
 const isCreatingBackup = ref(false)
-
-// Replications state
-const replications = ref<Replication[]>([])
-const isLoadingReplications = ref(false)
-const showCreateReplicationDialog = ref(false)
-const newReplication = ref<ReplicationRequest>({
-  source_node_id: '',
-  target_node_id: '',
-  service_type: 'redis',
-})
-const isCreatingReplication = ref(false)
 
 // Node list for dropdowns
 const nodeOptions = computed(() =>
@@ -72,7 +53,7 @@ const nodeOptions = computed(() =>
 const serviceTypes = ['redis', 'chromadb', 'sqlite']
 
 onMounted(async () => {
-  await Promise.all([fetchBackups(), fetchReplications(), fleetStore.fetchNodes()])
+  await Promise.all([fetchBackups(), fleetStore.fetchNodes()])
 })
 
 // =============================================================================
@@ -136,54 +117,6 @@ function errorText(e: unknown): string {
 }
 
 // =============================================================================
-// Replications
-// =============================================================================
-
-async function fetchReplications(): Promise<void> {
-  isLoadingReplications.value = true
-  try {
-    replications.value = await api.getReplications()
-  } finally {
-    isLoadingReplications.value = false
-  }
-}
-
-async function handleCreateReplication(): Promise<void> {
-  if (!newReplication.value.source_node_id || !newReplication.value.target_node_id) return
-  if (newReplication.value.source_node_id === newReplication.value.target_node_id) {
-    showToast('Source and target nodes must be different', 'error')
-    return
-  }
-
-  isCreatingReplication.value = true
-  try {
-    await api.startReplication(newReplication.value)
-    showCreateReplicationDialog.value = false
-    newReplication.value = { source_node_id: '', target_node_id: '', service_type: 'redis' }
-    await fetchReplications()
-  } finally {
-    isCreatingReplication.value = false
-  }
-}
-
-async function handlePromoteReplica(replicationId: string): Promise<void> {
-  if (
-    !confirm(
-      'Are you sure you want to promote this replica? This will make it the primary.'
-    )
-  ) {
-    return
-  }
-
-  try {
-    await api.promoteReplica(replicationId)
-    await fetchReplications()
-  } catch (e) {
-    showToast(`Promote failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
-  }
-}
-
-// =============================================================================
 // Utilities
 // =============================================================================
 
@@ -197,24 +130,6 @@ function getBackupStatusClass(state: string): string {
       return 'bg-yellow-100 text-yellow-800'
     case 'failed':
       return 'bg-red-100 text-red-800'
-    default:
-      return 'bg-gray-100 text-gray-800'
-  }
-}
-
-function getReplicationStatusClass(state: string): string {
-  switch (state) {
-    case 'synced':
-    case 'active':
-      return 'bg-green-100 text-green-800'
-    case 'syncing':
-      return 'bg-blue-100 text-blue-800'
-    case 'pending':
-      return 'bg-yellow-100 text-yellow-800'
-    case 'failed':
-      return 'bg-red-100 text-red-800'
-    case 'stopped':
-      return 'bg-gray-100 text-gray-800'
     default:
       return 'bg-gray-100 text-gray-800'
   }
@@ -238,224 +153,101 @@ function getNodeHostname(nodeId: string): string {
       <div>
         <h1 class="text-2xl font-bold text-gray-900">{{ $t('backupsView.statefulServices') }}</h1>
         <p class="text-sm text-gray-500 mt-1">
-          {{ $t('backupsView.manageBackupsAndReplications') }}
+          {{ $t('backupsView.manageBackups') }}
         </p>
       </div>
     </div>
 
-    <!-- Tabs -->
-    <div class="border-b border-gray-200 mb-6">
-      <nav class="-mb-px flex space-x-8">
-        <button
-          @click="navigateToTab('backups')"
-          :class="[
-            'py-4 px-1 border-b-2 font-medium text-sm',
-            activeTab === 'backups'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
-          ]"
-        >
-          {{ $t('backupsView.backups') }}
-          <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-gray-100 text-gray-600">
-            {{ backups.length }}
-          </span>
-        </button>
-        <button
-          @click="navigateToTab('replications')"
-          :class="[
-            'py-4 px-1 border-b-2 font-medium text-sm',
-            activeTab === 'replications'
-              ? 'border-primary-500 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
-          ]"
-        >
-          {{ $t('backupsView.replications') }}
-          <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-gray-100 text-gray-600">
-            {{ replications.length }}
-          </span>
-        </button>
-      </nav>
+    <!-- Backups Header -->
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold text-gray-800">{{ $t('backupsView.backupHistory') }}</h2>
+      <button
+        @click="showCreateBackupDialog = true"
+        class="btn btn-primary flex items-center gap-2"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        {{ $t('backupsView.createBackup') }}
+      </button>
     </div>
 
-    <!-- Backups Tab -->
-    <div v-if="activeTab === 'backups'">
-      <!-- Backups Header -->
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-gray-800">{{ $t('backupsView.backupHistory') }}</h2>
-        <button
-          @click="showCreateBackupDialog = true"
-          class="btn btn-primary flex items-center gap-2"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-          {{ $t('backupsView.createBackup') }}
-        </button>
-      </div>
-
-      <!-- Backups Table -->
-      <div class="card overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.backupID') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.node') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.service') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.size') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.location') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.status') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.created') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            <tr v-for="backup in backups" :key="backup.backup_id">
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                {{ backup.backup_id.slice(0, 8) }}...
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                {{ getNodeHostname(backup.node_id) }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ backup.service_type }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatBytes(backup.size_bytes, { units: ['B', 'KB', 'MB', 'GB', 'TB'], zeroText: '0 B' }) }}
-              </td>
-              <!-- #13307: backup_path was already in the API response and the
-                   page never rendered it, which is the whole of "no idea where
-                   they are created". title= carries the full path for a copy. -->
-              <td class="px-6 py-4 text-sm text-gray-500 max-w-xs">
-                <span v-if="backup.backup_path" class="font-mono text-xs break-all" :title="backup.backup_path">
-                  {{ backup.backup_path }}
-                </span>
-                <span v-else class="text-gray-400">{{ $t('backupsView.locationPending') }}</span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span :class="['px-2 py-1 text-xs font-medium rounded-full', getBackupStatusClass(backup.status)]">
-                  {{ backup.status }}
-                </span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDate(backup.started_at) }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm space-x-3">
-                <button
-                  v-if="backup.status === 'completed'"
-                  @click="handleRestore(backup.backup_id)"
-                  class="text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  {{ $t('backupsView.restore') }}
-                </button>
-                <button
-                  v-if="backup.status !== 'in_progress'"
-                  @click="handleDeleteBackup(backup.backup_id)"
-                  class="text-red-600 hover:text-red-800 font-medium"
-                >
-                  {{ $t('backupsView.delete') }}
-                </button>
-                <span v-if="backup.status === 'in_progress'" class="text-gray-400">-</span>
-              </td>
-            </tr>
-            <tr v-if="backups.length === 0 && !isLoadingBackups">
-              <td colspan="8" class="px-6 py-12 text-center text-gray-500">
-                {{ $t('backupsView.noBackupsYetClick') }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Backups Loading -->
-      <div v-if="isLoadingBackups" class="flex items-center justify-center py-12">
-        <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
-      </div>
+    <!-- Backups Table -->
+    <div class="card overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.backupID') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.node') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.service') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.size') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.location') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.status') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.created') }}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.actions') }}</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <tr v-for="backup in backups" :key="backup.backup_id">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+              {{ backup.backup_id.slice(0, 8) }}...
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+              {{ getNodeHostname(backup.node_id) }}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {{ backup.service_type }}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {{ formatBytes(backup.size_bytes, { units: ['B', 'KB', 'MB', 'GB', 'TB'], zeroText: '0 B' }) }}
+            </td>
+            <!-- #13307: backup_path was already in the API response and the
+                 page never rendered it, which is the whole of "no idea where
+                 they are created". title= carries the full path for a copy. -->
+            <td class="px-6 py-4 text-sm text-gray-500 max-w-xs">
+              <span v-if="backup.backup_path" class="font-mono text-xs break-all" :title="backup.backup_path">
+                {{ backup.backup_path }}
+              </span>
+              <span v-else class="text-gray-400">{{ $t('backupsView.locationPending') }}</span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span :class="['px-2 py-1 text-xs font-medium rounded-full', getBackupStatusClass(backup.status)]">
+                {{ backup.status }}
+              </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {{ formatDate(backup.started_at) }}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm space-x-3">
+              <button
+                v-if="backup.status === 'completed'"
+                @click="handleRestore(backup.backup_id)"
+                class="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                {{ $t('backupsView.restore') }}
+              </button>
+              <button
+                v-if="backup.status !== 'in_progress'"
+                @click="handleDeleteBackup(backup.backup_id)"
+                class="text-red-600 hover:text-red-800 font-medium"
+              >
+                {{ $t('backupsView.delete') }}
+              </button>
+              <span v-if="backup.status === 'in_progress'" class="text-gray-400">-</span>
+            </td>
+          </tr>
+          <tr v-if="backups.length === 0 && !isLoadingBackups">
+            <td colspan="8" class="px-6 py-12 text-center text-gray-500">
+              {{ $t('backupsView.noBackupsYetClick') }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <!-- Replications Tab -->
-    <div v-if="activeTab === 'replications'">
-      <!-- Replications Header -->
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-gray-800">{{ $t('backupsView.activeReplications') }}</h2>
-        <button
-          @click="showCreateReplicationDialog = true"
-          class="btn btn-primary flex items-center gap-2"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-          {{ $t('backupsView.startReplication') }}
-        </button>
-      </div>
-
-      <!-- Replications Table -->
-      <div class="card overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.iD') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.source') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.target') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.service') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.status') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.lag') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.started') }}</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('backupsView.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            <tr v-for="repl in replications" :key="repl.replication_id">
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                {{ repl.replication_id.slice(0, 8) }}...
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                {{ getNodeHostname(repl.source_node_id) }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                {{ getNodeHostname(repl.target_node_id) }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ repl.service_type }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span :class="['px-2 py-1 text-xs font-medium rounded-full', getReplicationStatusClass(repl.status)]">
-                  {{ repl.status }}
-                </span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center gap-2">
-                  <span class="text-xs text-gray-500">
-                    {{ repl.lag_bytes > 0 ? formatBytes(repl.lag_bytes, { units: ['B', 'KB', 'MB', 'GB', 'TB'], zeroText: '0 B' }) + ' lag' : 'In sync' }}
-                  </span>
-                </div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDate(repl.started_at) }}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">
-                <button
-                  v-if="repl.status === 'syncing' || repl.status === 'active'"
-                  @click="handlePromoteReplica(repl.replication_id)"
-                  class="text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  {{ $t('backupsView.promote') }}
-                </button>
-                <span v-else class="text-gray-400">-</span>
-              </td>
-            </tr>
-            <tr v-if="replications.length === 0 && !isLoadingReplications">
-              <td colspan="8" class="px-6 py-12 text-center text-gray-500">
-                {{ $t('backupsView.noActiveReplicationsClick') }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Replications Loading -->
-      <div v-if="isLoadingReplications" class="flex items-center justify-center py-12">
-        <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
-      </div>
+    <!-- Backups Loading -->
+    <div v-if="isLoadingBackups" class="flex items-center justify-center py-12">
+      <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
     </div>
 
     <!-- Create Backup Dialog -->
@@ -510,89 +302,6 @@ function getNodeHostname(nodeId: string): string {
           >
             <div v-if="isCreatingBackup" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
             {{ $t('backupsView.createBackup') }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Create Replication Dialog -->
-    <div
-      v-if="showCreateReplicationDialog"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      @click.self="showCreateReplicationDialog = false"
-    >
-      <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-        <div class="px-6 py-4 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900">{{ $t('backupsView.startReplication') }}</h3>
-        </div>
-        <div class="px-6 py-4 space-y-4">
-          <!-- Source Node Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.sourceNodePrimary') }}</label>
-            <select
-              v-model="newReplication.source_node_id"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="">{{ $t('backupsView.selectSourceNode') }}</option>
-              <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Target Node Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.targetNodeReplica') }}</label>
-            <select
-              v-model="newReplication.target_node_id"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="">{{ $t('backupsView.selectTargetNode') }}</option>
-              <option
-                v-for="opt in nodeOptions"
-                :key="opt.value"
-                :value="opt.value"
-                :disabled="opt.value === newReplication.source_node_id"
-              >
-                {{ opt.label }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Service Type Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.serviceType') }}</label>
-            <select
-              v-model="newReplication.service_type"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option v-for="svc in serviceTypes" :key="svc" :value="svc">
-                {{ svc }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Info Box -->
-          <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-            <p class="text-sm text-blue-700">
-              {{ $t('backupsView.replicationWillConfigureThe') }}
-            </p>
-          </div>
-        </div>
-        <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-          <button
-            @click="showCreateReplicationDialog = false"
-            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-          >
-            {{ $t('backupsView.cancel') }}
-          </button>
-          <button
-            @click="handleCreateReplication"
-            :disabled="!newReplication.source_node_id || !newReplication.target_node_id || isCreatingReplication"
-            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <div v-if="isCreatingReplication" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-            {{ $t('backupsView.startReplication') }}
           </button>
         </div>
       </div>
