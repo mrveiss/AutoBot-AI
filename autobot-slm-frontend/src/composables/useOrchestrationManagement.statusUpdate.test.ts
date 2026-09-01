@@ -187,4 +187,33 @@ describe('restartAllNodeServices — single progress-tracked call, not a client-
     expect(result).toBeNull()
     expect(o.error).toBe('node unreachable')
   })
+
+  it('sets orchestration.error on an HTTP 200 partial failure (success: false), not just a log line', async () => {
+    // A real response shape: the request succeeded but not every service
+    // restarted. ServicesView.vue's serial loop set `errorMessage.value` on
+    // exactly this branch; the ported composable must set the equivalent
+    // `error` ref, since that is what OrchestrationView's red banner reads —
+    // a caught exception is not the only way this endpoint reports failure.
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        node_id: 'node-a',
+        message: '2 of 3 services restarted; autobot-worker failed',
+        success: false,
+        total_services: 3,
+        successful_restarts: 2,
+        failed_restarts: 1,
+        slm_agent_restarted: false,
+      })
+    )
+
+    const o = useOrchestrationManagement()
+    const result = await o.restartAllNodeServices('node-a')
+
+    // The response itself is still returned (the caller needs the totals
+    // for the progress indicator) ...
+    expect(result?.success).toBe(false)
+    // ... but the error ref must ALSO be set so the failure is visible
+    // outside devtools, not just logged.
+    expect(o.error).toBe('2 of 3 services restarted; autobot-worker failed')
+  })
 })

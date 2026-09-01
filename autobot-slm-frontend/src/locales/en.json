@@ -1410,6 +1410,7 @@
     "requiredRolesDown": "Required Roles Down",
     "restart": "Restart",
     "restartAllConfirmMessage": "Are you sure you want to restart all services on <strong>{hostname}</strong>?<br><br>Services will be restarted sequentially.",
+    "restartAllPartiallyFailed": "Restart all services on {hostname} partially failed",
     "restartAllServices": "Restart All Services",
     "restartOnAllNodes": "Restart on all nodes",
     "restartServicesOnTargetNodeAfter": "Restart services on target node after sync",

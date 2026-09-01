@@ -31,11 +31,6 @@ import { createI18n } from 'vue-i18n'
 import BackupsView from './BackupsView.vue'
 import en from '@/locales/en.json'
 
-vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
-  useRoute: () => ({ params: {}, query: {} }),
-}))
-
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
 /** Exactly the shape `BackupResponse` serialises — `status`, not `state`. */

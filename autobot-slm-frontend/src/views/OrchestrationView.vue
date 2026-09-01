@@ -526,6 +526,45 @@ async function handleServiceAction(
   }
 }
 
+// Per-service category reassignment (ported from ServicesView.vue — #15224
+// review: the consolidation had dropped this entirely, leaving
+// `orchestration.updateServiceCategory` exported but uncalled outside a test)
+const categoryMenuOpen = ref<string | null>(null)
+const isCategoryChanging = ref(false)
+
+function toggleCategoryMenu(key: string): void {
+  categoryMenuOpen.value = categoryMenuOpen.value === key ? null : key
+}
+
+async function handleCategoryChange(
+  serviceName: string,
+  newCategory: 'autobot' | 'system'
+): Promise<void> {
+  if (isCategoryChanging.value) return
+
+  isCategoryChanging.value = true
+  categoryMenuOpen.value = null
+
+  try {
+    const success = await orchestration.updateServiceCategory(serviceName, newCategory)
+    if (success) {
+      logger.info(`Service ${serviceName} category changed to ${newCategory}`)
+      await orchestration.fetchFleetServices()
+    }
+  } catch (error) {
+    logger.error(`Failed to update category for ${serviceName}:`, error)
+  } finally {
+    isCategoryChanging.value = false
+  }
+}
+
+function handleClickOutsideCategoryMenu(event: MouseEvent): void {
+  const target = event.target as HTMLElement
+  if (!target.closest('.category-menu-container')) {
+    categoryMenuOpen.value = null
+  }
+}
+
 // Restart All Services on Node (Issue #725 parity — #15224: single
 // progress-tracked call to /nodes/:id/services/restart-all, replacing the
 // former client-side serial loop over handleServiceAction)
@@ -552,12 +591,21 @@ async function applyRestartAllResult(
   if (!result) return
 
   restartAllProgress.value = { total: result.total_services, completed: result.successful_restarts }
+  // Refresh first: fetchFleetServices() resets orchestration.error itself,
+  // which would otherwise wipe a partial-failure message set below before
+  // the banner (OrchestrationView template, orchestration.error) ever shows
+  // it — a real HTTP 200 + success:false shape ServicesView.vue surfaced
+  // via errorMessage and this consolidation had silently dropped (#15224 review).
+  await orchestration.fetchFleetServices()
+
   if (result.success) {
     logger.info(`Restarted all services on ${hostname}`)
   } else {
+    const message = result.message || t('orchestrationView.restartAllPartiallyFailed', { hostname })
     logger.error(`Restart all services partially failed on ${hostname}: ${result.message}`)
+    orchestration.setError(message)
+    showToast(message, 'error')
   }
-  await orchestration.fetchFleetServices()
 }
 
 async function confirmRestartAll(): Promise<void> {
@@ -912,12 +960,15 @@ onMounted(async () => {
   if (autoRefresh.value) {
     refreshInterval = setInterval(refresh, 15000)
   }
+
+  document.addEventListener('click', handleClickOutsideCategoryMenu)
 })
 
 onUnmounted(() => {
   if (refreshInterval) {
     clearInterval(refreshInterval)
   }
+  document.removeEventListener('click', handleClickOutsideCategoryMenu)
 })
 </script>
 
@@ -1183,16 +1234,42 @@ onUnmounted(() => {
                       <span v-else class="text-xs text-gray-300">{{ $t('orchestrationView.mdash') }}</span>
                     </td>
                     <td class="px-4 py-2">
-                      <span
-                        :class="[
-                          'px-1.5 py-0.5 text-xs font-medium rounded-sm',
-                          service.category === 'autobot'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-gray-100 text-gray-700'
-                        ]"
-                      >
-                        {{ service.category === 'autobot' ? $t('orchestrationView.autoBot') : $t('orchestrationView.system') }}
-                      </span>
+                      <!-- Category reassignment (ported from ServicesView.vue — #15224 review) -->
+                      <div class="relative category-menu-container">
+                        <button
+                          @click.stop="toggleCategoryMenu(`${node.nodeId}-${service.service_name}`)"
+                          :class="[
+                            'inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded-sm cursor-pointer hover:opacity-80',
+                            service.category === 'autobot'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-gray-100 text-gray-700'
+                          ]"
+                        >
+                          {{ service.category === 'autobot' ? $t('orchestrationView.autoBot') : $t('orchestrationView.system') }}
+                          <svg class="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        <div
+                          v-if="categoryMenuOpen === `${node.nodeId}-${service.service_name}`"
+                          class="absolute left-0 mt-1 w-28 bg-white rounded-lg shadow-lg border border-gray-200 z-10"
+                        >
+                          <button
+                            @click="handleCategoryChange(service.service_name, 'autobot')"
+                            :disabled="isCategoryChanging"
+                            class="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 rounded-t-lg"
+                          >
+                            {{ $t('orchestrationView.autoBot') }}
+                          </button>
+                          <button
+                            @click="handleCategoryChange(service.service_name, 'system')"
+                            :disabled="isCategoryChanging"
+                            class="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 rounded-b-lg border-t border-gray-100"
+                          >
+                            {{ $t('orchestrationView.system') }}
+                          </button>
+                        </div>
+                      </div>
                     </td>
                     <td class="px-4 py-2">
                       <ServiceStatusBadge :status="service.status" />

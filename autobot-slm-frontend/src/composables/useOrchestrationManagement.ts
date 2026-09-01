@@ -497,7 +497,16 @@ export function useOrchestrationManagement() {
         `/nodes/${nodeId}/services/restart-all`,
         options || {}
       )
-      logger.info(`Restart all services on ${nodeId}:`, response.data.message)
+      // #15224 review: HTTP 200 with `success: false` is a real response
+      // shape (a partial restart) — ServicesView.vue set errorMessage on
+      // exactly this branch. Without it here, a partial failure was only
+      // ever logged, invisible to the operator watching the UI.
+      if (!response.data.success) {
+        error.value = response.data.message || `Restart all services on ${nodeId} partially failed`
+        logger.error(`Restart all services on ${nodeId} partially failed:`, response.data.message)
+      } else {
+        logger.info(`Restart all services on ${nodeId}:`, response.data.message)
+      }
       return response.data
     } catch (e) {
       error.value = extractErrorMessage(e, `Failed to restart all services on ${nodeId}`)
@@ -550,6 +559,19 @@ export function useOrchestrationManagement() {
 
   function clearError(): void {
     error.value = null
+  }
+
+  /**
+   * Set the error banner text directly.
+   *
+   * #15224 review: a caller that does its own refresh after an action (e.g.
+   * OrchestrationView's restart-all confirmation) can otherwise have its
+   * failure message wiped by that refresh's own `error.value = null` before
+   * the banner ever renders it. Refresh first, then call this to restore
+   * the message the user actually needs to see.
+   */
+  function setError(message: string): void {
+    error.value = message
   }
 
   function reset(): void {
@@ -633,6 +655,7 @@ export function useOrchestrationManagement() {
 
     // Utilities
     clearError,
+    setError,
     reset,
     setActiveAction,
     clearActiveAction,
