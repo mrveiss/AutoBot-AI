@@ -20,8 +20,6 @@ import re
 import subprocess
 from pathlib import Path
 
-import pytest
-
 from autobot_shared.paths import scrubbed_git_env
 
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
@@ -143,6 +141,15 @@ class TestScanCostAndRepoWideResult:
 
     So the cost claim is pinned structurally instead -- at the thing that made
     it slow -- and the result claim is pinned as a count over the real tree.
+
+    The repo-wide case takes ~100s and deliberately carries no pytest selection
+    marker. ``repo_tests/hook_suites_run_in_ci_test.py`` derives which CI
+    invocations must run the hook suites by splitting on each invocation's own
+    ``-m`` expression, and marker-tests.yml selects a set of them; a hook test
+    carrying any marker in that set makes a marker-only invocation select it,
+    which breaks that guard's reasoning. It failed exactly that way when one
+    was added here -- and again when this note merely spelled the marker out,
+    because the guard scans the file as text. Cost is paid in the normal shard.
     """
 
     def test_no_subprocess_runs_before_the_raw_line_shortcut(self) -> None:
@@ -178,7 +185,6 @@ class TestScanCostAndRepoWideResult:
             "be used for a whole-repo scan at all."
         )
 
-    @pytest.mark.slow
     def test_the_whole_repo_scan_completes_and_reports_a_known_set(self) -> None:
         """AC2: the repo-wide violation set, pinned.
 
