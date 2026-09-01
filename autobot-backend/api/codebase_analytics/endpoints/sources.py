@@ -15,13 +15,13 @@ import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from security.secrets_store_errors import SecretsStoreUnavailable
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from security.secrets_store_errors import SecretsStoreUnavailable
 
 from .. import source_service
 from ..source_models import (
