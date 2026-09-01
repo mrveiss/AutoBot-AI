@@ -147,7 +147,26 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Gate on behavioural pre-commit hooks (#14878)")
     parser.add_argument("logfile", nargs="?", help="pre-commit output; stdin when omitted")
     parser.add_argument("--config", default=str(_CONFIG), help="path to .pre-commit-config.yaml")
+    parser.add_argument(
+        "--print-ids",
+        action="store_true",
+        help=(
+            "print the gating hook ids, one per line, and exit. #15358 scopes the "
+            "main sweep to the pull request diff, which makes every hook the diff "
+            "does not touch report Skipped -- and Skipped FAILS this gate by "
+            "design. The gating hooks therefore run in a second, full-scope "
+            "invocation, and the workflow asks for their ids here rather than "
+            "hard-coding them: a copy in YAML is a second thing to go stale, the "
+            "same reasoning that made check_precommit_hooks_executed import its "
+            "dormant list instead of duplicating it (#14202)."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.print_ids:
+        for hook_id in GATING_HOOK_IDS:
+            print(hook_id)  # noqa: print
+        return 0
 
     raw = Path(args.logfile).read_text(encoding="utf-8") if args.logfile else sys.stdin.read()
     output = _ANSI.sub("", raw)

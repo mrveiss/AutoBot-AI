@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """A role that maps to no ansible group must be reported, not silently inert (#14676).
 
 Loads the module from disk: conftest stubs ``services.*`` as MagicMock, and a
