@@ -18,6 +18,7 @@ disk, turning a recoverable parse error into permanent data loss.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Dict, Optional
 
@@ -38,3 +39,17 @@ def load_secrets_json(path: str) -> Optional[Dict[str, Dict]]:
         return None
     except json.JSONDecodeError as exc:
         raise SecretsStoreUnavailable("secrets file is not valid JSON") from exc
+
+
+def secret_log_ref(secret_id: str) -> str:
+    """A stable, non-reversible correlator for logging about one secret.
+
+    Logging a secret's *identifier* — even truncated — puts a real value from
+    the store into a log an operator, a shipper and anyone with log access can
+    read, and CodeQL flags it (``py/clear-text-logging-sensitive-data``) for
+    exactly that reason. An id is not a credential, so this is not the
+    catastrophe the rule name suggests; it is still an enumerable handle to one,
+    and there is no reason to emit it when a hash correlates log lines just as
+    well.
+    """
+    return hashlib.sha256(secret_id.encode("utf-8")).hexdigest()[:12]

@@ -301,3 +301,36 @@ def test_the_hosts_route_refuses_a_corrupted_store(tmp_path, monkeypatch) -> Non
 
     with pytest.raises(SecretsStoreUnavailable):
         infra._load_secrets_hosts()
+
+
+# ---------------------------------------------------------------------------
+# Logging about a secret without logging the secret's identifier
+# ---------------------------------------------------------------------------
+
+
+def test_the_log_reference_does_not_contain_the_identifier() -> None:
+    """CodeQL `py/clear-text-logging-sensitive-data` flagged three call sites in
+    `api/secrets.py` that logged a secret's id — one of them in full.
+
+    An id is not a credential, so this is not the catastrophe the rule name
+    suggests. It is still an enumerable handle to one, written into a log an
+    operator, a shipper and anyone with log access can read, and there is no
+    reason to emit it when a hash correlates log lines just as well.
+    """
+    from security.secrets_store_reader import secret_log_ref
+
+    secret_id = "sk-live-3f9a1c22-not-a-real-id"
+    ref = secret_log_ref(secret_id)
+
+    assert secret_id not in ref
+    assert ref not in secret_id
+    # Not merely truncated: no prefix of the id survives.
+    assert not any(secret_id.startswith(ref[:n]) for n in range(4, len(ref) + 1))
+
+
+def test_the_log_reference_is_stable_so_it_still_correlates() -> None:
+    """A correlator that changes per call would make the logs useless."""
+    from security.secrets_store_reader import secret_log_ref
+
+    assert secret_log_ref("abc-123") == secret_log_ref("abc-123")
+    assert secret_log_ref("abc-123") != secret_log_ref("abc-124")

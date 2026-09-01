@@ -54,7 +54,7 @@ from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.status_enums import SecretType
 from autobot_shared.time_utils import parse_utc_iso
 from middleware.proxy_utils import get_client_ip
-from security.secrets_store_reader import load_secrets_json
+from security.secrets_store_reader import load_secrets_json, secret_log_ref
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 from services.json_secrets_read import load_imported_json_secret
 from services.provider_key_vault import mirror_provider_key_best_effort
@@ -222,8 +222,7 @@ class SecretsManager:
                 # Return deep copy to prevent race conditions
                 return deepcopy(self._secrets_cache)
 
-            # Cache miss or invalidated - reload from disk. #14126: absence and
-            # corruption are different answers; see security/secrets_store_reader.
+            # Cache miss or reload. #14126: absence and corruption differ — see secrets_store_reader.
             loaded = load_secrets_json(self.secrets_file)
             self._secrets_cache = {} if loaded is None else loaded
             self._cache_mtime = None if loaded is None else current_mtime
@@ -294,7 +293,7 @@ class SecretsManager:
         secrets[secret.id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info("Created %s (ID: %s)", request.get_log_summary(), secret.id)
+        logger.info("Created %s (ref: %s)", request.get_log_summary(), secret_log_ref(secret.id))
         return secret
 
     def get_secret(self, secret_id: str, chat_id: str | None = None) -> Dict | None:
@@ -375,7 +374,7 @@ class SecretsManager:
         secrets[secret_id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info("Updated secret (ID: %s...)", secret_id[:8])
+        logger.info("Updated secret (ref: %s)", secret_log_ref(secret_id))
 
         # Return updated secret model
         safe_data = secret_data.copy()
@@ -398,7 +397,7 @@ class SecretsManager:
         del secrets[secret_id]
         self._save_secrets(secrets)
 
-        logger.info("Deleted secret (ID: %s...)", secret_id[:8])
+        logger.info("Deleted secret (ref: %s)", secret_log_ref(secret_id))
         return True
 
     def transfer_secrets(self, request: SecretTransferRequest, chat_id: str | None = None) -> Metadata:
