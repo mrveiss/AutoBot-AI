@@ -20,7 +20,6 @@ from .database import (
     NodeStatus,
     Setting,
 )
-from .schemas_health import HealthResponse
 from .schemas import (
     BackupCreate,
     BackupResponse,
@@ -42,6 +41,7 @@ from .schemas import (
     UserCreate,
     UserResponse,
 )
+from .schemas_health import HealthResponse
 
 __all__ = [
     # Database models

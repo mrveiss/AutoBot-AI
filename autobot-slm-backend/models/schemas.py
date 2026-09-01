@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-
 from .database import BackupServiceType, NodeStatus
 
 # =============================================================================
