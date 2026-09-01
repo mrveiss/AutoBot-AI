@@ -33,6 +33,34 @@ export type WorkItemStatus =
   | 'blocked'
   | 'cancelled'
 
+/**
+ * What `GET /api/llc/boards/{id}/items` actually returns per card (#14075).
+ *
+ * `_work_item_summary` (autobot-backend/llc/api/boards.py:95-115) emits
+ * exactly these 11 keys. The board views used to assert `WorkItem` here,
+ * which is a claim TypeScript cannot check — and it was wrong: the summary
+ * carries none of `description`, `assignee_name`, `reviewer_user_id`,
+ * `reviewer_agent_id`, `sprint_id`, `labels`, `acceptance_criteria`,
+ * `acceptance_criteria_done` or `linked_pr_urls`.
+ *
+ * Typing the board payload honestly is what makes #14044 a compile-time
+ * concern rather than a blank panel: anything needing a detail field must
+ * fetch the item, because this type does not have one to read.
+ */
+export interface WorkItemSummary {
+  id: string
+  identifier: string
+  title: string
+  type: WorkItemType
+  status: WorkItemStatus
+  priority: WorkItemPriority
+  story_points: number | null
+  assignee_agent_id: string | null
+  assignee_user_id: string | null
+  assignee_type: 'user' | 'agent' | null
+  column_id: string
+}
+
 export interface WorkItem {
   id: string
   identifier: string

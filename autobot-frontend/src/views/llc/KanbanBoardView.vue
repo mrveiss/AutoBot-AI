@@ -13,6 +13,16 @@
       </div>
     </div>
 
+
+    <!-- #14064: a load failure used to be logged only, so the board rendered
+         empty — indistinguishable from a board with no cards. -->
+    <div v-if="loadError" class="board-load-error" role="alert">
+      <span class="board-load-error-text">{{ $t('llc.board.loadFailed') }}</span>
+      <span class="board-load-error-detail">{{ loadError }}</span>
+      <button type="button" class="board-load-error-retry" @click="fetchBoard()">
+        {{ $t('llc.board.retry') }}
+      </button>
+    </div>
     <div class="board-layout">
       <div
         v-for="col in columns"
@@ -107,8 +117,17 @@
       </div>
     </div>
 
+    <!-- #14044: the board holds summaries, so opening a card fetches the full
+         item. Show that it is happening, and show a failure rather than an
+         empty panel. -->
+    <div v-if="detailLoading" class="detail-fetch-state" role="status">
+      {{ $t('llc.board.loadingItem') }}
+    </div>
+    <div v-else-if="detailError" class="detail-fetch-state detail-fetch-error" role="alert">
+      {{ $t('llc.board.itemLoadFailed') }} — {{ detailError }}
+    </div>
     <WorkItemDetail
-      v-if="detailItem"
+      v-else-if="detailItem"
       :item="detailItem"
       :company-id="companyId"
       @close="detailItem = null"
@@ -136,7 +155,7 @@ const { t } = useI18n()
 const companyId = computed(() => route.params.companyId as string)
 const boardId = computed(() => route.params.boardId as string)
 
-import type { WorkItem } from './workItemTypes'
+import type { WorkItem, WorkItemSummary } from './workItemTypes'
 
 interface BoardColumn {
   id: string
@@ -148,10 +167,14 @@ interface BoardColumn {
 }
 
 const columns = ref<BoardColumn[]>([])
-const items = ref<WorkItem[]>([])
+const items = ref<WorkItemSummary[]>([])
+// #14064: a load failure was only logged, so it rendered as an empty board.
+const loadError = ref<string | null>(null)
 const isLoading = ref(false)
 const detailItem = ref<WorkItem | null>(null)
-const draggedItem = ref<WorkItem | null>(null)
+const detailLoading = ref(false)
+const detailError = ref<string | null>(null)
+const draggedItem = ref<WorkItemSummary | null>(null)
 const swimlaneEnabled = ref(false)
 
 function itemsByColumn(colId: string) {
@@ -177,16 +200,51 @@ function isWipExceeded(col: BoardColumn) {
   return itemsByColumn(col.id).length >= col.wip_limit
 }
 
-function openDetail(item: WorkItem) {
-  detailItem.value = item
+/**
+ * #14044: the board only has an 11-field summary, so opening a card must
+ * fetch the item. Previously this assigned the summary straight into
+ * `detailItem`, and every detail-only field — description, labels,
+ * acceptance criteria, reviewers, linked PRs — read as undefined and rendered
+ * blank. The panel looked like a work item with nothing written in it.
+ */
+async function openDetail(summary: WorkItemSummary) {
+  detailItem.value = null
+  detailError.value = null
+  detailLoading.value = true
+  try {
+    detailItem.value = await api.get<WorkItem>(`/api/llc/work-items/${summary.id}`)
+  } catch (err) {
+    logger.error('Failed to load work item', err)
+    detailError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    detailLoading.value = false
+  }
 }
 
+/**
+ * The detail panel emits a full item; the board list holds summaries. Copy
+ * across only the fields the summary declares, so a board card cannot start
+ * carrying detail fields that `WorkItemSummary` says are not there (#14075).
+ */
 function onItemUpdated(updated: WorkItem) {
   const idx = items.value.findIndex(i => i.id === updated.id)
-  if (idx !== -1) items.value[idx] = updated
+  if (idx === -1) return
+  const current = items.value[idx]
+  items.value[idx] = {
+    ...current,
+    title: updated.title,
+    type: updated.type,
+    status: updated.status,
+    priority: updated.priority,
+    story_points: updated.story_points,
+    assignee_agent_id: updated.assignee_agent_id ?? null,
+    assignee_user_id: updated.assignee_user_id ?? null,
+    assignee_type: updated.assignee_type ?? null,
+  }
+  if (detailItem.value?.id === updated.id) detailItem.value = updated
 }
 
-function onDragStart(item: WorkItem) {
+function onDragStart(item: WorkItemSummary) {
   draggedItem.value = item
 }
 
@@ -220,17 +278,24 @@ function subscribeBoard() {
 
 async function fetchBoard() {
   isLoading.value = true
+  // #14064: cleared here, not in the catch, so a retry starts from a clean
+  // slate and a stale banner cannot outlive a successful reload.
+  loadError.value = null
   try {
     const [boardData, itemsData] = await Promise.all([
       api.get<{ columns: BoardColumn[] }>(`/api/llc/boards/${boardId.value}`),
       // GH#13993: the board-items endpoint nests items inside each column —
       // there is no top-level `items` key. Flatten before storing.
-      api.get<{ columns: Array<{ id: string; items: WorkItem[] }> }>(`/api/llc/boards/${boardId.value}/items`),
+      // #14075: the endpoint sends an 11-field summary, not a WorkItem.
+      api.get<{ columns: Array<{ id: string; items: WorkItemSummary[] }> }>(`/api/llc/boards/${boardId.value}/items`),
     ])
     columns.value = boardData.columns ?? []
     items.value = (itemsData.columns ?? []).flatMap(col => col.items ?? [])
   } catch (err) {
+    // #14064: a swallowed failure rendered as an empty board — indistinguishable
+    // from a board that genuinely has no cards. Surface it and offer a retry.
     logger.error('Failed to load board', err)
+    loadError.value = err instanceof Error ? err.message : String(err)
   } finally {
     isLoading.value = false
   }
@@ -498,5 +563,34 @@ onMounted(async () => {
   border: 2px dashed var(--border-default);
   border-radius: 0.375rem;
   margin: 0.5rem;
+}
+
+.board-load-error {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-danger-border, #f5c2c7);
+  background: var(--color-danger-bg, #f8d7da);
+  color: var(--color-danger-text, #842029);
+  border-radius: 6px;
+}
+.board-load-error-detail {
+  opacity: 0.85;
+  font-size: 0.875rem;
+}
+.board-load-error-retry {
+  margin-inline-start: auto;
+  cursor: pointer;
+}
+
+.detail-fetch-state {
+  padding: 1rem;
+  text-align: center;
+  color: var(--color-text-muted, #6c757d);
+}
+.detail-fetch-error {
+  color: var(--color-danger-text, #842029);
 }
 </style>

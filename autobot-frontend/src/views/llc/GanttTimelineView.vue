@@ -9,6 +9,14 @@
 -->
 <template>
   <div class="gantt-view">
+
+    <div v-if="loadError" class="board-load-error" role="alert">
+      <span class="board-load-error-text">{{ $t('llc.board.loadFailed') }}</span>
+      <span class="board-load-error-detail">{{ loadError }}</span>
+      <button type="button" class="board-load-error-retry" @click="loadProjects()">
+        {{ $t('llc.board.retry') }}
+      </button>
+    </div>
     <header class="gantt-toolbar">
       <h2 class="gantt-title">{{ $t('llc.gantt.title') }}</h2>
       <!-- #11701: board/sprint scope banner — shown when opened from a sprint board -->
@@ -553,6 +561,9 @@ async function exportPng() {
   }
 }
 
+// #14064: a load failure must be visible, not just logged.
+const loadError = ref<string | null>(null)
+
 // --- data loading ---------------------------------------------------------
 async function loadProjects() {
   try {
@@ -561,7 +572,10 @@ async function loadProjects() {
       selectedProjectId.value = projects.value[0].id
     }
   } catch (err) {
+    // #14064: logged only, so a failed project load rendered as an empty
+    // roadmap — the same shape as a company with no projects.
     logger.error('Failed to load projects', err)
+    loadError.value = err instanceof Error ? err.message : String(err)
   }
 }
 
@@ -587,7 +601,10 @@ async function loadBoardScope() {
     scopeLabel.value = board.name
     if (board.project_id) selectedProjectId.value = board.project_id
   } catch (err) {
+    // #14064: silently dropping the scope showed the whole company roadmap as
+    // if no board filter had been asked for.
     logger.error('Failed to load board scope', err)
+    loadError.value = err instanceof Error ? err.message : String(err)
     scopedItemIds.value = null
     scopeLabel.value = ''
   }
@@ -796,4 +813,18 @@ onBeforeUnmount(() => {
   fill: var(--text-secondary);
   font-style: italic;
 }
+
+.board-load-error {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-danger-border, #f5c2c7);
+  background: var(--color-danger-bg, #f8d7da);
+  color: var(--color-danger-text, #842029);
+  border-radius: 6px;
+}
+.board-load-error-detail { opacity: 0.85; font-size: 0.875rem; }
+.board-load-error-retry { margin-inline-start: auto; cursor: pointer; }
 </style>

@@ -8607,6 +8607,12 @@
       "saving": "Saving…",
       "save": "Save",
       "contactSaveError": "Could not save the contact."
+    },
+    "board": {
+      "loadFailed": "Could not load this board",
+      "retry": "Retry",
+      "loadingItem": "Loading work item…",
+      "itemLoadFailed": "Could not load this work item"
     }
   },
   "mobile": {

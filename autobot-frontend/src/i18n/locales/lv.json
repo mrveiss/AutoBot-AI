@@ -8619,6 +8619,12 @@
       "saving": "Saglabā…",
       "save": "Saglabāt",
       "contactSaveError": "Neizdevās saglabāt kontaktu."
+    },
+    "board": {
+      "loadFailed": "Neizdevās ielādēt šo tāfeli",
+      "retry": "Mēģināt vēlreiz",
+      "loadingItem": "Ielādē darba vienumu…",
+      "itemLoadFailed": "Neizdevās ielādēt šo darba vienumu"
     }
   },
   "code": {
