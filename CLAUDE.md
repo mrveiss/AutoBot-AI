@@ -42,7 +42,8 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 - **Security reviews are findings-first** — one-line verdict, then a severity/`file:line`/issue/fix table, within 3 tool calls. Verify *after*; never explore before the verdict lands. Skill: `secreview`.
 - **Nothing internal in outward artifacts** — no IPs, hostnames, secrets, tokens, or internal filesystem paths in issues, PRs, comments or logs. Redact to a generic role or node reference.
 - **Dispatch gates on review capacity, not PR count.** There is no open-PR limit; every PR still gets a `code-reviewer` pass before merge. PRs accumulating means review is the bottleneck — do that, don't defer new work.
-- **One PR may close several similar-scope issues** (`Closes #A, #B`) — but each must be *fully* delivered; partial delivery never closes. Independent or different-risk changes get separate PRs.
+- **Batch same-scope issues into one PR by default** (`Closes #A, #B`) — one CI suite per batch, not per issue. Each issue must still be *fully* delivered; partial delivery never closes. Independent or different-risk changes get separate PRs, as does anything too large for one honest review pass.
+- **A pushed PR ends the tick — never wait on its CI.** Pushing is the sweep point: check every *other* in-flight PR once (approval gate, CI verdict, behind-ness), act on what is green or red, then start the next non-colliding scoped issue immediately. The PR just pushed is re-checked at the next sweep, never polled.
 
 ## Essential Patterns
 
