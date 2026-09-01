@@ -133,9 +133,12 @@ def test_an_empty_file_listing_is_fatal_not_clean(guard, monkeypatch):
 def test_a_sentinel_zero_default_does_not_fail_a_real_port(guard, tmp_path, monkeypatch):
     """`default=0` means "not configured", not "port zero".
 
-    `AUTOBOT_POSTGRES_PORT` and `AUTOBOT_SMTP_PORT` both use it in the real
-    SSOT. Comparing `${AUTOBOT_POSTGRES_PORT:-5432}` against 0 would fail
-    correct code — the guard would block the very shape it exists to permit.
+    `AUTOBOT_SMTP_PORT` and `AUTOBOT_POSTGRES_PORT` were the examples this was
+    written against; both have since had their pre-#7437 values restored under
+    #13264 (587 and 5432). `REDIS_PORT` still carries `default=0` in the live
+    SSOT, so the clause is not hypothetical — and comparing
+    `${AUTOBOT_POSTGRES_PORT:-5432}` against 0 would fail correct code, which
+    is the shape this guard exists to permit rather than block.
     """
     (tmp_path / "autobot_shared").mkdir()
     (tmp_path / "autobot_shared" / "ssot_config.py").write_text(
@@ -158,11 +161,17 @@ def test_the_real_ssot_sentinels_are_excluded(guard):
     `AUTOBOT_SMTP_PORT` is what that clause was written for: it was a sentinel
     until #13264 restored its pre-#7437 default of 587, and this test is what
     caught the change rather than letting it pass silently. It is now asserted
-    as a real, comparable port."""
+    as a real, comparable port.
+
+    `AUTOBOT_POSTGRES_PORT` followed the same path in #13264 batch 3 — it was a
+    sentinel only because the #7437 migration had replaced its shipped 5432
+    with 0, and this test caught that restoration too. Both are now real ports;
+    the sentinel-exclusion clause itself is still exercised by
+    `test_an_all_sentinel_ssot_is_fatal_not_clean` below."""
     root = guard._repo_root()
     ports = guard._ssot_ports(root)
 
-    assert "AUTOBOT_POSTGRES_PORT" not in ports, "a sentinel default leaked into the comparison map"
+    assert ports.get("AUTOBOT_POSTGRES_PORT") == "5432", "restored by #13264 batch 3; no longer a sentinel"
     assert ports.get("AUTOBOT_SMTP_PORT") == "587", "restored by #13264; no longer a sentinel"
     assert ports.get("AUTOBOT_BROWSER_SERVICE_PORT") == "9001", "the real port this guard exists for"
     assert ports.get("AUTOBOT_GRAFANA_PORT") == "3000", "3000 belongs to Grafana — the whole point of #14198"
