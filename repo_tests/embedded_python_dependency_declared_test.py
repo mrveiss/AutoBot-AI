@@ -51,6 +51,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Roots a shell script's inline python may resolve an import against. Each
@@ -106,6 +108,7 @@ def _tracked_shell_scripts() -> list[Path]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     ).stdout
     return [_REPO_ROOT / line for line in out.splitlines() if line]
 

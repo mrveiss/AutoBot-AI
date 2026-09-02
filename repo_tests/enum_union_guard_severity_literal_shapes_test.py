@@ -32,6 +32,8 @@ import re
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
+from autobot_shared.paths import scrubbed_git_env
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Same shapes #14988 measured. No word boundary before ``severity`` is
@@ -135,6 +137,7 @@ def _tracked_python_files() -> tuple[str, ...]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     )
     return tuple(line for line in out.stdout.splitlines() if line)
 

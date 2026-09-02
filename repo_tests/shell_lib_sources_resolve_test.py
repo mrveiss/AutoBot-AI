@@ -54,6 +54,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _INFRA = _REPO_ROOT / "autobot-infrastructure"
 _SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", "venv", ".venv"}
@@ -231,6 +233,7 @@ def _tracked_shell_scripts() -> set[Path]:
         text=True,
         encoding="utf-8",
         cwd=_REPO_ROOT,
+        env=scrubbed_git_env(),
     )
     if result.returncode != 0:
         raise RuntimeError(f"git ls-files failed: {result.stderr.strip()}")

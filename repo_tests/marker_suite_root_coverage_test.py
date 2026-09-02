@@ -39,6 +39,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from autobot_shared.paths import scrubbed_git_env
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "marker-tests.yml"
 
@@ -107,6 +109,7 @@ def _test_modules() -> list[str]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     ).stdout
     return [
         path

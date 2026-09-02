@@ -34,6 +34,8 @@ from typing import List, Tuple
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 #: A path built under *this repo's* worktrees directory — the #15203 defect.
@@ -48,9 +50,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 #: NOT covered here: a hard-coded absolute path to a real machine's worktree.
 #: That is a machine-specific-path defect rather than a worktree one, and it
 #: belongs to whatever enforces the "no machine-specific absolute paths" rule.
-_BUILDS_PATH = re.compile(
-    r"""(?:project_root\(\)|REPO_ROOT|_REPO_ROOT|repo_root\(\))\s*/\s*["']\.worktrees["']"""
-)
+_BUILDS_PATH = re.compile(r"""(?:project_root\(\)|REPO_ROOT|_REPO_ROOT|repo_root\(\))\s*/\s*["']\.worktrees["']""")
 
 #: Constructing a scratch tree under pytest's tmp_path is not the repo's.
 _SCRATCH = re.compile(r"tmp_path\s*/\s*[\"']\.worktrees[\"']")
@@ -58,7 +58,7 @@ _SCRATCH = re.compile(r"tmp_path\s*/\s*[\"']\.worktrees[\"']")
 
 def _tracked_python_files() -> List[Path]:
     out = subprocess.run(
-        ["git", "ls-files", "*.py"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
+        ["git", "ls-files", "*.py"], cwd=REPO_ROOT, capture_output=True, text=True, check=True, env=scrubbed_git_env()
     ).stdout.split()
     return [REPO_ROOT / p for p in out]
 
@@ -116,7 +116,7 @@ def test_no_tracked_file_builds_a_path_into_the_repos_worktrees() -> None:
         ('_W = str(REPO_ROOT / ".worktrees" / "issue-9")', True),
         ('scratch = tmp_path / ".worktrees" / "fake"', False),
         ('SKIP_DIRS = ("venv/", "node_modules/", ".worktrees/")', False),
-        ('# .worktrees holds throwaway checkouts', False),
+        ("# .worktrees holds throwaway checkouts", False),
         # Real skip-list entries this guard must not fire on — all three were
         # false positives on the first draft, which is why they are pinned.
         ('    "/.worktrees/",', False),

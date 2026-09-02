@@ -21,6 +21,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_no_kb_aioredis_access import ALLOWLIST, _scan  # noqa: E402
 
+from autobot_shared.paths import scrubbed_git_env
+
 _REPO = Path(__file__).resolve().parents[2]
 
 
@@ -46,7 +48,7 @@ def test_every_allowlist_entry_names_a_file_that_exists() -> None:
     the one instance.
     """
     listing = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files"], cwd=str(_REPO), capture_output=True, text=True
+        ["git", "ls-files"], cwd=str(_REPO), capture_output=True, text=True, env=scrubbed_git_env()
     )
     assert listing.returncode == 0, "git ls-files failed — refusing to report clean"
     tracked = set(listing.stdout.split())

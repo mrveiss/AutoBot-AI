@@ -18,6 +18,7 @@ from __future__ import annotations
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
+from autobot_shared.paths import scrubbed_git_env
 from services.knowledge_grounding_models import VerificationMethod
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -56,6 +57,7 @@ def _tracked_python_files() -> list[str]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     )
     return [line for line in out.stdout.splitlines() if line]
 

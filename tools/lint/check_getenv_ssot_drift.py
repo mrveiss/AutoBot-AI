@@ -128,10 +128,29 @@ commit's pre-image), not carried over from the issue table unchecked; see
 from __future__ import annotations
 
 import ast
+import logging
+import sys
 from pathlib import Path
 from typing import Any
 
-from tools.lint._scan_helpers import EXCLUDED_DIR_NAMES
+# Importable both as ``tools.lint.check_getenv_ssot_drift`` (the test) and as a
+# bare script (``python3 tools/lint/check_getenv_ssot_drift.py``); the latter
+# only puts ``tools/lint/`` on the path, so the repository root is added here.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from tools.lint._scan_helpers import (  # noqa: E402
+    EXCLUDED_DIR_NAMES,
+    PY_FLOOR,
+    enforce_reach,
+    scan_python_files,
+)
+
+# Plain stdlib logging (#1082): a bare hook script must not drag config loading
+# onto every commit -- same trade as ``scripts/check_python_file_size.py``.
+logger = logging.getLogger(__name__)
+
+#: Name this guard reports under, in messages and in its floor failures.
+HOOK_ID = "getenv-ssot-drift"
 
 #: Trees ``ssot_config`` actually governs. A name collision outside these
 #: (a different service, an ops script) is not the same variable.
@@ -288,6 +307,21 @@ def _in_scope(path: Path, repo_root: Path) -> bool:
     return True
 
 
+def _swept_files(repo_root: Path) -> list[Path]:
+    """In-scope tracked ``*.py`` files, with the floor applied to the raw sweep.
+
+    The floor is checked against the **whole** tracked enumeration, not the
+    governed-root subset: the subset is legitimately a few hundred files, so a
+    floor there would have to be set so low it could not detect a lost sweep.
+    Raises rather than returning a short list — a sweep under the floor must
+    not be able to answer "no offenders" (#14896).
+    """
+    files, full_repo = scan_python_files([], repo_root)
+    if enforce_reach(len(files), PY_FLOOR, hook=HOOK_ID, full_repo=full_repo):
+        raise RuntimeError(f"{HOOK_ID}: full-repo sweep reached only {len(files)} file(s); floor is {PY_FLOOR}")
+    return sorted(path for path in files if _in_scope(path, repo_root))
+
+
 def find_drift(repo_root: Path) -> tuple[list[str], int]:
     """Offender strings, and the number of in-scope call sites examined."""
     ssot_source = (repo_root / "autobot_shared" / "ssot_config.py").read_text(encoding="utf-8")
@@ -298,9 +332,7 @@ def find_drift(repo_root: Path) -> tuple[list[str], int]:
 
     offenders: list[str] = []
     calls_examined = 0
-    for path in sorted(repo_root.rglob("*.py")):
-        if not _in_scope(path, repo_root):
-            continue
+    for path in _swept_files(repo_root):
         try:
             source = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
@@ -317,3 +349,33 @@ def find_drift(repo_root: Path) -> tuple[list[str], int]:
                     f"disagrees with ssot_config default={field_default!r}"
                 )
     return offenders, calls_examined
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Full-repo drift check. Always sweeps the whole tree: a call-site default
+    and the ``ssot_config`` field it contradicts are in two different files, so
+    a changed-files-only run would miss exactly the pairs this exists to find.
+    """
+    del argv  # full-repo only, by construction
+    repo_root = Path(__file__).resolve().parents[2]
+    offenders, calls_examined = find_drift(repo_root)
+    # The second floor, and a different one: PY_FLOOR proves the file sweep had
+    # reach, this proves the sweep actually *matched* getenv/ssot_config pairs.
+    # An empty offender list from zero comparable pairs asserts nothing (#14896).
+    if enforce_reach(calls_examined, GETENV_CALL_FLOOR, hook=HOOK_ID, full_repo=True):
+        return 1
+    for offender in offenders:
+        logger.error("[%s] %s", HOOK_ID, offender)
+    if offenders:
+        logger.error(
+            "[%s] %d call-site default(s) disagree with ssot_config. Read the value "
+            "through ssot_config instead of re-stating it (#13264).",
+            HOOK_ID,
+            len(offenders),
+        )
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

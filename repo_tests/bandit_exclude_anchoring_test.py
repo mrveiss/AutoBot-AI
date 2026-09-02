@@ -115,6 +115,7 @@ def tracked_py_files() -> list[str]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     )
     paths = [line for line in completed.stdout.splitlines() if line.strip()]
     assert len(paths) >= _TRACKED_PY_FLOOR, (

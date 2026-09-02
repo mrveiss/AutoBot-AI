@@ -22,6 +22,22 @@ in ``check_field_defaults_test.py``.
 from __future__ import annotations
 
 import ast
+import logging
+import sys
+from pathlib import Path
+
+# tools/lint/ is not a Python package; make the sibling helper importable
+# regardless of invocation mode (script / importlib from tests).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _scan_helpers import enforce_reach  # noqa: E402
+
+# Plain stdlib logging (#1082): a bare guard script must not drag config
+# loading in -- same trade as ``scripts/check_python_file_size.py``.
+logger = logging.getLogger(__name__)
+
+#: Name this guard reports under.
+HOOK_ID = "field-defaults"
 
 #: The live-install prefix no ``Field`` default may freeze (#14050), assembled
 #: from fragments so this module's own source does not carry the literal.
@@ -83,3 +99,35 @@ def live_install_field_defaults(source: str) -> list[str]:
 def field_call_count(source: str) -> int:
     """How many ``Field(...)`` calls a sweep of *source* actually reached."""
     return sum(1 for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call) and _call_name(n) == "Field")
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Check ``ssot_config.py``'s ``Field`` defaults, floor first.
+
+    Until #14896 this module was a library with :data:`FIELD_CALL_FLOOR`
+    asserted only from its own tests: the floor guarded the test's sweep and
+    nothing else, so nothing in the hook path could fail on it. This is where
+    it now earns its keep -- the offender list below is only meaningful once
+    the sweep is known to have reached the population it claims to cover.
+    """
+    del argv  # one fixed target file; there is nothing to select
+    repo_root = Path(__file__).resolve().parents[2]
+    source = (repo_root / "autobot_shared" / "ssot_config.py").read_text(encoding="utf-8")
+    if enforce_reach(field_call_count(source), FIELD_CALL_FLOOR, hook=HOOK_ID, full_repo=True):
+        return 1
+    offenders = live_install_field_defaults(source)
+    for offender in offenders:
+        logger.error("[%s] autobot_shared/ssot_config.py %s", HOOK_ID, offender)
+    if offenders:
+        logger.error(
+            "[%s] %d Field default(s) freeze the live install path. Resolve it at "
+            "read time via autobot_shared.paths instead (#13149).",
+            HOOK_ID,
+            len(offenders),
+        )
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

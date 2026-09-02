@@ -37,6 +37,12 @@ import sys
 
 import yaml
 
+# scripts/ is not a Python package; put the repository root on the path so
+# the shared vacuity floor is importable when this runs as a bare script.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+
+from tools.lint._scan_helpers import enforce_reach  # noqa: E402
+
 # The deploy syncs the repo to this prefix, so what follows it is a repo path.
 _DEPLOYED_SRC_PREFIX = "/opt/autobot/src/"
 
@@ -196,6 +202,10 @@ def _unresolvable_hosts(text: str, all_groups: set) -> list[tuple[int, str]]:
     return unresolved
 
 
+#: Name this guard reports under.
+HOOK_ID = "ansible-file-references"
+
+
 def main() -> int:
     """Report every deployed-src reference with no matching repo path."""
     root = pathlib.Path(".").resolve()
@@ -232,6 +242,12 @@ def main() -> int:
         print("ok=0 changed=0, exit 0 — which reads as a successful deploy.")
 
     if path_violations or host_violations:
+        return 1
+
+    # Vacuity floor (#14896): both counters at zero means no play was read, no
+    # reference was extracted, or the walk started from the wrong directory --
+    # every one of which used to print the success line below and exit 0.
+    if enforce_reach(paths_checked + hosts_checked, 1, hook=HOOK_ID, full_repo=True):
         return 1
 
     print(

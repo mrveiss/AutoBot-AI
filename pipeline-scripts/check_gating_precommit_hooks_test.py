@@ -38,16 +38,26 @@ repos:
       - id: ssot-config-lib-guard
         name: Shell SSOT Library Self-Test (#14041)
         entry: bash autobot-infrastructure/shared/tests/test_ssot_config_lib.sh
+      - id: no-root-clutter
+        name: Keep session reports and test artifacts out of the repo root (#14216)
+        entry: tools/lint/check_no_root_clutter.py
       - id: black
         name: black
 """
 
 _GUARD = "Shell SSOT Library Self-Test (#14041)"
 
+#: The second gating hook (#14895). Every allowlisted id must appear in the
+#: config AND report a result, so the fixture carries it in both places --
+#: omitting it here would make every case below fail for the wrong reason.
+_CLUTTER = "Keep session reports and test artifacts out of the repo root (#14216)"
 
-def _output(guard_status: str | None) -> str:
-    """A pre-commit --all-files transcript, optionally omitting the guard's line."""
+
+def _output(guard_status: str | None, clutter_status: str | None = "Passed") -> str:
+    """A pre-commit --all-files transcript, optionally omitting a hook's line."""
     lines = ["black" + "." * 60 + "Failed", "check yaml" + "." * 55 + "Passed"]
+    if clutter_status is not None:
+        lines.insert(1, _CLUTTER + "." * 12 + clutter_status)
     if guard_status is not None:
         lines.insert(1, _GUARD + "." * 30 + guard_status)
     return "\n".join(lines) + "\n"
@@ -68,6 +78,19 @@ def test_passing_guard_exits_zero_even_though_formatters_failed(gate, tmp_path):
 
 def test_failing_guard_blocks(gate, tmp_path):
     assert _run(gate, tmp_path, _output("Failed")) == 1
+
+
+def test_the_second_gating_hook_blocks_on_its_own(gate, tmp_path):
+    """#14895 admitted `no-root-clutter`. Every id in the list must be able to
+    fail the job by itself, or the append was decorative: a session report
+    committed to the repository root reached CI as a ``::warning::`` and merged.
+    """
+    assert _run(gate, tmp_path, _output("Passed", clutter_status="Failed")) == 1
+
+
+def test_the_second_gating_hook_blocks_when_it_did_not_run(gate, tmp_path):
+    """Same rule as the first: no result is not a clean result (#14878)."""
+    assert _run(gate, tmp_path, _output("Passed", clutter_status=None)) == 1
 
 
 def test_skipped_guard_blocks(gate, tmp_path):

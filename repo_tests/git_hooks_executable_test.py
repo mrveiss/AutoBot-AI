@@ -54,6 +54,8 @@ from pathlib import Path
 
 import yaml
 
+from autobot_shared.paths import scrubbed_git_env
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Directories whose contents git or a developer executes directly, plus the
@@ -95,6 +97,7 @@ def _tracked_modes() -> dict[str, str]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     )
     modes: dict[str, str] = {}
     for line in result.stdout.splitlines():
@@ -240,8 +243,7 @@ def test_no_executable_hook_relies_on_a_missing_shebang() -> None:
     assert not offenders, (
         "these files are executable but their first line is not a shebang, so the "
         "kernel refuses them and git falls back to `sh` — a bash-only script then "
-        "changes meaning silently. Move the `#!` line to line 1:\n  "
-        + "\n  ".join(offenders)
+        "changes meaning silently. Move the `#!` line to line 1:\n  " + "\n  ".join(offenders)
     )
 
 
@@ -303,6 +305,7 @@ def test_the_python_filter_reaches_the_inputs_these_guards_read() -> None:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     ).stdout.split()
     # `**/*.py` already covers the Python files by construction; what has to be
     # named explicitly is everything else.
@@ -311,11 +314,7 @@ def test_the_python_filter_reaches_the_inputs_these_guards_read() -> None:
         f"only {len(subjects)} non-Python files under {roots} — the listing "
         "regressed and this test would pass having checked almost nothing"
     )
-    unreachable = [
-        subject
-        for subject in subjects
-        if not any(_matches(pattern, subject) for pattern in patterns)
-    ]
+    unreachable = [subject for subject in subjects if not any(_matches(pattern, subject) for pattern in patterns)]
     assert not unreachable, (
         "changing these files matches no pattern in the python filter, so "
         "python-suite is reported green by the shim and the guards in this "

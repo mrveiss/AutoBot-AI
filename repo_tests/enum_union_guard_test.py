@@ -46,6 +46,7 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.status_enums import CommandRisk, RiskLevel, SecretType, Severity
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -313,11 +314,7 @@ _DECLARED_ENUM_FLOOR = 150
 @functools.lru_cache(maxsize=1)
 def _tracked_python_files() -> tuple[str, ...]:
     out = subprocess.run(  # nosec B603  # fixed argv, no shell
-        ["git", "ls-files", "*.py"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
+        ["git", "ls-files", "*.py"], cwd=REPO_ROOT, capture_output=True, text=True, check=True, env=scrubbed_git_env()
     )
     return tuple(line for line in out.stdout.splitlines() if line)
 

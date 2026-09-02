@@ -104,6 +104,8 @@ from typing import Dict, FrozenSet, List, Set, Tuple
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 _REPO = Path(__file__).resolve().parents[1]
 _BACKEND = _REPO / "autobot-backend"
 
@@ -198,6 +200,7 @@ def _tracked_paths(root: Path = _REPO) -> Set[Path]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     ).stdout
     return {root / relative for relative in listing.split("\0") if relative}
 
