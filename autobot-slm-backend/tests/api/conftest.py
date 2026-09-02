@@ -21,22 +21,50 @@ import types
 
 import pytest
 
-if "multipart" not in sys.modules or not hasattr(sys.modules.get("multipart"), "parse_options_header"):
-    # Stub multipart.multipart.parse_options_header so starlette.formparsers loads
-    _mp_inner = types.ModuleType("multipart.multipart")
-    _mp_inner.parse_options_header = lambda *a, **kw: (b"", {})  # type: ignore[attr-defined]
-    _mp = types.ModuleType("multipart")
-    _mp.multipart = _mp_inner  # type: ignore[attr-defined]
-    sys.modules.setdefault("multipart", _mp)
-    sys.modules.setdefault("multipart.multipart", _mp_inner)
 
-if "python_multipart" not in sys.modules:
-    _pymp_inner = types.ModuleType("python_multipart.multipart")
-    _pymp_inner.parse_options_header = lambda *a, **kw: (b"", {})  # type: ignore[attr-defined]
-    _pymp = types.ModuleType("python_multipart")
-    _pymp.multipart = _pymp_inner  # type: ignore[attr-defined]
-    sys.modules.setdefault("python_multipart", _pymp)
-    sys.modules.setdefault("python_multipart.multipart", _pymp_inner)
+def _starlette_formparsers_import_works() -> bool:
+    """Can starlette load its form parsers unaided?
+
+    #15065: the stubs below used to install whenever ``multipart`` merely was not
+    already in ``sys.modules`` — which is every fresh interpreter, so they went in
+    unconditionally, including on hosts and in CI where the real
+    ``python_multipart`` is installed and works. They then stayed in
+    ``sys.modules`` for the rest of the session, and any test file collected
+    afterwards from outside this directory tripped
+    ``repo_tests/sys_modules_leak_guard.py``.
+
+    Asking the question directly makes the stub a fallback rather than an
+    override: where the real package works, nothing is installed and there is
+    nothing to leak.
+    """
+    try:
+        import starlette.formparsers  # noqa: F401 — probing the import, not using it
+    except Exception:
+        return False
+    return True
+
+
+if not _starlette_formparsers_import_works():
+    # Dev-host fallback only. The stub cannot be installed and removed around a
+    # fixture: pytest imports every test module during collection, and they need
+    # `starlette.formparsers` to be importable at that point, which is before any
+    # fixture runs. So it is installed once here and recorded in the leak guard's
+    # baseline as an accepted owner rather than pretended away.
+    if "multipart" not in sys.modules or not hasattr(sys.modules.get("multipart"), "parse_options_header"):
+        _mp_inner = types.ModuleType("multipart.multipart")
+        _mp_inner.parse_options_header = lambda *a, **kw: (b"", {})  # type: ignore[attr-defined]
+        _mp = types.ModuleType("multipart")
+        _mp.multipart = _mp_inner  # type: ignore[attr-defined]
+        sys.modules.setdefault("multipart", _mp)
+        sys.modules.setdefault("multipart.multipart", _mp_inner)
+
+    if "python_multipart" not in sys.modules:
+        _pymp_inner = types.ModuleType("python_multipart.multipart")
+        _pymp_inner.parse_options_header = lambda *a, **kw: (b"", {})  # type: ignore[attr-defined]
+        _pymp = types.ModuleType("python_multipart")
+        _pymp.multipart = _pymp_inner  # type: ignore[attr-defined]
+        sys.modules.setdefault("python_multipart", _pymp)
+        sys.modules.setdefault("python_multipart.multipart", _pymp_inner)
 
 
 # ---------------------------------------------------------------------------
