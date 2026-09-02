@@ -18,13 +18,11 @@ import math
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from autobot_shared.paths import project_root
 from knowledge.search_components.reranking import RerankWeights
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
 
 
 def _make_search_result(hybrid_score: float = 0.5, content: str = "test content"):
