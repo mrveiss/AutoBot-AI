@@ -78,7 +78,7 @@ def _resolve_includes(path: Path, seen: set[Path]) -> set[Path]:
     return seen
 
 
-def _manifests_of(directory: str) -> list[Path]:
+def _manifests_of(directory: str, root: Path = _REPO_ROOT) -> list[Path]:
     """The dependency manifests a pip block owns directly.
 
     `pyproject.toml` counts: dependabot's pip ecosystem updates it as readily as
@@ -86,8 +86,13 @@ def _manifests_of(directory: str) -> list[Path]:
     pin from there. Modelling only `requirements*.txt` under-approximated what a
     block reaches, and an under-approximating guard reports clean rather than
     reporting less (#14733).
+
+    `root` defaults to this repository and is a parameter only so the sibling
+    guard ``dependabot_requirements_coverage_test.py`` can drive the same
+    resolution against a synthetic tree — one definition of "what a block
+    reaches", not two (#14562).
     """
-    base = _REPO_ROOT / directory.lstrip("/")
+    base = root / directory.lstrip("/")
     if not base.is_dir():
         return []
     manifests = sorted(base.glob("requirements*.txt"))
@@ -97,10 +102,10 @@ def _manifests_of(directory: str) -> list[Path]:
     return manifests
 
 
-def _files_reachable_from(directory: str) -> set[Path]:
+def _files_reachable_from(directory: str, root: Path = _REPO_ROOT) -> set[Path]:
     """Every requirements file a block can edit, following ``-r``."""
     files: set[Path] = set()
-    for manifest in _manifests_of(directory):
+    for manifest in _manifests_of(directory, root):
         _resolve_includes(manifest, files)
     return files
 

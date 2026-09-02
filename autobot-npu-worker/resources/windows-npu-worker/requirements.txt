@@ -37,7 +37,13 @@ openvino>=2026.3.1
 
 # HuggingFace for model downloading and tokenizers
 transformers>=4.36.0
-tokenizers>=0.15.0
+tokenizers>=0.15.0,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor at or
+                          # above 0.23.1 is unsatisfiable — the shape #10416 shipped by way of
+                          # a grouped bump. The cap matches the ai-stack and npu-worker-docker
+                          # siblings; the FLOOR stays at 0.15.0 because this file pins its own
+                          # older stack (transformers>=4.36.0 above) and raising it would only
+                          # narrow that range for no gain. #14562 put this directory inside
+                          # dependabot's reach, which is what makes the cap load-bearing here.
 sentencepiece>=0.1.99
 sentence-transformers>=2.2.0
 einops>=0.7.0

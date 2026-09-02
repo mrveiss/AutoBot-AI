@@ -90,13 +90,22 @@ _DIST_ALIASES = {
 # asserts each entry is STILL undeclared, so declaring one forces its exemption
 # out rather than leaving this file quietly guarding one path less than it
 # claims. THIS DICT ONLY SHRINKS.
-_KNOWN_UNDECLARED = {
-    ("autobot-backend/knowledge/tiering.py", "diskann"): "#15035",
-    ("autobot-backend/multimodal_processor/processors/voice.py", "librosa"): "#15035",
-    ("autobot-backend/services/execution/modal_backend.py", "modal"): "#15035",
-    ("autobot-infrastructure/shared/scripts/monitor_services.py", "flask"): "#15035",
-    ("autobot-infrastructure/shared/scripts/monitor_services.py", "flask_cors"): "#15035",
-}
+#
+# EMPTY as of #15035, which cleared the five this shipped with:
+#   * librosa and transformers -> autobot-backend/requirements-media.txt
+#   * modal                    -> autobot-backend/requirements-modal.txt
+#   * flask, flask-cors        -> autobot-infrastructure/shared/scripts/requirements.txt
+#   * diskann                  -> not a hard dependency after all. knowledge/tiering.py
+#     falls back to the declared `faiss` and only raises when BOTH are missing;
+#     the `if/elif/else` shape put that raise inside the DISKANN_AVAILABLE
+#     branch, which reads here as "raises without diskann". The module now uses
+#     early returns, so the detector sees what actually happens.
+#
+# The parametrization below therefore collects nothing. That is deliberate and
+# matches ``_KNOWN_BROKEN`` in ``infra_script_imports_resolve_test.py``: with no
+# live exemption, the detector's positive and negative controls at the bottom of
+# this file are what prove it still recognises the shape.
+_KNOWN_UNDECLARED: dict[tuple[str, str], str] = {}
 
 _STDLIB = set(sys.stdlib_module_names) | {"__future__"}
 

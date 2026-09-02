@@ -472,6 +472,91 @@ updates:
       - dependency-name: "fastapi"
         update-types: ["version-update:semver-major"]
 
+  # === #14562: manifests nested BELOW a configured directory ===
+  # dependabot's pip ecosystem resolves manifests relative to `directory:` and
+  # recurses only through `-r`/`-c` includes — never into subdirectories on its
+  # own. Measured on this repo: the root `/` block's grouped PR #14951 edited
+  # `autobot-backend/requirements.txt` and six `requirements-ci/*.txt` files,
+  # both sets reachable only via the `-r` lines in `requirements-dev.txt` and
+  # `requirements-ci.txt`. It touched nothing that lacked such a line.
+  #
+  # The three directories below hold pinned manifests with no include chain from
+  # any configured directory, so their pins received no update of any kind —
+  # security bumps included — while the tree above them looked covered.
+  # `repo_tests/dependabot_requirements_coverage_test.py` now fails when a new
+  # manifest appears outside this config's reach.
+  #
+  # Deliberately NOT on monday: every other block already runs then, and these
+  # three are low-churn. Spreading them keeps one day from producing the whole
+  # week's candidate set.
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-backend/code_analysis"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "backend"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    ignore:
+      # Kept in step with /autobot-backend: this block reaches
+      # constraints/shared.txt through the `-c` line in the code_analysis
+      # manifest, and numpy/pandas majors break the same consumers there.
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-infrastructure/shared/scripts"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "devops"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "pip"
+    directory: "/autobot-npu-worker/resources/windows-npu-worker"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "backend"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+    ignore:
+      - dependency-name: "tokenizers"
+        # #10331, and the SAME value the ai-stack and npu-worker-docker blocks
+        # carry: transformers caps tokenizers at <=0.23.0, so anything from
+        # 0.23.1 up is unresolvable against it. This block only became able to
+        # propose that bump when the directory was added above, which is why
+        # the manifest's own `<0.24` cap was added in the same change — a
+        # grouped all-dependencies bump ignores `update-types`, so the range is
+        # what holds (#14431).
+        versions: [">=0.23.1"]
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+
   # === #7182 P2: Root-level manifests ===
   # Catches root-level requirements*.txt (requirements.txt, requirements-ci.txt,
   # requirements-dev.txt) AND root pyproject.toml — used by ci.yml + security.yml.

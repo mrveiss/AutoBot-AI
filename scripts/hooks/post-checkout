@@ -27,7 +27,7 @@ fi
 # ---------------------------------------------------------------------------
 # 1. Fix WSL2 symlinks (Issue #886)
 # ---------------------------------------------------------------------------
-BACKEND_DIR="$GIT_ROOT/autobot-user-backend"
+BACKEND_DIR="$GIT_ROOT/autobot-backend"
 BACKEND_SYMLINK="$BACKEND_DIR/backend"
 
 if [ -d "$BACKEND_DIR" ] && { [ ! -L "$BACKEND_SYMLINK" ] || [ ! -e "$BACKEND_SYMLINK" ]; }; then

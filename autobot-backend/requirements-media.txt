@@ -1,0 +1,33 @@
+# Optional media extra — enables the audio and video multimodal pipelines (#15035).
+#
+# NOT installed in the default backend image. These are large wheels with system
+# library dependencies (ffmpeg/libsndfile for audio decoding, the OpenCV runtime
+# for frame extraction) and the pipelines they power are opt-in, so they are
+# declared here rather than in requirements.txt — which requirements-ci/ would
+# then have to mirror for a suite that does not exercise them.
+#
+# To enable:
+#   pip install -r requirements-media.txt
+#
+# Replaces the commented-out block that sat under "Optional (install separately
+# for full media support)" in requirements.txt. A comment is not a declaration:
+# nothing installed those packages and no tooling could tell an operator which
+# version to install, while multimodal_processor/processors/voice.py RAISES
+# without them (#15035).
+#
+# Every entry names its consumer. An entry with no consumer is a stale
+# declaration and belongs deleted, not carried.
+
+# multimodal_processor/processors/voice.py guard-imports this alongside
+# transformers and raises from _validate_audio_models_available() when the flag
+# is false — Whisper/Wav2Vec2 transcription is off entirely without it.
+librosa>=0.11.0
+
+# Same guarded block in voice.py (Whisper + Wav2Vec2), and the vision processor
+# multimodal_processor/processors/vision.py raises on its own flag too. Kept in
+# step with the other pinned sites (autobot-tts-worker/requirements.txt:3,
+# autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt:19).
+transformers>=5.16.1
+
+# Frame extraction for the video pipeline. Import name is cv2.
+opencv-python>=4.12.0

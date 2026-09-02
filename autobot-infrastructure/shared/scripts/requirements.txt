@@ -27,3 +27,10 @@ pytest-json-report>=1.5.0
 # logs through the Docker SDK; both guard-import it and drop container log
 # sources entirely when it is absent (#14872).
 docker>=7.1.0
+
+# monitor_services.py serves the service-monitor dashboard through Flask and
+# needs CORS on it for the browser front end. Both are guard-imported and the
+# dashboard raises when the flag is false, so this is a hard dependency of that
+# script wearing an optional coat — declared nowhere until now (#15035).
+flask>=3.1.0
+flask-cors>=6.0.0

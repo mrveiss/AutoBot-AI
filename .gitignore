@@ -538,5 +538,10 @@ MagicMock/
 autobot-backend/tests/results/
 autobot-backend/data/scheduled_workflows.json
 
+# #15193: the local WSL2 compatibility symlink that scripts/hooks/post-checkout
+# creates inside the backend component (issue #886). Never tracked - it is a
+# per-checkout convenience, and the hook recreates it on demand.
+autobot-backend/backend
+
 # #14678: generated at CI time from inventory/group_vars/all.yml, never tracked
 autobot-slm-backend/ansible/tests/inventory/group_vars/all.yml
