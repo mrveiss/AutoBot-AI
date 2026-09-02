@@ -107,15 +107,27 @@ class _DiskANNIndex:
         self._handle: Optional[Any] = None
 
     def load(self) -> None:
+        """Load the cold index through whichever backend is installed.
+
+        Early returns rather than ``if/elif/else`` deliberately (#15035). Nested
+        in the ``DISKANN_AVAILABLE`` branch, the raise below reads to
+        ``repo_tests/hard_optional_dependency_declared_test.py`` as "this module
+        raises when ``diskann`` is absent" — the hard-dependency shape, which
+        would demand a requirements entry for it. That is not what happens:
+        ``faiss`` is declared (as ``faiss-cpu``) and serves this path alone, so
+        ``diskann`` is a performance upgrade over a working default and never a
+        floor. The raise fires only when BOTH backends are missing.
+        """
         if DISKANN_AVAILABLE:
             self._handle = diskann.load_index(self._path, num_threads=1)
             logger.debug("DiskANN cold index loaded from %s", self._path)
-        elif FAISS_AVAILABLE:
+            return
+        if FAISS_AVAILABLE:
             # Fallback: load HNSW index stored on disk
             self._handle = faiss.read_index(self._path)
             logger.debug("FAISS cold index loaded (DiskANN unavailable) from %s", self._path)
-        else:
-            raise RuntimeError("Neither diskann nor faiss available for cold-tier search")
+            return
+        raise RuntimeError("Neither diskann nor faiss available for cold-tier search")
 
     def search(self, query: List[float], k: int) -> Tuple[List[int], List[float]]:
         if self._handle is None:
