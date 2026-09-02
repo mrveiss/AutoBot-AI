@@ -41,6 +41,7 @@ from api.venv_reconcile import (
     reconcile_component,
     refuse_explicit_list,
 )
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.db_url import assemble_postgres_url
 from autobot_shared.security.redaction import redact_mapping
 from autobot_shared.ssot_config import config
@@ -830,7 +831,15 @@ async def get_sync_status(
     )
 
 
-def _read_last_self_update_verdict():
+# Both self-update entry points fire the same action, and each carried its own
+# near-identical wording. One constant so the two cannot drift apart again.
+_SELF_UPDATE_QUEUED_MESSAGE = (
+    "Self-update queued: Ansible will update all roles on this machine and restart services. "
+    "Check backend health in ~60s."
+)
+
+
+def _read_last_self_update_verdict(not_before: Optional[str] = None):
     """Verdict for the last self-update run; never fails the status endpoint (#12776).
 
     #12959: the log only says whether the *playbook* finished. A run can reach
@@ -838,12 +847,16 @@ def _read_last_self_update_verdict():
     the updater applies only ``backend`` via ``tasks_from: env_only``. So the
     log verdict is combined with a probe of what actually landed on this host —
     otherwise "complete" keeps meaning "the tasks ran", not "the change arrived".
+
+    #15522: *not_before* binds the answer to the run that fired at that time, so
+    a caller asking about run N is told "no result yet" rather than handed run
+    N-1's verdict off a log last written hours earlier.
     """
     from services.playbook_executor import SELF_UPDATE_LOG_PATH
     from services.self_update_log_reader import SelfUpdateVerdict, read_self_update_verdict
 
     try:
-        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
+        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH, not_before)
     except Exception as exc:  # noqa: BLE001 — status must answer even if this cannot
         logger.warning("self-update verdict unavailable: %s", exc)
         verdict = SelfUpdateVerdict(reason=None)
@@ -3444,15 +3457,8 @@ async def sync_node(
         # Use Ansible to update all deployed roles on this machine (#9073).
         # Covers backend, frontend, shared, agent, plugins, workers, etc.
         logger.info("SLM self-update via Ansible: queuing (fire-and-forget)")
-        asyncio.create_task(_ansible_self_update(node_id))
-        return NodeSyncResponse(
-            success=True,
-            message=(
-                "SLM update queued: Ansible will update all roles on this machine and restart services. "
-                "Check backend health in ~60s."
-            ),
-            node_id=node_id,
-        )
+        fire_and_forget(_ansible_self_update(node_id), name=f"ansible-self-update:{node_id}")
+        return NodeSyncResponse(success=True, message=_SELF_UPDATE_QUEUED_MESSAGE, node_id=node_id)
 
     # Normal execution - wait for result with progress updates
     return await _execute_node_playbook(executor, node, node_id, request, progress_callback, db)
@@ -3524,17 +3530,9 @@ async def self_update(
         )
 
     logger.info("Full machine update via Ansible: queuing for node %s", slm_node.node_id)
-    asyncio.create_task(_ansible_self_update(slm_node.node_id))
+    fire_and_forget(_ansible_self_update(slm_node.node_id), name=f"ansible-self-update:{slm_node.node_id}")
 
-    return NodeSyncResponse(
-        success=True,
-        message=(
-            "Full update queued: Ansible will update all roles on this machine"
-            " and restart services. Check backend health in ~60s."
-        ),
-        node_id=slm_node.node_id,
-        job_id=None,
-    )
+    return NodeSyncResponse(success=True, message=_SELF_UPDATE_QUEUED_MESSAGE, node_id=slm_node.node_id, job_id=None)
 
 
 async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) -> None:
@@ -5214,7 +5212,7 @@ async def _run_slm_stage(
 
         _stage_log(stage, f"Firing Ansible self-update for {slm_node.node_id} (fire-and-forget)")
         stage.message = "Ansible SLM self-update queued; service will restart"
-        asyncio.create_task(_ansible_self_update(slm_node.node_id))
+        fire_and_forget(_ansible_self_update(slm_node.node_id), name=f"ansible-self-update:{slm_node.node_id}")
         return True
 
     except Exception as exc:
@@ -5691,7 +5689,7 @@ async def _reconcile_self_update_stage(
     # probe_role_delivery and `/status` already gates on. Resolving this stage
     # on the weaker check would let a degraded self-update be reported as
     # resolved and then deploy to the fleet on the strength of it.
-    verdict = _read_last_self_update_verdict()
+    verdict = _read_last_self_update_verdict(stage.started_at)
     if verdict.degraded:
         # Carry the reason into the stage: the count alone gave an operator
         # nothing to act on.

@@ -7,11 +7,13 @@
 from __future__ import annotations
 
 import asyncio
+import gc
+import logging
 import threading
 
 import pytest
 
-from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.async_compat import fire_and_forget, pending_background_tasks, run_or_schedule
 
 # ---------------------------------------------------------------------------
 # Sync-entry path: no event loop running
@@ -114,3 +116,59 @@ class TestConcurrent:
 
         assert errors == []
         assert sorted(results) == [0, 1, 4, 9, 16, 25, 36, 49]
+
+
+# ---------------------------------------------------------------------------
+# #15522: fire_and_forget must keep the task alive and surface its failures
+# ---------------------------------------------------------------------------
+
+
+class TestFireAndForget:
+    async def test_the_task_is_retained_while_pending_and_released_when_done(self) -> None:
+        release = asyncio.Event()
+
+        async def waits() -> str:
+            await release.wait()
+            return "done"
+
+        task = fire_and_forget(waits(), name="probe-retained")
+        assert task in pending_background_tasks(), "the task was not retained while pending"
+
+        release.set()
+        assert await task == "done"
+        await asyncio.sleep(0)
+        assert task not in pending_background_tasks(), "the done callback never released the reference"
+
+    async def test_the_task_survives_the_caller_dropping_its_reference(self) -> None:
+        """The live #15522 failure: a discarded task is collectable before it runs.
+
+        The caller keeps NO reference here and a collection is forced before the
+        loop gets a chance to run the coroutine, which is exactly the shape that
+        made one self-update firing execute and the next produce nothing at all.
+        """
+        ran: list[str] = []
+
+        async def records() -> None:
+            ran.append("executed")
+
+        fire_and_forget(records(), name="probe-collectable")
+        gc.collect()
+        await asyncio.sleep(0.05)
+        assert ran == ["executed"], "the task was collected before it executed"
+
+    async def test_a_launch_failure_is_logged_rather_than_swallowed(self, caplog) -> None:
+        """Nothing awaits these tasks, so the callback is the only place a raise can surface."""
+
+        async def explodes() -> None:
+            raise RuntimeError("ansible launch failed")
+
+        with caplog.at_level(logging.ERROR):
+            task = fire_and_forget(explodes(), name="probe-failing")
+            with pytest.raises(RuntimeError):
+                await task
+            await asyncio.sleep(0)
+
+        logged = "\n".join(record.getMessage() for record in caplog.records)
+        assert "probe-failing" in logged, f"the failing task was not named in any log record: {logged!r}"
+        assert "ansible launch failed" in logged, f"the exception was swallowed: {logged!r}"
+        assert task not in pending_background_tasks()

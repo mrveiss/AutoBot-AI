@@ -1,4 +1,4 @@
-role: autobot_shared
+role: autobot-shared
 description: "Shared Python utilities — redis_client, ssot_config, tracing, logging (deployed with every backend)"
 version: "1.0.0"
 target_node: null         # Deployed to all nodes that run Python backends

@@ -126,6 +126,13 @@ class ManifestTLS(BaseModel):
     auto_rotate: bool = Field(default=True)
     rotate_days_before: int = Field(default=14, description="Rotate cert N days before expiry")
     reload_command: str = Field(default="systemctl reload nginx")
+    #: #15523: ``reconciler._check_cert_expiry`` has always read ``tls.cert`` for
+    #: the PEM to inspect, but the field was never declared — so every role with
+    #: ``auto_rotate: true`` raised ``'ManifestTLS' object has no attribute
+    #: 'cert'`` on every reconcile cycle and the expiry check never once ran.
+    #: Optional: a role that terminates TLS elsewhere declares no path, and the
+    #: caller's existing ``if not cert_path: continue`` skips it.
+    cert: str | None = Field(default=None, description="Path to the PEM certificate to watch for expiry")
 
 
 class ManifestSystemUpdates(BaseModel):
@@ -217,7 +224,16 @@ class RoleManifest(BaseModel):
     @field_validator("role")
     @classmethod
     def role_must_have_prefix(cls, v: str) -> str:
-        """Validate role follows autobot-<name> convention."""
+        """Validate role follows autobot-<name> convention.
+
+        #15523 settles the spelling once, because it was forked: manifest role
+        names are HYPHENATED (``autobot-shared``) — that is the manifest
+        directory, the Ansible role, and the service account this class derives.
+        Only the Python package keeps the underscore (``autobot_shared/``),
+        because an import name cannot contain a hyphen. Path -> underscore,
+        role -> hyphen; nothing else. ``autobot-shared/manifest.yml`` declared
+        ``role: autobot_shared`` and so failed this validator on every load.
+        """
         if not v.startswith("autobot-"):
             raise ValueError(f"Role name must start with 'autobot-': {v!r}")
         return v
