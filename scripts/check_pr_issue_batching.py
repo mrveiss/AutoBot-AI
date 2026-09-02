@@ -44,6 +44,10 @@ _REFERENCE = re.compile(
     re.IGNORECASE,
 )
 _SPLIT = re.compile(_SEP_RE, re.IGNORECASE)
+# A reference inside a fenced block or inline code is an EXAMPLE, not a link.
+# Found on this gate's own PR, whose worked examples scored as six extra issues:
+# left in, a PR could satisfy the rule with sample text and never link anything.
+_FENCE = re.compile(r"```.*?```|~~~.*?~~~|`[^`\n]*`", re.DOTALL)
 _RATIONALE = re.compile(r"^\s*Single-issue rationale:\s*(.+?)\s*$", re.IGNORECASE | re.MULTILINE)
 
 # Plain stdlib logging, deliberately (#1082): this runs as a bare script in CI,
@@ -61,7 +65,7 @@ RATIONALE_HINT = (
 def referenced_issues(body: str) -> set[str]:
     """Distinct issue identifiers referenced by ``body``."""
     found = set()
-    for run in _REFERENCE.findall(body or ""):
+    for run in _REFERENCE.findall(_FENCE.sub(" ", body or "")):
         for ref in _SPLIT.split(run):
             ref = ref.strip().lstrip("#")
             if ref:

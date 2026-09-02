@@ -65,6 +65,26 @@ class TestReferenceCounting:
         assert referenced_issues(body) == expected
 
 
+class TestCodeIsNotALink:
+    """A reference inside code is an example. Found on this gate's own PR, whose
+    worked examples scored as six extra issues -- left in, a PR could satisfy the
+    batching rule entirely with sample text and never link anything real.
+    """
+
+    def test_a_fenced_block_contributes_nothing(self) -> None:
+        assert referenced_issues("```\nCloses #1, #2\n```\n") == set()
+
+    def test_a_tilde_fence_contributes_nothing(self) -> None:
+        assert referenced_issues("~~~\nCloses #1, #2\n~~~\n") == set()
+
+    def test_inline_code_contributes_nothing(self) -> None:
+        assert referenced_issues("the string `Closes #1` is an example") == set()
+
+    def test_prose_outside_a_fence_still_counts(self) -> None:
+        body = "```\nCloses #1\n```\n\nCloses #15492, #15488\n"
+        assert referenced_issues(body) == {"15492", "15488"}
+
+
 class TestTheRuleItself:
     def test_two_issues_pass(self) -> None:
         ok, message = check(TWO)
