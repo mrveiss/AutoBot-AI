@@ -13,6 +13,7 @@ The governing property: a check that cannot run is a FAILURE, never a verdict.
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -21,6 +22,23 @@ import pytest
 from autobot_shared.paths import scrubbed_git_env
 
 SCRIPT = Path(__file__).resolve().parent / "verify-done.sh"
+GIT = shutil.which("git") or "/usr/bin/git"
+
+# The report lines verbatim, so a test states WHICH verdict was reached rather
+# than that some string is absent (#13986). An absence assertion is satisfied by
+# a report that never reached the branch at all: every case in
+# TestNeverDeletesUnlandedWork ran without the ``gh`` stub, so the CANDIDATE
+# branch was unreachable whatever ``branch_state`` returned, and "CANDIDATE not
+# in stdout" held for a reason unrelated to the guard it claimed to check.
+VERDICT = {
+    "landed": "    landed        : every commit present in base (patch-id AND tree content)",
+    "unlanded": "    landed        : has unlanded commits",
+    "no commits": "    landed        : no commits yet, or only empty claim commits",
+    "unverifiable": "    landed        : CANNOT BE VERIFIED — investigate",
+    "content moved": "    landed        : landed by patch-id, but base has since changed the same paths",
+}
+UNCOMMITTED = "    uncommitted   : "
+CANDIDATE = "    => CANDIDATE for removal"
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
@@ -56,7 +74,41 @@ def repo(tmp_path: Path) -> Path:
     return r
 
 
-def run(repo: Path, *args: str, merged_pr: str | None = None) -> subprocess.CompletedProcess:
+def _install_gh_stub(bindir: Path, merged_pr: str) -> None:
+    """A ``gh`` reporting ``merged_pr`` as the merged PR; empty means none."""
+    stub = bindir / "gh"
+    stub.write_text(f'#!/bin/sh\necho "{merged_pr}"\n', encoding="utf-8")
+    stub.chmod(0o755)
+
+
+def _install_git_shim(bindir: Path, pattern: str, action: str) -> None:
+    """A ``git`` that misbehaves for ONE subcommand and is real for the rest.
+
+    The script's governing property is "a check that cannot run is a FAILURE,
+    never a verdict" (#13879). Nothing exercised that: every status check
+    (`|| return 3`) sat on a git call the suite never made fail, so removing the
+    check changed no test (#13986). This makes the failure reachable.
+    """
+    # A space ends the pattern word in `case`, and quoting it would make the
+    # globs literal, so spaces are escaped one at a time. Without this the shim
+    # is a syntax error, every git call fails, and the script exits at the base
+    # ref check — which looks exactly like the guard under test firing.
+    shim = bindir / "git"
+    shim.write_text(
+        "#!/bin/sh\n"
+        f'case "$*" in\n  {pattern.replace(" ", chr(92) + " ")}) {action} ;;\nesac\n'
+        f'exec {GIT} "$@"\n',
+        encoding="utf-8",
+    )
+    shim.chmod(0o755)
+
+
+def run(
+    repo: Path,
+    *args: str,
+    merged_pr: str | None = None,
+    git_shim: tuple[str, str] | None = None,
+) -> subprocess.CompletedProcess:
     """Run the audit.
 
     ``merged_pr`` installs a ``gh`` stub reporting that PR number as merged.
@@ -68,13 +120,14 @@ def run(repo: Path, *args: str, merged_pr: str | None = None) -> subprocess.Comp
     coverage at all.
     """
     env = {"PATH": "/usr/bin:/bin", "HOME": str(repo)}
-    if merged_pr is not None:
-        bindir = repo / ".stub-bin"
+    bindir = repo / ".stub-bin"
+    if merged_pr is not None or git_shim is not None:
         bindir.mkdir(exist_ok=True)
-        stub = bindir / "gh"
-        stub.write_text(f'#!/bin/sh\necho "{merged_pr}"\n', encoding="utf-8")
-        stub.chmod(0o755)
         env["PATH"] = f"{bindir}:{env['PATH']}"
+    if merged_pr is not None:
+        _install_gh_stub(bindir, merged_pr)
+    if git_shim is not None:
+        _install_git_shim(bindir, *git_shim)
     return subprocess.run(
         ["bash", str(SCRIPT), "--leftovers-only", *args],
         cwd=repo, capture_output=True, text=True, env=env,
@@ -104,9 +157,9 @@ class TestNeverDeletesUnlandedWork:
     def test_zero_commit_worktree_is_not_landed(self, repo: Path) -> None:
         """Trigger (b): a session that just started looked finished."""
         add_worktree(repo, "wt-fresh", [])
-        res = run(repo, "--base", "base")
+        res = run(repo, "--base", "base", merged_pr="4301")
+        assert VERDICT["no commits"] in res.stdout, res.stdout
         assert "CANDIDATE" not in res.stdout, res.stdout
-        assert "no commits" in res.stdout.lower()
 
     def test_tip_subject_collision_does_not_mark_unlanded_work_landed(self, repo: Path) -> None:
         """Trigger (c): the tip's subject also existed in base, so the OR fired."""
@@ -120,7 +173,8 @@ class TestNeverDeletesUnlandedWork:
         )
         # The SAME subject lands on base via a different patch.
         _commit(repo, "other.txt", "unrelated\n", "docs: update the changelog (#6)")
-        res = run(repo, "--base", "base")
+        res = run(repo, "--base", "base", merged_pr="4303")
+        assert VERDICT["unlanded"] in res.stdout, res.stdout
         assert "CANDIDATE" not in res.stdout, (
             "three unlanded commits must never be reported landed because the "
             f"tip subject collides\n{res.stdout}"
@@ -164,7 +218,8 @@ class TestNeverDeletesUnlandedWork:
         _git(repo, "worktree", "add", "-q", str(wt), "-b", "issue-9999", "base")
         _git(wt, "commit", "-q", "--allow-empty", "-m", "chore: claim worktree issue-9999")
         _git(repo, "commit", "-q", "--allow-empty", "-m", "chore(deps): bump npm_and_yarn (#13503)")
-        res = run(repo, "--base", "base")
+        res = run(repo, "--base", "base", merged_pr="4302")
+        assert VERDICT["no commits"] in res.stdout, res.stdout
         assert "CANDIDATE" not in res.stdout, res.stdout
         assert wt.exists()
 
@@ -175,9 +230,9 @@ class TestNeverDeletesUnlandedWork:
         _git(wt, "commit", "-q", "--allow-empty", "-m", "chore: claim worktree issue-8888")
         _commit(wt, "real.txt", "real work\n", "fix(z): genuine work (#9)")
         _git(repo, "commit", "-q", "--allow-empty", "-m", "chore: an empty commit on base")
-        res = run(repo, "--base", "base")
+        res = run(repo, "--base", "base", merged_pr="4304")
+        assert VERDICT["unlanded"] in res.stdout, res.stdout
         assert "CANDIDATE" not in res.stdout, res.stdout
-        assert "unlanded commits" in res.stdout
 
     def test_merge_unique_content_is_never_reported_landed(self, repo: Path) -> None:
         """`git cherry` OMITS merge commits, so merge-only content is unjudgeable.
