@@ -35,10 +35,10 @@ if __name__ == "__main__":
     print("=" * 70)
     print("ERROR: This entry point is deprecated.")
     print()
-    print("The production backend has moved to: autobot-backend/main.py")
+    print("The production backend has moved to: autobot-backend/main.py")  # noqa: print
     print()
     print("To start the backend, use one of:")
-    print("  cd autobot-backend && uvicorn main:app --host 0.0.0.0 --port 8001")
+    print("  cd autobot-backend && uvicorn main:app --host 0.0.0.0 --port 8001")  # noqa: print
     print("  SLM GUI: https://10.0.0.9/orchestration")
     print("  CLI: scripts/start-services.sh start")
     print()
