@@ -26,7 +26,7 @@ Tests validated in Phase 2a migrations:
 
 When reviving a class: remove its per-class skip + add behavior coverage
 elsewhere first, OR convert the class to exercise the endpoint via TestClient.
-Do not restore the file-level skip without updating #5359.
+Do not restore the file-level skip without updating #5359 and #15173.
 """
 
 import inspect
@@ -36,13 +36,13 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-# Skip the whole module — see #5359 for the audit plan.
-# Rationale: 2148 inspect.getsource() assertions silently rot on refactors
-# (evidence: #5338, #5336). No behavior-test coverage delta if removed;
-# preserved here for audit rather than deleted.
+# Skipped at collection ON PURPOSE — #15173, which lifts it one class at a time (TestClient behaviour coverage,
+# or deletion). Not silently uncollected: `autobot-backend` is in BACKEND_RUN in repo_tests/collection_coverage_test.py.
 pytestmark = pytest.mark.skip(
-    reason="Source-inspection assertions frozen pending #5359 audit "
-    "(2148 substring asserts that rot silently on refactors)"
+    reason="#15173 — PARKED, not passing. Re-measured, not inherited: 164 classes, 1017 assert statements over "
+    "2143 inspect.getsource() call sites, 710 of those asserts substring `in` checks, covering the "
+    "@with_error_handling Phase 2a migration — incl. the 14 batch_114 chat-knowledge asserts that gave #15160 no "
+    "signal. Source text, not behaviour, so they rot on refactors (#5338, #5336); #5359 Option C froze the file."
 )
 
 
