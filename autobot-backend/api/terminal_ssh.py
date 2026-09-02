@@ -64,11 +64,12 @@ class SSHTerminalWebSocket:
         """Start SSH terminal session — returns deprecation message."""
         self.active = False
         await self._send_error(
-            "SSH terminal connections to infrastructure hosts have been moved to SLM.\n"
-            "Please use slm-admin \u2192 Tools \u2192 Terminal to connect to infrastructure hosts,\n"
-            "or call the SLM API directly at: /api/terminal/ssh/{host_id}\n\n"
-            "This is part of the layer separation (#729) — infrastructure operations\n"
-            "are now managed exclusively by slm-server."
+            "SSH terminal connections to infrastructure hosts were removed from the\n"
+            "backend by the #729 layer separation, and no replacement has been built\n"
+            "on either side yet — this capability is currently unavailable.\n\n"
+            "#15236: this message used to name an SLM route that does not exist, so\n"
+            "anyone debugging a dead terminal was sent somewhere that 404s. Which\n"
+            "side owns SSH terminal sessions is an open decision — see #15230."
         )
         return False
 
@@ -91,24 +92,27 @@ class SSHTerminalWebSocket:
                 "type": "error",
                 "content": content,
                 "timestamp": time.time(),
-                "redirect": {
-                    "type": "slm",
-                    "message": "Use SLM for infrastructure SSH connections",
-                    "url": "/api/terminal/ssh/{host_id}",
+                # #15236: no "url" here. This carried "/api/terminal/ssh/{host_id}",
+                # a route the SLM never implemented, so the payload handed the
+                # client a working-looking target that 404s. Until #15230 decides
+                # which side owns SSH terminal sessions there is nowhere to point.
+                "unavailable": {
+                    "reason": "backend SSH removed by #729; no replacement built",
+                    "tracking_issue": 15230,
                 },
             }
         )
 
     async def send_to_terminal(self, text: str) -> None:
         """Send text input — not supported, redirects to SLM."""
-        await self._send_error("SSH terminal not available. Use SLM for infrastructure connections.")
+        await self._send_error("SSH terminal is not available on any side — see #15230.")
 
     async def send_output(self, content: str) -> None:
         """Send terminal output — stub."""
 
     async def handle_message(self, message: dict) -> None:
         """Handle incoming WebSocket message — returns deprecation notice."""
-        await self._send_error("SSH terminal moved to SLM server (#729)")
+        await self._send_error("SSH terminal was removed by #729 and not rebuilt — see #15230.")
 
 
 class _SSHTerminalManager:
