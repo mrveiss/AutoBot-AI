@@ -18,9 +18,14 @@
 #   * Scheduled, not per-PR. These are the tests that were excluded because they
 #     are slow or need external services; putting them in the PR gate is the
 #     change #10691 owns and is owner-gated.
-#   * Non-blocking by construction — it is not a `pull_request` workflow, so it
-#     is not a required context and cannot block a merge. It still FAILS (red in
-#     the Actions tab) when a test fails.
+#   * Non-blocking by construction. It DOES carry a `pull_request` trigger, but
+#     one filtered to `paths: ['.github/workflows/marker-tests.yml']`, so it runs
+#     only when this file itself changes and is a required context on no other
+#     PR. #15183: this header used to read "it is not a `pull_request` workflow",
+#     which the `on:` block contradicts and which the note above the trigger
+#     already stated correctly — a reader who checked the header and stopped got
+#     the wrong answer about why it cannot block. It still FAILS (red in the
+#     Actions tab) when a test fails.
 #
 #     A red run here is a DEFECT TO TRIAGE, never an accepted steady state. A
 #     workflow that is expected to be red is a workflow nobody reads — that is
