@@ -874,8 +874,8 @@ async def ssh_terminal_websocket(
     """
     DEPRECATED: SSH terminal connections to infrastructure hosts.
 
-    Issue #729/#620: infra SSH now lives in slm-server; backward-compat
-    stub -- use slm-admin -> Tools -> Terminal, or /api/terminal/ssh/{host_id}.
+    Issue #729/#620: infra SSH left the backend. #15236: this named
+    /api/terminal/ssh/{host_id} on the SLM; it was never built -- see #15230.
 
     Issue #14991: any caller who knew or guessed a host_id reached the inert
     SSH stub with zero authentication. Fixed with two gates before accept():
@@ -965,13 +965,13 @@ async def terminal_info(
         "endpoints": {
             "sessions": "/api/terminal/sessions",
             "websocket": "/api/terminal/ws/{session_id}",
-            # Issue #729: SSH to infrastructure hosts moved to slm-server
-            "websocket_ssh": "/api/terminal/ws/ssh/{host_id} (deprecated - use SLM)",
+            # #729 removed backend SSH; #15236: "use SLM" named a route the SLM never built.
+            "websocket_ssh": "/api/terminal/ws/ssh/{host_id} (inert stub -- no SSH backend, see #15230)",
         },
         "security_levels": [level.value for level in SecurityLevel],
-        # Issue #729: Layer separation notice
-        "notice": "SSH connections to infrastructure hosts have been moved to slm-server. "
-        "Use slm-admin or the SLM API for infrastructure terminal access.",
+        # #729 layer separation. #15236: the old wording promised an SLM route that does not exist.
+        "notice": "SSH to infrastructure hosts was removed from the backend by #729 and no replacement "
+        "was built on the SLM. Infrastructure terminal access is unavailable; #15230 tracks who owns it.",
     }
 
 
