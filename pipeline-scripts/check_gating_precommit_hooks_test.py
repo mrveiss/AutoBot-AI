@@ -151,3 +151,26 @@ def test_a_hook_reporting_both_statuses_resolves_to_the_worse_one(gate, tmp_path
     """Ambiguity must never resolve in the green direction."""
     output = _output("Passed").replace("black", _GUARD + "." * 10 + "Failed\nblack", 1)
     assert _run(gate, tmp_path, output) == 1
+
+
+def test_the_workflow_runs_one_hook_id_per_precommit_invocation():
+    """`pre-commit run` accepts at most ONE hook id.
+
+    #14895: the step interpolated the whole id list into a single
+    ``pre-commit run --all-files ${ids}``. That worked only while
+    ``GATING_HOOK_IDS`` held one entry; the second turned it into a usage
+    error, which produced no result line, which the gate then correctly
+    reported as "no hook ran". The break was latent from the day the list
+    was made plural.
+    """
+    workflow = (_REPO_ROOT / ".github" / "workflows" / "enforce-precommit.yml").read_text(
+        encoding="utf-8"
+    )
+    assert 'pre-commit run --all-files "${id}"' in workflow, (
+        "the gating step must run ONE hook id per invocation -- `pre-commit run` "
+        "rejects a second id with a usage error and writes no result line"
+    )
+    assert "pre-commit run --all-files ${ids}" not in workflow, (
+        "the gating step interpolates the whole id list into one `pre-commit run`; "
+        "that is a usage error for any list longer than one"
+    )
