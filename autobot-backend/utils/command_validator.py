@@ -25,7 +25,18 @@ from typing import Dict, List, Pattern
 from autobot_shared.logging_manager import get_logger
 from security.command_patterns import _normalize_for_matching, check_dangerous_patterns
 
-# Issue #380: Pre-compiled dangerous patterns for command validation
+# Issue #380: Pre-compiled dangerous patterns for command validation.
+#
+# #14042 - why this is not folded into security/command_patterns.py: the two
+# sets are near-disjoint, not one a subset of the other. Of the 20 patterns
+# here, exactly 1 appears verbatim in the canonical 21. This list is shell-shape
+# oriented (chained-delete forms, backtick and dollar-paren substitution, writes
+# into system directories) - the ways a *composed* command line smuggles a
+# destructive call past a naive check. The canonical set is target-oriented
+# (root-directed recursive deletes, fork bombs, raw device writes). Dropping
+# either loses coverage, so `_check_dangerous_patterns` runs BOTH: this list
+# after `_normalize_for_matching`, then `check_dangerous_patterns`. Merging the
+# two is behaviour-affecting and is tracked separately.
 _DANGEROUS_PATTERNS: List[Pattern] = [
     re.compile(pattern, re.IGNORECASE)
     for pattern in [
