@@ -36,13 +36,13 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-# Skipped at collection ON PURPOSE — #15173. Not silently uncollected: `autobot-backend` is in BACKEND_RUN
-# (repo_tests/collection_coverage_test.py), so pytest collects this module and reports 164 skips, not nothing.
+# Skipped at collection ON PURPOSE — #15173, which lifts it one class at a time (TestClient behaviour coverage,
+# or deletion). Not silently uncollected: `autobot-backend` is in BACKEND_RUN in repo_tests/collection_coverage_test.py.
 pytestmark = pytest.mark.skip(
-    reason="#15173 — PARKED, not passing: 164 classes / 2148 inspect.getsource() substring assertions over the "
-    "@with_error_handling Phase 2a migration, incl. the 14 batch_114 chat-knowledge asserts that gave #15160 no "
-    "signal. They match source text, not behaviour, so they rot silently on refactors (#5338, #5336) and #5359 "
-    "Option C froze the file. The skip lifts one class at a time — TestClient behaviour coverage, or deletion."
+    reason="#15173 — PARKED, not passing. Re-measured, not inherited: 164 classes, 1017 assert statements over "
+    "2143 inspect.getsource() call sites, 710 of those asserts substring `in` checks, covering the "
+    "@with_error_handling Phase 2a migration — incl. the 14 batch_114 chat-knowledge asserts that gave #15160 no "
+    "signal. Source text, not behaviour, so they rot on refactors (#5338, #5336); #5359 Option C froze the file."
 )
 
 

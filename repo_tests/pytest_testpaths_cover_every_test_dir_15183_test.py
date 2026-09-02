@@ -107,10 +107,10 @@ KNOWN_UNCOVERED: dict[str, str] = {
         "never-executed tests to the PR gate as a side effect of writing a guard "
         "-- ~30 ad-hoc scripts under shared/scripts/analysis/, and npu modules "
         "importing `openvino`, which requirements-ci.txt does not carry. That is "
-        "#15476's decision, not this file's. It is no longer the INTERNALERROR "
-        "pytest.ini lines 106-110 still names: #14917 put "
-        "shared/scripts/test_alertmanager.py's `sys.exit` behind a `main()` "
-        "guard, so the import is inert and that blocker is spent."
+        "#15476's decision, not this file's. It is NOT the INTERNALERROR that "
+        "reason used to name: #14917 put shared/scripts/test_alertmanager.py's "
+        "`sys.exit` behind a `main()` guard, so the import is inert and that "
+        "blocker is spent -- pytest.ini lines 106-110 now record it as spent too."
     ),
 }
 
