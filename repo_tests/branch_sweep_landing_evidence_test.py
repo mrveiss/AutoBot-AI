@@ -36,6 +36,8 @@ from pathlib import Path
 
 import yaml
 
+from autobot_shared.paths import scrubbed_git_env
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _WORKFLOWS = _REPO_ROOT / ".github/workflows"
 _GUARD_LIB = _REPO_ROOT / "scripts/lib/branch-guards.sh"
@@ -282,14 +284,22 @@ def _run_evidence(repo: Path, base: str, ref: str) -> str:
     """Call `branch_landing_evidence` inside a real git repo."""
     script = f'source "{_GUARD_LIB}"\nbranch_landing_evidence "{base}" "{ref}" "{ref}"\n'
     return subprocess.run(
-        ["bash", "-c", script], cwd=repo, capture_output=True, text=True
+        ["bash", "-c", script],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env=scrubbed_git_env(),
     ).stdout.strip()
 
 
 def _repo_with_branch(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     repo.mkdir()
-    run = lambda *a: subprocess.run(a, cwd=repo, capture_output=True, check=True)  # noqa: E731
+    # #15246: scrubbed -- an inherited GIT_DIR (the pre-push hook exports one)
+    # would init the real repo instead of tmp_path.
+    run = lambda *a: subprocess.run(  # noqa: E731
+        a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env()
+    )
     run("git", "init", "-q", ".")
     run("git", "config", "user.email", "t@t")
     run("git", "config", "user.name", "t")
@@ -329,7 +339,11 @@ def test_a_branch_whose_new_file_landed_and_then_changed_is_not_reported(tmp_pat
     not decay as the file evolves.
     """
     repo = _repo_with_branch(tmp_path)
-    run = lambda *a: subprocess.run(a, cwd=repo, capture_output=True, check=True)  # noqa: E731
+    # #15246: scrubbed -- an inherited GIT_DIR (the pre-push hook exports one)
+    # would init the real repo instead of tmp_path.
+    run = lambda *a: subprocess.run(  # noqa: E731
+        a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env()
+    )
     # The file lands on trunk, then diverges completely from the branch's copy.
     (repo / "src" / "introduced.py").write_text("landed, then rewritten entirely\n", encoding="utf-8")
     run("git", "add", "-A")
@@ -349,7 +363,11 @@ def test_a_modified_file_alone_is_not_landing_evidence(tmp_path) -> None:
     almost every branch landed.
     """
     repo = _repo_with_branch(tmp_path)
-    run = lambda *a: subprocess.run(a, cwd=repo, capture_output=True, check=True)  # noqa: E731
+    # #15246: scrubbed -- an inherited GIT_DIR (the pre-push hook exports one)
+    # would init the real repo instead of tmp_path.
+    run = lambda *a: subprocess.run(  # noqa: E731
+        a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env()
+    )
     run("git", "checkout", "-qb", "edit-only", "trunk")
     (repo / "src" / "existing.py").write_text("original\nan unlanded edit\n", encoding="utf-8")
     run("git", "add", "-A")
