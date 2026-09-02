@@ -7018,7 +7018,7 @@ export interface components {
         APIScopesResponse: {
             /** Scopes */
             scopes: {
-                [key: string]: unknown;
+                [key: string]: string;
             };
         } & {
             [key: string]: unknown;
@@ -7036,6 +7036,22 @@ export interface components {
             resource_id?: string | null;
             /** Success */
             success: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ActiveProviderResponse
+         * @description One entry of the login page's active-provider list.
+         */
+        ActiveProviderResponse: {
+            /** Id */
+            id: string;
+            /** Is Social */
+            is_social: boolean;
+            /** Name */
+            name: string;
+            /** Provider Type */
+            provider_type: string;
         } & {
             [key: string]: unknown;
         };
@@ -8438,6 +8454,18 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * DependentRolesResponse
+         * @description Secret key to dependent-role mapping used by the apply-secrets action.
+         */
+        DependentRolesResponse: {
+            /** Mapping */
+            mapping: {
+                [key: string]: string[];
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * DeploymentCreate
          * @description Deployment request.
          */
@@ -9415,6 +9443,18 @@ export interface components {
         MFAVerifyRequest: {
             /** Code */
             code: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * MFAVerifySetupResponse
+         * @description Outcome of enabling MFA from the initial TOTP code.
+         */
+        MFAVerifySetupResponse: {
+            /** Message */
+            message: string;
+            /** Success */
+            success: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -14677,9 +14717,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TokenResponse"];
                 };
             };
             /** @description Validation Error */
@@ -14708,9 +14746,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["ActiveProviderResponse"][];
                 };
             };
         };
@@ -18637,9 +18673,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TokenResponse"];
                 };
             };
             /** @description Validation Error */
@@ -18672,9 +18706,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MFAVerifySetupResponse"];
                 };
             };
             /** @description Validation Error */
@@ -22745,9 +22777,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DependentRolesResponse"];
                 };
             };
         };

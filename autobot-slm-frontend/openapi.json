@@ -247,7 +247,9 @@
         "description": "Response containing available API scopes.",
         "properties": {
           "scopes": {
-            "additionalProperties": true,
+            "additionalProperties": {
+              "type": "string"
+            },
             "title": "Scopes",
             "type": "object"
           }
@@ -291,6 +293,35 @@
           "message"
         ],
         "title": "ActionResponse",
+        "type": "object"
+      },
+      "ActiveProviderResponse": {
+        "description": "One entry of the login page's active-provider list.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_social": {
+            "title": "Is Social",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider_type": {
+            "title": "Provider Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "provider_type",
+          "is_social"
+        ],
+        "title": "ActiveProviderResponse",
         "type": "object"
       },
       "AgentCreateRequest": {
@@ -3400,6 +3431,26 @@
         "title": "DecommissionRoleInfo",
         "type": "object"
       },
+      "DependentRolesResponse": {
+        "description": "Secret key to dependent-role mapping used by the apply-secrets action.",
+        "properties": {
+          "mapping": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Mapping",
+            "type": "object"
+          }
+        },
+        "required": [
+          "mapping"
+        ],
+        "title": "DependentRolesResponse",
+        "type": "object"
+      },
       "DeploymentCreate": {
         "description": "Deployment request.",
         "properties": {
@@ -5223,6 +5274,25 @@
           "code"
         ],
         "title": "MFAVerifyRequest",
+        "type": "object"
+      },
+      "MFAVerifySetupResponse": {
+        "description": "Outcome of enabling MFA from the initial TOTP code.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "MFAVerifySetupResponse",
         "type": "object"
       },
       "MaintenanceWindowCreate": {
@@ -15734,9 +15804,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Ldap Login Api Auth Sso Ldap Login Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TokenResponse"
                 }
               }
             },
@@ -15769,8 +15837,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "additionalProperties": true,
-                    "type": "object"
+                    "$ref": "#/components/schemas/ActiveProviderResponse"
                   },
                   "title": "Response List Active Providers Api Auth Sso Providers Get",
                   "type": "array"
@@ -22374,9 +22441,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Verify Mfa Login Api Mfa Verify Login Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TokenResponse"
                 }
               }
             },
@@ -22423,9 +22488,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Verify Mfa Setup Api Mfa Verify Setup Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/MFAVerifySetupResponse"
                 }
               }
             },
@@ -29809,9 +29872,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Dependent Roles Mapping Api Secrets Dependent Roles Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DependentRolesResponse"
                 }
               }
             },

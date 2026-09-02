@@ -777,7 +777,7 @@ def test_ldap_login_succeeds_even_when_audit_db_fails():
         asyncio.run(_call())
 
     result = result_holder["result"]
-    assert "access_token" in result
+    assert result is fake_token  # #13139: was `"access_token" in result`, the dropped-`token` dict
 
 
 # ---------------------------------------------------------------------------
