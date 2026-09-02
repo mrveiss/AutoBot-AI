@@ -43,7 +43,7 @@ class InputValidationError(Exception):
 class WebResearchInputValidator:
     """Validates and sanitizes inputs for web research operations"""
 
-    # Dangerous patterns that could indicate malicious intent
+    # XSS/SQLi shapes for web-research text, not shell commands: #14042 for why this is not command_patterns.
     DANGEROUS_PATTERNS = [
         # Script injection patterns
         r"<script[^>]*>",

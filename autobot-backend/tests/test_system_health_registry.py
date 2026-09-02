@@ -542,3 +542,27 @@ def test_register_redis_probe_one_liner_with_callback():
     component = next(c for c in result.components if c.name == "toy_redis_cb")
     assert component.status == "ok"
     assert component.data == {"redis_connected": True, "service": "test"}
+
+
+def test_a_probe_error_detail_carries_no_exception_message():
+    """#14126: `GET /api/system/health` is public (api/system.py:450).
+
+    #10460 interpolated `str(exc)` into `detail` "so a down status is
+    actionable", on the stated premise that the endpoint was admin-only. It is
+    not, so any exception message a registered probe raised was reachable
+    unauthenticated. The type name stays - it is what every individual probe
+    already emits - and the message goes to the log instead.
+    """
+
+    @register_health_probe("leaky")
+    async def _leaky(_request=None):
+        raise RuntimeError("connect failed: postgres://svc:hunter2@10.0.0.5/db")
+
+    result = asyncio.run(collect_system_health())
+    detail = result.components[0].detail or ""
+
+    assert result.components[0].status == "down"
+    assert "RuntimeError" in detail, "the type name is what makes it actionable"
+    assert "hunter2" not in detail
+    assert "10.0.0.5" not in detail
+    assert "postgres://" not in detail

@@ -122,7 +122,7 @@ INJECTION_PATTERNS = (
     r"--force",
 )
 
-# Dangerous command patterns (regex patterns)
+# Dangerous command patterns. #14042: 0 of 17 shared with the canonical set; consolidation tracked in #15459.
 DANGEROUS_PATTERNS = (
     # File system destruction
     r"rm\s+-r",
