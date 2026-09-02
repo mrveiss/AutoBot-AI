@@ -35,11 +35,12 @@ test exists to remove.
 from __future__ import annotations
 
 import ast
-import re
 import sys
 from pathlib import Path
 
 import pytest
+
+from repo_tests.declared_distributions import SKIP_PARTS, declared_distributions
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPTS = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts"
@@ -47,7 +48,7 @@ _SCRIPTS = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts"
 # checked out under it, and a requirements file belonging to another branch would
 # widen _DECLARED below — an import this repo never declares would then read as
 # declared, which is the under-reporting direction.
-_SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", ".claude", "venv", ".venv"}
+_SKIP_PARTS = SKIP_PARTS
 
 # Roots an import may legitimately resolve against: the repo root (installed
 # first-party packages such as autobot_shared), the two backends, and the
@@ -103,35 +104,7 @@ _DIST_ALIASES = {
 _KNOWN_BROKEN: dict[tuple[str, str], str] = {}
 
 
-def _declared_distributions() -> tuple[set[str], int]:
-    """Every distribution named by a requirements file or pyproject in the repo."""
-    names: set[str] = set()
-    files = 0
-    candidates = list(_REPO_ROOT.rglob("requirements*.txt")) + list(
-        _REPO_ROOT.rglob("pyproject.toml")
-    )
-    for path in candidates:
-        # Relative parts, never the absolute path — see the note in
-        # first_party_imports_resolve_test.py about a checkout that itself sits
-        # under a directory named `venv` or `.worktrees`.
-        if any(part in _SKIP_PARTS for part in path.relative_to(_REPO_ROOT).parts):
-            continue
-        files += 1
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        for line in text.splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            match = re.match(r'^["\']?([A-Za-z0-9][A-Za-z0-9._-]*)', line)
-            if match:
-                names.add(match.group(1).lower().replace("-", "_"))
-    return names, files
-
-
-_DECLARED, _REQUIREMENTS_FILES = _declared_distributions()
+_DECLARED, _REQUIREMENTS_FILES = declared_distributions(_REPO_ROOT)
 _STDLIB = set(sys.stdlib_module_names) | {"__future__"}
 
 
@@ -234,9 +207,10 @@ def test_the_sweep_actually_reached_the_tree() -> None:
     """
     _, scanned = _unresolvable()
     assert scanned > 200, f"only walked {scanned} python files — the skip list is eating the tree"
-    assert _REQUIREMENTS_FILES >= 15, (
-        f"only read {_REQUIREMENTS_FILES} requirements/pyproject files — the "
-        "declaration oracle has gone blind and would report false findings"
+    assert _REQUIREMENTS_FILES >= 30, (
+        f"only read {_REQUIREMENTS_FILES} requirements/pyproject files, floor 30 "
+        f"(36 measured after the #15518 widening) — the declaration oracle has "
+        "gone blind and would report false findings"
     )
     assert len(_DECLARED) > 100, f"only {len(_DECLARED)} declared distributions found"
     for root in _ROOTS:

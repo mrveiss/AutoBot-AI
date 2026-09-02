@@ -51,6 +51,8 @@ from pathlib import Path
 
 import pytest
 
+from repo_tests.declared_distributions import SKIP_PARTS, declared_distributions
+
 from autobot_shared.paths import scrubbed_git_env
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -85,7 +87,7 @@ _DIST_ALIASES = {
     "pkg_resources": "setuptools",
 }
 
-_SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", ".claude", "venv", ".venv"}
+_SKIP_PARTS = SKIP_PARTS
 
 # Both spellings, and both block shapes. A single-line `python3 -c "import x"`
 # hides mid-line behind the shell quoting, so a line-anchored pattern slides
@@ -113,34 +115,7 @@ def _tracked_shell_scripts() -> list[Path]:
     return [_REPO_ROOT / line for line in out.splitlines() if line]
 
 
-def _declared_distributions() -> tuple[set[str], int]:
-    """Every distribution named by a requirements file or pyproject in this checkout."""
-    names: set[str] = set()
-    files = 0
-    candidates = sorted(_REPO_ROOT.rglob("requirements*.txt")) + sorted(_REPO_ROOT.rglob("pyproject.toml"))
-    for path in candidates:
-        # Relative parts, never the absolute path: a checkout that itself lives
-        # under a directory named `venv` would otherwise match every file, skip
-        # everything, and report an empty declaration set — which would turn
-        # every third-party import into a finding.
-        if any(part in _SKIP_PARTS for part in path.relative_to(_REPO_ROOT).parts):
-            continue
-        files += 1
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        for line in text.splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            match = re.match(r'^["\']?([A-Za-z0-9][A-Za-z0-9._-]*)', line)
-            if match:
-                names.add(match.group(1).lower().replace("-", "_"))
-    return names, files
-
-
-_DECLARED, _REQUIREMENTS_FILES = _declared_distributions()
+_DECLARED, _REQUIREMENTS_FILES = declared_distributions(_REPO_ROOT)
 
 
 def _is_declared(top: str) -> bool:
@@ -256,9 +231,10 @@ def test_the_sweep_reached_the_repository() -> None:
         "no shell script embeds a non-stdlib import any more, or the import "
         "pattern stopped matching — both make the check below vacuous"
     )
-    assert _REQUIREMENTS_FILES >= 15, (
-        f"only read {_REQUIREMENTS_FILES} requirements/pyproject files — the "
-        "declaration oracle has gone blind and would report false findings"
+    assert _REQUIREMENTS_FILES >= 30, (
+        f"only read {_REQUIREMENTS_FILES} requirements/pyproject files, floor 30 "
+        f"(36 measured after the #15518 widening) — the declaration oracle has "
+        "gone blind and would report false findings"
     )
     assert len(_DECLARED) > 100, f"only {len(_DECLARED)} declared distributions found"
     for root in _ROOTS:
