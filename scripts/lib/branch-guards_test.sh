@@ -267,7 +267,9 @@ check "and names the merge-base gap"   "no content could be measured (no-merge-b
 # base must still be reported -- that is the only reason the sweep exists.
 ev=$(cd "$TESTREPO" && branch_landing_evidence base 'truly-stranded')
 check "stranded branch stays reported" "unproven" "${ev%%|*}"
-check "and carries its numbers"        "0/2 added lines present in base, 0 path(s) gone" "${ev#*|}"
+# #15036: the evidence line now also carries the added-file count, because a
+# line score alone cannot tell "landed and then evolved" from "never landed".
+check "and carries its numbers"        "0/2 added lines present in base, 0 path(s) gone, 0/0 new file(s) present" "${ev#*|}"
 
 # A high score is evidence, never a verdict: it must NOT suppress the report.
 ev=$(cd "$TESTREPO" && branch_landing_evidence base 'already-there')
