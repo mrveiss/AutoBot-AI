@@ -14,7 +14,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import type { ActiveProvider, useSsoApi } from '@/composables/useSsoApi'
+import type { ActiveProviderResponse, useSsoApi } from '@/composables/useSsoApi'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -26,7 +26,7 @@ let ssoApi: ReturnType<typeof useSsoApi> | null = null
 const username = ref('')
 const password = ref('')
 const showPassword = ref(false)
-const ssoProviders = ref<ActiveProvider[]>([])
+const ssoProviders = ref<ActiveProviderResponse[]>([])
 const ssoLoading = ref(false)
 const ssoError = ref<string | null>(null)
 const mfaCode = ref('')
@@ -50,7 +50,7 @@ function cancelMFA(): void {
   mfaCode.value = ''
 }
 
-async function handleSSOLogin(provider: ActiveProvider): Promise<void> {
+async function handleSSOLogin(provider: ActiveProviderResponse): Promise<void> {
   if (!ssoApi) return
   ssoLoading.value = true
   ssoError.value = null
