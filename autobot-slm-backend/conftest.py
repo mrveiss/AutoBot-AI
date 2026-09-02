@@ -164,6 +164,11 @@ for _m in [
     "models",
     "models.database",
     "models.schemas",
+    # #13139: schemas_secrets exists because models/schemas.py sits on a frozen
+    # size ceiling and could not grow. The stub list is hand-maintained, so a new
+    # submodule is invisible until named here -- the parent stub has no __path__,
+    # so an unnamed submodule fails with "'models' is not a package".
+    "models.schemas_secrets",
 ]:
     _stub(_m)
 
