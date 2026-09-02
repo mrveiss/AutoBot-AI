@@ -48,10 +48,20 @@ SCOPE, AND WHAT IS DELIBERATELY NOT SCOPED
   needs no allowlist entry. The name ``subprocess`` is bound to is resolved
   from the file's own imports, so ``import subprocess as sp`` and
   ``from subprocess import run`` are both caught.
-* **``git ls-files`` is not gated**, though the same inherited ``GIT_DIR``
-  misleads it. Every current call site passes ``cwd=<root>`` from a root this
-  hook already protects, so gating it would flag correct code; the sites fixed
-  in #15176 pass ``env=scrubbed_git_env()`` there anyway.
+* **``git ls-files`` IS gated too, since #14896.** It was left out when this
+  hook landed on the reasoning that every call site passed ``cwd=<root>`` from
+  a root the hook already protected. That reasoning was wrong: ``cwd=`` loses
+  to an inherited ``GIT_DIR``, which names a git directory outright, so a
+  correct ``cwd`` enumerates the *other* checkout's index and answers without
+  erroring. #14896 found unscrubbed ``ls-files`` call sites still standing on
+  that argument, so the subcommand joins :data:`TOPLEVEL_FLAG` in
+  :data:`GATED_TOKENS`.
+* **Shell ``git ls-files`` is NOT gated.** :func:`scan_shell` matches
+  ``rev-parse`` + ``--show-toplevel`` as a pair; ``ls-files`` has no such
+  second token, and shell has no scrub helper for it the way
+  ``scripts/lib/git-root.sh`` provides one for the root. Three ``.sh`` call
+  sites carry the defect and are tracked separately rather than half-fixed
+  behind a text match here.
 
 KNOWN GAPS — WHAT THIS DOES **NOT** CATCH
 -----------------------------------------
@@ -72,7 +82,9 @@ by tests rather than half-implemented.
 * **A shadowed scrub helper.** ``_scrubs`` accepts ``env=`` whose callee is
   *named* ``scrubbed_git_env``; it does not verify the name resolves to
   ``autobot_shared.paths``. A locally defined function of that name satisfies
-  it.
+  it. :func:`scrub_wrappers` widens this deliberately: a local function whose
+  body names the helper is accepted as a caller of it, without proving the
+  returned env actually came from there.
 * **Shell: a subcommand hidden behind a variable, or a wrapper function.**
   ``scan_shell`` matches the two tokens as literal text, so
   ``FLAG=--show-toplevel; git rev-parse "$FLAG"`` or a local ``toplevel()``
@@ -101,7 +113,7 @@ from typing import Iterable, List, Set, Tuple
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import EXCLUDED_DIR_NAMES, iter_python_files  # noqa: E402
+from _scan_helpers import EXCLUDED_DIR_NAMES, enforce_reach, scan_python_files  # noqa: E402
 
 #: The canonical scrubbing helper, ``autobot_shared.paths.scrubbed_git_env``.
 SCRUB_HELPER = "scrubbed_git_env"
@@ -112,8 +124,33 @@ SCRUB_HELPER = "scrubbed_git_env"
 #: same trust boundary as ``_scrubs`` below for the shadowed-helper gap.
 SHELL_HELPER = "git_repo_root"
 
+#: Name this guard reports under.
+HOOK_ID = "git-toplevel-env-scrubbed"
+
 #: The flag whose answer depends on the work tree git thinks it has.
 TOPLEVEL_FLAG = "--show-toplevel"
+
+#: The subcommand with the same dependency: it enumerates the index of
+#: whatever git directory is in force, and an inherited ``GIT_DIR`` beats the
+#: ``cwd=`` a caller passes (#14896).
+LS_FILES_VERB = "ls-files"
+
+#: Every token whose call must scrub, and the fix each one is told to take.
+GATED_TOKENS = {
+    TOPLEVEL_FLAG: (
+        f"{TOPLEVEL_FLAG} without a scrubbed git environment. A hook exports "
+        "GIT_DIR and no GIT_WORK_TREE, so git calls the caller's CWD the work "
+        "tree and this answers with the CWD, silently. Use "
+        "`from autobot_shared.paths import git_repo_root` (#15176)."
+    ),
+    LS_FILES_VERB: (
+        f"`git {LS_FILES_VERB}` without a scrubbed git environment. An inherited "
+        "GIT_DIR outranks the `cwd=` passed here, so this enumerates the other "
+        "checkout's index and answers without erroring. Use "
+        "`tools/lint/_scan_helpers.tracked_paths()`, or pass "
+        "`env=scrubbed_git_env()` (#14896)."
+    ),
+}
 
 #: ``subprocess`` entry points that start a process.
 _SUBPROCESS_CALLS = frozenset({"run", "Popen", "call", "check_call", "check_output"})
@@ -186,18 +223,47 @@ def _is_subprocess_call(node: ast.Call, modules: Set[str], functions: Set[str]) 
     return False
 
 
-def _mentions_toplevel(node: ast.Call) -> bool:
-    """True when any string argument of *node* carries the flag."""
+def _gated_token(node: ast.Call) -> str | None:
+    """The :data:`GATED_TOKENS` key a string argument of *node* carries, if any."""
     for arg in node.args:
         for child in ast.walk(arg):
-            if isinstance(child, ast.Constant) and isinstance(child.value, str):
-                if TOPLEVEL_FLAG in child.value:
-                    return True
-    return False
+            if not (isinstance(child, ast.Constant) and isinstance(child.value, str)):
+                continue
+            for token in GATED_TOKENS:
+                if token in child.value:
+                    return token
+    return None
 
 
-def _scrubs(node: ast.Call) -> bool:
-    """True when the call passes ``env=scrubbed_git_env(...)``."""
+def scrub_wrappers(tree: ast.AST) -> Set[str]:
+    """Local functions that build their return value from :data:`SCRUB_HELPER`.
+
+    A test suite that needs the scrub *plus* something else — pinning
+    ``GIT_CONFIG_GLOBAL`` so a developer's global config cannot reach a
+    fixture, as ``pre-commit-no-print-console_test.py`` does — wraps the
+    helper in a one-liner and calls that. Rejecting the wrapper would push
+    those callers back onto an inline ``{**scrubbed_git_env(), ...}`` repeat,
+    which is the duplication this guard exists to stop.
+
+    The test is "this function's body names the helper", not a dataflow
+    proof; a function that mentions it and returns something else satisfies
+    it. That is the same trust boundary :func:`_scrubs` already takes for a
+    shadowed helper, recorded in this module's KNOWN GAPS.
+    """
+    names: Set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for child in ast.walk(node):
+            attr = child.attr if isinstance(child, ast.Attribute) else getattr(child, "id", None)
+            if attr == SCRUB_HELPER:
+                names.add(node.name)
+                break
+    return names
+
+
+def _scrubs(node: ast.Call, accepted: Set[str]) -> bool:
+    """True when the call passes ``env=<one of accepted>(...)``."""
     for keyword in node.keywords:
         if keyword.arg != "env":
             continue
@@ -205,7 +271,7 @@ def _scrubs(node: ast.Call) -> bool:
         if isinstance(value, ast.Call):
             func = value.func
             name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
-            return name == SCRUB_HELPER
+            return name in accepted
     return False
 
 
@@ -224,7 +290,7 @@ def scan(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
     # Cheap gate before the expensive one: full-repo mode walks every tracked
     # .py file, and AST-parsing all of them costs ~20s where a substring test
     # over the same set costs under one.
-    if TOPLEVEL_FLAG not in text:
+    if not any(token in text for token in GATED_TOKENS):
         return []
     try:
         tree = ast.parse(text)
@@ -232,21 +298,15 @@ def scan(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
         # A file that does not parse is another hook's finding, not this one's.
         return []
     modules, functions = subprocess_names(tree)
+    accepted = {SCRUB_HELPER} | scrub_wrappers(tree)
     findings: List[Tuple[int, str]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not _is_subprocess_call(node, modules, functions):
             continue
-        if not _mentions_toplevel(node) or _scrubs(node):
+        token = _gated_token(node)
+        if token is None or _scrubs(node, accepted):
             continue
-        findings.append(
-            (
-                node.lineno,
-                f"{TOPLEVEL_FLAG} without a scrubbed git environment. A hook exports "
-                "GIT_DIR and no GIT_WORK_TREE, so git calls the caller's CWD the work "
-                "tree and this answers with the CWD, silently. Use "
-                "`from autobot_shared.paths import git_repo_root` (#15176).",
-            )
-        )
+        findings.append((node.lineno, GATED_TOKENS[token]))
     return findings
 
 
@@ -312,18 +372,17 @@ def scan_shell(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
 def main(argv: List[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     repo_root = Path(__file__).resolve().parents[2]
-    py_files: List[Path] = list(iter_python_files(args, repo_root))
+    py_files, full_repo = scan_python_files(args, repo_root)
     sh_files: List[Path] = list(iter_shell_files(args, repo_root))
     # Vacuity floor: a full-repo run that swept neither language found nothing
     # by losing reach, not by the tree being clean. Only applies in full-repo
     # mode -- pre-commit's explicit argv is legitimately empty of one language
-    # on a PR that only touched the other.
-    if not args and not (py_files and sh_files):
-        print(  # noqa: print
-            "[git-toplevel-env-scrubbed] full-repo scan found no .py or .sh files "
-            "-- the sweep lost reach rather than the tree being clean.",
-            file=sys.stderr,
-        )
+    # on a PR that only touched the other. The floor of 1 per language is the
+    # number this hook has enforced since #15176; #14896 moved the *rule* into
+    # the shared helper without changing it.
+    if enforce_reach(len(py_files), 1, hook=HOOK_ID, full_repo=full_repo) or enforce_reach(
+        len(sh_files), 1, hook=HOOK_ID, full_repo=full_repo
+    ):
         return 1
     total = 0
     for path, scanner in [(p, scan) for p in py_files] + [(p, scan_shell) for p in sh_files]:

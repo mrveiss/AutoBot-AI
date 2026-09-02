@@ -89,8 +89,8 @@ from typing import List, Set, Tuple
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from _scan_helpers import enforce_reach, iter_python_files  # noqa: E402
 from check_git_toplevel_env_scrubbed import subprocess_names  # noqa: E402
-from _scan_helpers import iter_python_files  # noqa: E402
 
 #: The two scrub helpers this codebase has today. See the module docstring's
 #: "shadowed scrub helper" gap for what recognising them by name does not
@@ -333,12 +333,10 @@ def main(argv: List[str] | None = None) -> int:
         return 1 if total else 0
 
     reached, findings = scan_repo(repo_root)
-    if reached < TEST_FILE_FLOOR:
-        print(  # noqa: print
-            f"[git-write-env-scrubbed] only reached {reached} test files, floor is "
-            f"{TEST_FILE_FLOOR} -- the walk is broken, not the tree clean",
-            file=sys.stderr,
-        )
+    # Same floor as before (#15184/#15192), now through the shared helper so the
+    # full-repo-only rule lives in one place (#14896). ``args`` is empty here by
+    # construction -- the explicit-argv branch returned above.
+    if enforce_reach(reached, TEST_FILE_FLOOR, hook="git-write-env-scrubbed", full_repo=True):
         return 1
     for path, line_no, message in findings:
         _report(path, repo_root, line_no, message)

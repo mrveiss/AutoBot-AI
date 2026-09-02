@@ -40,7 +40,7 @@ from typing import List, Tuple
 # tools/lint/ is not a Python package; ensure sibling module is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import iter_python_files  # noqa: E402
+from _scan_helpers import PY_FLOOR, enforce_reach, scan_python_files  # noqa: E402
 
 # Strict regex: only AutoBot deployment range (172.16.168.0–255). RFC 1918
 # example space (192.168.x.x) and loopback (127.0.0.x) are legitimate per
@@ -128,7 +128,11 @@ def _scan(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
 
 def main(argv: List[str]) -> int:
     repo_root = Path(__file__).resolve().parents[2]
-    files = list(iter_python_files(argv[1:], repo_root))
+    files, full_repo = scan_python_files(argv[1:], repo_root)
+    # Vacuity floor (#14896): full-repo mode only -- pre-commit legitimately
+    # hands this hook an argv with no Python in it.
+    if enforce_reach(len(files), PY_FLOOR, hook="no-hardcoded-ip-fallbacks", full_repo=full_repo):
+        return 1
     total = 0
     for path in files:
         for line_no, message in _scan(path, repo_root):

@@ -28,6 +28,7 @@ import ast
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
+from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.ssot_constants import SecurityConstants
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -52,11 +53,7 @@ def _literal_string_sets(source: str) -> list[set[str]]:
     found = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Set) and node.elts:
-            values = {
-                e.value
-                for e in node.elts
-                if isinstance(e, ast.Constant) and isinstance(e.value, str)
-            }
+            values = {e.value for e in node.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)}
             if len(values) == len(node.elts):
                 found.append(values)
     return found
@@ -64,7 +61,7 @@ def _literal_string_sets(source: str) -> list[set[str]]:
 
 def _tracked_python_files() -> list[Path]:
     result = subprocess.run(  # nosec B603 B607
-        ["git", "ls-files", "*.py"], cwd=REPO_ROOT, capture_output=True, text=True, check=False
+        ["git", "ls-files", "*.py"], cwd=REPO_ROOT, capture_output=True, text=True, check=False, env=scrubbed_git_env()
     )
     return [REPO_ROOT / line for line in result.stdout.splitlines() if line]
 

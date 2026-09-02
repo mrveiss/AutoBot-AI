@@ -43,13 +43,20 @@ _SHELL_PLACEHOLDER = re.compile(r"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?")
 
 
 def _inventory_files():
-    """Tracked inventory YAML: the top-level file plus inventory/*.yml."""
+    """Tracked inventory YAML: the top-level file plus inventory/**/*.yml.
+
+    ``rglob``, not ``glob`` (#14673): the non-recursive form read only the
+    first level of ``inventory/``, so an inventory filed one directory deeper
+    was never opened and its placeholders were never checked. A file this
+    walk does not reach produces no finding, which is the same output as a
+    file that is clean.
+    """
     top = _ANSIBLE / "inventory.yml"
     if top.is_file():
         yield top
     inv_dir = _ANSIBLE / "inventory"
     if inv_dir.is_dir():
-        for path in sorted(inv_dir.glob("*.yml")):
+        for path in sorted(inv_dir.rglob("*.yml")):
             yield path
 
 
@@ -75,6 +82,13 @@ def test_the_scan_finds_inventories_and_hosts():
     files = list(_inventory_files())
 
     assert files, "no inventory files found — this rule is pinned to the wrong path"
+
+    # Pins rglob against a silent regression to glob (#14673). group_vars/ sits
+    # one level below inventory/, so a non-recursive walk reaches none of it and
+    # the placeholders in those files are never checked -- an outcome that looks
+    # exactly like a clean scan.
+    nested = [f for f in files if f.parent.name != "inventory" and f.name != "inventory.yml"]
+    assert nested, f"the walk stopped at the top level of inventory/: {[f.name for f in files]}"
 
     hosts = [v for f in files for v in _host_values(f)]
 
