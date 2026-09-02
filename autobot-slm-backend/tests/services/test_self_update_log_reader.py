@@ -325,3 +325,57 @@ def test_the_executor_writes_the_header_the_reader_expects():
     assert f'SELF_UPDATE_RUN_HEADER: str = "{reader_header}"' in executor_src
     # …and that the constant is what actually gets written, not a stale literal.
     assert 'f"{SELF_UPDATE_RUN_HEADER} {datetime.now(timezone.utc).isoformat()}' in executor_src
+
+
+# ---------------------------------------------------------------------------
+# #15522: a verdict must be bound to the run it is asked about
+# ---------------------------------------------------------------------------
+
+_RUN_AT_1136 = "SELF-UPDATE RUN STARTED 2026-08-29T11:36:00+00:00\n"
+_FIRED_AT_1247 = "2026-08-29T12:47:00+00:00"
+
+
+def test_a_newer_run_is_never_answered_with_an_older_runs_verdict(tmp_path):
+    """The live #15522 shape: an 11:36 log replayed as the 12:47 run's outcome.
+
+    The surface emitted "self-update finished with 1 failed task(s)" every ~60s
+    off a log last written an hour earlier, while nothing advanced — and an
+    operator read that as belonging to the run they had just triggered.
+    """
+    log = _write(tmp_path, _RUN_AT_1136 + _FAILED)
+
+    unbound = read_self_update_verdict(log)
+    assert unbound.failed_hosts == 2, "the fixture must carry a real failure, or this proves nothing"
+
+    bound = read_self_update_verdict(log, _FIRED_AT_1247)
+
+    assert bound.failed_hosts == 0
+    assert bound.degraded is False, "an older run's failure was attributed to a newer run"
+    assert bound.reason == "no self-update result for this run yet"
+
+
+def test_the_runs_own_verdict_is_still_reported(tmp_path):
+    """Binding must not swallow the answer for the run actually being asked about."""
+    log = _write(tmp_path, _RUN_AT_1136 + _FAILED)
+
+    v = read_self_update_verdict(log, "2026-08-29T11:36:00+00:00")
+
+    assert v.log_present and v.failed_hosts == 2 and v.degraded is True
+    assert v.run_started_at == "2026-08-29T11:36:00+00:00"
+
+
+def test_an_unstamped_log_is_no_answer_to_a_bound_caller(tmp_path):
+    """ "I cannot tell which run this is" must read as no answer, not as this run's."""
+    log = _write(tmp_path, _FAILED)
+
+    assert read_self_update_verdict(log).degraded is True
+    assert read_self_update_verdict(log, _FIRED_AT_1247).degraded is False
+
+
+def test_an_unbound_caller_still_gets_the_last_verdict(tmp_path):
+    """`/status` has no run to bind to and must keep reporting the last run."""
+    v = read_self_update_verdict(_write(tmp_path, _RUN_AT_1136 + _COMPLETE))
+
+    assert v.complete is True
+    assert v.run_started_at == "2026-08-29T11:36:00+00:00"
+    assert "run started 2026-08-29T11:36:00+00:00" in (v.reason or "")

@@ -302,11 +302,24 @@ for _name in _REAL_SERVICE_MODULES:
 # at route-registration time (import time for the router module).  Stub it
 # so that code_source_test.py can import code_source.py without the package
 # being installed in the dev environment.  Issue: #3525
-_pm_mod = types.ModuleType("python_multipart")
-_pm_mod.__version__ = "9.9.99"  # type: ignore[attr-defined]  # high sentinel — immune to future FastAPI threshold bumps
-# Legacy `multipart` shim re-exports `from python_multipart import __all__` (#10023).
-_pm_mod.__all__ = []  # type: ignore[attr-defined]
-sys.modules.setdefault("python_multipart", _pm_mod)
+#
+# #15531: probe for the real package FIRST. This stub carries only
+# ``__version__``/``__all__`` — it has no ``.multipart`` submodule — so
+# inserting it where the real ``python_multipart`` IS installed shadows the
+# working package for the whole session and breaks starlette's
+# ``from python_multipart.multipart import parse_options_header``. ``setdefault``
+# does not protect against that: nothing has imported the real package this
+# early, so the key is absent and the crippled stub always won. Only the import
+# probe can tell "absent" from "not yet imported".
+try:
+    import python_multipart as _real_python_multipart  # noqa: F401
+except Exception:  # noqa: BLE001 — any import failure means "genuinely absent"
+    _pm_mod = types.ModuleType("python_multipart")
+    # High sentinel version, immune to future FastAPI threshold bumps.
+    _pm_mod.__version__ = "9.9.99"  # type: ignore[attr-defined]
+    # Legacy `multipart` shim re-exports `from python_multipart import __all__` (#10023).
+    _pm_mod.__all__ = []  # type: ignore[attr-defined]
+    sys.modules.setdefault("python_multipart", _pm_mod)
 
 # ── user_management ───────────────────────────────────────────────────────────
 for _m in [
