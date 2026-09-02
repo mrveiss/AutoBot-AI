@@ -31,9 +31,12 @@ correct behaviour. Only executable shell is examined.
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 import yaml
+
+from autobot_shared.paths import scrubbed_git_env
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _WORKFLOWS = _REPO_ROOT / ".github/workflows"
@@ -220,6 +223,7 @@ def test_landing_evidence_helpers_are_defined() -> None:
     required = (
         "branch_landing_evidence()",
         "branch_content_presence()",
+        "branch_added_files_present()",
         "branch_is_archival()",
         "branch_tree_matches_base()",
         "branch_paths_covered_for_issue()",
@@ -269,3 +273,108 @@ def test_the_ancestry_exemption_still_explains_itself() -> None:
             f"{name} no longer uses ancestry at all -- drop its _ANCESTRY_ALLOWED "
             "entry so the repository-wide sweep covers it again"
         )
+
+
+# ---------------------------------------------------------------------------
+# #15036: a branch that landed and then kept evolving
+# ---------------------------------------------------------------------------
+
+
+def _run_evidence(repo: Path, base: str, ref: str) -> str:
+    """Call `branch_landing_evidence` inside a real git repo."""
+    script = f'source "{_GUARD_LIB}"\nbranch_landing_evidence "{base}" "{ref}" "{ref}"\n'
+    return subprocess.run(
+        ["bash", "-c", script],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env=scrubbed_git_env(),
+    ).stdout.strip()
+
+
+def _repo_with_branch(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    # #15246: scrubbed -- an inherited GIT_DIR (the pre-push hook exports one)
+    # would init the real repo instead of tmp_path.
+    run = lambda *a: subprocess.run(  # noqa: E731
+        a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env()
+    )
+    run("git", "init", "-q", ".")
+    run("git", "config", "user.email", "t@t")
+    run("git", "config", "user.name", "t")
+    (repo / "src").mkdir()
+    (repo / "src" / "existing.py").write_text("original\n", encoding="utf-8")
+    run("git", "add", "-A")
+    run("git", "commit", "-qm", "base")
+    run("git", "branch", "-q", "trunk")
+    run("git", "checkout", "-qb", "feature")
+    (repo / "src" / "introduced.py").write_text("the file this branch creates\n", encoding="utf-8")
+    (repo / "src" / "existing.py").write_text("original\nmodified\n", encoding="utf-8")
+    run("git", "add", "-A")
+    run("git", "commit", "-qm", "work")
+    run("git", "checkout", "-q", "trunk")
+    return repo
+
+
+def test_a_branch_whose_new_file_is_absent_from_base_is_still_reported(tmp_path) -> None:
+    """The half that must not regress: genuinely unlanded work stays visible."""
+    repo = _repo_with_branch(tmp_path)
+
+    verdict = _run_evidence(repo, "trunk", "feature")
+
+    assert verdict.startswith("unproven"), verdict
+    assert "0/1 new file(s) present" in verdict, verdict
+
+
+def test_a_branch_whose_new_file_landed_and_then_changed_is_not_reported(tmp_path) -> None:
+    """The #15036 case, reduced.
+
+    `feat/gantt-timeline-view` landed as a35416aab2 and the 766-line view it
+    introduced is in base today — but base edited it since, so only 74 of its 480
+    added lines still match. A line score of 15% is indistinguishable from work
+    that never landed, and the sweep reported it as stranded for months.
+
+    A path the branch CREATED that now exists in base is a landing fact that does
+    not decay as the file evolves.
+    """
+    repo = _repo_with_branch(tmp_path)
+    # #15246: scrubbed -- an inherited GIT_DIR (the pre-push hook exports one)
+    # would init the real repo instead of tmp_path.
+    run = lambda *a: subprocess.run(  # noqa: E731
+        a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env()
+    )
+    # The file lands on trunk, then diverges completely from the branch's copy.
+    (repo / "src" / "introduced.py").write_text("landed, then rewritten entirely\n", encoding="utf-8")
+    run("git", "add", "-A")
+    run("git", "commit", "-qm", "the file landed and then evolved")
+
+    verdict = _run_evidence(repo, "trunk", "feature")
+
+    assert verdict.startswith("landed"), verdict
+    assert "1 file(s) it added exist" in verdict, verdict
+
+
+def test_a_modified_file_alone_is_not_landing_evidence(tmp_path) -> None:
+    """Only CREATED paths count.
+
+    A branch that edits an existing file proves nothing by that file continuing
+    to exist — it existed before the branch. Counting modifications would mark
+    almost every branch landed.
+    """
+    repo = _repo_with_branch(tmp_path)
+    # #15246: scrubbed -- an inherited GIT_DIR (the pre-push hook exports one)
+    # would init the real repo instead of tmp_path.
+    run = lambda *a: subprocess.run(  # noqa: E731
+        a, cwd=repo, capture_output=True, check=True, env=scrubbed_git_env()
+    )
+    run("git", "checkout", "-qb", "edit-only", "trunk")
+    (repo / "src" / "existing.py").write_text("original\nan unlanded edit\n", encoding="utf-8")
+    run("git", "add", "-A")
+    run("git", "commit", "-qm", "edit an existing file only")
+    run("git", "checkout", "-q", "trunk")
+
+    verdict = _run_evidence(repo, "trunk", "edit-only")
+
+    assert verdict.startswith("unproven"), verdict
+    assert "0/0 new file(s) present" in verdict, verdict
