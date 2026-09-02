@@ -241,14 +241,14 @@ All integration modules have comprehensive test coverage:
 
 ```bash
 # Run all activity tracking tests
-pytest autobot-user-backend/utils/activity_tracker_test.py -v
-pytest autobot-user-backend/integrations/*_tracking_test.py -v
+pytest autobot-backend/utils/activity_tracker_test.py -v
+pytest autobot-backend/integrations/*_tracking_test.py -v
 
 # Run specific integration tests
-pytest autobot-user-backend/integrations/terminal_tracking_test.py -v
-pytest autobot-user-backend/integrations/file_tracking_test.py -v
-pytest autobot-user-backend/integrations/browser_tracking_test.py -v
-pytest autobot-user-backend/integrations/desktop_tracking_test.py -v
+pytest autobot-backend/integrations/terminal_tracking_test.py -v
+pytest autobot-backend/integrations/file_tracking_test.py -v
+pytest autobot-backend/integrations/browser_tracking_test.py -v
+pytest autobot-backend/integrations/desktop_tracking_test.py -v
 ```
 
 ## Integration Checklist
