@@ -48,7 +48,7 @@ coexistence:
   compatible_with:
     - autobot-backend
     - autobot-slm-agent
-    - autobot_shared
+    - autobot-shared
   conflicts_with: []
   warns_with: []
 

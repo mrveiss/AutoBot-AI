@@ -49,7 +49,7 @@ coexistence:
     - autobot-slm-database
     - autobot-monitoring
     - autobot-slm-agent
-    - autobot_shared
+    - autobot-shared
   warns_with: []
 
 depends_on:
