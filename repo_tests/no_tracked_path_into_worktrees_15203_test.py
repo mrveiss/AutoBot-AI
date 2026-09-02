@@ -41,7 +41,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 #: Deliberately anchored on a repo-root accessor rather than on any string
 #: containing `.worktrees`. Two things that string also appears in are correct:
 #: skip-list entries (`"/.worktrees/"`), and synthetic fixture paths in tests
-#: (`Path("/home/foo/repo/.worktrees/issue-X")`), which construct a scenario
+#: (a `Path(...)` built from an invented root), which construct a scenario
 #: rather than reaching into the real tree. Both were false positives on the
 #: first draft, and a guard that fires on correct code gets suppressed.
 #:
@@ -121,7 +121,10 @@ def test_no_tracked_file_builds_a_path_into_the_repos_worktrees() -> None:
         # false positives on the first draft, which is why they are pinned.
         ('    "/.worktrees/",', False),
         ('SKIP = ("/.worktrees/", "/venv/")', False),
-        ('fake_root = Path("/home/foo/repo/.worktrees/issue-X")', False),
+        # An invented root rather than a /home/... one: #13409 blocks developer
+        # absolute paths in tracked source, and this fixture tripped it — a
+        # contrast case must not itself be the thing another guard forbids.
+        ('fake_root = Path("/srv/example/repo/.worktrees/issue-X")', False),
     ],
 )
 def test_the_matcher_separates_building_from_mentioning(line: str, should_flag: bool) -> None:
