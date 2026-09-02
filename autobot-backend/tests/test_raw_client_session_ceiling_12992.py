@@ -192,9 +192,28 @@ EXCLUDED_DIR_SUBSTRING = "archive"
 EXEMPT_SUFFIXES = (pathlib.Path("autobot_shared") / "http_client.py",)
 
 
+def _directory_parts(path: pathlib.Path) -> tuple[str, ...]:
+    """Directory components of *path* **below** ``BACKEND_ROOT`` (#14484).
+
+    This used to be ``path.parts[:-1]`` on the absolute path, which asks a
+    different question than the one intended: it tests the directories the
+    checkout happens to sit in as well as the ones inside it. Because
+    ``EXCLUDED_DIR_SUBSTRING`` matches a substring, any ancestor whose name
+    merely *contains* ``archive`` excludes the entire tree. Measured on this
+    file list: 2311 files kept from an ordinary checkout path, 2311 from a
+    checkout under ``.worktrees/issue-14484``, and 0 from one under
+    ``.worktrees/issue-9999-archive-audit`` -- a guard whose reach depends on
+    the directory it was cloned into.
+    """
+    try:
+        return path.relative_to(BACKEND_ROOT).parts[:-1]
+    except ValueError:  # pragma: no cover - a path from outside the scan root
+        return path.parts[:-1]
+
+
 def _is_excluded(path: pathlib.Path) -> bool:
     """True when *path* is a test, cache, or archived file rather than live code."""
-    for part in path.parts[:-1]:
+    for part in _directory_parts(path):
         if part in EXCLUDED_DIR_NAMES or EXCLUDED_DIR_SUBSTRING in part:
             return True
     name = path.name
@@ -242,6 +261,26 @@ def raw_client_session_sites() -> dict[str, int]:
     return sites
 
 
+def _assert_population() -> None:
+    """Raise unless the walk reached the backend tree it claims to scan.
+
+    Called from the floor test *and* from the ceiling assertion, so the floor is
+    evaluated before the substantive check whatever order the tests run in --
+    this suite runs under ``pytest-randomly``, so file order guarantees nothing.
+    """
+    scanned = walk_backend_sources()
+    assert len(scanned) > 1000, (
+        f"Walker found only {len(scanned)} files under {BACKEND_ROOT}; "
+        "expected the full backend tree. FIX THE SWEEP -- the ceiling assertion "
+        "is meaningless against an empty or truncated walk, and a collapsed walk "
+        "reads exactly like a clean tree. Fix the walker, not this bound."
+    )
+    assert any(path.name == "monitoring_integration.py" for path in scanned), (
+        "Walker did not reach integrations/monitoring_integration.py — FIX THE "
+        "SWEEP: the walk is not covering the backend package tree."
+    )
+
+
 def test_walker_scans_a_nonempty_tree():
     """The walk must find real files, so the ceiling cannot pass vacuously.
 
@@ -249,16 +288,7 @@ def test_walker_scans_a_nonempty_tree():
     would silently reduce the walk to zero files and the ceiling assertion would
     pass while checking nothing.
     """
-    scanned = walk_backend_sources()
-    assert len(scanned) > 1000, (
-        f"Walker found only {len(scanned)} files under {BACKEND_ROOT}; "
-        "expected the full backend tree. The ceiling assertion is meaningless "
-        "against an empty or truncated walk — fix the walker, not this bound."
-    )
-    assert any(path.name == "monitoring_integration.py" for path in scanned), (
-        "Walker did not reach integrations/monitoring_integration.py — the walk "
-        "is not covering the backend package tree."
-    )
+    _assert_population()
 
 
 def test_raw_client_sessions_do_not_exceed_ceiling():
@@ -268,6 +298,7 @@ def test_raw_client_sessions_do_not_exceed_ceiling():
     instead — ``get_json()``/``post_json()`` for JSON, ``tracked_request()`` when
     the raw response must be inspected. Do not raise ``MAX_RAW_CLIENT_SESSIONS``.
     """
+    _assert_population()
     sites = raw_client_session_sites()
     total = sum(sites.values())
 
