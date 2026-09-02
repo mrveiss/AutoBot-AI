@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from verify_done_test import (  # noqa: E402
     CANDIDATE,
     SCRIPT,
+    UNCOMMITTED,
     VERDICT,
     _git,
     add_worktree,
