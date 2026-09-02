@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Dict, List
 
 # Add autobot modules to path
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-user-backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-backend"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
 from autobot_shared.redis_client import get_async_redis_client
