@@ -17,9 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from models.database import Node, NodeStatus
-from models.schemas import HealthResponse, SystemMetrics
+from models.schemas import SystemMetrics
+from models.schemas_health import HealthResponse
 from services.auth import get_current_user
 from services.database import get_db
+from services.frontend_bundle_health import frontend_bundle_status
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
@@ -83,13 +85,22 @@ async def health_check(
         db_status = "unhealthy"
 
     redis_status = await _check_redis_health()
+    # #15462: a filesystem stat, so it stays cheap enough for a public endpoint
+    # polled by monitoring — no thread hop needed.
+    frontend_status = frontend_bundle_status()
 
+    # #15462: `not_applicable` (this node serves no UI) is not a fault, so it
+    # does not degrade the response — only a bundle that should be servable and
+    # is not.
+    frontend_ok = frontend_status.startswith(("healthy", "not_applicable"))
+    healthy = db_status == "healthy" and redis_status == "healthy" and frontend_ok
     return HealthResponse(
-        status="healthy" if db_status == "healthy" and redis_status == "healthy" else "degraded",
+        status="healthy" if healthy else "degraded",
         version=VERSION,
         uptime_seconds=time.time() - START_TIME,
         database=db_status,
         redis=redis_status,
+        frontend=frontend_status,
         nodes_online=nodes_online,
         nodes_total=nodes_total,
     )

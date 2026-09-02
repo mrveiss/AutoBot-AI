@@ -41,6 +41,9 @@ that would have caught it, and is now here.
 
 from __future__ import annotations
 
+import ast
+import configparser
+import re
 import subprocess
 from pathlib import Path
 
@@ -113,23 +116,100 @@ NARROWLY_COLLECTED = {
         "backend-run: named explicitly in ci.yml and pytest.ini's testpaths "
         "(#14884); autobot-infrastructure as a whole does not collect"
     ),
+    "autobot-infrastructure/shared/tests": (
+        "backend-run: named by pytest.ini's testpaths (line 147) and by "
+        "marker-tests.yml's 'marked tests -- infrastructure, libs and frontend' "
+        "step (line 341). #15161 repointed this tree's conftest shim, so its "
+        "`from config import unified_config_manager` resolves through "
+        "autobot-backend/config/__init__.py's lazy `__getattr__` (line 242) and "
+        "the tree collects on its own terms"
+    ),
+    "autobot-frontend/tests": (
+        "marker-tests.yml ONLY -- the 'marked tests -- infrastructure, libs and "
+        "frontend' step (line 341), added by #14979 and #15166. It shares that "
+        "step with `libs` and shared/tests, but NOT their safety net: both of "
+        "those are also on pytest.ini's testpaths (lines 147-148) and run "
+        "unconditionally, while this tree is absent from testpaths and reaches "
+        "ci.yml only as a path filter and npm/vitest steps. So a file added here "
+        "carrying no marker MARKER_EXPRESSION selects runs NOWHERE, and "
+        "`test_marker_only_trees_carry_a_marker_the_suite_selects` is what makes "
+        "that fail rather than pass quietly (#15178)"
+    ),
     "libs": (
-        "marker-tests.yml, the 'marked tests -- infrastructure and libs' step "
-        "(#13543); the suite is marker-selected, so ci.yml's invocations, which "
-        "deselect every marker, would collect it and run nothing"
+        "marker-tests.yml, the 'marked tests -- infrastructure, libs and "
+        "frontend' step (#13543); the suite is marker-selected, so ci.yml's "
+        "invocations, which deselect every marker, would collect it and run nothing"
     ),
 }
 
-#: Path prefix -> why nothing collects it. Reasons, not endorsements.
+#: Path prefix -> the DECISION taken about it, and the issue that expires the
+#: entry. A description of the breakage is not an exemption: "conftest imports
+#: X, which no longer resolves" says what is wrong and nothing about who is
+#: fixing it, which is how the `autobot-infrastructure` reason below outlived
+#: the defect it named by two issues (#15178). Every entry states one of:
+#:
+#:   (a) COVERED ELSEWHERE -- and where,
+#:   (b) WIRE IN -- and what has to happen first,
+#:   (c) PARKED -- and the decision that is outstanding,
+#:
+#: plus the issue number that would remove the entry.
 INTENTIONALLY_UNCOLLECTED = {
     "autobot-npu-worker": (
-        "not in either ci.yml invocation; pytest.ini only --ignore's its resources/ "
-        "subdirectory (Windows-only, PySide6), so the other suites are simply uncollected"
+        "#15476 -- DECISION (b) WIRE IN, after the repairs that issue enumerates. "
+        "11 tracked modules holding 168 test functions sit OUTSIDE the resources/ "
+        "subtree that pytest.ini --ignore's at line 181 (Windows-only, PySide6); "
+        "the remaining 3 are inside it. ONE of the 11 -- openvino/openvino_validation_test.py "
+        "-- imports the `openvino` package, which requirements-ci.txt (the only requirements "
+        "file ci.yml installs, at line 504) does not carry, so it cannot pass until the "
+        "NPU dependency set becomes a CI concern. Three further files match the string "
+        "`openvino` but import the local `openvino_dispatch` module, not the package. "
+        "That dependency is the repair; this entry expires with it"
     ),
-    "autobot-infrastructure": "conftest imports unified_config_manager, which no longer resolves",
-    "plugins": "optional plugin tools; deps not installed by the CI requirements",
-    "autobot-frontend": "Python helper beside the Vue app; not part of either backend suite",
+    "autobot-infrastructure": (
+        "#15178 -- DECISION (b) WIRE IN. 51 tracked modules under shared/scripts/ "
+        "(outside the hooks/ subtree NARROWLY_COLLECTED accounts for) and "
+        "shared/tools/, named by no ci.yml invocation and no pytest.ini testpath. "
+        "Wiring them in means taking on ~30 ad-hoc scripts under "
+        "shared/scripts/analysis/, so it is a decision with a blast radius rather "
+        "than a one-line testpath edit. It blocks the 11 uncollected test methods "
+        "#14979 left in shared/scripts/{analysis,utilities} -- see "
+        "repo_tests/test_methods_in_uncollected_classes_test.py. The reason this "
+        "entry carried until #15178, 'conftest imports unified_config_manager, "
+        "which no longer resolves', described shared/tests/conftest.py -- a tree "
+        "this entry no longer covers, and a breakage #15161 had already repaired"
+    ),
+    "plugins": (
+        "#15178 -- DECISION (c) PARKED. 2 modules under "
+        "core-plugins/video-generation-plugin/tools/. `plugins/` is named by no "
+        "ci.yml invocation and no pytest.ini testpath, and the plugin directory is "
+        "hyphenated, so it is not an importable package -- both modules reach their "
+        "subject through importlib.util.spec_from_file_location rather than an "
+        "import. Whether dynamically-loaded plugin trees are gated at all is the "
+        "outstanding decision, not a wiring fix; parked until it is taken"
+    ),
 }
+
+#: Per-prefix ceilings on how many tracked test files each exclusion excuses.
+#: DOWN-ONLY: an entry may shrink to zero and then be deleted, never grow. This
+#: is not a record of today's number -- a growing exclusion is a tree quietly
+#: falling out of CI, which is the whole defect #13653 and #15018 recorded, and
+#: without a ceiling the allowlist absorbs it silently. Measured on
+#: Dev_new_gui after the autobot-frontend and autobot-infrastructure/shared/tests
+#: mis-classifications moved to NARROWLY_COLLECTED (#15178); the frontend entry
+#: alone had been inflating this by 1 and shared/tests by 5.
+#: NEVER raise one to make this pass.
+_UNCOLLECTED_CEILINGS = {
+    "autobot-infrastructure": 51,
+    "autobot-npu-worker": 14,
+    "plugins": 2,
+}
+
+#: Floor under the SUBJECT, not the finding. Every count above is derived from
+#: `_tracked_test_files()`, so a pathspec that collapses to nothing reports zero
+#: exclusions and a perfectly clean tree -- the exact failure #15018 recorded,
+#: one layer up. Measured 2110 on Dev_new_gui; recorded ~10% under so ordinary
+#: consolidation does not trip it. Raise as the tree grows; never lower.
+_MIN_TRACKED_TEST_FILES = 1900
 
 #: Minimum tracked files each half of ``python_files`` must match. The floor
 #: that existed before #15018 was on the COMBINED list, which ``*_test.py``
@@ -161,6 +241,68 @@ def _python_files_patterns() -> list[str]:
         "nothing to enumerate by and must not report a clean tree"
     )
     return patterns
+
+
+def _declared_testpaths() -> list[str]:
+    """pytest.ini's ``testpaths``, read rather than restated.
+
+    A ``NARROWLY_COLLECTED`` prefix that pytest.ini names runs unconditionally;
+    one it does not is only ever reached by a marker-selected workflow. That is
+    the difference `_marker_only_prefixes` turns on, so it is derived from the
+    config instead of hand-listed here (#15178).
+    """
+    parser = configparser.ConfigParser()
+    parser.read(project_root() / "pytest.ini", encoding="utf-8")
+    return parser.get("pytest", "testpaths").split()
+
+
+def _marker_only_prefixes() -> list[str]:
+    """``NARROWLY_COLLECTED`` prefixes whose ONLY runner is marker-selected.
+
+    Derived, not listed: a tree that loses its unconditional runner starts
+    being checked here on the next run rather than when someone remembers.
+    """
+    declared = _declared_testpaths()
+    return sorted(
+        prefix
+        for prefix in NARROWLY_COLLECTED
+        if not any(prefix == entry or prefix.startswith(f"{entry}/") for entry in declared)
+    )
+
+
+def _marker_expression_markers() -> set[str]:
+    """The marker names marker-tests.yml selects, read from the workflow.
+
+    Restating them here would let the workflow narrow its expression while this
+    guard kept vouching for files the run had stopped selecting.
+    """
+    workflow = project_root() / ".github" / "workflows" / "marker-tests.yml"
+    match = re.search(r"MARKER_EXPRESSION:.*?'([^']+)'", workflow.read_text(encoding="utf-8"))
+
+    assert match, (
+        "marker-tests.yml no longer defines MARKER_EXPRESSION with a literal "
+        "default, so this guard cannot tell which markers the suite selects"
+    )
+    return {token for token in match.group(1).split() if token != "or"}
+
+
+def _declared_markers(path: Path) -> set[str]:
+    """Marker names a module attaches, via `pytest.mark.X` anywhere in its AST.
+
+    Covers both forms that matter -- a module-level ``pytestmark`` and a
+    per-test decorator -- and, being an AST walk, cannot be satisfied by the
+    string appearing in a comment or a docstring.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return {
+        node.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Attribute)
+        and node.value.attr == "mark"
+        and isinstance(node.value.value, ast.Name)
+        and node.value.value.id == "pytest"
+    }
 
 
 def _tracked_test_files_by_pattern() -> dict[str, list[str]]:
@@ -206,10 +348,116 @@ def _classify(path: str) -> str | None:
     if top in SLM_RUN:
         return "slm-run"
 
-    for prefix, reason in INTENTIONALLY_UNCOLLECTED.items():
-        if path.startswith(f"{prefix}/"):
-            return f"excluded: {reason}"
+    prefix = _excluded_prefix(path)
+    if prefix is not None:
+        return f"excluded: {INTENTIONALLY_UNCOLLECTED[prefix]}"
     return None
+
+
+def _excluded_prefix(path: str) -> str | None:
+    """The ``INTENTIONALLY_UNCOLLECTED`` prefix naming *path*, or None.
+
+    Only consulted after the collected prefixes have had their turn, so it is
+    never asked about a path a runner already accounts for.
+    """
+    for prefix in INTENTIONALLY_UNCOLLECTED:
+        if path.startswith(f"{prefix}/"):
+            return prefix
+    return None
+
+
+def _uncollected_by_prefix() -> dict[str, int]:
+    """Tracked test files each exclusion actually excuses, per prefix.
+
+    Routed through ``_classify`` rather than matching the prefixes directly, so
+    the count is exactly what the allowlist excuses and not what its prefixes
+    happen to span. ``autobot-infrastructure`` spans a collected subtree and an
+    uncollected one; counting the collected half as excluded is how the
+    frontend and shared/tests entries overstated this number (#15178).
+    """
+    counts = dict.fromkeys(INTENTIONALLY_UNCOLLECTED, 0)
+    for path in _tracked_test_files():
+        runner = _classify(path)
+        if runner is None or not runner.startswith("excluded: "):
+            continue
+        prefix = _excluded_prefix(path)
+        if prefix is not None:
+            counts[prefix] += 1
+    return counts
+
+
+def test_the_tracked_population_is_large_enough_to_mean_anything() -> None:
+    """Floor under the subject. Zero files excused out of zero found is not clean.
+
+    Deliberately the first assertion in this module: every other check counts
+    what ``_tracked_test_files()`` returns, so a broken pathspec would let them
+    all report a spotless tree. This one names the sweep instead.
+    """
+    files = _tracked_test_files()
+
+    assert len(files) >= _MIN_TRACKED_TEST_FILES, (
+        f"the sweep matched only {len(files)} tracked test files, under the "
+        f"recorded floor of {_MIN_TRACKED_TEST_FILES}. FIX THE SWEEP -- every "
+        "check in this module is derived from this enumeration, so a collapsed "
+        "pathspec reads as a clean tree with nothing left uncollected, which is "
+        "#15018 one layer up. Never lower this floor to make it pass"
+    )
+
+
+def test_the_uncollected_population_only_ever_shrinks() -> None:
+    """``INTENTIONALLY_UNCOLLECTED`` is a ratchet, not a running total.
+
+    A tree that stops being collected lands in an existing exclusion's prefix
+    and changes nothing else: the allowlist already has a reason for it, so
+    ``test_every_test_file_is_accounted_for`` stays green while coverage
+    leaves. The ceiling is the assertion that sees it (#15178).
+    """
+    counts = _uncollected_by_prefix()
+
+    assert set(counts) == set(_UNCOLLECTED_CEILINGS), (
+        "every exclusion needs a ceiling, or it can absorb new files unnoticed: "
+        f"allowlist={sorted(counts)} ceilings={sorted(_UNCOLLECTED_CEILINGS)}"
+    )
+
+    grew = sorted(
+        f"{prefix}: {count} > {_UNCOLLECTED_CEILINGS[prefix]}"
+        for prefix, count in counts.items()
+        if count > _UNCOLLECTED_CEILINGS[prefix]
+    )
+    assert not grew, (
+        "more test files are excused from collection than when these ceilings "
+        "were measured. Collect the new files, or wire the tree in -- NEVER "
+        "raise a ceiling to make this pass:\n  " + "\n  ".join(grew)
+    )
+
+
+def test_marker_only_trees_carry_a_marker_the_suite_selects() -> None:
+    """A tree whose only runner is marker-selected must actually be selected.
+
+    ``NARROWLY_COLLECTED`` takes a prefix OUT of the ratchet, and nothing else
+    was checking what it took on. An unmarked file added under a marker-only
+    tree is accounted for by ``_classify``, so the accounting test is green; its
+    prefix is no longer in ``INTENTIONALLY_UNCOLLECTED``, so
+    ``_UNCOLLECTED_CEILINGS`` never sees it; and
+    ``repo_tests/marker_suite_root_coverage_test.py`` only fires on tests that
+    DO carry a marker, so it is green too. The file runs nowhere, silently --
+    #13653 and #15018 reproduced inside the guard against them (#15178).
+    """
+    root = project_root()
+    selected = _marker_expression_markers()
+    unmarked = sorted(
+        f"{path} (carries: {sorted(_declared_markers(root / path)) or 'no pytest.mark at all'})"
+        for prefix in _marker_only_prefixes()
+        for path in _tracked_test_files()
+        if path.startswith(f"{prefix}/") and not _declared_markers(root / path) & selected
+    )
+
+    assert not unmarked, (
+        "these files sit under a NARROWLY_COLLECTED prefix whose only runner is "
+        f"marker-selected ({sorted(selected)}), and carry no marker that runner "
+        "selects. Nothing collects them and this allowlist excuses them -- mark "
+        "them, or give the tree an unconditional runner:\n  " + "\n  ".join(unmarked)
+    )
 
 
 def test_every_test_file_is_accounted_for() -> None:
