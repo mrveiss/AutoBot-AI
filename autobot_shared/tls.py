@@ -16,7 +16,11 @@ from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
 
-logger = get_logger(__name__)
+# #14039: acquired lazily, never at module scope. This module is imported by
+# autobot-slm-backend, whose conftest stubs the config LoggingManager reads --
+# constructing a rotating handler at import time then compares a MagicMock to an
+# int and every SLM shard fails at collection. A logger bound at import in a
+# low-level shared module is a constraint here, not a style choice.
 
 # Canonical minimum TLS version for every AutoBot SSL context (#12285).
 # CodeQL py/insecure-protocol: pinning this rejects the broken TLSv1/TLSv1_1
@@ -124,7 +128,7 @@ def get_internal_tls_context(
     if _is_loopback_target(target_url):
         global _loopback_permissive_warned
         if not _loopback_permissive_warned:
-            logger.warning(
+            get_logger(__name__).warning(
                 "TLS verification disabled for loopback target %s — no CA configured "
                 "(set AUTOBOT_TLS_CA_PATH for strict verification, #6654)",
                 target_url,
