@@ -21,9 +21,15 @@ read ``>= 15`` files and it had read 24, comfortably above a floor set while
 blind. ``scripts/check_constraint_drift.py`` had already worked this out and
 globs both shapes; the guards had not.
 
-Widened here to ``requirements*/*.txt`` as well, and consolidated into one
-module so the next divergence has nowhere to happen: three copies of an oracle
-are three chances for one of them to be fixed alone.
+Widened here to ``requirements*/*.txt``, then closed over ``-r``/``-c`` includes
+so a manifest reached only through an include line is read too --
+``constraints/shared.txt`` matches no filename pattern and is pulled in only by
+``-c``. Measured after: 37 files, 197 distributions. The two halves overlap on
+today's tree by design; the glob covers a manifest no include references yet,
+the closure covers one no filename pattern can describe.
+
+Consolidated into one module so the next divergence has nowhere to happen:
+three copies of an oracle are three chances for one of them to be fixed alone.
 """
 
 from __future__ import annotations
@@ -46,15 +52,52 @@ MANIFEST_PATTERNS: tuple[str, ...] = ("requirements*.txt", "requirements*/*.txt"
 #: First token on a requirements line, quoted or not, is the distribution name.
 _NAME = re.compile(r'^["\']?([A-Za-z0-9][A-Za-z0-9._-]*)')
 
+#: ``-r``/``-c`` and their long spellings. A manifest reached only through an
+#: include line need not be *named* anything in particular: ``constraints/
+#: shared.txt`` is pulled in by ``-c`` and matches no filename pattern above,
+#: so the closure is what makes the population complete rather than merely wide.
+_INCLUDE = re.compile(r"^\s*-(?:r|c|-requirement|-constraint)\s*=?\s*(\S+)")
 
-def _manifests(repo_root: Path) -> list[Path]:
-    """Every requirements/pyproject file in this checkout, de-duplicated and ordered."""
+
+def _globbed(repo_root: Path) -> set[Path]:
+    """Manifests found by filename or directory shape, before the include closure."""
     found: set[Path] = set()
     for pattern in MANIFEST_PATTERNS:
         for path in repo_root.rglob(pattern):
             if any(part in SKIP_PARTS for part in path.relative_to(repo_root).parts):
                 continue
-            found.add(path)
+            found.add(path.resolve())
+    return found
+
+
+def _includes_of(path: Path) -> set[Path]:
+    """Files this manifest pulls in with ``-r`` or ``-c``, resolved against its own dir."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return set()
+    targets: set[Path] = set()
+    for line in text.splitlines():
+        match = _INCLUDE.match(line)
+        if match:
+            target = (path.parent / match.group(1)).resolve()
+            if target.is_file():
+                targets.add(target)
+    return targets
+
+
+def _manifests(repo_root: Path) -> list[Path]:
+    """Every manifest in this checkout: globbed, then closed over ``-r``/``-c``."""
+    found = _globbed(repo_root)
+    pending = list(found)
+    while pending:
+        for target in _includes_of(pending.pop()):
+            if target in found:
+                continue
+            if any(part in SKIP_PARTS for part in target.relative_to(repo_root).parts):
+                continue
+            found.add(target)
+            pending.append(target)
     return sorted(found)
 
 

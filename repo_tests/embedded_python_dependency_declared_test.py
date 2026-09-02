@@ -233,7 +233,7 @@ def test_the_sweep_reached_the_repository() -> None:
     )
     assert _REQUIREMENTS_FILES >= 30, (
         f"only read {_REQUIREMENTS_FILES} requirements/pyproject files, floor 30 "
-        f"(36 measured after the #15518 widening) — the declaration oracle has "
+        f"(37 measured after the #15518 widening) — the declaration oracle has "
         "gone blind and would report false findings"
     )
     assert len(_DECLARED) > 100, f"only {len(_DECLARED)} declared distributions found"

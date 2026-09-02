@@ -27,6 +27,7 @@ from autobot_shared.paths import scrubbed_git_env
 from repo_tests.declared_distributions import (
     MANIFEST_PATTERNS,
     SKIP_PARTS,
+    _globbed,
     _manifests,
     declared_distributions,
 )
@@ -86,7 +87,7 @@ def test_the_declaration_floors_hold() -> None:
     """
     names, files = declared_distributions(_REPO_ROOT)
     assert files >= 30, (
-        f"only read {files} manifests, floor 30 (36 measured) — FIX THE SWEEP, "
+        f"only read {files} manifests, floor 30 (37 measured) — FIX THE SWEEP, "
         "the oracle has gone blind"
     )
     assert len(names) >= 180, (
@@ -106,3 +107,46 @@ def test_the_parser_still_matches_what_a_manifest_emits(tmp_path: Path) -> None:
     names, files = declared_distributions(tmp_path)
     assert files == 1, f"expected the nested manifest to be read, read {files}"
     assert {"some_dist", "quoted_dist", "plain_dist"} <= names, f"parsed {sorted(names)}"
+
+
+#: Distributions declared in exactly ONE place, a ``requirements-ci/`` manifest
+#: the pre-#15518 filename glob could not open. Each read as "declared nowhere"
+#: before the widening, which is the false finding this guard exists to prevent.
+CI_ONLY_DISTRIBUTIONS = ("pygetwindow", "langchain_text_splitters", "mouseinfo")
+
+
+def test_a_distribution_declared_only_under_requirements_ci_reads_as_declared() -> None:
+    """The #15518 acceptance criterion, asserted on named distributions.
+
+    A count can be met by the wrong files, and "197 declared" would still pass
+    if these three were missing. Naming them is what makes the criterion
+    checkable: each is declared in exactly one ``requirements-ci/`` file, so
+    each reads as declared only if that file was actually opened.
+    """
+    names, _ = declared_distributions(_REPO_ROOT)
+    missing = [d for d in CI_ONLY_DISTRIBUTIONS if d not in names]
+    assert not missing, (
+        f"{missing} are declared only under requirements-ci/ and the oracle "
+        "does not see them — every import of one would be reported as an "
+        "undeclared dependency by three guards (#15518)"
+    )
+
+
+def test_a_manifest_reachable_only_through_an_include_line_is_read() -> None:
+    """``constraints/shared.txt`` matches no filename pattern; only ``-c`` reaches it.
+
+    The filename widening alone leaves this file unread, so a population that
+    is merely *wider* is still not complete. The include closure is what closes
+    it, and this names the file that proves the closure runs.
+    """
+    read = {str(p.relative_to(_REPO_ROOT)) for p in _manifests(_REPO_ROOT)}
+    globbed = {str(p.relative_to(_REPO_ROOT)) for p in _globbed(_REPO_ROOT)}
+    reached_only_by_include = read - globbed
+    assert reached_only_by_include, (
+        "the include closure contributed no manifest at all — FIX THE SWEEP, "
+        "a file pulled in with -r/-c and matching no filename pattern would go unread"
+    )
+    assert "constraints/shared.txt" in reached_only_by_include, (
+        "constraints/shared.txt is pulled in by an include line and matches no "
+        f"filename pattern, but the closure reached {sorted(reached_only_by_include)}"
+    )
