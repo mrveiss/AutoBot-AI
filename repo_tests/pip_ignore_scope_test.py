@@ -107,7 +107,14 @@ def _files_reachable_from(directory: str) -> set[Path]:
 
 def _pyproject_specs(path: Path) -> list[str]:
     """Every PEP 508 requirement string a pyproject declares."""
-    import tomllib  # 3.11+; nothing this repo supports predates it
+    # #15177: matches the two siblings below rather than inventing a third
+    # approach. A `tomli` fallback is not available -- it is declared in no
+    # requirements or constraints file -- so skipping is the only option that
+    # does not raise ModuleNotFoundError on 3.10.
+    if sys.version_info < (3, 11):
+        pytest.skip("tomllib is 3.11+; no tomli fallback is declared in this repo")
+
+    import tomllib
 
     # Deliberately not wrapped in try/except. Returning [] on a parse error is
     # the same under-approximation this guard exists to close: a malformed
