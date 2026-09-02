@@ -53,13 +53,23 @@ def _declared_testpaths(ini: Path) -> List[str]:
     return []
 
 
+#: Both halves of pytest.ini's `python_files`. Sweeping only `test_*.py` was
+#: #15018's defect one guard over: `*_test.py` is the majority form in this
+#: tree, so eight directories holding nothing but that half were invisible to
+#: this check -- among them autobot-infrastructure/shared/scripts/monitoring,
+#: .../setup/knowledge and shared/tools, which no testpath reaches (#15178).
+#: `test_every_pattern_pytest_collects_by_is_swept` pins this list to the ini.
+_TEST_FILE_GLOBS = ("test_*.py", "*_test.py")
+
+
 def _dirs_holding_tests(root: Path) -> Set[Path]:
-    """Directories under *root* that contain at least one `test_*.py`."""
+    """Directories under *root* holding at least one file pytest would collect."""
     found: Set[Path] = set()
-    for path in root.rglob("test_*.py"):
-        if _SKIP_PARTS & set(path.relative_to(root).parts):
-            continue
-        found.add(path.parent)
+    for pattern in _TEST_FILE_GLOBS:
+        for path in root.rglob(pattern):
+            if _SKIP_PARTS & set(path.relative_to(root).parts):
+                continue
+            found.add(path.parent)
     return found
 
 
@@ -80,14 +90,50 @@ def _covered(root: Path, declared: List[str], directory: Path) -> bool:
 #: guard -- a decision that belongs to #15476, not to this file.
 KNOWN_UNCOVERED: dict[str, str] = {
     "pytest.ini": (
-        "#15476: testpaths omits autobot-npu-worker (8 files, 67 test functions "
-        "named by no workflow either) and four autobot-infrastructure/shared/scripts "
-        "directories. Whether those join the PR gate or the marker suite is a "
-        "decision, not a wiring fix."
+        "#15476: testpaths does not reach 16 directories holding files pytest "
+        "would collect. Re-measured under #15178, because every number in the "
+        "reason this replaced was wrong. autobot-npu-worker is omitted whole: 14 "
+        "tracked test files across 7 directories, of which 11 -- holding 168 test "
+        "functions -- sit outside the resources/ subtree pytest.ini --ignore's at "
+        "line 181, not the '8 files, 67 test functions' recorded here before. "
+        "autobot-infrastructure contributes SEVEN directories, not four: "
+        "shared/scripts and its analysis/, logging/, monitoring/, "
+        "setup/knowledge/ and utilities/ subdirectories, plus shared/tools -- the "
+        "last three were missed because this module swept only `test_*.py` and "
+        "they hold `*_test.py`. The remaining two are autobot-frontend/tests and "
+        "plugins/core-plugins/video-generation-plugin/tools, both named by "
+        "marker-tests.yml or by nothing rather than by this ini. "
+        "Why the exemption cannot simply be dropped: widening testpaths adds "
+        "never-executed tests to the PR gate as a side effect of writing a guard "
+        "-- ~30 ad-hoc scripts under shared/scripts/analysis/, and npu modules "
+        "importing `openvino`, which requirements-ci.txt does not carry. That is "
+        "#15476's decision, not this file's. It is no longer the INTERNALERROR "
+        "pytest.ini lines 106-110 still names: #14917 put "
+        "shared/scripts/test_alertmanager.py's `sys.exit` behind a `main()` "
+        "guard, so the import is inert and that blocker is spent."
     ),
 }
 
 _INIS = [ini for ini in _pytest_inis() if _declared_testpaths(ini)]
+
+
+def test_every_pattern_pytest_collects_by_is_swept() -> None:
+    """`_TEST_FILE_GLOBS` must be exactly pytest.ini's `python_files`.
+
+    A half pytest collects by that this sweep does not glob is a directory this
+    guard cannot see -- a silent omission inside the guard against silent
+    omissions (#15018, #15178).
+    """
+    parser = configparser.ConfigParser()
+    parser.read(REPO_ROOT / "pytest.ini", encoding="utf-8")
+    declared = parser.get("pytest", "python_files").split()
+
+    assert declared, "pytest.ini declares no `python_files`, so this sweep has nothing to mirror"
+    assert set(declared) == set(_TEST_FILE_GLOBS), (
+        "pytest.ini's `python_files` and this module's sweep patterns disagree, so a "
+        "directory holding only the unswept half is invisible here: "
+        f"pytest.ini={sorted(declared)} sweep={sorted(_TEST_FILE_GLOBS)}"
+    )
 
 
 def test_the_guard_found_a_config_to_check() -> None:
