@@ -19,15 +19,16 @@ Registration is global and idempotent — a no-op for every other dialect, so
 PostgreSQL DDL is untouched.
 """
 
-import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
 from typing import AsyncGenerator
 
-from user_management.models.base import Base
-from models.mobile_device import MobileDevice
+import pytest
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.pool import StaticPool
+
+from models.mobile_device import MobileDevice
+from user_management.models.base import Base
 
 
 @compiles(JSONB, "sqlite")

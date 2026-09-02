@@ -15,13 +15,9 @@ Comprehensive end-to-end tests for push notification delivery to mobile devices:
 """
 
 from datetime import timedelta
-from typing import AsyncGenerator
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.ext.asyncio.session import async_sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from autobot_shared.time_utils import now_utc
 from models.mobile_device import MobileDevice
@@ -30,14 +26,9 @@ from services.push_notification_service import (
     _send_mobile_push,
     send_push_notification,
 )
-from user_management.models.base import Base
 
 # Test database setup
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
-
-
-
-
 
 
 # =============================================================================
@@ -535,8 +526,6 @@ async def test_send_push_to_many_devices_is_efficient(mock_session_factory, test
             url="/",
         )
     assert count == 50  # PWA is skipped, all ios/android
-
-
 
 
 if __name__ == "__main__":
