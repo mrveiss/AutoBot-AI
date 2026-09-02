@@ -62,7 +62,14 @@ _WIRING_INSTRUCTIONS = (
 )
 
 
-_SKIP_PARTS = {"tests", "node_modules", ".worktrees", "__pycache__", "venv", ".venv"}
+# #15350: `"tests"` is deliberately absent. Pruning by DIRECTORY name dropped
+# every file under a `tests/` tree, test or not — so a WorkflowPlanner call site
+# in a non-test helper there was invisible to a guard whose whole job is to find
+# call sites. The per-file name filter below (`_test.py` / `test_` prefix) is
+# what excludes actual tests, and it does so without hiding their neighbours.
+# The sibling guard `with_error_handling_single_definition_test.py` made this
+# same narrowing for #15258 and names this file as the one still to do it.
+_SKIP_PARTS = {"node_modules", ".worktrees", "__pycache__", "venv", ".venv"}
 
 
 def _production_sources(root: Path = _BACKEND) -> List[Path]:
@@ -197,3 +204,41 @@ def test_a_checkout_under_worktrees_is_still_scanned(tmp_path):
         "a scan rooted under .worktrees/ and tests/ skipped its own tree — the "
         "exclusion is matching the absolute path instead of relative parts"
     )
+
+
+def test_a_non_test_helper_inside_a_tests_directory_is_still_scanned(tmp_path):
+    """#15350 contrast mutation: a call site in a non-test file under `tests/`.
+
+    Pruning `tests` by directory name dropped everything beneath it — test or
+    not — so a `WorkflowPlanner` reference in a helper module there was invisible
+    to the guard that exists to find references. Real instances of that shape
+    live at `autobot-backend/llc/tests/_e2e_harness.py` and
+    `autobot-infrastructure/shared/tests/mock_llm_interface.py`.
+
+    Narrowing the exclusion to file NAME means such a helper is scanned, while an
+    actual test file in the same directory stays excluded — the distinction the
+    per-file filter was already making and the directory filter was overriding.
+    """
+    root = tmp_path / "autobot-backend"
+    (root / "orchestration").mkdir(parents=True)
+    live = root / "orchestration" / "caller.py"
+    live.write_text("x = 1\n", encoding="utf-8")
+
+    helper_dir = root / "llc" / "tests"
+    helper_dir.mkdir(parents=True)
+    helper = helper_dir / "_e2e_harness.py"
+    helper.write_text("from orchestration import WorkflowPlanner\n", encoding="utf-8")
+    real_test = helper_dir / "test_something.py"
+    real_test.write_text("from orchestration import WorkflowPlanner\n", encoding="utf-8")
+    also_a_test = helper_dir / "harness_test.py"
+    also_a_test.write_text("from orchestration import WorkflowPlanner\n", encoding="utf-8")
+
+    scanned = _production_sources(root)
+
+    assert helper in scanned, (
+        "a non-test helper under tests/ was skipped — a WorkflowPlanner call site "
+        "placed there would never be reported"
+    )
+    assert real_test not in scanned, "an actual test file under tests/ must stay excluded"
+    assert also_a_test not in scanned, "the _test.py suffix must stay excluded too"
+    assert sorted(scanned) == sorted([live, helper])
