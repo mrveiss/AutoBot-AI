@@ -48,6 +48,13 @@ _TRANSFORMERS_FLOOR = (0, 22, 0)
 _REQUIREMENT_FILES = (
     "autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt",
     "autobot-infrastructure/autobot-npu-worker/docker/requirements-npu.txt",
+    # #14562: this one was excluded below as "an old, independent stack nothing
+    # deploys", which was true of the deploy roles and irrelevant to the risk.
+    # It pins `transformers>=4.36.0` with no cap, so pip resolves transformers
+    # to 5.x and inherits the same tokenizers<=0.23.0 cap the two above face —
+    # and the directory is now inside dependabot's reach, so a grouped bump can
+    # move the pin. Guarded rather than exempted.
+    "autobot-npu-worker/resources/windows-npu-worker/requirements.txt",
 )
 
 _SKIP_PARTS = {"venv", ".venv", "node_modules", ".worktrees", ".claude", "__pycache__"}
@@ -62,6 +69,7 @@ def _outside_excluded_dirs(path: Path, root: Path = _REPO_ROOT) -> bool:
     comparing an empty set against the expected one.
     """
     return not any(part in _SKIP_PARTS for part in path.relative_to(root).parts)
+
 
 _TOKENIZERS_LINE = re.compile(r"^tokenizers\s*(?P<spec>[^#\n]*)", re.M)
 _SPEC = re.compile(r"(?P<op>>=|<=|==|<|>)\s*(?P<version>\d+(?:\.\d+)*)")
@@ -164,10 +172,15 @@ def test_every_file_declaring_tokenizers_is_covered():
         if _outside_excluded_dirs(p)
         and _TOKENIZERS_LINE.search(p.read_text(encoding="utf-8", errors="replace"))
     }
-    # The windows npu-worker resource file pins an old, independent stack
-    # (transformers>=4.36) and is not installed by any role this repo deploys.
-    declaring -= {"autobot-npu-worker/resources/windows-npu-worker/requirements.txt"}
-    assert declaring == set(_REQUIREMENT_FILES), f"unguarded tokenizers pins: {sorted(declaring - set(_REQUIREMENT_FILES))}"
+    # No subtraction any more (#14562). The windows npu-worker resource file was
+    # excluded here for being "an old, independent stack nothing deploys" — a
+    # statement about deploy roles, not about whether the pin can go
+    # unsatisfiable. It is in _REQUIREMENT_FILES now, so this set comparison is
+    # a plain equality with nothing carved out of it.
+    assert declaring, "the rglob matched no requirements file at all — FIX THE SWEEP, every rule above is vacuous"
+    assert declaring == set(
+        _REQUIREMENT_FILES
+    ), f"unguarded tokenizers pins: {sorted(declaring - set(_REQUIREMENT_FILES))}"
 
 
 @pytest.mark.parametrize(

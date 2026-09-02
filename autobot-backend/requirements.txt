@@ -141,10 +141,14 @@ pdfplumber>=0.11.10
 docker>=7.2.0
 jsonschema>=4.26.0      # Issue #7405: JSON Schema validation for /knowledge/extract
 defusedxml>=0.7.1       # MVA-2039: XML parsing for WebDAV (Nextcloud connector)
-# Optional (install separately for full media support):
-# opencv-python>=4.8.0   # Frame extraction for video pipeline
-# transformers>=4.30.0   # Whisper transcription for audio pipeline
-# librosa>=0.10.0        # Audio decoding (used with transformers)
+# Optional media support (opencv-python, transformers, librosa) is a REAL
+# declaration in requirements-media.txt, not a comment here (#15035). Those three
+# sat commented out under a heading that read like a declaration while
+# multimodal_processor/processors/voice.py raised without them: nothing installed
+# them and no tooling could say which version an operator needed. They are not in
+# this file because everything here must be mirrored into requirements-ci/
+# (tools/lint/check_requirements_ci_drift.py) and the CI suite does not exercise
+# the media pipelines. Install with: pip install -r requirements-media.txt
 
 # Optional LLM tracing integrations (GH#9012) — backend starts without them when env vars are absent
 # langfuse>=2.0.0        # Set LANGFUSE_HOST + LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY to activate

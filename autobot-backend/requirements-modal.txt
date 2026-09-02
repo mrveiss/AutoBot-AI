@@ -1,0 +1,16 @@
+# Optional Modal extra — enables the Modal serverless execution backend (#15035).
+#
+# NOT installed in the default backend image. services/execution/modal_backend.py
+# guard-imports `modal` and raises RuntimeError("modal package not installed")
+# from execute(), _run_in_sandbox() and _call_modal_function() when it is absent,
+# so this is a hard dependency of that backend — but the backend is one of
+# several (docker, ssh, local) and only reachable with a Modal account and token,
+# so it is an opt-in extra rather than core runtime.
+#
+# Declared here rather than in requirements.txt because anything landing there
+# has to be mirrored into requirements-ci/ (tools/lint/check_requirements_ci_drift.py),
+# and the CI suite neither has nor wants Modal credentials.
+#
+# To enable:
+#   pip install -r requirements-modal.txt
+modal>=1.0.0
