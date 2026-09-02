@@ -15,6 +15,7 @@
  * endpoints that moved.
  */
 
+import { readFileSync } from 'node:fs'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
@@ -151,5 +152,79 @@ describe('UserManagementSettings RBAC transport (#13079)', () => {
     await vm.checkRbacStatus()
 
     expect(vm.rbacStatus.message).toBe('Failed to check RBAC status')
+  })
+})
+
+/**
+ * #15533 — the endpoint this view hands to PasswordChangeForm must name a route
+ * the SLM actually serves.
+ *
+ * The oracle is the SLM's own generated contract (`autobot-slm-frontend/
+ * openapi.json`, produced by `npm run gen:types:openapi` from the live app), not
+ * a literal string copied out of the component: a test that asserted the string
+ * would pass just as happily on `/api/users/{id}/change-password`, which is what
+ * the self-service button produced before this fix and which no SLM router
+ * mounts. Asserting that the modal opens is not enough either — it opened then
+ * too.
+ */
+
+const CONTRACT_PATHS: string[] = Object.keys(
+  JSON.parse(readFileSync(new URL('../../../../openapi.json', import.meta.url), 'utf-8')).paths,
+)
+
+/** True when `endpoint` matches a contract path, treating `{...}` as one segment. */
+function servedBySlm(endpoint: string): boolean {
+  const call = endpoint.split('/').filter(Boolean)
+  return CONTRACT_PATHS.some((served) => {
+    const route = served.split('/').filter(Boolean)
+    return (
+      route.length === call.length &&
+      route.every((seg, i) => seg.startsWith('{') || seg === call[i])
+    )
+  })
+}
+
+type PasswordVm = {
+  slmUsers: Array<{ id: string; username: string }>
+  openPasswordChangeModal: (user?: { id: string; username: string }, type?: 'slm' | 'autobot') => void
+  passwordChangeApiEndpoint: string
+  showChangePasswordModal: boolean
+}
+
+describe('UserManagementSettings password endpoint (#15533)', () => {
+  function mountWithSignedInUser(): PasswordVm {
+    const vm = mount(UserManagementSettings, {
+      global: { plugins: [i18n], stubs: { PasswordChangeForm: true } },
+    }).vm as unknown as PasswordVm
+    vm.slmUsers = [{ id: 'a3f1c2d4-0000-4000-8000-000000000001', username: 'ops' }]
+    return vm
+  }
+
+  it('the contract oracle rejects the pre-fix path and accepts the served one', () => {
+    expect(servedBySlm('/api/users/a3f1c2d4/change-password')).toBe(false)
+    expect(servedBySlm('/api/slm-users/a3f1c2d4/change-password')).toBe(true)
+    expect(servedBySlm('/api/autobot-users/a3f1c2d4/change-password')).toBe(true)
+  })
+
+  it('the self-service button names a route the SLM serves', async () => {
+    const vm = mountWithSignedInUser()
+    await flushPromises()
+
+    vm.openPasswordChangeModal()
+
+    expect(vm.showChangePasswordModal).toBe(true)
+    expect(vm.passwordChangeApiEndpoint).not.toBe('')
+    expect(servedBySlm(vm.passwordChangeApiEndpoint)).toBe(true)
+  })
+
+  it('every reachable user type names a route the SLM serves', async () => {
+    const vm = mountWithSignedInUser()
+    await flushPromises()
+    const user = { id: 'a3f1c2d4-0000-4000-8000-000000000002', username: 'other' }
+
+    for (const type of ['slm', 'autobot'] as const) {
+      vm.openPasswordChangeModal(user, type)
+      expect(servedBySlm(vm.passwordChangeApiEndpoint)).toBe(true)
+    }
   })
 })
