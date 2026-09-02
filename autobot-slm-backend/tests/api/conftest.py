@@ -36,12 +36,30 @@ def _starlette_formparsers_import_works() -> bool:
     Asking the question directly makes the stub a fallback rather than an
     override: where the real package works, nothing is installed and there is
     nothing to leak.
+
+    #15531: ``starlette.formparsers`` alone was the WRONG question, and asking it
+    made this whole block unreachable. ``formparsers`` imports the legacy
+    ``multipart`` shim, which is installed on these hosts, so the probe answered
+    "fine" — while ``starlette.requests`` (what ``import fastapi`` actually pulls)
+    imports ``python_multipart.multipart`` and was failing. Both are probed now,
+    so the fallback is reachable exactly when the imports it repairs are broken.
     """
     try:
         import starlette.formparsers  # noqa: F401 — probing the import, not using it
+        import starlette.requests  # noqa: F401 — the import `import fastapi` actually makes
     except Exception:
         return False
     return True
+
+
+def _stub_is_usable(module) -> bool:
+    """Does *module* already expose ``<pkg>.multipart.parse_options_header``?
+
+    #15531: the question the two branches below must ask. "Is the name in
+    ``sys.modules``" is a different question, and answering it instead is what
+    let a crippled stub installed by an outer conftest stand unrepaired.
+    """
+    return hasattr(getattr(module, "multipart", None), "parse_options_header")
 
 
 if not _starlette_formparsers_import_works():
@@ -50,21 +68,25 @@ if not _starlette_formparsers_import_works():
     # `starlette.formparsers` to be importable at that point, which is before any
     # fixture runs. So it is installed once here and recorded in the leak guard's
     # baseline as an accepted owner rather than pretended away.
-    if "multipart" not in sys.modules or not hasattr(sys.modules.get("multipart"), "parse_options_header"):
-        _mp_inner = types.ModuleType("multipart.multipart")
-        _mp_inner.parse_options_header = lambda *a, **kw: (b"", {})  # type: ignore[attr-defined]
-        _mp = types.ModuleType("multipart")
-        _mp.multipart = _mp_inner  # type: ignore[attr-defined]
-        sys.modules.setdefault("multipart", _mp)
-        sys.modules.setdefault("multipart.multipart", _mp_inner)
-
-    if "python_multipart" not in sys.modules:
-        _pymp_inner = types.ModuleType("python_multipart.multipart")
-        _pymp_inner.parse_options_header = lambda *a, **kw: (b"", {})  # type: ignore[attr-defined]
-        _pymp = types.ModuleType("python_multipart")
-        _pymp.multipart = _pymp_inner  # type: ignore[attr-defined]
-        sys.modules.setdefault("python_multipart", _pymp)
-        sys.modules.setdefault("python_multipart.multipart", _pymp_inner)
+    # #15531: both branches ask whether the entry in ``sys.modules`` actually
+    # PROVIDES what starlette imports — ``<pkg>.multipart.parse_options_header``
+    # — not merely whether the name is taken. Presence alone was the bug: the
+    # root ``conftest.py`` puts a bare ``python_multipart`` (no ``.multipart``)
+    # in first, so the presence check skipped the repair and starlette died on
+    # ``from python_multipart.multipart import parse_options_header``. For the
+    # same reason the entries are ASSIGNED rather than ``setdefault``: a broken
+    # entry has to be replaced, and ``setdefault`` would leave it in place.
+    # The outer probe above already established starlette cannot load unaided,
+    # so nothing here can displace a working install.
+    for _name in ("multipart", "python_multipart"):
+        if _stub_is_usable(sys.modules.get(_name)):
+            continue
+        _inner = types.ModuleType(f"{_name}.multipart")
+        _inner.parse_options_header = lambda *a, **kw: (b"", {})  # type: ignore[attr-defined]
+        _outer = types.ModuleType(_name)
+        _outer.multipart = _inner  # type: ignore[attr-defined]
+        sys.modules[_name] = _outer
+        sys.modules[f"{_name}.multipart"] = _inner
 
 
 # ---------------------------------------------------------------------------
