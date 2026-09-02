@@ -154,9 +154,13 @@ def test_every_file_declaring_tokenizers_is_covered():
     unguarded, which is how the npu-worker copy went unnoticed while only the
     ai-stack one was being discussed.
     """
+    # Both manifest shapes, as in repo_tests/declared_distributions.py (#15518):
+    # a requirements file is not always *named* `requirements*` — every
+    # `requirements-ci/*.txt` is one, and a filename-only glob never sees them.
+    candidates = set(_REPO_ROOT.rglob("requirements*.txt")) | set(_REPO_ROOT.rglob("requirements*/*.txt"))
     declaring = {
         str(p.relative_to(_REPO_ROOT))
-        for p in _REPO_ROOT.rglob("requirements*.txt")
+        for p in sorted(candidates)
         if _outside_excluded_dirs(p)
         and _TOKENIZERS_LINE.search(p.read_text(encoding="utf-8", errors="replace"))
     }
