@@ -315,7 +315,8 @@ try:
     import python_multipart as _real_python_multipart  # noqa: F401
 except Exception:  # noqa: BLE001 — any import failure means "genuinely absent"
     _pm_mod = types.ModuleType("python_multipart")
-    _pm_mod.__version__ = "9.9.99"  # type: ignore[attr-defined]  # high sentinel — immune to future FastAPI threshold bumps
+    # High sentinel version, immune to future FastAPI threshold bumps.
+    _pm_mod.__version__ = "9.9.99"  # type: ignore[attr-defined]
     # Legacy `multipart` shim re-exports `from python_multipart import __all__` (#10023).
     _pm_mod.__all__ = []  # type: ignore[attr-defined]
     sys.modules.setdefault("python_multipart", _pm_mod)
