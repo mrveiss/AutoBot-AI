@@ -9,3 +9,20 @@
 - exclude:
     file:
       - autobot-backend/skills/external_importer.py
+
+# #14126: the three call sites CodeQL flags in api/secrets.py log
+# `secret_log_ref(id)` — a truncated SHA-256 of the identifier, not the
+# identifier and never the secret value. The taint tracker follows the id into
+# the helper and does not recognise the hash as a sanitiser, so it reports what
+# is already the fix for what it is reporting: before this, one of those lines
+# logged the id in full.
+#
+# Inline `codeql[...]` comments do not dismiss alerts here (#12307), so this is
+# the only mechanism available. The scope is wider than the finding — it covers
+# the whole file, including any genuine clear-text logging added later — which
+# is tracked as its own trade-off rather than accepted silently.
+- description: Exclude py/clear-text-logging-sensitive-data in api/secrets.py (ids are logged as truncated SHA-256 via secret_log_ref)
+- query: py/clear-text-logging-sensitive-data
+- exclude:
+    file:
+      - autobot-backend/api/secrets.py
