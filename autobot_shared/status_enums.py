@@ -112,6 +112,21 @@ class Severity(Enum):
     So this enum is the severity *vocabulary*. Numeric risk grading uses the
     narrower ``score_ladder()`` — see that method for why the distinction is
     load-bearing rather than cosmetic.
+
+    #14988 measured four more words in fields named ``severity`` and none of
+    them belongs here. Each is a different vocabulary, and the fix is to type
+    the field, never to widen this enum:
+
+    * ``forbidden`` — ``CommandRisk`` below already grades that; a command
+      permission is not an outcome grade.
+    * ``none`` / ``moderate`` — ``autobot_shared.delta_engine`` classifies a
+      metric delta, and ``none`` means *no finding at all*, which no severity
+      rung can express.
+    * ``missing`` — ``autobot_shared.env_drift_detector`` records a drift
+      *kind*, not how bad the drift is.
+
+    ``repo_tests/severity_literal_shape_guard_test.py`` fails if any of the
+    four is added here.
     """
 
     UNKNOWN = "unknown"
