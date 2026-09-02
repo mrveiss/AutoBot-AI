@@ -70,17 +70,16 @@ export function useApiKeyApi() {
    * the envelope and rendered a single bogus entry keyed `scopes`. Wiring the
    * generated contract exposed that; unwrap here so callers keep the bare map.
    *
-   * The backend declares `scopes` as an untyped `dict`, so the generated value
-   * type is `unknown`; the values are scope descriptions, normalised to string.
+   * #13139 narrowed the backend field from a bare `dict` to `dict[str, str]`
+   * (API_KEY_SCOPES maps scope name to human description, both `str`), so the
+   * generated value type is `string` and the `String(...)` normalisation this
+   * function used to need is gone. The `?? {}` guard stays: it covers a
+   * response that omits the envelope field at runtime, which no static type
+   * can rule out.
    */
   async function getScopes(): Promise<Record<string, string>> {
     const response = await slmApiClient.get<APIScopesResponse>('/api-keys/scopes')
-    return Object.fromEntries(
-      Object.entries(response.scopes ?? {}).map(([scope, description]) => [
-        scope,
-        String(description),
-      ])
-    )
+    return { ...(response.scopes ?? {}) }
   }
 
   return {

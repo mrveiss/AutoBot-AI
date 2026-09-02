@@ -32,6 +32,7 @@ that supplies it, so every existing ``_urls(call)`` call site is unchanged.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from pathlib import Path
 
@@ -78,6 +79,44 @@ async def _record(call, base: str) -> list[tuple[str, str, frozenset[str]]]:
 
 def _urls(call, base: str) -> list[tuple[str, str, frozenset[str]]]:
     return asyncio.run(_record(call, base))
+
+
+async def _record_body(call, base: str) -> list[tuple[str, str, str, frozenset[str]]]:
+    """Run one SDK call and record ``(verb, path, content-type, body keys)``.
+
+    A sibling of ``_record`` rather than a fourth element appended to it: every
+    existing ``verb, path, sent = _urls(call)[0]`` unpack in the two guards that
+    already import it would have to change, and widening a passing guard's
+    tuple to add a field it does not use is churn with a failure mode
+    (#15057). ``SDK_REQUESTS`` stays the single table both recorders drive, so
+    the two cannot see different requests.
+
+    Body keys are the **top-level** field names as they reach the wire, read off
+    the encoded request rather than off the method's ``body`` dict, so what the
+    SDK builds and what httpx actually sends are the same set. A request with no
+    body records an empty set and an empty content type.
+    """
+    seen: list[tuple[str, str, str, frozenset[str]]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raw = request.content
+        media = request.headers.get("content-type", "").split(";")[0].strip() if raw else ""
+        keys: frozenset[str] = frozenset()
+        if raw:
+            decoded = json.loads(raw)
+            assert isinstance(decoded, dict), f"{request.method} {request.url.path} sends a non-object JSON body"
+            keys = frozenset(decoded)
+        seen.append((request.method, request.url.path, media, keys))
+        return httpx.Response(200, json={"success": True, "data": None, "status": "healthy"})
+
+    async with AutoBot(base_url=base, token="t") as bot:
+        bot._client._transport = httpx.MockTransport(handler)
+        await call(bot)
+    return seen
+
+
+def _bodies(call, base: str) -> list[tuple[str, str, str, frozenset[str]]]:
+    return asyncio.run(_record_body(call, base))
 
 
 # ``(name, coroutine, expected METHOD, expected full path)`` — one row per

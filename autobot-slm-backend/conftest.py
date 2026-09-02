@@ -167,6 +167,22 @@ for _m in [
 ]:
     _stub(_m)
 
+# #13139: models/schemas_secrets.py must be REAL, not stubbed. It carries
+# response_model classes, and FastAPI rejects a MagicMock as a response field
+# ("Invalid args for response field!") the moment a test builds the app. It
+# imports only pydantic, so loading it by path is safe -- this deliberately
+# bypasses models/__init__.py, which is what the stubs above exist to avoid.
+_schemas_secrets_path = Path(__file__).parent / "models" / "schemas_secrets.py"
+if not _schemas_secrets_path.is_file():
+    raise RuntimeError("conftest: models/schemas_secrets.py is named here but does not exist")
+import importlib.util as _ss_importlib_util  # noqa: E402  -- the shared alias is bound later
+
+_ss_spec = _ss_importlib_util.spec_from_file_location("models.schemas_secrets", _schemas_secrets_path)
+_ss_mod = _ss_importlib_util.module_from_spec(_ss_spec)
+_ss_spec.loader.exec_module(_ss_mod)
+sys.modules["models.schemas_secrets"] = _ss_mod
+setattr(sys.modules["models"], "schemas_secrets", _ss_mod)
+
 # ── services ──────────────────────────────────────────────────────────────────
 # The services.* modules api/code_sync.py and api/setup_wizard.py import are
 # AST-derived from their sources (#11575, #11794) — a hand-maintained list rots

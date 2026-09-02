@@ -33,13 +33,12 @@ export type ApplySecretsRequest = components['schemas']['ApplySecretsRequest']
 export type ApplySecretsResult = components['schemas']['ApplySecretsResponse']
 
 /**
- * `GET /secrets/dependent-roles` returns an untyped `dict` (the backend
- * declares no response_model), so there is no generated schema to derive from —
- * this shape stays hand-declared until the backend types the endpoint.
+ * `GET /secrets/dependent-roles`. Derived since #13139 gave the endpoint a
+ * `response_model` (`autobot-slm-backend/api/secrets.py`, returning
+ * `DependentRolesResponse(mapping=_SECRET_TO_DEPENDENT_ROLES)`), replacing the
+ * hand-declared shape this file used to carry.
  */
-export interface DependentRolesMapping {
-  mapping: Record<string, string[]>
-}
+export type DependentRolesResponse = components['schemas']['DependentRolesResponse']
 
 export function useSecretsApi() {
   async function listSecrets(): Promise<SecretResponse[]> {
@@ -64,8 +63,8 @@ export function useSecretsApi() {
     await slmApiClient.delete(`/secrets/${encodeURIComponent(key)}`)
   }
 
-  async function getDependentRolesMapping(): Promise<DependentRolesMapping> {
-    return slmApiClient.get<DependentRolesMapping>('/secrets/dependent-roles')
+  async function getDependentRolesMapping(): Promise<DependentRolesResponse> {
+    return slmApiClient.get<DependentRolesResponse>('/secrets/dependent-roles')
   }
 
   async function applySecret(key: string): Promise<ApplySecretsResult> {
