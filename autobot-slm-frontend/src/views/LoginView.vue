@@ -298,7 +298,7 @@ onMounted(async () => {
 <style scoped>
 input:focus-visible,
 button:focus-visible {
-  outline: 2px solid var(--a11y-focus-ring, #0284c7);
+  outline: 2px solid var(--a11y-focus-ring);
   outline-offset: 2px;
 }
 </style>
