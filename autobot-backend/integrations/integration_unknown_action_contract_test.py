@@ -20,7 +20,6 @@ from pathlib import Path
 
 import pytest
 
-
 #: The integration package this guard lives in, anchored to the test file (#12993).
 #:
 #: This was ``Path("autobot-backend/integrations")`` -- a bare relative path,

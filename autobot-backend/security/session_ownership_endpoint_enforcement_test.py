@@ -261,8 +261,7 @@ def test_get_endpoint_enforcement_has_a_non_test_caller():
     # Non-vacuity: the sweep must at least find the definition it is named
     # after, or it swept nothing and every assertion below passes for free.
     assert references, (
-        "the sweep found zero references to get_endpoint_enforcement -- FIX THE SWEEP, "
-        "the sweep itself is broken"
+        "the sweep found zero references to get_endpoint_enforcement -- FIX THE SWEEP, " "the sweep itself is broken"
     )
 
     def _defines_it(path_part: str) -> bool:
