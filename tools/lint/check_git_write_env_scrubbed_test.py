@@ -306,11 +306,17 @@ def test_the_reach_floor_is_met_by_the_real_tree() -> None:
     assert reached >= TEST_FILE_FLOOR, f"only reached {reached} test files, floor is {TEST_FILE_FLOOR}"
 
 
-def test_scan_repo_reaches_nothing_under_an_empty_tree(tmp_path: Path) -> None:
-    """The floor check's precondition: an empty tree reaches zero files."""
-    reached, findings = scan_repo(tmp_path)
-    assert reached == 0
-    assert findings == []
+def test_scan_repo_refuses_a_tree_git_cannot_enumerate(tmp_path: Path) -> None:
+    """The floor check's precondition, restated after #14896.
+
+    The walk used to be ``rglob``, so a directory that was not a repository
+    reached zero files and the floor caught it one frame later. It is now a
+    ``git ls-files`` enumeration, and a failed enumeration raises here instead
+    of travelling on as an empty list -- an earlier, louder version of the same
+    refusal, not a weaker one. Both are nonzero exits; only the frame moved.
+    """
+    with pytest.raises(RuntimeError, match="git ls-files"):
+        scan_repo(tmp_path)
 
 
 def test_a_walk_below_the_floor_fails_main_loudly(monkeypatch: pytest.MonkeyPatch) -> None:

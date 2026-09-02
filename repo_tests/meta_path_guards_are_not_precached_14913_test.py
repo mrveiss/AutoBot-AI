@@ -35,6 +35,8 @@ from typing import Dict, List, Set, Tuple
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _SKIP_PARTS = {"node_modules", ".worktrees", "__pycache__", "venv", ".venv"}
 
@@ -46,13 +48,9 @@ _CACHES_DEFAULT = re.compile(r"""sys\.modules\.setdefault\(\s*["']([\w.]+)["']""
 
 def _tracked(pattern: str) -> List[Path]:
     out = subprocess.run(
-        ["git", "ls-files", pattern], cwd=REPO_ROOT, capture_output=True, text=True, check=True
+        ["git", "ls-files", pattern], cwd=REPO_ROOT, capture_output=True, text=True, check=True, env=scrubbed_git_env()
     ).stdout.split()
-    return [
-        REPO_ROOT / p
-        for p in out
-        if not _SKIP_PARTS & set(Path(p).parts)
-    ]
+    return [REPO_ROOT / p for p in out if not _SKIP_PARTS & set(Path(p).parts)]
 
 
 def _meta_path_guards() -> List[Path]:

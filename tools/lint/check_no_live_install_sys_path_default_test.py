@@ -172,8 +172,9 @@ def test_this_test_file_does_not_need_an_exemption_either():
 def test_the_live_repository_has_no_remaining_sites():
     """#14544 swept all 18; nothing should be left to find at HEAD."""
     repo_root = pathlib.Path(__file__).resolve().parents[2]
+    files, _ = guard.scan_python_files([], repo_root)
     total = 0
-    for path in guard.iter_python_files([], repo_root):
+    for path in files:
         try:
             total += len(guard.live_install_default_sites(path))
         except (SyntaxError, UnicodeDecodeError, OSError):

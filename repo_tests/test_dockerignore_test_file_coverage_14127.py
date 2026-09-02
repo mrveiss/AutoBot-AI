@@ -41,6 +41,8 @@ import subprocess
 from functools import lru_cache
 from pathlib import Path
 
+from autobot_shared.paths import scrubbed_git_env
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _DOCKERIGNORE = _REPO_ROOT / ".dockerignore"
 
@@ -94,6 +96,7 @@ def _tracked_test_files() -> list[str]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     )
     files = [line for line in result.stdout.splitlines() if line.strip()]
     return [
@@ -235,6 +238,7 @@ def _tracked_python_files() -> tuple[str, ...]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     )
     return tuple(line for line in result.stdout.splitlines() if line.strip())
 

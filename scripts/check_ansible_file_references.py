@@ -37,6 +37,12 @@ import sys
 
 import yaml
 
+# scripts/ is not a Python package; put the repository root on the path so
+# the shared vacuity floor is importable when this runs as a bare script.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+
+from tools.lint._scan_helpers import enforce_reach  # noqa: E402
+
 # The deploy syncs the repo to this prefix, so what follows it is a repo path.
 _DEPLOYED_SRC_PREFIX = "/opt/autobot/src/"
 
@@ -196,6 +202,17 @@ def _unresolvable_hosts(text: str, all_groups: set) -> list[tuple[int, str]]:
     return unresolved
 
 
+#: Name this guard reports under.
+HOOK_ID = "ansible-file-references"
+
+
+# The vacuity floor below (#14896) counts plays READ, not references
+# resolved. A walk that read no play at all -- wrong CWD, a renamed
+# ansible/ directory, a discovery filter inverted -- used to print the
+# success line and exit 0, reporting its own empty population as a pass.
+# Flooring resolutions instead would be wrong in the other direction: a
+# play whose only host pattern is runtime-supplied ('{{ target_group }}',
+# 'localhost') legitimately resolves nothing, and that tree is honest.
 def main() -> int:
     """Report every deployed-src reference with no matching repo path."""
     root = pathlib.Path(".").resolve()
@@ -203,13 +220,14 @@ def main() -> int:
     all_groups = set().union(*inventories.values()) if inventories else set()
 
     path_violations, host_violations = [], []
-    paths_checked = hosts_checked = 0
+    paths_checked = hosts_checked = plays_read = 0
 
     for play in _ansible_files(root):
         try:
             text = play.read_text(encoding="utf-8")
         except OSError:
             continue
+        plays_read += 1
         rel_play = play.relative_to(root)
         for line_no, key, rel in _referenced_repo_paths(text):
             paths_checked += 1
@@ -232,6 +250,10 @@ def main() -> int:
         print("ok=0 changed=0, exit 0 — which reads as a successful deploy.")
 
     if path_violations or host_violations:
+        return 1
+
+    # Vacuity floor (#14896) -- rationale in the comment above main().
+    if enforce_reach(plays_read, 1, hook=HOOK_ID, full_repo=True):
         return 1
 
     print(

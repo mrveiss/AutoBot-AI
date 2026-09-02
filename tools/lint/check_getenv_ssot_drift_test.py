@@ -13,8 +13,12 @@ guard against the real tree, the way CI does.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
+import pytest
+
+from tools.lint import check_getenv_ssot_drift as guard
 from tools.lint.check_getenv_ssot_drift import (
     FIELD_DEFAULT_FLOOR,
     GETENV_CALL_FLOOR,
@@ -104,3 +108,39 @@ def test_no_drift_between_live_getenv_defaults_and_ssot_config() -> None:
         "ssot_config alias — it broke, or scope narrowed unexpectedly"
     )
     assert offenders == [], "\n".join(offenders)
+
+
+def test_main_refuses_when_the_pair_sweep_matched_nothing(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """``GETENV_CALL_FLOOR`` was asserted only from this file until #14896 — the
+    checker itself never read it, so the floor guarded the test's sweep and
+    nothing in the hook path. This pins the wiring, not the constant.
+
+    An empty offender list from a sweep that compared zero getenv/ssot_config
+    pairs is the vacuous pass: it looks identical to a tree with no drift.
+    """
+    monkeypatch.setattr(guard, "find_drift", lambda _root: ([], 0))
+
+    with caplog.at_level(logging.ERROR):
+        assert guard.main() == 1
+
+    assert "FIX THE SWEEP" in caplog.text
+
+
+def test_main_passes_once_the_pair_sweep_reaches_the_floor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The green direction, so the refusal above cannot be satisfied by a main()
+    that returns 1 unconditionally."""
+    monkeypatch.setattr(guard, "find_drift", lambda _root: ([], GETENV_CALL_FLOOR))
+    assert guard.main() == 0
+
+
+def test_main_reports_drift_it_was_handed(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    """And the floor must not swallow a real finding on the way past."""
+    monkeypatch.setattr(guard, "find_drift", lambda _root: (["x.py:1: A disagrees"], GETENV_CALL_FLOOR))
+
+    with caplog.at_level(logging.ERROR):
+        assert guard.main() == 1
+
+    assert "A disagrees" in caplog.text
+    assert "FIX THE SWEEP" not in caplog.text

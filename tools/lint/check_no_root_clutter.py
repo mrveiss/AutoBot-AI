@@ -45,9 +45,15 @@ Exit code
 
 from __future__ import annotations
 
-import subprocess
+import subprocess  # noqa: F401  # monkeypatched by name in the suite's git-missing test
 import sys
 from pathlib import Path
+
+# tools/lint/ is not a Python package; make the sibling helper importable
+# regardless of invocation mode (script / importlib from tests).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _scan_helpers import tracked_paths  # noqa: E402
 
 # Top-level *.md / *.txt files a newcomer needs at the front door.
 # Anything else belongs under docs/. Extend deliberately, in the commit that
@@ -95,19 +101,11 @@ def _tracked_paths(repo_root: Path) -> list[str]:
     Anchored with ``cwd=repo_root`` rather than the caller's CWD: run from a
     subdirectory, ``git ls-files`` succeeds and returns paths re-prefixed
     relative to that subdirectory, so a CWD-relative scan reports a
-    confidently wrong result instead of an empty one.
+    confidently wrong result instead of an empty one. Kept as a named
+    function despite being one line: the suite monkeypatches it by name to
+    drive the empty/raising/clean/dirty branches of :func:`main`.
     """
-    result = subprocess.run(
-        ["git", "ls-files"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"git ls-files failed: {result.stderr.strip()}")
-    return [line.replace("\\", "/") for line in result.stdout.splitlines() if line]
+    return tracked_paths(repo_root)
 
 
 def find_violations(paths: list[str]) -> list[tuple[str, str]]:

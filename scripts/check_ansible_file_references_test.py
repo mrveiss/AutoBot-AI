@@ -212,6 +212,40 @@ def test_patterns_needing_no_inventory_group_are_skipped(pattern, tmp_path):
     assert _run(tmp_path).returncode == 0
 
 
+def test_a_tree_with_no_ansible_content_is_refused_rather_than_passed(tmp_path):
+    """The #14896 defect this floor exists for.
+
+    Run from the wrong directory -- or after an `ansible/` directory is renamed
+    -- the walk reads no play, extracts no reference, and every violation list
+    comes back empty. That is byte-identical to a clean tree at the exit code,
+    so the guard has to refuse it rather than print its success line.
+    """
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("x = 1\n", encoding="utf-8")
+
+    result = _run(tmp_path)
+
+    assert result.returncode == 1, result.stdout
+    assert "FIX THE SWEEP" in result.stderr
+    assert "reference(s) resolve" not in result.stdout
+
+
+def test_a_play_resolving_nothing_is_still_a_pass(tmp_path):
+    """The floor counts plays READ, not references resolved (#14896).
+
+    A play whose only host pattern is runtime-supplied resolves zero groups and
+    zero deployed-src paths. Flooring resolutions would fail this honest tree,
+    which is what made the first cut of the floor red on CI.
+    """
+    _inventory(tmp_path, "all:\n  children:\n    frontend:\n      hosts:\n        web-1: {}\n")
+    _play(tmp_path, "- name: Play\n  hosts: '{{ target_group }}'\n  tasks: []\n")
+
+    result = _run(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "FIX THE SWEEP" not in result.stderr
+
+
 def test_the_allowlist_is_documented_with_a_tracking_issue():
     """An unexplained allowlist entry is indistinguishable from the bug it hides."""
     source = _SCRIPT.read_text(encoding="utf-8")
@@ -265,7 +299,15 @@ def test_the_workflow_installs_every_third_party_import_the_guard_needs():
 
     # Distribution names differ from import names for some packages.
     dist_for = {"yaml": "pyyaml", "pytest": "pytest"}
-    local = {_SCRIPT.stem}
+    # A top-level name that exists in the repository is not a dependency to
+    # install: actions/checkout puts it on disk, and the guard prepends the
+    # repo root to sys.path, so the import resolves to the checked-out copy
+    # whatever pip did. `tools.lint._scan_helpers` is one such import.
+    local = {_SCRIPT.stem} | {
+        entry.stem if entry.suffix == ".py" else entry.name
+        for entry in repo_root.iterdir()
+        if entry.is_dir() or entry.suffix == ".py"
+    }
     third_party = {m for m in imported - stdlib - local if not m.startswith("_")}
 
     missing = {m for m in third_party if dist_for.get(m, m) not in declared}

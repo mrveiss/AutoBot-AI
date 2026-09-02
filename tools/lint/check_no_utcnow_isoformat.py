@@ -43,7 +43,7 @@ from typing import List, Tuple
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import iter_python_files  # noqa: E402
+from _scan_helpers import PY_FLOOR, enforce_reach, scan_python_files  # noqa: E402
 
 # Files allowed to contain banned patterns (very narrow allowlist)
 ALLOWLIST = {
@@ -227,7 +227,11 @@ def _prose_lines(text: str) -> set[int]:
 
 def main(argv: List[str]) -> int:
     repo_root = Path(__file__).resolve().parents[2]
-    files = list(iter_python_files(argv[1:], repo_root))
+    files, full_repo = scan_python_files(argv[1:], repo_root)
+    # Vacuity floor (#14896): full-repo mode only -- pre-commit legitimately
+    # hands this hook an argv with no Python in it.
+    if enforce_reach(len(files), PY_FLOOR, hook="no-utcnow-isoformat", full_repo=full_repo):
+        return 1
     total_hits = 0
     for path in files:
         for line_no, pattern_id, message in _scan(path, repo_root):
