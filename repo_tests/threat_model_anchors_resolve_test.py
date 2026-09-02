@@ -23,6 +23,7 @@ Anchor grammar (one form, deliberately):
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -81,6 +82,60 @@ def test_anchors_were_actually_parsed():
     assert len(anchors) >= 25, f"only {len(anchors)} anchors parsed — grammar drifted"
 
 
+def _format_lines(lines: list[int]) -> str:
+    """`31`, or `31, 47 or 63` — the actual locations, not just a complaint."""
+    if len(lines) == 1:
+        return str(lines[0])
+    return ", ".join(str(n) for n in lines[:-1]) + f" or {lines[-1]}"
+
+
+def _parse(target: Path) -> ast.Module | None:
+    try:
+        return ast.parse(target.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):  # pragma: no cover - a tracked file that will not parse
+        return None
+
+
+def _definition_lines(target: Path, ident: str) -> list[int]:
+    """Every line where *ident* is defined: def, class, or module/class assignment."""
+    tree = _parse(target)
+    if tree is None:
+        return []
+    found: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == ident:
+            found.add(node.lineno)
+        elif isinstance(node, ast.Assign):
+            for target_node in node.targets:
+                if isinstance(target_node, ast.Name) and target_node.id == ident:
+                    found.add(target_node.lineno)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == ident:
+            found.add(node.target.lineno)
+    return sorted(found)
+
+
+def _reference_lines(target: Path, ident: str) -> list[int]:
+    """Lines where *ident* appears as code — a name or an attribute access.
+
+    Not a text search: a mention inside a comment or a docstring is not a
+    reference, and treating one as a citation is how an anchor survives the
+    thing it pointed at being deleted.
+    """
+    tree = _parse(target)
+    if tree is None:
+        return []
+    found: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == ident:
+            found.add(node.lineno)
+        elif isinstance(node, ast.Attribute) and node.attr == ident:
+            found.add(node.lineno)
+        elif isinstance(node, ast.alias) and (node.asname or node.name).split(".")[-1] == ident:
+            found.add(getattr(node, "lineno", 0) or 0)
+    found.discard(0)
+    return sorted(found)
+
+
 @pytest.mark.parametrize("rel,symbol,lineno", _anchors(), ids=lambda v: str(v))
 def test_anchor_points_at_its_symbol(rel: str, symbol: str, lineno: int):
     target = (DOC.parent / rel).resolve()
@@ -90,9 +145,33 @@ def test_anchor_points_at_its_symbol(rel: str, symbol: str, lineno: int):
 
     ident = _IDENT_RE.findall(symbol)[-1]
     actual = lines[lineno - 1]
-    # Word-boundary, not substring: a comment or unrelated string that merely
-    # contains the identifier would otherwise pass for a definition that moved.
-    assert re.search(rf"\b{re.escape(ident)}\b", actual), (
-        f"THREAT_MODEL.md cites `{symbol}` at {rel}:{lineno}, "
-        f"but that line reads: {actual.strip()!r}"
+
+    # #15247: parse the file rather than regex the cited line. A word-boundary
+    # match on one line accepts a comment or a docstring that merely mentions the
+    # identifier, and — worse — when a definition moves it can only say "that
+    # line reads X". It cannot say where the symbol went, which is the one fact
+    # someone fixing the anchor needs.
+    definitions = _definition_lines(target, ident)
+
+    if definitions:
+        assert lineno in definitions, (
+            f"THREAT_MODEL.md cites `{symbol}` at {rel}:{lineno}, but {ident} is "
+            f"defined at {rel}:{_format_lines(definitions)}. Update the anchor to "
+            f"the line above; the cited line reads: {actual.strip()!r}"
+        )
+        return
+
+    # No definition in this file: the doc legitimately anchors call sites too
+    # (`import_module` and `spec_from_file_location` in the plugin loader are
+    # stdlib calls, not definitions here). Require the identifier to appear as
+    # real code on that line — a Name or an attribute — so a mention in a comment
+    # or string still fails, which the regex could not distinguish.
+    uses = _reference_lines(target, ident)
+    assert uses, (
+        f"THREAT_MODEL.md cites `{symbol}` in {rel}, but {ident} appears there "
+        f"neither as a definition nor as a code reference — the file link is stale"
+    )
+    assert lineno in uses, (
+        f"THREAT_MODEL.md cites `{symbol}` at {rel}:{lineno}, but {ident} is used "
+        f"at {rel}:{_format_lines(uses)}. The cited line reads: {actual.strip()!r}"
     )
