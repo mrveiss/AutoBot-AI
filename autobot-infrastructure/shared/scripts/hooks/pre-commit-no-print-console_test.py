@@ -28,7 +28,12 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # Shrink-only -- see TestScanCostAndRepoWideResult for why a silent shrink is
 # the bug this pins. Measured, not estimated; the issue's "50" was a staged
 # subset, not the tree.
-_KNOWN_REPO_VIOLATIONS = 504
+# 502 since #15193: the repo-root main.py redirect shim carries two print()
+# calls whose text names a component path, so retargeting that path touched
+# them and the changed-lines gate flagged both. print IS the mechanism there
+# -- it is a deprecated stdout-only entry point -- so the two lines carry
+# `# noqa: print` and the whole-repo count drops by exactly two.
+_KNOWN_REPO_VIOLATIONS = 502
 
 
 def _test_git_env() -> dict[str, str]:
