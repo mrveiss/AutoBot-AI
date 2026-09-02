@@ -208,69 +208,19 @@ class ServiceDiscoveryCache:
         logger.debug("Cleared service discovery cache")
 
 
+# #14039: the direct-uvicorn-vs-nginx decision now lives in
+# autobot_shared/slm_rest_url.py, so the call sites holding a bare URL string
+# (dag_executor, redis_service_manager, skill_proposer, daily_health_check) can
+# import it without dragging this module's redis/aiohttp/config weight — or a
+# second copy of the decision — along with it. Re-exported under the private
+# name this module has always used so its own call sites read unchanged.
+from autobot_shared.slm_rest_url import is_direct_uvicorn_url as _is_direct_uvicorn_url
+from autobot_shared.slm_rest_url import rest_url
+
 # #6702: SSL context creation moved to autobot_shared/tls.py — single canonical
 # implementation shared across slm_client, dag_executor, celery_app, and
 # notification_service. Re-exported here for one-cycle backward compatibility.
 from autobot_shared.tls import get_internal_tls_context as _create_permissive_ssl_context
-
-_LOOPBACK_HOSTS: frozenset = frozenset({"127.0.0.1", "localhost", "::1", "ip6-localhost"})
-_NGINX_HTTP_PORTS: frozenset = frozenset({80, 443})
-
-
-def _is_direct_uvicorn_url(url: str) -> bool:
-    """Return True when the SLM URL points directly to uvicorn (no nginx in between).
-
-    nginx always serves on HTTPS (port 443) or standard HTTP (port 80).  Any
-    plain-HTTP URL with a non-standard port (e.g. ``:8000``) or a loopback
-    hostname connects directly to uvicorn, so the WebSocket path must NOT
-    include the ``/slm/`` nginx prefix.
-
-    This fixes the Docker Compose case where ``AUTOBOT_SLM_HOST=autobot-slm``
-    (a Docker internal DNS name, not a loopback address) is set to port 8000 —
-    the old ``_is_loopback_target`` check returned False, which caused
-    ``ws_path="/slm/api/ws/events"`` to be used against direct uvicorn.
-    Uvicorn has no ``/slm/`` route → starlette sends WebSocketClose before
-    accept → uvicorn converts that to HTTP 403 (GH#10459).
-
-    Args:
-        url: The SLM base URL (e.g. ``http://autobot-slm:8000``).
-
-    Returns:
-        True if the URL targets uvicorn directly (use ``/api/ws/events``).
-        False if the URL targets an nginx reverse proxy (use ``/slm/api/ws/events``).
-    """
-    try:
-        from urllib.parse import urlparse
-
-        p = urlparse(url)
-        host = (p.hostname or "").lower()
-        scheme = p.scheme.lower()
-        port = p.port  # None means the scheme's default port (80 for http, 443 for https)
-
-        # #12781: an nginx PORT wins over any host heuristic, including
-        # loopback. On a co-located single-box install nginx terminates TLS on
-        # 127.0.0.1:443 and proxies /slm/api/ -> the SLM on :8000, while
-        # /api/ws/ goes to the USER backend. Treating loopback as "direct
-        # uvicorn" therefore chose /api/ws/events, nginx routed it to the user
-        # backend, and that rejected the handshake with 403 on every reconnect.
-        #
-        # This check must come FIRST. It used to sit after the loopback branch,
-        # which made loopback+443 unreachable.
-        if port in _NGINX_HTTP_PORTS or (port is None and scheme in ("http", "https")):
-            return False
-
-        # Loopback on a non-nginx port means direct uvicorn.
-        if host in _LOOPBACK_HOSTS:
-            return True
-
-        # Plain HTTP on a non-standard port means direct uvicorn — the Docker
-        # Compose case (AUTOBOT_SLM_HOST=autobot-slm, port 8000) from #10459.
-        if scheme == "http" and port is not None and port not in _NGINX_HTTP_PORTS:
-            return True
-
-        return False
-    except Exception:
-        return False
 
 
 class ServiceNotConfiguredError(Exception):
@@ -434,6 +384,10 @@ class SLMClient:
         """Build a REST URL using the same direct-vs-proxy decision as the
         WebSocket path (``_is_direct_uvicorn_url``, see ``_ws_connect_and_listen``).
 
+        Thin wrapper over ``autobot_shared.slm_rest_url.rest_url`` (#14039): the
+        instance-bound form for the six call sites in this module, the same
+        function the standalone callers import.
+
         Behind nginx, REST endpoints are proxied under the ``/slm`` prefix
         just like the WebSocket route; hitting uvicorn directly with that
         prefix 404s because uvicorn has no ``/slm/`` route. Every REST call
@@ -447,8 +401,7 @@ class SLMClient:
             The full URL, prefixed with ``/slm`` when ``self.slm_url`` targets
             an nginx reverse proxy.
         """
-        prefix = "" if _is_direct_uvicorn_url(self.slm_url) else "/slm"
-        return f"{self.slm_url}{prefix}{path}"
+        return rest_url(self.slm_url, path)
 
     async def connect(self) -> None:
         """

@@ -15,6 +15,8 @@ from pathlib import Path
 
 import requests
 
+from autobot_shared.slm_rest_url import rest_url
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -109,7 +111,7 @@ class HealthCheck:
         """Check 4: SLM health"""
         logger.info("Checking SLM health...")
         try:
-            response = requests.get(f"{self.slm_url}/api/health", timeout=5)
+            response = requests.get(rest_url(self.slm_url, "/api/health"), timeout=5)
             is_healthy = response.status_code == 200
             self.results["slm_health"] = {
                 "status": "OK" if is_healthy else f"FAILED ({response.status_code})",

@@ -42,6 +42,23 @@ def _is_loopback_target(target_url: Optional[str]) -> bool:
     return host in _LOOPBACK_HOSTS
 
 
+def tls_verify_enabled() -> bool:
+    """Whether internal TLS verification is on — the ``verify=`` bool for httpx.
+
+    The same switch as step 3 of :func:`get_internal_tls_context`, in the shape
+    httpx wants, so an httpx caller cannot end up reading the variable itself
+    and inverting it. Verification is ON unless ``AUTOBOT_SKIP_TLS_VERIFY=true``
+    is set explicitly; the polarity is the whole point. #14653 caught a node
+    proxy one commit before merge whose own flag defaulted to *false* — TLS
+    verification off unless an operator opted in, on the channel carrying the
+    internal API key. A default that has to be opted into is not a default.
+
+    Returns:
+        True to verify (the default); False only on an explicit opt-out.
+    """
+    return os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
+
+
 def get_internal_tls_context(
     target_url: Optional[str] = None,
     ca_path: Optional[str] = None,
@@ -88,7 +105,7 @@ def get_internal_tls_context(
         return ctx
 
     # 3. Dev/test override — skip verification entirely
-    if os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() == "true":
+    if not tls_verify_enabled():
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
