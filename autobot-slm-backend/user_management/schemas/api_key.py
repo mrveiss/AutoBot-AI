@@ -72,4 +72,7 @@ class APIKeyUpdate(BaseModel):
 class APIScopesResponse(BaseModel):
     """Response containing available API scopes."""
 
-    scopes: dict
+    # #13139: API_KEY_SCOPES maps scope name -> human description, both str
+    # (autobot_shared/user_management/models/api_key.py:212). A bare `dict`
+    # generated `{ [key: string]: unknown }`, forcing String() on the frontend.
+    scopes: dict[str, str]
