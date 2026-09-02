@@ -617,9 +617,7 @@ _MAX_DEVICE_FETCH_QUERIES = 3
 
 
 @pytest.mark.asyncio
-async def test_device_fetching_does_not_scale_with_device_count(
-    mock_session_factory, test_db_session, test_user_id
-):
+async def test_device_fetching_does_not_scale_with_device_count(mock_session_factory, test_db_session, test_user_id):
     """Sending to 50 devices issues the same number of queries as sending to 5 (#15150).
 
     This replaces an `assert elapsed < 5.0` wall clock. That bound measured the
