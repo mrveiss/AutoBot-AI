@@ -198,14 +198,47 @@ class TestAnUnreadableOverrideDegradesNoMorePermissivelyThanGlobal:
         assert exc_info.value.status_code == 403, "an unreadable override must not weaken an enforced global mode"
 
 
+#: Floor on the swept population, so a collapsed sweep fails by name rather
+#: than reporting an absence of references (#14484).
+MIN_SWEPT_FILES = 500
+
+
+def _swept_files():
+    """Backend Python files the reference sweep may read.
+
+    #14484: the skip set is tested against the path **relative to the scan
+    root**. Testing ``set(path.parts)`` on the absolute path asks whether the
+    checkout itself sits under a directory named ``archive``/``venv``/... as
+    well as whether the file does, so the sweep's reach depended on the
+    directory the tree was cloned into rather than on the tree.
+    """
+    for path in BACKEND_ROOT.rglob("*.py"):
+        if SKIP_DIR_PARTS & set(path.relative_to(BACKEND_ROOT).parts):
+            continue
+        yield path
+
+
+def _assert_population() -> None:
+    """Raise unless the sweep reached the backend tree it claims to scan."""
+    swept = sum(1 for _ in _swept_files())
+    assert swept >= MIN_SWEPT_FILES, (
+        f"the reference sweep reached only {swept} files under {BACKEND_ROOT} "
+        f"(floor {MIN_SWEPT_FILES}). FIX THE SWEEP -- a sweep that reads nothing "
+        "finds no references, which reads exactly like a genuinely unused getter."
+    )
+
+
+def test_the_reference_sweep_reached_the_backend_tree():
+    """Population floor, evaluated before the reference assertion below."""
+    _assert_population()
+
+
 def _endpoint_enforcement_references() -> tuple[str, ...]:
     """``path:line`` for every textual reference to ``get_endpoint_enforcement``
     across the backend -- the definition, its callers, and its tests alike.
     """
     hits: list[str] = []
-    for path in BACKEND_ROOT.rglob("*.py"):
-        if SKIP_DIR_PARTS & set(path.parts):
-            continue
+    for path in _swept_files():
         try:
             source = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -222,11 +255,14 @@ def test_get_endpoint_enforcement_has_a_non_test_caller():
     """The regression this issue exists to prevent: a getter that only its own
     definition (and, now, its tests) ever mention is write-only again.
     """
+    _assert_population()
     references = _endpoint_enforcement_references()
 
     # Non-vacuity: the sweep must at least find the definition it is named
     # after, or it swept nothing and every assertion below passes for free.
-    assert references, "the sweep found zero references to get_endpoint_enforcement -- the sweep itself is broken"
+    assert references, (
+        "the sweep found zero references to get_endpoint_enforcement -- FIX THE SWEEP, " "the sweep itself is broken"
+    )
 
     def _defines_it(path_part: str) -> bool:
         """Whether *path_part* (a ``path:line`` reference's file) is the
