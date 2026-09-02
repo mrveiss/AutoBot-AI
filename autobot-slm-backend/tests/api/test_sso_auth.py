@@ -777,7 +777,13 @@ def test_ldap_login_succeeds_even_when_audit_db_fails():
         asyncio.run(_call())
 
     result = result_holder["result"]
-    assert "access_token" in result
+    # #13139: the handler returns its TokenResponse whole. It used to re-pack
+    # three of the model's four fields into a dict, dropping `token` -- #12216's
+    # mirror of access_token that every other SLM token-issuing route emits --
+    # and `"access_token" in result` asserted that dict's keys, i.e. it asserted
+    # the bug. Identity is the stronger claim: any future re-pack fails here.
+    assert result is fake_token
+    assert result.access_token == "tok_ldap"
 
 
 # ---------------------------------------------------------------------------
