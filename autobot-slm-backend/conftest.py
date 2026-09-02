@@ -263,6 +263,10 @@ _REAL_SERVICE_MODULES = (
     "ansible_utils",
     "provision_progress",
     "process_divergence",
+    # #15462: has a co-located test that imports it, so it must be real-loaded
+    # here or it resolves to a MagicMock depending on shard order
+    # (tests/test_real_service_modules_14307.py enforces this).
+    "frontend_bundle_health",
 )
 
 for _name in _REAL_SERVICE_MODULES:
