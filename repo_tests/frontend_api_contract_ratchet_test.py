@@ -85,7 +85,12 @@ _BASELINES = {
         # transport client, so this one is a real bypass and should reach 0.
         # The main frontend is already there.
         "axios": 1,
-        "responses": 31,
+        # #13139: 31 -> 29. Giving `/mfa/verify-login` and `/auth/sso/ldap/login`
+        # a `response_model` retired `interface MFAVerifyResponse` (useMfaApi.ts)
+        # and `interface LDAPLoginResponse` (useSsoApi.ts); both are now derived
+        # from `components['schemas'][...]`. Lowered in the same commit as the
+        # work, per this module's docstring: an unrecorded shrink is a failure.
+        "responses": 29,
         "inline_generics": 87,
     },
 }

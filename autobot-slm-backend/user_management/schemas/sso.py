@@ -69,6 +69,15 @@ class SSOProviderListResponse(BaseModel):
     total: int
 
 
+class ActiveProviderResponse(BaseModel):
+    """One entry of the login page's active-provider list."""
+
+    id: str
+    name: str
+    provider_type: str
+    is_social: bool
+
+
 class SSOLoginInitResponse(BaseModel):
     """Response model for initiating SSO login."""
 
