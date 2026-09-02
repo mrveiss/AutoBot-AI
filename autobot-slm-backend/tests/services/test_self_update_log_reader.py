@@ -365,7 +365,7 @@ def test_the_runs_own_verdict_is_still_reported(tmp_path):
 
 
 def test_an_unstamped_log_is_no_answer_to_a_bound_caller(tmp_path):
-    """"I cannot tell which run this is" must read as no answer, not as this run's."""
+    """ "I cannot tell which run this is" must read as no answer, not as this run's."""
     log = _write(tmp_path, _FAILED)
 
     assert read_self_update_verdict(log).degraded is True
