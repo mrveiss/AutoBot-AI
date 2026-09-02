@@ -55,7 +55,7 @@ def is_direct_uvicorn_url(url: str) -> bool:
       routed it to the *user* backend, and every reconnect got 403.
 
     Args:
-        url: The SLM base URL (e.g. ``http://autobot-slm:8000``).
+        url: The SLM base URL, loopback or Docker-DNS, with or without a port.
 
     Returns:
         True for direct uvicorn (no prefix); False for nginx (``/slm`` prefix).

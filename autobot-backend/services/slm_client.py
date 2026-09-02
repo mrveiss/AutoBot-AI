@@ -614,7 +614,7 @@ class SLMClient:
           - Direct uvicorn (loopback OR plain HTTP on non-standard port such as
             ``:8000``): ``/api/ws/events`` — nginx is not involved.  Covers
             co-located bare-metal (``http://127.0.0.1:8000``) AND Docker Compose
-            (``http://autobot-slm:8000``) where the hostname is a Docker DNS
+            (a Docker-DNS service name and port) where the hostname is a DNS
             name, not a loopback address.  Using ``/slm/api/ws/events`` against
             direct uvicorn was the root-cause 403: starlette finds no ``/slm/``
             route → sends WebSocketClose before accept → uvicorn maps that to
