@@ -67,17 +67,7 @@ def route_query_params() -> dict[tuple[str, str], frozenset[str]]:
     own copy (this file is now shared by two), rather than the one build the
     single original file used to get -- a small, deliberate cost of the split.
     """
-    registry = dict(routing.registry_entries(_BACKEND / "initialization" / "router_registry"))
-    assert registry, "the router registry parsed no entries -- the oracle below would have nothing to mount"
-
-    app = FastAPI()
-    for module_path in SERVING_MODULES:
-        assert module_path in registry, f"{module_path} is not mounted by initialization/router_registry"
-        app.include_router(
-            importlib.import_module(module_path).router, prefix=f"{_BACKEND_API_ROOT}{registry[module_path]}"
-        )
-
-    spec = get_openapi(title="sdk-request-oracle", version="1", routes=app.routes)
+    spec = _serving_openapi()
     declared: dict[tuple[str, str], frozenset[str]] = {}
     for path, operations in spec.get("paths", {}).items():
         for verb, operation in operations.items():
@@ -90,3 +80,69 @@ def route_query_params() -> dict[tuple[str, str], frozenset[str]]:
         "the parameter extraction is -- an oracle where everything accepts nothing cannot detect a wrong name."
     )
     return declared
+
+
+def _serving_openapi() -> dict:
+    """The OpenAPI document for exactly the modules in ``SERVING_MODULES``.
+
+    Shared by ``route_query_params`` and ``route_request_bodies`` (#15057): both
+    read different sections of the same document, and building it twice from two
+    copies of the mount loop is how the query oracle and the body oracle would
+    come to describe two different applications.
+    """
+    registry = dict(routing.registry_entries(_BACKEND / "initialization" / "router_registry"))
+    assert registry, "the router registry parsed no entries -- the oracles below would have nothing to mount"
+
+    app = FastAPI()
+    for module_path in SERVING_MODULES:
+        assert module_path in registry, f"{module_path} is not mounted by initialization/router_registry"
+        app.include_router(
+            importlib.import_module(module_path).router, prefix=f"{_BACKEND_API_ROOT}{registry[module_path]}"
+        )
+    return get_openapi(title="sdk-request-oracle", version="1", routes=app.routes)
+
+
+def _body_fields(schema: dict, components: dict) -> tuple[frozenset[str], frozenset[str]] | None:
+    """``(declared field names, required field names)`` for one body schema.
+
+    ``None`` for a body the route declares as a bare object -- ``add_text``
+    takes ``request: dict``, so FastAPI publishes ``additionalProperties: True``
+    with no properties at all and the schema constrains nothing. Reporting that
+    as "declares no fields" would make every key the SDK sends look wrong; the
+    honest answer is that this oracle cannot judge it.
+    """
+    if "$ref" in schema:
+        return _body_fields(components[schema["$ref"].rsplit("/", 1)[-1]], components)
+    properties = schema.get("properties")
+    if properties is None:
+        return None
+    return frozenset(properties), frozenset(schema.get("required", ()))
+
+
+@pytest.fixture(scope="module")
+def route_request_bodies() -> dict[tuple[str, str], tuple[str, frozenset[str] | None, frozenset[str]]]:
+    """``(METHOD, path template) -> (media type, declared fields, required fields)``.
+
+    The backend's own request models, read the way FastAPI publishes them, so a
+    schema change fails in the guard rather than at a caller (#15057 AC4). Only
+    routes that declare a request body appear; ``declared fields`` is ``None``
+    for a body the route types as a bare object (see :func:`_body_fields`).
+
+    The media type is carried because it is part of the contract and a wrong one
+    is a 422 no field-name comparison can see: ``POST /api/agent/execute_command``
+    mixes ``Form`` with a ``dict`` body parameter, so FastAPI publishes it as
+    ``application/x-www-form-urlencoded`` while every SDK method sends JSON.
+    """
+    spec = _serving_openapi()
+    components = spec.get("components", {}).get("schemas", {})
+    bodies: dict[tuple[str, str], tuple[str, frozenset[str] | None, frozenset[str]]] = {}
+    for path, operations in spec.get("paths", {}).items():
+        for verb, operation in operations.items():
+            content = (operation.get("requestBody") or {}).get("content") or {}
+            for media, entry in content.items():
+                fields = _body_fields(entry.get("schema", {}), components)
+                declared, required = (None, frozenset()) if fields is None else fields
+                bodies[(verb.upper(), path)] = (media, declared, required)
+
+    assert bodies, "the oracle found no route with a request body at all; every assertion below would pass vacuously"
+    return bodies
