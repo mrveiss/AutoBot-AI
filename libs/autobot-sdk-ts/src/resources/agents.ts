@@ -20,7 +20,9 @@ export class AgentsResource {
     return this.client.put("/agent/config", fields);
   }
 
-  sendCommand(command: string, sessionId?: string): Promise<Record<string, unknown>> {
-    return this.client.post("/agent/execute_command", { command, session_id: sessionId });
+  // #15527: the route reads `command` only. `sessionId` named nothing it has,
+  // and until that fix the operation was form-encoded, so no body reached it.
+  sendCommand(command: string): Promise<Record<string, unknown>> {
+    return this.client.post("/agent/execute_command", { command });
   }
 }
