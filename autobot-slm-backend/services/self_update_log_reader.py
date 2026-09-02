@@ -81,6 +81,11 @@ _ROTATED_SUFFIX = ".1"
 # sides agree on. The pairing is pinned by a test.
 _RUN_HEADER = "SELF-UPDATE RUN STARTED"
 
+# #15522: the executor stamps that header with the run's start time, which is the
+# only run identity this log carries. Parsing it is what lets a reader tell run N
+# from run N-1 instead of replaying whichever verdict happens to be on disk.
+_RUN_STARTED = re.compile(rf"^{re.escape(_RUN_HEADER)}\s+(?P<ts>\S+)", re.MULTILINE)
+
 
 @dataclass
 class SelfUpdateVerdict:
@@ -104,6 +109,10 @@ class SelfUpdateVerdict:
     #: an idle node's rotation is never superseded, so it can be far older than
     #: a day — the reason states the date instead of implying "yesterday".
     rotated_log_mtime: str | None = None
+    #: #15522: the run-start timestamp stamped into the log by the executor, so a
+    #: caller can tell WHICH run this verdict describes. ``None`` when the log
+    #: carries no header (a pre-#12776 log, or the "nothing to say" verdicts).
+    run_started_at: str | None = None
 
     @property
     def degraded(self) -> bool:
@@ -195,13 +204,45 @@ def _mtime_iso(path: Path) -> str | None:
         return None
 
 
-def read_self_update_verdict(log_path: Path) -> SelfUpdateVerdict:
+def _run_started_at(text: str) -> str | None:
+    """The run-start timestamp stamped into *text*, or None when unstamped."""
+    match = _RUN_STARTED.search(text)
+    return match.group("ts") if match else None
+
+
+def _run_is_at_or_after(run_started_at: str | None, not_before: str | None) -> bool:
+    """Whether the logged run is the one *not_before* is asking about.
+
+    Unbound callers (*not_before* is None) accept any run. A bound caller
+    rejects an unstamped or unparseable log outright: "I cannot tell which run
+    this is" must read as no answer, never as this run's answer.
+    """
+    if not_before is None:
+        return True
+    try:
+        started = datetime.fromisoformat(run_started_at or "")
+        fired = datetime.fromisoformat(not_before)
+    except (TypeError, ValueError):
+        return False
+    started = started if started.tzinfo else started.replace(tzinfo=timezone.utc)
+    fired = fired if fired.tzinfo else fired.replace(tzinfo=timezone.utc)
+    return started >= fired
+
+
+def read_self_update_verdict(log_path: Path, not_before: str | None = None) -> SelfUpdateVerdict:
     """Parse *log_path* and report whether the last self-update run completed.
 
     Never raises: a status endpoint must not fail because a log is missing or
     malformed. A log that is missing, or empty on both the live and rotated
     paths, yields ``log_present=False``, which is treated as "nothing to say"
     rather than as a failure.
+
+    *not_before* binds the answer to a run identity (#15522). Pass the ISO-8601
+    time a run was fired and the log is only believed when its own run-start
+    stamp is at or after that: an older run's verdict is reported as "no result
+    yet" instead. A stale verdict is worse than none here, because it is
+    indistinguishable from a fresh one — that is what made an operator attribute
+    a previous run's failure to the run they had just triggered.
     """
     source = _read_log_text(log_path)
     if source.unreadable:
@@ -216,6 +257,9 @@ def read_self_update_verdict(log_path: Path) -> SelfUpdateVerdict:
 
     text = source.text
     from_rotated = source.from_rotated
+    run_started_at = _run_started_at(text)
+    if not _run_is_at_or_after(run_started_at, not_before):
+        return SelfUpdateVerdict(reason="no self-update result for this run yet", run_started_at=run_started_at)
     plays = _PLAY_HEADER.findall(text)
     has_recap = bool(_PLAY_RECAP.search(text))
 
@@ -236,6 +280,7 @@ def read_self_update_verdict(log_path: Path) -> SelfUpdateVerdict:
         unreachable_hosts=unreachable,
         from_rotated_log=from_rotated,
         rotated_log_mtime=source.rotated_age,
+        run_started_at=run_started_at,
     )
     verdict.reason = _describe(verdict)
     if verdict.degraded:
@@ -250,12 +295,13 @@ def _describe(v: SelfUpdateVerdict) -> str:
     An operator reading "completed, no failures" needs to know it describes the
     run before the last rotation, not one since.
     """
+    stamp = f" [run started {v.run_started_at}]" if v.run_started_at else ""
     if not v.from_rotated_log:
-        suffix = ""
+        suffix = stamp
     elif v.rotated_log_mtime:
-        suffix = f" (from the log rotated at {v.rotated_log_mtime}; no self-update has run since)"
+        suffix = f"{stamp} (from the log rotated at {v.rotated_log_mtime}; no self-update has run since)"
     else:
-        suffix = " (from the rotated log; no self-update has run since)"
+        suffix = f"{stamp} (from the rotated log; no self-update has run since)"
     if not v.complete:
         seen = ", ".join(v.plays_seen) if v.plays_seen else "none"
         return (
