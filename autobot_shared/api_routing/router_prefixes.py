@@ -90,6 +90,20 @@ ROUTER_CONFIG_ENTRY_RE = re.compile(
 #: variable form of a registry entry back to its module.
 ROUTER_IMPORT_ALIAS_RE = re.compile(r"from\s+([\w.]+)\s+import\s+router\s+as\s+(\w+)")
 
+#: ``@router.get("/chats")`` — the route-declaring decorator, captured as
+#: ``(verb, path)``. It belongs beside the router-prefix grammar it is always
+#: used with, for the reason :func:`package_router_files` gives: two copies are
+#: two route tables that can disagree about which routes exist (#15141).
+#:
+#: ``scripts/audit_api_wiring.py`` still carries a byte-identical literal and is
+#: NOT yet pointed here. Editing that file at all trips the function-length
+#: pre-commit hook on its pre-existing 111-line ``main()`` — unrelated debt that
+#: a one-line import change cannot fix and must not be bypassed. New consumers
+#: read this constant; collapsing the last copy is filed, not forgotten.
+ROUTE_DECORATOR_RE = re.compile(
+    r"@(?:router|app|api_router)\.(get|post|put|delete|patch|websocket|head|options)\(\s*[\'\"]([^\'\"]*)"
+)
+
 
 # ── Call scanning ────────────────────────────────────────────────────────────
 #
