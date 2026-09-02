@@ -22,6 +22,8 @@ from check_git_safe_directory import (  # noqa: E402
     find_violations,
 )
 
+from autobot_shared.paths import scrubbed_git_env
+
 
 def _write(tmp: Path, name: str, body: str) -> Path:
     p = tmp / name
@@ -121,7 +123,7 @@ def test_the_same_alternately_named_vars_pass_once_guarded() -> None:
     the blind one — it would block every site #7150 already fixed.
     """
     bodies = [
-        "- name: t\n  cmd: \"git -c safe.directory={{ _code_source_dest }} -C {{ _code_source_dest }} log -1\"\n",
+        '- name: t\n  cmd: "git -c safe.directory={{ _code_source_dest }} -C {{ _code_source_dest }} log -1"\n',
         "- name: t\n"
         "  cmd: >-\n"
         "    git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}\n"
@@ -187,7 +189,7 @@ def test_an_unguarded_command_used_as_a_mapping_key_is_caught() -> None:
     pre-#14196 line-based scanner (which matched anywhere in a line) caught
     it.
     """
-    body = "- name: t\n  vars:\n    \"git -C {{ git_repo_root }} log -1\": marker\n"
+    body = '- name: t\n  vars:\n    "git -C {{ git_repo_root }} log -1": marker\n'
     with tempfile.TemporaryDirectory() as d:
         f = _write(Path(d), "key_git.yml", body)
         assert len(find_violations(f)) == 1
@@ -221,6 +223,7 @@ def test_the_repository_guarded_sites_stay_visible() -> None:
         cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
+        env=scrubbed_git_env(),
     )
     assert listing.returncode == 0, "git ls-files failed — refusing to report clean"
     tracked = listing.stdout.split()
@@ -295,6 +298,7 @@ def _tracked_yaml_files() -> list:
         cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
+        env=scrubbed_git_env(),
     )
     return listing.stdout.split()
 

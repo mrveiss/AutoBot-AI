@@ -49,6 +49,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from autobot_shared.paths import scrubbed_git_env
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPT = REPO_ROOT / "scripts" / "check_python_file_size.py"
 _BASELINE_SCRIPT = REPO_ROOT / "repo_tests" / "python_file_size_ratchet_baseline.py"
@@ -127,6 +129,7 @@ def tracked_py_files() -> list[str]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     )
     return [line for line in out.stdout.splitlines() if line.strip()]
 
@@ -291,7 +294,7 @@ def test_an_entry_singled_out_as_live_keeps_its_note(hook):
         for rel, opened_under in ANNOTATED_AS_LIVE.items():
             assert rel in hook.KNOWN_LARGE, f"{rel} is annotated but no longer grandfathered"
             at = next(i for i, line in enumerate(lines) if line.strip().startswith(f'"{rel}":'))
-            above = "\n".join(lines[max(0, at - 3):at])
+            above = "\n".join(lines[max(0, at - 3) : at])
             assert "#14630" in above and opened_under in above, f"{path.name}: {rel} lost its annotation"
 
 
@@ -501,9 +504,7 @@ def test_the_hook_has_no_stdout_calls_left(hook):
     calls = [
         node.lineno
         for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == banned
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == banned
     ]
     assert calls == [], f"stdout calls remain at lines {calls}"
 
@@ -590,9 +591,7 @@ def test_matcher_reaches_every_entry_over_a_tracked_enumeration(hook, tracked_py
     # A compliant line count is silent for every ordinary file and loud for a
     # grandfathered one ("delete the entry"), so the probe identifies membership
     # without depending on any ceiling value.
-    matched = [
-        rel for rel in tracked_py_files if hook.verdict(rel, hook.MAX_LINES) is not None
-    ]
+    matched = [rel for rel in tracked_py_files if hook.verdict(rel, hook.MAX_LINES) is not None]
     assert sorted(matched) == sorted(hook.KNOWN_LARGE), (
         f"matcher reached {len(matched)} of {len(hook.KNOWN_LARGE)} entries over "
         f"{len(tracked_py_files)} tracked files: {sorted(matched)}"

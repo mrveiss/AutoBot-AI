@@ -114,6 +114,8 @@ from pathlib import Path
 
 from repo_tests.credential_vault_prose_strip import UnparseableSourceError, strip_prose
 
+from autobot_shared.paths import scrubbed_git_env
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _FROM_PRETRAINED_RE = re.compile(r"\bfrom_pretrained\s*\(")
@@ -147,6 +149,7 @@ def _tracked_python_files() -> list[str]:
         capture_output=True,
         text=True,
         check=True,
+        env=scrubbed_git_env(),
     ).stdout
     return [line for line in out.splitlines() if line]
 
@@ -306,7 +309,9 @@ def test_no_unreviewed_splat_kwargs_reach_from_pretrained() -> None:
         for lineno, span in calls
         if _SPLAT_RE.search(span) and (rel, lineno) not in SPLAT_ALLOWLIST
     ]
-    assert not unreviewed, "unreviewed **splat inside a from_pretrained call -- read it and allowlist or fix it:\n" + "\n".join(
+    assert (
+        not unreviewed
+    ), "unreviewed **splat inside a from_pretrained call -- read it and allowlist or fix it:\n" + "\n".join(
         f"  {rel}:{lineno}" for rel, lineno in sorted(unreviewed)
     )
 
@@ -314,9 +319,7 @@ def test_no_unreviewed_splat_kwargs_reach_from_pretrained() -> None:
 def test_splat_allowlist_entries_still_correspond_to_a_real_splat() -> None:
     """A stale entry (the splat it excused is gone) should shrink, not linger."""
     found = production_from_pretrained_calls()
-    live_splats = {
-        (rel, lineno) for rel, calls in found.items() for lineno, span in calls if _SPLAT_RE.search(span)
-    }
+    live_splats = {(rel, lineno) for rel, calls in found.items() for lineno, span in calls if _SPLAT_RE.search(span)}
     stale = sorted(key for key in SPLAT_ALLOWLIST if key not in live_splats)
     assert not stale, f"SPLAT_ALLOWLIST entries with no matching splat left -- delete them: {stale}"
 
@@ -330,8 +333,7 @@ def test_a_splat_kwargs_call_is_flagged_for_review() -> None:
     than invisible to the guard entirely.
     """
     splat_shape = (
-        '        _dl_kwargs = {"resume_download": True}\n'
-        '        CLIPModel.from_pretrained("x", **_dl_kwargs)\n'
+        '        _dl_kwargs = {"resume_download": True}\n' '        CLIPModel.from_pretrained("x", **_dl_kwargs)\n'
     )
     calls = find_from_pretrained_calls(splat_shape)
     assert len(calls) == 1
@@ -340,9 +342,7 @@ def test_a_splat_kwargs_call_is_flagged_for_review() -> None:
 
     fake_file = "repro/not_a_real_file.py"
     unreviewed = [
-        (fake_file, ln)
-        for ln, sp in calls
-        if _SPLAT_RE.search(sp) and (fake_file, ln) not in SPLAT_ALLOWLIST
+        (fake_file, ln) for ln, sp in calls if _SPLAT_RE.search(sp) and (fake_file, ln) not in SPLAT_ALLOWLIST
     ]
     assert unreviewed == [(fake_file, lineno)], (
         "the reproduction of the indirect-splat resume_download shape was not "

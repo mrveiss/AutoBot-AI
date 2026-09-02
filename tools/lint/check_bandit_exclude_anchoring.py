@@ -81,10 +81,15 @@ from __future__ import annotations
 import argparse
 import logging
 import pathlib
-import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 import sys
 
 import yaml
+
+# tools/lint/ is not a Python package; make the sibling helper importable
+# regardless of invocation mode (script / importlib from tests).
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _scan_helpers import tracked_paths  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082) — see check_flake8_exclude_anchoring.py.
 logger = logging.getLogger(__name__)
@@ -159,15 +164,14 @@ def unanchored_source_entries(entries: list[str]) -> list[str]:
 
 
 def tracked_py_files(root: pathlib.Path | None = None) -> list[str]:
-    """Every tracked ``*.py`` path, enumerated by git rather than by bandit."""
-    completed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "*.py"],
-        cwd=root if root is not None else repo_root(),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return [line for line in completed.stdout.splitlines() if line.strip()]
+    """Every tracked ``*.py`` path, enumerated by git rather than by bandit.
+
+    Through the shared enumerator (#14896) so the ``env=scrubbed_git_env()``
+    this needs -- an inherited ``GIT_DIR`` outranks ``cwd=`` and would list
+    another checkout's index -- is not a per-hook repeat, and so a failed or
+    empty listing raises instead of reading as "bandit excludes nothing".
+    """
+    return tracked_paths(root if root is not None else repo_root(), "*.py")
 
 
 def entries_covering_tracked_python(entries: list[str], tracked: list[str]) -> dict[str, int]:
@@ -234,7 +238,15 @@ def audit_excludes(root: pathlib.Path | None = None) -> tuple[int, list[str]]:
             "`repo_tests/foo.py`)."
         )
 
-    tracked = tracked_py_files(base)
+    try:
+        tracked = tracked_py_files(base)
+    except RuntimeError as exc:
+        # The shared enumerator refuses an empty or failed listing rather than
+        # returning one (#14896). Recorded as a problem here instead of
+        # propagating: the anchoring findings above are still worth printing,
+        # and this path is already a nonzero exit.
+        tracked = []
+        problems.append(str(exc))
     if len(tracked) < TRACKED_PY_FLOOR:
         problems.append(
             f"git ls-files returned only {len(tracked)} Python files (floor "

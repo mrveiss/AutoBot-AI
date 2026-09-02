@@ -67,11 +67,43 @@ _PROSE_ONLY = '''
 TOPLEVEL_NOTE = "--show-toplevel answers with the CWD under an ambient GIT_DIR"
 '''
 
+# `git ls-files` used to live here: it was the example of a git call the guard
+# deliberately let through. #14896 gated it -- an inherited GIT_DIR outranks
+# `cwd=` and enumerates the wrong index -- so the un-gated example is now a
+# subcommand whose answer does not depend on which work tree git picks.
 _OTHER_GIT_CALL = """
+import subprocess
+
+def head(root):
+    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=root).stdout
+"""
+
+_UNSCRUBBED_LS_FILES = """
 import subprocess
 
 def tracked(root):
     return subprocess.run(["git", "ls-files"], cwd=root).stdout
+"""
+
+_SCRUBBED_LS_FILES = """
+import subprocess
+
+from autobot_shared.paths import scrubbed_git_env
+
+def tracked(root):
+    return subprocess.run(["git", "ls-files"], cwd=root, env=scrubbed_git_env()).stdout
+"""
+
+_LS_FILES_VIA_A_LOCAL_SCRUB_WRAPPER = """
+import subprocess
+
+from autobot_shared.paths import scrubbed_git_env
+
+def _test_git_env():
+    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null"}
+
+def tracked(root):
+    return subprocess.run(["git", "ls-files"], cwd=root, env=_test_git_env()).stdout
 """
 
 
@@ -182,6 +214,27 @@ def test_prose_mentioning_the_flag_is_not_a_finding(tmp_path: Path) -> None:
 
 def test_other_git_subprocesses_are_left_alone(tmp_path: Path) -> None:
     assert scan(_write(tmp_path, _OTHER_GIT_CALL), tmp_path) == []
+
+
+def test_unscrubbed_ls_files_is_a_finding(tmp_path: Path) -> None:
+    """#14896: `cwd=` loses to an inherited GIT_DIR, so a correct cwd still
+    enumerates the other checkout's index -- and answers without erroring."""
+    findings = scan(_write(tmp_path, _UNSCRUBBED_LS_FILES), tmp_path)
+    assert len(findings) == 1
+    assert "ls-files" in findings[0][1]
+
+
+def test_scrubbed_ls_files_is_not_a_finding(tmp_path: Path) -> None:
+    """The green direction, so the test above cannot be met by flagging every
+    ls-files call and telling correct code to fix itself."""
+    assert scan(_write(tmp_path, _SCRUBBED_LS_FILES), tmp_path) == []
+
+
+def test_ls_files_through_a_local_scrub_wrapper_is_not_a_finding(tmp_path: Path) -> None:
+    """A suite that needs the scrub plus a pinned GIT_CONFIG_GLOBAL wraps the
+    helper. Rejecting the wrapper would push those callers back onto an inline
+    repeat of the scrub, which is the duplication this guard exists to stop."""
+    assert scan(_write(tmp_path, _LS_FILES_VIA_A_LOCAL_SCRUB_WRAPPER), tmp_path) == []
 
 
 def test_allowlisted_files_are_skipped(tmp_path: Path) -> None:

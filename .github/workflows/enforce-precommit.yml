@@ -238,8 +238,17 @@ jobs:
         run: |
           ids="$(python3 pipeline-scripts/check_gating_precommit_hooks.py --print-ids)"
           echo "gating hooks: ${ids}"
-          # shellcheck disable=SC2086  # deliberate word-splitting: one hook id per line
-          pre-commit run --all-files ${ids} > precommit-gating.txt 2>&1 || true
+          # #14895: `pre-commit run` takes at most ONE hook id -- passing two
+          # exits with a usage error and writes no result line, which the gate
+          # then correctly reports as "no hook ran". The previous form worked
+          # only because GATING_HOOK_IDS held exactly one entry; it was a latent
+          # break waiting for the second. Run them one at a time and append, so
+          # the captured output carries a result line per id.
+          : > precommit-gating.txt
+          while IFS= read -r id; do
+            [ -n "${id}" ] || continue
+            pre-commit run --all-files "${id}" >> precommit-gating.txt 2>&1 || true
+          done <<< "${ids}"
           cat precommit-gating.txt
 
       - name: Fail when a behavioural hook reported a finding (#14878)
