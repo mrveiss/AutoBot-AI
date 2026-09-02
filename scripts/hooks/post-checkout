@@ -156,8 +156,22 @@ COMMON_HOOKS="$(git rev-parse --git-common-dir 2>/dev/null)/hooks"
 INSTALLED="${COMMON_HOOKS}/post-checkout"
 if [ -f "$CANONICAL" ] && [ -d "$COMMON_HOOKS" ]; then
     if [ ! -f "$INSTALLED" ] || ! diff -q "$CANONICAL" "$INSTALLED" > /dev/null 2>&1; then
-        cp "$CANONICAL" "$INSTALLED"
-        chmod +x "$INSTALLED"
+        # #15532: never cp over the path this script is executing from. bash reads
+        # a script incrementally and remembers a byte offset; rewriting the live
+        # file in place makes the running shell resume at that offset inside
+        # different content. A same-directory temp file plus an atomic rename
+        # leaves this process on its original inode and every later invocation on
+        # the new one. chmod before the rename, so the installed hook is never
+        # present-but-not-executable. The temp name is fixed, so an interrupted
+        # run leaves at most one stale file that the next run overwrites; the
+        # unconditional rm clears it when any step above failed (a no-op when the
+        # rename succeeded). Git only ever executes the exact hook name, so
+        # "post-checkout.new" is never mistaken for a hook.
+        INSTALLED_TMP="${INSTALLED}.new"
+        cp "$CANONICAL" "$INSTALLED_TMP" \
+            && chmod +x "$INSTALLED_TMP" \
+            && mv -f "$INSTALLED_TMP" "$INSTALLED"
+        rm -f "$INSTALLED_TMP"
     fi
 fi
 
