@@ -39,6 +39,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # meaningless.
 SOURCE_ROOTS = ["autobot-backend", "autobot-slm-backend", "autobot_shared"]
 
+#: Directory names, matched against the path **relative to the repo root**,
+#: that hold no production source. See ``_production_files`` for why the
+#: relative form is load-bearing (#14484).
+_EXCLUDED_DIR_NAMES = {"tests", "node_modules", "__pycache__", ".venv"}
+
 MIDDLEWARES = [
     "autobot-backend/user_management/middleware/rbac_middleware.py",
     "autobot-slm-backend/user_management/middleware/rbac_middleware.py",
@@ -108,10 +113,14 @@ def _production_files() -> tuple[Path, ...]:
         if not base.is_dir():
             continue
         for path in base.rglob("*.py"):
-            parts = set(path.parts)
+            # #14484: relative to the repo root, never the absolute path. The
+            # absolute form also tests the directories the checkout itself sits
+            # in, so a tree cloned under a directory named `tests` or `.venv`
+            # swept zero files and every assertion below passed vacuously.
+            parts = set(path.relative_to(REPO_ROOT).parts)
             if path.name.endswith("_test.py") or path.name.startswith("test_"):
                 continue
-            if parts & {"tests", "node_modules", "__pycache__", ".venv"}:
+            if parts & _EXCLUDED_DIR_NAMES:
                 continue
             files.append(path)
     return tuple(sorted(files))
@@ -249,12 +258,23 @@ def _swallowing_write_handlers(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> li
 # ---------------------------------------------------------------------------
 
 
+def _assert_population() -> None:
+    """Raise unless the walk reached the production tree it claims to scan.
+
+    Called from the floor test *and* from each substantive assertion, so the
+    floor is evaluated first whatever order the tests run in.
+    """
+    walked = len(_production_files())
+    assert walked > 500, (
+        f"only {walked} production files walked — FIX THE SWEEP, the search path "
+        "is wrong and every assertion over it passes vacuously."
+    )
+
+
 def test_the_sweep_reached_the_production_tree() -> None:
+    _assert_population()
     sites, unparsed = _denial_audit_call_sites()
 
-    assert (
-        len(_production_files()) > 500
-    ), f"only {len(_production_files())} production files walked — the search path is wrong"
     assert not unparsed, f"these files did not parse, so they were never checked: {unparsed}"
     assert len(sites) >= 5, (
         f"only {len(sites)} permission-denial audit call sites found. Either the "
@@ -269,6 +289,7 @@ def test_both_known_denial_paths_are_among_the_derived_sites() -> None:
     Derivation is what catches the *next* path; naming these two is what keeps
     the derivation honest about the two it already knows.
     """
+    _assert_population()
     sites, _ = _denial_audit_call_sites()
     files = {rel for rel, _, _ in sites}
     functions = {name for _, name, _ in sites}
@@ -287,6 +308,7 @@ def test_both_known_denial_paths_are_among_the_derived_sites() -> None:
 
 def test_every_derived_denial_audit_sink_counts_a_dropped_record() -> None:
     """The invariant, over the derived set rather than a hand-written list."""
+    _assert_population()
     definitions, callees = _denial_audit_sinks()
     assert definitions, f"no denial-audit sink resolved at all (callees: {sorted(callees)})"
 
