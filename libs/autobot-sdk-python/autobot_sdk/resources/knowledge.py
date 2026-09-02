@@ -50,10 +50,17 @@ class KnowledgeResource:
         """Search the knowledge base.
 
         The route takes its arguments in a JSON body, and names the result cap
-        ``max_results``. It has no category filter — use :meth:`get_entries`,
-        whose route does.
+        ``limit`` -- ``SearchRequest`` (``api/schemas_knowledge.py``) declares
+        ``limit`` with ``AliasChoices("limit", "top_k")`` and nothing called
+        ``max_results``. The SDK sent ``max_results``; the model does not set
+        ``extra="forbid"``, so pydantic dropped the key without an error and
+        every search came back at the route's own default however large a
+        ``limit`` the caller asked for -- the #15119 shape, in a body rather
+        than a query string (#15057).
+
+        It has no category filter -- use :meth:`get_entries`, whose route does.
         """
-        body: dict[str, Any] = {"query": query, "max_results": limit}
+        body: dict[str, Any] = {"query": query, "limit": limit}
         raw = await self._c.post("/knowledge_base/search", body)
         return KnowledgeSearchResult.model_validate(raw)
 
