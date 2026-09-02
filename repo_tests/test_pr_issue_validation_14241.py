@@ -28,12 +28,26 @@ _WORKFLOW = (
 )
 
 
+_STEP_NAME = "Validate PR issue linkage"
+
+
 def _script() -> str:
+    """The linkage step's shell body, selected BY NAME.
+
+    #15492: this used to assert the job had exactly one ``run:`` step and take
+    it. That held only while the job did one thing -- adding a second step
+    (the same-scope batching gate) failed eight tests at once, none of them for
+    a reason connected to what they assert. Selecting by name keeps the
+    extraction unambiguous without pinning the job to a single step.
+    """
     document = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
     steps = document["jobs"]["validate"]["steps"]
-    run_steps = [step["run"] for step in steps if "run" in step]
-    assert len(run_steps) == 1, f"expected one run step, found {len(run_steps)}"
-    return run_steps[0]
+    named = [step["run"] for step in steps if step.get("name") == _STEP_NAME and "run" in step]
+    assert len(named) == 1, (
+        f"expected exactly one step named {_STEP_NAME!r} carrying a `run:` body, "
+        f"found {len(named)}. If the step was renamed, update _STEP_NAME here too."
+    )
+    return named[0]
 
 
 def _decide(tmp_path: Path, *, branch: str, body: str, is_fork: str = "false") -> tuple[int, str]:
