@@ -50,12 +50,11 @@ MIN_CREATE_TASK_SITES = 30
 # taken was to decompose each file below MAX_LINES first, in its own refactor,
 # and convert the site as part of that work. Each entry names its issue.
 KNOWN_DISCARDED_CREATE_TASK: dict[str, int] = {
-    # Decompose, then convert -- see the per-file decomposition issues.
-    "autobot-slm-backend/api/infrastructure.py": 1,
-    "autobot-slm-backend/api/setup_wizard.py": 1,
-    "autobot-slm-backend/api/updates.py": 1,
-    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 1,
-    "autobot-slm-backend/slm/agent/agent.py": 1,
+    "autobot-slm-backend/api/infrastructure.py": 1,  # decompose first: #15552
+    "autobot-slm-backend/api/setup_wizard.py": 1,  # decompose first: #15553
+    "autobot-slm-backend/api/updates.py": 1,  # decompose first: #15554
+    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 1,  # #15555
+    "autobot-slm-backend/slm/agent/agent.py": 1,  # decompose first: #15555
 }
 
 
