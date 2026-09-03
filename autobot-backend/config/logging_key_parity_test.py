@@ -40,7 +40,6 @@ import yaml
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from autobot_shared.paths import project_root  # noqa: E402
-
 from config.defaults import get_default_config  # noqa: E402
 
 # Optional per-deployment overrides with a safe inline default at every call
