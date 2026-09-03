@@ -16108,12 +16108,12 @@ export interface paths {
          * @description Executes a shell command and returns its output.
          *
          *     Issue #744: Requires admin authentication (CRITICAL: command execution).
-         *     Issue #281: Refactored from 151 lines to use extracted helper methods.
-         *     Issue #620: Further refactored to reduce function length below 50 lines.
+         *     Issue #15527: one JSON body model. A Form field beside a dict body made
+         *     FastAPI publish this as application/x-www-form-urlencoded, where every
+         *     field is a string, so no client could construct a body that validated.
          *
          *     Args:
-         *         command_data (dict): A dictionary containing the command to execute.
-         *         user_role (str): The role of the user executing the command.
+         *         payload (CommandExecutePayload): Command to run and the caller's role.
          *
          *     Returns:
          *         dict: A dictionary containing the result of the command execution.
@@ -59292,20 +59292,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** Body_execute_command_api_agent_execute_command_post */
-        Body_execute_command_api_agent_execute_command_post: {
-            /** Command Data */
-            command_data: {
-                [key: string]: unknown;
-            };
-            /**
-             * User Role
-             * @default user
-             */
-            user_role: string;
-        } & {
-            [key: string]: unknown;
-        };
         /** Body_install_plugin_zip_api_plugins_install_upload_post */
         Body_install_plugin_zip_api_plugins_install_upload_post: {
             /**
@@ -63640,6 +63626,21 @@ export interface components {
             message: string;
             /** Requires Confirmation */
             requires_confirmation: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CommandExecutePayload
+         * @description Body of POST /execute_command: the command to run and the caller's role.
+         */
+        CommandExecutePayload: {
+            /** Command */
+            command: string;
+            /**
+             * User Role
+             * @default user
+             */
+            user_role: string;
         } & {
             [key: string]: unknown;
         };
@@ -124140,7 +124141,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["Body_execute_command_api_agent_execute_command_post"];
+                "application/json": components["schemas"]["CommandExecutePayload"];
             };
         };
         responses: {
