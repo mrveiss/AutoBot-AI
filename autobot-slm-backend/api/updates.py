@@ -22,6 +22,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.time_utils import utc_timestamp
 from models.database import (
     CodeStatus,
@@ -49,7 +50,6 @@ from models.schemas import (
     UpdatePackagesResponse,
     UpdateSummaryResponse,
 )
-from autobot_shared.async_compat import fire_and_forget
 from services.ansible_utils import parse_unreachable_hosts, summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_status import get_latest_code_version, reported_code_status
