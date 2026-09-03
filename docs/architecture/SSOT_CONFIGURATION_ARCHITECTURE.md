@@ -47,7 +47,7 @@ This document defines the Single Source of Truth (SSOT) configuration architectu
 | | `src/constants/security_constants.py` | ~? | Security settings | |
 | | `src/constants/threshold_constants.py` | ~? | Thresholds | |
 | **Backend - Models** | | | | |
-| | `backend/models/settings.py` | ~389 | Pydantic AutoBotSettings | Separate validation |
+| | `backend/models/settings.py` | ~156 | Re-export shim onto `ssot_config` | Resolved #12750: was a parallel pydantic settings system with zero importers; now defines nothing and aliases the canonical objects |
 | | `backend/services/config_service.py` | ~502 | API layer for config CRUD | Wrapper complexity |
 | **Frontend** | | | | |
 | | `autobot-frontend/src/config/defaults.js` | ~200 | DEFAULT_CONFIG with fallbacks | Hardcoded IPs |
