@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.async_compat import fire_and_forget
 from models.database import Backup, BackupServiceType, BackupStatus, Node, Replication, ReplicationStatus
 from models.schemas import (
     ActionResponse,
@@ -130,8 +131,7 @@ async def create_backup(
     await db.commit()
     await db.refresh(backup)
 
-    # Start async backup job
-    asyncio.create_task(_run_backup(backup_id, node.ip_address, request.service_type))
+    fire_and_forget(_run_backup(backup_id, node.ip_address, request.service_type), name=f"backup:{backup_id}")
 
     logger.info("Backup created: %s for node %s", backup_id, request.node_id)
     return BackupResponse.model_validate(backup)
@@ -184,7 +184,7 @@ async def restore_backup(
 
     # Start async restore job
     job_id = str(uuid.uuid4())[:16]
-    asyncio.create_task(_run_restore(job_id, backup.backup_id, backup.node_id))
+    fire_and_forget(_run_restore(job_id, backup.backup_id, backup.node_id), name=f"restore:{job_id}")
 
     logger.info("Restore started: %s from backup %s", job_id, backup_id)
     return BackupRestoreResponse(
@@ -324,10 +324,9 @@ async def start_replication(
     await db.commit()
     await db.refresh(replication)
 
-    # Start async replication job using the ReplicationService (Issue #726 Phase 4)
-    asyncio.create_task(
-        replication_service.setup_replication(db, replication_id, source_node, target_node, request.service_type)
-    )
+    # Uses the ReplicationService (Issue #726 Phase 4).
+    coro = replication_service.setup_replication(db, replication_id, source_node, target_node, request.service_type)
+    fire_and_forget(coro, name=f"replication:{replication_id}")
 
     logger.info(
         "Replication started: %s (%s -> %s)",

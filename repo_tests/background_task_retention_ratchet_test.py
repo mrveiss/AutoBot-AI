@@ -35,18 +35,26 @@ SCAN_ROOT = "autobot-slm-backend/"
 MIN_FILES_SCANNED = 200
 MIN_CREATE_TASK_SITES = 30
 
-# Measured on the tree after #15522's three conversions. Exact, shrink-only.
+# #15524 converted seven of the twelve discarded sites: stateful.py's three
+# jobs and performance_dashboard.py's broadcaster to ``fire_and_forget``,
+# blue_green.py's rollback and deployment.py's two launch sites to a reference
+# retained in ``_running_deployments`` and dropped on a done callback.
+#
+# The five below are NOT deferred for lack of a fix -- the conversion is one
+# line each, and it is written and verified. They are blocked by the
+# python-file-size ratchet: each file is grandfathered at an exact size, that
+# mapping only shrinks, and the ``from autobot_shared.async_compat import
+# fire_and_forget`` line a conversion needs puts every one of them exactly one
+# line over its frozen ceiling. Buying that line back by deleting unrelated
+# comments would satisfy the counter while degrading the file, so the decision
+# taken was to decompose each file below MAX_LINES first, in its own refactor,
+# and convert the site as part of that work. Each entry names its issue.
 KNOWN_DISCARDED_CREATE_TASK: dict[str, int] = {
-    "autobot-slm-backend/api/code_sync.py": 0,
-    "autobot-slm-backend/api/infrastructure.py": 1,
-    "autobot-slm-backend/api/setup_wizard.py": 1,
-    "autobot-slm-backend/api/stateful.py": 3,
-    "autobot-slm-backend/api/updates.py": 1,
-    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 1,
-    "autobot-slm-backend/monitoring/performance_dashboard.py": 1,
-    "autobot-slm-backend/services/blue_green.py": 1,
-    "autobot-slm-backend/services/deployment.py": 2,
-    "autobot-slm-backend/slm/agent/agent.py": 1,
+    "autobot-slm-backend/api/infrastructure.py": 1,  # decompose first: #15552
+    "autobot-slm-backend/api/setup_wizard.py": 1,  # decompose first: #15553
+    "autobot-slm-backend/api/updates.py": 1,  # decompose first: #15554
+    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 1,  # #15555
+    "autobot-slm-backend/slm/agent/agent.py": 1,  # decompose first: #15555
 }
 
 
