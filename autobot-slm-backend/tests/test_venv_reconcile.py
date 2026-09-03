@@ -93,7 +93,9 @@ def _record_line(rel_path: str, root: Path) -> str:
     return f"{rel_path},sha256={b64},{len(data)}"
 
 
-def _write_dist_info(site_packages: Path, dist_name: str, module_name: str, version: str, requires: tuple = ()) -> None:
+def _write_dist_info(
+    site_packages: Path, dist_name: str, module_name: str, version: str, requires: tuple = ()
+) -> Path:
     """Hand-build a real, pip-uninstallable dist-info directory.
 
     Same on-disk shape `pip install` itself produces (METADATA + RECORD),
@@ -105,7 +107,9 @@ def _write_dist_info(site_packages: Path, dist_name: str, module_name: str, vers
     uninstall matches on the directory name, not the METADATA ``Name:``
     field) — *module_name* only names the importable ``.py`` stand-in, kept
     separate so several fixture packages can share a venv's site-packages
-    without colliding on their module file.
+    without colliding on their module file. Returns the dist-info directory
+    so a caller can additionally stamp it with an install-provenance marker
+    (#15067) to simulate a package this tool itself put there.
     """
     dist_info_stem = dist_name.replace("-", "_")
     dist_info = site_packages / f"{dist_info_stem}-{version}.dist-info"
@@ -122,6 +126,7 @@ def _write_dist_info(site_packages: Path, dist_name: str, module_name: str, vers
         f"{dist_info_stem}-{version}.dist-info/RECORD,,",
     ]
     (dist_info / "RECORD").write_text("\n".join(record_lines) + "\n", encoding="utf-8")
+    return dist_info
 
 
 def _installed_names(real_venv: _RealVenv) -> set:
@@ -150,11 +155,15 @@ async def test_reconcile_real_venv_removes_orphan_keeps_declared_and_transitive(
     real_venv: _RealVenv, tmp_path: Path
 ) -> None:
     """A package removed from requirements.txt is gone; a still-declared
-    package and a transitive dependency of it are untouched (#15063)."""
+    package and a transitive dependency of it are untouched (#15063). pkg-orphan
+    carries this tool's own install-provenance marker (#15067) — simulating
+    that a PRIOR run of this same tool put it there — so it is verified, not
+    merely a same-name candidate, and removal proceeds without an opt-in."""
     site = real_venv.site_packages
     _write_dist_info(site, "pkg-root", "pkg_root_15063", "1.0", requires=("pkg-trans",))
     _write_dist_info(site, "pkg-trans", "pkg_trans_15063", "1.0")
-    _write_dist_info(site, "pkg-orphan", "pkg_orphan_15063", "1.0")
+    orphan_dist_info = _write_dist_info(site, "pkg-orphan", "pkg_orphan_15063", "1.0")
+    vr.provenance.write_provenance_marker(orphan_dist_info, "test-comp")
 
     req = tmp_path / "requirements.txt"
     req.write_text("pkg-root>=1.0\n", encoding="utf-8")  # noqa: async_blocking_io
@@ -172,6 +181,7 @@ async def test_reconcile_real_venv_removes_orphan_keeps_declared_and_transitive(
 
     assert report.status == "ok"
     assert report.removed == ("pkg-orphan",)  # exact package, never len() > 0
+    assert report.unverified == ()
     assert "pkg-trans" not in report.removed
     assert "pkg-root" not in report.removed
     assert "pkg-trans" in report.kept_transitive
@@ -186,25 +196,22 @@ async def test_reconcile_real_venv_removes_orphan_keeps_declared_and_transitive(
 
 
 @pytest.mark.asyncio
-async def test_reconcile_removes_a_name_an_operator_reinstalled_after_it_was_declared(
-    real_venv: _RealVenv, tmp_path: Path
+async def test_reconcile_survives_a_name_an_operator_reinstalled_after_it_was_declared(
+    real_venv: _RealVenv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """KNOWN LIMITATION (module docstring), tracked as #15067: this is a
-    name diff against the tool's OWN prior-declared history, with no
-    install-provenance marker. A package this venv's history once declared,
-    dropped from requirements, then reinstalled by an operator under that
-    exact name before the next reconcile, is indistinguishable from tool
-    debris and IS removed — this test documents that, it does not endorse
-    it. Only a name never declared by this tool's history (e.g. `ipdb`) is
-    safe — see test_reconcile_real_venv_removes_orphan_keeps_declared_and_transitive's
-    pkg-root/pkg-trans, which the lock never lets become candidates at all,
-    and the untouched `pip`/`setuptools` in every real-venv test here, which
-    were never in any lock this tool wrote. #15067 is the follow-up to close
-    this gap with real install provenance — when it lands, this test's
-    assertion should flip to prove SURVIVAL, per its own acceptance criteria.
+    """#15067 closes the collision the module docstring used to document as
+    a KNOWN LIMITATION: a package this venv's history once declared, dropped
+    from requirements, then reinstalled by an operator under that exact name
+    before the next reconcile, has no `AUTOBOT_PROVENANCE` marker in its
+    dist-info — a plain `pip install`, by anyone, always replaces that
+    directory — so it is a removal candidate with UNVERIFIED provenance and
+    survives by default. Only an explicit operator opt-in
+    (`ALLOW_UNVERIFIED_REMOVAL_ENV`) would remove it; this test proves the
+    default does not.
     """
+    monkeypatch.delenv(vr.provenance.ALLOW_UNVERIFIED_REMOVAL_ENV, raising=False)
     site = real_venv.site_packages
-    _write_dist_info(site, "pkg-stale-collide", "pkg_stale_collide_15063", "1.0")
+    _write_dist_info(site, "pkg-stale-collide", "pkg_stale_collide_15063", "1.0")  # no provenance marker: not ours
 
     req = tmp_path / "requirements.txt"
     req.write_text("\n", encoding="utf-8")  # noqa: async_blocking_io
@@ -216,8 +223,10 @@ async def test_reconcile_removes_a_name_an_operator_reinstalled_after_it_was_dec
     report = await vr.reconcile_component("test-comp-collide", str(req), str(real_venv.pip_bin), steps)
 
     assert report.status == "ok"
-    assert report.removed == ("pkg-stale-collide",)
-    assert "pkg-stale-collide" not in _installed_names(real_venv)
+    assert report.removed == ()
+    assert report.unverified == ("pkg-stale-collide",)
+    assert "pkg-stale-collide" in _installed_names(real_venv)
+    assert any("pkg-stale-collide" in s and "unverified" in s.lower() for s in steps)
 
 
 @pytest.mark.asyncio
@@ -327,6 +336,9 @@ def test_explicit_list_components_are_exactly_the_three_ansible_list_workers() -
 
 @pytest.mark.asyncio
 async def test_apply_removals_keeps_a_failed_uninstall_in_the_lock_for_retry(tmp_path: Path) -> None:
+    """pkg-b carries this tool's own provenance marker (installed by a prior
+    run, per the lock) — it must be ATTEMPTED, and a pip failure must retry
+    it next run, not silently drop it because provenance was unverified."""
     pip_bin = tmp_path / "venv" / "bin" / "pip"
     pip_bin.parent.mkdir(parents=True)
     lock_path = pip_bin.parents[1] / vr._DECLARED_LOCK_FILENAME
@@ -334,6 +346,10 @@ async def test_apply_removals_keeps_a_failed_uninstall_in_the_lock_for_retry(tmp
     declared = {"pkg-a"}
     previous = {"pkg-a", "pkg-b"}
     graph = {"pkg-a": set(), "pkg-b": set()}
+    dist_info_b = tmp_path / "pkg_b-1.0.dist-info"
+    dist_info_b.mkdir()
+    (dist_info_b / vr.provenance.PROVENANCE_MARKER_FILENAME).write_text("{}", encoding="utf-8")
+    dist_info_paths = {"pkg-a": None, "pkg-b": dist_info_b}
 
     async def _fake_uninstall(pip, names):
         return [], list(names)  # every removal attempt fails
@@ -342,12 +358,15 @@ async def test_apply_removals_keeps_a_failed_uninstall_in_the_lock_for_retry(tmp
     vr.uninstall_packages = _fake_uninstall
     try:
         steps: list = []
-        report = await vr._apply_removals("test-comp-retry", declared, previous, graph, lock_path, pip_bin, steps)
+        report = await vr._apply_removals(
+            "test-comp-retry", declared, previous, graph, dist_info_paths, lock_path, pip_bin, steps
+        )
     finally:
         vr.uninstall_packages = orig
 
     assert report.failed == ("pkg-b",)
     assert report.removed == ()
+    assert report.unverified == ()
     recorded = json.loads(lock_path.read_text(encoding="utf-8"))  # noqa: async_blocking_io
     assert set(recorded["declared"]) == {"pkg-a", "pkg-b"}  # retried next run, not forgotten
 
@@ -457,6 +476,9 @@ def test_extract_requirement_name_strips_specifiers_extras_markers() -> None:
 
 
 def test_build_dependency_graph_normalizes_names_on_both_sides() -> None:
-    raw = {"Pkg-Root": ["Pkg_Trans>=1.0 ; extra == 'x'"], "Pkg_Trans": []}
+    raw = {
+        "Pkg-Root": {"requires": ["Pkg_Trans>=1.0 ; extra == 'x'"], "dist_info": None},
+        "Pkg_Trans": {"requires": [], "dist_info": None},
+    }
     graph = vr.build_dependency_graph(raw)
     assert graph == {"pkg-root": {"pkg-trans"}, "pkg-trans": set()}
