@@ -38,16 +38,18 @@ requirements file (`EXPLICIT_LIST_COMPONENTS`) have nothing here to reconcile
 against — `refuse_explicit_list` reports that plainly instead of silently
 skipping them.
 
-KNOWN LIMITATION — a name-collision, not a redesign candidate here. Tracked
-as #15067. Protection in step 2 is a name diff against this tool's OWN
-history, with no install-provenance marker to tell "this tool put it here"
-apart from "an operator happens to have installed something with this exact
-name since". A package this venv's history once declared, then dropped from
-requirements, is indistinguishable from operator debris installed under
-that same name in the window before the next reconcile — see
-`test_reconcile_removes_a_name_an_operator_reinstalled_after_it_was_declared`.
-A package this tool's history NEVER declared is unaffected regardless.
-#15067 is the follow-up to close this with real install provenance.
+INSTALL PROVENANCE (#15067) — step 2's name diff alone cannot tell "this
+tool put this exact installation here" apart from "an operator happens to
+have installed something under this exact name since". `venv_provenance.py`
+closes that gap with a dist-info-adjacent marker file this tool stamps onto
+every currently-required package after its own `pip install` confirms it
+present, so an operator's later manual reinstall under a name this tool once
+declared erases the marker along with the rest of that dist-info directory.
+A removal candidate is only actually removed when its marker is present; one
+with no marker — including every package on every host that predates this
+module — is reported and left alone unless an operator opts in via
+`venv_provenance.ALLOW_UNVERIFIED_REMOVAL_ENV`. See that module's docstring
+for the full model and the first-run rationale.
 """
 
 from __future__ import annotations
@@ -62,6 +64,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
+import venv_provenance as provenance
 from autobot_shared.time_utils import utc_timestamp
 
 # Plain stdlib logging, deliberately (mirrors code_sync.py itself, and the
@@ -109,6 +112,7 @@ class ReconcileReport:
     declared: Tuple[str, ...] = ()
     removed: Tuple[str, ...] = ()
     kept_transitive: Tuple[str, ...] = ()
+    unverified: Tuple[str, ...] = ()  # candidates skipped: no install-provenance marker (#15067)
     failed: Tuple[str, ...] = ()
 
 
@@ -227,17 +231,22 @@ def resolve_declared_names(entry_path: Path) -> Tuple[Set[str], List[str]]:
 
 _INSPECT_SCRIPT = (
     "import importlib.metadata as m, json\n"
-    "print(json.dumps({\n"
-    "    d.metadata['Name']: (d.requires or [])\n"
-    "    for d in m.distributions() if d.metadata.get('Name')\n"
-    "}))\n"
+    "out = {}\n"
+    "for d in m.distributions():\n"
+    "    name = d.metadata.get('Name')\n"
+    "    if not name:\n"
+    "        continue\n"
+    "    di = getattr(d, '_path', None)\n"
+    "    out[name] = {'requires': d.requires or [], 'dist_info': str(di) if di else None}\n"
+    "print(json.dumps(out))\n"
 )
 
 
-async def installed_state(venv_python: Path) -> Optional[Dict[str, List[str]]]:
-    """Every distribution installed in *venv_python*'s venv, with its raw
-    Requires-Dist strings — read locally via importlib.metadata, no network,
-    no resolver call. Returns None when the venv cannot be introspected."""
+async def installed_state(venv_python: Path) -> Optional[Dict[str, Dict[str, object]]]:
+    """Every distribution installed in *venv_python*'s venv — its raw
+    Requires-Dist strings and its dist-info directory (for #15067 provenance
+    markers) — read locally via importlib.metadata, no network, no resolver
+    call. Returns None when the venv cannot be introspected."""
     if not venv_python.exists():
         return None
     try:
@@ -262,10 +271,11 @@ async def installed_state(venv_python: Path) -> Optional[Dict[str, List[str]]]:
         return None
 
 
-def build_dependency_graph(raw_state: Dict[str, List[str]]) -> Dict[str, Set[str]]:
+def build_dependency_graph(raw_state: Dict[str, Dict[str, object]]) -> Dict[str, Set[str]]:
     """Normalize `installed_state`'s raw Requires-Dist strings into a name graph."""
     graph: Dict[str, Set[str]] = {}
-    for name, requires in raw_state.items():
+    for name, info in raw_state.items():
+        requires = info.get("requires") or [] if isinstance(info, dict) else []
         deps = {n for n in (extract_requirement_name(r) for r in requires) if n}
         graph.setdefault(normalize_name(name), set()).update(deps)
     return graph
@@ -367,11 +377,20 @@ def refuse_explicit_list(component: str, steps: List[str]) -> ReconcileReport:
     return _report(component, "refused", reason, steps)
 
 
+def _unverified_skip_message(component: str, skipped: Set[str]) -> str:
+    return (
+        f"venv-reconcile[{component}]: {len(skipped)} candidate(s) with no install-provenance "
+        f"marker — NOT removed (unverified origin, set {provenance.ALLOW_UNVERIFIED_REMOVAL_ENV}=1 "
+        f"to allow after review): {sorted(skipped)}"
+    )
+
+
 async def _apply_removals(
     component: str,
     declared: Set[str],
     previous: Set[str],
     graph: Dict[str, Set[str]],
+    dist_info_paths: Dict[str, Optional[Path]],
     lock_path: Path,
     pip: Path,
     steps: List[str],
@@ -384,7 +403,15 @@ async def _apply_removals(
     # rather than failing, so without this filter a candidate that is not
     # actually there would be reported (falsely) as removed, not merely waste
     # a subprocess call.
-    removable = sorted((candidates - kept) & installed)
+    provisional = (candidates - kept) & installed
+    verified, unverified = provenance.split_by_provenance(provisional, dist_info_paths)
+    allowed = provenance.allow_unverified_removal()
+    skipped = set() if allowed else unverified
+    removable = sorted(verified | (unverified if allowed else set()))
+    if skipped:
+        skip_msg = _unverified_skip_message(component, skipped)
+        steps.append(skip_msg)
+        logger.warning(skip_msg)
     msg = f"venv-reconcile[{component}]: {len(removable)} package(s) to remove: {removable}"
     steps.append(msg)
     logger.info(msg)
@@ -393,7 +420,7 @@ async def _apply_removals(
         kept_msg = f"venv-reconcile[{component}]: kept (still required transitively): {sorted(kept)}"
         steps.append(kept_msg)
         logger.info(kept_msg)
-    write_lock(lock_path, declared | set(failed))
+    write_lock(lock_path, declared | set(failed) | skipped)
     return ReconcileReport(
         component=component,
         status="ok",
@@ -402,6 +429,7 @@ async def _apply_removals(
         removed=tuple(removed),
         kept_transitive=tuple(sorted(kept)),
         failed=tuple(failed),
+        unverified=tuple(sorted(skipped)),
     )
 
 
@@ -410,6 +438,10 @@ async def reconcile_component(component: str, req_path: str, pip_bin: str, steps
     removals — or refuse and report exactly what could not be reconciled
     (#15063). Never removes and discovers: every branch that cannot establish
     the declared set or introspect the venv with confidence refuses instead.
+    Every currently-required package is (re-)stamped with this run's own
+    install-provenance marker regardless of branch (#15067) — that is the
+    only moment reconcile can truthfully claim "I put this exact installation
+    here", so it happens whether or not this run goes on to remove anything.
     """
     req, pip = Path(req_path), Path(pip_bin)
     if not req.exists():
@@ -422,13 +454,15 @@ async def reconcile_component(component: str, req_path: str, pip_bin: str, steps
         reason = f"could not introspect venv at {pip.parent}"
         return _report(component, "refused", reason, steps, declared=declared)
     graph = build_dependency_graph(raw_state)
+    dist_info_paths = provenance.dist_info_paths(raw_state, normalize_name)
+    provenance.mark_current_set(component, transitive_closure(declared, graph), dist_info_paths, steps)
     lock_path = pip.parents[1] / _DECLARED_LOCK_FILENAME
     previous = load_lock(lock_path)
     if previous is None:
         write_lock(lock_path, declared)
         reason = f"no prior declared-set snapshot — recorded baseline of {len(declared)} package(s)"
         return _report(component, "baseline_recorded", reason, steps, declared=declared)
-    return await _apply_removals(component, declared, previous, graph, lock_path, pip, steps)
+    return await _apply_removals(component, declared, previous, graph, dist_info_paths, lock_path, pip, steps)
 
 
 async def install_pip_deps_for_component(component: str, steps: List[str]) -> bool:
