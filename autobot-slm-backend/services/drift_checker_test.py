@@ -12,11 +12,9 @@ patched at module-import time via monkeypatch / unittest.mock.
 
 import hashlib
 import importlib
-import os
 import sys
 import types
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -61,7 +59,6 @@ source_only_patterns = _dc.source_only_patterns
 compute_drift = _dc.compute_drift
 build_drift_report = _dc.build_drift_report
 get_default_source_dir = _dc.get_default_source_dir
-get_default_deployed_dir = _dc.get_default_deployed_dir
 ALLOWED_COMPONENTS = _dc.ALLOWED_COMPONENTS
 EXTRA_VISIBILITY_COMPONENTS = _dc.EXTRA_VISIBILITY_COMPONENTS
 VISIBILITY_COMPONENTS = _dc.VISIBILITY_COMPONENTS
@@ -422,37 +419,11 @@ class TestBuildDriftReport:
         assert "+00:00" in checked_at
 
 
-# ===========================================================================
-# get_default_deployed_dir
-# ===========================================================================
-
-
-class TestGetDefaultDeployedDir:
-    def test_default_root(self):
-        """Without SLM_DEPLOYED_ROOT set, defaults to /opt/autobot/<component>."""
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("SLM_DEPLOYED_ROOT", None)
-            result = get_default_deployed_dir("autobot-slm-backend")
-        assert result == "/opt/autobot/autobot-slm-backend"
-
-    def test_env_override(self, tmp_path):
-        """SLM_DEPLOYED_ROOT env var overrides the hardcoded /opt/autobot root."""
-        custom_root = str(tmp_path / "custom_root")
-        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": custom_root}):
-            result = get_default_deployed_dir("autobot-slm-backend")
-        assert result == str(Path(custom_root) / "autobot-slm-backend")
-
-    def test_component_appended(self, tmp_path):
-        """The component name is appended as a sub-directory of the root,
-        except for the #12450 nonstandard-path components which are
-        deliberately excluded from this generic convention — see
-        _NONSTANDARD_COMPONENT_PATHS and
-        TestNonstandardComponentPathMap.test_allowed_components_with_overrides_are_the_two_verified_exceptions."""
-        root = str(tmp_path)
-        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": root}):
-            for component in ALLOWED_COMPONENTS - set(_NONSTANDARD_COMPONENT_PATHS):
-                result = get_default_deployed_dir(component)
-                assert result == str(Path(root) / component)
+# get_live_dir / get_release_component_dir moved to
+# services/deployed_dir_resolver.py (#13539 B2) — see
+# services/deployed_dir_resolver_test.py for their coverage, including the
+# nonstandard-path-map cases this file used to carry for them and the
+# "unchanged today" reader/writer agreement proof.
 
 
 # ===========================================================================
@@ -877,9 +848,11 @@ class TestExtraVisibilityComponents:
 
 
 class TestNonstandardComponentPathMap:
-    """Verify the source/deployed path override for each nonstandard
-    component (#12450) resolves to the paths confirmed against the live
-    ansible deploy tasks."""
+    """Verify the SOURCE path override for each nonstandard component
+    (#12450) resolves to the paths confirmed against the live ansible
+    deploy tasks. The matching DEPLOYED-path assertions live in
+    ``services/deployed_dir_resolver_test.py`` alongside that module's own
+    tests (#13539 B2)."""
 
     def test_ai_stack_source_path_is_infrastructure_subtree(self, monkeypatch, tmp_path):
         """ai-stack has no top-level code_source/autobot-ai-stack dir; its
@@ -890,13 +863,6 @@ class TestNonstandardComponentPathMap:
         monkeypatch.setattr(_dc, "DEFAULT_REPO_PATH", str(fake_repo))
         result = get_default_source_dir("autobot-ai-stack")
         assert result == str(fake_repo / "autobot-infrastructure" / "shared" / "docker" / "ai-stack")
-
-    def test_ai_stack_deployed_path_strips_to_flat_dir(self):
-        """--strip-components=4 (Play 2, ~1060-1064) lands ai-stack's contents
-        flat under /opt/autobot/autobot-ai-stack, not a nested path."""
-        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": "/opt/autobot"}):
-            result = get_default_deployed_dir("autobot-ai-stack")
-        assert result == "/opt/autobot/autobot-ai-stack"
 
     def test_slm_agent_source_path_is_role_files_subtree(self, monkeypatch, tmp_path):
         """slm-agent's source of truth is the per-file copy: tasks in the
@@ -909,14 +875,6 @@ class TestNonstandardComponentPathMap:
         result = get_default_source_dir("autobot-slm-agent")
         assert result == str(nested)
 
-    def test_slm_agent_deployed_path_is_agent_subtree(self):
-        """Deployed target is <slm_agent_dir>/slm/agent (role tasks ~132-213),
-        not the top-level /opt/autobot/autobot-slm-agent dir (which also
-        holds config.yaml/role.json/version.json — templated, not raw source)."""
-        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": "/opt/autobot"}):
-            result = get_default_deployed_dir("autobot-slm-agent")
-        assert result == "/opt/autobot/autobot-slm-agent/slm/agent"
-
     def test_plugins_source_path_is_repo_root_sibling(self, monkeypatch, tmp_path):
         """plugins/ ships at the repo root, a SIBLING of autobot-backend/, not
         nested inside it."""
@@ -926,22 +884,12 @@ class TestNonstandardComponentPathMap:
         result = get_default_source_dir("plugins")
         assert result == str(fake_repo / "plugins")
 
-    def test_plugins_deployed_path_is_inside_backend(self):
-        """plugins/ is rsynced into the backend's own plugins/ subdirectory
-        (backend role #10294), not a top-level /opt/autobot/plugins tree."""
-        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": "/opt/autobot"}):
-            result = get_default_deployed_dir("plugins")
-        assert result == "/opt/autobot/autobot-backend/plugins"
-
-    def test_standard_components_are_unaffected_by_the_override_map(self, tmp_path):
+    def test_standard_components_are_unaffected_by_the_override_map(self):
         """npu-worker and browser-worker follow the standard
         code_source/<name> -> <root>/<name> convention — no override needed,
         so they must NOT appear in _NONSTANDARD_COMPONENT_PATHS."""
         assert "autobot-npu-worker" not in _NONSTANDARD_COMPONENT_PATHS
         assert "autobot-browser-worker" not in _NONSTANDARD_COMPONENT_PATHS
-        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": str(tmp_path)}):
-            assert get_default_deployed_dir("autobot-npu-worker") == str(tmp_path / "autobot-npu-worker")
-            assert get_default_deployed_dir("autobot-browser-worker") == str(tmp_path / "autobot-browser-worker")
 
     def test_allowed_components_with_overrides_are_the_two_verified_exceptions(self):
         """#12450 phase 2 intentionally violates the original "no allowed

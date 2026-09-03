@@ -181,10 +181,10 @@ VISIBILITY_COMPONENTS = ALLOWED_COMPONENTS | EXTRA_VISIBILITY_COMPONENTS
 
 # Source/deployed path overrides for components whose layout does not follow
 # the code_source/<component> -> <SLM_DEPLOYED_ROOT>/<component> convention
-# assumed by get_default_source_dir/get_default_deployed_dir (#12450). Paths
-# are relative to DEFAULT_REPO_PATH / SLM_DEPLOYED_ROOT respectively. Verified
-# against the live ansible deploy tasks — do not add an entry without tracing
-# it to the actual unarchive/copy/synchronize task.
+# assumed by get_default_source_dir and services.deployed_dir_resolver's two
+# forms (#13539 B2). Paths are relative to DEFAULT_REPO_PATH / SLM_DEPLOYED_ROOT
+# respectively. Verified against the live ansible deploy tasks — do not add an
+# entry without tracing it to the actual unarchive/copy/synchronize task.
 _NONSTANDARD_COMPONENT_PATHS: dict[str, tuple[str, str]] = {
     # ai-stack has no top-level code_source/autobot-ai-stack dir; it lives
     # under autobot-infrastructure/ and deploys with --strip-components=4 so
@@ -295,7 +295,8 @@ _RENDERED_FILES: dict[str, dict[str, str]] = {
 def _deployed_relpath(component: str) -> str:
     """Deployed path of *component* relative to the deployed root.
 
-    Mirrors :func:`get_default_deployed_dir` without the root prefix so
+    Mirrors ``services.deployed_dir_resolver._resolve_deployed_dir`` without
+    the root prefix so
     ownership between component trees can be reasoned about (#13851).
     """
     override = _NONSTANDARD_COMPONENT_PATHS.get(component)
@@ -812,26 +813,6 @@ def build_drift_report(
         "drift_detected": len(drifted) > 0,
         "checked_at": utc_timestamp(),
     }
-
-
-def get_default_deployed_dir(component: str = "autobot-slm-backend") -> str:
-    """Return the expected deployed path for *component* under /opt/autobot.
-
-    Reads ``SLM_DEPLOYED_ROOT`` from the environment so the path is
-    configurable without hardcoding. Components listed in
-    ``_NONSTANDARD_COMPONENT_PATHS`` (#12450) use their verified override
-    sub-path instead of the standard ``<root>/<component>`` convention.
-
-    Args:
-        component: Sub-directory name under the deployed root.
-
-    Returns:
-        Absolute path string for the deployed component directory.
-    """
-    deployed_root = os.environ.get("SLM_DEPLOYED_ROOT", "/opt/autobot")
-    override = _NONSTANDARD_COMPONENT_PATHS.get(component)
-    rel_path = override[1] if override else component
-    return str(Path(deployed_root) / rel_path)
 
 
 def get_default_source_dir(component: str = "autobot-slm-backend") -> str:

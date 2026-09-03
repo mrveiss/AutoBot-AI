@@ -85,12 +85,12 @@ from services.deploy_artifacts import (
     rsync_artifact_excludes,
     rsync_host_state_args,
 )
+from services.deployed_dir_resolver import get_live_dir, get_release_component_dir
 from services.drift_checker import (
     ALLOWED_COMPONENTS,
     VISIBILITY_COMPONENTS,
     build_drift_report,
     deploy_only_entries,
-    get_default_deployed_dir,
     get_default_source_dir,
     owned_subtrees,
 )
@@ -370,7 +370,7 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
             logger.error("component resolve job %s: source path error: %s", job_id, exc)
             return
 
-        deployed_dir = get_default_deployed_dir(component)
+        deployed_dir = get_release_component_dir(component)
         source_root = str(Path(source_dir).parent)
         excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
         excludes = excludes_map.get(component, [])  # universal excludes at the rsync chokepoint (#11459)
@@ -684,7 +684,7 @@ async def _compute_stale_components(force: bool = False) -> list[str]:
     loop = asyncio.get_running_loop()
     for component in sorted(VISIBILITY_COMPONENTS):
         try:
-            deployed_dir = get_default_deployed_dir(component)
+            deployed_dir = get_live_dir(component)
             if not os.path.isdir(deployed_dir):
                 continue  # not deployed on this box — nothing to compare
             source_dir = get_default_source_dir(component)
@@ -719,7 +719,7 @@ async def _compute_process_divergence() -> Dict[str, str]:
     """Per-component stale/healthy/unknown verdict for GET /status (#15323).
 
     Wraps services.process_divergence.compute_process_divergence with the
-    live _COMPONENT_SERVICES / get_default_deployed_dir wiring this module
+    live _COMPONENT_SERVICES / get_live_dir wiring this module
     already owns — keeps the generic detector layering-clean (services/
     never imports api/, see process_divergence.py's module docstring).
 
@@ -743,7 +743,7 @@ async def _compute_process_divergence() -> Dict[str, str]:
         from services.process_divergence import compute_process_divergence
 
         units_by_component = {c: svcs for c, svcs in _COMPONENT_SERVICES.items() if svcs and svcs != ["nginx"]}
-        deployed_dirs = {c: get_default_deployed_dir(c) for c in units_by_component}
+        deployed_dirs = {c: get_live_dir(c) for c in units_by_component}
         return await compute_process_divergence(units_by_component, deployed_dirs)
     except Exception:  # noqa: BLE001 - a bad scan must not break /status
         logger.exception("process-divergence: /status scan failed")
@@ -921,7 +921,7 @@ async def get_file_drift(
         source_dir = get_default_source_dir(component)
     except ValueError as exc:
         raise HTTPException(status_code=500, detail="Failed to determine component path") from exc
-    deployed_dir = get_default_deployed_dir(component)
+    deployed_dir = get_live_dir(component)
 
     logger.info("drift check: comparing source=%s deployed=%s", source_dir, deployed_dir)
 
@@ -1065,7 +1065,7 @@ async def resolve_drift(
         source_dir = get_default_source_dir(request.component)
     except ValueError as exc:
         raise HTTPException(status_code=500, detail="Failed to determine source path") from exc
-    deployed_dir = get_default_deployed_dir(request.component)
+    deployed_dir = get_release_component_dir(request.component)
 
     # source_dir = /opt/autobot/code_source/<component>; _rsync_component_local
     # constructs `{source_path}/{component}/` so pass the parent.
@@ -2559,7 +2559,7 @@ async def _snapshot_component(component: str) -> Optional[str]:
 
     Returns the backup dir path string on success, None on failure.
     """
-    deployed_dir = get_default_deployed_dir(component)
+    deployed_dir = get_live_dir(component)
     snap_base = Path(_SNAPSHOT_BASE_DIR)
     try:
         snap_base.mkdir(parents=True, exist_ok=True)
@@ -2605,7 +2605,7 @@ async def _restore_component_snapshot(component: str, snapshot: str, steps: List
     Returns True on a clean rsync (rc=0); False on a failed/timed-out/errored
     restore, each case logged and recorded in *steps*.
     """
-    deployed_dir = get_default_deployed_dir(component)
+    deployed_dir = get_release_component_dir(component)
     steps.append(f"rollback: restoring {component} from {snapshot}")
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -2917,7 +2917,7 @@ async def _ensure_autobot_shared_synced(component: str, force: bool = False) -> 
     source_root = str(Path(shared_source).parent)
     excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
     excludes = excludes_map.get("autobot_shared", [])
-    shared_deployed = get_default_deployed_dir("autobot_shared")
+    shared_deployed = get_release_component_dir("autobot_shared")
     if not force:
         allowed, blocked, guard_msg = await _resolve_deletion_guard(
             "autobot_shared", source_root, excludes, shared_source, shared_deployed
@@ -4737,7 +4737,7 @@ async def _compute_deps_changed(component: str) -> bool:
     """Return True if any watched dependency file differs for a component."""
     try:
         source_dir = get_default_source_dir(component)
-        deployed_dir = get_default_deployed_dir(component)
+        deployed_dir = get_live_dir(component)
     except ValueError:
         return False
     except Exception:
@@ -4836,7 +4836,7 @@ async def _get_slm_deployed_commit() -> Optional[str]:
 
     Reads the ``.deployed_commit`` marker written by the ``slm_manager``
     Ansible role right after it rsyncs code_source into the install dir
-    (get_default_deployed_dir) — NOT ``git_tracker.get_local_commit()``,
+    (get_live_dir) — NOT ``git_tracker.get_local_commit()``,
     which reflects code_source HEAD. Stage 2 (code_source_pull) already
     advances code_source HEAD to remote before this check runs, so comparing
     against git_tracker would always read remote == remote and the self-
@@ -4845,7 +4845,7 @@ async def _get_slm_deployed_commit() -> Optional[str]:
     Returns None when the marker is absent/unreadable/empty — callers must
     treat that as "not current" (fail-safe toward firing the self-update).
     """
-    marker = Path(get_default_deployed_dir("autobot-slm-backend")) / ".deployed_commit"
+    marker = Path(get_live_dir("autobot-slm-backend")) / ".deployed_commit"
     try:
         commit = (await asyncio.to_thread(marker.read_text, encoding="utf-8")).strip()
     except OSError:
@@ -4952,7 +4952,7 @@ async def _component_has_file_drift(component: str) -> bool:
         source_dir = get_default_source_dir(component)
     except ValueError:
         return False
-    deployed_dir = get_default_deployed_dir(component)
+    deployed_dir = get_live_dir(component)
     if not Path(deployed_dir).exists():
         return False
     report = await asyncio.get_running_loop().run_in_executor(
