@@ -36,7 +36,6 @@ import asyncio
 import contextlib
 import importlib
 import sys
-import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -204,6 +203,7 @@ async def db():
 # ---------------------------------------------------------------------------
 
 _REAL_CREATE_TASK = asyncio.create_task
+_REAL_FIRE_AND_FORGET = _stateful.fire_and_forget
 
 
 @pytest.fixture(autouse=True)
@@ -239,11 +239,15 @@ async def test_db_teardown_survives_a_replaced_global_create_task(db, monkeypatc
 
 
 def test_no_bg_tasks_leaves_the_shared_asyncio_module_untouched(no_bg_tasks):
-    """The background-task patch stays inside ``api.stateful``."""
+    """The patch stays inside ``api.stateful``; shared ``asyncio`` is untouched.
+
+    #15524 moved it from an ``asyncio`` shim to the module's own
+    ``fire_and_forget``. The #13329 invariant is unchanged: SQLAlchemy's async
+    teardown shares the process-wide ``asyncio``, so it must be exactly as found.
+    """
     assert asyncio.create_task is _REAL_CREATE_TASK
-    assert _stateful.asyncio is not asyncio
-    assert _stateful.asyncio.create_task is not _REAL_CREATE_TASK
-    assert _stateful.asyncio.wait_for is asyncio.wait_for
+    assert _stateful.asyncio is asyncio
+    assert _stateful.fire_and_forget is not _REAL_FIRE_AND_FORGET
 
 
 async def _insert_node(db, node_id: str, ip: str = "10.0.0.10", **overrides) -> Node:
@@ -362,46 +366,26 @@ class TestNodesCrud:
 # ---------------------------------------------------------------------------
 
 
-def _make_no_op_task_asyncio() -> types.ModuleType:
-    """Return an ``asyncio`` stand-in whose ``create_task`` schedules nothing.
-
-    A module object carrying a copy of the real ``asyncio`` namespace, so every
-    other attribute ``api/stateful.py`` reaches for
-    (``create_subprocess_exec``, ``subprocess.PIPE``, ``wait_for``,
-    ``TimeoutError``) keeps its real behaviour.
-    """
-
-    def _fake_create_task(coro=None, *args, **kwargs):
-        if asyncio.iscoroutine(coro):
-            coro.close()
-        return MagicMock()
-
-    shim = types.ModuleType("asyncio")
-    shim.__dict__.update(vars(asyncio))
-    shim.create_task = _fake_create_task  # type: ignore[attr-defined]
-    return shim
-
-
 @pytest.fixture
 def no_bg_tasks(monkeypatch):
-    """Neutralise the fire-and-forget ``asyncio.create_task`` background jobs.
+    """Neutralise the fire-and-forget background jobs.
 
     ``create_backup``/``start_replication``/``restore_backup`` kick off async
     jobs that reach real backup/replication services (stubbed MagicMocks here).
     Scheduling those would either raise (MagicMock isn't a coroutine) or leak
-    'never retrieved' task warnings, so replace scheduling with a coroutine-safe
-    no-op for the duration of the test.
+    'never retrieved' task warnings, so scheduling is replaced with a no-op that
+    closes the coroutine for the duration of the test.
 
-    #13329: the replacement goes on the *router module's* ``asyncio`` binding,
-    never on the shared ``asyncio`` module itself.  ``monkeypatch.setattr(
-    _stateful.asyncio, "create_task", ...)`` mutated the one ``asyncio`` object
-    the whole process shares — including the copy SQLAlchemy's
-    ``AsyncSession.__aexit__`` calls — so for as long as the undo had not run,
-    every unrelated async teardown in this package got a ``MagicMock`` back from
-    ``create_task``.  Rebinding the name inside ``api.stateful`` keeps the blast
-    radius at exactly the module under test.
+    #13329: the replacement goes on the *router module's* binding, never on a
+    shared module. Patching ``asyncio.create_task`` on the real ``asyncio``
+    object mutated the one copy the whole process shares — including the one
+    SQLAlchemy's ``AsyncSession.__aexit__`` calls — so every unrelated async
+    teardown in this package got a ``MagicMock`` back until the undo ran.
+    #15524: the jobs now route through ``fire_and_forget``, so the old
+    ``asyncio`` shim stubbed a call nobody makes; patching the module's own
+    ``fire_and_forget`` keeps that blast radius, as #13329 requires.
     """
-    monkeypatch.setattr(_stateful, "asyncio", _make_no_op_task_asyncio())
+    monkeypatch.setattr(_stateful, "fire_and_forget", lambda coro, **_: coro.close())
 
 
 class TestStatefulBackups:

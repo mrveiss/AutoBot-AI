@@ -143,3 +143,20 @@ def _retire_background_task(task: asyncio.Task[Any]) -> None:
 def pending_background_tasks() -> frozenset[asyncio.Task[Any]]:
     """Snapshot of the tasks :func:`fire_and_forget` is currently retaining."""
     return frozenset(_BACKGROUND_TASKS)
+
+
+def retain_until_done(
+    registry: dict[str, asyncio.Task[Any]], key: str, coro: Coroutine[Any, Any, Any]
+) -> asyncio.Task[Any]:
+    """Schedule *coro*, hold it in *registry* under *key*, and drop it when done.
+
+    A discarded ``create_task`` result can be garbage-collected before its
+    coroutine runs (#15524), so a caller that needs the task cancellable later
+    must keep a reference. A reference that is never released leaks for the life
+    of the process, so the done callback removes it. Prefer
+    :func:`fire_and_forget` unless something must be able to cancel the task.
+    """
+    task = asyncio.create_task(coro)
+    registry[key] = task
+    task.add_done_callback(lambda _: registry.pop(key, None))
+    return task
