@@ -27,15 +27,16 @@ import os
 import shutil
 from pathlib import Path
 
-from services.drift_checker import get_default_deployed_dir
+from services.deployed_dir_resolver import get_release_component_dir
 
 logger = logging.getLogger(__name__)
 
 # The build output nginx serves this node's SLM UI from. Resolved through the
 # same env-backed helper the rest of the SLM uses (SLM_DEPLOYED_ROOT), never
 # hardcoded to an absolute path -- a literal here silently disagrees with any
-# install whose deployed root differs.
-_SLM_FRONTEND_DIR = get_default_deployed_dir("autobot-slm-frontend")
+# install whose deployed root differs. A WRITE: this is a build/publish
+# destination, so it goes through get_release_component_dir, never the reader form.
+_SLM_FRONTEND_DIR = get_release_component_dir("autobot-slm-frontend")
 
 # Subprocess ceilings. Env-backed rather than magic numbers at the call site:
 # npm ci and a Vite build are the slow steps, and an install with a cold cache
@@ -169,7 +170,7 @@ async def write_slm_deployed_commit_marker(commit: str) -> None:
     (#12223, #12202). Without it, ``_get_slm_deployed_commit()`` always
     returns None after this path runs and a bad state cannot be identified.
     """
-    marker = Path(get_default_deployed_dir("autobot-slm-backend")) / ".deployed_commit"
+    marker = Path(get_release_component_dir("autobot-slm-backend")) / ".deployed_commit"
     try:
         await asyncio.to_thread(marker.write_text, commit, encoding="utf-8")
     except OSError as exc:

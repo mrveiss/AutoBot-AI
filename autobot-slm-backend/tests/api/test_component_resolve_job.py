@@ -309,7 +309,7 @@ def test_run_component_resolve_job_happy_path() -> None:
 
     with (
         patch("api.code_sync.get_default_source_dir", return_value="/src/autobot-slm-backend"),
-        patch("api.code_sync.get_default_deployed_dir", return_value="/opt/autobot/autobot-slm-backend"),
+        patch("api.code_sync.get_release_component_dir", return_value="/opt/autobot/autobot-slm-backend"),
         # #13851: the job dry-runs rsync before syncing; unpatched that is a real
         # subprocess in a unit test. Refusal behaviour lives in
         # tests/api/test_resolve_deletion_guard_13851.py.
@@ -354,7 +354,7 @@ def test_run_component_resolve_job_rsync_failure() -> None:
 
     with (
         patch("api.code_sync.get_default_source_dir", return_value="/src/autobot-slm-backend"),
-        patch("api.code_sync.get_default_deployed_dir", return_value="/opt/autobot/autobot-slm-backend"),
+        patch("api.code_sync.get_release_component_dir", return_value="/opt/autobot/autobot-slm-backend"),
         patch("api.code_sync._preview_rsync_deletions", AsyncMock(return_value=(True, [], ""))),
         patch("api.code_sync._rsync_component_local", AsyncMock(return_value=(False, "rsync boom"))),
         patch("api.code_sync._run_post_sync_steps", AsyncMock()),
@@ -382,7 +382,7 @@ def test_run_component_resolve_job_shared_sync_failure() -> None:
 
     with (
         patch("api.code_sync.get_default_source_dir", return_value="/src/autobot-slm-backend"),
-        patch("api.code_sync.get_default_deployed_dir", return_value="/opt/autobot/autobot-slm-backend"),
+        patch("api.code_sync.get_release_component_dir", return_value="/opt/autobot/autobot-slm-backend"),
         patch("api.code_sync._preview_rsync_deletions", AsyncMock(return_value=(True, [], ""))),
         patch(
             "api.code_sync._ensure_autobot_shared_synced",

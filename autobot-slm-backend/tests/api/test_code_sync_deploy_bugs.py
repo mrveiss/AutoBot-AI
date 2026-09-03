@@ -1306,7 +1306,7 @@ def test_snapshot_component_returns_none_when_rsync_fails(tmp_path) -> None:
     snap_dir = tmp_path / "snapshots"
     snap_dir.mkdir()
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(tmp_path / "deployed")),
+        patch("api.code_sync.get_live_dir", return_value=str(tmp_path / "deployed")),
         patch("api.code_sync._SNAPSHOT_BASE_DIR", str(snap_dir)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
     ):
@@ -1328,7 +1328,7 @@ def test_snapshot_component_returns_backup_path(tmp_path) -> None:
         return proc
 
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("api.code_sync.get_live_dir", return_value=str(deployed)),
         patch("api.code_sync._SNAPSHOT_BASE_DIR", str(snap_dir)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
     ):
@@ -1355,7 +1355,7 @@ def test_snapshot_rsyncs_deployed_dir(tmp_path) -> None:
         return proc
 
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("api.code_sync.get_live_dir", return_value=str(deployed)),
         patch("api.code_sync._SNAPSHOT_BASE_DIR", str(snap_dir)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
     ):
@@ -1385,7 +1385,7 @@ def test_rollback_component_rsyncs_from_backup_and_restarts(tmp_path) -> None:
         restarted.append(True)
 
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("api.code_sync.get_release_component_dir", return_value=str(deployed)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
         patch("api.code_sync._restart_component_services", side_effect=_fake_restart),
     ):
@@ -1412,7 +1412,7 @@ def test_rollback_skips_dump_path_when_no_backup_sentinel(tmp_path) -> None:
         return proc
 
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("api.code_sync.get_release_component_dir", return_value=str(deployed)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
         patch("api.code_sync._restart_component_services", AsyncMock()),
     ):
@@ -1452,7 +1452,7 @@ def test_rollback_restarts_even_when_restore_rsync_fails(tmp_path) -> None:
         return proc
 
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("api.code_sync.get_release_component_dir", return_value=str(deployed)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
         patch("api.code_sync._restart_component_services", AsyncMock()) as restart,
     ):
@@ -1476,7 +1476,7 @@ def test_restore_component_snapshot_returns_false_on_timeout(tmp_path) -> None:
         return proc
 
     with (
-        patch("api.code_sync.get_default_deployed_dir", return_value=str(deployed)),
+        patch("api.code_sync.get_release_component_dir", return_value=str(deployed)),
         patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
         patch("asyncio.wait_for", side_effect=__import__("asyncio").TimeoutError),
     ):

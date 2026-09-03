@@ -216,7 +216,7 @@ async def compute_process_divergence(
 
     *units_by_component* and *deployed_dir_by_component* are supplied by the
     caller (api/code_sync.py already owns ``_COMPONENT_SERVICES`` and
-    ``get_default_deployed_dir``) so this module never imports ``api.*``.
+    ``get_live_dir``) so this module never imports ``api.*``.
     Every unit listed for a component is checked — see
     ``_aggregate_unit_statuses`` — not just the first.
     """
