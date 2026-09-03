@@ -45,9 +45,17 @@ from autobot_shared.ssot_config import (
 
 # --------------------------------------------------------------------------
 # Legacy class names -> canonical classes.
+#
+# No ``LLMSettings`` alias here (#15577): this module's pre-consolidation
+# ``LLMSettings`` and ``llm_shared.models.LLMSettings`` (live pydantic-settings
+# for Ollama provider config, imported by ``llm_shared/__init__.py`` and
+# ``llm_shared/providers/ollama*.py``) are different concepts that happened to
+# share a name. Swept first, the way #12750 did for this whole module: nothing
+# imports ``models.settings.LLMSettings`` by that bare name, so there is no
+# legacy caller to keep resolving -- aliasing it here would only recreate the
+# collision the sweep exists to catch. Use ``LLMConfig`` directly.
 # --------------------------------------------------------------------------
 AutoBotSettings = AutoBotConfig
-LLMSettings = LLMConfig
 RedisSettings = RedisConfig
 DataSettings = PathConfig
 BackendSettings = PortConfig
@@ -138,7 +146,6 @@ __all__ = [
     "TelemetryConfig",
     "VMConfig",
     "AutoBotSettings",
-    "LLMSettings",
     "RedisSettings",
     "DataSettings",
     "BackendSettings",
