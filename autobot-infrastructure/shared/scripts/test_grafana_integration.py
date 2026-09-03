@@ -14,6 +14,7 @@ import json
 import sys
 from pathlib import Path
 
+
 def main() -> int:
     """Print the Grafana integration status summary.
 

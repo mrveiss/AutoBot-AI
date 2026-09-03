@@ -213,7 +213,8 @@ def check_legacy_compatibility(env_vars: Dict[str, str]) -> List[str]:
         elif legacy_var in env_vars and modern_var in env_vars:
             if env_vars[legacy_var] != env_vars[modern_var]:
                 warnings.append(
-                    f"Legacy variable mismatch: {legacy_var} = {env_vars[legacy_var]}, {modern_var} = {env_vars[modern_var]}"
+                    f"Legacy variable mismatch: {legacy_var} = {env_vars[legacy_var]}, "
+                    f"{modern_var} = {env_vars[modern_var]}"
                 )
 
     return warnings

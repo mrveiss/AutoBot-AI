@@ -708,7 +708,7 @@ class ReportProcessingCoordinator:
         for rec in summary["recommendations"]:
             content += f"- {rec}\n"
 
-        content += """
+        content += f"""
 
 ## Processing Statistics
 
