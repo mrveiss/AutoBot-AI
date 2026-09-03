@@ -79,7 +79,7 @@ def _deployed(component: str, *parts: str) -> Path:
     A READ: this probes artifacts on the currently-served tree, so it goes
     through :func:`get_live_dir`, never the writer form.
     """
-    from services.drift_checker import get_live_dir
+    from services.deployed_dir_resolver import get_live_dir
 
     return Path(get_live_dir(component)).joinpath(*parts)
 

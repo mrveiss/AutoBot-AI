@@ -27,7 +27,7 @@ import os
 import shutil
 from pathlib import Path
 
-from services.drift_checker import get_release_component_dir
+from services.deployed_dir_resolver import get_release_component_dir
 
 logger = logging.getLogger(__name__)
 
