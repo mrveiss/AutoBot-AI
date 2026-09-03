@@ -64,7 +64,6 @@ for the core → SLM → modules picture, then use this index to navigate everyt
 | [[GLOSSARY]] | Terms and definitions |
 | [[ROADMAP]] | Product roadmap |
 | [[DEPENDENCIES]] | Dependency overview |
-| [[external_apps/_index\|External Apps]] | Archived external AI tool system prompts |
 
 ## Architecture Decision Records
 

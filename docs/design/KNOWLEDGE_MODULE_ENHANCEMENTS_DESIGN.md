@@ -804,7 +804,7 @@ src/knowledge/
 
 ## 9. References
 
-- Manus Knowledge Module: `docs/external_apps/.../Manus Agent Tools & Prompt/Modules.txt`
-- Cursor Memory System: `docs/external_apps/.../Cursor Prompts/Memory Prompt.txt`
+- Manus Knowledge Module: Manus Agent Tools & Prompt/Modules.txt (archived outside the repository, #15223)
+- Cursor Memory System: Cursor Prompts/Memory Prompt.txt (archived outside the repository, #15223)
 - Current ChromaDB integration: `src/knowledge/`
 - Current Memory MCP: `src/utils/memory_mcp.py`
