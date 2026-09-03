@@ -64,9 +64,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from autobot_shared.time_utils import utc_timestamp
-
 import venv_provenance as provenance
+from autobot_shared.time_utils import utc_timestamp
 
 # Plain stdlib logging, deliberately (mirrors code_sync.py itself, and the
 # password_epoch.py precedent CLAUDE.md documents): this module is imported

@@ -93,9 +93,7 @@ def _record_line(rel_path: str, root: Path) -> str:
     return f"{rel_path},sha256={b64},{len(data)}"
 
 
-def _write_dist_info(
-    site_packages: Path, dist_name: str, module_name: str, version: str, requires: tuple = ()
-) -> Path:
+def _write_dist_info(site_packages: Path, dist_name: str, module_name: str, version: str, requires: tuple = ()) -> Path:
     """Hand-build a real, pip-uninstallable dist-info directory.
 
     Same on-disk shape `pip install` itself produces (METADATA + RECORD),

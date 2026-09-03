@@ -133,9 +133,7 @@ def test_split_by_provenance_separates_marked_from_unmarked(tmp_path: Path) -> N
     unverified_dist_info.mkdir()  # no marker — e.g. an operator's own install
 
     paths = {"pkg-verified": verified_dist_info, "pkg-unverified": unverified_dist_info, "pkg-no-path": None}
-    verified, unverified = provenance.split_by_provenance(
-        {"pkg-verified", "pkg-unverified", "pkg-no-path"}, paths
-    )
+    verified, unverified = provenance.split_by_provenance({"pkg-verified", "pkg-unverified", "pkg-no-path"}, paths)
 
     assert verified == {"pkg-verified"}
     assert unverified == {"pkg-unverified", "pkg-no-path"}
