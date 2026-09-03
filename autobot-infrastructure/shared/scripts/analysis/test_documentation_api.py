@@ -36,7 +36,6 @@ async def test_documentation_browser_logic():
         # the imported name would make it a local and raise UnboundLocalError.
         root = project_root()
 
-        documentation_files = []
         total_size = 0
         total_docs = 0
 

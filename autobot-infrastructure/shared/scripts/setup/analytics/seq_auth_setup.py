@@ -194,17 +194,26 @@ def setup_basic_seq_queries(seq_url=None, api_key=None):
     basic_queries = [
         {
             "name": "AutoBot Error Summary",
-            "query": "select @l as Level, count(*) as Count from stream where Application = 'AutoBot' and @l = 'Error' group by @l",
+            "query": (
+                "select @l as Level, count(*) as Count from stream "
+                "where Application = 'AutoBot' and @l = 'Error' group by @l"
+            ),
             "description": "Summary of AutoBot errors",
         },
         {
             "name": "AutoBot Container Activity",
-            "query": "select ContainerName, count(*) as LogCount from stream where LogType = 'DockerContainer' and @t >= Now() - 1h group by ContainerName",
+            "query": (
+                "select ContainerName, count(*) as LogCount from stream "
+                "where LogType = 'DockerContainer' and @t >= Now() - 1h group by ContainerName"
+            ),
             "description": "Recent container activity",
         },
         {
             "name": "AutoBot Recent Errors",
-            "query": "select top 20 @t, Source, @mt from stream where Application = 'AutoBot' and @l = 'Error' order by @t desc",
+            "query": (
+                "select top 20 @t, Source, @mt from stream "
+                "where Application = 'AutoBot' and @l = 'Error' order by @t desc"
+            ),
             "description": "Most recent errors",
         },
     ]

@@ -513,7 +513,8 @@ def _generate_migration_phases_md(migration: dict) -> str:
 
     report += """
 ### Migration Timeline
-- **Total Duration:** {migration["estimated_total_duration_weeks"]} weeks (~{migration["estimated_total_duration_weeks"]//4} months)
+- **Total Duration:** {migration["estimated_total_duration_weeks"]} weeks
+  (~{migration["estimated_total_duration_weeks"]//4} months)
 - **Parallel Development:** Possible for some phases
 - **Rollback Strategy:** Maintain monolith during transition
 """
@@ -556,7 +557,8 @@ AutoBot shows **{migration["readiness_level"].upper()}** readiness for microserv
 
 ### Architecture Assessment
 - **Microservice Readiness:** {metrics["microservice_readiness_score"]}/10
-- **Overall Size:** {"Large" if metrics["estimated_total_loc"] >= 50000 else "Medium" if metrics["estimated_total_loc"] >= 20000 else "Small"}
+- **Overall Size:** {"Large" if metrics["estimated_total_loc"] >= 50000
+  else "Medium" if metrics["estimated_total_loc"] >= 20000 else "Small"}
 
 ## 🌐 API Structure Analysis
 
