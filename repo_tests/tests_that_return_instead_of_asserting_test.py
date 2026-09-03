@@ -232,7 +232,12 @@ _KNOWN_OFFENDERS = {
     # 86 -> 75 with #15189 (continued): config_consolidation_p2_test.py's ten
     # swallowing sections are now ten real tests; all 11 counted returns gone.
     "autobot-backend": (75, 18000),
-    "autobot-infrastructure": (121, 250),
+    # 121 -> 118 with #15255: three more swallowing drivers in
+    # shared/scripts/test_configuration.py lost their `return False` paths, so
+    # their assertions propagate and stop being counted. Same shape as the
+    # #15189 entry above, and the same reason it is a shrink rather than a
+    # re-measurement: the definition did not move, the population did.
+    "autobot-infrastructure": (118, 250),
     "autobot-npu-worker": (7, 150),
 }
 
