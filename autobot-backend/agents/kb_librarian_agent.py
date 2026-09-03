@@ -18,7 +18,12 @@ from autobot_shared.ssot_config import (
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
-from config import config
+# #15255: ``from config import config`` binds the SSOT
+# autobot_shared.ssot_config singleton, which has no ``.get()`` -- every
+# instantiation of this class raised AttributeError. The runtime,
+# GUI-editable settings this reads are ``config_manager``'s (ConfigManager),
+# reached via ``from config import config_manager``.
+from config import config_manager
 from constants.path_constants import PATH
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
@@ -47,13 +52,13 @@ class KBLibrarianAgent(StandardizedAgent):
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
         self.model_name = get_agent_model_explicit(self.AGENT_ID)
 
-        self.auto_learning_enabled = config.get("agents.kb_librarian.auto_learning_enabled", True)
+        self.auto_learning_enabled = config_manager.get("agents.kb_librarian.auto_learning_enabled", True)
 
         # Runtime-configurable parameters (used by api/kb_librarian.py overrides)
         self.enabled: bool = True
-        self.max_results: int = config.get("agents.kb_librarian.max_results", 5)
-        self.similarity_threshold: float = config.get("agents.kb_librarian.similarity_threshold", 0.6)
-        self.auto_summarize: bool = config.get("agents.kb_librarian.auto_summarize", False)
+        self.max_results: int = config_manager.get("agents.kb_librarian.max_results", 5)
+        self.similarity_threshold: float = config_manager.get("agents.kb_librarian.similarity_threshold", 0.6)
+        self.auto_summarize: bool = config_manager.get("agents.kb_librarian.auto_summarize", False)
 
         # Register action handlers for StandardizedAgent routing
         self.register_actions(
