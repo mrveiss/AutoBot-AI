@@ -18,6 +18,7 @@ from autobot_shared.ssot_config import (
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
+
 # #15255: ``from config import config`` binds the SSOT
 # autobot_shared.ssot_config singleton, which has no ``.get()`` -- every
 # instantiation of this class raised AttributeError. The runtime,
