@@ -354,9 +354,7 @@ class StartupValidator:
         # not relevant here; it runs its own venv and never imports this module.
         minimum_version = _minimum_python_version()
         if sys.version_info < minimum_version:
-            self.result.add_error(
-                f"Python {minimum_version[0]}.{minimum_version[1]}+ required, found {sys.version}"
-            )
+            self.result.add_error(f"Python {minimum_version[0]}.{minimum_version[1]}+ required, found {sys.version}")
 
         # Check disk space for logs and data
         try:
