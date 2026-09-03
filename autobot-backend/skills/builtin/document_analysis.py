@@ -17,6 +17,18 @@ never did (#13897).
 Extraction now goes through the canonical document extractor
 (``media/document/extraction.py``, #13893), so this skill inherits its text-layer
 detection and page structure rather than reimplementing either.
+
+``_resolve_path`` validates against ``PROJECT_ALLOWED_ROOTS`` **and** the
+configured data root (#15293). ``_emit_document_uploaded``
+(``api/files.py``) always fires this trigger with a path under
+``SANDBOXED_ROOT``, a subdirectory of ``config.path.data_path`` — never under
+the code tree. In a checkout the two coincide (``AUTOBOT_DATA_DIR`` unset, so
+``data_path`` resolves under ``project_root()``), which is why the mismatch
+was invisible in development. The ansible-deployed layout sets
+``AUTOBOT_DATA_DIR`` to an absolute path outside the code root on purpose
+(``/var/lib/autobot``, so runtime data survives a code redeploy), and
+``PROJECT_ALLOWED_ROOTS`` alone never contains it — ``validate_path`` rejected
+every real upload there.
 """
 
 import asyncio
@@ -26,6 +38,7 @@ from typing import Any, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
+from autobot_shared.ssot_config import config
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 
 logger = get_logger(__name__)
@@ -141,8 +154,14 @@ class DocumentAnalysisSkill(BaseSkill):
         # anyway. It canonicalizes and then confines the resolved path to the
         # allowed roots, rather than denylisting ".." in the raw string — #14050
         # records why a raw-string denylist is the wrong check.
+        #
+        # Both the code root and the configured data root are allowed — see the
+        # module docstring for why the trigger's one real producer needs the
+        # second one (#15293). Read fresh from ``config`` each call, rather than
+        # frozen into a module constant, so this never drifts from the live SSOT.
+        allowed_roots = PROJECT_ALLOWED_ROOTS + (str(config.path.data_path),)
         try:
-            path = validate_path(raw_path, allowed_roots=PROJECT_ALLOWED_ROOTS)
+            path = validate_path(raw_path, allowed_roots=allowed_roots)
         except ValueError as exc:
             logger.warning("Rejected document path: %s", exc)
             return None, {"success": False, "error": f"Invalid file_path: {exc}"}
