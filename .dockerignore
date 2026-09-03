@@ -37,6 +37,12 @@ Thumbs.db
 # CI/CD
 .github
 pipeline-scripts
+# Backlog maintenance CLI: talks to the GitHub API, has no runtime role, and
+# reuses the HTTP client that lives in the excluded pipeline-scripts tree. It
+# was a shipped module importing an excluded one -- an ImportError waiting in
+# the image (#15439). The import is fine where it lives; what was wrong is that
+# this tool reached the image at all.
+scripts/backfill_relationships.py
 
 # Documentation (not needed in containers)
 docs
