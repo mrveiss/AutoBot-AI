@@ -232,7 +232,7 @@ _KNOWN_OFFENDERS = {
     # 86 -> 75 with #15189 (continued): config_consolidation_p2_test.py's ten
     # swallowing sections are now ten real tests; all 11 counted returns gone.
     "autobot-backend": (75, 18000),
-    "autobot-infrastructure": (121, 250),
+    "autobot-infrastructure": (118, 250),  # 121 -> 118, #15255: swallowing drivers now assert
     "autobot-npu-worker": (7, 150),
 }
 

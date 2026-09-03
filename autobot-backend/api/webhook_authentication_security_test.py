@@ -29,6 +29,7 @@ from fastapi.testclient import TestClient
 # Repository root — this file lives at <root>/autobot-backend/api/.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 WEBHOOK_AUTH_DOC = PROJECT_ROOT / "docs" / "security" / "WEBHOOK_AUTHENTICATION.md"
+ENV_EXAMPLE = PROJECT_ROOT / ".env.example"
 
 
 @pytest.fixture(scope="module")
@@ -320,6 +321,28 @@ class TestWebhookSecurityDocumentation:
 
         assert "ALERTMANAGER_WEBHOOK_SECRET" in content
         assert "X-AlertManager-Secret" in content
+
+    def test_env_example_documents_alertmanager_webhook_secret(self):
+        """#13382: .env.example must document the variable the AlertManager
+        webhook fails closed on -- an operator deploying from this template
+        had nothing to grep for. Path is resolved from this file's own
+        location (no shell syntax), so this actually executes (#13149 class).
+        """
+        content = ENV_EXAMPLE.read_text(encoding="utf-8")
+
+        assert "ALERTMANAGER_WEBHOOK_SECRET" in content
+        assert "X-AlertManager-Secret" in content
+        assert "503" in content, ".env.example must state unset means fail-closed, not open"
+
+    def test_env_example_notes_telegram_secret_is_not_an_env_var(self):
+        """#13382: without this note, ALERTMANAGER_WEBHOOK_SECRET with no
+        Telegram counterpart reads as a missing variable rather than a
+        deliberate design choice (secret is generated per bot and stored
+        server-side via POST /api/telegram/config)."""
+        content = ENV_EXAMPLE.read_text(encoding="utf-8")
+
+        assert "X-Telegram-Bot-Api-Secret-Token" in content
+        assert "/api/telegram/config" in content
 
 
 class TestWebhookSecurityRegression:
