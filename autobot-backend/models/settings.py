@@ -21,7 +21,7 @@ import yaml
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from constants.model_constants import OPENAI_GPT35_TURBO, Models
+from constants.model_constants import OPENAI_GPT35_TURBO, ModelConstants
 from constants.network_constants import NetworkConstants, ServiceURLs
 
 # Issue #380: Module-level tuples for validation constants
@@ -33,13 +33,13 @@ class LLMSettings(RedactedReprMixin, BaseSettings):
     """LLM configuration settings with validation."""
 
     default_llm: str = Field(default="ollama", description="Default LLM provider")
-    orchestrator_llm: str = Field(default=Models.ORCHESTRATOR, description="LLM model for orchestrator")
+    orchestrator_llm: str = Field(default=ModelConstants.ORCHESTRATOR_MODEL, description="LLM model for orchestrator")
     task_llm: str = Field(default="ollama", description="LLM provider for tasks")
 
     # Ollama configuration
     ollama_host: str = Field(default=ServiceURLs.OLLAMA_LOCAL, description="Ollama server host")
     ollama_port: int = Field(default=NetworkConstants.OLLAMA_PORT, description="Ollama server port")
-    ollama_model: str = Field(default=Models.DEFAULT, description="Default Ollama model")
+    ollama_model: str = Field(default=ModelConstants.DEFAULT_OLLAMA_MODEL, description="Default Ollama model")
     ollama_base_url: str = Field(default=ServiceURLs.OLLAMA_LOCAL, description="Ollama base URL")
 
     # OpenAI configuration (optional)
