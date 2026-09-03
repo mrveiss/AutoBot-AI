@@ -222,7 +222,7 @@ class HealthCheck:
         try:
             import redis
 
-            r = redis.Redis(host="localhost", port=6379, db=0, socket_connect_timeout=5)
+            r = redis.Redis(host="localhost", port=6379, db=0, socket_connect_timeout=5)  # noqa: redis
             r.ping()
             self.results["redis"] = {"status": "OK", "timestamp": datetime.now().isoformat()}
             return True
