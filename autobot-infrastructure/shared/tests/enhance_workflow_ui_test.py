@@ -23,7 +23,12 @@ import pytest
 # ``utilities.enhance_workflow_ui`` (a PEP 420 namespace package portion)
 # resolves, matching the convention ``optimize_agents_test.py`` (in this same
 # directory) already established for this tree (#14518).
-_SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
+# Lives here, not beside the script it tests: ci.yml's shard command passes an
+# explicit path list, and `.../shared/scripts/utilities` is not on it while
+# `.../shared/tests` is. A test placed beside the script is collected by a bare
+# local pytest and by nothing in CI -- present, passing, and never run where it
+# matters. Same reasoning as repo_tests/test_pr_issue_validation_14241.py.
+_SCRIPTS_ROOT = Path(__file__).resolve().parents[1] / "scripts"
 if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
 
