@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -48,6 +49,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ci_dispatch_watchdog import GitHubApi  # noqa: E402
 
 from child_ref import blockers, child_ref  # noqa: E402
+
+# Plain stdlib logging, deliberately (#1082): this runs as a bare script, where
+# autobot_shared.logging_manager would pull in config a CLI does not have.
+logger = logging.getLogger(__name__)
 
 DEFAULT_MANIFEST = Path(".backlog") / "relationship-manifest.json"
 PAGE_SIZE = 100
@@ -282,10 +287,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="reconcile only: actually delete manifest-owned edges the checklist dropped",
     )
     args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
 
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
     if not token or not args.repo:
-        print("GH_TOKEN and --repo (or GITHUB_REPOSITORY) are required", file=sys.stderr)
+        logger.error("GH_TOKEN and --repo (or GITHUB_REPOSITORY) are required")
         return 2
 
     api = GitHubApi(token=token, repository=args.repo)
@@ -299,12 +305,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             lines = reconcile(api, numbers, manifest, args.remove)
     except BackfillError as exc:
-        print(f"refusing to continue: {exc}", file=sys.stderr)
+        logger.error("refusing to continue: %s", exc)
         return 1
 
     for line in lines:
-        print(line)
-    print(f"\n{len(lines)} edge(s) reported over {len(numbers)} umbrella(s)")
+        logger.info("%s", line)
+    logger.info("%d edge(s) reported over %d umbrella(s)", len(lines), len(numbers))
     return 0
 
 
