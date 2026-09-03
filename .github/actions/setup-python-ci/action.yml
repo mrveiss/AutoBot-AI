@@ -40,10 +40,9 @@
 # "not found for Ubuntu 25.10". GitHub-hosted runners are unaffected; they
 # keep using actions/setup-python's normal (cached) path below.
 #
-# Usage:
+# Usage (python-version omitted -- reads .python-version, #13842):
 #   - uses: ./.github/actions/setup-python-ci
 #     with:
-#       python-version: '3.14'
 #       requirements-file: 'requirements-ci.txt'
 #       extra-packages: 'pytest pytest-asyncio mypy'
 
@@ -52,9 +51,13 @@ description: 'Set up Python with pip caching, upgrade pip/setuptools/wheel, and 
 
 inputs:
   python-version:
-    description: 'Python version to install (e.g. "3.14")'
+    description: >-
+      Python version to install (e.g. "3.14"). Empty (the default) reads
+      `.python-version` at the repo root instead (#13842) -- see the "Resolve
+      Python version" step below, which is the one place this action's own
+      floor can drift from the SSOT every other declaration reads.
     required: false
-    default: '3.14'
+    default: ''
   requirements-file:
     description: 'Path to requirements file to install (relative to repo root). Empty to skip.'
     required: false
@@ -82,7 +85,23 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Set up Python ${{ inputs.python-version }} (github-hosted)
+    # #13842: the single place this action's floor is read, so a caller that
+    # takes the default gets the SSOT rather than a literal restated here.
+    # `inputs.python-version` still wins when a caller passes one explicitly
+    # (e.g. a matrix job pinning an older interpreter on purpose).
+    - name: Resolve Python version
+      id: resolve-version
+      shell: bash
+      env:
+        REQUESTED: ${{ inputs.python-version }}
+      run: |
+        if [ -n "$REQUESTED" ]; then
+          echo "version=$REQUESTED" >> "$GITHUB_OUTPUT"
+        else
+          echo "version=$(cat .python-version)" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Set up Python ${{ steps.resolve-version.outputs.version }} (github-hosted)
       id: setup
       if: runner.environment != 'self-hosted'
       # #13517: was pinned to a v5 SHA while every workflow in this repo is
@@ -90,19 +109,19 @@ runs:
       # downgraded setup-python across 21 jobs.
       uses: actions/setup-python@v7
       with:
-        python-version: ${{ inputs.python-version }}
+        python-version: ${{ steps.resolve-version.outputs.version }}
         cache: 'pip'
         cache-dependency-path: ${{ inputs.cache-dependency-path }}
 
     # #15313: no download here. If the requested interpreter is not already
     # on PATH, this fails loudly (exit 1, ::error::) rather than falling
     # through to a mismatched system Python silently.
-    - name: Resolve system Python ${{ inputs.python-version }} (self-hosted)
+    - name: Resolve system Python ${{ steps.resolve-version.outputs.version }} (self-hosted)
       id: setup-self-hosted
       if: runner.environment == 'self-hosted'
       shell: bash
       env:
-        PY_VERSION: ${{ inputs.python-version }}
+        PY_VERSION: ${{ steps.resolve-version.outputs.version }}
       run: |
         BIN="python${PY_VERSION}"
         if ! command -v "$BIN" >/dev/null 2>&1; then
@@ -163,7 +182,7 @@ runs:
       id: cache-key
       shell: bash
       env:
-        PY_VERSION: ${{ inputs.python-version }}
+        PY_VERSION: ${{ steps.resolve-version.outputs.version }}
         REQ_HASH: ${{ hashFiles('**/requirements*.txt', 'pyproject.toml') }}
       run: |
         echo "value=python-${PY_VERSION}-pip-${REQ_HASH}" >> "$GITHUB_OUTPUT"
@@ -178,7 +197,7 @@ runs:
         path: ~/.cache/pip
         key: ${{ steps.cache-key.outputs.value }}
         restore-keys: |
-          python-${{ inputs.python-version }}-pip-
+          python-${{ steps.resolve-version.outputs.version }}-pip-
 
     - name: Upgrade pip, setuptools, wheel
       shell: bash

@@ -201,7 +201,7 @@ jobs:
     - name: Set up Python 3.14
       uses: ./.github/actions/setup-python-ci
       with:
-        python-version: '3.14'
+        python-version-file: '.python-version'
         cache-dependency-path: |
           requirements*.txt
           autobot-backend/requirements*.txt

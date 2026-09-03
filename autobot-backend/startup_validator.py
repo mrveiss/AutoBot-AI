@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import ProjectRootUndeterminable, project_root
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.path_constants import PATH
@@ -41,6 +42,28 @@ from constants.path_constants import PATH
 logger = get_logger(__name__)
 
 config = get_config_manager()
+
+#: Last-resort floor (#13842) if `.python-version` cannot be read on a deployed
+#: host. Restating a number here would recreate the exact drift #13842 exists
+#: to remove, so this path only ever runs when the SSOT file is missing, and it
+#: always logs loudly rather than silently substituting a number nobody chose.
+_FALLBACK_PYTHON_FLOOR: Tuple[int, int] = (3, 14)
+
+
+def _minimum_python_version() -> Tuple[int, int]:
+    """Interpreter floor read from `.python-version` (#13842) -- the same file
+    CI, mypy, and both Dockerfiles read. Previously a hardcoded `(3, 14)` that
+    silently drifted to `(3, 12)` for four minor versions (PR #13750) because
+    nothing tied it to the SSOT; reading the file instead makes that drift
+    impossible here.
+    """
+    try:
+        version_text = (project_root() / ".python-version").read_text(encoding="utf-8").strip()
+        major, minor = version_text.split(".")[:2]
+        return int(major), int(minor)
+    except (ProjectRootUndeterminable, OSError, ValueError) as exc:
+        logger.error(f".python-version unreadable ({exc}); falling back to {_FALLBACK_PYTHON_FLOOR}")
+        return _FALLBACK_PYTHON_FLOOR
 
 
 @dataclass
@@ -323,15 +346,17 @@ class StartupValidator:
         """Validate system-level requirements"""
         logger.info("Validating system requirements...")
 
-        # Check Python version. 3.14 is the backend's actual floor, not a
-        # conservative guess: CI, .python-version, mypy, docker/backend and
-        # docker/slm, and every Ansible role that builds a backend venv all
-        # pin 3.14. This check read 3.12 while all of those said 3.14, and it
-        # is the only floor the running process enforces — so it is the one a
-        # reader trusts. The NPU worker's separate, older pin is not relevant
-        # here; it runs its own venv and never imports this module.
-        if sys.version_info < (3, 14):
-            self.result.add_error(f"Python 3.14+ required, found {sys.version}")
+        # Check Python version against the SSOT (#13842: `.python-version`, read
+        # by `_minimum_python_version`). This is the only floor a running process
+        # enforces, so it is the one a reader trusts — it previously read 3.12
+        # while every other declaration said 3.14 (fixed in PR #13750) because
+        # nothing tied it to the SSOT. The NPU worker's separate, older pin is
+        # not relevant here; it runs its own venv and never imports this module.
+        minimum_version = _minimum_python_version()
+        if sys.version_info < minimum_version:
+            self.result.add_error(
+                f"Python {minimum_version[0]}.{minimum_version[1]}+ required, found {sys.version}"
+            )
 
         # Check disk space for logs and data
         try:

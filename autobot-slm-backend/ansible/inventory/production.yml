@@ -147,8 +147,9 @@ all:
         openvino_device: "AUTO"  # Auto-detect NPU > GPU > CPU
         # #13747: openvino/torch/numpy all ship cp314 wheels, so the OpenVINO/NPU
         # runtime moved to 3.14 with the rest of the fleet. Kept in sync with
-        # roles/python314/defaults/main.yml even though nothing in
-        # roles/npu-worker or roles/python314 currently reads this exact var name.
+        # roles/python_interpreter/defaults/main.yml (#13843, was python314)
+        # even though nothing in roles/npu-worker or roles/python_interpreter
+        # currently reads this exact var name.
         python_version: "3.14"
         worker_threads: 2
         inference_optimization: true

@@ -7,17 +7,24 @@
 #
 # The SLM code-sync update path calls this when the target interpreter
 # (python3.14 fleet-wide, including the NPU worker since #13747) is missing on the box it
-# runs on. Applying roles/python314 to localhost installs the deadsnakes
+# runs on. Applying roles/python_interpreter to localhost installs the deadsnakes
 # interpreter so the subsequent venv recreation + pip install succeed.
 #
-# The python314 role is idempotent: it first runs `python3.14 --version`
-# and does nothing when the interpreter is already present. This playbook
-# is intentionally scoped to localhost with connection: local so it can be
-# driven from the SLM backend without SSH.
+# The python_interpreter role (#13843, was python314) is idempotent: it first
+# runs `python3.14 --version` and does nothing when the interpreter is
+# already present. This playbook is intentionally scoped to localhost with
+# connection: local so it can be driven from the SLM backend without SSH.
 #
 # Usage (run from autobot-slm-backend/ansible):
 #   ansible-playbook playbooks/provision-local-python.yml \
 #     --tags python314 --limit localhost -i inventory.yml --connection local
+#
+# #13843: `--tags python314` stays the invocation string on purpose -- it is
+# baked into the NOPASSWD sudoers grant configure-python-provision-permissions.yml
+# generates on already-deployed hosts, which this change cannot regenerate
+# there. The role tasks (roles/python_interpreter) carry `python314` as a
+# permanent compatibility alias tag for exactly this reason, so the tag below
+# still selects every task in the role.
 #
 # Privilege: the role's apt tasks use become: true. The autobot service
 # user is granted a narrowly-scoped NOPASSWD sudoers entry for exactly this
@@ -32,9 +39,9 @@
   gather_facts: true
 
   tasks:
-    - name: "Install target Python interpreter via python314 role"
+    - name: "Install target Python interpreter via python_interpreter role"
       ansible.builtin.include_role:
-        name: python314
+        name: python_interpreter
         apply:
-          tags: ['deps', 'python314']
-      tags: ['deps', 'python314']
+          tags: ['deps', 'python_interpreter', 'python314']
+      tags: ['deps', 'python_interpreter', 'python314']

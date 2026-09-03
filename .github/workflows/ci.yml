@@ -487,12 +487,12 @@ jobs:
     - uses: actions/checkout@v7
 
     # #13162: the step was named "Set up Python 3.12" while pinning 3.14. The
-    # version lives in `python-version:` and nowhere else, so the name carries
-    # no version at all rather than a second copy to drift.
+    # name carries no version at all rather than a second copy to drift.
+    # #13842: `python-version-file` reads the SSOT instead of restating it.
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.14'
+        python-version-file: '.python-version'
         cache: 'pip'
         cache-dependency-path: |
           requirements*.txt
