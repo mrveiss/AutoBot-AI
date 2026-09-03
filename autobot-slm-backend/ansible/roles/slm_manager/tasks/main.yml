@@ -354,7 +354,12 @@
 # governed by slm_base_dir — no hardcoded /opt/autobot path (#10912).
 - name: "SLM | Symlink embedded autobot_shared to canonical SLM copy (#10912)"
   ansible.builtin.file:
-    src: "{{ slm_shared_dir }}"
+    # #13539/B4: was "{{ slm_shared_dir }}" (= {{ slm_base_dir }}/autobot_shared,
+    # absolute) -- escapes to the live tree under a relocated deploy root.
+    # slm_backend_dir and slm_shared_dir are always siblings under
+    # slm_base_dir (roles/slm_manager/defaults/main.yml), so the relative
+    # form resolves identically today and stays correct under a relocation.
+    src: ../autobot_shared
     dest: "{{ slm_backend_dir }}/autobot_shared"
     state: link
     force: true
