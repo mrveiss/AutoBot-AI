@@ -33,9 +33,7 @@ class LLMSettings(RedactedReprMixin, BaseSettings):
     """LLM configuration settings with validation."""
 
     default_llm: str = Field(default="ollama", description="Default LLM provider")
-    orchestrator_llm: str = Field(
-        default=ModelConstants.ORCHESTRATOR_MODEL, description="LLM model for orchestrator"
-    )
+    orchestrator_llm: str = Field(default=ModelConstants.ORCHESTRATOR_MODEL, description="LLM model for orchestrator")
     task_llm: str = Field(default="ollama", description="LLM provider for tasks")
 
     # Ollama configuration
