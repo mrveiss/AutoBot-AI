@@ -114,7 +114,7 @@ class MemoryOptimizationApplier:
         rotating_loggers = []
 
         # Main backend logger
-        backend_logger = MemoryOptimizedLogging.setup_rotating_logger(
+        MemoryOptimizedLogging.setup_rotating_logger(
             name="autobot_backend",
             log_file=self.logs_dir / "autobot_backend.log",
             max_bytes=20 * 1024 * 1024,  # 20MB per file
@@ -124,7 +124,7 @@ class MemoryOptimizationApplier:
         rotating_loggers.append("autobot_backend")
 
         # LLM usage logger
-        llm_logger = MemoryOptimizedLogging.setup_rotating_logger(
+        MemoryOptimizedLogging.setup_rotating_logger(
             name="llm_usage",
             log_file=self.logs_dir / "llm_usage.log",
             max_bytes=10 * 1024 * 1024,  # 10MB per file
@@ -134,7 +134,7 @@ class MemoryOptimizationApplier:
         rotating_loggers.append("llm_usage")
 
         # Agent logger
-        agent_logger = MemoryOptimizedLogging.setup_rotating_logger(
+        MemoryOptimizedLogging.setup_rotating_logger(
             name="autobot_agent",
             log_file=self.logs_dir / "autobot.log",
             max_bytes=15 * 1024 * 1024,  # 15MB per file

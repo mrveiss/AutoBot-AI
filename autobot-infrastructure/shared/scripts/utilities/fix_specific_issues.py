@@ -48,7 +48,7 @@ def fix_syntax_errors():
             for line in lines:
                 if "logger = logging.getLogger(__name__)" in line and not found_logger:
                     # Ensure proper imports first
-                    if not any("import logging" in l for l in fixed_lines[:10]):
+                    if not any("import logging" in existing_line for existing_line in fixed_lines[:10]):
                         fixed_lines.insert(0, "import logging")
                     found_logger = True
                 fixed_lines.append(line)

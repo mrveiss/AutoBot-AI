@@ -17,8 +17,6 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import pytest
-
 from autobot_shared.paths import scrubbed_git_env
 
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-tag-pinned-action"
