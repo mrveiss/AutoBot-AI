@@ -133,8 +133,12 @@ class LoggingManager:
                 logger.addHandler(build_stdout_handler(formatter))
                 logger.addHandler(build_stderr_handler(formatter))
 
-            # Set log level
-            log_level = getattr(logging, _get_config_manager().get("logging.level", "INFO").upper())
+            # Set log level. Issue #15575: the config tree publishes
+            # "logging.log_level" (config/defaults.py, validated by
+            # config/validation.py, mapped from AUTOBOT_LOG_LEVEL) -- there has
+            # never been a "logging.level" key, so this lookup always fell
+            # through to the "INFO" default regardless of configuration.
+            log_level = getattr(logging, _get_config_manager().get("logging.log_level", "INFO").upper())
             logger.setLevel(log_level)
 
             cls._loggers[logger_key] = logger
