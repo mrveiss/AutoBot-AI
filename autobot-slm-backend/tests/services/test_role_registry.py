@@ -600,7 +600,7 @@ def _ansible_role_needs_nginx(role_name: str) -> bool:
 # dependency the ansible roles actually impose rather than just the one that
 # happened to fail first.
 _DEPENDENCY_PROBES = {
-    "python314": _ansible_role_needs_python,
+    "python_interpreter": _ansible_role_needs_python,
     "nginx": _ansible_role_needs_nginx,
 }
 
@@ -686,7 +686,7 @@ def test_every_role_declares_what_its_group_actually_requires():
 
 
 @pytest.mark.parametrize("role", ["vnc", "celery", "scheduler"])
-@pytest.mark.parametrize("dependency", ["python314", "nginx"])
+@pytest.mark.parametrize("dependency", ["python_interpreter", "nginx"])
 def test_the_backend_group_roles_declare_both(role, dependency):
     """The observed regression and its two silent siblings, pinned by name.
 
@@ -721,7 +721,7 @@ def test_the_canonical_map_roles_declare_the_interpreter(role, group, ansible_ro
     instead of reporting a clean run.
     """
     assert group in _groups_a_role_joins(role), f"{role} no longer joins {group}"
-    assert "python314" in ROLE_DEPENDENCIES[role], (
+    assert "python_interpreter" in ROLE_DEPENDENCIES[role], (
         f"{role} joins {group!r}, which activates the {ansible_role!r} ansible role and its "
         f"unconditional `python3.14 -m venv`, but declares no interpreter (#14460)"
     )

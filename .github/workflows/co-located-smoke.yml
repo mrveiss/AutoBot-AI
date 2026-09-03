@@ -74,7 +74,7 @@ jobs:
       - name: Set up Python 3.12
         uses: actions/setup-python@v7
         with:
-          python-version: '3.14'
+          python-version-file: '.python-version'
           cache: 'pip'
           cache-dependency-path: |
             requirements*.txt

@@ -18,10 +18,11 @@ description: Install the CI-safe Python dependency set and write the CI config f
 runs:
   using: composite
   steps:
-    - name: Set up Python 3.14
+    # #13842: name carries no version -- python-version-file reads the SSOT.
+    - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.14'
+        python-version-file: '.python-version'
         # Still worth keeping: this only speeds up the cache-MISS path, where
         # pip has to fetch wheels before building the venv below.
         cache: 'pip'

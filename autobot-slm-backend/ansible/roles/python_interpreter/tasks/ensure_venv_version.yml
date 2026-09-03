@@ -20,7 +20,7 @@
 # interpreter. Safe/idempotent when the venv is missing (rc != 0 → no-op).
 ---
 
-- name: "python314 | Assert ensure_venv_version inputs are defined"
+- name: "python_interpreter | Assert ensure_venv_version inputs are defined"
   ansible.builtin.assert:
     that:
       - venv_path is defined and venv_path | length > 0
@@ -28,19 +28,19 @@
     fail_msg: "ensure_venv_version requires non-empty venv_path and venv_python"
     quiet: true
 
-- name: "python314 | Derive expected venv Python version string"
+- name: "python_interpreter | Derive expected venv Python version string"
   ansible.builtin.set_fact:
     _ensure_venv_expected: >-
       Python {{ venv_python | regex_replace('^python', '') }}
 
-- name: "python314 | Check existing venv Python version ({{ venv_path }})"
+- name: "python_interpreter | Check existing venv Python version ({{ venv_path }})"
   ansible.builtin.command:
     cmd: "{{ venv_path }}/bin/python --version"
   register: _ensure_venv_python_version
   changed_when: false
   failed_when: false
 
-- name: "python314 | Report venv rebuild reason ({{ venv_path }})"
+- name: "python_interpreter | Report venv rebuild reason ({{ venv_path }})"
   ansible.builtin.debug:
     msg: >-
       Removing venv at {{ venv_path }}: found
@@ -50,7 +50,7 @@
     - _ensure_venv_python_version.rc == 0
     - _ensure_venv_expected | trim not in _ensure_venv_python_version.stdout
 
-- name: "python314 | Remove stale venv on Python version mismatch"
+- name: "python_interpreter | Remove stale venv on Python version mismatch"
   ansible.builtin.file:
     path: "{{ venv_path }}"
     state: absent

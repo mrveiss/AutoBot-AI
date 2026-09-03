@@ -8,7 +8,7 @@ in #14667. Resolved from the declared-plus-detected union it was handed
 `nodejs` and `postgresql` on top of what it actually needs, for roles it never
 declared.
 
-`vnc` genuinely requires `nginx` and `python314`, so those are correct and are
+`vnc` genuinely requires `nginx` and `python_interpreter`, so those are correct and are
 NOT what this fixes. (I first read this as nginx being the intruder, from a
 truncated view of the dependency map. It is not: nginx failing to start on that
 node is a missing-certificate problem, tracked under #14861.)
@@ -84,7 +84,7 @@ def test_the_contaminated_node_gets_only_what_it_declares() -> None:
 
     assert declared == {
         "nginx",
-        "python314",
+        "python_interpreter",
     }, f"vnc + slm-agent should resolve to exactly vnc's own dependencies; got {sorted(declared)}"
     unwanted = union - declared
     assert unwanted, "the union no longer differs from declared — this test's premise is stale"
@@ -100,7 +100,7 @@ def test_vnc_really_does_need_nginx() -> None:
     different change from the one #14859 made.
     """
     assert set(_role_dependencies().get("vnc", [])) == {
-        "python314",
+        "python_interpreter",
         "nginx",
     }, "vnc's dependencies changed — #14859's fix and its issue text both assume nginx is legitimate here"
 
@@ -108,7 +108,7 @@ def test_vnc_really_does_need_nginx() -> None:
 def test_a_declared_backend_still_gets_its_packages() -> None:
     """The fix must not stop real roles being provisioned."""
     resolved = _resolve(["backend"])
-    assert {"python314", "nginx"} <= resolved, f"a declared backend lost its dependencies: {sorted(resolved)}"
+    assert {"python_interpreter", "nginx"} <= resolved, f"a declared backend lost its dependencies: {sorted(resolved)}"
 
 
 def test_the_wizard_resolves_dependencies_from_the_declared_hostvar() -> None:

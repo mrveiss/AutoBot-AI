@@ -569,7 +569,7 @@ def test_ensure_target_python_skips_when_present() -> None:
 
 
 def test_ensure_target_python_invokes_ansible_when_missing() -> None:
-    """When the target is absent, the python314 provisioning playbook is run."""
+    """When absent, the python_interpreter provisioning playbook runs (ansible tag `python314`, #13843)."""
     steps: list[str] = []
     with (
         patch("shutil.which", return_value=None),
@@ -1647,7 +1647,7 @@ def test_run_post_sync_steps_rolls_back_on_unhealthy(tmp_path) -> None:
 
 def test_provision_playbook_runs_from_ansible_dir_with_config() -> None:
     """#11403: ansible-playbook must run with the ansible dir as cwd (survives
-    sudo env_reset) and ANSIBLE_CONFIG set, so roles_path resolves the python314
+    sudo env_reset) and ANSIBLE_CONFIG set, so roles_path resolves the python_interpreter
     role instead of defaulting to playbooks/roles/ (role-not-found)."""
     from api.code_sync import (
         _ANSIBLE_CONFIG,

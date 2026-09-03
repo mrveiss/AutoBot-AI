@@ -1623,7 +1623,7 @@ _ANSIBLE_DIR: Path = Path(DEFAULT_REPO_PATH) / "autobot-slm-backend" / "ansible"
 _PROVISION_PYTHON_PLAYBOOK: Path = _ANSIBLE_DIR / "playbooks" / "provision-local-python.yml"
 # #11403: ansible resolves roles via roles_path in ansible.cfg, which it only reads
 # from its cwd (or via ANSIBLE_CONFIG). Run from an arbitrary cwd, roles_path
-# defaults to playbooks/roles/ and the python314 role (at ansible/roles/) is not
+# defaults to playbooks/roles/ and the python_interpreter role (at ansible/roles/) is not
 # found → play fails. We pass cwd=_ANSIBLE_DIR — it survives sudo's env_reset,
 # whereas changing the command args would break the exact-match NOPASSWD sudoers
 # rule. ANSIBLE_CONFIG is also set as a fallback (honored only if sudoers keeps it).
@@ -1882,7 +1882,7 @@ async def _deploy_repo_root_requirements(source_root: str, steps: List[str]) -> 
 
 
 async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
-    """Run the python314 role on localhost to install *target* (#11343).
+    """Run the python_interpreter role on localhost to install *target* (#11343).
 
     Invokes ansible-playbook via an ARG LIST (never a shell string) under sudo.
     The command matches the NOPASSWD sudoers grant from
@@ -1894,7 +1894,7 @@ async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
     # so "--limit localhost" left ansible with no hosts to target (#11352). The
     # playbook is `hosts: localhost` / `connection: local`.
     cmd = ["sudo", "ansible-playbook", str(_PROVISION_PYTHON_PLAYBOOK)]
-    cmd += ["--tags", "python314", "-i", "localhost,", "--connection", "local"]
+    cmd += ["--tags", "python314", "-i", "localhost,", "--connection", "local"]  # #13843: permanent alias tag
     steps.append(f"python-provision: installing {target} via {_PROVISION_PYTHON_PLAYBOOK.name}")
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -1926,7 +1926,7 @@ async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
 async def _ensure_target_python_installed(component: str, steps: List[str]) -> None:
     """Install the target interpreter when missing, BEFORE venv recreation (#11343).
 
-    Runs the Ansible python314 role (deadsnakes) scoped to localhost when the
+    Runs the Ansible python_interpreter role (deadsnakes) scoped to localhost when the
     interpreter mapped in _COMPONENT_PYTHON_TARGET is absent from PATH. Preserves
     the #11323 safety guard: on provision failure it appends a clear step and
     RETURNS without touching the venv, so a running service is never bricked.
@@ -1966,7 +1966,7 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> bool:
     Safety: verifies the target interpreter is present on PATH (shutil.which) BEFORE
     removing anything. If absent, the existing venv is left intact and a skip step is
     recorded — the service stays running; operators must provision the interpreter
-    first (Ansible python314 role). (#11327 review)
+    first (Ansible python_interpreter role). (#11327 review)
     """
 
     target = _COMPONENT_PYTHON_TARGET.get(component)
@@ -1980,7 +1980,7 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> bool:
             logger.warning("drift resolve: %s not on PATH — skipping venv create for %s", target, component)
             steps.append(
                 f"venv: {venv_python} missing and {target} not installed"
-                " — skipping recreation; provision the interpreter first (Ansible python314 role)"
+                " — skipping recreation; provision the interpreter first (Ansible python_interpreter role)"
             )
             return False
         steps.append(f"venv: {venv_python} missing — will create with {target}")
@@ -2009,7 +2009,7 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> bool:
                 steps.append(
                     f"venv: mismatch (have '{version_out}', need {expected_fragment})"
                     f" but {target} not installed — skipping recreation;"
-                    " provision the interpreter first (Ansible python314 role)"
+                    " provision the interpreter first (Ansible python_interpreter role)"
                 )
                 return False
             steps.append(f"venv: mismatch (have '{version_out}', need {expected_fragment}) — recreating")

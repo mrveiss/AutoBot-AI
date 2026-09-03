@@ -532,10 +532,10 @@ ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
 
 # Static dependency map: role -> infrastructure packages required.
 # Used by setup_wizard.py to compute node_dependencies for provisioning Phase 0.
-# Dependencies are Ansible role names: nginx, python314, nodejs, postgresql.
+# Dependencies are Ansible role names: nginx, python_interpreter (#13843, was python314), nodejs, postgresql.
 ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # SLM roles
-    "slm-backend": ["python314", "nginx"],
+    "slm-backend": ["python_interpreter", "nginx"],
     "slm-frontend": ["nodejs", "nginx"],
     # #14460: NOT just postgresql. inventory_builder._ROLE_TO_GROUPS puts
     # slm-database in {redis, database} -- the same groups `role_redis_active`
@@ -543,7 +543,7 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # unconditional `python3.14 -m venv`. The SLM roles are separable (see the
     # section header above), so a node can carry slm-database without
     # slm-backend, which is the only other declarer of the interpreter here.
-    "slm-database": ["postgresql", "python314"],
+    "slm-database": ["postgresql", "python_interpreter"],
     "slm-monitoring": [],
     # Service roles
     #
@@ -554,14 +554,14 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # roles must therefore declare both, exactly as "backend" does. Declaring
     # less does not skip the work; it just means Phase 0 never installs what
     # Phase 4a is about to require.
-    "backend": ["python314", "nginx"],
-    "celery": ["python314", "nginx"],
-    "scheduler": ["python314", "nginx"],
+    "backend": ["python_interpreter", "nginx"],
+    "celery": ["python_interpreter", "nginx"],
+    "scheduler": ["python_interpreter", "nginx"],
     "frontend": ["nodejs", "nginx"],
     # #14446: the redis role unconditionally `import_tasks: chromadb.yml`,
     # which runs `python3.14 -m venv`. A redis-only node needs the interpreter
     # even though nothing about "redis" suggests it.
-    "redis": ["python314"],
+    "redis": ["python_interpreter"],
     # #14460: NOT just postgresql. A postgres node joins the `database` group,
     # and `role_redis_active` gates on that group -- so Phase 3 applies the
     # *redis* ansible role, whose main.yml unconditionally
@@ -569,25 +569,25 @@ ROLE_DEPENDENCIES: Dict[str, List[str]] = {
     # interpreter is imposed by the shared group, not by postgres itself.
     # #14446's guard could not see this: its group path looked up "databases",
     # a name no fact mentions, so it found nothing to require.
-    "postgres": ["postgresql", "python314"],
-    "ai-stack": ["python314"],
-    "chromadb": ["python314"],
+    "postgres": ["postgresql", "python_interpreter"],
+    "ai-stack": ["python_interpreter"],
+    "chromadb": ["python_interpreter"],
     "browser-service": ["nodejs"],
-    "npu-worker": ["python314"],
-    "tts-worker": ["python314"],
+    "npu-worker": ["python_interpreter"],
+    "tts-worker": ["python_interpreter"],
     # #14460: NOT empty. The `autobot-llm-` prefix key in
     # inventory_builder._ROLE_TO_GROUPS lands both roles in {ai_stack, aiml,
     # ai, llm_nodes}; `role_ai_stack_active` gates on ai_stack/aiml, so
     # provision-fleet-roles.yml applies the ai-stack ansible role, which
     # creates a python3.14 venv. Same shape as slm-database above: the
     # requirement comes from the group, not from the role's own name.
-    "autobot-llm-cpu": ["python314"],
-    "autobot-llm-gpu": ["python314"],
+    "autobot-llm-cpu": ["python_interpreter"],
+    "autobot-llm-gpu": ["python_interpreter"],
     # #14446: NOT empty. See the note on the service roles above -- vnc maps
     # into the backend group, so the backend ansible role runs on a vnc-only
     # node. Provisioning failed at the venv with "No such file or directory:
     # b'python3.14'", an error naming the venv rather than the dependency.
-    "vnc": ["python314", "nginx"],
+    "vnc": ["python_interpreter", "nginx"],
     "slm-agent": [],
 }
 
