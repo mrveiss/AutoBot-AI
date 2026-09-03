@@ -241,3 +241,41 @@ the guarded fetch applies.
 
 **Grep check:** `grep -rn "guard_egress\|ssrf_guard" autobot-slm-backend/` should
 stay empty, or this entry needs replacing with the migration.
+
+## SLM Recovery Page — No i18n Runtime, English-Only
+
+**File:** `autobot-slm-backend/static/recovery.html`
+**Served by:** `autobot-slm-backend/api/health.py`'s `health_router` (`GET /api/recovery`) — co-located with `frontend_bundle_status`, the probe for the exact condition this page recovers from, rather than a dedicated router (#15462 review, also keeps `main.py` under its grandfathered line-count ceiling, #14236)
+**Issue:** #15462
+
+**Pattern bypassed:** "No hardcoded UI strings — anything user-facing needs
+i18n across all 11 locales."
+
+**Reason:** This page exists because the SLM frontend's build output can be
+missing or broken (#15462 — a directory holding one file, no `index.html`,
+serving 403 for the whole `/slm/` tree while every service reported
+healthy). The Vue i18n runtime ships as part of that same frontend bundle,
+so wiring the recovery page into it would make the recovery surface depend
+on the exact artifact it exists to work around — reintroducing the single
+point of failure this issue is about. The page is therefore a single,
+dependency-free static HTML file with inline CSS/JS: no framework, no
+bundler, no build step, no CDN import, nothing that can itself fail to
+build. It is served directly by the SLM backend (`FileResponse`), reachable
+through `location /slm/api/` in nginx — a reverse-proxy block, not a
+static-file alias, so it does not depend on `dist/` either.
+
+**How the text is handled:** All strings are English, hand-written directly
+into `recovery.html`. This is a deliberate scope limit, not an oversight —
+an operator locked out of the dashboard by a broken build needs a page that
+loads at all, in front of a full translation matrix for a page that exists
+purely to run one action (sign in, trigger self-update).
+
+**Revisit when:** a lightweight, dependency-free i18n mechanism exists that
+does not require the frontend bundle to be servable (e.g. a tiny inline
+dictionary the backend renders server-side from `Accept-Language`) — at that
+point this page can adopt it without reintroducing the coupling described
+above.
+
+**Grep check:** `grep -c '<script' autobot-slm-backend/static/recovery.html`
+should show the page has no `<script src=` — everything it loads is inline
+in the same file, never fetched from a bundler-produced path.

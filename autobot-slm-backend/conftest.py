@@ -283,6 +283,10 @@ _REAL_SERVICE_MODULES = (
     # here or it resolves to a MagicMock depending on shard order
     # (tests/test_real_service_modules_14307.py enforces this).
     "frontend_bundle_health",
+    # #15462: build/publish logic extracted out of api/code_sync.py (grandfathered
+    # line-count ceiling, #14236) into this module; its own tests import it
+    # directly and need the real coroutines, not MagicMocks.
+    "slm_frontend_build",
 )
 
 for _name in _REAL_SERVICE_MODULES:

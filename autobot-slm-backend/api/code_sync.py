@@ -97,6 +97,8 @@ from services.drift_checker import (
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.playbook_executor import get_playbook_executor
+from services.slm_frontend_build import build_slm_frontend as _build_slm_frontend
+from services.slm_frontend_build import write_slm_deployed_commit_marker as _write_slm_deployed_commit_marker
 from services.ssh_utils import _ssh_key_usable
 from services.sync_orchestrator import get_sync_orchestrator
 
@@ -3110,68 +3112,6 @@ async def _run_post_sync_steps(
     return deps_changed, steps, pip_ok
 
 
-async def _build_slm_frontend() -> None:
-    """Run npm ci + npm run build for the SLM frontend.
-
-    Issue #1607: The Ansible path builds the frontend; the self-sync
-    path was missing this step, serving stale dist/ files.
-    Issue #1624: Fix ownership before build — Ansible deploys as root.
-    """
-    frontend_dir = "/opt/autobot/autobot-slm-frontend"
-    try:
-        # Fix ownership — Ansible may have created root-owned files (#1624)
-        proc = await asyncio.create_subprocess_exec(
-            "sudo",
-            "chown",
-            "-R",
-            "autobot:autobot",
-            frontend_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        await asyncio.wait_for(proc.communicate(), timeout=30.0)
-
-        # npm ci — install exact lockfile deps
-        proc = await asyncio.create_subprocess_exec(
-            "npm",
-            "ci",
-            "--prefix",
-            frontend_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        if proc.returncode != 0:
-            logger.warning(
-                "SLM self-sync: npm ci failed (%d): %s",
-                proc.returncode,
-                stdout.decode(errors="replace")[:500],
-            )
-            return
-
-        # npm run build
-        proc = await asyncio.create_subprocess_exec(
-            "npm",
-            "run",
-            "build",
-            "--prefix",
-            frontend_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        if proc.returncode == 0:
-            logger.info("SLM self-sync: frontend build complete")
-        else:
-            logger.warning(
-                "SLM self-sync: npm build failed (%d): %s",
-                proc.returncode,
-                stdout.decode(errors="replace")[:500],
-            )
-    except Exception as exc:
-        logger.warning("SLM self-sync: frontend build failed: %s", exc)
-
-
 async def _restart_slm_service(service: str) -> None:
     """Restart a systemd service on the local SLM server.
 
@@ -3244,6 +3184,7 @@ async def _mark_slm_node_up_to_date(db_service, node_id: str) -> None:
         logger.warning("SLM self-sync: could not determine current commit")
         return
 
+    await _write_slm_deployed_commit_marker(current_commit)
     try:
         async with db_service.session() as db:
             slm_result = await db.execute(select(Node).where(Node.node_id == node_id))
@@ -3325,8 +3266,14 @@ async def _sync_slm_from_code_source(node_id: str, job_id: str) -> None:
         # it can run.
         await _update_node_state_db(job_id, node_id, message="; ".join(reconcile_steps))
 
-    # --- Phase 2c: rebuild SLM frontend (#1607) ---
-    await _build_slm_frontend()
+    # --- Phase 2c: rebuild SLM frontend (#1607, staged publish #15462) ---
+    if not await _build_slm_frontend():
+        logger.error(
+            "SLM self-sync: frontend build failed — previous dist/ is still serving; "
+            "node NOT marked up-to-date and services NOT restarted (#15462)"
+        )
+        return
+
     # --- Phase 3: mark up-to-date in DB before restarting (#1209) ---
     await _mark_slm_node_up_to_date(db_service, node_id)
 
@@ -3464,6 +3411,35 @@ async def sync_node(
     return await _execute_node_playbook(executor, node, node_id, request, progress_callback, db)
 
 
+async def _colocated_node_ids(slm_node_id: str) -> List[str]:
+    """Every Node row registered at THIS physical machine's own IP (#15475).
+
+    A single-box install can model a role co-located with the SLM (e.g. the
+    main frontend) as its OWN Node row sharing the SLM's IP, rather than as a
+    role token on the SLM's own row — see
+    ``setup_wizard._apply_colocation_vars``, which detects co-location the
+    same way. ``update-all-nodes.yml``'s Play 2 (``hosts: infrastructure``)
+    only runs for a host ``--limit`` includes, so limiting to the SLM's own
+    node_id alone silently skipped every co-located row: "self-update"
+    updated the SLM node, not the machine it presented itself as updating.
+    Widening the limit to every fleet host instead would turn a one-click
+    self-update into a full-fleet deploy; the correct scope is exactly this
+    physical machine — everything sharing its IP addresses.
+    """
+    from autobot_shared.network_utils import get_local_ips
+    from services.database import db_service
+
+    node_ids = {slm_node_id}
+    try:
+        local_ips = get_local_ips()
+        async with db_service.session() as db:
+            result = await db.execute(select(Node.node_id, Node.ip_address))
+            node_ids |= {nid for nid, ip in result.all() if ip in local_ips}
+    except Exception as exc:
+        logger.warning("Could not resolve co-located nodes for self-update (%s): %s", slm_node_id, exc)
+    return sorted(node_ids)
+
+
 async def _ansible_self_update(node_id: str) -> None:
     """Run update-all-nodes.yml against this machine to update all deployed roles (#9073).
 
@@ -3478,9 +3454,12 @@ async def _ansible_self_update(node_id: str) -> None:
     Issue #9224: Update node version in DB after successful sync.
     C2-a: Clear the resume plan on playbook failure (before restart) so stale
           plans do not auto-fire forever.
+    Issue #15475: ``--limit`` includes every Node row co-located on this same
+    physical machine, not just the SLM's own node_id, so a co-located
+    frontend (or any other co-located role) is refreshed by the same run.
     """
     executor = get_playbook_executor()
-    limit = ["localhost", node_id]
+    limit = ["localhost", *await _colocated_node_ids(node_id)]
     try:
         result = await executor.execute_playbook(
             playbook_name="update-all-nodes.yml",

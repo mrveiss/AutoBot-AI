@@ -9,9 +9,11 @@ SLM Health API Routes
 import logging
 import os
 import time
+from pathlib import Path
 
 import psutil
 from fastapi import APIRouter, Depends
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
@@ -28,6 +30,14 @@ router = APIRouter(tags=["health"])
 
 START_TIME = time.time()
 VERSION = "1.0.0"
+
+# #15462: the static, dependency-free recovery page. This router already owns
+# "is the served frontend broken" (frontend_bundle_status below, wired into
+# /api/health as the `frontend` field) — the recovery surface for that exact
+# condition belongs beside the probe that detects it, on the same ungated
+# router, rather than a separate router main.py has to know about and the
+# #14339 ungated-router registry has to track a second entry for.
+_RECOVERY_PAGE = Path(__file__).resolve().parent.parent / "static" / "recovery.html"
 
 
 async def _check_redis_health() -> str:
@@ -143,3 +153,19 @@ async def database_health_check() -> dict:
     from services.database import db_service
 
     return await db_service.health_check()
+
+
+@router.get("/recovery", include_in_schema=False)
+async def recovery_page() -> FileResponse:
+    """Serve the static recovery page (#15462).
+
+    No auth dependency — this router is mounted ungated in main.py (see the
+    "Routers intentionally left open" registry there), and the page must be
+    reachable when the SLM frontend build itself is broken. It performs its
+    own login against /api/auth/login and calls /api/code-sync/self-update
+    with the resulting token, so it needs no session to already exist. See
+    `static/recovery.html` for the page itself and
+    `docs/developer/ARCHITECTURE_EXCEPTIONS.md` for why it is not wired into
+    the i18n runtime.
+    """
+    return FileResponse(_RECOVERY_PAGE, media_type="text/html")
