@@ -401,7 +401,7 @@
     # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
     - name: "[PLAY 1] SLM Agent | Create autobot_shared symlink for agent imports"
       ansible.builtin.file:
-        src: /opt/autobot/autobot_shared
+        src: ../autobot_shared
         dest: /opt/autobot/autobot-slm-agent/autobot_shared
         state: link
         force: true
@@ -413,7 +413,7 @@
     # Issue #9565: slm-backend needs autobot_shared in PYTHONPATH
     - name: "[PLAY 1] SLM Backend | Create autobot_shared symlink for backend imports"
       ansible.builtin.file:
-        src: /opt/autobot/autobot_shared
+        src: ../autobot_shared
         dest: /opt/autobot/autobot-slm-backend/autobot_shared
         state: link
         force: true
@@ -787,7 +787,7 @@
 
     - name: "[PLAY 2] Backend | Ensure autobot_shared symlink inside backend dir (#2651)"
       ansible.builtin.file:
-        src: /opt/autobot/autobot_shared
+        src: ../autobot_shared
         dest: /opt/autobot/autobot-backend/autobot_shared
         state: link
         force: true
@@ -1550,7 +1550,7 @@
     # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
     - name: "[PLAY 2] SLM Agent | Create autobot_shared symlink for agent imports"
       ansible.builtin.file:
-        src: /opt/autobot/autobot_shared
+        src: ../autobot_shared
         dest: /opt/autobot/autobot-slm-agent/autobot_shared
         state: link
         force: true
@@ -1591,7 +1591,7 @@
     # Issue #9565: slm-backend needs autobot_shared in PYTHONPATH
     - name: "[PLAY 2] SLM Backend | Create autobot_shared symlink for backend imports"
       ansible.builtin.file:
-        src: /opt/autobot/autobot_shared
+        src: ../autobot_shared
         dest: /opt/autobot/autobot-slm-backend/autobot_shared
         state: link
         force: true

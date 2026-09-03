@@ -13,8 +13,15 @@
   gather_facts: true
 
   vars:
-    backend_install_dir: /opt/autobot
-    backend_code_dir: /opt/autobot/autobot-user-backend
+    # #13539/B3: this play renders roles/backend/templates/autobot-backend.service.j2
+    # directly (below), which derives the deploy root as
+    # `backend_install_dir | dirname` -- so backend_install_dir must carry the
+    # SAME meaning it has in roles/backend/defaults/main.yml (the component
+    # dir), not the deploy root. backend_deployed_root holds the root under
+    # its own name for every task below that genuinely wants it.
+    backend_deployed_root: /opt/autobot
+    backend_code_dir: "{{ backend_deployed_root }}/autobot-user-backend"
+    backend_install_dir: "{{ backend_code_dir }}"
     backend_log_dir: /var/log/autobot
     backend_user: autobot
     backend_group: autobot
@@ -49,9 +56,9 @@
     # Phase 2: Verify .env File Location
     # ============================================================
 
-    - name: Check for .env in backend_install_dir
+    - name: Check for .env in backend_deployed_root
       stat:
-        path: "{{ backend_install_dir }}/.env"
+        path: "{{ backend_deployed_root }}/.env"
       register: env_install_dir
 
     - name: Check for .env in backend_code_dir
@@ -62,12 +69,12 @@
     - name: Display .env location findings
       debug:
         msg: |
-          .env in {{ backend_install_dir }}: {{ env_install_dir.stat.exists }}
+          .env in {{ backend_deployed_root }}: {{ env_install_dir.stat.exists }}
           .env in {{ backend_code_dir }}: {{ env_code_dir.stat.exists }}
 
     - name: Warn if .env in wrong location
       debug:
-        msg: "⚠️  WARNING: .env found in {{ backend_code_dir }} but service expects {{ backend_install_dir }}/.env"
+        msg: "⚠️  WARNING: .env found in {{ backend_code_dir }} but service expects {{ backend_deployed_root }}/.env"
       when: env_code_dir.stat.exists and not env_install_dir.stat.exists
 
     # ============================================================
@@ -87,7 +94,7 @@
       lineinfile:
         path: /etc/systemd/system/autobot-backend.service
         regexp: '^EnvironmentFile={{ backend_code_dir }}/.env'
-        line: 'EnvironmentFile={{ backend_install_dir }}/.env'
+        line: 'EnvironmentFile={{ backend_deployed_root }}/.env'
         state: present
       notify: reload systemd
 
@@ -95,7 +102,7 @@
       lineinfile:
         path: /etc/systemd/system/autobot-backend.service
         regexp: '^Environment="PYTHONPATH='
-        line: 'Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot_shared"'
+        line: 'Environment="PYTHONPATH={{ backend_deployed_root }}:{{ backend_code_dir }}:{{ backend_deployed_root }}/autobot_shared"'
         state: present
       notify: reload systemd
 
@@ -128,7 +135,7 @@
     - name: Test Python can import main module
       shell: |
         cd {{ backend_code_dir }}
-        export PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot_shared
+        export PYTHONPATH={{ backend_deployed_root }}:{{ backend_code_dir }}:{{ backend_deployed_root }}/autobot_shared
         {{ backend_code_dir }}/venv/bin/python -c "
         import sys
         print('PYTHONPATH:', sys.path[:5])
@@ -180,8 +187,8 @@
           Environment configuration fixed!
 
           Changes applied:
-          - .env path: {{ backend_install_dir }}/.env
-          - PYTHONPATH: {{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot_shared
+          - .env path: {{ backend_deployed_root }}/.env
+          - PYTHONPATH: {{ backend_deployed_root }}:{{ backend_code_dir }}:{{ backend_deployed_root }}/autobot_shared
           - Python venv: {{ backend_code_dir }}/venv (deadsnakes python3.14)
 
           Next steps:
