@@ -21,10 +21,11 @@ a schema change fails here rather than at a caller (#15057 AC4).
 
 Two things this file checks that a field-name comparison alone would miss:
 
-* **the media type.** ``POST /api/agent/execute_command`` mixes ``Form`` with a
-  ``dict`` body parameter, so FastAPI publishes it as
-  ``application/x-www-form-urlencoded``. Every SDK method sends JSON. No choice
-  of field names makes that request succeed -- see ``_UNSATISFIABLE`` below.
+* **the media type.** A route mixing ``Form`` with a ``dict`` body parameter is
+  published as ``application/x-www-form-urlencoded`` while every SDK method
+  sends JSON, so no choice of field names makes the request succeed. #15527
+  fixed the last such route; the deferral registry that tracked it is gone,
+  because its own floor refuses to iterate an empty map.
 * **the required fields.** A body missing one is a 422 the SDK cannot see until
   it is pointed at a live backend, which is the situation that produced #15053.
 """
@@ -51,19 +52,6 @@ _JSON = "application/json"
 #: at the SDK rather than found it clean, and must fail by name rather than pass
 #: over an empty set.
 _MIN_BODY_ROWS = 6
-
-#: Rows whose route no client can satisfy, with the issue that will remove them.
-#:
-#: ``POST /api/agent/execute_command`` declares ``command_data: dict`` alongside
-#: ``user_role: str = Form("user")``. The ``Form`` default makes FastAPI read the
-#: whole body as form data, and a form field is a string, so ``command_data``
-#: can never validate as a dict. Measured against the mounted route, all four
-#: candidate shapes answer 422 -- the SDK's own JSON, the field names the route
-#: names, that JSON as a form value, and a plain string. There is no body the
-#: SDK could send instead, so the entry is a deferral of the backend half, not
-#: an exemption: ``test_every_unsatisfiable_row_is_still_unsatisfiable`` fails
-#: the moment the route becomes callable, and the entry comes out with it.
-_UNSATISFIABLE = {"agents.send_command": "#15057 (backend half deferred: the route is uncallable by any client)"}
 
 
 def _body_rows() -> list[tuple[str, str, str, str, frozenset[str]]]:
@@ -128,8 +116,6 @@ def test_every_body_field_the_sdk_sends_is_declared_by_the_route(body_rows, rout
     """
     assert len(body_rows) >= _MIN_BODY_ROWS, "FIX THE SWEEP: body row floor not met"
     for name, verb, path, _media, keys in body_rows:
-        if name in _UNSATISFIABLE:
-            continue
         entry = _oracle_entry(name, verb, path, keys, route_request_bodies)
         if entry is None:
             continue
@@ -150,8 +136,6 @@ def test_every_required_body_field_is_sent(body_rows, route_request_bodies):
     """
     assert len(body_rows) >= _MIN_BODY_ROWS, "FIX THE SWEEP: body row floor not met"
     for name, verb, path, _media, keys in body_rows:
-        if name in _UNSATISFIABLE:
-            continue
         entry = _oracle_entry(name, verb, path, keys, route_request_bodies)
         if entry is None:
             continue
@@ -166,31 +150,12 @@ def test_every_sdk_body_matches_the_media_type_the_route_publishes(body_rows, ro
     """
     assert len(body_rows) >= _MIN_BODY_ROWS, "FIX THE SWEEP: body row floor not met"
     for name, verb, path, media, _keys in body_rows:
-        if name in _UNSATISFIABLE:
-            continue
         entry = _oracle_entry(name, verb, path, _keys, route_request_bodies)
         if entry is None:
             continue
         (route_media, _declared, _required), template = entry
         assert media == route_media, (
             f"{name} sends {media} to {verb} {template}, which FastAPI publishes as {route_media}."
-        )
-
-
-def test_every_unsatisfiable_row_is_still_unsatisfiable(body_rows, route_request_bodies):
-    """A deferral that cannot rot: each ``_UNSATISFIABLE`` entry must still name
-    a route no JSON body can satisfy. When the backend half lands, this fails
-    and the entry comes out with it rather than quietly exempting a fixed route.
-    """
-    assert _UNSATISFIABLE, "FIX THE SWEEP: the deferral registry is empty; delete it rather than iterating nothing"
-    seen = {name for name, _verb, _path, _media, _keys in body_rows}
-    for name, reason in _UNSATISFIABLE.items():
-        assert name in seen, f"{name} no longer sends a body at all; drop its {reason} entry."
-        verb, path, _media, _keys = next((v, p, m, k) for n, v, p, m, k in body_rows if n == name)  # noqa: B007
-        (route_media, _declared, _required), template = _oracle_entry(name, verb, path, _keys, route_request_bodies)
-        assert route_media != _JSON, (
-            f"{verb} {template} now publishes {route_media}: it is satisfiable, so {name} must be fixed "
-            f"and its entry ({reason}) removed from _UNSATISFIABLE."
         )
 
 
