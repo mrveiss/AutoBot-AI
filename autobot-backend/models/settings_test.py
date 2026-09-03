@@ -109,11 +109,7 @@ def test_shim_defines_no_classes_or_functions():
 def test_shim_declares_no_pydantic_fields_or_validators():
     """No Field()/field_validator/SettingsConfigDict anywhere in the shim."""
     banned = {"Field", "field_validator", "model_validator", "SettingsConfigDict", "BaseSettings"}
-    used = {
-        node.id
-        for node in ast.walk(_shim_tree())
-        if isinstance(node, ast.Name) and node.id in banned
-    }
+    used = {node.id for node in ast.walk(_shim_tree()) if isinstance(node, ast.Name) and node.id in banned}
 
     assert used == set(), f"models/settings.py re-declares settings machinery: {sorted(used)}"
 
