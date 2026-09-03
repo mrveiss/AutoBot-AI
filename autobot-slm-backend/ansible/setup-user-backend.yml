@@ -23,9 +23,19 @@
   gather_facts: true
 
   vars:
-    backend_install_dir: /opt/autobot
-    backend_code_dir: "{{ backend_install_dir }}/autobot-backend"
-    backend_shared_dir: "{{ backend_install_dir }}/autobot_shared"
+    # #13539/B3: `backend_install_dir` means the BACKEND COMPONENT directory
+    # everywhere else it is defined (roles/backend/defaults/main.yml,
+    # roles/ai-stack/defaults/main.yml) and every template that consumes it
+    # derives the deploy root back out via `| dirname` -- so overriding it
+    # here with the deploy root silently broke that derivation (the
+    # autobot_shared PYTHONPATH entry and uvicorn's --log-config resolved to
+    # /opt/autobot_shared instead of /opt/autobot/autobot_shared). Declare the
+    # root under its own name and derive backend_install_dir FROM it, so the
+    # role's `| dirname` convention still lands on /opt/autobot.
+    backend_deployed_root: /opt/autobot
+    backend_install_dir: "{{ backend_deployed_root }}/autobot-backend"
+    backend_code_dir: "{{ backend_install_dir }}"
+    backend_shared_dir: "{{ backend_deployed_root }}/autobot_shared"
     backend_user: autobot
     backend_group: autobot
     backend_port: 8001

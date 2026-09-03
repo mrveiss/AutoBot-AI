@@ -643,7 +643,13 @@
   # destination is already a symlink pointing elsewhere (e.g. old partial-path symlinks).
   - name: "Backend | Symlink embedded autobot_shared to standalone canonical copy (#10020)"
     ansible.builtin.file:
-      src: "{{ backend_shared_standalone_dir }}"
+      # #13539/B4: was "{{ backend_shared_standalone_dir }}" (absolute,
+      # /opt/autobot/autobot_shared) -- escapes to the live tree under a
+      # relocated deploy root. backend_install_dir and
+      # backend_shared_standalone_dir are always siblings under the same
+      # root, so the relative form resolves identically today and stays
+      # correct under a relocation.
+      src: ../autobot_shared
       dest: "{{ backend_install_dir }}/autobot_shared"
       state: link
       force: true

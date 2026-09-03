@@ -14,7 +14,12 @@
   gather_facts: true
 
   vars:
-    backend_install_dir: /opt/autobot
+    # #13539/B3: purely diagnostic -- never renders roles/backend templates --
+    # but backend_install_dir is reserved elsewhere in this repo for the
+    # BACKEND COMPONENT dir (roles/backend/defaults/main.yml). Name the root
+    # explicitly so grepping backend_install_dir never turns up a second
+    # meaning again.
+    backend_deployed_root: /opt/autobot
     backend_code_dir: /opt/autobot/autobot-user-backend
     backend_log_dir: /var/log/autobot
     diagnostic_output_dir: /tmp/backend-diagnostics
@@ -120,7 +125,7 @@
 
     - name: Check if .env file exists
       stat:
-        path: "{{ backend_install_dir }}/.env"
+        path: "{{ backend_deployed_root }}/.env"
       register: env_file
 
     - name: Check Python venv
@@ -159,7 +164,7 @@
     - name: Test if main.py can be imported
       shell: |
         cd {{ backend_code_dir }}
-        export PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}
+        export PYTHONPATH={{ backend_deployed_root }}:{{ backend_code_dir }}
         {{ backend_code_dir }}/venv/bin/python -c "
         import sys
         print('Python version:', sys.version)
@@ -228,7 +233,7 @@
     - name: Attempt manual backend start (10 second timeout)
       shell: |
         cd {{ backend_code_dir }}
-        export PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}
+        export PYTHONPATH={{ backend_deployed_root }}:{{ backend_code_dir }}
         timeout 10s {{ backend_code_dir }}/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8443 --workers 1 2>&1 || echo "Manual start attempt completed/timeout"
       become_user: autobot
       register: manual_start
