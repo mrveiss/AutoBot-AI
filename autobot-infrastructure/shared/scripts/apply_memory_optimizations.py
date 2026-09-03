@@ -369,19 +369,19 @@ class MemoryOptimizationApplier:
         """Generate markdown optimization report"""
         optimizations = report["optimizations_applied"]
 
-        markdown = """# 🔧 AutoBot Memory Optimizations Applied
+        markdown = f"""# 🔧 AutoBot Memory Optimizations Applied
 
-**Date:** {report["timestamp"]}
-**Total Optimizations:** {report["summary"]["total_optimizations"]}
+**Date:** {report['timestamp']}
+**Total Optimizations:** {report['summary']['total_optimizations']}
 
 ## 📊 Optimizations Summary
 
 """
 
         for opt in optimizations:
-            markdown += """### {opt["type"].replace("_", " ").title()}
+            markdown += f"""### {opt['type'].replace('_', ' ').title()}
 
-**Description:** {opt["description"]}
+**Description:** {opt['description']}
 
 """
             # Add specific details based on optimization type

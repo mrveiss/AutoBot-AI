@@ -507,4 +507,4 @@ if __name__ == "__main__":
     result = detect_config_duplicates(project_root)
 
     logger.info(result["report"])
-    logger.info("\nFound {result['duplicates_found']} configuration values with duplicates")
+    logger.info(f"\nFound {result['duplicates_found']} configuration values with duplicates")
