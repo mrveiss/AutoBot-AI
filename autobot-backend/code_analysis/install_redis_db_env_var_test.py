@@ -37,6 +37,5 @@ def test_install_sh_does_not_read_the_retired_redis_db_var():
 def test_install_sh_reads_the_named_main_redis_db_key():
     text = _INSTALL_SH.read_text(encoding="utf-8")
     assert text.count(_REPLACEMENT_VAR) >= 2, (
-        f"install.sh should resolve both its .env template and its self-test "
-        f"from {_REPLACEMENT_VAR}"
+        f"install.sh should resolve both its .env template and its self-test " f"from {_REPLACEMENT_VAR}"
     )
