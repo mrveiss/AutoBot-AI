@@ -18,6 +18,7 @@ import jinja2
 from aiohttp import WSMsgType, web
 from performance_monitor import PerformanceMonitor
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.network_constants import NetworkConstants
 from utils.html_dashboard_utils import (
     create_dashboard_header,
@@ -684,8 +685,7 @@ class PerformanceDashboard:
         # Initialize Redis connection for the monitor
         await self.monitor.initialize_redis_connection()
 
-        # Start background metrics broadcasting
-        asyncio.create_task(self.start_metrics_broadcasting())
+        fire_and_forget(self.start_metrics_broadcasting(), name="performance-dashboard-metrics")
 
         # Start the web server
         runner = web.AppRunner(self.app)

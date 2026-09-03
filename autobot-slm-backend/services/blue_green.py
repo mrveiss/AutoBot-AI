@@ -26,6 +26,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.async_compat import retain_until_done
 from autobot_shared.time_utils import utc_timestamp
 from config import settings
 from models.database import BlueGreenDeployment, BlueGreenStatus, Node, NodeStatus
@@ -193,7 +194,6 @@ class BlueGreenService:
     # =========================================================================
     # Public Methods
     # =========================================================================
-
     async def create_deployment(
         self,
         db: AsyncSession,
@@ -210,9 +210,8 @@ class BlueGreenService:
         # Create and persist deployment record
         deployment = await self._create_deployment_record(db, data, green_node, triggered_by)
 
-        # Start deployment in background
-        task = asyncio.create_task(self._execute_deployment(deployment.bg_deployment_id))
-        self._running_deployments[deployment.bg_deployment_id] = task
+        coro = self._execute_deployment(deployment.bg_deployment_id)
+        retain_until_done(self._running_deployments, deployment.bg_deployment_id, coro)
 
         logger.info(
             "Blue-green deployment created: %s (blue=%s, green=%s, roles=%s)",
@@ -300,8 +299,7 @@ class BlueGreenService:
         # Cancel running tasks
         await self._cancel_deployment_tasks(bg_deployment_id)
 
-        # Start rollback task
-        asyncio.create_task(self._execute_rollback(bg_deployment_id))
+        retain_until_done(self._running_deployments, bg_deployment_id, self._execute_rollback(bg_deployment_id))
 
         return True, "Rollback initiated"
 
@@ -354,8 +352,7 @@ class BlueGreenService:
         await db.commit()
 
         # Start deployment in background
-        task = asyncio.create_task(self._execute_deployment(bg_deployment_id))
-        self._running_deployments[bg_deployment_id] = task
+        retain_until_done(self._running_deployments, bg_deployment_id, self._execute_deployment(bg_deployment_id))
 
         logger.info(
             "Blue-green deployment retry initiated: %s by %s",
