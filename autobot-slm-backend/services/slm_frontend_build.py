@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import shutil
 from pathlib import Path
 
@@ -30,11 +31,17 @@ from services.drift_checker import get_default_deployed_dir
 
 logger = logging.getLogger(__name__)
 
-# The build output nginx serves this node's SLM UI from. Relative to
-# /opt/autobot, matching the layout every other SLM path in this codebase
-# assumes (see services/frontend_bundle_health.py's identical reasoning for
-# not hardcoding an absolute default).
-_SLM_FRONTEND_DIR = "/opt/autobot/autobot-slm-frontend"
+# The build output nginx serves this node's SLM UI from. Resolved through the
+# same env-backed helper the rest of the SLM uses (SLM_DEPLOYED_ROOT), never
+# hardcoded to an absolute path -- a literal here silently disagrees with any
+# install whose deployed root differs.
+_SLM_FRONTEND_DIR = get_default_deployed_dir("autobot-slm-frontend")
+
+# Subprocess ceilings. Env-backed rather than magic numbers at the call site:
+# npm ci and a Vite build are the slow steps, and an install with a cold cache
+# or a slower node legitimately needs longer than this default.
+_CHOWN_TIMEOUT_SECONDS = float(os.getenv("SLM_FRONTEND_CHOWN_TIMEOUT_SECONDS", "30"))
+_NPM_TIMEOUT_SECONDS = float(os.getenv("SLM_FRONTEND_NPM_TIMEOUT_SECONDS", "300"))
 
 
 async def _chown_slm_frontend(frontend_dir: str) -> None:
@@ -48,7 +55,7 @@ async def _chown_slm_frontend(frontend_dir: str) -> None:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )
-    await asyncio.wait_for(proc.communicate(), timeout=30.0)
+    await asyncio.wait_for(proc.communicate(), timeout=_CHOWN_TIMEOUT_SECONDS)
 
 
 async def _npm_ci_slm_frontend(frontend_dir: str) -> bool:
@@ -61,7 +68,7 @@ async def _npm_ci_slm_frontend(frontend_dir: str) -> bool:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )
-    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_NPM_TIMEOUT_SECONDS)
     if proc.returncode != 0:
         logger.error(
             "SLM self-sync: npm ci failed (%d): %s",
@@ -94,7 +101,7 @@ async def _npm_build_slm_staged(frontend_dir: str) -> bool:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )
-    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_NPM_TIMEOUT_SECONDS)
     if proc.returncode != 0:
         logger.error(
             "SLM self-sync: frontend build failed (%d) — previous dist/ untouched: %s",
