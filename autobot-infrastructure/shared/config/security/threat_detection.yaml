@@ -23,11 +23,13 @@ ml_models:
   min_training_samples: 1000       # Minimum samples required for training
   contamination_rate: 0.1          # Expected anomaly rate for Isolation Forest
   enable_auto_tuning: true         # Automatically tune model parameters
-
-  # Model persistence
-  model_storage_path: "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/data/security/models"
-  save_trained_models: true
-  load_existing_models: true
+  # #15044: `model_storage_path`, `save_trained_models` and
+  # `load_existing_models` used to live here, advertising trained-model
+  # persistence the engine does not implement -- `ThreatDetectionEngine`
+  # reads only `model_retrain_hours` and `min_training_samples` above.
+  # Profile persistence is a different, real feature, at
+  # `PATH.get_data_path("security", "user_profiles.json")` in
+  # `threat_detection/engine.py`, unrelated to this key.
 
 # Detection Thresholds
 thresholds:
