@@ -517,7 +517,6 @@
 1|other|autobot-backend/services/research/synthesizer.py|"user"
 1|other|autobot-backend/services/skill_management/skill_extractor.py|"user"
 1|other|autobot-backend/services/slm_client.py|30
-2|other|autobot-backend/services/slm_client.py|http://autobot-slm:8000
 1|other|autobot-backend/services/task_decomposition_service.py|300
 1|other|autobot-backend/services/telegram_bot_service.py|https://api.telegram.org/bot{bot_token}
 1|other|autobot-backend/services/telegram_bot_service.py|https://api.telegram.org/file/bot{self.bot_token}/{file_path}

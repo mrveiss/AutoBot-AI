@@ -204,3 +204,40 @@ one edit that reaches every node on the next code-sync, not an env var an
 operator has to remember to set identically everywhere.
 
 **Grep check:** `grep -rn "SERVICE_DISCOVERY_TTL_S" autobot_shared/service_discovery.py autobot-slm-backend/slm/agent/health_collector.py autobot-slm-backend/services/reconciler.py` should show one definition and two importers, no second hardcoded literal.
+
+---
+
+## SLM → node proxy calls — not routed through the guarded fetch
+
+**File:** `autobot_shared/node_proxy.py`
+**Callers:** `autobot-slm-backend/api/voice_proxy.py`, `api/personality_proxy.py`, `api/memory_lifecycle_proxy.py`
+**Issue:** #14886 (decision), #13625 (Rule 8's origin audit)
+
+**Pattern bypassed:** Rule 8 — "outbound HTTP goes through the guarded fetch
+(egress policy)". These calls use `httpx` directly, via the shared node client.
+
+**Reason:** Rule 8's origin audit scoped `guard_egress`/`ssrf_guard` to external
+connectors whose target host arrives from *customer* configuration, where a
+hostile value is the threat being defended against. A control-plane → node call
+has neither property: the host comes from `AUTOBOT_BACKEND_URL` or the
+identity-authority base, both operator-set deployment config, and the request
+body never influences it. Nothing under `autobot-slm-backend/` routed through the
+guarded fetch before this change either — grepping for `guard_egress` or
+`ssrf_guard` there returns zero hits. So the state was undocumented rather than
+decided, which is what #14886 asked to fix. Fixing it in one proxy alone would
+have created a fourth inconsistent pattern, so it is decided once, here, and
+applied by every caller of the shared client.
+
+**What keeps it safe instead:** TLS verification is on by default
+(`autobot_shared/tls.py::tls_verify_enabled`, pinned by
+`autobot_shared/node_proxy_test.py::test_tls_verification_is_on_by_default`), the
+internal API key travels only on that verified channel, and the target host is
+never taken from a request.
+
+**Revisit when:** a node proxy's target host starts coming from anything a
+request can influence — a fleet member id resolved from a request body, a
+customer-supplied node URL. At that point the host is attacker-influenced and
+the guarded fetch applies.
+
+**Grep check:** `grep -rn "guard_egress\|ssrf_guard" autobot-slm-backend/` should
+stay empty, or this entry needs replacing with the migration.
