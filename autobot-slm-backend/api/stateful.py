@@ -131,7 +131,6 @@ async def create_backup(
     await db.commit()
     await db.refresh(backup)
 
-    # Start async backup job
     fire_and_forget(_run_backup(backup_id, node.ip_address, request.service_type), name=f"backup:{backup_id}")
 
     logger.info("Backup created: %s for node %s", backup_id, request.node_id)
@@ -325,11 +324,9 @@ async def start_replication(
     await db.commit()
     await db.refresh(replication)
 
-    # Start async replication job using the ReplicationService (Issue #726 Phase 4)
-    fire_and_forget(
-        replication_service.setup_replication(db, replication_id, source_node, target_node, request.service_type),
-        name=f"replication:{replication_id}",
-    )
+    # Uses the ReplicationService (Issue #726 Phase 4).
+    coro = replication_service.setup_replication(db, replication_id, source_node, target_node, request.service_type)
+    fire_and_forget(coro, name=f"replication:{replication_id}")
 
     logger.info(
         "Replication started: %s (%s -> %s)",

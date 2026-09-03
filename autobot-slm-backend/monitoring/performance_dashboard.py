@@ -18,6 +18,7 @@ import jinja2
 from aiohttp import WSMsgType, web
 from performance_monitor import PerformanceMonitor
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.network_constants import NetworkConstants
 from utils.html_dashboard_utils import (
     create_dashboard_header,
@@ -447,7 +448,6 @@ class PerformanceDashboard:
         self.monitor = PerformanceMonitor()
         self.websocket_connections = set()
         self.redis_client = None
-        self._metrics_task: asyncio.Task | None = None
         self.setup_routes()
         self.setup_templates()
 
@@ -685,10 +685,7 @@ class PerformanceDashboard:
         # Initialize Redis connection for the monitor
         await self.monitor.initialize_redis_connection()
 
-        # Start background metrics broadcasting. Held on self so shutdown can
-        # cancel it instead of leaving it to be silently garbage-collected
-        # mid-flight (#15524).
-        self._metrics_task = asyncio.create_task(self.start_metrics_broadcasting())
+        fire_and_forget(self.start_metrics_broadcasting(), name="performance-dashboard-metrics")
 
         # Start the web server
         runner = web.AppRunner(self.app)
@@ -707,8 +704,6 @@ class PerformanceDashboard:
         except KeyboardInterrupt:
             logger.info("Shutting down dashboard...")
         finally:
-            if self._metrics_task is not None:
-                self._metrics_task.cancel()
             await runner.cleanup()
 
 

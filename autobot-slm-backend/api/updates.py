@@ -643,7 +643,7 @@ async def discover_updates(
         "completed_at": None,
     }
 
-    fire_and_forget(_run_discover_job(job_id, request.node_ids, request.role), name=f"discover:{job_id}")
+    asyncio.create_task(_run_discover_job(job_id, request.node_ids, request.role))
 
     logger.info("Discover job created: %s", job_id)
     return UpdateDiscoverResponse(

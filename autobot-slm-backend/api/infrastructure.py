@@ -21,7 +21,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from typing_extensions import Annotated
 
-from autobot_shared.async_compat import fire_and_forget
 from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
 
@@ -492,10 +491,7 @@ async def execute_playbook(
     _executions[execution_id] = execution
 
     # Start execution in background
-    fire_and_forget(
-        _run_playbook(execution_id, playbook, request.variables, request.limit_hosts),
-        name=f"infrastructure-execute:{execution_id}",
-    )
+    asyncio.create_task(_run_playbook(execution_id, playbook, request.variables, request.limit_hosts))
 
     logger.info(
         "Infrastructure playbook execution started: %s (%s) by %s",

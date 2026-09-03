@@ -20,6 +20,7 @@ from typing import Dict, List, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.async_compat import retain_until_done
 from autobot_shared.ssot_config import config as ssot_config
 from config import settings
 from models.database import Deployment, DeploymentStatus, Node, NodeStatus
@@ -325,17 +326,6 @@ class DeploymentService:
         self.ansible_dir = Path(settings.ansible_dir)
         self._running_deployments: Dict[str, asyncio.Task] = {}
 
-    def _retain_deployment_task(self, deployment_id: str, task: asyncio.Task) -> None:
-        """Hold a background task, and drop it once it ends.
-
-        A discarded ``create_task`` result can be garbage-collected before its
-        coroutine runs (#15524), so the reference must be kept. A reference that
-        is never released leaks for the life of the process, so the done callback
-        removes it. ``cancel_deployment`` reads this dict, so entries must be real.
-        """
-        self._running_deployments[deployment_id] = task
-        task.add_done_callback(lambda _: self._running_deployments.pop(deployment_id, None))
-
     async def create_deployment(
         self, db: AsyncSession, deployment_data: DeploymentCreate, triggered_by: str
     ) -> DeploymentResponse:
@@ -358,8 +348,7 @@ class DeploymentService:
         await db.commit()
         await db.refresh(deployment)
 
-        task = asyncio.create_task(self._run_deployment(deployment_id))
-        self._retain_deployment_task(deployment_id, task)
+        retain_until_done(self._running_deployments, deployment_id, self._run_deployment(deployment_id))
 
         return DeploymentResponse.model_validate(deployment)
 
@@ -485,9 +474,7 @@ class DeploymentService:
         await db.commit()
         await db.refresh(new_deployment)
 
-        # Start the deployment in background
-        task = asyncio.create_task(self._run_deployment(new_deployment_id))
-        self._retain_deployment_task(new_deployment_id, task)
+        retain_until_done(self._running_deployments, new_deployment_id, self._run_deployment(new_deployment_id))
 
         logger.info(
             "Retry deployment created: %s (retry of %s)",
