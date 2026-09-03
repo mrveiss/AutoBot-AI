@@ -16,6 +16,7 @@ from typing import Dict, List
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.slm_rest_url import rest_url
 from autobot_shared.ssot_config import config
 from services.skill_management.skill_extractor import ExtractedSkill
 from services.slm_client import get_slm_client
@@ -141,7 +142,7 @@ class SkillProposer:
         try:
             # Call SLM endpoint: POST /api/skills/propose
             slm_url = self.slm_client._ws_url.replace("ws://", "http://").replace("wss://", "https://")
-            proposal_url = f"{slm_url}/api/skills/propose"
+            proposal_url = rest_url(slm_url, "/api/skills/propose")
 
             async with self.http_client.post(
                 proposal_url,
@@ -166,7 +167,7 @@ class SkillProposer:
             slm_url = config.slm_url
 
             async with self.http_client.post(
-                f"{slm_url}/api/skills/propose",
+                rest_url(slm_url, "/api/skills/propose"),
                 json=payload,
                 timeout=config.timeout.llm_call,
                 ssl=False,

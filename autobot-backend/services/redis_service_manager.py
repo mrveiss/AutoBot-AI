@@ -24,6 +24,7 @@ from typing import List, Tuple
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.slm_rest_url import rest_url
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
@@ -178,8 +179,7 @@ class RedisServiceManager:
             logger.error("Audit logging failed: %s", e)
 
     async def _slm_service_action(self, action: str) -> Tuple[bool, str]:
-        """
-        Call SLM API to start/stop/restart the Redis service.
+        """Call SLM API to start/stop/restart the Redis service.
 
         Issue #933: Replaces direct SSH systemctl calls.
 
@@ -194,7 +194,7 @@ class RedisServiceManager:
         """
         if not self.slm_url:
             raise RedisConnectionError("SLM_URL not configured")
-        url = f"{self.slm_url}/api/nodes/{self.slm_node_id}" f"/services/{self.service_name}/{action}"
+        url = rest_url(self.slm_url, f"/api/nodes/{self.slm_node_id}/services/{self.service_name}/{action}")
         try:
             async with get_http_client().tracked_request("POST", url, ssl=False) as resp:
                 data = await resp.json()
@@ -217,7 +217,7 @@ class RedisServiceManager:
         """
         if not self.slm_url:
             return "unknown"
-        url = f"{self.slm_url}/api/nodes/{self.slm_node_id}/services"
+        url = rest_url(self.slm_url, f"/api/nodes/{self.slm_node_id}/services")
         try:
             params = {"search": self.service_name, "per_page": "1"}
             async with get_http_client().tracked_request("GET", url, params=params, ssl=False) as resp:

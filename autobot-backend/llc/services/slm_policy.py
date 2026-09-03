@@ -30,7 +30,7 @@ async def fetch_slm_policy_json(key: str) -> dict | None:
         return None
     try:
         session = await client._get_session()
-        url = f"{client.slm_url}/api/settings/{key}"
+        url = client._rest_url(f"/api/settings/{key}")
         async with session.get(url) as response:
             if response.status != 200:
                 return None

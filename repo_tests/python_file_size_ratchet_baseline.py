@@ -298,7 +298,9 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/multimodal_processor/multimodal_integration_test.py": 633,
     "autobot-backend/multimodal_processor/processor.py": 774,
     "autobot-backend/npu_semantic_search.py": 1647,
-    "autobot-backend/orchestration/dag_executor.py": 984,
+    # 984 -> 978 (#14039): the single-use _build_slm_ssl_context wrapper was
+    # inlined onto autobot_shared.tls.get_internal_tls_context, its only body.
+    "autobot-backend/orchestration/dag_executor.py": 978,
     "autobot-backend/orchestration/graph_runner.py": 742,
     "autobot-backend/orchestration/graph_runner_test.py": 624,
     "autobot-backend/orchestration/workflow_executor.py": 1245,
@@ -376,7 +378,9 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/security_tool_parsers.py": 865,
     "autobot-backend/services/security_workflow_manager.py": 1306,
     "autobot-backend/services/skill_management/skill_distillation_scheduler.py": 717,
-    "autobot-backend/services/slm_client.py": 1090,
+    # 1090 -> 1043 (#14039): the direct-uvicorn-vs-nginx predicate moved to
+    # autobot_shared/slm_rest_url.py so the standalone REST callers could import it.
+    "autobot-backend/services/slm_client.py": 1043,
     "autobot-backend/services/slm_client_test.py": 796,
     "autobot-backend/services/temporal_invalidation_service.py": 997,
     "autobot-backend/services/tool_output_filter.py": 639,
