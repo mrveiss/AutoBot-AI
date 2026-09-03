@@ -35,19 +35,12 @@ SCAN_ROOT = "autobot-slm-backend/"
 MIN_FILES_SCANNED = 200
 MIN_CREATE_TASK_SITES = 30
 
-# Measured on the tree after #15522's three conversions. Exact, shrink-only.
-KNOWN_DISCARDED_CREATE_TASK: dict[str, int] = {
-    "autobot-slm-backend/api/code_sync.py": 0,
-    "autobot-slm-backend/api/infrastructure.py": 1,
-    "autobot-slm-backend/api/setup_wizard.py": 1,
-    "autobot-slm-backend/api/stateful.py": 3,
-    "autobot-slm-backend/api/updates.py": 1,
-    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 1,
-    "autobot-slm-backend/monitoring/performance_dashboard.py": 1,
-    "autobot-slm-backend/services/blue_green.py": 1,
-    "autobot-slm-backend/services/deployment.py": 2,
-    "autobot-slm-backend/slm/agent/agent.py": 1,
-}
+# #15524 converted the remaining twelve discarded sites: eight to
+# ``fire_and_forget`` and four (performance_dashboard.py's broadcaster,
+# blue_green.py's rollback, deployment.py's two launch sites) to a hard
+# reference held by the owning object. Nothing discarded remains, so the
+# shrink assertion below is now vacuous and only the growth guard bites.
+KNOWN_DISCARDED_CREATE_TASK: dict[str, int] = {}
 
 
 def _tracked_python_files() -> tuple[str, ...]:

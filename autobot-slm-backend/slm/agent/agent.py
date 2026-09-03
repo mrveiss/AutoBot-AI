@@ -26,6 +26,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.time_utils import utc_timestamp
 
 from .health_collector import HealthCollector
@@ -554,7 +555,7 @@ class SLMAgent:
             logger.info("Code change notification: %s on %s", commit[:12], branch)
 
             self._process_code_change(commit, branch, message)
-            asyncio.create_task(self._notify_code_change(commit))
+            fire_and_forget(self._notify_code_change(commit), name=f"agent-code-change-notify:{commit[:12]}")
 
             return web.json_response(
                 {

@@ -193,6 +193,16 @@ class BlueGreenService:
     # =========================================================================
     # Public Methods
     # =========================================================================
+    def _retain_deployment_task(self, deployment_id: str, task: asyncio.Task) -> None:
+        """Hold a background task, and drop it once it ends.
+
+        A discarded ``create_task`` result can be garbage-collected before its
+        coroutine runs (#15524), so the reference must be kept. A reference that
+        is never released leaks for the life of the process, so the done callback
+        removes it. ``_cancel_deployment_tasks`` reads this dict, so entries must be real.
+        """
+        self._running_deployments[deployment_id] = task
+        task.add_done_callback(lambda _: self._running_deployments.pop(deployment_id, None))
 
     async def create_deployment(
         self,
@@ -212,7 +222,7 @@ class BlueGreenService:
 
         # Start deployment in background
         task = asyncio.create_task(self._execute_deployment(deployment.bg_deployment_id))
-        self._running_deployments[deployment.bg_deployment_id] = task
+        self._retain_deployment_task(deployment.bg_deployment_id, task)
 
         logger.info(
             "Blue-green deployment created: %s (blue=%s, green=%s, roles=%s)",
@@ -301,7 +311,8 @@ class BlueGreenService:
         await self._cancel_deployment_tasks(bg_deployment_id)
 
         # Start rollback task
-        asyncio.create_task(self._execute_rollback(bg_deployment_id))
+        task = asyncio.create_task(self._execute_rollback(bg_deployment_id))
+        self._retain_deployment_task(bg_deployment_id, task)
 
         return True, "Rollback initiated"
 
@@ -355,7 +366,7 @@ class BlueGreenService:
 
         # Start deployment in background
         task = asyncio.create_task(self._execute_deployment(bg_deployment_id))
-        self._running_deployments[bg_deployment_id] = task
+        self._retain_deployment_task(bg_deployment_id, task)
 
         logger.info(
             "Blue-green deployment retry initiated: %s by %s",

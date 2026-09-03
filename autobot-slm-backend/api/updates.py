@@ -49,6 +49,7 @@ from models.schemas import (
     UpdatePackagesResponse,
     UpdateSummaryResponse,
 )
+from autobot_shared.async_compat import fire_and_forget
 from services.ansible_utils import parse_unreachable_hosts, summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_status import get_latest_code_version, reported_code_status
@@ -642,7 +643,7 @@ async def discover_updates(
         "completed_at": None,
     }
 
-    asyncio.create_task(_run_discover_job(job_id, request.node_ids, request.role))
+    fire_and_forget(_run_discover_job(job_id, request.node_ids, request.role), name=f"discover:{job_id}")
 
     logger.info("Discover job created: %s", job_id)
     return UpdateDiscoverResponse(
