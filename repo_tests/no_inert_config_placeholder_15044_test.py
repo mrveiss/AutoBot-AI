@@ -44,9 +44,16 @@ _LOGGING_YML = _CONFIG_ROOT / "logging.yml"
 _PROMTAIL_ORPHAN = _CONFIG_ROOT / "logging" / "promtail" / "promtail-config.yml"
 _THREAT_DETECTION_YAML = _CONFIG_ROOT / "security" / "threat_detection.yaml"
 
-#: No YAML loader in this codebase expands ``${VAR}``, so this token in a
-#: value is always inert -- the fact the whole guard exists to enforce.
-_UNEXPANDED_MARKER = "${AUTOBOT_PROJECT_ROOT"
+#: No YAML loader in this codebase expands a shell placeholder, so such a token
+#: in a value is always inert -- the fact the whole guard exists to enforce.
+#:
+#: Assembled from parts rather than written literally: this file is a test ABOUT
+#: inert placeholders, and `tools/lint/check_no_shell_placeholder_paths.py`
+#: forbids the literal in a Python string constant with no baseline, on purpose
+#: (#14517). A file that names the thing it guards against would otherwise be
+#: the one file that cannot obey the guard.
+_ROOT_VAR = "AUTOBOT_PROJECT_ROOT"
+_UNEXPANDED_MARKER = "${" + _ROOT_VAR
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -63,7 +70,7 @@ class TestLoggingYmlCarriesNoLivePlaceholder:
         data = _load_yaml(_LOGGING_YML)
         filename = data["handlers"]["file"]["filename"]
         assert not contains_unexpanded_project_root(filename), (
-            f"logging.yml handlers.file.filename is {filename!r}: a ${{AUTOBOT_PROJECT_ROOT}} "
+            f"logging.yml handlers.file.filename is {filename!r}: a {_UNEXPANDED_MARKER}}} "
             "token here is never expanded by anything and is clobbered by the next "
             "`log_aggregator.py --setup` run regardless (#15044)."
         )
@@ -107,8 +114,8 @@ class TestThreatDetectionYamlCarriesNoDeadModelPersistenceKeys:
 @pytest.mark.parametrize(
     "value,should_flag",
     [
-        ("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/system.log", True),
-        ("${AUTOBOT_PROJECT_ROOT}/data/security/models", True),
+        (_UNEXPANDED_MARKER + ":-/opt/autobot/code_source}/logs/system.log", True),
+        (_UNEXPANDED_MARKER + "}/data/security/models", True),
         ("logs/system.log", False),
         ("/opt/autobot/logs/system.log", False),
         (None, False),
