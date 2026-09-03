@@ -1316,14 +1316,14 @@
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/autobot-frontend
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/autobot-slm-backend/requirements.txt
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/autobot-slm-backend/venv/bin/pip
-2|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/autobot-slm-frontend
+1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/autobot-slm-frontend
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/{_CONSTRAINTS_SOURCE_SUBDIR}/
 1|other|autobot-slm-backend/api/code_sync.py|"/opt/autobot/{component}/
 1|other|autobot-slm-backend/api/code_sync.py|'/opt/autobot/{component}
 1|other|autobot-slm-backend/api/code_sync.py|100
 6|other|autobot-slm-backend/api/code_sync.py|120
-3|other|autobot-slm-backend/api/code_sync.py|30
-4|other|autobot-slm-backend/api/code_sync.py|300
+2|other|autobot-slm-backend/api/code_sync.py|30
+2|other|autobot-slm-backend/api/code_sync.py|300
 2|other|autobot-slm-backend/api/code_sync.py|60
 1|ssot|autobot-slm-backend/api/code_sync.py|:8001
 1|other|autobot-slm-backend/api/errors.py|50

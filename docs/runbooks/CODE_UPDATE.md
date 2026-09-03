@@ -189,6 +189,32 @@ git stash pop
 
 ---
 
+## Recovery when the SLM dashboard itself is unreachable (#15462)
+
+A failed SLM frontend build can leave `/slm/` serving 403 for the whole
+dashboard — including the "Update All Nodes" button and the code-sync UI you
+would normally use to fix it — while every `autobot-*` service still reports
+`active (running)`. The backend API stays reachable throughout; only its UI
+is gone.
+
+For that situation, a static, dependency-free recovery page is served
+directly by the SLM backend, independent of the frontend build:
+
+```
+https://<slm-manager-ip>/slm/api/recovery
+```
+
+It shows the backend's own `/api/health` (including the frontend-bundle
+probe below), and lets you sign in and trigger the same self-update the
+dashboard's "Update All Nodes" button runs — with no build step of its own,
+so a broken frontend build cannot take it down too.
+
+A degraded `frontend` field in `/api/health` (`unhealthy: build output has
+no index.html — a build failed or was never published`) is the signal that
+this is the situation you are in, versus a process actually being down.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -199,6 +225,7 @@ git stash pop
 | Backend takes 6 min after restart | Normal startup (GPUSemanticChunker + ChromaDB) | Wait; check `/var/log/autobot/backend.log` |
 | `rsync` wipes `/opt/autobot/data/` | Missing `--exclude` | Never use `--delete` without excludes in sync scripts |
 | Node shows wrong commit | Heartbeat overwrote mark-synced | Issue fixed in #918; check `code_version` in DB |
+| `/slm/` returns 403, all services green | Frontend build failed/incomplete (#15462) | Use `https://<slm-manager-ip>/slm/api/recovery` — see section above |
 
 ---
 
@@ -217,3 +244,4 @@ git stash pop
 - `update-all-nodes.yml` — code update playbook
 - `scripts/hooks/slm-post-commit` — post-commit hook
 - `docs/runbooks/SYSTEM_UPDATE.md` — OS package updates (separate from code)
+- `autobot-slm-backend/static/recovery.html` — backend-served recovery page (#15462)
