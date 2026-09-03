@@ -1260,7 +1260,7 @@ class MicroserviceArchitectureEvaluator:
 
         # AI Agents
         agents = structure["key_components"]["agents"]
-        report += """
+        report += f"""
 #### AI Agents
 - **Total Agents:** {agents['total_agents']}
 - **Agent Types:** {len(agents['agent_types'])}
@@ -1270,8 +1270,8 @@ class MicroserviceArchitectureEvaluator:
             report += f"- **{agent_type.title()}:** {', '.join(agent_names)}\n"
 
         # Data Models
-        structure["key_components"]["data_models"]
-        report += """
+        models = structure["key_components"]["data_models"]
+        report += f"""
 #### Data Models
 - **Database Files:** {len(models['database_files'])}
 - **Database Types:** {', '.join(models['database_types']) if models['database_types'] else 'None'}
@@ -1280,8 +1280,8 @@ class MicroserviceArchitectureEvaluator:
 """
 
         # Utilities
-        structure["key_components"]["utilities"]
-        report += """#### Utilities
+        utilities = structure["key_components"]["utilities"]
+        report += f"""#### Utilities
 - **Utility Files:** {len(utilities['util_files'])}
 - **Shared Utilities:** {len(utilities['shared_utilities'])}
 - **Utility Types:** {', '.join(utilities['utility_types'].keys())}
@@ -1308,7 +1308,7 @@ class MicroserviceArchitectureEvaluator:
 ### Core Services
 """
         for service in boundaries["proposed_services"]:
-            report += """
+            report += f"""
 #### {service['name']}
 - **Type:** {service['type'].replace('_', ' ').title()}
 - **Complexity:** {service['estimated_complexity']}/10
@@ -1324,7 +1324,7 @@ class MicroserviceArchitectureEvaluator:
 ### Shared Services
 """
             for service in boundaries["shared_services"]:
-                report += """
+                report += f"""
 #### {service['name']}
 - **Utilities:** {', '.join(service.get('utilities', []))}
 - **Purpose:** Provide common {service['name'].replace('Service', '').lower()} functionality
@@ -1335,7 +1335,7 @@ class MicroserviceArchitectureEvaluator:
 ### Data Services
 """
             for service in boundaries["data_services"]:
-                report += """
+                report += f"""
 #### {service['name']}
 - **Database Type:** {service['database_type']}
 - **Purpose:** Manage {service['database_type']} operations
@@ -1355,37 +1355,37 @@ class MicroserviceArchitectureEvaluator:
         migration = self.analysis_results["migration_strategy"]
         recommendations = self.analysis_results["recommendations"]
 
-        report = """# 🏗️ AutoBot Microservice Architecture Evaluation
+        report = f"""# 🏗️ AutoBot Microservice Architecture Evaluation
 
-**Analysis Date:** {self.analysis_results["timestamp"]}
+**Analysis Date:** {self.analysis_results['timestamp']}
 
 ## 📊 Executive Summary
 
 This analysis evaluates the AutoBot codebase for microservice architecture migration potential.
-The system shows {"strong" if structure["architecture_patterns"]["microservice_readiness"] >= 7
-else "moderate" if structure["architecture_patterns"]["microservice_readiness"] >= 4
+The system shows {"strong" if structure['architecture_patterns']['microservice_readiness'] >= 7
+else "moderate" if structure['architecture_patterns']['microservice_readiness'] >= 4
 else "limited"} readiness for microservice decomposition.
 
 ### Key Findings
-- **Total Lines of Code:** {structure["file_statistics"]["total_loc"]:,}
-- **Microservice Readiness Score:** {structure["architecture_patterns"]["microservice_readiness"]}/10
-- **Identified Services:** {len(boundaries["proposed_services"]) + len(boundaries["shared_services"])
-+ len(boundaries["data_services"])}
-- **Migration Phases:** {len(migration["migration_phases"])}
+- **Total Lines of Code:** {structure['file_statistics']['total_loc']:,}
+- **Microservice Readiness Score:** {structure['architecture_patterns']['microservice_readiness']}/10
+- **Identified Services:** {len(boundaries['proposed_services']) + len(boundaries['shared_services'])
++ len(boundaries['data_services'])}
+- **Migration Phases:** {len(migration['migration_phases'])}
 
 ## 🏢 Current Architecture Analysis
 
 ### Project Structure
-- **Total Files:** {structure["file_statistics"]["total_files"]:,}
-- **Python Files:** {structure["file_statistics"]["python_files"]:,}
-- **JavaScript/TypeScript Files:** {structure["file_statistics"]["javascript_files"]:,}
-- **Configuration Files:** {structure["file_statistics"]["config_files"]:,}
+- **Total Files:** {structure['file_statistics']['total_files']:,}
+- **Python Files:** {structure['file_statistics']['python_files']:,}
+- **JavaScript/TypeScript Files:** {structure['file_statistics']['javascript_files']:,}
+- **Configuration Files:** {structure['file_statistics']['config_files']:,}
 
 ### Architecture Patterns
-- **MVC Pattern:** {"✅ Present" if structure["architecture_patterns"]["mvc_pattern"] else "❌ Not Present"}
-- **Layered Architecture:** {"✅ Present" if structure["architecture_patterns"]["layered_architecture"]
+- **MVC Pattern:** {"✅ Present" if structure['architecture_patterns']['mvc_pattern'] else "❌ Not Present"}
+- **Layered Architecture:** {"✅ Present" if structure['architecture_patterns']['layered_architecture']
 else "❌ Not Present"}
-- **API Gateway:** {"✅ Present" if structure["architecture_patterns"]["api_gateway_present"] else "❌ Not Present"}
+- **API Gateway:** {"✅ Present" if structure['architecture_patterns']['api_gateway_present'] else "❌ Not Present"}
 
 ### Component Analysis
 
@@ -1430,7 +1430,7 @@ else "❌ Not Present"}
 """
 
         for phase in migration["migration_phases"]:
-            report += """
+            report += f"""
 ### Phase {phase['phase']}: {phase['name']}
 - **Duration:** {phase['estimated_duration_weeks']} weeks
 - **Complexity:** {phase['complexity']}

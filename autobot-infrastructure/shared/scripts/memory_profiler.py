@@ -386,15 +386,15 @@ class MemoryProfiler:
 
     def generate_markdown_report(self) -> str:
         """Generate markdown memory profiling report"""
-        self.profile_results.get("system_memory", {})
-        self.profile_results.get("process_memory", {})
+        system_memory = self.profile_results.get("system_memory", {})
+        process_memory = self.profile_results.get("process_memory", {})
         object_analysis = self.profile_results.get("object_analysis", {})
         file_analysis = self.profile_results.get("file_analysis", {})
         recommendations = self.profile_results.get("recommendations", [])
 
-        report = """# 💾 AutoBot Memory Usage Report
+        report = f"""# 💾 AutoBot Memory Usage Report
 
-**Profile Date:** {self.profile_results["timestamp"]}
+**Profile Date:** {self.profile_results['timestamp']}
 
 ## 📊 System Memory Status
 
@@ -431,7 +431,7 @@ class MemoryProfiler:
         object_lines = [f"- **{obj_type}:** {count:,} instances" for obj_type, count in list(top_objects.items())[:10]]
         report += "\n".join(object_lines) + "\n" if object_lines else ""
 
-        report += """
+        report += f"""
 ### Garbage Collector Stats
 - **Generation 0:** {object_analysis.get('garbage_collector_stats', {}).get('generation_0', 0)} objects
 - **Generation 1:** {object_analysis.get('garbage_collector_stats', {}).get('generation_1', 0)} objects
