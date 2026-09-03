@@ -22,7 +22,6 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
-from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.time_utils import utc_timestamp
 from models.database import (
     CodeStatus,
