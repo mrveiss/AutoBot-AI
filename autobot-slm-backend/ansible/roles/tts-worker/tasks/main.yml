@@ -150,7 +150,7 @@
 # ============================================================
 - name: "TTS Worker | Enforce venv target Python version (env-drift fix)"
   ansible.builtin.include_role:
-    name: python314
+    name: python_interpreter
     tasks_from: ensure_venv_version
   vars:
     venv_path: "{{ tts_install_dir }}/venv"

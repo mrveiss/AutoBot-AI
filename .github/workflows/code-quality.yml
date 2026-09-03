@@ -198,10 +198,13 @@ jobs:
     # PATH instead (see .github/actions/setup-python-ci/action.yml). Also
     # fixes this step's own name, which named 3.12 while requesting 3.14 --
     # harmless, but sent debugging here to the wrong version first (#15313 aside).
-    - name: Set up Python 3.14
+    - name: Set up Python
       uses: ./.github/actions/setup-python-ci
       with:
-        python-version: '3.14'
+        # python-version omitted on purpose: the composite reads .python-version
+        # when it is empty (#13842). Passing python-version-file here is not the
+        # same thing -- that input belongs to actions/setup-python, and this
+        # composite does not declare it, so actionlint rejects it.
         cache-dependency-path: |
           requirements*.txt
           autobot-backend/requirements*.txt

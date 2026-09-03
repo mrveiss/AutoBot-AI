@@ -202,7 +202,7 @@
       tags: [always]
 
 # -------------------------------------------------------------------
-# Phase 0: Shared Dependencies (nginx, python314, nodejs)
+# Phase 0: Shared Dependencies (nginx, python_interpreter, nodejs)
 # Resolved from ROLE_DEPENDENCIES map via node_dependencies host var.
 # -------------------------------------------------------------------
 - name: "Provision Phase 0: Shared Dependencies"
@@ -227,13 +227,17 @@
       when: "'nginx' in (node_dependencies | default([]))"
       tags: ['deps', 'nginx']
 
-    - name: "Deps | Install Python 3.14"
+    # #13843: python_interpreter was renamed from python314. node_dependencies
+    # is computed FRESH every provisioning run from role_registry.ROLE_DEPENDENCIES
+    # (setup_wizard._compute_node_dependencies), never persisted, so checking only
+    # the new name here is safe -- unlike pending_dep_removals below.
+    - name: "Deps | Install Python interpreter"
       ansible.builtin.include_role:
-        name: python314
+        name: python_interpreter
         apply:
-          tags: ['deps', 'python314']
-      when: "'python314' in (node_dependencies | default([]))"
-      tags: ['deps', 'python314']
+          tags: ['deps', 'python_interpreter']
+      when: "'python_interpreter' in (node_dependencies | default([]))"
+      tags: ['deps', 'python_interpreter']
 
     - name: "Deps | Install Node.js"
       ansible.builtin.include_role:
@@ -252,7 +256,13 @@
       when: "'nginx' in (pending_dep_removals | default([]))"
       tags: ['deps', 'removal']
 
-    - name: "Deps | Remove Python 3.14 if marked for removal"
+    # #13843: pending_dep_removals comes from node.extra_data (api/nodes.py),
+    # which IS persisted -- an admin could have marked "python314" for removal
+    # before this rename shipped. Checked against both spellings so a stored
+    # pre-rename value is not silently ignored; the freshly-computed
+    # node_dependencies check above does not need this because it is never
+    # persisted.
+    - name: "Deps | Remove Python interpreter if marked for removal"
       ansible.builtin.apt:
         name:
           - python3.14
@@ -260,7 +270,9 @@
           - python3.14-dev
         state: absent
         purge: true
-      when: "'python314' in (pending_dep_removals | default([]))"
+      when: >-
+        'python_interpreter' in (pending_dep_removals | default([]))
+        or 'python314' in (pending_dep_removals | default([]))
       tags: ['deps', 'removal']
 
     - name: "Deps | Remove Node.js if marked for removal"

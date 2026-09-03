@@ -74,10 +74,14 @@ class RoleInvariant:
 
 
 def _deployed(component: str, *parts: str) -> Path:
-    """Resolve a deployed component path via the canonical drift_checker helper."""
-    from services.drift_checker import get_default_deployed_dir
+    """Resolve a deployed component path via the canonical drift_checker helper.
 
-    return Path(get_default_deployed_dir(component)).joinpath(*parts)
+    A READ: this probes artifacts on the currently-served tree, so it goes
+    through :func:`get_live_dir`, never the writer form.
+    """
+    from services.deployed_dir_resolver import get_live_dir
+
+    return Path(get_live_dir(component)).joinpath(*parts)
 
 
 def invariants() -> list[RoleInvariant]:

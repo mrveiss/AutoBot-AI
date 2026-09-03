@@ -135,9 +135,10 @@
 
 # #11374: Install the target interpreter BEFORE any venv work.
 # `ensure_venv_version` removes a wrong-version venv and the `-m venv` step
-# recreates it — both fail if the interpreter is absent. The SAME python314
-# role installs it via the parametrized version var, reusing the deadsnakes
-# apt logic (no duplication). Idempotent + fail-loud.
+# recreates it — both fail if the interpreter is absent. The SAME
+# python_interpreter role (#13843, was python314) installs it via the
+# parametrized version var, reusing the deadsnakes apt logic (no
+# duplication). Idempotent + fail-loud.
 #
 # #13747: was pinned to 3.11 because OpenVINO shipped no 3.14 wheels (#10877).
 # That is no longer true — openvino 2026.3.0, torch 2.13.0 and numpy 2.5.1 all
@@ -153,15 +154,13 @@
 # it detects the existing 3.11 venv as wrong-version and removes it, so the
 # 3.11-built OpenVINO binaries in site-packages are never carried into a 3.14
 # venv (which would fail at import, not at deploy).
-- name: NPU worker | Install target Python interpreter (python3.14)
+- name: NPU worker | Install target Python interpreter
   ansible.builtin.include_role:
-    name: python314
-  vars:
-    python_interpreter_version: "3.14"
+    name: python_interpreter
 
 - name: NPU worker | Enforce venv target Python version (env-drift fix)
   ansible.builtin.include_role:
-    name: python314
+    name: python_interpreter
     tasks_from: ensure_venv_version
   vars:
     venv_path: "{{ npu_install_dir }}/venv"
@@ -221,14 +220,14 @@
 # 'setuptools.build_meta'", an error naming the build backend and saying
 # nothing about the package that caused it.
 #
-# The loose `>=2024.0` floor is what let the resolver walk backwards at all;
-# autobot-npu-worker/requirements.txt has said `>=2026.3.0` the whole time.
-# The shared constraints are applied here too, so numpy cannot be dragged below
-# its pinned floor by any future dependency.
+# The loose `>=2024.0` floor is what let the resolver walk backwards at all.
+# #15408: the floor is no longer restated here -- constraints/shared.txt is the
+# single source of truth for both openvino and numpy, so a dependabot bump
+# there needs no edit here.
 - name: Install OpenVINO and dependencies
   ansible.builtin.pip:
     name:
-      - openvino>=2026.3.1
+      - openvino
       - numpy
       - pillow
       - transformers

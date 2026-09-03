@@ -53,12 +53,13 @@
     append: true
 
 # #14476: had no version floor at all and no constraints file -- looser than
-# even the pre-#14449 npu-worker role, which at least said `>=2024.0`. Matches
-# the SSOT (autobot-npu-worker/requirements.txt) and applies constraints/shared.txt
-# so no future dependency can drag numpy below its pinned floor.
+# even the pre-#14449 npu-worker role, which at least said `>=2024.0`.
+# #15408: the floor is no longer restated here -- constraints/shared.txt is the
+# single source of truth, applied below so no future dependency can drag numpy
+# below its pinned floor either.
 - name: Set up OpenVINO environment in venv
   pip:
-    name: openvino>=2026.3.1
+    name: openvino
     virtualenv: "{{ venv_dir }}"
     extra_args: "-c {{ code_source_dir | default('/opt/autobot/code_source') }}/constraints/shared.txt"
   become_user: "{{ service_user }}"

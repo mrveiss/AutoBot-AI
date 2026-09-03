@@ -2,10 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""No site that installs OpenVINO via pip may contradict the SSOT (#14447, #14452, #14453).
+"""No site that installs OpenVINO via pip may contradict the SSOT (#14447, #14452, #14453, #15408).
 
-Seven sites in the repo pin or install `openvino` independently of
-`autobot-npu-worker/requirements.txt` (the SSOT), and this guard reaches all seven:
+Seven sites in the repo pin or install `openvino` and this guard reaches all seven:
 
 1. The `npu-worker` ansible role's inline package list (#14447).
 2. `deploy-native-services.yml`'s inline package list (#14452).
@@ -40,12 +39,20 @@ backend and nothing about which requirement caused it. Site 7 never paired with
 `openvino-dev`, so it does not reproduce that exact crash, but it did contradict the
 SSOT floor -- the invariant this guard exists to hold everywhere `openvino` is pinned.
 
-The floor is read out of the SSOT rather than repeated here. A test that hardcoded
-`2026.3.0` would go stale in exactly the way each site did. Every site factory reads
-its source file with an uncaught `Path.read_text()` -- a renamed or moved file raises
-`FileNotFoundError` and errors the test rather than silently guarding nothing.
-`setup.py` is parsed with `ast.parse` (never executed) rather than a text regex, so a
-reformatted-but-equivalent file still resolves correctly.
+#15408: parity used to be asserted after the fact -- every one of the seven restated the
+floor as a literal, so a dependabot bump of *one* left the other six wrong until someone
+hand-edited them. `constraints/shared.txt` is now the single literal (matching the numpy
+line already there, #10524): sites 1-4 and 6 declare a bare `openvino` and apply it via
+`-c constraints/shared.txt` -- pip resolves the constraint, no literal to restate. Site 5
+is dormant with no pip mechanism to attach a `-c` to, so it stays bare with no floor at
+all (nothing to drift). Site 7's `setup.py` half stays a literal -- it is parsed with
+`ast.parse` (never executed) rather than executed, so it cannot itself read a file at
+build time the way `install.sh`'s shell line can -- so it is still checked against the
+SSOT rather than deriving it; `install.sh`'s own pip line derives via the same bare + `-c`
+pattern as the ansible sites. The floor is read out of `constraints/shared.txt` rather than
+hardcoded here. Every site factory reads its source file with an uncaught
+`Path.read_text()` -- a renamed or moved file raises `FileNotFoundError` and errors the
+test rather than silently guarding nothing.
 """
 
 from __future__ import annotations
@@ -70,7 +77,9 @@ _AIML_GROUP_VARS = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "inventory" 
 _WINDOWS_REQUIREMENTS = _REPO_ROOT / "autobot-npu-worker" / "resources" / "windows-npu-worker" / "requirements.txt"
 _CODE_ANALYSIS_SETUP = _REPO_ROOT / "autobot-backend" / "code_analysis" / "setup.py"
 _CODE_ANALYSIS_INSTALL_SH = _REPO_ROOT / "autobot-backend" / "code_analysis" / "install.sh"
-_SSOT_REQUIREMENTS = _REPO_ROOT / "autobot-npu-worker" / "requirements.txt"
+# #15408: the SSOT moved from autobot-npu-worker/requirements.txt (a literal restated in
+# six other places) to constraints/shared.txt (already the SSOT for numpy, #10524).
+_SSOT_CONSTRAINTS = _REPO_ROOT / "constraints" / "shared.txt"
 
 _ROLE_TASK_NAME = "Install OpenVINO and dependencies"
 _PLAYBOOK_TASK_NAME = "Install OpenVINO runtime for NPU Worker"
@@ -288,12 +297,12 @@ def _extra_args_for(site_name: str) -> str:
 
 
 def _ssot_openvino_floor() -> str:
-    """The `openvino>=X` floor declared by the worker's own requirements.txt."""
-    for line in _SSOT_REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+    """The `openvino>=X` floor declared by constraints/shared.txt (#15408, #10524)."""
+    for line in _SSOT_CONSTRAINTS.read_text(encoding="utf-8").splitlines():
         match = re.match(r"^\s*openvino\s*>=\s*([0-9][0-9.]*)", line)
         if match:
             return match.group(1)
-    raise AssertionError("no `openvino>=` floor in the SSOT requirements — this guard is pinned to the wrong file")
+    raise AssertionError("no `openvino>=` floor in the SSOT constraints file — this guard is pinned to the wrong file")
 
 
 def test_the_sources_this_guard_reads_are_present():
@@ -324,12 +333,18 @@ def test_the_deprecated_meta_package_is_not_installed(site_name: str):
 
 @pytest.mark.parametrize("site_name", list(_SITES))
 def test_the_floor_is_not_below_the_ssot(site_name: str):
-    """A lower (or absent) floor lets the resolver walk backwards into pre-cp314 releases.
+    """A lower (or absent, unconstrained) floor lets the resolver walk backwards into
+    pre-cp314 releases.
 
     This is what made the openvino-dev conflict fatal rather than merely
-    unsatisfiable: with a floor below the SSOT's (or no floor at all, as in the
-    agent_config and code_analysis/install.sh sites before their fix) there was
-    an older openvino to retreat to.
+    unsatisfiable: with a floor below the SSOT's there was an older openvino to
+    retreat to. #15408 changed most sites from an inline `>=` literal to a bare
+    `openvino` that derives its floor from `-c constraints/shared.txt` -- a bare
+    spec is compliant only if the site actually applies that constraint (proven
+    here, not just delegated to `test_the_shared_constraints_are_applied`, so a
+    site that goes bare *without* wiring up `-c` still fails this test too).
+    `aiml (dormant)` has no pip mechanism to attach a `-c` to at all (see
+    `_CONSTRAINTS_EXEMPT`) and is exempt from that half of the check.
     """
     site = _SITES[site_name]()
     specs = [name for name in site.packages if _bare_name(name) == "openvino"]
@@ -338,9 +353,16 @@ def test_the_floor_is_not_below_the_ssot(site_name: str):
     ssot_floor = _ssot_openvino_floor()
     for spec in specs:
         match = re.search(r">=\s*([0-9][0-9.]*)", spec)
-        assert match, f"{site.label}: {spec!r} has no lower bound, so pip may resolve any older release"
+        if match is None:
+            if site_name in _CONSTRAINTS_EXEMPT:
+                continue
+            assert "constraints/shared.txt" in _extra_args_for(site_name), (
+                f"{site.label}: {spec!r} has no lower bound and does not apply "
+                "constraints/shared.txt, so pip may resolve any older release (#15408)"
+            )
+            continue
         assert _version_tuple(match.group(1)) >= _version_tuple(ssot_floor), (
-            f"{site.label} pins openvino>={match.group(1)} while {_SSOT_REQUIREMENTS.name} "
+            f"{site.label} pins openvino>={match.group(1)} while {_SSOT_CONSTRAINTS.name} "
             f"declares >={ssot_floor} — this site has drifted below the SSOT (#14447, #14452, #14453)"
         )
 
@@ -426,6 +448,6 @@ def test_no_document_publishes_a_floor_below_the_ssot():
     drifted = [(path, number, pin) for path, number, pin in _live_doc_pins() if pin != ssot_floor]
 
     assert not drifted, "documentation contradicts the SSOT openvino floor (#15415):\n" + "\n".join(
-        f"  {path}:{number} says >={pin}, {_SSOT_REQUIREMENTS.name} declares >={ssot_floor}"
+        f"  {path}:{number} says >={pin}, {_SSOT_CONSTRAINTS.name} declares >={ssot_floor}"
         for path, number, pin in drifted
     )

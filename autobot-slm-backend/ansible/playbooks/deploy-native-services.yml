@@ -383,7 +383,7 @@
     # OpenVINO binaries are never carried into a 3.14 venv.
     - name: Enforce the target interpreter on any existing NPU venv
       ansible.builtin.include_role:
-        name: python314
+        name: python_interpreter
         tasks_from: ensure_venv_version
       vars:
         venv_path: "{{ npu_venv }}"
@@ -417,16 +417,16 @@
     # meta-package frozen at 2024.6.0 with no release compatible with openvino
     # 2026.x, so pip backtracks through every version of it until it reaches a
     # numpy with no cp314 wheel and the sdist build dies on
-    # setuptools.build_meta. autobot-npu-worker/requirements.txt (the SSOT
-    # installed by the task above) pins openvino>=2026.3.1 with no
-    # openvino-dev; this task now matches it and applies the shared
-    # constraints so no future dependency can drag numpy below its pinned
-    # floor. The constraints path is relative to /opt/autobot/src, the
-    # destination the task above already syncs the full source tree to.
+    # setuptools.build_meta. This task adds the [pytorch,tensorflow] extras the
+    # task above's plain requirements.txt install does not carry; #15408 stopped
+    # restating the floor here -- constraints/shared.txt (below) is the single
+    # source of truth, same as the numpy line already pinned that way. The
+    # constraints path is relative to /opt/autobot/src, the destination the
+    # task above already syncs the full source tree to.
     - name: Install OpenVINO runtime for NPU Worker
       pip:
         name:
-          - openvino[pytorch,tensorflow]>=2026.3.1
+          - openvino[pytorch,tensorflow]
         virtualenv: "{{ npu_venv }}"
         extra_args: "-c /opt/autobot/src/constraints/shared.txt"
       become_user: autobot-service
@@ -557,7 +557,7 @@
     # this rebuilds it, and `creates:` makes the matching case a no-op.
     - name: Enforce the target interpreter on any existing venv
       ansible.builtin.include_role:
-        name: python314
+        name: python_interpreter
         tasks_from: ensure_venv_version
       vars:
         venv_path: /opt/autobot/venv

@@ -11,7 +11,7 @@ Legend: ✅ implemented (file cited) · ⚠️ partial (gap noted) · ❌ none.
 | **PostgreSQL** | ✅ `ansible/roles/postgresql` | ✅ `backup-node-data.yml` `pg_dumpall --clean --if-exists \| gzip` | ✅ code-sync + `deployment.py` migrations | ✅ `stateful.py POST /backups/{id}/restore`; `disaster-recovery.md` |
 | **Redis** | ✅ `ansible/roles/redis` | ✅ `access_control/tasks/backup.yml` BGSAVE + RDB | ✅ role re-run | ✅ RDB reload; `disaster-recovery.md` Scenario 3 |
 | **ChromaDB** | ✅ `ansible/roles/redis/tasks/chromadb.yml` (`/opt/autobot/autobot-db-stack/chromadb/data`) | ✅ `backup-node-data.yml` ChromaDB block (**path bug fixed #11098** — had stat'd stale `/var/lib/chromadb` → no-op) | ✅ `chromadb-1x-upgrade.md` | ✅ restorability verified by `verify-backup-restore.yml` (scratch extract + health-check); in-place restore = re-provision |
-| **Backend** | ✅ `ansible/roles/backend` (python314 venv) | n/a (stateless; secrets/.env below) | ⚠️ code-sync rsync+restart; **backend `pip install` on requirements change missing → #11069** | ✅ code-cache rollback (below) |
+| **Backend** | ✅ `ansible/roles/backend` (python3.14 venv, via `roles/python_interpreter` #13843) | n/a (stateless; secrets/.env below) | ⚠️ code-sync rsync+restart; **backend `pip install` on requirements change missing → #11069** | ✅ code-cache rollback (below) |
 | **SLM backend** | ✅ `ansible/roles/slm_manager` | ✅ DB (postgres) + `data/.slm_keys` | ✅ code-sync | ✅ DB restore |
 | **Frontends** | ✅ `ansible/roles/frontend` | n/a (rebuilt from source) | ✅ code-sync rebuilds dist (`#9982`/#10120) | ✅ rebuild from code-cache sha |
 | **Workers** (npu/tts/ai-stack/browser) | ✅ `ansible/roles/{npu-worker,tts-worker,ai-stack,browser}` | n/a (stateless) | ✅ code-sync | ✅ re-provision |

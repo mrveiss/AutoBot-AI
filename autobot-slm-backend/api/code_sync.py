@@ -85,12 +85,12 @@ from services.deploy_artifacts import (
     rsync_artifact_excludes,
     rsync_host_state_args,
 )
+from services.deployed_dir_resolver import get_live_dir, get_release_component_dir
 from services.drift_checker import (
     ALLOWED_COMPONENTS,
     VISIBILITY_COMPONENTS,
     build_drift_report,
     deploy_only_entries,
-    get_default_deployed_dir,
     get_default_source_dir,
     owned_subtrees,
 )
@@ -370,7 +370,7 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
             logger.error("component resolve job %s: source path error: %s", job_id, exc)
             return
 
-        deployed_dir = get_default_deployed_dir(component)
+        deployed_dir = get_release_component_dir(component)
         source_root = str(Path(source_dir).parent)
         excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
         excludes = excludes_map.get(component, [])  # universal excludes at the rsync chokepoint (#11459)
@@ -684,7 +684,7 @@ async def _compute_stale_components(force: bool = False) -> list[str]:
     loop = asyncio.get_running_loop()
     for component in sorted(VISIBILITY_COMPONENTS):
         try:
-            deployed_dir = get_default_deployed_dir(component)
+            deployed_dir = get_live_dir(component)
             if not os.path.isdir(deployed_dir):
                 continue  # not deployed on this box — nothing to compare
             source_dir = get_default_source_dir(component)
@@ -719,7 +719,7 @@ async def _compute_process_divergence() -> Dict[str, str]:
     """Per-component stale/healthy/unknown verdict for GET /status (#15323).
 
     Wraps services.process_divergence.compute_process_divergence with the
-    live _COMPONENT_SERVICES / get_default_deployed_dir wiring this module
+    live _COMPONENT_SERVICES / get_live_dir wiring this module
     already owns — keeps the generic detector layering-clean (services/
     never imports api/, see process_divergence.py's module docstring).
 
@@ -743,7 +743,7 @@ async def _compute_process_divergence() -> Dict[str, str]:
         from services.process_divergence import compute_process_divergence
 
         units_by_component = {c: svcs for c, svcs in _COMPONENT_SERVICES.items() if svcs and svcs != ["nginx"]}
-        deployed_dirs = {c: get_default_deployed_dir(c) for c in units_by_component}
+        deployed_dirs = {c: get_live_dir(c) for c in units_by_component}
         return await compute_process_divergence(units_by_component, deployed_dirs)
     except Exception:  # noqa: BLE001 - a bad scan must not break /status
         logger.exception("process-divergence: /status scan failed")
@@ -921,7 +921,7 @@ async def get_file_drift(
         source_dir = get_default_source_dir(component)
     except ValueError as exc:
         raise HTTPException(status_code=500, detail="Failed to determine component path") from exc
-    deployed_dir = get_default_deployed_dir(component)
+    deployed_dir = get_live_dir(component)
 
     logger.info("drift check: comparing source=%s deployed=%s", source_dir, deployed_dir)
 
@@ -1065,7 +1065,7 @@ async def resolve_drift(
         source_dir = get_default_source_dir(request.component)
     except ValueError as exc:
         raise HTTPException(status_code=500, detail="Failed to determine source path") from exc
-    deployed_dir = get_default_deployed_dir(request.component)
+    deployed_dir = get_release_component_dir(request.component)
 
     # source_dir = /opt/autobot/code_source/<component>; _rsync_component_local
     # constructs `{source_path}/{component}/` so pass the parent.
@@ -1623,7 +1623,7 @@ _ANSIBLE_DIR: Path = Path(DEFAULT_REPO_PATH) / "autobot-slm-backend" / "ansible"
 _PROVISION_PYTHON_PLAYBOOK: Path = _ANSIBLE_DIR / "playbooks" / "provision-local-python.yml"
 # #11403: ansible resolves roles via roles_path in ansible.cfg, which it only reads
 # from its cwd (or via ANSIBLE_CONFIG). Run from an arbitrary cwd, roles_path
-# defaults to playbooks/roles/ and the python314 role (at ansible/roles/) is not
+# defaults to playbooks/roles/ and the python_interpreter role (at ansible/roles/) is not
 # found → play fails. We pass cwd=_ANSIBLE_DIR — it survives sudo's env_reset,
 # whereas changing the command args would break the exact-match NOPASSWD sudoers
 # rule. ANSIBLE_CONFIG is also set as a fallback (honored only if sudoers keeps it).
@@ -1882,7 +1882,7 @@ async def _deploy_repo_root_requirements(source_root: str, steps: List[str]) -> 
 
 
 async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
-    """Run the python314 role on localhost to install *target* (#11343).
+    """Run the python_interpreter role on localhost to install *target* (#11343).
 
     Invokes ansible-playbook via an ARG LIST (never a shell string) under sudo.
     The command matches the NOPASSWD sudoers grant from
@@ -1894,7 +1894,7 @@ async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
     # so "--limit localhost" left ansible with no hosts to target (#11352). The
     # playbook is `hosts: localhost` / `connection: local`.
     cmd = ["sudo", "ansible-playbook", str(_PROVISION_PYTHON_PLAYBOOK)]
-    cmd += ["--tags", "python314", "-i", "localhost,", "--connection", "local"]
+    cmd += ["--tags", "python314", "-i", "localhost,", "--connection", "local"]  # #13843: permanent alias tag
     steps.append(f"python-provision: installing {target} via {_PROVISION_PYTHON_PLAYBOOK.name}")
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -1926,7 +1926,7 @@ async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
 async def _ensure_target_python_installed(component: str, steps: List[str]) -> None:
     """Install the target interpreter when missing, BEFORE venv recreation (#11343).
 
-    Runs the Ansible python314 role (deadsnakes) scoped to localhost when the
+    Runs the Ansible python_interpreter role (deadsnakes) scoped to localhost when the
     interpreter mapped in _COMPONENT_PYTHON_TARGET is absent from PATH. Preserves
     the #11323 safety guard: on provision failure it appends a clear step and
     RETURNS without touching the venv, so a running service is never bricked.
@@ -1966,7 +1966,7 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> bool:
     Safety: verifies the target interpreter is present on PATH (shutil.which) BEFORE
     removing anything. If absent, the existing venv is left intact and a skip step is
     recorded — the service stays running; operators must provision the interpreter
-    first (Ansible python314 role). (#11327 review)
+    first (Ansible python_interpreter role). (#11327 review)
     """
 
     target = _COMPONENT_PYTHON_TARGET.get(component)
@@ -1980,7 +1980,7 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> bool:
             logger.warning("drift resolve: %s not on PATH — skipping venv create for %s", target, component)
             steps.append(
                 f"venv: {venv_python} missing and {target} not installed"
-                " — skipping recreation; provision the interpreter first (Ansible python314 role)"
+                " — skipping recreation; provision the interpreter first (Ansible python_interpreter role)"
             )
             return False
         steps.append(f"venv: {venv_python} missing — will create with {target}")
@@ -2009,7 +2009,7 @@ async def _ensure_venv_python(component: str, steps: List[str]) -> bool:
                 steps.append(
                     f"venv: mismatch (have '{version_out}', need {expected_fragment})"
                     f" but {target} not installed — skipping recreation;"
-                    " provision the interpreter first (Ansible python314 role)"
+                    " provision the interpreter first (Ansible python_interpreter role)"
                 )
                 return False
             steps.append(f"venv: mismatch (have '{version_out}', need {expected_fragment}) — recreating")
@@ -2559,7 +2559,7 @@ async def _snapshot_component(component: str) -> Optional[str]:
 
     Returns the backup dir path string on success, None on failure.
     """
-    deployed_dir = get_default_deployed_dir(component)
+    deployed_dir = get_live_dir(component)
     snap_base = Path(_SNAPSHOT_BASE_DIR)
     try:
         snap_base.mkdir(parents=True, exist_ok=True)
@@ -2605,7 +2605,7 @@ async def _restore_component_snapshot(component: str, snapshot: str, steps: List
     Returns True on a clean rsync (rc=0); False on a failed/timed-out/errored
     restore, each case logged and recorded in *steps*.
     """
-    deployed_dir = get_default_deployed_dir(component)
+    deployed_dir = get_release_component_dir(component)
     steps.append(f"rollback: restoring {component} from {snapshot}")
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -2917,7 +2917,7 @@ async def _ensure_autobot_shared_synced(component: str, force: bool = False) -> 
     source_root = str(Path(shared_source).parent)
     excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
     excludes = excludes_map.get("autobot_shared", [])
-    shared_deployed = get_default_deployed_dir("autobot_shared")
+    shared_deployed = get_release_component_dir("autobot_shared")
     if not force:
         allowed, blocked, guard_msg = await _resolve_deletion_guard(
             "autobot_shared", source_root, excludes, shared_source, shared_deployed
@@ -4737,7 +4737,7 @@ async def _compute_deps_changed(component: str) -> bool:
     """Return True if any watched dependency file differs for a component."""
     try:
         source_dir = get_default_source_dir(component)
-        deployed_dir = get_default_deployed_dir(component)
+        deployed_dir = get_live_dir(component)
     except ValueError:
         return False
     except Exception:
@@ -4836,7 +4836,7 @@ async def _get_slm_deployed_commit() -> Optional[str]:
 
     Reads the ``.deployed_commit`` marker written by the ``slm_manager``
     Ansible role right after it rsyncs code_source into the install dir
-    (get_default_deployed_dir) — NOT ``git_tracker.get_local_commit()``,
+    (get_live_dir) — NOT ``git_tracker.get_local_commit()``,
     which reflects code_source HEAD. Stage 2 (code_source_pull) already
     advances code_source HEAD to remote before this check runs, so comparing
     against git_tracker would always read remote == remote and the self-
@@ -4845,7 +4845,7 @@ async def _get_slm_deployed_commit() -> Optional[str]:
     Returns None when the marker is absent/unreadable/empty — callers must
     treat that as "not current" (fail-safe toward firing the self-update).
     """
-    marker = Path(get_default_deployed_dir("autobot-slm-backend")) / ".deployed_commit"
+    marker = Path(get_live_dir("autobot-slm-backend")) / ".deployed_commit"
     try:
         commit = (await asyncio.to_thread(marker.read_text, encoding="utf-8")).strip()
     except OSError:
@@ -4952,7 +4952,7 @@ async def _component_has_file_drift(component: str) -> bool:
         source_dir = get_default_source_dir(component)
     except ValueError:
         return False
-    deployed_dir = get_default_deployed_dir(component)
+    deployed_dir = get_live_dir(component)
     if not Path(deployed_dir).exists():
         return False
     report = await asyncio.get_running_loop().run_in_executor(

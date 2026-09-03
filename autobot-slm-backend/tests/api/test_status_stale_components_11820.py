@@ -56,7 +56,7 @@ async def test_flags_only_drifted_deployed_components(monkeypatch, tmp_path):
     _reset_cache(cs)
     monkeypatch.setattr(cs, "ALLOWED_COMPONENTS", {"autobot-slm-backend", "autobot_shared"})
     monkeypatch.setattr(cs, "VISIBILITY_COMPONENTS", {"autobot-slm-backend", "autobot_shared"})
-    monkeypatch.setattr(cs, "get_default_deployed_dir", lambda c: str(tmp_path))  # exists → checked
+    monkeypatch.setattr(cs, "get_live_dir", lambda c: str(tmp_path))  # exists → checked
     monkeypatch.setattr(cs, "get_default_source_dir", lambda c: str(tmp_path))
 
     def fake_report(src, dep, comp):
@@ -73,7 +73,7 @@ async def test_skips_components_not_deployed_here(monkeypatch):
     _reset_cache(cs)
     monkeypatch.setattr(cs, "ALLOWED_COMPONENTS", {"autobot-backend"})
     monkeypatch.setattr(cs, "VISIBILITY_COMPONENTS", {"autobot-backend"})
-    monkeypatch.setattr(cs, "get_default_deployed_dir", lambda c: "/nonexistent/deployed/dir")
+    monkeypatch.setattr(cs, "get_live_dir", lambda c: "/nonexistent/deployed/dir")
 
     def _boom(*_a, **_k):  # must never be called when the dir is absent
         raise AssertionError("build_drift_report called for a non-deployed component")
@@ -89,7 +89,7 @@ async def test_result_is_ttl_cached(monkeypatch, tmp_path):
     _reset_cache(cs)
     monkeypatch.setattr(cs, "ALLOWED_COMPONENTS", {"autobot_shared"})
     monkeypatch.setattr(cs, "VISIBILITY_COMPONENTS", {"autobot_shared"})
-    monkeypatch.setattr(cs, "get_default_deployed_dir", lambda c: str(tmp_path))
+    monkeypatch.setattr(cs, "get_live_dir", lambda c: str(tmp_path))
     monkeypatch.setattr(cs, "get_default_source_dir", lambda c: str(tmp_path))
     monkeypatch.setattr(cs, "build_drift_report", lambda *a: {"drifted_files": ["x"], "total_compared": 1})
 
@@ -108,7 +108,7 @@ async def test_failing_component_is_isolated(monkeypatch, tmp_path):
     _reset_cache(cs)
     monkeypatch.setattr(cs, "ALLOWED_COMPONENTS", {"autobot-slm-backend", "autobot_shared"})
     monkeypatch.setattr(cs, "VISIBILITY_COMPONENTS", {"autobot-slm-backend", "autobot_shared"})
-    monkeypatch.setattr(cs, "get_default_deployed_dir", lambda c: str(tmp_path))
+    monkeypatch.setattr(cs, "get_live_dir", lambda c: str(tmp_path))
     monkeypatch.setattr(cs, "get_default_source_dir", lambda c: str(tmp_path))
 
     def flaky(src, dep, comp):
@@ -130,7 +130,7 @@ async def test_pull_invalidates_stale_components_cache(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cs, "ALLOWED_COMPONENTS", {"autobot_shared"})
     monkeypatch.setattr(cs, "VISIBILITY_COMPONENTS", {"autobot_shared"})
-    monkeypatch.setattr(cs, "get_default_deployed_dir", lambda c: str(tmp_path))
+    monkeypatch.setattr(cs, "get_live_dir", lambda c: str(tmp_path))
     monkeypatch.setattr(cs, "get_default_source_dir", lambda c: str(tmp_path))
     monkeypatch.setattr(cs, "build_drift_report", lambda *a: {"drifted_files": ["x"], "total_compared": 1})
 
@@ -170,7 +170,7 @@ async def test_status_read_alone_never_busts_cache(monkeypatch, tmp_path):
     _reset_cache(cs)
     monkeypatch.setattr(cs, "ALLOWED_COMPONENTS", {"autobot_shared"})
     monkeypatch.setattr(cs, "VISIBILITY_COMPONENTS", {"autobot_shared"})
-    monkeypatch.setattr(cs, "get_default_deployed_dir", lambda c: str(tmp_path))
+    monkeypatch.setattr(cs, "get_live_dir", lambda c: str(tmp_path))
     monkeypatch.setattr(cs, "get_default_source_dir", lambda c: str(tmp_path))
     monkeypatch.setattr(cs, "build_drift_report", lambda *a: {"drifted_files": ["x"], "total_compared": 1})
 
@@ -194,7 +194,7 @@ async def test_extended_scan_covers_ai_stack_with_correct_path_map(monkeypatch, 
     ~1060-1064) with real tmp_path directories and asserts
     _compute_stale_components resolves the EXACT path pair for the
     component before reporting it stale — proving both scan coverage and
-    path-map correctness. (get_default_source_dir/get_default_deployed_dir's
+    path-map correctness. (get_default_source_dir/get_live_dir's
     own nonstandard-path-map logic is covered directly by
     TestNonstandardComponentPathMap in services/drift_checker_test.py.)"""
     import api.code_sync as cs
@@ -226,7 +226,7 @@ async def test_extended_scan_covers_ai_stack_with_correct_path_map(monkeypatch, 
     monkeypatch.setattr(cs, "ALLOWED_COMPONENTS", frozenset())
     monkeypatch.setattr(cs, "VISIBILITY_COMPONENTS", frozenset({"autobot-ai-stack"}))
     monkeypatch.setattr(cs, "get_default_source_dir", fake_source_dir)
-    monkeypatch.setattr(cs, "get_default_deployed_dir", fake_deployed_dir)
+    monkeypatch.setattr(cs, "get_live_dir", fake_deployed_dir)
     monkeypatch.setattr(cs, "build_drift_report", fake_report)
 
     stale = await cs._compute_stale_components()

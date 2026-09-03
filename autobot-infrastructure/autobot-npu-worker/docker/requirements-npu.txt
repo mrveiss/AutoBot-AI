@@ -11,7 +11,9 @@ pydantic>=2.13.4
 # 2024.6.0 with no release compatible with openvino 2026.x, so a resolve
 # against this file backtracked into a numpy with no cp314 wheel and died in
 # an sdist build (the same defect fixed in the npu-worker role by #14449).
-openvino>=2026.3.1
+# #15408: floor no longer restated here -- constraints/shared.txt (below) is
+# the single source of truth, so a dependabot bump there needs no edit here.
+openvino  # version from constraints/shared.txt
 
 # Model and Tokenization (lightweight)
 tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is

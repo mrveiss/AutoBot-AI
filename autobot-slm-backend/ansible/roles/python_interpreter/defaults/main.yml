@@ -1,0 +1,31 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+---
+# Target interpreter version installed from the deadsnakes PPA.
+#
+# #13842: no literal default here any more. `python_interpreter_version` is
+# either passed explicitly by a caller, or derived from `.python-version` (the
+# repo-wide interpreter SSOT) by the "Derive interpreter version" task at the
+# top of tasks/main.yml, which runs a `lookup('file', ...)` anchored to
+# `role_path` and `set_fact`s the result. That derivation deliberately lives
+# in a TASK rather than here: `role_path` is only valid while this role's own
+# tasks are executing, so a `defaults:` entry that referenced it (Ansible
+# re-evaluates defaults lazily, on every read) broke the moment anything read
+# `python_interpreter_version` from outside this role -- `role_path is
+# undefined`. A `set_fact` materialises a real value once, in-context, which
+# stays correct for every later reader.
+#
+# Callers that need a different interpreter still override
+# python_interpreter_version explicitly; the package list and the interpreter
+# binary name are derived from it so the SAME role installs any
+# deadsnakes-supported version without duplicated apt logic (#11374). No
+# current caller does this (the NPU worker's #13747 migration to 3.14 removed
+# the last one), but the parameterisation is what the role is named for
+# (#13843) and is kept for the next one that does.
+
+# Derived — do not set directly; override python_interpreter_version instead.
+python_interpreter_binary: "python{{ python_interpreter_version }}"
+python_interpreter_packages:
+  - "python{{ python_interpreter_version }}"
+  - "python{{ python_interpreter_version }}-venv"
+  - "python{{ python_interpreter_version }}-dev"
