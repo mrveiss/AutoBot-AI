@@ -407,7 +407,13 @@ jobs:
         exit 1
 
     - name: Report success
-      run: echo "All 6 python-suite shards passed."
+      # The number here must equal the python-shard matrix length. It said "All
+      # 6" against a 12-way matrix (#14353). `strategy.job-total` is not usable
+      # -- this is the aggregate job, not a matrix job, so it expands to empty
+      # here. The agreement is enforced instead by
+      # repo_tests/ci_shard_count_message_test.py, which reads both numbers out
+      # of this file; update them together or that test fails.
+      run: echo "All 12 python-suite shards passed."
 
 
   frontend-tests:
