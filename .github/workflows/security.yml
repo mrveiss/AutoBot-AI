@@ -154,6 +154,21 @@ jobs:
     # also fails, so this list must shrink as the fix lands. Bumping chromadb is
     # tracked as #15052: it is a core RAG dependency and the bump needs its own
     # verification, not a line in a CI-wiring change.
+    #
+    # #15520 — PYSEC-2026-3740 (CVE-2026-81726, GHSA-8mgp-746c-j5xp) against
+    # `nltk<=3.10.3` is a fifth allowance, added deliberately rather than fixed
+    # by a bump: the nltk security advisory records `first_patched_version:
+    # null` — there is no fixed release to bump to. The finding is a pathsec
+    # bypass in `TransitionParser`, `AveragedPerceptron`, `PerceptronTagger`
+    # and the maxent save/load helpers; grepping the tree for `import nltk` /
+    # `from nltk` across autobot-backend, autobot-slm-backend and
+    # autobot_shared returns no matches — nothing in this repository imports
+    # nltk at all, so none of the vulnerable model-persistence APIs are ever
+    # called and pathsec enforcement (opt-in, off by default upstream) is
+    # never reached from AutoBot code. RE-CHECK BY 2026-12-01: re-run
+    # `pip-audit` for a patched nltk release and remove this allowance the
+    # moment the scanner stops reporting it (an allowance the scanner no
+    # longer reports fails the step, so removal is enforced, not optional).
     - name: Python Dependency Audit
       run: |
         set -euo pipefail
@@ -169,7 +184,8 @@ jobs:
           --allow-id PYSEC-2026-311 \
           --allow-id CVE-2026-45830 \
           --allow-id CVE-2026-45831 \
-          --allow-id CVE-2026-45833
+          --allow-id CVE-2026-45833 \
+          --allow-id PYSEC-2026-3740
 
     # REPORT ONLY, and the step name says so (#13543). `safety check` without
     # credentials is deprecated upstream and cannot be relied on to produce a
