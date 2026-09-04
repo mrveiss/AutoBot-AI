@@ -99,6 +99,23 @@ MIN_LEDGER_ENTRIES = 3
 #: two paths among twenty prose strings is not read as a ledger.
 MIN_ROOTED_SHARE = 0.8
 
+#: Python ledgers that must be censused even when discovery would not find them.
+#:
+#: Discovery is deliberately size-gated -- a pair of paths in a tuple is an
+#: ordinary constant, not a record of the tree. But a ledger that SHRINKS past
+#: the gate leaves coverage silently, and the shrink is usually the very fix
+#: this guard motivated. That happened immediately: resolving the one strand
+#: this check found took `ALLOWLISTED_PATHS` from three rooted entries to two,
+#: which would have dropped the guard's own motivating ledger out of its census
+#: and left a later stranding of either survivor undetected.
+#:
+#: A pin costs nothing while the ledger is large enough to be discovered, and it
+#: is asserted to still exist, so renaming or deleting the symbol fails loudly
+#: rather than quietly reducing coverage.
+PINNED_LEDGERS: Tuple[Tuple[str, str], ...] = (
+    ("pipeline-scripts/check_no_literal_ttl_seconds.py", "ALLOWLISTED_PATHS"),
+)
+
 _SUFFIXES = "py|yml|yaml|ts|tsx|js|vue|sh|md|json|toml|txt|cfg|ini|service|conf|sql|html|css|j2|pyi|sample"
 _FILEISH = re.compile(rf"^[\w.\-/]+\.({_SUFFIXES})$")
 _DIRISH = re.compile(r"^[\w.\-]+(/[\w.\-]+)+/?$")
@@ -319,7 +336,27 @@ def _census() -> Census:
         ledgers += len(found)
         records.update({f"{relative}:{name}": entries for name, entries in found.items()})
     records.update(_registered_records())
+    records.update(_pinned_records(tree))
     return Census(records=records, files_parsed=parsed, ledgers=ledgers)
+
+
+def _pinned_records(tree: Tree) -> Dict[str, Tuple[str, ...]]:
+    """Entries of every PINNED_LEDGERS symbol, ignoring the discovery floors."""
+    out: Dict[str, Tuple[str, ...]] = {}
+    for relative, symbol in PINNED_LEDGERS:
+        source = (REPO_ROOT / relative).read_text(encoding="utf-8")
+        for node in ast.parse(source).body:
+            for name, value in _module_level_bindings(node):
+                if name != symbol:
+                    continue
+                out[f"{relative}:{name}"] = tuple(e for e in _string_entries(value) if tree.is_rooted(e))
+        if f"{relative}:{symbol}" not in out:
+            raise AssertionError(
+                f"FIX THE SWEEP: {relative} no longer binds {symbol} at module level. "
+                "A pinned ledger that cannot be found is lost coverage, not a passing check -- "
+                "move the pin or remove it deliberately."
+            )
+    return out
 
 
 def _registered_records() -> Dict[str, Tuple[str, ...]]:
@@ -502,3 +539,37 @@ def test_the_advisory_names_the_recorders_a_change_would_strand():
 def test_the_advisory_names_nothing_for_a_path_no_recorder_holds():
     """Contrast: an advisory that answers for every path answers for none."""
     assert recorders_naming(["no/such/path.py"]) == {}
+
+
+def test_every_pinned_ledger_is_in_the_census():
+    """A pin exists to survive shrinking below the discovery floor.
+
+    `ALLOWLISTED_PATHS` is the case: it held three rooted entries when this
+    guard was written, and resolving the single strand the guard found took it
+    to two -- under `MIN_LEDGER_ENTRIES`. Without the pin it would have left the
+    census silently, and a later stranding of either survivor would go unseen.
+    That is the guard losing its own motivating ledger to its own fix.
+    """
+    census = _census()
+    for relative, symbol in PINNED_LEDGERS:
+        key = f"{relative}:{symbol}"
+        assert key in census.records, f"{key} is pinned but absent from the census"
+
+
+def test_a_pinned_ledger_is_censused_below_the_discovery_floor():
+    """The pin must do something -- i.e. discovery alone would not find it."""
+    tree = _tree()
+    below = []
+    for relative, symbol in PINNED_LEDGERS:
+        source = (REPO_ROOT / relative).read_text(encoding="utf-8")
+        if symbol not in ledgers_in(source, tree):
+            below.append(f"{relative}:{symbol}")
+        assert f"{relative}:{symbol}" in _pinned_records(tree)
+
+    assert below, (
+        "every pinned ledger is currently large enough for discovery to find it "
+        "anyway. That is fine and the pins are harmless -- but if this stays true "
+        "the pins are no longer being exercised, so re-read whether they still "
+        "describe a real risk rather than deleting them reflexively."
+    )
+

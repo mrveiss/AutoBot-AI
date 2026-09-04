@@ -37,9 +37,23 @@ contexts"), whose named job does exist. The issue is surfaced. The reasoning
 that surfaces it is not the reasoning its filing assumed, and pretending
 otherwise would be the same defect this tool exists to report.
 
-#13162 is caught on its merits, but only because ``security-tests`` is resolved
-against the **job** names declared across ``.github/workflows/``. A rule reading
-paths alone sees nothing there at all.
+#13162 is **not** caught, and the reason is worth stating rather than glossing.
+Its body carries no task-list checkbox at all -- the `security-tests` analysis
+lives in prose bullets under "Suggested fix", and the corrective finding
+(``grep -rln 'security-tests' .github/workflows/`` returns nothing) is in an
+issue *comment*, which this tool never reads. ``iter_boxes()`` returns an empty
+list for it, so no rule of this tool can fire.
+
+The job-name resolution below is still what a #13162-shaped issue needs, and the
+unit test exercises that rule against a constructed body -- but a constructed
+body is what it is, and the two must not be confused. An earlier draft of this
+docstring claimed #13162 was "caught on its merits"; it is not, and the claim
+was checked against the live issue only in review.
+
+What that says about the rule's reach: this tool sees issues written in
+scope-box form. An issue whose findings live in prose, or in comments, is
+outside it by construction. That is a real limit on the population, not a bug
+to fix here -- widening to prose would trade a precise signal for a noisy one.
 
 ## Why this is a script and not a pytest gate
 
