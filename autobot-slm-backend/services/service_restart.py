@@ -36,14 +36,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from datetime import datetime, timezone
 from typing import Tuple
 
-from autobot_shared.env_utils import env_float_clamped
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.ssot_config import config
 from models.database import Node, Service, ServiceStatus
 
