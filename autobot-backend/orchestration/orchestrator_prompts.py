@@ -104,8 +104,7 @@ def _render_similar_trajectories_section(similar_trajectories: List[Any] | None)
         reward = traj_dict.get("reward", 0.0)
         actions = traj_dict.get("action_sequence", [])
         action_summary = ", ".join(
-            sanitize_injected(a.get("action", a.get("agent", a)) if isinstance(a, dict) else a, 40)
-            for a in actions[:5]
+            sanitize_injected(a.get("action", a.get("agent", a)) if isinstance(a, dict) else a, 40) for a in actions[:5]
         )
         body_lines.append(
             f"- Task: {task_text!r} | strategy={strategy} reward={reward:.2f} | steps: [{action_summary}]"

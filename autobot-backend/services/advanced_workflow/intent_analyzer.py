@@ -94,6 +94,7 @@ def _render_request_block(user_request: str) -> Optional[str]:
 
     return frame_untrusted_block("USER_REQUEST", list(_REQUEST_FRAME_WARNING), [body])
 
+
 # Issue #380: Module-level constants for intent keyword detection
 # Moved from _fallback_intent_analysis to avoid repeated dict creation
 _INTENT_KEYWORDS = {
