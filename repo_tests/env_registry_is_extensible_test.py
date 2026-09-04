@@ -49,6 +49,25 @@ def _registrations(path: Path) -> list[str]:
     return names
 
 
+def _imported_siblings() -> set[str]:
+    """Module stems the parent actually imports, read from its AST.
+
+    A substring search over the parent's text would pass on a *comment* naming
+    the module — and one such comment already exists. That is a guard that goes
+    green precisely when the import it checks for has been deleted, so this
+    resolves real `import` / `from ... import` statements instead.
+    """
+    tree = ast.parse(PARENT.read_text(encoding="utf-8"))
+    stems: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            stems.update(alias.name.rsplit(".", 1)[-1] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            stems.update(alias.name for alias in node.names)
+            if node.module:
+                stems.add(node.module.rsplit(".", 1)[-1])
+    return stems
+
 def test_the_scan_finds_the_registry_modules():
     """FIX THE SWEEP floor: a glob matching nothing would assert nothing below."""
     assert len(_MODULES) >= 2, (
@@ -97,11 +116,11 @@ def test_every_split_module_is_imported_by_the_parent():
     not a dormant file — it is a set of variables the registry does not have,
     while the source still looks as though it does.
     """
-    parent_source = PARENT.read_text(encoding="utf-8")
+    imported = _imported_siblings()
     orphans = [
         module.name
         for module in _MODULES
-        if module != PARENT and _registrations(module) and module.stem not in parent_source
+        if module != PARENT and _registrations(module) and module.stem not in imported
     ]
 
     assert not orphans, (

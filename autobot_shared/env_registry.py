@@ -75,6 +75,7 @@ def env(name: str, default: Any = None) -> Any:
 from autobot_shared import env_registry_ai  # noqa: E402,F401
 from autobot_shared import env_registry_terminal  # noqa: E402,F401
 from autobot_shared import env_registry_testing  # noqa: E402,F401
+from autobot_shared import env_registry_backend  # noqa: E402,F401
 
 # --- events (#14817, #14818) -------------------------------------------------
 
@@ -1275,10 +1276,3 @@ register_env_var(
         component="backend",
     )
 )
-
-# Per-component modules, imported for their registration side effect (#15624).
-# `env_registry.py` was exactly at its size ceiling, so no new variable could be
-# registered anywhere until the groups started moving out. Import goes at the
-# bottom: these modules import `EnvVarSpec` and `register_env_var` from here, so
-# both must exist before they load.
-from autobot_shared import env_registry_backend  # noqa: E402,F401  isort:skip
