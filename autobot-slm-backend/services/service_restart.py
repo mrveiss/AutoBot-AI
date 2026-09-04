@@ -53,6 +53,12 @@ logger = logging.getLogger(__name__)
 # constant rather than a literal: the right value depends on the deployment.
 _RESPONSE_FLUSH_DELAY_SECONDS = float(os.getenv("AUTOBOT_SLM_RESTART_FLUSH_DELAY_SECONDS", "1"))
 
+# Seconds to wait for one `systemctl restart` over SSH before giving up on it.
+# Same reasoning as the flush delay: a literal here is a deployment assumption
+# in disguise, since a slow node restarting a heavy unit legitimately exceeds a
+# value that is generous on a fast one.
+_RESTART_SSH_TIMEOUT_SECONDS = float(os.getenv("AUTOBOT_SLM_RESTART_SSH_TIMEOUT_SECONDS", "30"))
+
 
 def build_service_ssh_cmd(node: Node, remote_cmd: str) -> list:
     """Build SSH command list for service action. Ref: #1088."""
@@ -94,7 +100,7 @@ async def run_ansible_service_action(
 
         stdout, stderr = await asyncio.wait_for(
             process.communicate(),
-            timeout=30.0,
+            timeout=_RESTART_SSH_TIMEOUT_SECONDS,
         )
 
         if process.returncode == 0:
