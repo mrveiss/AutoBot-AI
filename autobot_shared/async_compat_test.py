@@ -13,7 +13,13 @@ import threading
 
 import pytest
 
-from autobot_shared.async_compat import fire_and_forget, pending_background_tasks, run_or_schedule
+from autobot_shared.async_compat import (
+    fire_and_forget,
+    fire_and_forget_threadsafe,
+    pending_background_tasks,
+    pending_threadsafe_dispatches,
+    run_or_schedule,
+)
 
 # ---------------------------------------------------------------------------
 # Sync-entry path: no event loop running
@@ -172,3 +178,92 @@ class TestFireAndForget:
         assert "probe-failing" in logged, f"the failing task was not named in any log record: {logged!r}"
         assert "ansible launch failed" in logged, f"the exception was swallowed: {logged!r}"
         assert task not in pending_background_tasks()
+
+
+# ---------------------------------------------------------------------------
+# #15636: the hand-off a thread that is not running the loop has to use
+# ---------------------------------------------------------------------------
+
+
+class TestFireAndForgetThreadsafe:
+    async def test_a_coroutine_handed_over_from_another_thread_actually_runs(self) -> None:
+        """``fire_and_forget`` raises here; this is what a foreign thread needs.
+
+        ``asyncio.create_task`` requires a loop running in the CALLING thread.
+        A watchdog Observer callback has none, so every launch it made raised
+        ``RuntimeError`` and the coroutine never ran at all (#15636).
+        """
+        loop = asyncio.get_running_loop()
+        ran: list[str] = []
+        raised: list[BaseException] = []
+
+        async def records() -> None:
+            ran.append("executed")
+
+        def from_a_foreign_thread() -> None:
+            try:
+                fire_and_forget_threadsafe(records(), name="probe-crossthread", loop=loop)
+            except BaseException as exc:  # noqa: BLE001 - the raise is the finding
+                raised.append(exc)
+
+        worker = threading.Thread(target=from_a_foreign_thread)
+        worker.start()
+        worker.join(timeout=5)
+
+        assert raised == [], f"the hand-off raised on the foreign thread: {raised!r}"
+        for _ in range(200):
+            await asyncio.sleep(0.01)
+            if ran:
+                break
+        assert ran == ["executed"], "the coroutine handed over from another thread never ran"
+
+    async def test_the_future_is_retained_while_pending_and_released_when_done(self) -> None:
+        release = asyncio.Event()
+        loop = asyncio.get_running_loop()
+
+        async def waits() -> str:
+            await release.wait()
+            return "done"
+
+        future = fire_and_forget_threadsafe(waits(), name="probe-crossthread-retained", loop=loop)
+        assert future is not None
+        assert future in pending_threadsafe_dispatches(), "the future was not retained while pending"
+
+        release.set()
+        for _ in range(200):
+            await asyncio.sleep(0.01)
+            if future.done():
+                break
+        assert future.result(timeout=5) == "done"
+        assert future not in pending_threadsafe_dispatches(), "the done callback never released the reference"
+
+    async def test_a_failure_is_reported_rather_than_swallowed(self, caplog) -> None:
+        loop = asyncio.get_running_loop()
+
+        async def explodes() -> None:
+            raise RuntimeError("cross-thread write failed")
+
+        with caplog.at_level(logging.ERROR):
+            future = fire_and_forget_threadsafe(explodes(), name="probe-crossthread-failing", loop=loop)
+            assert future is not None
+            for _ in range(200):
+                await asyncio.sleep(0.01)
+                if future.done():
+                    break
+
+        logged = "\n".join(record.getMessage() for record in caplog.records)
+        assert "probe-crossthread-failing" in logged, f"the failing launch was not named: {logged!r}"
+        assert "cross-thread write failed" in logged, f"the exception was swallowed: {logged!r}"
+
+    def test_no_captured_loop_returns_none_so_the_caller_can_tell(self, caplog) -> None:
+        """A falsy return is how a handler knows not to record the work as done."""
+        ran: list[str] = []
+
+        async def records() -> None:
+            ran.append("executed")
+
+        with caplog.at_level(logging.ERROR):
+            assert fire_and_forget_threadsafe(records(), name="probe-no-loop", loop=None) is None
+
+        assert ran == []
+        assert "probe-no-loop" in "\n".join(record.getMessage() for record in caplog.records)

@@ -66,9 +66,9 @@ from autobot_shared.auth.jwt_core import (
     decode_jwt,
     encode_jwt,
 )
-from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_write import run_redis_write
 from autobot_shared.ssot_config import config
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 
