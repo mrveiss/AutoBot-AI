@@ -84,6 +84,12 @@ class RootBudget(NamedTuple):
 SCAN_ROOTS: dict[str, RootBudget] = {
     "autobot-backend/": RootBudget(min_files=2000, min_reach_markers=150),
     "autobot-slm-backend/": RootBudget(min_files=200, min_reach_markers=30),
+    # Added by #15637: launches outside both backends were in no scan root at
+    # all, which is how a discarded task in `autobot_shared/` -- the tree the
+    # other guards import their fix from -- survived every sweep.
+    "autobot_shared/": RootBudget(min_files=150, min_reach_markers=6),
+    "autobot-infrastructure/": RootBudget(min_files=180, min_reach_markers=8),
+    "autobot-npu-worker/": RootBudget(min_files=25, min_reach_markers=1),
 }
 
 # Discarded when used as a bare expression statement.
@@ -128,7 +134,6 @@ REACH_MARKERS = LAUNCHERS | RETAINERS
 # census matches the tree it is asserted against; PR #15618 converts both and
 # must lower this entry in the same commit, exactly as the contract says.
 KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
-    # -- autobot-backend/, group 1: decompose below MAX_LINES first (#15635) --
     "autobot-backend/agents/base_agent.py": 1,
     "autobot-backend/agents/llm_failsafe_agent.py": 1,
     "autobot-backend/agents/npu_code_search_agent.py": 1,
@@ -141,25 +146,27 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
     "autobot-backend/chat_workflow/tool_handler.py": 2,
     "autobot-backend/initialization/lifespan.py": 1,
     "autobot-backend/knowledge/facts.py": 1,
+    "autobot-backend/llc/services/goal.py": 2,
     "autobot-backend/orchestrator.py": 1,
     "autobot-backend/secure_sandbox_executor.py": 1,
     "autobot-backend/security/enterprise/threat_detection/engine.py": 3,
-    "autobot-backend/services/knowledge/doc_indexer.py": 1,
-    "autobot-backend/services/tool_output_filter.py": 1,
-    "autobot-backend/utils/service_discovery.py": 1,
-    "autobot-backend/workflow_scheduler.py": 2,
-    # -- autobot-backend/, group 2: fired off the loop thread (#15636) --
     "autobot-backend/services/documentation_watcher.py": 1,
     "autobot-backend/services/kb_folder_watcher.py": 1,
+    "autobot-backend/services/knowledge/doc_indexer.py": 1,
+    "autobot-backend/services/tool_output_filter.py": 1,
     "autobot-backend/utils/hot_reload_manager.py": 1,
-    # -- autobot-backend/, group 3: converted by PR #15618 (#15612) --
-    "autobot-backend/llc/services/goal.py": 2,
-    # -- autobot-slm-backend/: decompose below MAX_LINES first (#15524) --
-    "autobot-slm-backend/api/infrastructure.py": 1,  # decompose first: #15552
-    "autobot-slm-backend/api/setup_wizard.py": 1,  # decompose first: #15553
-    "autobot-slm-backend/api/updates.py": 1,  # decompose first: #15554
-    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 1,  # #15555
-    "autobot-slm-backend/slm/agent/agent.py": 1,  # decompose first: #15555
+    "autobot-backend/utils/service_discovery.py": 1,
+    "autobot-backend/workflow_scheduler.py": 2,
+    "autobot-npu-worker/resources/windows-npu-worker/app/npu_worker.py": 1,
+    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 1,
+    "autobot-slm-backend/api/infrastructure.py": 1,
+    "autobot-slm-backend/api/setup_wizard.py": 1,
+    "autobot-slm-backend/api/updates.py": 1,
+    "autobot-slm-backend/slm/agent/agent.py": 1,
+    "autobot_shared/http_client.py": 1,
+    # Censused rather than converted: each sits in a file grandfathered at an
+    # exact line count, so the one import a conversion needs puts it over the
+    # ceiling. Decompose first -- #15641, #15642.
 }
 
 

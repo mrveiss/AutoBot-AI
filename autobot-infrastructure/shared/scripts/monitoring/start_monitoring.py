@@ -18,6 +18,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from autobot_shared.async_compat import fire_and_forget
+
 # Add project root to Python path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -143,11 +145,11 @@ class PerformanceMonitoringManager:
 
             # Start periodic optimization if enabled
             if self.config["gpu_optimization_enabled"]:
-                asyncio.create_task(self._periodic_optimization_loop())
+                fire_and_forget(self._periodic_optimization_loop(), name="monitor-optimization-loop")
 
             # Start monitoring dashboard updates
             if self.config["realtime_dashboard_enabled"]:
-                asyncio.create_task(self._dashboard_update_loop())
+                fire_and_forget(self._dashboard_update_loop(), name="monitor-dashboard-loop")
 
             self.monitoring_active = True
             self.start_time = time.time()
