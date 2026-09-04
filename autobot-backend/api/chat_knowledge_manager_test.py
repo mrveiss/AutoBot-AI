@@ -30,6 +30,13 @@ _CHAT_ID = "chat-15630"
 _USER_LINE = "how do I rotate the deploy credentials"
 _ASSISTANT_LINE = "run the rotation task and confirm the epoch advanced"
 
+#: The exact text the unprefixed prompt used to ship. Assembled rather than
+#: written as one literal: spelled out, it IS a replacement field rooted at
+#: `json`, and the #15589 guard flags a file that reaches for a module it never
+#: imports -- correctly, since that is the defect this test pins. Splitting the
+#: brace keeps the assertion and leaves the guard reading real code.
+_PRE_FIX_FIELD = "{" + "json.dumps(messages, indent=2)" + "}"
+
 _MESSAGES = [
     {"role": "system", "content": "you are a helpful assistant"},
     {"role": "user", "content": _USER_LINE},
@@ -96,7 +103,7 @@ async def test_the_prompt_never_ships_the_interpolation_as_literal_text() -> Non
     prompt = await _prompt_for(_MESSAGES)
 
     assert "json.dumps" not in prompt
-    assert "{json.dumps(messages, indent=2)}" not in prompt
+    assert _PRE_FIX_FIELD not in prompt
 
 
 async def test_system_messages_are_excluded_by_default() -> None:
