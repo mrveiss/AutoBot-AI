@@ -463,3 +463,20 @@ slm_manager_inventory_host: >-
 slm_manager_node_id: >-
   {{ hostvars[slm_manager_inventory_host]['slm_node_id']
      | default(slm_manager_inventory_host) }}
+
+# ==========================================
+# SLM FRONTEND RELEASE RETENTION (#15610)
+# ==========================================
+# How many built SLM-frontend bundle directories survive a publish, fleet-wide.
+# roles/_shared/tasks/build_publish_slm_frontend.yml publishes by flipping a
+# `current` symlink onto a per-build `dist-<id>` directory, so the directories
+# accumulate unless something bounds them — one per deploy, forever.
+#
+# Three: the bundle being served, the one `previous` points at (the rollback
+# target), and one older than that, so a rollback still has somewhere to go
+# after it has been used once. The Python half of the same publish
+# (services/slm_frontend_build.py) reads the same bound from
+# SLM_FRONTEND_RELEASE_KEEP — it runs inside the SLM backend's venv and cannot
+# read Ansible inventory, so the two halves carry the number separately and
+# must be changed together.
+slm_frontend_release_keep: 3

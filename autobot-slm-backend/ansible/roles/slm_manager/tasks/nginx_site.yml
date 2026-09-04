@@ -1,0 +1,41 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# Render the SLM nginx site config from the ONE template (#15610).
+#
+# The site config names the path nginx serves the SLM bundle from. #15610
+# moved that path from `dist/` — a directory renamed on every publish, which
+# is why the served path briefly did not exist — to `current`, a symlink
+# flipped by a single rename(2). A served-path change is only real on a host
+# whose config has been re-rendered, so every play that publishes the frontend
+# has to be able to re-render it.
+#
+# `playbooks/update-all-nodes.yml` PLAY 1 is the self-update path: it deploys
+# the SLM backend by unarchive and never runs this role, so before #15610 it
+# published a new bundle and left nginx pointing wherever the last full
+# provision had aimed it. It now includes this file with
+# `include_role: tasks_from: nginx_site.yml` — the same seam #14624 used to
+# stop the systemd unit going stale for exactly the same reason. A copied
+# template task in the playbook would be the second copy that drifts.
+#
+# Callers: tasks/main.yml (the role's own run) and
+# playbooks/update-all-nodes.yml. `playbooks/provision-fleet-roles.yml`
+# re-renders the same template directly for the co-located case (#3012).
+
+- name: "SLM | Detect co-located mode before rendering the site config (#3013)"
+  ansible.builtin.include_tasks: colocated_frontend_detect.yml
+  tags: ['slm', 'frontend', 'nginx']
+
+- name: "SLM | Deploy nginx configuration"
+  ansible.builtin.template:
+    src: autobot-slm.conf.j2
+    dest: /etc/nginx/sites-available/{{ slm_nginx_config }}
+    mode: "0644"
+    backup: true
+  become: true
+  notify:
+    - test nginx config
+    - reload nginx
+  tags: ['slm', 'nginx']
