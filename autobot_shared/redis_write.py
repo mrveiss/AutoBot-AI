@@ -30,14 +30,19 @@ anyone would notice. Failures now surface at ``error`` through
 
 ## What it still does NOT do
 
-The write is not awaited: the caller returns before the record is durable, and
-a caller that must not lose the record has to await the coroutine itself rather
-than hand it here. ``mcp_process``'s trace span, ``event_log``'s bus write,
-``audit``'s and ``audit_log``'s history rows and ``run_jwt``'s revocation
-denylist entry are all best-effort observability by design — the denylist write
-is the only one with a security edge, and it is backed by the token's own
-expiry, so a lost write shortens revocation to the token's remaining lifetime
-rather than failing open indefinitely.
+The write is not awaited: the caller returns before the record is durable. All
+five call sites were checked against that, and every one of them is a thin
+fire-and-forget wrapper over a coroutine a caller can await directly when it
+needs the record confirmed — ``audit.emit`` over ``record``, ``audit_log``'s
+wrapper over ``record_event``, ``event_log``'s over ``_write_event``,
+``mcp_process``'s trace span over ``write_span``.
+
+``run_jwt.revoke_run_jwt`` is the one with a security edge, and the codebase
+already answers it: ``revoke_run_jwt_async`` awaits the same denylist write and
+its docstring names breach response as the case that must use it. The
+fire-and-forget variant is documented for end-of-run cleanup, and the denylist
+entry's TTL is the token's own remaining lifetime — so a lost write shortens
+revocation to that remaining lifetime rather than failing open indefinitely.
 """
 
 from __future__ import annotations
