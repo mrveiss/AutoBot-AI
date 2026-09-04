@@ -250,48 +250,97 @@ def test_the_shim_fails_closed_and_reads_the_shared_filter(pair):
 
 # ── the general catcher ──────────────────────────────────────────────────────
 #
-# Every pair above is one required context published by TWO jobs whose `if:`
-# conditions are exact complements. The pattern only holds while someone
-# remembers to build the second half.
+# The pairs above are pinned by name, but detection must NOT depend on that
+# table: a context missing from it is exactly the case that needs catching. This
+# resolves the property structurally instead — a required context is safe when
+# some job publishing it is unconditional, or when two of them carry conditions
+# that are exact complements.
 #
-# `startup-import-smoke` is why this test exists. Its workflow correctly carries
-# no `pull_request.paths` filter, so the test above passed — but its single job
-# was gated on `needs.changes.outputs.backend == 'true'` with no complement, and
-# its own header comment claimed the job "self-skips (reporting success) when no
+# `startup-import-smoke` is why this exists. Its workflow correctly carries no
+# `pull_request.paths` filter, so the older test above passed — but its single
+# job was gated on `needs.changes.outputs.backend == 'true'` with no complement,
+# and its own header claimed the job "self-skips (reporting success) when no
 # backend paths are touched". A job whose `if:` is false is SKIPPED, and a
 # skipped job publishes a check run whose conclusion is `skipped`, not `success`.
 # A pull request touching only `scripts/` and `.dockerignore` therefore sat
-# blocked on a required context nothing could turn green.
+# blocked on a required context nothing could turn green (#15606).
 #
-# The two failure directions are not symmetric. A missing shim BLOCKS, loudly and
-# immediately. A shim whose condition is not an exact complement reports green for
-# a gate that never ran, which is a silent bypass — so the complement assertion in
-# the parametrized tests above matters more than this one.
-_CONDITIONAL_REAL_JOBS = {context: real_if for context, _, real_if, _, _, _ in _COMPLEMENT_PAIRS}
+# The two failure directions are not symmetric. A missing complement BLOCKS,
+# loudly and immediately. A complement whose condition is not an exact negation
+# reports green for a gate that never ran, which is a silent bypass — so the
+# string-level pinning in the parametrized tests matters more than this sweep.
+
+# Shrink-only. A context here is a KNOWN deadlock with an issue against it, not a
+# permitted shape: removing the gap must remove the entry, and a stale entry
+# fails as loudly as a new unpaired context.
+_KNOWN_UNPAIRED = {
+    "code-quality": "#15608 — its path set is inline, so a complement needs the "
+    "filter extracted to a shared file first",
+}
 
 
-def test_every_conditionally_gated_required_context_has_a_complement():
-    """A required job with an `if:` and no complement deadlocks the pull request."""
-    conditional = {}
+def _condition_is_always_true(expression: str) -> bool:
+    """`always()` and a bare `true` run unconditionally, so they cannot deadlock."""
+    return expression.strip().strip("${} ").lower() in {"always()", "true", "success() || failure()"}
+
+
+def _negates(left: str, right: str) -> bool:
+    """True when two `if:` expressions are exact complements of each other.
+
+    Compared on the `outputs.<name> ==/!= 'true'` clause rather than the whole
+    string: the real gate usually also admits `merge_group`, which the shim
+    cannot see because `merge_group` is not one of its triggers.
+    """
+    clause = re.compile(r"needs\.changes\.outputs\.(\w+)\s*(==|!=)\s*'true'")
+    left_clauses = {m.group(1): m.group(2) for m in clause.finditer(left)}
+    right_clauses = {m.group(1): m.group(2) for m in clause.finditer(right)}
+    shared = set(left_clauses) & set(right_clauses)
+    return any(left_clauses[name] != right_clauses[name] for name in shared)
+
+
+def _publishers_of_required_contexts():
+    """Map each required context to every `if:` expression publishing it."""
+    found = {}
     for path in sorted(WORKFLOW_DIR.glob("*.yml")):
         doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         for job_id, spec in (doc.get("jobs") or {}).items():
             spec = spec or {}
             context = spec.get("name", job_id)
-            if context in REQUIRED_CONTEXTS and spec.get("if"):
-                conditional.setdefault(context, []).append(path.name)
+            if context in REQUIRED_CONTEXTS:
+                found.setdefault(context, []).append((path.name, str(spec.get("if") or "")))
+    return found
 
-    assert conditional, (
-        "no required context is published by a conditional job at all — FIX THE "
-        "SWEEP, this comparison has nothing to compare against"
+
+def test_the_publisher_sweep_finds_every_required_context():
+    """A sweep that resolved nothing would make the guard below assert nothing."""
+    found = _publishers_of_required_contexts()
+    missing = sorted(REQUIRED_CONTEXTS - set(found))
+    assert not missing, f"no workflow publishes these required contexts at all: {missing}"
+
+
+def test_every_required_context_can_report_success_on_any_pull_request():
+    """A required context nothing can turn green deadlocks the pull request."""
+    unpaired = []
+    for context, publishers in sorted(_publishers_of_required_contexts().items()):
+        conditions = [expr for _, expr in publishers]
+        if any(not expr or _condition_is_always_true(expr) for expr in conditions):
+            continue
+        if any(_negates(a, b) for i, a in enumerate(conditions) for b in conditions[i + 1 :]):
+            continue
+        where = ", ".join(sorted({name for name, _ in publishers}))
+        unpaired.append((context, where))
+
+    unexpected = [f"{c} (in {w})" for c, w in unpaired if c not in _KNOWN_UNPAIRED]
+    assert not unexpected, (
+        "these required contexts are published only by conditional jobs with no "
+        "complement. When the condition is false the job is SKIPPED, which is "
+        "not SUCCESS, so the pull request blocks on a context nothing can "
+        "produce (#15606):\n  " + "\n  ".join(unexpected)
     )
 
-    unpaired = sorted(c for c in conditional if c not in _CONDITIONAL_REAL_JOBS)
-    assert not unpaired, (
-        "these required contexts are published only by jobs carrying an `if:`, "
-        "with no complement shim declared in _COMPLEMENT_PAIRS. When the `if:` "
-        "is false the job is SKIPPED, which is not SUCCESS, so the pull request "
-        "blocks on a context nothing can produce:\n  "
-        + "\n  ".join(f"{c} (in {', '.join(sorted(set(conditional[c])))})" for c in unpaired)
+    fixed = sorted(set(_KNOWN_UNPAIRED) - {c for c, _ in unpaired})
+    assert not fixed, (
+        "these contexts now have a complement but are still listed in "
+        "_KNOWN_UNPAIRED — remove them, a stale entry hides the next real one:\n  "
+        + "\n  ".join(fixed)
     )
-

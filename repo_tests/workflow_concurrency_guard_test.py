@@ -51,6 +51,9 @@ DELIBERATELY_EXEMPT = {
     "docker-smoke-required-context.yml": (
         "publishes the required 'docker-smoke-required-context' context; same deadlock (#15300)"
     ),
+    "backend-required-context.yml": (
+        "publishes the required 'startup-import-smoke' context; same deadlock (#15606)"
+    ),
 }
 
 
