@@ -411,20 +411,29 @@ def test_no_constrained_package_carries_a_version_in_ansible() -> None:
     )
 
 
+def _divergence_line(key: str, declaration: Declaration) -> str:
+    """One failure line, whether or not the site resolves to a manifest."""
+    entry = resolution.SITE_MANIFESTS.get(declaration.site)
+    if entry is None:
+        return f"{key}: ansible {declaration.specifier}, site does not resolve to a manifest"
+    stated = sorted(_manifest_specifiers(entry.manifests).get(declaration.package, ()))
+    return f"{key}: ansible {declaration.specifier}, {sorted(entry.manifests)} state {stated}"
+
+
 def test_every_cross_manifest_divergence_is_in_the_baseline() -> None:
     """A package may not be versioned one way in ansible and another in its own manifest."""
     found = divergences()
     unlisted = sorted(set(found) - set(baseline_keys()))
-    detail = [
-        f"{key}: ansible {found[key].specifier}, "
-        f"{sorted(resolution.SITE_MANIFESTS[found[key].site].manifests)} state "
-        f"{sorted(_manifest_specifiers(resolution.SITE_MANIFESTS[found[key].site].manifests).get(found[key].package, ()))}"
-        for key in unlisted
-        if found[key].site in resolution.SITE_MANIFESTS
-    ]
+    # Every key gets a line, including one whose site does not resolve. Filtering
+    # the detail to resolved sites left the assertion firing on the full set while
+    # the message named a subset -- and an unresolved site is the finding class
+    # #15629 added, so the omitted line was the newest and least familiar one. A
+    # failure that reports fewer causes than it has sends the reader to the wrong
+    # place, which is worse than a longer message.
+    detail = [_divergence_line(key, found[key]) for key in unlisted]
     assert not unlisted, (
         "New ansible/requirements version divergence:\n  "
-        + "\n  ".join(detail or unlisted)
+        + "\n  ".join(detail)
         + f"\nFix the declaration. {_BASELINE.name} only shrinks — adding a line to it"
         " to clear this failure is not the fix (#15568)."
     )
