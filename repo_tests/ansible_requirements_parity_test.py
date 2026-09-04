@@ -49,6 +49,17 @@ one host, so two floors for one library make pip unsatisfiable and skew the nump
 on embeddings one role writes and another reads. This is the ansible half of
 `check_constraint_drift.py`, which cannot see these files.
 
+`test_no_venv_is_provisioned_from_more_than_one_source_shape` is the third, and
+it asks a different question of the same walk (#15671). Parity compares a floor
+against the manifest for the venv it fills; this compares the *kinds of source*
+that fill one venv against each other. `roles/npu-worker` filled
+/opt/autobot/autobot-npu-worker/venv from two inline `name:` lists while
+`playbooks/deploy-native-services.yml` filled the same venv from
+`autobot-npu-worker/requirements.txt`, so the venv's contents depended on the
+entry point and only one path carried `constraints/shared.txt`. Every floor on
+both sides could agree with its manifest and that would still be true, which is
+why it needs its own assertion rather than a sharper comparison.
+
 `test_every_cross_manifest_divergence_is_in_the_baseline` is ratcheted through
 `ansible_pip_parity_baseline.txt`, because the backlog this test first measured
 was 55 and asserting it flat would have reddened the tree rather than described
@@ -109,10 +120,10 @@ _SPECIFIER = re.compile(r"^(==|>=|<=|~=|!=|>|<)")
 # finds. Fixing a divergence must never trip one -- only a parser that has quietly
 # stopped matching the files it claims to read.
 _MIN_ANSIBLE_DOCUMENTS = 250  # 329 parsed on 2026-09-04
-_MIN_PIP_SITES = 15  # 18 carry at least one name: entry
-_MIN_ANSIBLE_DECLARATIONS = 95  # 115, versioned and bare together
+_MIN_PIP_SITES = 15  # 17 carry at least one name: entry
+_MIN_ANSIBLE_DECLARATIONS = 95  # 107, versioned and bare together
 _MIN_REQUIREMENT_FILES = 30  # 34
-_MIN_REQUIREMENT_PACKAGES = 140  # 161
+_MIN_REQUIREMENT_PACKAGES = 140  # 162
 # The resolver's own reach (#15629). `_MIN_DERIVED_BINDINGS` counts the venvs the
 # ansible tree itself binds to a repo manifest -- a resolver that stopped matching
 # `requirements:` tasks or `build-filtered-requirements.sh` rewrites would derive
@@ -125,7 +136,12 @@ _MIN_REQUIREMENT_PACKAGES = 140  # 161
 # (`{{ backend_code_dir }}/venv`), whose defining role is outside the scope
 # the walk reaches -- recorded rather than papered over.
 _MIN_DERIVED_BINDINGS = 5  # 6
-_MIN_SITES_WITH_A_MANIFEST = 11  # 13 of 18; 2 are host-wide, 3 have no manifest
+_MIN_SITES_WITH_A_MANIFEST = 11  # 12 of 17; 2 are host-wide, 3 have no manifest
+# `provisioning_shapes()` reads the same tree for HOW a venv is filled rather
+# than from WHICH manifest, and it is the only input to the multi-source record
+# below. A walk that stopped matching pip tasks would derive one shape per venv,
+# find no venv with two, and read as a tree that had been fixed.
+_MIN_PROVISIONED_VENVS = 8  # 10
 # Exact, unlike the others: `constraints/shared.txt` guards two packages and a
 # floor of 2 is the whole population. Legitimately shrinking that file to one
 # guarded package trips this as a walk failure, which it would not be -- so
@@ -359,6 +375,8 @@ def test_the_walk_reaches_the_manifests_it_claims_to_read() -> None:
     assert len(constrained_packages()) >= _MIN_CONSTRAINED_PACKAGES
     assert len(resolution.derived_bindings()) >= _MIN_DERIVED_BINDINGS, "the resolver derived nothing"
     assert len(bound) >= _MIN_SITES_WITH_A_MANIFEST, f"only {len(bound)} sites resolve to a manifest"
+    shapes = resolution.provisioning_shapes()
+    assert len(shapes) >= _MIN_PROVISIONED_VENVS, f"only {len(shapes)} venvs have a known source"
 
 
 def test_every_declaration_site_resolves_to_the_manifests_it_provisions() -> None:
@@ -523,6 +541,66 @@ def test_the_baseline_carries_no_stale_entry() -> None:
     assert not stale, (
         "These baseline entries no longer diverge — the declaration was fixed or "
         "removed. Delete them:\n  " + "\n  ".join(stale)
+    )
+
+
+_NPU_VENV = "/opt/autobot/autobot-npu-worker/venv"
+
+
+def test_no_venv_is_provisioned_from_more_than_one_source_shape() -> None:
+    """One venv, one kind of source. A venv fed by both has two sources of truth.
+
+    A `requirements:` install reads a manifest; a `name:` list restates packages
+    inline. Where both fill one venv, what a node ends up with depends on which
+    entry point ran, and neither answer is wrong -- they are simply different
+    machines, which is what makes the shape invisible to a comparison that only
+    checks whether each floor agrees with its manifest (#15671).
+
+    `MULTI_SOURCE_VENVS` is asserted by exact set equality, so it cannot be used
+    to wave a new one through: a venv that starts being filled two ways fails,
+    and an entry left behind after its venv was fixed fails just as loudly.
+    """
+    found = resolution.multi_source_venvs()
+    recorded = frozenset(resolution.MULTI_SOURCE_VENVS)
+    shapes = resolution.provisioning_shapes()
+    unrecorded = sorted(found - recorded)
+    stale = sorted(recorded - found)
+    assert not unrecorded, (
+        "These venvs are filled from BOTH a manifest and an inline `name:` list, so their "
+        "contents depend on which ansible entry point ran. Move the inline packages into the "
+        "manifest and install from it with `-c constraints/shared.txt`, as roles/npu-worker "
+        "does (#15671):\n  " + "\n  ".join(f"{key}: {sorted(shapes[key])}" for key in unrecorded)
+    )
+    assert not stale, (
+        "These MULTI_SOURCE_VENVS entries name a venv that is no longer filled two ways — the "
+        "fix landed and the record did not. Delete them (#15684):\n  " + "\n  ".join(stale)
+    )
+
+
+def test_the_npu_worker_venv_is_filled_only_from_its_manifest() -> None:
+    """The #15671 regression case, pinned at the venv the two paths collided on.
+
+    Named rather than left to the record above because the record is a set of
+    strings: emptied of this key it says nothing about WHY the key left, and the
+    next role to add a convenient `name:` list here would only have to add one
+    line to put it back. This asserts the positive — more than one ansible file
+    fills this venv, and every one of them reads the worker's manifest.
+    """
+    shapes = resolution.provisioning_shapes()
+    assert _NPU_VENV in shapes, (
+        f"{_NPU_VENV} is filled by no pip task the walk can see — roles/npu-worker and "
+        "playbooks/deploy-native-services.yml both provision it, so this is a parser failure"
+    )
+    assert shapes[_NPU_VENV] == frozenset({resolution.MANIFEST_SOURCE}), (
+        f"{_NPU_VENV} is filled from {sorted(shapes[_NPU_VENV])}. Every path into it must read "
+        "autobot-npu-worker/requirements.txt; an inline `name:` list here is the defect #15671 "
+        "removed, where the role installed five packages the manifest did not declare and only "
+        "the other path applied constraints/shared.txt"
+    )
+    filling = resolution.files_filling(_NPU_VENV)
+    assert len(filling) > 1, (
+        f"only {sorted(filling)} fills {_NPU_VENV}; the collision this pins needs at least two "
+        "files resolving to one venv, so a rename that split them would make this vacuous"
     )
 
 

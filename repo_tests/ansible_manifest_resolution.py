@@ -28,6 +28,15 @@ shell task -- and resolves each to a repo-relative path. Every binding it derive
 must appear in the declared entry for the same virtualenv, so the table cannot
 drift away from the tree it describes without going red.
 
+`provisioning_shapes()` is the same mechanical reading asked a different
+question: not WHICH manifest fills a venv but HOW MANY KINDS of source do. A
+`requirements:` install reads a manifest; a `name:` list restates packages
+inline. A venv fed by both has two sources of truth and its contents depend on
+which entry point ran last -- #15671, where `roles/npu-worker` installed five
+packages `autobot-npu-worker/requirements.txt` had never heard of while
+`playbooks/deploy-native-services.yml` installed that manifest into the same
+venv. `MULTI_SOURCE_VENVS` records the venvs still in that state, shrink-only.
+
 Where the tree states nothing the declared entry carries the reason instead, and
 that is the point: `roles/tts-worker` never installs its worker's manifest, the
 standalone ChromaDB venv has no manifest at all, and `roles/dependency_patching`
@@ -72,10 +81,6 @@ LOGICAL_ONLY: Dict[Tuple[str, str], str] = {
         "autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml",
         NPU_DOCKER,
     ): "delivered by the NPU worker image build, not by an ansible pip task",
-    (
-        "autobot-slm-backend/ansible/playbooks/deploy-native-services.yml",
-        NPU_DOCKER,
-    ): "same image-delivered manifest, provisioned natively here",
 }
 TTS = "autobot-tts-worker/requirements.txt"
 GPU_TORCH = "requirements-gpu-torch.txt"
@@ -103,7 +108,6 @@ class Resolution(NamedTuple):
 
 _ROLES = "autobot-slm-backend/ansible/roles"
 _INVENTORY = "autobot-slm-backend/ansible/inventory/group_vars"
-_PLAYBOOKS = "autobot-slm-backend/ansible/playbooks"
 
 # Keyed by (ansible file, environment) -- the environment being the pip task's
 # `virtualenv:` text verbatim, its `executable:` when it installs outside a venv,
@@ -124,11 +128,6 @@ SITE_MANIFESTS: dict[tuple[str, str], Resolution] = {
         (BROWSER,),
         "roles/browser provisions this group and the worker venv installs from the browser "
         "worker's own manifest (#15596, #15621)",
-    ),
-    (f"{_PLAYBOOKS}/deploy-native-services.yml", "{{ npu_venv }}"): Resolution(
-        (NPU, NPU_DOCKER),
-        "the play installs /opt/autobot/src/autobot-npu-worker/requirements.txt into this venv; "
-        "the docker manifest carries the worker's web-server floors",
     ),
     (f"{_ROLES}/agent_config/tasks/openvino.yml", "{{ venv_dir }}"): Resolution(
         (ROOT_REQUIREMENTS,),
@@ -156,8 +155,8 @@ SITE_MANIFESTS: dict[tuple[str, str], Resolution] = {
     (f"{_ROLES}/browser/tasks/main.yml", "{{ browser_install_dir }}/venv"): Resolution(
         (BROWSER,),
         "the role rsyncs autobot-browser-worker/ to the install dir and update-all-nodes.yml "
-        "installs that manifest into this venv",
-        unanchored=("fastapi", "uvicorn"),
+        "installs that manifest into this venv, which now declares the web-server floors the "
+        "role states rather than leaving them unanchored (#15660)",
     ),
     (f"{_ROLES}/common/tasks/main.yml", "pip3"): Resolution(
         (),
@@ -176,8 +175,9 @@ SITE_MANIFESTS: dict[tuple[str, str], Resolution] = {
     ),
     (f"{_ROLES}/npu-worker/tasks/main.yml", "{{ npu_install_dir }}/venv"): Resolution(
         (NPU, NPU_DOCKER),
-        "update-all-nodes.yml installs the worker manifest into this venv; the web-server floors "
-        "here are the docker manifest's, which the role does not install (#15598)",
+        "#15671: the role installs the worker manifest into this venv itself, in one pip "
+        "invocation with -c constraints/shared.txt, so nothing is declared here that the "
+        "manifest does not carry; update-all-nodes.yml installs the same file",
     ),
     (f"{_ROLES}/redis/tasks/chromadb.yml", "{{ chromadb_install_dir }}/venv"): Resolution(
         (BACKEND, AI_STACK),
@@ -196,8 +196,50 @@ SITE_MANIFESTS: dict[tuple[str, str], Resolution] = {
     (f"{_ROLES}/tts-worker/tasks/main.yml", "{{ tts_install_dir }}/venv"): Resolution(
         (TTS,),
         "the role populates the worker venv itself and never installs the worker's manifest, so the "
-        "floors here are that manifest's text by intent rather than by a task (#15598)",
-        unanchored=("pocket-tts", "scipy"),
+        "floors here are that manifest's text by intent rather than by a task (#15598). #15660 "
+        "added pocket-tts and scipy to that manifest, so every floor here now has an anchor",
+    ),
+}
+
+#: The two shapes a pip task can fill a venv from. Kept as names rather than
+#: booleans because the failure they describe is "which of these was it", and a
+#: guard message naming the shape is the whole value of measuring it.
+MANIFEST_SOURCE = "manifest"
+INLINE_SOURCE = "inline"
+
+#: Packaging bootstrap, not a component's packages. Every venv upgrades these
+#: before anything else, so counting a `name:` list holding only them as an
+#: inline source would put every venv in `MULTI_SOURCE_VENVS` and make the
+#: record say nothing about any of them.
+_BOOTSTRAP = frozenset({"pip", "setuptools", "wheel"})
+
+#: First token on a `name:` entry, before any extras or specifier.
+_DISTRIBUTION = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)")
+
+#: Venvs the ansible tree fills from BOTH shapes, with the reason each is not
+#: yet one. Asserted by exact set equality and shrink-only, the same contract as
+#: `unanchored` above: a venv that starts being filled two ways fails, and an
+#: entry left behind after its venv was fixed fails just as loudly.
+#:
+#: #15671 removed `/opt/autobot/autobot-npu-worker/venv` from this record by
+#: moving `roles/npu-worker`'s two inline lists into the worker's manifest and
+#: installing from it. The three below are #15684.
+MULTI_SOURCE_VENVS: dict[str, str] = {
+    "/opt/autobot/autobot-ai-stack/venv": (
+        "roles/ai-stack installs the filtered requirements-ai manifest (#14272, #14809) and keeps "
+        "a conditional `name:` fallback list for a host where that manifest is absent; the two are "
+        "hand-kept against each other, which is how the fallback's floors drifted until #15623"
+    ),
+    "/opt/autobot/autobot-browser-worker/venv": (
+        "roles/browser installs playwright, playwright-stealth, uvicorn and fastapi as a `name:` "
+        "list while update-all-nodes.yml installs autobot-browser-worker/requirements.txt into the "
+        "same venv; #15660 made the manifest declare all four, so the two agree in text -- but the "
+        "role still restates them, so both sides must be edited together"
+    ),
+    "/opt/autobot/venv": (
+        "roles/agent_config/python_deps.yml installs the deployed repo-root manifest and "
+        "roles/backend_services installs /opt/autobot/app/requirements.txt, while "
+        "roles/agent_config's openvino.yml and playwright.yml add bare `name:` lists to the same venv"
     ),
 }
 
@@ -223,6 +265,7 @@ class _Edges(NamedTuple):
     written_from: dict[str, str]  # a written requirements path -> the path it was written from
     mirrors: dict[str, str]  # a deployed directory -> the source tree it mirrors
     installs: list[tuple[str, str, str]]  # (ansible file, virtualenv text, requirements path)
+    sources: list[tuple[str, str, str]]  # (ansible file, virtualenv text, source shape)
 
 
 @functools.cache
@@ -272,6 +315,24 @@ def _shell_install(command: str) -> tuple[str, str] | None:
     return venv, tokens[tokens.index("-r") + 1]
 
 
+def _names_a_component_package(value: object) -> bool:
+    """True when a pip ``name:`` states a package that is not packaging bootstrap.
+
+    ``name:`` is a single string or a list of them, and every venv in the tree
+    opens with ``name: pip``. Reading that as an inline source would make every
+    venv multi-source and the record below meaningless, so bootstrap names are
+    read as what they are -- preparing the venv, not filling it.
+    """
+    entries = [value] if isinstance(value, str) else value if isinstance(value, list) else []
+    for entry in entries:
+        if not isinstance(entry, str):
+            continue
+        match = _DISTRIBUTION.match(entry.strip())
+        if match and re.sub(r"[-_.]+", "-", match.group(1)).lower() not in _BOOTSTRAP:
+            return True
+    return False
+
+
 # Only a pip task carrying BOTH a literal `requirements:` and a literal
 # `virtualenv:` produces a derived edge. A `name:`-list pip task is invisible
 # here whether or not a manifest exists behind it, so the three "no manifest"
@@ -281,6 +342,9 @@ def _record_task(key: object, value: object, path: str, edges: _Edges) -> None:
     if key in _PIP_TASK_KEYS and isinstance(value, dict):
         if isinstance(value.get("requirements"), str) and isinstance(value.get("virtualenv"), str):
             edges.installs.append((path, value["virtualenv"], value["requirements"]))
+            edges.sources.append((path, value["virtualenv"], MANIFEST_SOURCE))
+        if isinstance(value.get("virtualenv"), str) and _names_a_component_package(value.get("name")):
+            edges.sources.append((path, value["virtualenv"], INLINE_SOURCE))
     if key in _SYNCHRONIZE_KEYS and isinstance(value, dict):
         source, destination = str(value.get("src", "")), str(value.get("dest", ""))
         if source.endswith("/") and destination.endswith("/"):
@@ -302,6 +366,7 @@ def _record_shell(command: str, path: str, edges: _Edges) -> None:
         install = _shell_install(command.replace("\n", " "))
         if install is not None:
             edges.installs.append((path, install[0], install[1]))
+            edges.sources.append((path, install[0], MANIFEST_SOURCE))
 
 
 def _walk_edges(node: object, path: str, edges: _Edges) -> None:
@@ -316,7 +381,7 @@ def _walk_edges(node: object, path: str, edges: _Edges) -> None:
 
 @functools.cache
 def _edges() -> _Edges:
-    edges = _Edges({}, {}, [])
+    edges = _Edges({}, {}, [], [])
     for path, document in ansible_documents():
         _walk_edges(document, path, edges)
     return edges
@@ -449,3 +514,35 @@ def derived_bindings() -> dict[str, frozenset[str]]:
         if manifest is not None:
             bindings.setdefault(environment_key(path, environment), set()).add(manifest)
     return {key: frozenset(value) for key, value in bindings.items()}
+
+
+@functools.cache
+def provisioning_shapes() -> dict[str, frozenset[str]]:
+    """``environment key -> the source shapes the ansible tree fills that venv from``.
+
+    Keyed the same way `derived_bindings()` is, so a venv named two ways -- the
+    role's `{{ npu_install_dir }}/venv` and the playbook's `{{ npu_venv }}` --
+    resolves to one entry rather than to two that never meet. That collapse IS
+    the measurement: #15671 is invisible until both files are read as filling
+    the same venv.
+    """
+    shapes: dict[str, set[str]] = {}
+    for path, environment, shape in _edges().sources:
+        shapes.setdefault(environment_key(path, environment), set()).add(shape)
+    return {key: frozenset(value) for key, value in shapes.items()}
+
+
+def files_filling(environment: str) -> frozenset[str]:
+    """The ansible files whose pip tasks fill one venv, by environment key.
+
+    Public because a guard proving a venv is filled from ONE shape has to prove
+    the venv is filled by more than one file first -- otherwise a rename that
+    split the two keys apart would leave that guard passing over a single site
+    and say nothing.
+    """
+    return frozenset(path for path, text, _ in _edges().sources if environment_key(path, text) == environment)
+
+
+def multi_source_venvs() -> frozenset[str]:
+    """Venvs filled from more than one source shape -- the #15671 class."""
+    return frozenset(key for key, shapes in provisioning_shapes().items() if len(shapes) > 1)
