@@ -105,9 +105,6 @@ NOT_A_SCRIPT = frozenset(
 #: the entry. Every reason must name an issue number: "nothing runs it" is a
 #: description of the defect, not a decision about it.
 UNINVOKED_TEST_SCRIPTS = {
-    ".mcp::test": (
-        "#15674 -- WIRE IN. `node --test autobot-mcp-server.test.js`, invoked by " "no workflow and no composite action"
-    ),
     "autobot-browser-worker::test": (
         "#15675 -- WIRE IN, after browser provisioning. `npx playwright test` "
         "needs `playwright install --with-deps` on the runner; visual-regression.yml "
@@ -139,19 +136,16 @@ UNINVOKED_TEST_SCRIPTS = {
     "autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking::test:integration": (
         "#15677 -- WIRE IN. The integration half of the same jest suite"
     ),
-    "libs/autobot-sdk-ts::test": (
-        "#15676 -- WIRE IN. jest, invoked by nothing. marker-tests.yml reaches `libs` "
-        "for its PYTHON marker-selected suite only; the TypeScript SDK's own suite "
-        "has no runner"
-    ),
 }
 
 #: DOWN-ONLY ceiling on packages whose EVERY runner is allowlisted -- a whole
-#: app gated by nothing, which is exactly the #15667 shape. Measured on
-#: Dev_new_gui: .mcp, autobot-browser-worker, vscode-autobot,
-#: mcp-structured-thinking, libs/autobot-sdk-ts. NEVER raise this to make a new
-#: app pass; wire the app in, or this guard has become the thing it replaced.
-MAX_WHOLLY_UNGATED_PACKAGES = 5
+#: app gated by nothing, which is exactly the #15667 shape. Was 5 on the first
+#: measurement (.mcp, autobot-browser-worker, vscode-autobot,
+#: mcp-structured-thinking, libs/autobot-sdk-ts); npm-package-tests.yml gates
+#: .mcp (#15674) and libs/autobot-sdk-ts (#15676), leaving three. NEVER raise
+#: this to make a new app pass; wire the app in, or this guard has become the
+#: thing it replaced.
+MAX_WHOLLY_UNGATED_PACKAGES = 3
 
 #: Floors, so a regex that stops matching turns this module red instead of green
 #: (the #15018 lesson: a guard that enumerates nothing passes comfortably).
