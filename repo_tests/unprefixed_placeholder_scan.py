@@ -369,13 +369,27 @@ def _emitted_string_ids(tree: ast.AST) -> Set[int]:
 
 
 def _function_bindings(node: ast.AST) -> Set[str]:
-    """Parameters, assignments, loop targets and caught exceptions of one function body."""
+    """Parameters, assignments, loop targets and caught exceptions of one function body.
+
+    The walk stops at nested ``def``/``lambda``/``class`` boundaries. ``ast.walk``
+    descends into them, which would report a name bound only inside an inner
+    function as bound in the outer one -- and this set is what licenses the
+    bare-identifier rule to call a field a genuine missing prefix. A name that
+    is real but scoped to a nested function would then be "fixed" by adding
+    ``f``, which raises ``NameError`` at runtime: the guard would have created
+    the bug it exists to find.
+    """
     bound = set(_parameter_names(node.args))
-    for inner in ast.walk(node):
+    pending = list(node.body)
+    while pending:
+        inner = pending.pop()
+        if isinstance(inner, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+            continue
         if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Store):
             bound.add(inner.id)
         elif isinstance(inner, ast.ExceptHandler) and inner.name:
             bound.add(inner.name)
+        pending.extend(ast.iter_child_nodes(inner))
     return bound
 
 

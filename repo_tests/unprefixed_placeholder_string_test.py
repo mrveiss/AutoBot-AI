@@ -438,6 +438,13 @@ _EMITTED_NONLOCAL = 'chat_id = "seed"\n\n\ndef usage():\n    print("connect to /
 #: The identical field, locally bound, in a route index map rather than a message.
 _UNEMITTED_BARE = 'def routes(session_id):\n    return {"get": "/sessions/' + _field("session_id") + '"}\n'
 
+#: The same field bound ONLY inside a nested function, emitted by the outer one.
+#: `ast.walk` descends into nested defs, so a scope set built that way reports
+#: `token` as bound in `outer` -- and adding the prefix there raises NameError.
+_EMITTED_NESTED_ONLY = (
+    "def outer():\n" "    def inner():\n" "        token = 'x'\n" '    print("using ' + _field("token") + '")\n'
+)
+
 
 def test_a_bare_identifier_in_an_emitted_message_is_a_finding():
     """#15628 -- 11 of the 1,452 had this shape and every one was a missing prefix."""
@@ -469,3 +476,15 @@ def test_neither_half_of_the_guard_ever_reports_its_own_source():
         assert unimported_module_interpolations(own) == [], path.name
         assert conditional_interpolations(own) == [], path.name
         assert emitted_bare_interpolations(own) == [], path.name
+
+
+def test_a_field_bound_only_in_a_nested_function_is_not_a_finding():
+    """The scope set must stop at nested `def` boundaries.
+
+    `ast.walk` descends into them, so a name assigned only inside an inner
+    function would read as bound in the outer one. That is the one way this
+    rule can over-fire, and the consequence is the worst available: the guard
+    would report a fixable missing prefix, and adding `f` would raise
+    `NameError` at runtime — the guard creating the bug it exists to find.
+    """
+    assert emitted_bare_interpolations(_EMITTED_NESTED_ONLY) == []
