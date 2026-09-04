@@ -67,21 +67,6 @@ BROWSER = "autobot-browser-worker/requirements.txt"
 NPU = "autobot-npu-worker/requirements.txt"
 NPU_DOCKER = "autobot-infrastructure/autobot-npu-worker/docker/requirements-npu.txt"
 
-#: Declared bindings the ansible walk cannot derive, with the reason each is
-#: real anyway. Shrink-only: if the wiring for one ever becomes derivable, the
-#: entry must go, and the test below fails while it lingers.
-#:
-#: Without this list the containment check is one-directional -- it catches a
-#: manifest the tree installs and the table omits, but not a manifest the table
-#: names after its install task is deleted. A declared entry that quietly stops
-#: being true is the drift this module exists to prevent, so the reverse has to
-#: be asserted too, and the genuine exceptions named rather than tolerated.
-LOGICAL_ONLY: Dict[Tuple[str, str], str] = {
-    (
-        "autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml",
-        NPU_DOCKER,
-    ): "delivered by the NPU worker image build, not by an ansible pip task",
-}
 TTS = "autobot-tts-worker/requirements.txt"
 GPU_TORCH = "requirements-gpu-torch.txt"
 GPU = "requirements-gpu.txt"
@@ -241,6 +226,42 @@ MULTI_SOURCE_VENVS: dict[str, str] = {
         "roles/backend_services installs /opt/autobot/app/requirements.txt, while "
         "roles/agent_config's openvino.yml and playwright.yml add bare `name:` lists to the same venv"
     ),
+}
+
+#: Shared reasons, so nine entries do not become nine chances to word one fact
+#: three different ways.
+_AGENT_CONFIG = "python_deps.yml installs it here, from a path of two vars the walk cannot resolve"
+_CHROMADB = "the standalone ChromaDB venv has no manifest; bound to its readers' by intent (#15598)"
+
+#: Declared bindings the ansible walk cannot derive, with the reason each is
+#: real anyway. Shrink-only: if the wiring for one ever becomes derivable, the
+#: entry must go, and `test_no_logical_only_exception_is_stale` fails while it
+#: lingers.
+#:
+#: Without this list the containment check is one-directional -- it catches a
+#: manifest the tree installs and the table omits, but not a manifest the table
+#: names after its install task is deleted. A declared entry that quietly stops
+#: being true is the drift this module exists to prevent, so the reverse has to
+#: be asserted too, and the genuine exceptions named rather than tolerated.
+#:
+#: It went from one entry to ten in #15671, and not one of the nine is new
+#: drift. The reverse check used to SKIP any site the walk derived nothing for,
+#: so it could not tell a structurally underivable binding from one whose
+#: install task had been deleted -- deriving nothing is exactly what both look
+#: like. Dropping that skip is what makes a vanished binding fail, and it is
+#: what obliges every underivable-but-real binding to be named here rather than
+#: to pass in silence.
+LOGICAL_ONLY: Dict[Tuple[str, str], str] = {
+    (f"{_ROLES}/npu-worker/tasks/main.yml", NPU_DOCKER): "delivered by the NPU worker image build, not a pip task",
+    (f"{_INVENTORY}/aiml.yml", AI_STACK): "installed by roles/ai-stack; a group_vars list is not a pip task",
+    (f"{_INVENTORY}/backend.yml", BACKEND): "installed by roles/backend, filtered; this list is not a pip task",
+    (f"{_INVENTORY}/browser.yml", BROWSER): "installed by roles/browser; this list is not a pip task",
+    (f"{_ROLES}/agent_config/tasks/openvino.yml", ROOT_REQUIREMENTS): _AGENT_CONFIG,
+    (f"{_ROLES}/agent_config/tasks/playwright.yml", ROOT_REQUIREMENTS): _AGENT_CONFIG,
+    (f"{_ROLES}/agent_config/tasks/python_env.yml", ROOT_REQUIREMENTS): _AGENT_CONFIG,
+    (f"{_ROLES}/redis/tasks/chromadb.yml", BACKEND): _CHROMADB,
+    (f"{_ROLES}/redis/tasks/chromadb.yml", AI_STACK): _CHROMADB,
+    (f"{_ROLES}/tts-worker/tasks/main.yml", TTS): "the role fills this venv from name: lists and never installs it",
 }
 
 _PIP_TASK_KEYS = ("pip", "ansible.builtin.pip")
@@ -530,6 +551,28 @@ def provisioning_shapes() -> dict[str, frozenset[str]]:
     for path, environment, shape in _edges().sources:
         shapes.setdefault(environment_key(path, environment), set()).add(shape)
     return {key: frozenset(value) for key, value in shapes.items()}
+
+
+#: An install whose requirements path resolves to no repo manifest.
+UNRESOLVED = "<unresolved>"
+
+
+def manifests_installed_by_file(environment: str) -> dict[str, frozenset[str]]:
+    """``ansible file -> the manifests it installs into one venv``, per file.
+
+    `derived_bindings()` unions across files, so ONE file resolving is enough to
+    make a venv look bound to a manifest -- a second file installing a different
+    one, or a path the resolver returns None for, disappears into that union.
+    Per file is what proves every path into a venv reads the same manifest,
+    which is the claim #15671 actually makes.
+    """
+    per_file: dict[str, set[str]] = {}
+    for path, text, requirements in _edges().installs:
+        if environment_key(path, text) != environment:
+            continue
+        manifest = _resolve_manifest(requirements, _scope_for(path))
+        per_file.setdefault(path, set()).add(manifest or UNRESOLVED)
+    return {path: frozenset(manifests) for path, manifests in per_file.items()}
 
 
 def files_filling(environment: str) -> frozenset[str]:

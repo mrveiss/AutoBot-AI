@@ -325,11 +325,6 @@ def _contradicts(specifier: str, stated: set[str] | None) -> bool:
     return bool(specifier) and bool(stated) and specifier not in stated
 
 
-def unresolved_sites() -> list[tuple[str, str]]:
-    """Sites the walk reached that no resolution names -- a new role, or a renamed venv."""
-    return sorted(ansible_declarations()[1] - set(resolution.SITE_MANIFESTS))
-
-
 @functools.cache
 def _classified() -> tuple[dict[str, Declaration], dict[tuple[str, str], frozenset[str]]]:
     """``(divergences, unanchored packages per site)`` over every versioned declaration."""
