@@ -129,6 +129,16 @@ UNINVOKED_TEST_SCRIPTS = {
         "it is workflow_dispatch-ONLY (#9825, #10316) and runs a different config over "
         "storybook with two chromium projects and no backend (#15693)"
     ),
+    "libs/autobot-sdk-ts::test:live": (
+        "#15698 -- DELIBERATELY NOT GATED: IT NEEDS A BACKEND CI DOES NOT HAVE. The "
+        "two tests behind this script dial a real HTTP endpoint; the four that do not "
+        "stayed in `test`, which IS gated by npm-package-tests.yml (#15676). They were "
+        "split rather than left behind a skip-if-unreachable branch, because that "
+        "branch ended in `return` -- jest reports that as PASSED, so a backend-less run "
+        "showed 6 passed with two of them asserting nothing. Standing this up in CI "
+        "means running FastAPI + Redis + Chroma in the workflow, which is its own "
+        "change, not a wiring fix"
+    ),
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot::test": (
         "#15678 -- NOT GATEABLE: THERE IS NO HARNESS TO GATE. Measured, not assumed: "
         "the package's only source file is src/extension.ts. There is no src/test/, so "
