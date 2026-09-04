@@ -174,6 +174,18 @@ def _report_lines(drift: Drift, label: str) -> List[str]:
     return lines
 
 
+# Exit codes. A caller gating on "non-zero" must still be able to tell an
+# actionable finding from a run that never read anything: a cron job that
+# alerts on drift would otherwise page on a rate-limit exactly as it pages on
+# an unlabelled umbrella, and the two need opposite responses. `scan` refuses
+# to report a partial population, so EXIT_READ_FAILED means NOTHING was
+# measured -- it is never a weaker form of EXIT_DRIFT_FOUND.
+EXIT_CLEAN = 0
+EXIT_DRIFT_FOUND = 1
+EXIT_USAGE = 2
+EXIT_READ_FAILED = 3
+
+
 def _parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", ""))
@@ -190,7 +202,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
     if not token or not args.repo:
         logger.error("GH_TOKEN and --repo (or GITHUB_REPOSITORY) are required")
-        return 2
+        return EXIT_USAGE
 
     api = GitHubApi(token=token, repository=args.repo)
     states = ("open", "closed") if args.state == "all" else (args.state,)
@@ -198,7 +210,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         drift = scan(api, states, args.label)
     except DriftError as exc:
         logger.error("refusing to report a partial population: %s", exc)
-        return 1
+        return EXIT_READ_FAILED
 
     if args.json:
         payload = {"missing_label": drift.missing_label, "label_without_children": drift.label_without_children}
@@ -207,7 +219,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for line in _report_lines(drift, args.label):
             logger.info("%s", line)
 
-    return 1 if drift.missing_label else 0
+    return EXIT_DRIFT_FOUND if drift.missing_label else EXIT_CLEAN
 
 
 if __name__ == "__main__":

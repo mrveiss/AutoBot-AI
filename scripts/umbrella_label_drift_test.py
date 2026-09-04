@@ -11,6 +11,7 @@ it would report.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -20,12 +21,20 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import umbrella_label_drift  # noqa: E402
 from umbrella_label_drift import (  # noqa: E402
+    EXIT_CLEAN,
+    EXIT_DRIFT_FOUND,
+    EXIT_READ_FAILED,
+    EXIT_USAGE,
+    MAX_PAGES,
+    PAGE_SIZE,
     DriftError,
     _has_label,
     _holds_sub_issues,
     _paginate_issues,
     classify,
+    main,
     scan,
 )
 
@@ -127,3 +136,82 @@ def test_scan_merges_requested_states_into_one_population() -> None:
 
     assert drift.missing_label == [1]
     assert drift.label_without_children == [2]
+
+
+class _ExplodingApi:
+    """Returns an error status, so `_paginate_issues` raises DriftError."""
+
+    repository = "mrveiss/AutoBot-AI"
+
+    def request(self, method, path, payload=None):  # noqa: ANN001, ANN201, ARG002
+        return (403, {"message": "API rate limit exceeded"})
+
+
+def _install_api(monkeypatch, api):
+    """Point `main` at *api* and give it the token/repo it demands."""
+    monkeypatch.setenv("GH_TOKEN", "not-a-real-token")
+    monkeypatch.setattr(umbrella_label_drift, "GitHubApi", lambda **kwargs: api)
+
+
+def test_main_without_a_token_returns_the_usage_code(monkeypatch):
+    """No token means no run at all -- and that is not a drift finding."""
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+
+    assert main(["--repo", "mrveiss/AutoBot-AI"]) == EXIT_USAGE
+
+
+def test_main_without_a_repo_returns_the_usage_code(monkeypatch):
+    monkeypatch.setenv("GH_TOKEN", "not-a-real-token")
+    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+
+    assert main([]) == EXIT_USAGE
+
+
+def test_a_failed_read_is_not_reported_as_drift(monkeypatch):
+    """The distinction this exit code exists for (see the module's constants).
+
+    A caller that alerts on drift must not page for a rate limit, so a read
+    that measured NOTHING may never share an exit code with a real finding.
+    """
+    _install_api(monkeypatch, _ExplodingApi())
+
+    assert main(["--repo", "mrveiss/AutoBot-AI"]) == EXIT_READ_FAILED
+    assert EXIT_READ_FAILED != EXIT_DRIFT_FOUND
+
+
+def test_main_reports_drift_and_cleanliness_with_distinct_codes(monkeypatch):
+    """Both success paths, so the drift code is not just "whatever is left"."""
+    drifting = FakeApi({"open": [[_issue(1, total=3, labels=[])]]})
+    _install_api(monkeypatch, drifting)
+    assert main(["--repo", "mrveiss/AutoBot-AI"]) == EXIT_DRIFT_FOUND
+
+    agreeing = FakeApi({"open": [[_issue(2, total=3, labels=["umbrella"])]]})
+    _install_api(monkeypatch, agreeing)
+    assert main(["--repo", "mrveiss/AutoBot-AI"]) == EXIT_CLEAN
+
+
+def test_main_json_output_is_machine_readable(monkeypatch, caplog):
+    _install_api(monkeypatch, FakeApi({"open": [[_issue(7, total=2, labels=[])]]}))
+
+    with caplog.at_level("INFO"):
+        assert main(["--repo", "mrveiss/AutoBot-AI", "--json"]) == EXIT_DRIFT_FOUND
+
+    payload = json.loads(caplog.messages[-1])
+    assert payload["missing_label"] == [7]
+    assert payload["label_without_children"] == []
+
+
+def test_exceeding_the_page_ceiling_raises_instead_of_truncating():
+    """The module's stated guarantee: a loud failure beats a silent short read.
+
+    Every page is full, so the `len(body) < PAGE_SIZE` terminator never fires
+    and the ceiling is the only thing that stops the walk.
+    """
+    full_page = [_issue(n) for n in range(PAGE_SIZE)]
+    api = FakeApi({"open": [list(full_page) for _ in range(MAX_PAGES + 1)]})
+
+    with pytest.raises(DriftError, match=f"exceeded {MAX_PAGES} pages"):
+        _paginate_issues(api, "open")
+
