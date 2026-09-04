@@ -1,0 +1,151 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit configuration.
+#
+# WHY THIS FILE EXISTS AT ALL: without it CodeRabbit reviews nothing here. Its
+# default is to auto-review only pull requests targeting the repository's
+# GitHub default branch, which is `main` — and `main` is protected, so no pull
+# request ever targets it. Every pull request here targets `Dev_new_gui`, so
+# every review was being skipped with "Auto reviews are disabled on base/target
+# branches other than the default branch". `base_branches` below is the line
+# that turns the integration on.
+language: en-GB
+early_access: false
+
+reviews:
+  # ASSERTIVE surfaces more; this repository would rather triage a nit than
+  # miss a defect, and several classes below are silent when they go wrong.
+  profile: assertive
+  high_level_summary: true
+  # Off deliberately: a merge here is gated on named required contexts, and a
+  # bot review that can request changes adds an approval gate nobody owns.
+  request_changes_workflow: false
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+
+  auto_review:
+    enabled: true
+    drafts: false
+    # The actual fix. `main` is included so a release pull request is covered
+    # too, but `Dev_new_gui` is where the work happens.
+    base_branches:
+      - Dev_new_gui
+      - main
+
+  path_filters:
+    # Recorders, not code. These are data files whose diffs are counts and
+    # paths; a reviewer reading them as logic produces noise, and their real
+    # invariants are enforced by tests that already exist.
+    - "!**/*_baseline.txt"
+    - "!pipeline-scripts/hardcoded_values_baseline.txt"
+    - "!repo_tests/python_file_size_ratchet_baseline.py"
+    - "!scripts/python_file_size_known_large.py"
+    - "!**/.test_durations*"
+    - "!**/package-lock.json"
+    - "!**/*.lock"
+    - "!**/dist/**"
+    - "!**/node_modules/**"
+    - "!.claude/worktrees/**"
+
+  path_instructions:
+    - path: "**/*.py"
+      instructions: |
+        Flag a string containing `{...}` replacement fields that lacks an `f`
+        prefix and is not a `.format()` template, a regex, embedded JS/Lua, or
+        a prompt intending literal braces. This has shipped repeatedly here,
+        including an LLM prompt that received the literal text `{json.dumps(...)}`
+        and so summarised nothing. Equally, flag ADDING an `f` prefix to a string
+        whose root name the module never imports — that raises NameError.
+
+        Flag `asyncio.create_task(...)` / `ensure_future(...)` /
+        `run_coroutine_threadsafe(...)` whose returned handle is discarded. A
+        dropped task can be garbage-collected mid-flight and swallows its own
+        exception. The retaining helper is
+        `autobot_shared.async_compat.fire_and_forget`. Note it requires a RUNNING
+        loop: on a non-loop thread (a watchdog `Observer` callback, for example)
+        it raises exactly as `create_task` does, and the correct helper there is
+        `fire_and_forget_threadsafe`.
+
+        Flag a request-scoped DB session or an ORM row crossing into background
+        work — `BackgroundTasks.add_task`, a task, an after-commit hook. Only
+        scalars may cross; the job must open its own session. A detached row is
+        the same defect as a leaked session.
+
+        Flag a new environment variable read with a bare `os.getenv(...)` +
+        `int()`/`float()`. Use the clamped readers in `autobot_shared/env_utils.py`:
+        a bare cast raises at import time on a malformed value, and an
+        `EnvVarSpec` `range=` is documentation that enforces nothing.
+
+    - path: "autobot_shared/env_registry*.py"
+      instructions: |
+        A new `register_env_var` call must NOT be added to `env_registry.py`.
+        That file sits at its recorded size ceiling by design; new entries go in
+        a per-component sibling module (`env_registry_<component>.py`), created
+        if the component has none. Registering a variable also requires
+        regenerating the table in `docs/developer/CLAUDE_RULES.md` — a stale
+        table fails two tests that look unrelated.
+
+    - path: "repo_tests/**"
+      instructions: |
+        A guard's vacuity floor must bind to the sweep's REACH — files parsed,
+        nodes visited, entries discovered — never to the number of findings. A
+        floor that counts findings passes silently when the parser breaks, and
+        fixing a real finding then trips it.
+
+        Every detector needs a contrast pair: a fixture that SHOULD trip it and
+        one that should not. A detector that fires on everything or nothing is
+        worse than none.
+
+        Census and baseline mappings here are shrink-only AND bidirectional: a
+        new finding fails, and a STALE entry fails just as loudly. A change that
+        fixes a site must remove its entry in the same commit. Where an entry
+        keys an occurrence count, reduce the count rather than deleting the line
+        when only some occurrences went — deleting turns the survivors into new
+        violations.
+
+    - path: ".github/workflows/**"
+      instructions: |
+        A required status context published by a job with an `if:` condition
+        needs a complement that publishes it when the condition is false. A
+        skipped job reports conclusion `skipped`, which branch protection does
+        not accept, so the pull request blocks on a context nothing can produce.
+        The established pattern is a sibling `*-required-context.yml` with the
+        exact negated condition, its own file, and no `concurrency:` block.
+
+        A workflow publishing a required context must not filter
+        `pull_request` on `paths` — a pull request that misses the filter never
+        starts the run and waits on "Expected" forever.
+
+    - path: "**/*.{yml,yaml}"
+      instructions: |
+        Flag a hardcoded absolute path, host, port or IP. Paths derive from the
+        SSOT (`autobot.base_dir` in `inventory/group_vars/all.yml`); an override
+        variable keeps its override and only the fallback is derived.
+
+        Flag a fix applied to one of several sibling entry points. Several
+        defects here were "fixed in one place, left in three"; if a task file is
+        shared, say so, and if it is copied, say that too.
+
+    - path: "autobot-slm-backend/conftest.py"
+      instructions: |
+        `_EXTRA_SERVICE_MODULES` installs a plain `MagicMock`.
+        `_REAL_SERVICE_MODULES` loads the module by file spec. A module is only
+        safe in the plain-stub list if nothing in it is awaited and it exports no
+        exception class named in an `except` clause: a MagicMock is not
+        awaitable, and `except <MagicMock>` raises TypeError instead of catching.
+
+    - path: "**/*.{ts,vue}"
+      instructions: |
+        Flag a user-facing string that is not routed through i18n, and a caught
+        error that resolves to an empty or default value — a request that failed
+        must stay distinguishable from one that legitimately returned nothing.
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: local
+  issues:
+    scope: local
