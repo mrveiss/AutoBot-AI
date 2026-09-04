@@ -93,7 +93,12 @@ SCAN_ROOTS: dict[str, RootBudget] = {
 }
 
 # Discarded when used as a bare expression statement.
-LAUNCHERS = frozenset({"create_task", "ensure_future"})
+# `run_coroutine_threadsafe` is a launcher too, and the one that matters most:
+# it is how work crosses INTO the loop from another thread, so a dropped
+# `concurrent.futures.Future` there loses work that no loop-side code can
+# even see. #15636 was that defect in the watchdog handlers; the four sites
+# censused below are the same shape one level out, found while fixing it.
+LAUNCHERS = frozenset({"create_task", "ensure_future", "run_coroutine_threadsafe"})
 # The retained forms. Not findings — but they ARE evidence the sweep arrived,
 # so the floor counts them and stays flat as conversions land.
 RETAINERS = frozenset({"fire_and_forget", "retain_until_done"})
@@ -147,16 +152,15 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
     "autobot-backend/initialization/lifespan.py": 1,
     "autobot-backend/knowledge/facts.py": 1,
     "autobot-backend/llc/services/goal.py": 2,
+    "autobot-backend/middleware/audit_middleware.py": 1,
     "autobot-backend/orchestrator.py": 1,
     "autobot-backend/secure_sandbox_executor.py": 1,
     "autobot-backend/security/enterprise/threat_detection/engine.py": 3,
-    "autobot-backend/services/documentation_watcher.py": 1,
-    "autobot-backend/services/kb_folder_watcher.py": 1,
     "autobot-backend/services/knowledge/doc_indexer.py": 1,
     "autobot-backend/services/tool_output_filter.py": 1,
-    "autobot-backend/utils/hot_reload_manager.py": 1,
     "autobot-backend/utils/service_discovery.py": 1,
     "autobot-backend/workflow_scheduler.py": 2,
+    "autobot-infrastructure/shared/scripts/comprehensive_log_aggregator.py": 4,
     "autobot-npu-worker/resources/windows-npu-worker/app/npu_worker.py": 1,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 1,
     "autobot-slm-backend/api/infrastructure.py": 1,
@@ -164,6 +168,10 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
     "autobot-slm-backend/api/updates.py": 1,
     "autobot-slm-backend/slm/agent/agent.py": 1,
     "autobot_shared/http_client.py": 1,
+    # audit_middleware surfaced only when `run_coroutine_threadsafe` joined
+    # LAUNCHERS: it hands an audit write into the loop from another thread and
+    # drops the future. Censused, not converted — the fix belongs with #15637,
+    # which owns the audit-write path.
     # Censused rather than converted: each sits in a file grandfathered at an
     # exact line count, so the one import a conversion needs puts it over the
     # ceiling. Decompose first -- #15641, #15642.
