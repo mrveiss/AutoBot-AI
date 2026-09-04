@@ -183,13 +183,15 @@ async def _check_vectorization_batch_internal(
     try:
         # #12733: prefer the vector store's own membership over the Redis-side
         # flag, so the indicator cannot drift from reality.
-        vectorized_ids = await _vectorized_ids_from_vector_store(kb_instance, fact_ids)
-        if vectorized_ids is None:
+        # #15663: named ``in_vector_store`` rather than ``vectorized_ids``, which
+        # would shadow the imported helper of that name for the rest of the scope.
+        in_vector_store = await _vectorized_ids_from_vector_store(kb_instance, fact_ids)
+        if in_vector_store is None:
             # Vector store unreachable — fall back to the legacy Redis flags
             # rather than claiming nothing is vectorized.
             results = await _execute_pipeline_exists_check(kb_instance, vector_keys)
         else:
-            results = [fact_id in vectorized_ids for fact_id in fact_ids]
+            results = [fact_id in in_vector_store for fact_id in fact_ids]
 
         # Build status map (Issue #620: uses helper)
         statuses, vectorized_count = _build_status_map(fact_ids, results, include_dimensions, kb_instance)
