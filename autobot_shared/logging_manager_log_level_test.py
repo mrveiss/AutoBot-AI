@@ -27,19 +27,34 @@ from autobot_shared import logging_manager
 
 
 class _FakeConfigManager:
-    """Stand-in for ``config_manager`` that answers only ``logging.log_level``.
+    """Stand-in holding a NESTED config, with both accessors as the real one has them.
 
-    Every other key falls through to the caller's own default, matching the
-    real ``ConfigManager.get(key, default)`` contract for unrelated keys.
+    The first version of this fake answered ``get("logging.log_level")`` directly.
+    That is not a contract ``ConfigManager`` has: its ``get`` is a FLAT top-level
+    lookup and only ``get_nested`` walks a dotted path. So the fake agreed with
+    code that could never work against the real object, and #15575 shipped a fix
+    that changed the key name while the read still fell through (#15586).
+
+    Holding a nested dict and implementing both methods with the real semantics
+    is what makes this test able to fail: a caller using ``get`` on a dotted key
+    now gets the fallback here exactly as it would in production.
     """
 
     def __init__(self, log_level: str) -> None:
-        self._log_level = log_level
+        self._config = {"logging": {"log_level": log_level}}
 
     def get(self, key: str, default=None):  # noqa: ANN001, ANN201
-        if key == "logging.log_level":
-            return self._log_level
-        return default
+        """Flat top-level lookup — a dotted key MISSES, as in ConfigManager."""
+        return self._config.get(key, default)
+
+    def get_nested(self, path: str, default=None):  # noqa: ANN001, ANN201
+        """Dotted-path walk, as in ConfigManager.get_nested."""
+        node = self._config
+        for part in path.split("."):
+            if not isinstance(node, dict) or part not in node:
+                return default
+            node = node[part]
+        return node
 
 
 def test_debug_configured_level_reaches_a_debug_record(monkeypatch, capsys):
