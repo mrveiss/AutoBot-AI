@@ -77,6 +77,17 @@ def frontend_bundle_status(directory: Optional[Path] = None) -> str:
     """
     root = bundle_dir() if directory is None else directory
     try:
+        # A `current` that exists as a symlink but resolves to nothing is a
+        # BROKEN POINTER, not an absent frontend: the node was publishing here
+        # and its served target has gone. Checked before the `is_dir()` branch
+        # below, because a dangling link fails `is_dir()` and would otherwise be
+        # classified `not_applicable` — dropping the exact real outage this
+        # probe exists to catch out of the health rollup as "no frontend on this
+        # node" (#15610).
+        pointer = root if directory is None else None
+        if pointer is not None and pointer.is_symlink() and not pointer.exists():
+            return "unhealthy: the served pointer does not resolve to a bundle"
+
         if not root.is_dir():
             # Not "unhealthy": no build output directory at all means this node
             # does not serve the UI — a backend-only node, or a checkout. A

@@ -200,6 +200,24 @@
         'autobot-slm-frontend' in deploy_roles
         and (cache_stat.results | selectattr('item', 'equalto', 'autobot-slm-frontend') | map(attribute='stat.exists') | first | default(false))
 
+    # #15610: publishing without re-rendering the site config is the failure
+    # this play would otherwise cause on every existing node. The served path
+    # moved from `dist/` to the atomically-flipped `current` pointer, and every
+    # already-provisioned host still has an nginx config naming `dist/`. Without
+    # this, a run publishes a fully-verified bundle to `current` and nginx keeps
+    # serving the stale one — silently, because every check inside the publish
+    # task file passes. Same include and same reasoning as PLAY 1 of
+    # update-all-nodes.yml; `tasks_from` rather than a copied template task,
+    # because a second copy drifts.
+    - name: "Re-render the nginx site config (#15610, #14624)"
+      ansible.builtin.include_role:
+        name: slm_manager
+        tasks_from: nginx_site.yml
+        apply:
+          become: true
+      when: "'autobot-slm-frontend' in deploy_roles"
+      tags: [slm, slm-frontend, nginx]
+
     # #15557: a cache-deployed node recorded nothing about which deployment put
     # it in the state it is in — the absence that made the #15462 incident
     # unattributable. The commit comes from Play 1 because the target node has

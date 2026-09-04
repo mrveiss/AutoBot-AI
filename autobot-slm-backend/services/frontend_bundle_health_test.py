@@ -110,3 +110,33 @@ def test_a_node_with_only_the_legacy_directory_still_resolves(monkeypatch, tmp_p
     monkeypatch.setattr(module, "config", SimpleNamespace(path=SimpleNamespace(resolve=lambda rel: tmp_path / rel)))
 
     assert module.bundle_dir().name == "dist"
+
+
+def test_a_broken_pointer_is_unhealthy_not_not_applicable(monkeypatch, tmp_path) -> None:
+    """A `current` that resolves to nothing is an outage, not an absent frontend.
+
+    A dangling symlink fails `is_dir()`, so without its own branch it lands in
+    the `not_applicable` case — reported as "this node serves no UI" and dropped
+    from health rollups, when in fact the node was publishing and its served
+    target has gone. That is the exact shape this probe exists to catch.
+    """
+    from services import frontend_bundle_health as module
+
+    root = tmp_path / "autobot-slm-frontend"
+    root.mkdir(parents=True)
+    (root / "current").symlink_to(root / "dist-vanished")
+    monkeypatch.setattr(module, "config", SimpleNamespace(path=SimpleNamespace(resolve=lambda rel: tmp_path / rel)))
+
+    status = module.frontend_bundle_status()
+
+    assert status.startswith("unhealthy")
+    assert "not_applicable" not in status
+
+
+def test_a_node_with_no_frontend_at_all_is_still_not_applicable(monkeypatch, tmp_path) -> None:
+    """The other half: a backend-only node must not be dragged down by this probe."""
+    from services import frontend_bundle_health as module
+
+    monkeypatch.setattr(module, "config", SimpleNamespace(path=SimpleNamespace(resolve=lambda rel: tmp_path / rel)))
+
+    assert module.frontend_bundle_status().startswith("not_applicable")
