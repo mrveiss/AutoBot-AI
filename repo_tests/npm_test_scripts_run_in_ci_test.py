@@ -105,11 +105,6 @@ NOT_A_SCRIPT = frozenset(
 #: the entry. Every reason must name an issue number: "nothing runs it" is a
 #: description of the defect, not a decision about it.
 UNINVOKED_TEST_SCRIPTS = {
-    "autobot-browser-worker::test": (
-        "#15675 -- WIRE IN, after browser provisioning. `npx playwright test` "
-        "needs `playwright install --with-deps` on the runner; visual-regression.yml "
-        "already carries that pattern to mirror"
-    ),
     "autobot-frontend::test:unit": (
         "#10365 -- COVERED ELSEWHERE. frontend-test.yml runs `test:coverage`, which "
         "is `vitest run --coverage` over the same default config, so a separate "
@@ -135,10 +130,11 @@ UNINVOKED_TEST_SCRIPTS = {
 #: app gated by nothing, which is exactly the #15667 shape. Was 5 on the first
 #: measurement (.mcp, autobot-browser-worker, vscode-autobot,
 #: mcp-structured-thinking, libs/autobot-sdk-ts); npm-package-tests.yml gates
-#: .mcp (#15674), libs/autobot-sdk-ts (#15676) and mcp-structured-thinking
-#: (#15677), leaving two. NEVER raise this to make a new app pass; wire the app
-#: in, or this guard has become the thing it replaced.
-MAX_WHOLLY_UNGATED_PACKAGES = 2
+#: .mcp (#15674), autobot-browser-worker (#15675), libs/autobot-sdk-ts (#15676)
+#: and mcp-structured-thinking (#15677), leaving vscode-autobot alone. NEVER
+#: raise this to make a new app pass; wire the app in, or this guard has become
+#: the thing it replaced.
+MAX_WHOLLY_UNGATED_PACKAGES = 1
 
 #: Floors, so a regex that stops matching turns this module red instead of green
 #: (the #15018 lesson: a guard that enumerates nothing passes comfortably).
