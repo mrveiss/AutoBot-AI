@@ -265,8 +265,9 @@ for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_M
 #                      collapse "cannot tell" into "healthy" — a stub cannot
 #                      exercise that guarantee.
 #
-# All eight are dependency-light (stdlib plus at most yaml/httpx/autobot_shared),
-# which is the bar for being loadable here at all.
+# All of them are dependency-light (stdlib plus at most yaml/httpx/autobot_shared),
+# which is the bar for being loadable here at all. Not a count: the list has
+# outgrown "eight" twice already (#15462), and a stale number reads as a rule.
 import importlib.util as _importlib_util  # noqa: E402
 
 _REAL_SERVICE_MODULES = (
@@ -289,6 +290,20 @@ _REAL_SERVICE_MODULES = (
     "slm_frontend_build",
 )
 
+# The placeholder a failed real-load falls back to (#15563). Loaded by path for
+# the same reason the modules below are: `autobot-slm-backend` is deliberately
+# NOT on pytest.ini's `pythonpath` (#13084 — `api`/`services`/`models` collide
+# with autobot-backend), so there is no import that reaches it. Kept in its own
+# file rather than inline here so the contract test can exercise the SAME object
+# without re-executing this conftest's global stub installation.
+_placeholder_path = Path(__file__).parent / "tests" / "realload_placeholder.py"
+if not _placeholder_path.is_file():
+    raise RuntimeError("conftest: tests/realload_placeholder.py is named here but does not exist")
+_ph_spec = _importlib_util.spec_from_file_location("_realload_placeholder", _placeholder_path)
+_ph_mod = _importlib_util.module_from_spec(_ph_spec)
+_ph_spec.loader.exec_module(_ph_mod)
+_unavailable_module = _ph_mod.unavailable_module
+
 for _name in _REAL_SERVICE_MODULES:
     _path = Path(__file__).parent / "services" / f"{_name}.py"
     if not _path.is_file():
@@ -300,20 +315,37 @@ for _name in _REAL_SERVICE_MODULES:
         _spec.loader.exec_module(_mod)
     except ImportError as _exc:
         # A third-party dependency this module needs is absent here (#14326).
-        # Leave the name ABSENT rather than stubbed: a MagicMock is what
-        # #14307 removed, because it iterates as empty and turns a missing
-        # dependency into a silently wrong result instead of an error.
+        # Bind a placeholder that raises ImportError naming BOTH this module and
+        # that dependency on any attribute access.
         #
-        # Absent means a test that genuinely needs the module fails with a
-        # plain ImportError naming it, while unrelated tests in the same
-        # directory still run. Eager real-loading otherwise imposes every
-        # listed module's dependencies on every environment that loads this
-        # conftest — the deliberately-minimal migration gate hit exactly that,
-        # first with `yaml` (inventory_builder) and then `aiohttp`
-        # (a2a_card_fetcher), taking down tests unrelated to either.
-        sys.modules.pop(f"services.{_name}", None)
-        print(f"conftest: services.{_name} not real-loaded ({_exc}) — left absent, not stubbed")
-        continue
+        # Not a MagicMock (#14307): it is truthy and iterates empty, so a missing
+        # dependency becomes a silently wrong result instead of an error.
+        #
+        # Not a deletion either (#15563). Deleting the name does NOT produce the
+        # "plain ImportError naming it" this comment used to promise: `services`
+        # is itself a MagicMock(unsafe=True) for most of the suite and fabricates
+        # the attribute on demand, so `patch("services.x.y")` and
+        # `getattr(services, "x")` hand back an auto-created mock — the #14307
+        # trap again. Where the parent has been swapped for a real-path package
+        # (tests/services/conftest.py) the deletion degrades instead into
+        # "module 'services' has no attribute 'x'. Did you mean: 'x_test'?",
+        # which names the stub package and points at the co-located test file
+        # rather than at the missing dependency; two separate investigations read
+        # that hint and filed the wrong cause.
+        #
+        # The placeholder keeps the original tolerance: only a test that actually
+        # touches the module fails, and it fails naming the dependency, while
+        # unrelated tests in the same directory still run. Eager real-loading
+        # otherwise imposes every listed module's dependencies on every
+        # environment that loads this conftest — the deliberately-minimal
+        # migration gate hit exactly that, first with `yaml` (inventory_builder)
+        # and then `aiohttp` (a2a_card_fetcher), taking down tests unrelated to
+        # either.
+        _mod = _unavailable_module(f"services.{_name}", _exc)
+        sys.modules[f"services.{_name}"] = _mod
+        print(f"conftest: services.{_name} not real-loaded ({_exc}) — bound as an unavailable-module placeholder")
+    # Bound for BOTH paths: the placeholder has to be reachable through the
+    # parent, or the MagicMock parent fabricates a child mock over it.
     setattr(sys.modules["services"], _name, _mod)
 
 # ── python-multipart ─────────────────────────────────────────────────────────
