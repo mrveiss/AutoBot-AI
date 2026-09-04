@@ -55,7 +55,7 @@ async def test_llm_direct():
 
     except Exception as e:
         elapsed = time.time() - start_time
-        logger.error("❌ LLM request failed after {elapsed:.2f}s: %s", e)
+        logger.error("❌ LLM request failed after %.2fs: %s", elapsed, e)
         import traceback
 
         traceback.print_exc()
@@ -94,7 +94,7 @@ async def test_classification_direct():
 
     except Exception as e:
         elapsed = time.time() - start_time
-        logger.error("❌ Classification failed after {elapsed:.2f}s: %s", e)
+        logger.error("❌ Classification failed after %.2fs: %s", elapsed, e)
         import traceback
 
         traceback.print_exc()
@@ -137,7 +137,7 @@ async def test_kb_search():
 
     except Exception as e:
         elapsed = time.time() - start_time
-        logger.error("❌ KB search failed after {elapsed:.2f}s: %s", e)
+        logger.error("❌ KB search failed after %.2fs: %s", elapsed, e)
         import traceback
 
         traceback.print_exc()
@@ -163,7 +163,7 @@ async def main():
             if not success:
                 logger.info("🚨 %s is the likely culprit!", test_name)
         except Exception as e:
-            logger.error("❌ {test_name} crashed: %s", e)
+            logger.error("❌ %s crashed: %s", test_name, e)
 
     logger.info("\n" + "=" * 50)
     logger.error("🔍 Test completed. Check above for timeouts or failures.")
