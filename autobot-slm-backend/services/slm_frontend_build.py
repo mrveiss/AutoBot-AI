@@ -32,6 +32,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
+from autobot_shared.env_utils import env_int_clamped
 from services.deployed_dir_resolver import get_release_component_dir
 
 logger = logging.getLogger(__name__)
@@ -64,7 +65,12 @@ _LEGACY_DIR = "dist"
 # above are: the Ansible half reads `slm_frontend_release_keep` from inventory
 # and cannot be read from here, so the two carry the number separately and move
 # together.
-_RELEASE_KEEP = int(os.getenv("SLM_FRONTEND_RELEASE_KEEP", "3"))
+# Read through `env_int_clamped`, not a bare `int(os.getenv(...))`: this is a
+# module-level constant, so a malformed value raises ValueError at IMPORT and
+# takes the backend down over a typo in an env file. The clamped reader falls
+# back to the default with a warning instead. A floor of 1 also refuses 0,
+# which would prune the bundle that was just published (#15610).
+_RELEASE_KEEP = env_int_clamped("SLM_FRONTEND_RELEASE_KEEP", 3, 1, 50)
 
 
 def _build_id() -> str:
