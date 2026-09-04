@@ -90,6 +90,10 @@ docs
 # Build artifacts
 autobot-frontend/dist
 autobot-slm-frontend/dist
+# #15610 layout: per-build directories and the two pointers.
+autobot-slm-frontend/dist-*
+autobot-slm-frontend/current
+autobot-slm-frontend/previous
 
 # Data (mounted as volumes)
 data

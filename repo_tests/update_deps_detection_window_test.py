@@ -179,15 +179,28 @@ def test_a_failed_frontend_build_cannot_publish_an_empty_bundle() -> None:
     """The outage was a failed build leaving dist/ empty behind nginx."""
     shared, tasks = _staged_publish_tasks()
 
-    assert "dist.staging" in shared.read_text(encoding="utf-8"), (
-        "the frontend build still writes straight into the served directory (#15430) — "
-        "a failed build empties it and every /slm/ path answers 403"
+    # #15610 renamed the directory the build writes into: it used to be the
+    # single `dist.staging`, it is now this build's own `dist-<build id>`. The
+    # property is unchanged and is what is asserted — the build never targets
+    # what nginx is serving, because vite empties its outDir before writing.
+    build_cmds = []
+    for task in tasks:
+        for key in ("ansible.builtin.command", "command"):
+            args = task.get(key)
+            if isinstance(args, dict) and isinstance(args.get("cmd"), str) and "build:slm" in args["cmd"]:
+                build_cmds.append(args["cmd"])
+    assert len(build_cmds) == 1, f"expected exactly one SLM frontend build command, found {build_cmds!r}"
+    assert "--outDir dist-{{ " in build_cmds[0], (
+        "the frontend build no longer writes into a per-build directory (#15430, #15610) — "
+        f"a build that targets the served path empties it and every /slm/ path answers 403: {build_cmds[0]!r}"
     )
+    assert "--outDir current" not in build_cmds[0], "the build targets the served pointer itself"
 
     names = [task["name"] for task in tasks if isinstance(task.get("name"), str)]
     assert len(names) >= 5, (
-        f"the shared staged publish carries only {len(names)} named tasks — build, failure gate, "
-        "entrypoint check, refusal, rotate and publish are six steps, so the extraction collapsed"
+        f"the shared staged publish carries only {len(names)} named tasks — build id, seed, build, "
+        "failure gate, entrypoint check, refusal, read-before-flip, flip, previous and prune are "
+        "ten steps, so the extraction collapsed"
     )
     assert any("no index.html" in name for name in names), "nothing refuses to publish a bundle without an index.html"
     assert any("build failed" in name for name in names), "a failed build does not fail the play with its own stderr"
