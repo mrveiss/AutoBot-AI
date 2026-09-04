@@ -53,21 +53,55 @@ class ReplicationService:
         )
         return await self._get_replication_record(db, replication_id)
 
-    async def setup_replication(
+    async def _load_replication_nodes(
         self,
         db: AsyncSession,
+        source_node_id: str,
+        target_node_id: str,
+    ) -> Tuple[Node, Node] | None:
+        """Load both replication endpoints through the job's own session.
+
+        Helper for setup_replication (#15549). The job owns its session, so the
+        ORM rows it works with are loaded here rather than handed across the
+        background boundary still bound to the request's session.
+
+        Args:
+            db: Database session owned by the background job
+            source_node_id: Primary/master node id
+            target_node_id: Replica node id
+
+        Returns:
+            (source_node, target_node), or None if either id is unknown
+        """
+        result = await db.execute(select(Node).where(Node.node_id.in_([source_node_id, target_node_id])))
+        by_id = {node.node_id: node for node in result.scalars().all()}
+        source_node = by_id.get(source_node_id)
+        target_node = by_id.get(target_node_id)
+        if source_node is None or target_node is None:
+            return None
+        return source_node, target_node
+
+    async def setup_replication(
+        self,
         replication_id: str,
-        source_node: Node,
-        target_node: Node,
+        source_node_id: str,
+        target_node_id: str,
         service_type: BackupServiceType = BackupServiceType.REDIS,
     ) -> Tuple[bool, str]:
         """Set up replication from source to target using Ansible.
 
+        #15549: this runs as a background job that outlives the HTTP request
+        which started it, so it opens and owns its own session instead of
+        borrowing the caller's — the same idiom as ``_run_deployment`` in
+        ``services/deployment.py``. Only plain identifiers cross the background
+        boundary; a request-scoped ``AsyncSession`` is closed in FastAPI's
+        dependency teardown as soon as the response is sent, and the ORM rows
+        loaded through it are detached from that point on.
+
         Args:
-            db: Database session
             replication_id: Replication ID to track
-            source_node: Primary/master node
-            target_node: Replica node
+            source_node_id: Primary/master node id
+            target_node_id: Replica node id
             service_type: Service to replicate (currently only REDIS supported)
 
         Returns:
@@ -80,6 +114,34 @@ class ReplicationService:
         if service_type is not BackupServiceType.REDIS:
             return False, f"Unsupported service type: {service_type.value}"
 
+        from services.database import db_service
+
+        async with db_service.session() as db:
+            nodes = await self._load_replication_nodes(db, source_node_id, target_node_id)
+            if nodes is None:
+                return False, "Source or target node not found"
+            return await self._setup_replication_in_session(db, replication_id, *nodes)
+
+    async def _setup_replication_in_session(
+        self,
+        db: AsyncSession,
+        replication_id: str,
+        source_node: Node,
+        target_node: Node,
+    ) -> Tuple[bool, str]:
+        """Run the replication setup against a session this job owns.
+
+        Helper for setup_replication (#15549 / #665).
+
+        Args:
+            db: Database session owned by the background job
+            replication_id: Replication ID to track
+            source_node: Primary/master node loaded through *db*
+            target_node: Replica node loaded through *db*
+
+        Returns:
+            Tuple of (success, message)
+        """
         replication = await self._log_and_load_replication(db, replication_id, source_node, target_node)
         if not replication:
             return False, "Replication record not found"

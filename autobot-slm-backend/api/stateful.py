@@ -309,7 +309,9 @@ async def start_replication(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> ReplicationResponse:
     """Start a new replication between nodes."""
-    source_node, target_node = await _fetch_replication_nodes(db, request)
+    # Existence check only — the 404 contract. The rows deliberately do not
+    # escape this handler (#15549); see the background hand-off below.
+    await _fetch_replication_nodes(db, request)
     await _check_existing_replication(db, request)
 
     replication_id = str(uuid.uuid4())[:16]
@@ -325,7 +327,16 @@ async def start_replication(
     await db.refresh(replication)
 
     # Uses the ReplicationService (Issue #726 Phase 4).
-    coro = replication_service.setup_replication(db, replication_id, source_node, target_node, request.service_type)
+    # #15549: only plain identifiers cross the background boundary. ``db`` is
+    # request-scoped — FastAPI closes it in dependency teardown as soon as this
+    # response is sent — and ORM rows loaded through it are detached from that
+    # point on, so the job opens and owns its own session instead.
+    coro = replication_service.setup_replication(
+        replication_id,
+        request.source_node_id,
+        request.target_node_id,
+        request.service_type,
+    )
     fire_and_forget(coro, name=f"replication:{replication_id}")
 
     logger.info(
