@@ -16,6 +16,15 @@
  * menu and picks a category, and asserts the PATCH actually goes out and
  * the fleet list is refreshed — so dropping the dropdown again fails here,
  * not just in a composable unit test.
+ *
+ * #15667: the per-node services table lives behind
+ * `v-if="expandedNodes.has(node.nodeId)"`, and this file never expanded the
+ * node card — so every query for `.category-menu-container` hit a collapsed
+ * card and all three cases failed against a view that had the control wired
+ * the whole time (`OrchestrationView.vue` `toggleCategoryMenu` /
+ * `handleCategoryChange` -> `orchestration.updateServiceCategory`). Nothing
+ * caught it because this app's vitest suite ran in no workflow. `mountOrchestration`
+ * now expands the card the way a user does — by clicking the NodeHealthCard header.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -46,6 +55,7 @@ vi.mock('@/composables/useAutobotApi', () => ({
   autobotApiErrorMessage: () => 'error',
 }))
 
+import NodeHealthCard from '@/components/orchestration/NodeHealthCard.vue'
 import OrchestrationView from './OrchestrationView.vue'
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
@@ -92,6 +102,15 @@ async function mountOrchestration() {
   await flushPromises()
   await flushPromises()
   await flushPromises()
+
+  // Node cards start collapsed; the services table (and with it the category
+  // control) only renders once expanded. NodeHealthCard's root element is the
+  // header button that emits `toggle`, so this is the user's own gesture.
+  const nodeCard = wrapper.findComponent(NodeHealthCard)
+  expect(nodeCard.exists(), 'no node card rendered in the per-node tab').toBe(true)
+  await nodeCard.trigger('click')
+  await flushPromises()
+
   return wrapper
 }
 
