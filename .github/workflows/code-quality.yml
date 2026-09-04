@@ -55,6 +55,11 @@ on:
       - 'docs/**'
       - 'scripts/lib/**'
       - '.github/workflows/code-quality.yml'
+      # #15608: the shared filter file and the complement shim publishing the
+      # same required context. Editing either must run the REAL gate, not the
+      # shim reporting green over its own change.
+      - '.github/filters/code-quality-paths.yml'
+      - '.github/workflows/code-quality-required-context.yml'
   # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
   # required-check context ("code-quality") always reports a conclusion. A
   # path-filtered required check that never triggers leaves the PR deadlocked on
@@ -90,40 +95,15 @@ jobs:
           # never reports and the queue deadlocks. Empty on push/PR, so
           # their existing behaviour is unchanged.
           base: ${{ github.event.merge_group.base_sha || '' }}
-          filters: |
-            backend:
-              - '**/*.py'
-              - '**/requirements*.txt'
-              - 'requirements-ci/**'
-              - 'repo_tests/**'
-              - 'pyproject.toml'
-              - '.flake8'
-              - '.bandit'
-              - '.pre-commit-config.yaml'
-              - 'pipeline-scripts/**'
-              - 'tools/lint/**'
-              - 'autobot-infrastructure/shared/scripts/**'
-              # #14584: was 'autobot-infrastructure/ansible/roles/slm_agent/files/**',
-              # a path that never existed (autobot-infrastructure/ has no ansible/
-              # tree at all) -- a stranded entry that matched nothing since it was
-              # added. Corrected to the real mirror path, and widened to the second
-              # canonical/mirror pair detect-agent-code-drift.sh now also checks.
-              - 'autobot-slm-backend/ansible/roles/slm_agent/files/**'
-              - 'autobot-slm-backend/ansible/roles/backend/files/**'
-              - 'autobot-backend/config/permission_rules.yaml'
-              - 'autobot-backend/static/error_messages.yaml'
-              - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
-              - '.github/actions/**'
-              # #15309: the watchdog inventory + systemd templates
-              # tools/lint/check_runner_watchdog_schedule.py --audit reads.
-              - 'scripts/runner-watchdog-inventory.yaml'
-              - 'scripts/systemd/runner-watchdog@.service'
-              - 'scripts/systemd/runner-watchdog@.timer'
-              # #15208: see the on.push.paths list above -- docs/ and the shared rule
-              # set are the documentation guard's inputs.
-              - 'docs/**'
-              - 'scripts/lib/**'
-              - '.github/workflows/code-quality.yml'
+          # #15608: the path set is defined ONCE in
+          # .github/filters/code-quality-paths.yml and read by reference from
+          # both halves of the required-context pair -- this gate and the
+          # complement shim in code-quality-required-context.yml. A second
+          # inline copy is how the two sides drift apart, and the drift
+          # direction is silent: a shim that believes nothing changed while
+          # this gate believes otherwise publishes `code-quality` green for an
+          # audit that never ran.
+          filters: .github/filters/code-quality-paths.yml
 
   code-quality:
     needs: changes

@@ -200,6 +200,14 @@ _COMPLEMENT_PAIRS = (
         "needs.changes.outputs.backend != 'true'",
         "backend-python-paths.yml",
     ),
+    (
+        "code-quality",
+        "code-quality.yml",
+        "needs.changes.outputs.backend == 'true'",
+        "code-quality-required-context.yml",
+        "needs.changes.outputs.backend != 'true'",
+        "code-quality-paths.yml",
+    ),
 )
 
 _PAIR_IDS = [p[0] for p in _COMPLEMENT_PAIRS]
@@ -274,10 +282,12 @@ def test_the_shim_fails_closed_and_reads_the_shared_filter(pair):
 # Shrink-only. A context here is a KNOWN deadlock with an issue against it, not a
 # permitted shape: removing the gap must remove the entry, and a stale entry
 # fails as loudly as a new unpaired context.
-_KNOWN_UNPAIRED = {
-    "code-quality": "#15608 — its path set is inline, so a complement needs the "
-    "filter extracted to a shared file first",
-}
+# Empty, and that is the point: #15608 was the last entry, closed by extracting
+# code-quality's inline path set to .github/filters/code-quality-paths.yml and
+# pairing it with .github/workflows/code-quality-required-context.yml. Every
+# required context now has either an unconditional publisher or an exact
+# complement, and the structural sweep below is what keeps it that way.
+_KNOWN_UNPAIRED: dict[str, str] = {}
 
 
 def _condition_is_always_true(expression: str) -> bool:

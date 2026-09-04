@@ -54,6 +54,9 @@ DELIBERATELY_EXEMPT = {
     "backend-required-context.yml": (
         "publishes the required 'startup-import-smoke' context; same deadlock (#15606)"
     ),
+    "code-quality-required-context.yml": (
+        "publishes the required 'code-quality' context; same deadlock (#15608)"
+    ),
 }
 
 

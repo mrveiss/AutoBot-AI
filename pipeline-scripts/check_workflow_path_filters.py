@@ -16,6 +16,14 @@ policing. A workflow's ``on.push.paths`` / ``on.pull_request.paths`` trigger
 cannot: GitHub offers no include mechanism for event path filters, so those
 copies are unavoidable. This guard is what stops them being *silent*.
 
+TWO CANONICAL SETS, ONE CONTRACT. #15608 extracted a second one --
+`.github/filters/code-quality-paths.yml`, the path list for the REQUIRED
+``code-quality`` context -- for the same reason plus one more: its complement
+shim has to resolve the identical set by reference, or a shim that believes
+nothing changed while the gate believes otherwise publishes green for an audit
+that never ran. Every check below takes the set it polices as an argument, so
+the second registration is a table entry rather than a forked copy of the guard.
+
 What it asserts, and why each assertion is phrased as a presence check
 ---------------------------------------------------------------------
 
@@ -29,7 +37,7 @@ it can pass:
   a restructure or rename strands the declaration LOUDLY rather than exempting
   it silently;
 * every declared location is a superset of the canonical set;
-* every workflow whose dorny step loads the canonical file is declared here
+* every workflow whose dorny step loads either canonical file is declared here
   (reverse check: a new consumer cannot arrive undeclared);
 * every filter in ``SHARED_TREE_WATCHERS`` still names the shared tree (#14885).
   Those filters deliberately keep a per-product split the canonical set would
@@ -92,6 +100,36 @@ NOT_CONSUMERS: dict[str, str] = {
     ),
 }
 
+# ── a second canonical set: `code-quality`'s path list (#15608) ──────────────
+#
+# Same contract, different path family. `code-quality` is the most heavily
+# relied-upon required context in the repo and its list used to live INLINE in
+# the `changes` job. #15608 extracted it so the complement shim publishing the
+# same context could read the set by reference instead of carrying a copy that
+# drifts -- and the drift direction is the dangerous one: a shim that believes
+# nothing changed while the gate believes otherwise publishes green for an audit
+# that never ran.
+#
+# The `on.push.paths` copy is the one GitHub gives no include mechanism for, so
+# it is policed here exactly like the backend-Python inline copies above.
+CODE_QUALITY_FILE = Path(".github/filters/code-quality-paths.yml")
+CODE_QUALITY_KEY = "backend"
+
+CODE_QUALITY_INLINE_CONSUMERS: dict[str, tuple[str, ...]] = {
+    "code-quality.yml": ("push",),
+}
+
+CODE_QUALITY_NOT_CONSUMERS: dict[str, str] = {
+    "code-quality-required-context.yml": (
+        "the complement shim publishing the required 'code-quality' context "
+        "(#15608). It reads the canonical file through its `changes` job but "
+        "declares NO `paths:` of its own, deliberately: a required-context "
+        "publisher that filters its trigger never starts on the pull requests it "
+        "is meant to rescue, which is the deadlock it exists to prevent. There is "
+        "no inline list here to keep in step with the canonical set."
+    ),
+}
+
 # The shared-Python prefix, derived from the canonical set rather than retyped.
 # Hardcoding it here would be a second source of truth for the very thing this
 # guard exists to keep singular.
@@ -140,14 +178,14 @@ def _load_yaml(path: Path) -> dict:
     return parsed
 
 
-def canonical_paths() -> list[str]:
+def canonical_paths(canonical_file: Path = CANONICAL_FILE, key: str = CANONICAL_KEY) -> list[str]:
     """The canonical set, flattened. Dies rather than returning an empty set."""
-    entry = _load_yaml(CANONICAL_FILE).get(CANONICAL_KEY)
+    entry = _load_yaml(canonical_file).get(key)
     if not isinstance(entry, list) or not entry:
-        sys.exit(f"FATAL: {CANONICAL_FILE} has no non-empty '{CANONICAL_KEY}' list — nothing to enforce")
+        sys.exit(f"FATAL: {canonical_file} has no non-empty '{key}' list — nothing to enforce")
     flat = [item for item in entry if isinstance(item, str)]
     if len(flat) != len(entry):
-        sys.exit(f"FATAL: '{CANONICAL_KEY}' in {CANONICAL_FILE} must be a flat list of strings")
+        sys.exit(f"FATAL: '{key}' in {canonical_file} must be a flat list of strings")
     return flat
 
 
@@ -177,8 +215,8 @@ def _event_paths(parsed: dict, path: Path, event: str) -> list[str] | None:
     return [p for p in paths if isinstance(p, str)]
 
 
-def _loads_canonical_file(parsed: dict) -> bool:
-    """True when any dorny/paths-filter step in *parsed* reads the canonical file."""
+def _loads_canonical_file(parsed: dict, canonical_file: Path = CANONICAL_FILE) -> bool:
+    """True when any dorny/paths-filter step in *parsed* reads *canonical_file*."""
     for job in (parsed.get("jobs") or {}).values():
         if not isinstance(job, dict):
             continue
@@ -187,16 +225,19 @@ def _loads_canonical_file(parsed: dict) -> bool:
                 continue
             if "dorny/paths-filter" not in str(step.get("uses", "")):
                 continue
-            if str((step.get("with") or {}).get("filters", "")).strip() == str(CANONICAL_FILE):
+            if str((step.get("with") or {}).get("filters", "")).strip() == str(canonical_file):
                 return True
     return False
 
 
-def check_inline_consumers(canonical: list[str]) -> tuple[list[str], int]:
+def check_inline_consumers(
+    canonical: list[str],
+    consumers: dict[str, tuple[str, ...]] = INLINE_CONSUMERS,
+) -> tuple[list[str], int]:
     """Every declared inline copy must contain the whole canonical set."""
     failures: list[str] = []
     checked = 0
-    for name, events in INLINE_CONSUMERS.items():
+    for name, events in consumers.items():
         workflow = WORKFLOWS / name
         parsed = _load_yaml(workflow)
         for event in events:
@@ -225,16 +266,19 @@ def check_required_absences() -> list[str]:
     return failures
 
 
-def check_no_undeclared_consumer() -> list[str]:
+def check_no_undeclared_consumer(
+    canonical_file: Path = CANONICAL_FILE,
+    declared: frozenset[str] | None = None,
+) -> list[str]:
     """A workflow that loads the canonical file must be declared, either way."""
     failures: list[str] = []
-    declared = set(INLINE_CONSUMERS) | set(NOT_CONSUMERS)
+    known = frozenset(INLINE_CONSUMERS) | frozenset(NOT_CONSUMERS) if declared is None else declared
     for workflow in sorted(WORKFLOWS.glob("*.yml")):
-        if workflow.name in declared:
+        if workflow.name in known:
             continue
-        if _loads_canonical_file(_load_yaml(workflow)):
+        if _loads_canonical_file(_load_yaml(workflow), canonical_file):
             failures.append(
-                f"{workflow}: loads {CANONICAL_FILE} but is not declared in INLINE_CONSUMERS or NOT_CONSUMERS. "
+                f"{workflow}: loads {canonical_file} but is not declared in INLINE_CONSUMERS or NOT_CONSUMERS. "
                 "Add it, so its event triggers are policed too."
             )
     return failures
@@ -340,6 +384,26 @@ def check_shared_tree_watchers(canonical: list[str]) -> tuple[list[str], int]:
     return failures, checked
 
 
+def check_code_quality_set() -> tuple[list[str], int]:
+    """The second canonical set (#15608), through the same two checks.
+
+    Its own function rather than more lines in ``main``: a second registration
+    must cost a table entry and one call, or the next one gets folded in by
+    copy-paste and the two sets stop being policed the same way.
+    """
+    code_quality = canonical_paths(CODE_QUALITY_FILE, CODE_QUALITY_KEY)
+    print(  # noqa: print
+        f"check-workflow-path-filters: canonical '{CODE_QUALITY_KEY}' in "
+        f"{CODE_QUALITY_FILE} = {len(code_quality)} entries\n"
+    )
+    failures, checked = check_inline_consumers(code_quality, CODE_QUALITY_INLINE_CONSUMERS)
+    failures += check_no_undeclared_consumer(
+        CODE_QUALITY_FILE,
+        frozenset(CODE_QUALITY_INLINE_CONSUMERS) | frozenset(CODE_QUALITY_NOT_CONSUMERS),
+    )
+    return failures, checked
+
+
 def check_declarations_resolve() -> list[str]:
     """Every declared workflow must exist.
 
@@ -353,6 +417,8 @@ def check_declarations_resolve() -> list[str]:
             | set(NOT_CONSUMERS)
             | set(REQUIRED_ABSENT_PATHS)
             | set(SHARED_TREE_WATCHERS)
+            | set(CODE_QUALITY_INLINE_CONSUMERS)
+            | set(CODE_QUALITY_NOT_CONSUMERS)
         )
         if not (WORKFLOWS / name).is_file()
     ]
@@ -379,20 +445,24 @@ def main(argv: list[str] | None = None) -> int:
     failures += check_required_absences()
     failures += check_no_undeclared_consumer()
 
-    if checked == 0 or shared_checked == 0:
+    cq_failures, cq_checked = check_code_quality_set()
+    failures += cq_failures
+
+    if checked == 0 or shared_checked == 0 or cq_checked == 0:
         print(  # noqa: print
-            f"\n  FAIL   {checked} inline path list(s) and {shared_checked} shared-tree "
-            "watcher(s) were checked — a zero on either side means the guard scanned nothing"
+            f"\n  FAIL   {checked} inline path list(s), {shared_checked} shared-tree watcher(s) "
+            f"and {cq_checked} code-quality path list(s) were checked — a zero on any side "
+            "means the guard scanned nothing"
         )
         return 1
 
-    for name, reason in sorted(NOT_CONSUMERS.items()):
+    for name, reason in sorted({**NOT_CONSUMERS, **CODE_QUALITY_NOT_CONSUMERS}.items()):
         print(f"  NOTE   {WORKFLOWS / name} is deliberately not a consumer: {reason}")  # noqa: print
 
     if not failures:
         print(  # noqa: print
-            f"\ncheck-workflow-path-filters: {checked} inline path list(s) match the canonical set, "
-            f"{shared_checked} shared-tree watcher(s) still name it"
+            f"\ncheck-workflow-path-filters: {checked + cq_checked} inline path list(s) match their "
+            f"canonical set, {shared_checked} shared-tree watcher(s) still name it"
         )
         return 0
 
@@ -400,8 +470,9 @@ def main(argv: list[str] | None = None) -> int:
     for failure in failures:
         print(f"  FAIL   {failure}")  # noqa: print
     print(  # noqa: print
-        f"\nThe canonical set lives in {CANONICAL_FILE}. GitHub has no include mechanism\n"
-        "for event path filters, so a `paths:` trigger must repeat it literally —\n"
+        f"\nThe canonical sets live in {CANONICAL_FILE} and {CODE_QUALITY_FILE}. GitHub has\n"
+        "no include mechanism for event path filters, so a `paths:` trigger must repeat\n"
+        "one of them literally —\n"
         "this guard exists so that repetition drifts LOUDLY instead of silently\n"
         "shrinking a gate's coverage.\n"
     )

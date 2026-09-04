@@ -1,0 +1,91 @@
+# Canonical path set for "which paths must the `code-quality` audit run on?" (#15608)
+#
+# SINGLE SOURCE OF TRUTH — do not inline a copy of `backend` back into a
+# workflow's `changes` job. Same contract as backend-python-paths.yml,
+# frontend-paths.yml and python-paths.yml in this directory.
+#
+# WHY IT WAS EXTRACTED. `code-quality` is a REQUIRED status context published by
+# exactly one job, gated on
+# `github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true'`.
+# A job whose `if:` is false is SKIPPED, and a skipped check run's conclusion is
+# `skipped`, not `success` — which branch protection does not accept. A pull
+# request touching none of these paths (frontend-only TypeScript, say) therefore
+# blocked on a context nothing could produce. The fix is a complement shim in
+# .github/workflows/code-quality-required-context.yml, and a shim can only be
+# safe if both halves resolve the SAME set by reference. A second copy would
+# drift, and the drift direction is silent: a shim that believes nothing changed
+# while the gate believes otherwise publishes `code-quality` green for an audit
+# that never ran.
+#
+# Two kinds of consumer, and only one of them can read this file:
+#
+#   1. A `changes` job's dorny/paths-filter step. It loads this file by path, so
+#      it tracks the set automatically. Both halves of the pair do that.
+#
+#   2. `.github/workflows/code-quality.yml`'s `on.push.paths` trigger. GitHub
+#      offers NO include mechanism for event path filters — they must be
+#      literal, in the workflow file. That copy cannot be removed, so
+#      `pipeline-scripts/check_workflow_path_filters.py` asserts it still
+#      contains all of `backend` and fails the build when it does not. The
+#      duplication that is unavoidable is at least no longer silent.
+#
+# NO YAML ANCHORS OR ALIASES IN THIS FILE. `tools/lint/check_code_quality_guard_reach.py`
+# re-derives this set to prove every guarded checker's inputs are reachable, and
+# it runs inside `code-quality` itself — a job that installs linters, never the
+# application's dependencies, so it has no third-party YAML parser and reads the
+# bullets literally. backend-python-paths.yml can use an anchor because nothing
+# parses it without PyYAML; this one cannot.
+
+# ── the canonical set ────────────────────────────────────────────────────────
+# The key is `backend`, unchanged from the inline copy it replaces, so
+# code-quality.yml's `steps.filter.outputs.backend` keeps working verbatim. It
+# is NOT the `backend` of backend-python-paths.yml: a single dorny/paths-filter
+# step reads exactly one `filters` source, and these two files are never read by
+# the same step.
+backend:
+  - '**/*.py'
+  - '**/requirements*.txt'
+  - 'requirements-ci/**'
+  - 'repo_tests/**'
+  - 'pyproject.toml'
+  - '.flake8'
+  - '.bandit'
+  - '.pre-commit-config.yaml'
+  - 'pipeline-scripts/**'
+  - 'tools/lint/**'
+  - 'autobot-infrastructure/shared/scripts/**'
+  # #14584: was 'autobot-infrastructure/ansible/roles/slm_agent/files/**', a
+  # path that never existed (autobot-infrastructure/ has no ansible/ tree at
+  # all) -- a stranded entry that matched nothing since it was added. Corrected
+  # to the real mirror path, and widened to the second canonical/mirror pair
+  # detect-agent-code-drift.sh now also checks.
+  - 'autobot-slm-backend/ansible/roles/slm_agent/files/**'
+  - 'autobot-slm-backend/ansible/roles/backend/files/**'
+  - 'autobot-backend/config/permission_rules.yaml'
+  - 'autobot-backend/static/error_messages.yaml'
+  # #14550/#14551: the ansible role check_ci_system_package_provisioning.py
+  # reads, and the composite action both new guards exist to protect. Neither
+  # matched any prior entry, so a PR touching only one of these skipped
+  # `code-quality` entirely -- and a skipped required job reads as satisfied to
+  # branch protection, so the guard could not fire on the change it exists to
+  # catch.
+  - 'autobot-slm-backend/ansible/roles/backend/tasks/**'
+  - '.github/actions/**'
+  # #15309: the watchdog inventory + systemd templates
+  # tools/lint/check_runner_watchdog_schedule.py --audit reads.
+  - 'scripts/runner-watchdog-inventory.yaml'
+  - 'scripts/systemd/runner-watchdog@.service'
+  - 'scripts/systemd/runner-watchdog@.timer'
+  # #15208: the documentation fleet-addressing guard reads every Markdown file
+  # under docs/ and takes its pattern from scripts/lib/hardcoded-value-rules.sh.
+  # Without the wider entry a docs-only PR -- the exact shape that reintroduces
+  # an address -- skips code-quality.
+  - 'docs/**'
+  - 'scripts/lib/**'
+  - '.github/workflows/code-quality.yml'
+  # #15608: this file and the complement shim are inputs to what `code-quality`
+  # means. Editing either must run the REAL gate, not the shim reporting green
+  # over its own change -- the same self-reference backend-python-paths.yml
+  # carries for `startup-import-smoke`.
+  - '.github/filters/code-quality-paths.yml'
+  - '.github/workflows/code-quality-required-context.yml'

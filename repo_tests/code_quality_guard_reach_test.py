@@ -60,26 +60,40 @@ def test_backend_filter_patterns_survives_a_comment_mid_list(tmp_path):
     after the comment -- including this checker's own guarded paths -- read
     as uncovered. dorny/paths-filter itself parses this as real YAML and is
     unaffected by comments; this mirror must not diverge from that."""
-    workflows = tmp_path / ".github" / "workflows"
-    workflows.mkdir(parents=True)
-    (workflows / "code-quality.yml").write_text(
-        "jobs:\n"
-        "  changes:\n"
-        "    outputs:\n"
-        "      backend: ${{ steps.filter.outputs.backend }}\n"
-        "    steps:\n"
-        "      - uses: dorny/paths-filter@x\n"
-        "        id: filter\n"
-        "        with:\n"
-        "          filters: |\n"
-        "            backend:\n"
-        "              - 'before/**'\n"
-        "              # a comment sitting between two bullets, mid-list\n"
-        "              - 'after/**'\n",
+    filters = tmp_path / ".github" / "filters"
+    filters.mkdir(parents=True)
+    (filters / "code-quality-paths.yml").write_text(
+        "# a header comment, before the key\n"
+        "backend:\n"
+        "  - 'before/**'\n"
+        "  # a comment sitting between two bullets, mid-list\n"
+        "\n"
+        "  - 'after/**'\n",
         encoding="utf-8",
     )
     patterns = checker.backend_filter_patterns(tmp_path)
     assert patterns == ["before/**", "after/**"]
+
+
+def test_backend_filter_patterns_ignores_a_nested_backend_key(tmp_path):
+    """A `backend:` inside a workflow's `filters: |` literal is a DIFFERENT set.
+
+    #15608 moved the canonical list out of code-quality.yml into its own file.
+    The key is anchored at column zero so an indented copy -- a composed filter,
+    or a stale inline block someone reintroduces -- cannot be picked up as the
+    canonical one and quietly widen the reach this guard reports.
+    """
+    filters = tmp_path / ".github" / "filters"
+    filters.mkdir(parents=True)
+    (filters / "code-quality-paths.yml").write_text(
+        "some-other-key:\n"
+        "  backend:\n"
+        "    - 'nested/**'\n"
+        "backend:\n"
+        "  - 'real/**'\n",
+        encoding="utf-8",
+    )
+    assert checker.backend_filter_patterns(tmp_path) == ["real/**"]
 
 
 def test_uncovered_paths_flags_a_guarded_path_no_pattern_reaches():
@@ -100,25 +114,11 @@ def test_uncovered_paths_is_empty_when_every_path_is_covered():
 # --------------------------------------------------------------------------
 
 
-def _write_workflow(tmp_path, backend_patterns: list[str]) -> None:
-    workflows = tmp_path / ".github" / "workflows"
-    workflows.mkdir(parents=True)
-    bullets = "\n".join(f"            - '{p}'" for p in backend_patterns)
-    (workflows / "code-quality.yml").write_text(
-        f"""jobs:
-  changes:
-    outputs:
-      backend: ${{{{ steps.filter.outputs.backend }}}}
-    steps:
-      - uses: dorny/paths-filter@x
-        id: filter
-        with:
-          filters: |
-            backend:
-{bullets}
-""",
-        encoding="utf-8",
-    )
+def _write_filter_file(tmp_path, backend_patterns: list[str]) -> None:
+    filters = tmp_path / ".github" / "filters"
+    filters.mkdir(parents=True)
+    bullets = "\n".join(f"  - '{p}'" for p in backend_patterns)
+    (filters / "code-quality-paths.yml").write_text(f"backend:\n{bullets}\n", encoding="utf-8")
 
 
 def _write_fake_checker(tmp_path, *, rel_path: str, guard_input_paths: tuple[str, ...]) -> None:
@@ -129,7 +129,7 @@ def _write_fake_checker(tmp_path, *, rel_path: str, guard_input_paths: tuple[str
 
 
 def test_audit_fails_when_a_checkers_input_is_not_filtered(tmp_path, monkeypatch):
-    _write_workflow(tmp_path, backend_patterns=["**/*.py"])
+    _write_filter_file(tmp_path, backend_patterns=["**/*.py"])
     _write_fake_checker(tmp_path, rel_path="tools/lint/fake_checker.py", guard_input_paths=("some/config.yml",))
     monkeypatch.setattr(checker, "_GUARDED_CHECKERS", ("tools/lint/fake_checker.py",))
 
@@ -140,7 +140,7 @@ def test_audit_fails_when_a_checkers_input_is_not_filtered(tmp_path, monkeypatch
 
 
 def test_audit_passes_when_every_input_is_filtered(tmp_path, monkeypatch):
-    _write_workflow(tmp_path, backend_patterns=["some/**"])
+    _write_filter_file(tmp_path, backend_patterns=["some/**"])
     _write_fake_checker(tmp_path, rel_path="tools/lint/fake_checker.py", guard_input_paths=("some/config.yml",))
     monkeypatch.setattr(checker, "_GUARDED_CHECKERS", ("tools/lint/fake_checker.py",))
 
@@ -150,10 +150,15 @@ def test_audit_passes_when_every_input_is_filtered(tmp_path, monkeypatch):
 
 
 def test_audit_fails_on_zero_filter_patterns(tmp_path, monkeypatch):
-    """A malformed/moved filters block must not read as a clean scan of nothing."""
-    workflows = tmp_path / ".github" / "workflows"
-    workflows.mkdir(parents=True)
-    (workflows / "code-quality.yml").write_text("jobs: {}\n", encoding="utf-8")
+    """A malformed/moved filters block must not read as a clean scan of nothing.
+
+    #15608 moved the set to its own file; a move that emptied it would make this
+    scan find FEWER uncovered paths and go GREENER, so an empty parse is a
+    failure rather than a pass.
+    """
+    filters = tmp_path / ".github" / "filters"
+    filters.mkdir(parents=True)
+    (filters / "code-quality-paths.yml").write_text("some-other-key: []\n", encoding="utf-8")
     _write_fake_checker(tmp_path, rel_path="tools/lint/fake_checker.py", guard_input_paths=("some/config.yml",))
     monkeypatch.setattr(checker, "_GUARDED_CHECKERS", ("tools/lint/fake_checker.py",))
 
@@ -164,7 +169,7 @@ def test_audit_fails_on_zero_filter_patterns(tmp_path, monkeypatch):
 
 def test_audit_fails_on_zero_guard_input_paths(tmp_path):
     """A checker that lost its GUARD_INPUT_PATHS attribute must not read as clean."""
-    _write_workflow(tmp_path, backend_patterns=["**/*.py"])
+    _write_filter_file(tmp_path, backend_patterns=["**/*.py"])
     reached, problems = checker.audit_reach(tmp_path)
     assert reached == 0
     assert problems and "checked nothing" in problems[0]
@@ -181,12 +186,34 @@ def test_audit_is_clean_on_the_real_tree():
     assert problems == [], problems
 
 
-def test_backend_filter_finds_the_real_filters_block_not_the_outputs_key():
-    """`outputs: backend: ...` sits two lines above the real filter list — must not match first."""
+def test_backend_filter_reads_the_shared_filter_file_not_the_workflow():
+    """The set moved to .github/filters/code-quality-paths.yml (#15608).
+
+    Reading the workflow instead would find nothing there any more and report a
+    clean scan of zero patterns as coverage, so the entries are asserted by name.
+    """
     patterns = checker.backend_filter_patterns()
     assert "**/*.py" in patterns
     assert "autobot-slm-backend/ansible/roles/backend/tasks/**" in patterns
     assert ".github/actions/**" in patterns
+    # The set is an input to itself: editing either half of the required-context
+    # pair must run the REAL gate, not the shim reporting green over its own change.
+    assert ".github/filters/code-quality-paths.yml" in patterns
+    assert ".github/workflows/code-quality-required-context.yml" in patterns
+
+
+def test_the_workflow_and_the_shim_both_read_the_shared_filter_file():
+    """Neither half of the pair may keep an inline copy of the path set (#15608)."""
+    for name in ("code-quality.yml", "code-quality-required-context.yml"):
+        text = (REPO_ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+        assert "filters: .github/filters/code-quality-paths.yml" in text, (
+            f"{name} does not resolve the path set through the shared filter file"
+        )
+        assert "filters: |" not in text, (
+            f"{name} carries an inline `filters: |` block again — a second copy is "
+            "how the gate and its complement shim drift apart, and the drift "
+            "direction is silent"
+        )
 
 
 # --------------------------------------------------------------------------
