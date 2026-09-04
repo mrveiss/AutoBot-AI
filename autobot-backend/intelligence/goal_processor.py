@@ -583,21 +583,21 @@ if __name__ == "__main__":
         logger.info("=== Goal Processing Test ===")
 
         for goal in test_goals:
-            logger.info("\nGoal: {goal}")
+            logger.info(f"\nGoal: {goal}")
             logger.info("-" * 50)
 
             processed = await processor.process_goal(goal)
 
-            logger.info("Intent: {processed.intent}")
-            logger.info("Category: {processed.category.value}")
-            logger.info("Confidence: {processed.confidence:.2f}")
-            logger.info("Risk Level: {processed.risk_level.value}")
-            logger.info("Explanation: {processed.explanation}")
+            logger.info(f"Intent: {processed.intent}")
+            logger.info(f"Category: {processed.category.value}")
+            logger.info(f"Confidence: {processed.confidence:.2f}")
+            logger.info(f"Risk Level: {processed.risk_level.value}")
+            logger.info(f"Explanation: {processed.explanation}")
 
             if processed.warnings:
                 logger.info("Warnings:")
                 for warning in processed.warnings:
-                    logger.info("  - {warning}")
+                    logger.info(f"  - {warning}")
 
         # Test similar intents
         logger.info("\n\n=== Similar Intents Test ===")

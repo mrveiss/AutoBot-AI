@@ -748,16 +748,16 @@ if __name__ == "__main__":
 
         logger.info("\nTesting URLs:")
         for url in test_urls:
-            logger.info("\n  Checking: {url}")
+            logger.info(f"\n  Checking: {url}")
             result = await service.check_url_reputation(url)
-            logger.info("    Overall Score: {result.overall_score:.2f}")
-            logger.info("    Threat Level: {result.threat_level.value}")
-            logger.info("    Sources Checked: {result.sources_checked}")
-            logger.info("    Cached: {result.cached}")
+            logger.info(f"    Overall Score: {result.overall_score:.2f}")
+            logger.info(f"    Threat Level: {result.threat_level.value}")
+            logger.info(f"    Sources Checked: {result.sources_checked}")
+            logger.info(f"    Cached: {result.cached}")
 
             if result.virustotal_score is not None:
-                logger.info("    VirusTotal: {result.virustotal_score:.2f}")
+                logger.info(f"    VirusTotal: {result.virustotal_score:.2f}")
             if result.urlvoid_score is not None:
-                logger.info("    URLVoid: {result.urlvoid_score:.2f}")
+                logger.info(f"    URLVoid: {result.urlvoid_score:.2f}")
 
     run_or_schedule(test_threat_intel())

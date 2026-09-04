@@ -541,8 +541,8 @@ if __name__ == "__main__":
     large_text = "This is a very long text. " * 100
     result = optimizer.optimize_payload(large_text, "test_text")
 
-    logger.info("Original size: {result.original_size}")
-    logger.info("Optimized size: {result.optimized_size}")
-    logger.info("Chunks: {len(result.chunks)}")
-    logger.info("Savings: {result.savings_percent:.1f}%")
-    logger.info("Optimization type: {result.optimization_type}")
+    logger.info(f"Original size: {result.original_size}")
+    logger.info(f"Optimized size: {result.optimized_size}")
+    logger.info(f"Chunks: {len(result.chunks)}")
+    logger.info(f"Savings: {result.savings_percent:.1f}%")
+    logger.info(f"Optimization type: {result.optimization_type}")
