@@ -112,17 +112,29 @@ UNINVOKED_TEST_SCRIPTS = {
         "this spelling of it is not"
     ),
     "autobot-frontend::test:e2e": (
-        "#15679 -- DECISION OUTSTANDING. `cypress run --e2e` behind "
-        "start-server-and-test, invoked by nothing; whether cypress is superseded by "
-        "the playwright suites is the open question, not a wiring fix"
+        "#15679 -- SUPERSEDED, RETIREMENT NOT YET TAKEN. Measured: the whole cypress "
+        "suite is ONE scaffold spec, cypress/e2e/example.cy.ts, asserting "
+        "`cy.contains('h1', 'You did it!')` -- create-vue starter text that appears "
+        "nowhere in src/, so gating it would red the check on a template remnant while "
+        "tests/e2e carries 11 playwright specs against the real app. Ten workflows "
+        "already set CYPRESS_INSTALL_BINARY=0 on #13410's finding that no CI job runs "
+        "cypress. Retiring the spec is the remaining decision, not a wiring fix"
     ),
     "autobot-frontend::test:playwright": (
-        "#15679 -- WIRE IN. `playwright test`, invoked by nothing, while "
-        "visual-regression.yml proves the playwright runner already works here"
+        "#15679 -- WIRE IN, BUT NOT AT THIS COST. Measured: 103 tests over 11 spec "
+        "files in tests/e2e, times SEVEN browser projects including the branded msedge "
+        "and chrome channels, behind `webServer: npm run dev` and against a running "
+        "backend the specs address directly -- the whole stack, on every frontend pull "
+        "request. visual-regression.yml is NOT the precedent this entry once claimed: "
+        "it is workflow_dispatch-ONLY (#9825, #10316) and runs a different config over "
+        "storybook with two chromium projects and no backend (#15693)"
     ),
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot::test": (
-        "#15678 -- WIRE IN, after harness provisioning. `node ./out/test/runTest.js` "
-        "downloads VS Code and needs a virtual display, so it is a job rather than a step"
+        "#15678 -- NOT GATEABLE: THERE IS NO HARNESS TO GATE. Measured, not assumed: "
+        "the package's only source file is src/extension.ts. There is no src/test/, so "
+        "`tsc -p ./` cannot produce the out/test/runTest.js the script names, and there "
+        "is no package-lock.json for `npm ci` either. A gate on it today could only ever "
+        "be red. Write the extension test harness, or retire the script"
     ),
 }
 
