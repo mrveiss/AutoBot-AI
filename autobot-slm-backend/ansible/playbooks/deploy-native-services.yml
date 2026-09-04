@@ -409,7 +409,7 @@
     # /opt/autobot/src, but it was the ONLY thing applying the shared pins on
     # this play, and roles/npu-worker states the constraints at the task. One
     # shape on both paths, so a reader of either sees the pins being applied.
-    - name: Install Python dependencies for NPU Worker
+    - name: Install NPU Worker dependencies from its manifest
       pip:
         requirements: /opt/autobot/src/autobot-npu-worker/requirements.txt
         virtualenv: "{{ npu_venv }}"

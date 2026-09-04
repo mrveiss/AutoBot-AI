@@ -4,10 +4,15 @@
 # Author: mrveiss
 """No site that installs OpenVINO via pip may contradict the SSOT (#14447, #14452, #14453, #15408).
 
-Seven sites in the repo pin or install `openvino` and this guard reaches all seven:
+Eight sites in the repo pin or install `openvino` and this guard reaches all eight:
 
-1. The `npu-worker` ansible role's inline package list (#14447).
-2. `deploy-native-services.yml`'s inline package list (#14452).
+1. The `npu-worker` ansible role's pip task (#14447) -- #15671 replaced its inline package
+   list with a `requirements:` install of site 8, so the packages it installs are read from
+   that manifest and the constraints from the task's own `extra_args`.
+2. `deploy-native-services.yml`'s pip task (#14452) -- same shape, same manifest, since
+   #15671 removed the `openvino[pytorch,tensorflow]` task that used to follow it. openvino
+   publishes no extras at all, so those two names were a no-op pip warned about; they were
+   `openvino-dev`'s, carried over when #14452 dropped that meta-package.
 3. `autobot-infrastructure/.../docker/requirements-npu.txt`, tracked by dependabot (#14453).
 4. `agent_config/tasks/openvino.yml`'s inline `pip:` task -- live via
    `deploy-agent-config.yml` against `slm_nodes`, `install_openvino: true` by default.
@@ -19,7 +24,11 @@ Seven sites in the repo pin or install `openvino` and this guard reaches all sev
    the moment something does read it.
 6. `autobot-npu-worker/resources/windows-npu-worker/requirements.txt` -- a live build
    path per its `BUILDING.md`.
-7. `autobot-backend/code_analysis/` -- a standalone tool with its own `setup.py`
+7. `autobot-npu-worker/requirements.txt` -- the native worker's own manifest, which #15671
+   made the single source both ansible paths install from. It declares `openvino` bare and
+   carries its own `-c ../constraints/shared.txt`, so it is read here as a requirements-file
+   site like sites 3 and 6.
+8. `autobot-backend/code_analysis/` -- a standalone tool with its own `setup.py`
    (documented as such in `pyproject.toml`'s mypy exclusion, GH#7105), not part of the
    ansible-orchestrated fleet deploy. Its `src/` modules are imported live by the running
    backend via `PYTHONPATH` (`api/anti_pattern.py`, `code_intelligence/*`, etc.), but that
@@ -75,14 +84,17 @@ _AGENT_CONFIG_TASKS = (
 )
 _AIML_GROUP_VARS = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "inventory" / "group_vars" / "aiml.yml"
 _WINDOWS_REQUIREMENTS = _REPO_ROOT / "autobot-npu-worker" / "resources" / "windows-npu-worker" / "requirements.txt"
+# #15671: the manifest both ansible paths now install, and the only place this
+# worker's openvino spec is written.
+_NATIVE_REQUIREMENTS = _REPO_ROOT / "autobot-npu-worker" / "requirements.txt"
 _CODE_ANALYSIS_SETUP = _REPO_ROOT / "autobot-backend" / "code_analysis" / "setup.py"
 _CODE_ANALYSIS_INSTALL_SH = _REPO_ROOT / "autobot-backend" / "code_analysis" / "install.sh"
 # #15408: the SSOT moved from autobot-npu-worker/requirements.txt (a literal restated in
 # six other places) to constraints/shared.txt (already the SSOT for numpy, #10524).
 _SSOT_CONSTRAINTS = _REPO_ROOT / "constraints" / "shared.txt"
 
-_ROLE_TASK_NAME = "Install OpenVINO and dependencies"
-_PLAYBOOK_TASK_NAME = "Install OpenVINO runtime for NPU Worker"
+_ROLE_TASK_NAME = "NPU Worker | Install worker dependencies from its manifest"
+_PLAYBOOK_TASK_NAME = "Install NPU Worker dependencies from its manifest"
 _AGENT_CONFIG_TASK_NAME = "Set up OpenVINO environment in venv"
 
 
@@ -122,9 +134,18 @@ def _extra_args_of(task: dict) -> str:
 
 
 def _role_site() -> _Site:
+    """#15671: the role installs a manifest, so its packages ARE that manifest's.
+
+    Reading the task is still what proves the site exists -- an uncaught lookup
+    on the task name fails loudly if the pip task is renamed or removed, which is
+    the failure a guard reading only the manifest would miss entirely.
+    """
     tasks = yaml.safe_load(_ROLE_TASKS.read_text(encoding="utf-8"))
-    task = _pip_task_from_task_list(tasks, _ROLE_TASK_NAME, "ansible.builtin.pip")
-    return _Site(label=f"npu-worker role ({_ROLE_TASKS.name})", packages=_normalize_names(task["name"]))
+    _pip_task_from_task_list(tasks, _ROLE_TASK_NAME, "ansible.builtin.pip")
+    return _Site(
+        label=f"npu-worker role ({_ROLE_TASKS.name}, installing {_NATIVE_REQUIREMENTS.name})",
+        packages=_parse_requirements_file(_NATIVE_REQUIREMENTS),
+    )
 
 
 def _playbook_site() -> _Site:
@@ -139,7 +160,10 @@ def _playbook_site() -> _Site:
     assert (
         task is not None
     ), f"no task named {_PLAYBOOK_TASK_NAME!r} in any play — this guard is pinned to the wrong name"
-    return _Site(label=f"deploy-native-services.yml ({_PLAYBOOK.name})", packages=_normalize_names(task["name"]))
+    return _Site(
+        label=f"deploy-native-services.yml ({_PLAYBOOK.name}, installing {_NATIVE_REQUIREMENTS.name})",
+        packages=_parse_requirements_file(_NATIVE_REQUIREMENTS),
+    )
 
 
 def _agent_config_site() -> _Site:
@@ -163,6 +187,13 @@ def _docker_requirements_site() -> _Site:
     return _Site(
         label=f"requirements-npu.txt ({_DOCKER_REQUIREMENTS.name})",
         packages=_parse_requirements_file(_DOCKER_REQUIREMENTS),
+    )
+
+
+def _native_requirements_site() -> _Site:
+    return _Site(
+        label=f"autobot-npu-worker manifest ({_NATIVE_REQUIREMENTS.name})",
+        packages=_parse_requirements_file(_NATIVE_REQUIREMENTS),
     )
 
 
@@ -237,6 +268,7 @@ _SITES: dict = {
     "role": _role_site,
     "playbook": _playbook_site,
     "requirements-npu.txt": _docker_requirements_site,
+    "autobot-npu-worker manifest": _native_requirements_site,
     "agent_config": _agent_config_site,
     "aiml (dormant)": _aiml_site,
     "windows-npu-worker": _windows_requirements_site,
@@ -263,6 +295,7 @@ _PIP_TASK_SITES: dict = {
 }
 _REQUIREMENTS_FILE_SITES: dict = {
     "requirements-npu.txt": _DOCKER_REQUIREMENTS,
+    "autobot-npu-worker manifest": _NATIVE_REQUIREMENTS,
     "windows-npu-worker": _WINDOWS_REQUIREMENTS,
 }
 
