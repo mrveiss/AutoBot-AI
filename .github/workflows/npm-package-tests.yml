@@ -1,0 +1,171 @@
+# NPM Package Tests — the small npm suites that no other workflow reaches
+# (#15674, #15675, #15676, #15677)
+#
+# `repo_tests/npm_test_scripts_run_in_ci_test.py` measures which declared npm
+# test runners any workflow actually invokes. Its first measurement found a
+# family of packages whose entire suite ran nowhere — the #15667 shape, where a
+# check reports on what it reaches and nothing checks its reach.
+#
+# The big frontends have their own workflows (frontend-test.yml,
+# slm-frontend-check.yml). This file is for the small packages that each need a
+# handful of seconds and no browser: one job, one checkout, and a per-package
+# `if:` so an unrelated pull request pays for nothing.
+#
+# Deliberately WITHOUT continue-on-error on any test step: a gate that cannot
+# turn the check red is not a gate, which is the whole reason these suites were
+# found unreached in the first place.
+
+name: NPM Package Tests
+
+on:
+  push:
+    branches: [main, develop, 'Dev_*']
+    paths:
+      - '.mcp/**'
+      - 'autobot-browser-worker/**'
+      - 'libs/autobot-sdk-ts/**'
+      - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
+      - '.github/workflows/npm-package-tests.yml'
+  pull_request:
+    branches: [main, develop, 'Dev_*']
+    # SAFE under #13388: "NPM Package Tests" is not one of the required contexts
+    # on Dev_new_gui, so this workflow may skip its run entirely. The job-level
+    # self-skip below exists so the check still reports a conclusion when the
+    # workflow does run but nothing it owns changed.
+    paths:
+      - '.mcp/**'
+      - 'autobot-browser-worker/**'
+      - 'libs/autobot-sdk-ts/**'
+      - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
+      - '.github/workflows/npm-package-tests.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # Always runs so the check reports a conclusion even when nothing matched.
+  changes:
+    name: Detect changed packages
+    runs-on: ubuntu-latest
+    outputs:
+      browser_worker: ${{ steps.filter.outputs.browser_worker }}
+      mcp: ${{ steps.filter.outputs.mcp }}
+      sdk_ts: ${{ steps.filter.outputs.sdk_ts }}
+      structured_thinking: ${{ steps.filter.outputs.structured_thinking }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: filter
+        with:
+          filters: |
+            browser_worker:
+              - 'autobot-browser-worker/**'
+              - '.github/workflows/npm-package-tests.yml'
+            mcp:
+              - '.mcp/**'
+              - '.github/workflows/npm-package-tests.yml'
+            sdk_ts:
+              - 'libs/autobot-sdk-ts/**'
+              - '.github/workflows/npm-package-tests.yml'
+            structured_thinking:
+              - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
+              - '.github/workflows/npm-package-tests.yml'
+
+  npm-package-tests:
+    name: NPM Package Tests
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Self-skip when no gated package changed
+        if: needs.changes.outputs.mcp != 'true' && needs.changes.outputs.sdk_ts != 'true' && needs.changes.outputs.structured_thinking != 'true'
+          && needs.changes.outputs.browser_worker != 'true'
+        run: echo "No gated npm package changed — skipping (reporting success)."
+
+      - name: Set up Node
+        if: needs.changes.outputs.mcp == 'true' || needs.changes.outputs.sdk_ts == 'true' || needs.changes.outputs.structured_thinking == 'true'
+          || needs.changes.outputs.browser_worker == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            .mcp/package-lock.json
+            libs/autobot-sdk-ts/package-lock.json
+            autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/package-lock.json
+
+      # --- .mcp (#15674) -------------------------------------------------
+      # `node --test autobot-mcp-server.test.js` — 8 tests asserting the MCP
+      # server's PROJECT_ROOT clamping and command validation. Measured at
+      # 0.25s; the install is the only part with any cost.
+      - name: Install .mcp dependencies
+        if: needs.changes.outputs.mcp == 'true'
+        working-directory: .mcp
+        run: npm ci
+
+      - name: Test .mcp (node --test)
+        if: needs.changes.outputs.mcp == 'true'
+        working-directory: .mcp
+        run: npm test
+
+      # --- libs/autobot-sdk-ts (#15676) ----------------------------------
+      # jest under --experimental-vm-modules. marker-tests.yml reaches `libs`
+      # for its PYTHON marker-selected suite only, so the TypeScript SDK's own
+      # suite had no runner at all. Measured at 3.6s including the transform.
+      - name: Install libs/autobot-sdk-ts dependencies
+        if: needs.changes.outputs.sdk_ts == 'true'
+        working-directory: libs/autobot-sdk-ts
+        run: npm ci
+
+      - name: Test libs/autobot-sdk-ts (jest)
+        if: needs.changes.outputs.sdk_ts == 'true'
+        working-directory: libs/autobot-sdk-ts
+        run: npm test
+
+      # --- mcp-structured-thinking (#15677) ------------------------------
+      # Two jest runners, neither invoked by anything. The suite drives the
+      # built server over stdio (`node dist/index.js`), so it needs a compile
+      # first — an undeclared prerequisite that made a fresh checkout fail with
+      # "MCP error -32000: Connection closed" on all four tests. That is now a
+      # `pretest` / `pretest:integration` hook in the manifest, mirroring
+      # vscode-autobot's `"pretest": "npm run compile"`, so the package is
+      # honest wherever it is run rather than only under this workflow.
+      # Measured at 7.8s and 7.3s from a clean tree, build included.
+      - name: Install mcp-structured-thinking dependencies
+        if: needs.changes.outputs.structured_thinking == 'true'
+        working-directory: autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking
+        run: npm ci
+
+      - name: Test mcp-structured-thinking (jest)
+        if: needs.changes.outputs.structured_thinking == 'true'
+        working-directory: autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking
+        run: npm test
+
+      - name: Test mcp-structured-thinking (jest, integration)
+        if: needs.changes.outputs.structured_thinking == 'true'
+        working-directory: autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking
+        run: npm run test:integration
+
+      # --- autobot-browser-worker (#15675) -------------------------------
+      # No browser provisioning here, and none is needed. The declared runner
+      # was `npx playwright test`, but this package has never contained a
+      # Playwright test: both files under tests/ use node:test and say so in
+      # their own headers ("zero dependency on Playwright / @playwright/test"),
+      # and playwright.config.js could not even load — its `globalSetup`
+      # names tests/setup/global-setup.js and its webServer.cwd names
+      # ./autobot-vue, neither of which exists. The script now names the suite
+      # that does exist: 19 tests in 0.27s with no node_modules at all, which
+      # is why this package gets no install step.
+      - name: Test autobot-browser-worker (node --test)
+        if: needs.changes.outputs.browser_worker == 'true'
+        working-directory: autobot-browser-worker
+        run: npm test
