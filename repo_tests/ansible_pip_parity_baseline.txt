@@ -62,26 +62,6 @@ autobot-slm-backend/ansible/inventory/group_vars/browser.yml::requests
 autobot-slm-backend/ansible/inventory/group_vars/browser.yml::uvicorn
 
 # ---------------------------------------------------------------------------
-# #15597 — `python_security_updates` floors that sit BELOW the shipped
-# requirements, so the patching run they drive is a no-op while reporting
-# success. `nltk` is here for the same reason as the rest: `>=3.9.3` against a
-# `==3.10.3` pin. It is NOT the #15551 finding, which is about the advisory
-# allowance, and it does not make nltk removable — llama-index-core requires it.
-# ---------------------------------------------------------------------------
-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::aiohttp
-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::cryptography
-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::fastapi
-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::langchain-core
-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::markdownify
-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::nltk
-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::pillow
-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::protobuf
-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::pypdf
-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::python-multipart
-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::requests
-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::starlette
-
-# ---------------------------------------------------------------------------
 # #15598 — live role pip tasks whose floors are below the component's own
 # requirements file. `roles/tts-worker`'s `fastapi>=0.100.0` provisions the very
 # worker whose requirements annotate `fastapi>=0.141.1` as a security floor.
