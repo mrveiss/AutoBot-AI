@@ -46,16 +46,16 @@ def test_redis_basic():
                 )
                 key_count = db_client.dbsize()
                 if key_count > 0:
-                    logger.info("✅ DB {db_num}: %s keys", key_count)
+                    logger.info("✅ DB %s: %s keys", db_num, key_count)
                     # Show sample keys
                     keys = db_client.keys("*")[:5]
                     for key in keys:
                         key_type = db_client.type(key)
-                        logger.info("    - {key} (%s)", key_type)
+                        logger.info("    - %s (%s)", key, key_type)
                 else:
                     logger.info("⚪ DB %s: empty", db_num)
             except Exception as e:
-                logger.error("❌ DB {db_num}: %s", e)
+                logger.error("❌ DB %s: %s", db_num, e)
 
     except Exception as e:
         logger.error("❌ Redis connection failed: %s", e)
@@ -88,9 +88,9 @@ def test_vector_database():
             for index_name in indexes:
                 try:
                     info = client.execute_command("FT.INFO", index_name)
-                    logger.info("Index {index_name} info: %s", info)
+                    logger.info("Index %s info: %s", index_name, info)
                 except Exception as e:
-                    logger.info("Could not get info for index {index_name}: %s", e)
+                    logger.info("Could not get info for index %s: %s", index_name, e)
 
         except Exception as e:
             logger.info("No RedisSearch indexes found: %s", e)
@@ -100,7 +100,7 @@ def test_vector_database():
         logger.info("Total keys in DB 8: %s", len(all_keys))
         for key in all_keys[:10]:  # Show first 10
             key_type = client.type(key)
-            logger.info("    - {key} (%s)", key_type)
+            logger.info("    - %s (%s)", key, key_type)
 
     except Exception as e:
         logger.error("❌ Vector database test failed: %s", e)
@@ -136,14 +136,14 @@ def test_sqlite_databases():
                 try:
                     cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
                     count = cursor.fetchone()[0]
-                    logger.info("  {table_name}: %s rows", count)
+                    logger.info("  %s: %s rows", table_name, count)
                 except Exception as e:
-                    logger.error("  {table_name}: Error counting - %s", e)
+                    logger.error("  %s: Error counting - %s", table_name, e)
 
             conn.close()
 
         except Exception as e:
-            logger.error("❌ Error reading {db_file}: %s", e)
+            logger.error("❌ Error reading %s: %s", db_file, e)
 
 
 def _inspect_sqlite_file(file: Path) -> None:
@@ -228,7 +228,7 @@ def test_backend_errors():
         db_info = manager.get_database_info()
         logger.info("\nDatabase mapping:")
         for name, config in db_info.items():
-            logger.info("  {name}: DB {config.get('db')} - %s", config.get("description"))
+            logger.info("  %s: DB %s - %s", name, config.get("db"), config.get("description"))
 
     except Exception as e:
         logger.error("❌ Backend configuration test failed: %s", e)
@@ -250,10 +250,10 @@ async def test_async_redis():
             try:
                 db_client = aioredis.from_url(f"redis://localhost:6379/{db_num}", decode_responses=True)
                 key_count = await db_client.dbsize()
-                logger.info("✅ Async DB {db_num}: %s keys", key_count)
+                logger.info("✅ Async DB %s: %s keys", db_num, key_count)
                 await db_client.close()
             except Exception as e:
-                logger.error("❌ Async DB {db_num}: %s", e)
+                logger.error("❌ Async DB %s: %s", db_num, e)
 
         await redis_client.close()
 
@@ -278,7 +278,7 @@ def test_environment_variables():
     for var in redis_env_vars:
         value = os.getenv(var)
         if value:
-            logger.info("✅ {var}=%s", value)
+            logger.info("✅ %s=%s", var, value)
         else:
             logger.info("⚪ %s not set", var)
 

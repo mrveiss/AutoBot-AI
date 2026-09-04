@@ -481,22 +481,22 @@ NEXT: System will be updated"""
         expected_safe = test_case["expected_safe"]
         description = test_case["description"]
 
-        logger.info("Test {i}: {description}")
-        logger.info("Expected: {'✅ SAFE' if expected_safe else '🚨 BLOCKED'}")
+        logger.info(f"Test {i}: {description}")
+        logger.info(f"Expected: {'✅ SAFE' if expected_safe else '🚨 BLOCKED'}")
 
         validated_commands = parser.parse_commands(response, user_goal="test command")
 
         is_safe = len(validated_commands) > 0
         status = "✅ PASS" if is_safe == expected_safe else "❌ FAIL"
 
-        logger.info("Result: {status} | Commands validated: {len(validated_commands)}")
+        logger.info(f"Result: {status} | Commands validated: {len(validated_commands)}")
 
         if validated_commands:
             for cmd in validated_commands:
-                logger.info("  ✓ {cmd.command}")
+                logger.info(f"  ✓ {cmd.command}")
 
     # Show statistics
     logger.info("=== Parser Statistics ===")
     stats = parser.get_statistics()
     for key, value in stats.items():
-        logger.info("{key}: {value}")
+        logger.info(f"{key}: {value}")

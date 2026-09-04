@@ -26,6 +26,7 @@ There is one home for this manager — ``app.state`` — and one way in,
 """
 
 import asyncio
+import json
 import os
 import uuid
 from dataclasses import dataclass, field
@@ -419,7 +420,7 @@ class ChatKnowledgeManager:
         if not include_system_messages:
             messages = [m for m in messages if m.get("role") != CategoryDefaults.ROLE_SYSTEM]
 
-        summary_prompt = """
+        summary_prompt = f"""
         Summarize this conversation into a comprehensive knowledge base entry.
         Include key topics, solutions, code examples, and important information.
 
