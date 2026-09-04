@@ -161,3 +161,27 @@ def test_the_ceiling_is_registered_and_clamped():
     """The constant is env-backed with a range, not a literal (#15620)."""
     assert isinstance(journal_fetch.JOURNAL_SSH_TIMEOUT_SECONDS, float)
     assert journal_fetch.JOURNAL_SSH_TIMEOUT_SECONDS > 0
+
+
+async def test_a_child_that_exited_before_the_kill_still_reports_the_timeout(monkeypatch):
+    """The suppression must cover the race, and cover only the race.
+
+    Between `wait_for` cancelling and the kill landing, the child may already be
+    gone -- `kill()` then raises ProcessLookupError. Suppressing that is correct;
+    suppressing it in a way that also swallowed the timeout would turn the very
+    distinction this module exists to draw back into an empty result, which is
+    the bug #15620 was filed for.
+    """
+
+    class _AlreadyExited(_FakeProcess):
+        def kill(self):
+            raise ProcessLookupError("child already reaped")
+
+    process = _AlreadyExited(hang=True)
+    _run_against(monkeypatch, process)
+    monkeypatch.setattr(journal_fetch, "JOURNAL_SSH_TIMEOUT_SECONDS", 0.01)
+
+    with pytest.raises(journal_fetch.JournalFetchTimeout) as excinfo:
+        await journal_fetch.fetch_service_journal(_SSH_CMD, "autobot-backend")
+
+    assert "AUTOBOT_SLM_JOURNAL_SSH_TIMEOUT_SECONDS" in str(excinfo.value)
