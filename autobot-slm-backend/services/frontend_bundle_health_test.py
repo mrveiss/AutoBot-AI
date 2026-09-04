@@ -13,6 +13,7 @@ reported `healthy`, because every field in that response described a process.
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from services.frontend_bundle_health import frontend_bundle_status
 
@@ -91,7 +92,9 @@ def test_the_pointer_is_preferred_over_the_legacy_directory(monkeypatch, tmp_pat
     root = tmp_path / "autobot-slm-frontend"
     (root / "current").mkdir(parents=True)
     (root / "dist").mkdir()
-    monkeypatch.setattr(module.config.path, "resolve", lambda rel: tmp_path / rel)
+    # `config.path` is a pydantic model and rejects setattr, so the module's
+    # own `config` reference is swapped rather than the field mutated.
+    monkeypatch.setattr(module, "config", SimpleNamespace(path=SimpleNamespace(resolve=lambda rel: tmp_path / rel)))
 
     assert module.bundle_dir().name == "current"
 
@@ -102,6 +105,8 @@ def test_a_node_with_only_the_legacy_directory_still_resolves(monkeypatch, tmp_p
 
     root = tmp_path / "autobot-slm-frontend"
     (root / "dist").mkdir(parents=True)
-    monkeypatch.setattr(module.config.path, "resolve", lambda rel: tmp_path / rel)
+    # `config.path` is a pydantic model and rejects setattr, so the module's
+    # own `config` reference is swapped rather than the field mutated.
+    monkeypatch.setattr(module, "config", SimpleNamespace(path=SimpleNamespace(resolve=lambda rel: tmp_path / rel)))
 
     assert module.bundle_dir().name == "dist"
