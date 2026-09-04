@@ -52,12 +52,15 @@ updates:
         # #10474/#10615/#10616 hard-excluded >=7.0.0 because opentelemetry-proto
         # (otel 1.42) required protobuf<7.0 and a grouped bump kept re-proposing
         # 7.x. That is no longer the state of the tree: the manifest now pins
-        # `protobuf>=7.35.1,<8.0.0` and the Docker images build green, so 7.x is
+        # `protobuf>=7.36.0,<8.0.0` and the Docker images build green, so 7.x is
         # demonstrably installable here.
         # #14727: an exclusion at or below a manifest's own floor leaves
         # dependabot nothing it may propose — protobuf was FROZEN in this block,
         # not capped. The range now mirrors the manifest's real ceiling, <8.0.0.
-        # The stale <7.0 rationale is raised separately for confirmation.
+        # The stale <7.0 rationale was confirmed stale and corrected in #15622:
+        # the cap mirrors what opentelemetry-proto and googleapis-common-protos
+        # declare, and grpcio -- named there as a blocker -- does not depend on
+        # protobuf at all.
         versions: [">=8.0.0"]
       - dependency-name: "websockets"
         # #10474/#10386: cap <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16.
@@ -594,7 +597,7 @@ updates:
         # #14727: the range mirrors the manifest's own cap, `<8.0.0`.
         # It previously read `>=7.0.0`, carried over from the #10474 note about
         # opentelemetry-proto needing protobuf<7.0 — but the pin has since moved
-        # to `protobuf>=7.35.1,<8.0.0`. An exclusion at or below a manifest's own
+        # to `protobuf>=7.36.0,<8.0.0`. An exclusion at or below a manifest's own
         # floor offers dependabot nothing it is allowed to propose, so protobuf
         # was frozen in this block rather than capped.
         # update-types alone does NOT stop a grouped all-dependencies bump
