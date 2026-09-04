@@ -20,11 +20,8 @@ import json
 from types import SimpleNamespace
 from typing import Any, List
 
-from modern_ai_integration import (
-    _GOAL_FALLBACK,
-    ModernAIIntegration,
-    _render_goal_block,
-)
+from modern_ai_integration import ModernAIIntegration
+from screen_analysis_prompt import _GOAL_FALLBACK, _render_goal_block
 
 _BEGIN = "<<<BEGIN_ANALYSIS_GOAL>>>"
 _END = "<<<END_ANALYSIS_GOAL>>>"
