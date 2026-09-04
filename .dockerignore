@@ -43,6 +43,9 @@ pipeline-scripts
 # the image (#15439). The import is fine where it lives; what was wrong is that
 # this tool reached the image at all.
 scripts/backfill_relationships.py
+# Same reasoning, same fix: reuses the identical GitHubApi transport and has no
+# runtime role either (#15440).
+scripts/umbrella_label_drift.py
 
 # Documentation (not needed in containers)
 docs
