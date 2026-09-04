@@ -138,7 +138,7 @@ async def _run_ansible_get_logs(
 
     Wiring only: the ceiling, the three outcomes and the orphan cleanup live in
     services/journal_fetch.py (#15620). The argv comes from the same helper
-    _run_ansible_service_action uses, rather than a second copy that can drift
+    run_ansible_service_action uses, rather than a second copy that can drift
     from it.
     """
     journal_cmd = build_journal_command(service_name, lines, since)

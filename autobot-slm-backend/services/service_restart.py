@@ -40,6 +40,7 @@ import os
 from datetime import datetime, timezone
 from typing import Tuple
 
+from autobot_shared.env_utils import env_float_clamped
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,13 +52,20 @@ logger = logging.getLogger(__name__)
 # Seconds the deferred SLM restart waits for the HTTP response to flush before
 # it starts killing the services that carried it (#816). Env-backed module
 # constant rather than a literal: the right value depends on the deployment.
-_RESPONSE_FLUSH_DELAY_SECONDS = float(os.getenv("AUTOBOT_SLM_RESTART_FLUSH_DELAY_SECONDS", "1"))
+#
+# Read through `env_float_clamped`, not a bare `float(os.getenv(...))`, for two
+# reasons the registry alone does not cover: `EnvVarSpec`'s `range=` is
+# documentation and enforces nothing, and a malformed value in a bare `float()`
+# raises at IMPORT time, taking the whole backend down over a typo in an env
+# file. The clamped reader falls back to the default with a warning instead.
+# Same helper the sibling ceiling in `services/journal_fetch.py` uses.
+_RESPONSE_FLUSH_DELAY_SECONDS = env_float_clamped("AUTOBOT_SLM_RESTART_FLUSH_DELAY_SECONDS", 1.0, 0.0, 60.0)
 
 # Seconds to wait for one `systemctl restart` over SSH before giving up on it.
 # Same reasoning as the flush delay: a literal here is a deployment assumption
 # in disguise, since a slow node restarting a heavy unit legitimately exceeds a
 # value that is generous on a fast one.
-_RESTART_SSH_TIMEOUT_SECONDS = float(os.getenv("AUTOBOT_SLM_RESTART_SSH_TIMEOUT_SECONDS", "30"))
+_RESTART_SSH_TIMEOUT_SECONDS = env_float_clamped("AUTOBOT_SLM_RESTART_SSH_TIMEOUT_SECONDS", 30.0, 1.0, 600.0)
 
 
 def build_service_ssh_cmd(node: Node, remote_cmd: str) -> list:
