@@ -36,6 +36,11 @@ END_MARKER = "<!-- END_AUTOGEN_ENV_DOCS -->"
 # Files that define the registry itself — skip them to avoid false positives.
 REGISTRY_PATHS = {
     "autobot_shared/env_registry.py",
+    # Per-component split (#15624). `env_registry.py` was exactly at its size
+    # ceiling, so no new variable could be registered anywhere. Each of these
+    # defines registry entries and must be skipped for the same reason the
+    # parent is: its `name=` strings are declarations, not usages.
+    "autobot_shared/env_registry_backend.py",
 }
 
 
