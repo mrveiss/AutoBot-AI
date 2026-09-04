@@ -27,7 +27,6 @@ from knowledge.backends import get_async_default_client
 from knowledge.pipeline.base import PipelineContext
 from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCognifier
 from knowledge.pipeline.models.chunk import ProcessedChunk
-from knowledge.vector_membership import vectorized_ids
 from knowledge.schemas.vectorization import (
     BackgroundVectorizationResponse,
     BatchVectorizeRequest,
@@ -45,6 +44,7 @@ from knowledge.schemas.vectorization import (
     VectorizeFactsResponse,
     VectorizeJobStatusResponse,
 )
+from knowledge.vector_membership import vectorized_ids
 from knowledge_factory import get_or_create_knowledge_base
 from type_defs.common import Metadata
 
