@@ -36,29 +36,57 @@ requirements_path: "/opt/autobot/requirements.txt"
 pip_extra_args: "--no-cache-dir"
 
 # Packages to update (CVE fixes from Issue #544)
-# Format: package_name: minimum_version
+#
+# CONTRACT (#15597): this map is a FLOOR list, not a per-CVE historical record.
+# `templates/requirements-security-update.txt.j2` renders each entry as
+# `<package>>=<value>` and `tasks/update-venv.yml` pip-installs the result into
+# the live venv. That rendered file is the ENTIRE content of the patching run --
+# the role never installs `-r requirements.txt` -- so a floor below what the
+# component already ships installs nothing while the play reports success. That
+# is a green signal for work that did not happen, which is worse than not
+# running: `protobuf>=5.29.6` against a venv already holding 7.x is a no-op.
+#
+# So every floor here that a `requirements*.txt` also declares is written as the
+# SAME specifier text that manifest uses, and `repo_tests/
+# ansible_requirements_parity_test.py` (#15568) keeps it there: the moment a
+# manifest moves and this map does not, the parity guard reports a new
+# divergence and CI goes red. It is the mechanism that stops the re-rot.
+#
+# Format: `package: <specifier tail appended to '>=' >`. Usually a bare version,
+# but where the shipped manifest carries an upper bound the bound comes with it
+# -- an unbounded upgrade past a cap the requirements file sets would break the
+# venv the run is meant to protect, and this map has no other constraint source.
 python_security_updates:
+  # -------------------------------------------------------------------------
+  # Floors that mirror a shipped requirements declaration. Raise them HERE and
+  # in the manifest together, or the parity guard fails the PR.
+  # -------------------------------------------------------------------------
   # Critical
-  langchain-core: "0.3.81"        # Serialization injection + template injection + SSRF
-  nltk: "3.9.3"                   # Zip slip vulnerability
+  langchain-core: "1.6.1,<2.0.0"   # Serialization injection + template injection + SSRF
+  nltk: "3.10.3"                   # Zip slip vulnerability
   # High
-  starlette: "0.52.1"             # O(n^2) DoS via Range header
-  fastapi: "0.135.1"              # Requires starlette >=0.46.0
-  aiohttp: "3.13.3"               # Zip bomb + DoS + payload + chunked
-  python-multipart: "0.0.22"      # Arbitrary file write
-  cryptography: "46.0.5"          # Subgroup attack on SECT curves
-  pillow: "12.1.1"                # OOB write loading PSD images
-  protobuf: "5.29.6"              # JSON recursion depth bypass
+  starlette: "1.6.0"               # O(n^2) DoS via Range header
+  fastapi: "0.141.1"               # Requires starlette >=0.52.1
+  aiohttp: "3.14.3"                # Zip bomb + DoS + payload + chunked
+  python-multipart: "0.0.32"       # Arbitrary file write
+  cryptography: "50.0.1"           # Subgroup attack on SECT curves
+  pillow: "12.3.0"                 # OOB write loading PSD images
+  protobuf: "7.36.0,<8.0.0"        # JSON recursion depth bypass
   # Medium (pypdf - 10 CVEs)
-  pypdf: "6.7.5"                  # Infinite loops, RAM exhaustion, malformed streams
+  pypdf: "6.16.2"                  # Infinite loops, RAM exhaustion, malformed streams
   # Carried forward from prior patches
+  markdownify: "1.2.3"
+  requests: "2.34.2"
+  # -------------------------------------------------------------------------
+  # Floors no `requirements*.txt` carries: these arrive transitively, so this
+  # map is the only place their patched version is stated. The parity guard has
+  # nothing to compare them against -- keep them, and bump them by advisory.
+  # -------------------------------------------------------------------------
   filelock: "3.20.1"
   keras: "3.12.0"
-  markdownify: "0.14.1"
   marshmallow: "3.26.2"
   urllib3: "2.6.0"
   werkzeug: "3.1.4"
-  requests: "2.32.4"
 
 # Service restart after update
 restart_service_after_update: true

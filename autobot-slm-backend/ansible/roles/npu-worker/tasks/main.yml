@@ -199,11 +199,18 @@
   failed_when: false
   become_user: "{{ npu_user }}"
 
+# #15598: floors raised to the specifier text `autobot-infrastructure/
+# autobot-npu-worker/docker/requirements-npu.txt` declares for the same two
+# packages. `>=0.100.0` let a fresh provision satisfy this task four minors
+# below the floor `fastapi>=0.141.1` carries for a security reason (it requires
+# starlette >=0.52.1, the O(n^2) Range-header DoS), and the worker's own
+# manifest is not installed by this role, so nothing downstream corrected it.
+# The parity guard (#15568) now fails any PR that moves one side alone.
 - name: Install FastAPI and web server dependencies
   ansible.builtin.pip:
     name:
-      - fastapi>=0.100.0
-      - uvicorn[standard]>=0.20.0
+      - fastapi>=0.141.1
+      - uvicorn[standard]>=0.52.4
     virtualenv: "{{ npu_install_dir }}/venv"
     state: present
   become_user: "{{ npu_user }}"

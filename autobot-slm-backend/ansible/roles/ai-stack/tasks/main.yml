@@ -191,31 +191,49 @@
   timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   when: _ai_requirements_file.stat.exists
 
+# #15598: this list runs only when requirements-ai.txt is missing, so `-r` is
+# not available to it by construction -- the degraded path is defined by that
+# file's absence. The floors therefore stay literal, and every one of them is
+# the SAME specifier text `autobot-infrastructure/shared/docker/ai-stack/
+# requirements-ai.txt` declares, so the fallback can no longer land a stack the
+# happy path would refuse. They were one to two majors below it (chromadb
+# `>=0.4.0` against `>=1.5.9,<2.0.0`, langchain `>=0.1.0` against
+# `>=1.3.18,<2.0.0`), which is exactly the version a silent degraded path is
+# least likely to have anyone check. Upper bounds come across with the floors:
+# unbounded here, pip would resolve chromadb 2.x into a venv the manifest caps
+# below it. `repo_tests/ansible_requirements_parity_test.py` (#15568) fails the
+# PR that moves the manifest without moving these.
+#
+# numpy stays bare against constraints/shared.txt (#10524) -- the `-c` was
+# missing here, so nothing bound it. Same shape as roles/npu-worker and
+# roles/tts-worker.
 - name: Install AI Python packages (fallback list)
   ansible.builtin.pip:
     name:
-      - chromadb>=0.4.0
-      - langchain>=0.1.0
+      - chromadb>=1.5.9,<2.0.0
+      - langchain>=1.3.18,<2.0.0
       - langchain-community
-      - transformers>=4.30.0
+      - transformers>=5.16.1
       - sentence-transformers
-      - torch>=2.0.0
+      - torch>=2.13.0
       - numpy
       - pandas
       - pillow
       - openai
       - anthropic
-      - fastapi>=0.115.0
-      - "uvicorn[standard]>=0.35.0"
+      - fastapi>=0.141.1
+      - "uvicorn[standard]>=0.52.4"
       - httpx
-      - pydantic>=2.0.0
+      - pydantic>=2.13.4
       - python-dotenv
-      - redis>=5.0.0
-      - sqlalchemy>=2.0.0
+      - redis>=8.1.0
+      - sqlalchemy>=2.0.52
       - aiosqlite
     virtualenv: "{{ ai_install_dir }}/venv"
     state: present
-    extra_args: "--timeout 300"
+    extra_args: >-
+      --timeout 300
+      -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
   become_user: "{{ ai_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "300"
