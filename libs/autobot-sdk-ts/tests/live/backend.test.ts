@@ -9,9 +9,11 @@
  * `npm test` run by `testPathIgnorePatterns` in jest.config.js. Run them
  * deliberately, against a backend that is actually up:
  *
- *     AUTOBOT_BASE_URL=http://<host>:<port> npm run test:live
+ *     AUTOBOT_BASE_URL=https://<host>:<port> npm run test:live
  *
- * Set AUTOBOT_API_TOKEN as well if the target requires auth.
+ * Set AUTOBOT_API_TOKEN as well if the target requires auth. Use https for any
+ * remote target: the SDK sends the token as an `Authorization: Bearer` header,
+ * and plain http puts it on the wire in cleartext. http is for localhost only.
  *
  * There is deliberately NO "backend unavailable, skipping" escape hatch here.
  * The previous version of these tests carried one, and it was dead code for
@@ -45,6 +47,10 @@ describe("AutoBot SDK -- live backend", () => {
 
   test("knowledge.stats returns DataResponse<KnowledgeStats>", async () => {
     const result = await bot.knowledge.stats();
+    // `success` can be false on a real error response, and toHaveProperty is
+    // satisfied by either -- an assertion that passes whether or not the call
+    // worked is the vacuity this PR exists to remove, one layer down.
     expect(result).toHaveProperty("success");
+    expect(result.success).toBe(true);
   });
 });
