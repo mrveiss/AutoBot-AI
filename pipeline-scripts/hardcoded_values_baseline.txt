@@ -1208,7 +1208,6 @@
 1|other|autobot-slm-backend/ansible/roles/agent_config/defaults/main.yml|"/var/lib/autobot/models
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/nodejs.yml|https://deb.nodesource.com/setup_{{
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/ollama.yml|https://ollama.ai/install.sh
-1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/openvino.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/openvino.yml|300
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/openvino.yml|https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/openvino.yml|https://apt.repos.intel.com/openvino/{{
@@ -1274,7 +1273,6 @@
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/node_exporter.yml|https://github.com/prometheus/node_exporter/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/prometheus.yml|https://github.com/prometheus/prometheus/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/nodejs/tasks/main.yml|https://deb.nodesource.com/setup_{{
-1|other|autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml|300
 1|other|autobot-slm-backend/ansible/roles/postgresql/tasks/install.yml|https://apt.postgresql.org/pub/repos/apt

@@ -231,6 +231,13 @@
 # #15408: the floor is no longer restated here -- constraints/shared.txt is the
 # single source of truth for both openvino and numpy, so a dependabot bump
 # there needs no edit here.
+# #15601: the `-c` fallback derives from `autobot.base_dir`
+# (inventory/group_vars/all.yml) rather than restating the install root as a
+# literal. An explicit `code_source_dir` override is still honoured -- only the
+# default stops being a second copy of a value the SSOT already publishes, so a
+# moved base directory cannot leave this role provisioning against the old path
+# (the failure shape #14272 records for ai-stack: a wrong constraints path
+# aborts the pip run). Same shape as roles/tts-worker (#15599).
 - name: Install OpenVINO and dependencies
   ansible.builtin.pip:
     name:
@@ -243,7 +250,7 @@
     state: present
     extra_args: >-
       --timeout 120
-      -c {{ code_source_dir | default('/opt/autobot/code_source') }}/constraints/shared.txt
+      -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
   become_user: "{{ npu_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
