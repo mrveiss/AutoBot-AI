@@ -128,8 +128,6 @@ register_env_var(
 # --- backend ----------------------------------------------------------------
 
 
-
-
 # --- chat -------------------------------------------------------------------
 
 register_env_var(
@@ -857,10 +855,6 @@ register_env_var(
 # --- worker and analysis pools (#14223) --------------------------------------
 
 
-
-
-
-
 # --- timeouts and backoffs (#14223) ------------------------------------------
 
 register_env_var(
@@ -1112,7 +1106,6 @@ register_env_var(
 )
 
 
-
 # --- backfilled from the env_utils helper form (#14265) -----------------------
 # These were read via env_int/env_flag/env_str/env_float and were therefore
 # invisible to the registry checker until it learned that form. Defaults and
@@ -1145,11 +1138,6 @@ register_env_var(
         component="execution",
     )
 )
-
-
-
-
-
 
 
 register_env_var(
@@ -1259,13 +1247,6 @@ register_env_var(
 )
 
 
-
-
-
-
-
-
-
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_STT_PEAK_WINDOW_MS",
@@ -1286,4 +1267,3 @@ register_env_var(
 # bottom: these modules import `EnvVarSpec` and `register_env_var` from here, so
 # both must exist before they load.
 from autobot_shared import env_registry_backend  # noqa: E402,F401  isort:skip
-

@@ -20,7 +20,6 @@ its side effect. Nothing here is re-exported and nothing imports it directly.
 
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
-
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_BACKEND_HOST",
