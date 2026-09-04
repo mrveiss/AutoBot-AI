@@ -1,0 +1,659 @@
+diff --git a/autobot-slm-backend/ansible/inventory/group_vars/aiml.yml b/autobot-slm-backend/ansible/inventory/group_vars/aiml.yml
+index 8d81281ee4..591d136ef9 100644
+--- a/autobot-slm-backend/ansible/inventory/group_vars/aiml.yml
++++ b/autobot-slm-backend/ansible/inventory/group_vars/aiml.yml
+@@ -215,44 +215,64 @@ packages:
+     - libpng-dev
+     - libglib2.0-dev
+ 
++  # DECISION (#15596): the group's role and the component requirements file are
++  # the source of versions -- NOT this list. Nothing reads `packages.python`
++  # (nor `packages.system`): grepped across ansible `*.yml`/`*.j2` for
++  # `packages.python`, `packages['python']`, `packages.system` and every
++  # `{{ ... packages ... }}`, and every reader-shaped hit is a different
++  # variable (`system_packages`, `python_interpreter_packages`,
++  # `required_packages`, `role_configs[node_role].packages`, or a registered
++  # result). `deploy-aiml.yml` runs `roles/ai-stack`, which installs from
++  # `autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt`.
++  #
++  # So the list installs nothing today, and every floor it carried had drifted
++  # one to two majors below that manifest -- `torch>=2.0.0` against its
++  # `>=2.13.0`. It is kept as a names-only inventory of what a node in this
++  # group needs, and now restates NO versions, which is the defect: an
++  # uninstalled list cannot be caught by anything except the drift itself.
++  #
++  # Wiring it to a pip task was considered and rejected: that would be a SECOND
++  # install path for libraries `roles/ai-stack` already installs from that
++  # manifest, which is the co-located-roles hazard `constraints/shared.txt`
++  # documents in its own header. If it is ever wired, install with `-r`
++  # against the manifest and `-c constraints/shared.txt` -- never with floors
++  # typed here.
++  #
++  # The wire-or-remove decision for the whole `packages` dict -- both halves,
++  # all three groups -- is #15621, together with `scipy`, the one name here
++  # that no shipped manifest declares at all.
+   python:
+     # Core AI/ML packages
+-    - torch>=2.0.0
+-    - torchvision>=0.15.0
+-    - transformers>=4.55.2
+-    - sentence-transformers>=2.2.0
+-    - openai>=1.0.0
+-    - anthropic>=0.7.0
++    - torch
++    - torchvision
++    - transformers
++    - sentence-transformers
++    - openai
++    - anthropic
+ 
+     # Intel OpenVINO Python API
+     # #14476: openvino-dev dropped -- it is a deprecated meta-package frozen at
+     # 2024.6.0 with no release compatible with openvino 2026.x (#14447).
+-    # Currently dormant: no playbook reads packages.python from this file
+-    # (verified via grep -- deploy-aiml.yml references neither `packages` nor
+-    # `openvino`), so this list installs nothing today. Left in place per the
+-    # never-delete-code rule rather than removed.
+-    # #15408: no version restated here -- if this list is ever wired to an
+-    # actual `pip install`, pass `-c constraints/shared.txt` the same way
+-    # roles/npu-worker, roles/agent_config and deploy-native-services.yml do,
+-    # which is what constrains the bare name below to the SSOT floor.
++    # #15408: constraints/shared.txt (#10524) is the SSOT for its floor, which
++    # is what a `-c` on the install above would bind this bare name to.
+     - openvino
+ 
+     # Computer vision
+-    - opencv-python>=4.8.0
+-    - pillow>=10.0.0
++    - opencv-python
++    - pillow
+     # #15568: numpy is constrained by constraints/shared.txt (#10524) exactly as
+-    # openvino above is, so it carries no floor here either. The `>=1.24.0` this
+-    # replaced was two majors below the SSOT's >=2.5.2,<3.0.0.
++    # openvino above is. The `>=1.24.0` this replaced was two majors below the
++    # SSOT's >=2.5.2,<3.0.0.
+     - numpy
+ 
+     # Scientific computing
+-    - scipy>=1.11.0
+-    - scikit-learn>=1.3.0
++    - scipy
++    - scikit-learn
+ 
+     # Async and web framework
+-    - fastapi>=0.115.0
+-    - uvicorn>=0.30.0
+-    - aiohttp>=3.12.15
++    - fastapi
++    - uvicorn
++    - aiohttp
+ 
+ # ==========================================
+ # GPU/NPU HARDWARE CONFIGURATION
+diff --git a/autobot-slm-backend/ansible/inventory/group_vars/backend.yml b/autobot-slm-backend/ansible/inventory/group_vars/backend.yml
+index 5309dea99f..453cb475d0 100644
+--- a/autobot-slm-backend/ansible/inventory/group_vars/backend.yml
++++ b/autobot-slm-backend/ansible/inventory/group_vars/backend.yml
+@@ -159,29 +159,51 @@ packages:
+     - netcat
+     - redis-tools
+ 
++  # DECISION (#15596): the group's role and the component requirements file are
++  # the source of versions -- NOT this list. Nothing reads `packages.python`
++  # (nor `packages.system`): every reader-shaped hit across ansible `*.yml` and
++  # `*.j2` is a different variable (`system_packages`,
++  # `python_interpreter_packages`, `required_packages`,
++  # `role_configs[node_role].packages`, or a registered result). `roles/backend` installs the backend venv from the filtered copy of
++  # `requirements.txt` it builds through `scripts/build-filtered-requirements.sh`,
++  # which `backend.python.packages_file` above already names as the source.
++  #
++  # So the list installs nothing today, and every floor it carried had drifted
++  # below that manifest -- `structlog>=22.0.0` against its `>=26.1.0`. It is kept as a names-only inventory of
++  # what a node in this group needs, and now restates NO versions, which is the
++  # defect: an uninstalled list cannot be caught by anything except the drift.
++  #
++  # Wiring it to a pip task was considered and rejected: that would be a SECOND
++  # install path for libraries `roles/backend` already installs, which is the
++  # co-located-roles hazard `constraints/shared.txt` documents in its own
++  # header. If it is ever wired, install with `-r` against the manifest and
++  # `-c constraints/shared.txt` -- never with floors typed here.
++  #
++  # The wire-or-remove decision for the whole `packages` dict -- both halves,
++  # all three groups -- is #15621, together with `gunicorn`, the one name here that no shipped manifest declares.
+   python:
+     # Core framework dependencies
+-    - fastapi>=0.115.0
+-    - uvicorn>=0.30.0
+-    - gunicorn>=20.1.0
+-    - aiohttp>=3.12.15
+-    - aiofiles>=23.0.0
+-    - websockets>=11.0.0
+-    - pydantic>=2.8.0
+-    - python-multipart>=0.0.9
++    - fastapi
++    - uvicorn
++    - gunicorn
++    - aiohttp
++    - aiofiles
++    - websockets
++    - pydantic
++    - python-multipart
+ 
+     # Database and caching
+-    - redis>=5.0.0
+-    - aiosqlite>=0.17.0
++    - redis
++    - aiosqlite
+ 
+     # AI/ML dependencies
+-    - torch>=2.0.0
+-    - transformers>=4.55.2
+-    - sentence-transformers>=2.2.0
++    - torch
++    - transformers
++    - sentence-transformers
+ 
+     # Monitoring and logging
+-    - prometheus-client>=0.16.0
+-    - structlog>=22.0.0
++    - prometheus-client
++    - structlog
+ 
+ # ==========================================
+ # SYSTEMD SERVICE CONFIGURATION
+diff --git a/autobot-slm-backend/ansible/inventory/group_vars/browser.yml b/autobot-slm-backend/ansible/inventory/group_vars/browser.yml
+index a7755e2e3a..08e0b7a0bc 100644
+--- a/autobot-slm-backend/ansible/inventory/group_vars/browser.yml
++++ b/autobot-slm-backend/ansible/inventory/group_vars/browser.yml
+@@ -270,23 +270,46 @@ packages:
+     - "unzip"
+     - "software-properties-common"
+ 
++  # DECISION (#15596): the group's role and the component requirements file are
++  # the source of versions -- NOT this list. Nothing reads `packages.python`
++  # (nor `packages.system`): every reader-shaped hit across ansible `*.yml` and
++  # `*.j2` is a different variable (`system_packages`,
++  # `python_interpreter_packages`, `required_packages`,
++  # `role_configs[node_role].packages`, or a registered result). `roles/browser` installs playwright, fastapi and uvicorn into the worker's
++  # own venv at the floors `autobot-browser-worker/requirements.txt` and the
++  # backend's manifest declare, with `-c constraints/shared.txt` applied.
++  #
++  # So the list installs nothing today, and every floor it carried had drifted
++  # below that manifest -- `playwright>=1.40.0` against the worker's `>=1.62.0`. It is kept as a names-only inventory of
++  # what a node in this group needs, and now restates NO versions, which is the
++  # defect: an uninstalled list cannot be caught by anything except the drift.
++  #
++  # Wiring it to a pip task was considered and rejected: that would be a SECOND
++  # install path for libraries `roles/browser` already installs, which is the
++  # co-located-roles hazard `constraints/shared.txt` documents in its own
++  # header. If it is ever wired, install with `-r` against the manifest and
++  # `-c constraints/shared.txt` -- never with floors typed here.
++  #
++  # The wire-or-remove decision for the whole `packages` dict -- both halves,
++  # all three groups -- is #15621, together with `playwright-pytest` and `selenium`, the two names here that no
++  # shipped manifest declares.
+   python:
+     # Playwright and dependencies
+-    - "playwright>=1.40.0"
+-    - "playwright-pytest>=0.4.0"
++    - "playwright"
++    - "playwright-pytest"
+ 
+     # Web automation
+-    - "selenium>=4.15.0"
+-    - "beautifulsoup4>=4.12.0"
+-    - "requests>=2.32.4"
++    - "selenium"
++    - "beautifulsoup4"
++    - "requests"
+ 
+     # Image and media processing
+-    - "pillow>=10.0.0"
+-    - "opencv-python>=4.8.0"
++    - "pillow"
++    - "opencv-python"
+ 
+     # API framework
+-    - "fastapi>=0.115.0"
+-    - "uvicorn>=0.30.0"
++    - "fastapi"
++    - "uvicorn"
+ 
+   nodejs:
+     # Playwright Node.js packages
+diff --git a/autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml b/autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml
+index 92f49e4e2e..feb49caee7 100644
+--- a/autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml
++++ b/autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml
+@@ -191,31 +191,49 @@
+   timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
+   when: _ai_requirements_file.stat.exists
+ 
++# #15598: this list runs only when requirements-ai.txt is missing, so `-r` is
++# not available to it by construction -- the degraded path is defined by that
++# file's absence. The floors therefore stay literal, and every one of them is
++# the SAME specifier text `autobot-infrastructure/shared/docker/ai-stack/
++# requirements-ai.txt` declares, so the fallback can no longer land a stack the
++# happy path would refuse. They were one to two majors below it (chromadb
++# `>=0.4.0` against `>=1.5.9,<2.0.0`, langchain `>=0.1.0` against
++# `>=1.3.18,<2.0.0`), which is exactly the version a silent degraded path is
++# least likely to have anyone check. Upper bounds come across with the floors:
++# unbounded here, pip would resolve chromadb 2.x into a venv the manifest caps
++# below it. `repo_tests/ansible_requirements_parity_test.py` (#15568) fails the
++# PR that moves the manifest without moving these.
++#
++# numpy stays bare against constraints/shared.txt (#10524) -- the `-c` was
++# missing here, so nothing bound it. Same shape as roles/npu-worker and
++# roles/tts-worker.
+ - name: Install AI Python packages (fallback list)
+   ansible.builtin.pip:
+     name:
+-      - chromadb>=0.4.0
+-      - langchain>=0.1.0
++      - chromadb>=1.5.9,<2.0.0
++      - langchain>=1.3.18,<2.0.0
+       - langchain-community
+-      - transformers>=4.30.0
++      - transformers>=5.16.1
+       - sentence-transformers
+-      - torch>=2.0.0
++      - torch>=2.13.0
+       - numpy
+       - pandas
+       - pillow
+       - openai
+       - anthropic
+-      - fastapi>=0.115.0
+-      - "uvicorn[standard]>=0.35.0"
++      - fastapi>=0.141.1
++      - "uvicorn[standard]>=0.52.4"
+       - httpx
+-      - pydantic>=2.0.0
++      - pydantic>=2.13.4
+       - python-dotenv
+-      - redis>=5.0.0
+-      - sqlalchemy>=2.0.0
++      - redis>=8.1.0
++      - sqlalchemy>=2.0.52
+       - aiosqlite
+     virtualenv: "{{ ai_install_dir }}/venv"
+     state: present
+-    extra_args: "--timeout 300"
++    extra_args: >-
++      --timeout 300
++      -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
+   become_user: "{{ ai_user }}"
+   environment:
+     PIP_DEFAULT_TIMEOUT: "300"
+diff --git a/autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml b/autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml
+index 943f223e81..92b825ea90 100644
+--- a/autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml
++++ b/autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml
+@@ -36,29 +36,57 @@ requirements_path: "/opt/autobot/requirements.txt"
+ pip_extra_args: "--no-cache-dir"
+ 
+ # Packages to update (CVE fixes from Issue #544)
+-# Format: package_name: minimum_version
++#
++# CONTRACT (#15597): this map is a FLOOR list, not a per-CVE historical record.
++# `templates/requirements-security-update.txt.j2` renders each entry as
++# `<package>>=<value>` and `tasks/update-venv.yml` pip-installs the result into
++# the live venv. That rendered file is the ENTIRE content of the patching run --
++# the role never installs `-r requirements.txt` -- so a floor below what the
++# component already ships installs nothing while the play reports success. That
++# is a green signal for work that did not happen, which is worse than not
++# running: `protobuf>=5.29.6` against a venv already holding 7.x is a no-op.
++#
++# So every floor here that a `requirements*.txt` also declares is written as the
++# SAME specifier text that manifest uses, and `repo_tests/
++# ansible_requirements_parity_test.py` (#15568) keeps it there: the moment a
++# manifest moves and this map does not, the parity guard reports a new
++# divergence and CI goes red. It is the mechanism that stops the re-rot.
++#
++# Format: `package: <specifier tail appended to '>=' >`. Usually a bare version,
++# but where the shipped manifest carries an upper bound the bound comes with it
++# -- an unbounded upgrade past a cap the requirements file sets would break the
++# venv the run is meant to protect, and this map has no other constraint source.
+ python_security_updates:
++  # -------------------------------------------------------------------------
++  # Floors that mirror a shipped requirements declaration. Raise them HERE and
++  # in the manifest together, or the parity guard fails the PR.
++  # -------------------------------------------------------------------------
+   # Critical
+-  langchain-core: "0.3.81"        # Serialization injection + template injection + SSRF
+-  nltk: "3.9.3"                   # Zip slip vulnerability
++  langchain-core: "1.6.1,<2.0.0"   # Serialization injection + template injection + SSRF
++  nltk: "3.10.3"                   # Zip slip vulnerability
+   # High
+-  starlette: "0.52.1"             # O(n^2) DoS via Range header
+-  fastapi: "0.135.1"              # Requires starlette >=0.46.0
+-  aiohttp: "3.13.3"               # Zip bomb + DoS + payload + chunked
+-  python-multipart: "0.0.22"      # Arbitrary file write
+-  cryptography: "46.0.5"          # Subgroup attack on SECT curves
+-  pillow: "12.1.1"                # OOB write loading PSD images
+-  protobuf: "5.29.6"              # JSON recursion depth bypass
++  starlette: "1.6.0"               # O(n^2) DoS via Range header
++  fastapi: "0.141.1"               # Requires starlette >=0.52.1
++  aiohttp: "3.14.3"                # Zip bomb + DoS + payload + chunked
++  python-multipart: "0.0.32"       # Arbitrary file write
++  cryptography: "50.0.1"           # Subgroup attack on SECT curves
++  pillow: "12.3.0"                 # OOB write loading PSD images
++  protobuf: "7.36.0,<8.0.0"        # JSON recursion depth bypass
+   # Medium (pypdf - 10 CVEs)
+-  pypdf: "6.7.5"                  # Infinite loops, RAM exhaustion, malformed streams
++  pypdf: "6.16.2"                  # Infinite loops, RAM exhaustion, malformed streams
+   # Carried forward from prior patches
++  markdownify: "1.2.3"
++  requests: "2.34.2"
++  # -------------------------------------------------------------------------
++  # Floors no `requirements*.txt` carries: these arrive transitively, so this
++  # map is the only place their patched version is stated. The parity guard has
++  # nothing to compare them against -- keep them, and bump them by advisory.
++  # -------------------------------------------------------------------------
+   filelock: "3.20.1"
+   keras: "3.12.0"
+-  markdownify: "0.14.1"
+   marshmallow: "3.26.2"
+   urllib3: "2.6.0"
+   werkzeug: "3.1.4"
+-  requests: "2.32.4"
+ 
+ # Service restart after update
+ restart_service_after_update: true
+diff --git a/autobot-slm-backend/ansible/roles/dependency_patching/tasks/main.yml b/autobot-slm-backend/ansible/roles/dependency_patching/tasks/main.yml
+index 8a8a83a4e7..13823b64a1 100644
+--- a/autobot-slm-backend/ansible/roles/dependency_patching/tasks/main.yml
++++ b/autobot-slm-backend/ansible/roles/dependency_patching/tasks/main.yml
+@@ -31,6 +31,6 @@
+     msg: |
+       DRY RUN - Would update the following packages on {{ inventory_hostname }}:
+       {% for pkg, version in python_security_updates.items() %}
+-      - {{ pkg }} >= {{ version }}
++      - {{ pkg }}>={{ version }}
+       {% endfor %}
+   when: dry_run
+diff --git a/autobot-slm-backend/ansible/roles/dependency_patching/templates/requirements-security-update.txt.j2 b/autobot-slm-backend/ansible/roles/dependency_patching/templates/requirements-security-update.txt.j2
+index d189123f94..5235cf88fd 100644
+--- a/autobot-slm-backend/ansible/roles/dependency_patching/templates/requirements-security-update.txt.j2
++++ b/autobot-slm-backend/ansible/roles/dependency_patching/templates/requirements-security-update.txt.j2
+@@ -4,6 +4,9 @@
+ #
+ # Security Updates - Generated by Ansible
+ # Issue #682: CVE Remediation
++#
++# Each value in `python_security_updates` is the specifier tail appended to
++# `>=` (#15597), so an entry carrying an upper bound renders it here too.
+ # Generated: {{ ansible_facts['date_time'].iso8601 }}
+ # Host: {{ inventory_hostname }}
+ 
+diff --git a/autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml b/autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml
+index 4ac444c190..fa77847d5e 100644
+--- a/autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml
++++ b/autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml
+@@ -199,11 +199,18 @@
+   failed_when: false
+   become_user: "{{ npu_user }}"
+ 
++# #15598: floors raised to the specifier text `autobot-infrastructure/
++# autobot-npu-worker/docker/requirements-npu.txt` declares for the same two
++# packages. `>=0.100.0` let a fresh provision satisfy this task four minors
++# below the floor `fastapi>=0.141.1` carries for a security reason (it requires
++# starlette >=0.52.1, the O(n^2) Range-header DoS), and the worker's own
++# manifest is not installed by this role, so nothing downstream corrected it.
++# The parity guard (#15568) now fails any PR that moves one side alone.
+ - name: Install FastAPI and web server dependencies
+   ansible.builtin.pip:
+     name:
+-      - fastapi>=0.100.0
+-      - uvicorn[standard]>=0.20.0
++      - fastapi>=0.141.1
++      - uvicorn[standard]>=0.52.4
+     virtualenv: "{{ npu_install_dir }}/venv"
+     state: present
+   become_user: "{{ npu_user }}"
+diff --git a/autobot-slm-backend/ansible/roles/redis/tasks/chromadb.yml b/autobot-slm-backend/ansible/roles/redis/tasks/chromadb.yml
+index 260f684beb..a38da44f07 100644
+--- a/autobot-slm-backend/ansible/roles/redis/tasks/chromadb.yml
++++ b/autobot-slm-backend/ansible/roles/redis/tasks/chromadb.yml
+@@ -48,9 +48,17 @@
+     HOME: "{{ chromadb_install_dir }}"
+   tags: ['redis', 'chromadb']
+ 
++# #15598: the standalone ChromaDB service venv has no requirements manifest of
++# its own, so the floor must stay literal here. It is the specifier text
++# `autobot-backend/requirements.txt` and the ai-stack manifest both declare --
++# `>=0.5` admitted a chromadb two majors below the one the backend that reads
++# this instance is built against. The upper bound comes across with the floor
++# for the reason those manifests state next to it -- it guards against breaking
++# API changes above 2.x -- and an unbounded floor in a venv with no `-c` would
++# resolve straight past it.
+ - name: "ChromaDB | Install chromadb package"
+   ansible.builtin.pip:
+-    name: "chromadb>=0.5"
++    name: "chromadb>=1.5.9,<2.0.0"
+     state: present
+     virtualenv: "{{ chromadb_install_dir }}/venv"
+     extra_args: "--timeout 300"
+diff --git a/autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml b/autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml
+index 96e71c0c70..82b3bd9509 100644
+--- a/autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml
++++ b/autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml
+@@ -183,13 +183,22 @@
+   timeout: 120  # Issue #2835: prevent indefinite hang on network issues
+   tags: ['tts', 'venv']
+ 
++# #15598: every floor here is now the specifier text `autobot-tts-worker/
++# requirements.txt` declares. This role provisions the very worker whose
++# manifest annotates `fastapi>=0.141.1` as a SECURITY UPDATE requiring starlette
++# >=0.52.1, and it asked for `>=0.100.0` -- so a fresh provision satisfied the
++# task below the floor the security note exists to hold, and the role never
++# installs that manifest to correct it afterwards. `-r` is not used because the
++# worker's packages are split across three pip tasks by index (torch comes from
++# the CPU-only wheel index below); the parity guard (#15568) binds the literals
++# to the manifest instead.
+ - name: "TTS Worker | Install FastAPI and server dependencies"
+   ansible.builtin.pip:
+     name:
+-      - fastapi>=0.100.0
+-      - uvicorn[standard]>=0.20.0
+-      - python-multipart>=0.0.6
+-      - aiofiles>=23.0.0
++      - fastapi>=0.141.1
++      - uvicorn[standard]>=0.52.4
++      - python-multipart>=0.0.32
++      - aiofiles>=25.1.0
+     virtualenv: "{{ tts_install_dir }}/venv"
+     state: present
+   become_user: "{{ tts_user }}"
+@@ -198,10 +207,14 @@
+   timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
+   tags: ['tts', 'packages']
+ 
+-- name: "TTS Worker | Install torch CPU-only (Pocket TTS requires >=2.5)"
++# #15598: floor raised from `>=2.5.0` to the `>=2.13.0` that
++# `autobot-tts-worker/requirements.txt` declares. Pocket TTS needs >=2.5, but
++# the worker ships against 2.13 and this task is what actually populates its
++# venv, so the lower number was the one that bound.
++- name: "TTS Worker | Install torch CPU-only from the CPU wheel index"
+   ansible.builtin.pip:
+     name:
+-      - "torch>=2.5.0"
++      - "torch>=2.13.0"
+     virtualenv: "{{ tts_install_dir }}/venv"
+     state: present
+     extra_args: "--index-url https://download.pytorch.org/whl/cpu --timeout 300"
+@@ -221,7 +234,9 @@
+       # the worker's streaming code path, rather than an unbounded
+       # latest-wins resolve.
+       - pocket-tts>=2.0.0
+-      - soundfile>=0.12.0
++      # #15598: `>=0.14.0` is the floor `autobot-tts-worker/requirements.txt`
++      # declares for this worker; `>=0.12.0` here undercut it by two minors.
++      - soundfile>=0.14.0
+       # #15568: numpy carries no floor here -- constraints/shared.txt is the
+       # single source of truth for it (#10524), and `autobot-tts-worker/
+       # requirements.txt` already lists it bare against that constraint. The
+diff --git a/repo_tests/ansible_pip_parity_baseline.txt b/repo_tests/ansible_pip_parity_baseline.txt
+index 69d0e7933f..f75a7599b1 100644
+--- a/repo_tests/ansible_pip_parity_baseline.txt
++++ b/repo_tests/ansible_pip_parity_baseline.txt
+@@ -4,7 +4,23 @@
+ # package that an ansible pip declaration site versions differently from every
+ # `requirements*.txt` declaration of the same package.
+ #
+-# `repo_tests/ansible_requirements_parity_test.py` enforces two things:
++# THIS FILE IS NOW EMPTY, AND THAT IS THE POINT.
++#
++# It was seeded with the 55 divergences the #15568 audit measured, grouped by
++# the three issues that owned them. All 55 are fixed:
++#
++#   * #15597 — 12 `python_security_updates` floors that sat BELOW the shipped
++#     requirements, so the patching run they drive installed nothing while
++#     reporting success. Raised to the manifests' own specifier text.
++#   * #15598 — 16 live role pip tasks below their component's own floors
++#     (`roles/ai-stack`, `roles/npu-worker`, `roles/redis`, `roles/tts-worker`).
++#     Raised to the same.
++#   * #15596 — 27 entries in three dormant `packages.python` group_vars lists.
++#     Nothing reads them; they now restate no versions at all, and the
++#     wire-or-remove decision for the whole `packages` dict is #15621.
++#
++# `repo_tests/ansible_requirements_parity_test.py` enforces two things, and with
++# no entries left both now bite on the first offence:
+ #
+ #   1. any divergence NOT listed here fails — a new restatement, or a bump that
+ #      moved one manifest and not the other, which is the failure #15408 hit
+@@ -13,92 +29,8 @@
+ #      because the declaration was removed — ALSO fails. A stale entry exempts
+ #      nothing while looking authoritative.
+ #
+-# THIS LIST ONLY SHRINKS. Seeded from the audit #15568 asked for, run
+-# 2026-09-04 over 21 ansible pip declaration sites and 34 requirements files.
+-# Nothing may be added to it to make a red go away: a new divergence is either
+-# fixed at the declaration, or the package moves onto `constraints/shared.txt`.
+-#
+-# Two divergences found by that audit are absent because they were fixed in the
+-# same change: `numpy` in `group_vars/aiml.yml` and in `roles/tts-worker`, both
+-# now bare names against `constraints/shared.txt`. Packages the constraints file
+-# guards are never eligible for this baseline — a separate assertion in the same
+-# test fails them outright.
+-#
+-# The remaining 55 fall into three classes, one issue each. Every line below is
+-# a live finding with an owner, not an accepted state.
+-
+-# ---------------------------------------------------------------------------
+-# #15596 — dormant `packages.python` lists. Nothing reads these three vars, so
+-# they install nothing today; each floor is one to two majors below the
+-# matching requirements pin. Fix is to wire them or fold them into the roles'
+-# own pip tasks, not to bump literals that will re-rot.
+-# ---------------------------------------------------------------------------
+-autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::aiohttp
+-autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::anthropic
+-autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::openai
+-autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::opencv-python
+-autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::pillow
+-autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::torch
+-autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::torchvision
+-autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::transformers
+-autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::uvicorn
+-autobot-slm-backend/ansible/inventory/group_vars/backend.yml::aiofiles
+-autobot-slm-backend/ansible/inventory/group_vars/backend.yml::aiohttp
+-autobot-slm-backend/ansible/inventory/group_vars/backend.yml::aiosqlite
+-autobot-slm-backend/ansible/inventory/group_vars/backend.yml::prometheus-client
+-autobot-slm-backend/ansible/inventory/group_vars/backend.yml::pydantic
+-autobot-slm-backend/ansible/inventory/group_vars/backend.yml::python-multipart
+-autobot-slm-backend/ansible/inventory/group_vars/backend.yml::redis
+-autobot-slm-backend/ansible/inventory/group_vars/backend.yml::structlog
+-autobot-slm-backend/ansible/inventory/group_vars/backend.yml::torch
+-autobot-slm-backend/ansible/inventory/group_vars/backend.yml::transformers
+-autobot-slm-backend/ansible/inventory/group_vars/backend.yml::uvicorn
+-autobot-slm-backend/ansible/inventory/group_vars/backend.yml::websockets
+-autobot-slm-backend/ansible/inventory/group_vars/browser.yml::beautifulsoup4
+-autobot-slm-backend/ansible/inventory/group_vars/browser.yml::opencv-python
+-autobot-slm-backend/ansible/inventory/group_vars/browser.yml::pillow
+-autobot-slm-backend/ansible/inventory/group_vars/browser.yml::playwright
+-autobot-slm-backend/ansible/inventory/group_vars/browser.yml::requests
+-autobot-slm-backend/ansible/inventory/group_vars/browser.yml::uvicorn
+-
+-# ---------------------------------------------------------------------------
+-# #15597 — `python_security_updates` floors that sit BELOW the shipped
+-# requirements, so the patching run they drive is a no-op while reporting
+-# success. `nltk` is here for the same reason as the rest: `>=3.9.3` against a
+-# `==3.10.3` pin. It is NOT the #15551 finding, which is about the advisory
+-# allowance, and it does not make nltk removable — llama-index-core requires it.
+-# ---------------------------------------------------------------------------
+-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::aiohttp
+-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::cryptography
+-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::fastapi
+-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::langchain-core
+-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::markdownify
+-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::nltk
+-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::pillow
+-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::protobuf
+-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::pypdf
+-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::python-multipart
+-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::requests
+-autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::starlette
+-
+-# ---------------------------------------------------------------------------
+-# #15598 — live role pip tasks whose floors are below the component's own
+-# requirements file. `roles/tts-worker`'s `fastapi>=0.100.0` provisions the very
+-# worker whose requirements annotate `fastapi>=0.141.1` as a security floor.
+-# ---------------------------------------------------------------------------
+-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::chromadb
+-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::langchain
+-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::pydantic
+-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::redis
+-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::sqlalchemy
+-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::torch
+-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::transformers
+-autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml::fastapi
+-autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml::uvicorn
+-autobot-slm-backend/ansible/roles/redis/tasks/chromadb.yml::chromadb
+-autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::aiofiles
+-autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::fastapi
+-autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::python-multipart
+-autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::soundfile
+-autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::torch
+-autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::uvicorn
++# THIS LIST ONLY SHRINKS, and it has nowhere left to shrink to. Nothing may be
++# added to it to make a red go away: a new divergence is either fixed at the
++# declaration, or the package moves onto `constraints/shared.txt`. Packages the
++# constraints file guards are never eligible for it in any case — a separate
++# assertion in the same test fails them outright.
+diff --git a/repo_tests/ansible_requirements_parity_test.py b/repo_tests/ansible_requirements_parity_test.py
+index c9ff0f7b3d..a0931e932d 100644
+--- a/repo_tests/ansible_requirements_parity_test.py
++++ b/repo_tests/ansible_requirements_parity_test.py
+@@ -28,11 +28,17 @@
+ on embeddings one role writes and another reads. This is the ansible half of
+ `check_constraint_drift.py`, which cannot see these files.
+ 
+-`test_every_cross_manifest_divergence_is_in_the_baseline` is ratcheted, because the
+-measured backlog is 55 and asserting it flat would redden the tree rather than
+-describe it. `ansible_pip_parity_baseline.txt` records every one, grouped by
+-the issue that owns it (#15596, #15597, #15598); the file only shrinks, and a stale
+-entry fails just as loudly as a new divergence.
++`test_every_cross_manifest_divergence_is_in_the_baseline` is ratcheted through
++`ansible_pip_parity_baseline.txt`, because the backlog this test first measured
++was 55 and asserting it flat would have reddened the tree rather than described
++it. That backlog is now zero -- #15597 raised the twelve `python_security_updates`
++floors that sat below the shipped requirements, #15598 the sixteen role pip
++tasks, and #15596 stripped the twenty-seven restated versions out of the three
++dormant `packages.python` lists -- so the baseline carries no entries and both
++assertions bite on the first offence. The file only shrinks, and a stale entry
++fails just as loudly as a new divergence; it is kept, empty, as the mechanism
++rather than deleted, because deleting it would make the next divergence's fix a
++matter of re-inventing the ratchet.
+ 
+ Agreement is compared as specifier text, not as a resolved range. `>=0.115.0` and
+ `==0.115.0` are treated as different statements of the same version because they are:
+@@ -54,7 +60,8 @@
+ _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
+ _CONSTRAINTS = _REPO_ROOT / "constraints" / "shared.txt"
+ # Named `..._pip_parity_...`, NOT `..._requirements_...`: this file RECORDS
+-# divergences, it does not DECLARE dependencies. `declared_distributions.py`
++# divergences (none, as of #15596/#15597/#15598), it does not DECLARE
++# dependencies. `declared_distributions.py`
+ # globs `*requirements*.txt` to find manifests it must read as declaration
+ # sources, and `declared_distributions_test.py` fails on any tracked file
+ # matching that glob which the oracle does not read. A recorder that reads as

@@ -1410,10 +1410,10 @@
 3|other|autobot-slm-frontend/src/views/tools/admin/VoiceTool.vue|'user'
 1|other|autobot_shared/auth/mcp_tool_permissions.py|"user"
 1|other|autobot_shared/env_registry.py|http://10.0.0.4:9090
-1|other|autobot_shared/env_registry_backend.py|http://10.255.255.254:8001
+1|other|autobot_shared/env_registry.py|http://10.255.255.254:8001
 1|other|autobot_shared/env_registry.py|http://otel-collector:4317
 1|ssot|autobot_shared/env_registry.py|:11434
-1|ssot|autobot_shared/env_registry_backend.py|:8001
+1|ssot|autobot_shared/env_registry.py|:8001
 1|ssot|autobot_shared/env_registry.py|:9090
 1|ssot|autobot_shared/env_registry.py|gemma2:2b
 1|ssot|autobot_shared/env_registry.py|llama3.2:1b

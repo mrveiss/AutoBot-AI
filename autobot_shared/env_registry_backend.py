@@ -42,16 +42,6 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_BACKEND_URL",
-        type=str,
-        default="http://10.255.255.254:8001",
-        description="Full base URL of the AutoBot backend service (overrides HOST+PORT).",
-        component="backend",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
         name="AUTOBOT_AUDIT_MAX_DEFERRED",
         type=int,
         default=10000,

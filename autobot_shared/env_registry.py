@@ -1261,6 +1261,21 @@ register_env_var(
 )
 
 
+# Stays here rather than moving to env_registry_backend with the rest of its
+# component: its default is a baselined hardcoded value, and the baseline refuses
+# an entry for a file the same change created — correctly, since it cannot tell a
+# moved value from a new one. Moving this spec would mean either stranding the
+# record or rewriting a default that is out of scope here (#15624).
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BACKEND_URL",
+        type=str,
+        default="http://10.255.255.254:8001",
+        description="Full base URL of the AutoBot backend service (overrides HOST+PORT).",
+        component="backend",
+    )
+)
+
 # Per-component modules, imported for their registration side effect (#15624).
 # `env_registry.py` was exactly at its size ceiling, so no new variable could be
 # registered anywhere until the groups started moving out. Import goes at the
