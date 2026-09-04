@@ -114,7 +114,7 @@ REACH_MARKERS = LAUNCHERS | RETAINERS
 # of the backlog" — each group states what blocks it, and two of the three
 # groups are blocked by something other than effort.
 #
-# GROUP 1 — blocked by the python-file-size ratchet (18 files, 26 sites).
+# GROUP 1 — blocked by the python-file-size ratchet (17 files, 25 sites).
 # Every file here is grandfathered at an EXACT line count in
 # ``scripts/python_file_size_known_large.py``; that mapping only shrinks, and
 # the ``from autobot_shared.async_compat import fire_and_forget`` line a
@@ -161,7 +161,6 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
     "autobot-backend/utils/service_discovery.py": 1,
     "autobot-backend/workflow_scheduler.py": 2,
     "autobot-infrastructure/shared/scripts/comprehensive_log_aggregator.py": 4,
-    "autobot-npu-worker/resources/windows-npu-worker/app/npu_worker.py": 1,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 1,
     "autobot-slm-backend/api/infrastructure.py": 1,
     "autobot-slm-backend/api/setup_wizard.py": 1,
@@ -171,10 +170,6 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
     # LAUNCHERS: it hands an audit write into the loop from another thread and
     # drops the future. Censused, not converted — the fix belongs with #15637,
     # which owns the audit-write path.
-    # Censused rather than converted: each sits in a file grandfathered at an
-    # exact line count, so the one import a conversion needs puts it over the
-    # ceiling. Decompose first -- #15642 is the last of those still standing;
-    # #15641 landed, which is why `autobot_shared/` is now a proven zero below.
 }
 
 
@@ -187,9 +182,16 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
 #
 # ``autobot_shared/`` earned its zero in #15641: ``http_client.py`` held the
 # tree's last discarded launch, and decomposing the file made room for the
-# ``fire_and_forget`` import that converted it.
+# ``fire_and_forget`` import that converted it. ``autobot-npu-worker/`` earned
+# its zero in #15642 the same way, except that the Windows worker ships
+# standalone and cannot import ``autobot_shared`` at all -- its retention is a
+# local mirror, ``app/async_compat.py``, recorded in
+# ``docs/developer/ARCHITECTURE_EXCEPTIONS.md`` beside the redis_client mirror
+# it follows. The sweep does not care which module the retainer came from; it
+# cares that the launch keeps its handle.
 PROVEN_ZERO_ROOTS: dict[str, str] = {
     "autobot_shared/": "#15641 converted the last one (http_client.py)",
+    "autobot-npu-worker/": "#15642 converted the last one (windows npu_worker.py)",
 }
 
 

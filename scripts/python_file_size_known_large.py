@@ -445,7 +445,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/workers/audit_tasks_test.py": 1197,
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
-    "autobot-npu-worker/resources/windows-npu-worker/app/npu_worker.py": 2248,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 739,
     "autobot-slm-backend/api/code_source.py": 720,
     "autobot-slm-backend/api/code_sync.py": 6091,  # #15462: build/publish logic moved to services/slm_frontend_build.py
