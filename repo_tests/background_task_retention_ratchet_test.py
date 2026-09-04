@@ -97,10 +97,11 @@ REACH_MARKERS = LAUNCHERS | RETAINERS
 # still standing. THIS MAPPING ONLY SHRINKS. A conversion lowers its entry in
 # the same commit; an entry that no longer matches the tree fails either way.
 #
-# #15619 converted 39 of the 42 reachable autobot-backend/ sites to
-# ``fire_and_forget``. What is left below is not "the rest of the backlog" —
-# each group states what blocks it, and two of the three groups are blocked by
-# something other than effort.
+# The widened sweep found 71 discarded launches in autobot-backend/, a tree
+# this file had never reached. #15619 read every one of them and converted 39
+# to ``fire_and_forget``; the 32 below are what is left. They are not "the rest
+# of the backlog" — each group states what blocks it, and two of the three
+# groups are blocked by something other than effort.
 #
 # GROUP 1 — blocked by the python-file-size ratchet (19 files, 27 sites).
 # Every file here is grandfathered at an EXACT line count in
