@@ -257,7 +257,7 @@ class SettingsLoadingFixer:
             env = os.environ.copy()
             env["PYTHONPATH"] = os.getcwd()
 
-            process = subprocess.Popen(
+            subprocess.Popen(
                 ["python", "main.py"],
                 env=env,
                 stdout=subprocess.PIPE,

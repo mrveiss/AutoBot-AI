@@ -88,7 +88,12 @@ echo "⚙️ Setting up configuration..."
 # Check for existing AutoBot configuration or use defaults
 REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
 REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
-REDIS_DB="${AUTOBOT_REDIS_DB:-0}"
+# AUTOBOT_REDIS_DB_MAIN: 11 of the 12 code_analysis Redis call sites default
+# to get_async_redis_client() with no `database` arg, which resolves to
+# "main" (autobot_shared/redis_client.py) -- so the installer's fallback
+# tracks that default rather than the retired, unset bare-name variable
+# this replaced (#15577).
+REDIS_DB="${AUTOBOT_REDIS_DB_MAIN:-0}"
 
 cat > .env << EOF
 # AutoBot Code Analysis Suite Configuration
@@ -127,7 +132,7 @@ import redis
 import os
 redis_host = os.getenv('AUTOBOT_REDIS_HOST', 'localhost')
 redis_port = int(os.getenv('AUTOBOT_REDIS_PORT', '6379'))
-redis_db = int(os.getenv('AUTOBOT_REDIS_DB', '0'))
+redis_db = int(os.getenv('AUTOBOT_REDIS_DB_MAIN', '0'))
 r = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
 r.ping()
 print('✅ Redis connection successful')

@@ -379,7 +379,8 @@ class CodebaseProfiler:
         print(f"📥 Import statements: {len(static.get('import_statements', {}))}")
         print(f"🔄 Duplicate functions: {len(self.results['performance_hotspots'].get('duplicate_code', []))}")
         print(
-            f"🔥 High complexity functions: {len(self.results['performance_hotspots'].get('high_complexity_functions', []))}"
+            "🔥 High complexity functions: "
+            f"{len(self.results['performance_hotspots'].get('high_complexity_functions', []))}"
         )
         print(f"💡 Recommendations: {len(self.results['recommendations'])}")
 

@@ -22,15 +22,30 @@ this test would have caught the real defect: an autospec of the Enhanced
 path's dict return combined with list iteration reproduces the exact
 production ``AttributeError``, and top_k= keeps it on the List-returning
 Basic path.
+
+#15255: ``__init__`` separately called ``config.get(...)`` four times, where
+``config`` (``from config import config``) is the SSOT
+``autobot_shared.ssot_config`` singleton -- it has no ``.get()``, so every
+*real* construction of this class (``KBLibrarianAgent()`` in
+``api/workflow.py``'s librarian step handler, and via ``get_kb_librarian()``
+in ``api/kb_librarian.py`` / ``agent_orchestration/coordinator.py`` /
+``agent_orchestration/agent_execution.py``) raised ``AttributeError``. The
+tests above never caught this because ``_agent_with_mock_kb`` bypasses
+``__init__`` entirely via ``object.__new__``. The tests below exercise the
+real constructor.
 """
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from unittest import mock
 from unittest.mock import create_autospec
 
 import pytest
 
+import agents.kb_librarian_agent as kb_agent_module
 from agents.kb_librarian_agent import KBLibrarianAgent
+from autobot_shared.ssot_config import config as ssot_config
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
 
@@ -40,6 +55,38 @@ def _agent_with_mock_kb(results):
     agent.knowledge_base = create_autospec(KnowledgeBase, instance=True)
     agent.knowledge_base.search.return_value = results
     return agent
+
+
+@contextmanager
+def _mocked_init_dependencies():
+    """Patch everything ``__init__`` needs besides config_manager (#15255)."""
+    with (
+        mock.patch.object(kb_agent_module, "get_agent_provider_explicit", return_value="ollama"),
+        mock.patch.object(kb_agent_module, "get_agent_endpoint_explicit", return_value="http://127.0.0.1:11434"),
+        mock.patch.object(kb_agent_module, "get_agent_model_explicit", return_value="test-model"),
+        mock.patch.object(kb_agent_module, "KnowledgeBase", return_value=create_autospec(KnowledgeBase, instance=True)),
+        mock.patch.object(kb_agent_module, "get_llm_service", return_value=mock.Mock()),
+    ):
+        yield
+
+
+def test_init_raises_with_pre_fix_ssot_singleton_binding():
+    """#15255 contrast mutation: red. The pre-fix ``config`` binding (the SSOT
+    singleton) has no ``.get()`` and breaks construction."""
+    with _mocked_init_dependencies(), mock.patch.object(kb_agent_module, "config_manager", ssot_config):
+        with pytest.raises(AttributeError):
+            KBLibrarianAgent()
+
+
+def test_init_reads_runtime_defaults_via_config_manager():
+    """#15255: green. Real construction reads defaults through config_manager.get()."""
+    with _mocked_init_dependencies():
+        agent = KBLibrarianAgent()
+
+    assert agent.max_results == 5
+    assert agent.similarity_threshold == 0.6
+    assert agent.auto_summarize is False
+    assert agent.auto_learning_enabled is True
 
 
 @pytest.mark.asyncio
