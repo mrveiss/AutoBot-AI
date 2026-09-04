@@ -49,7 +49,7 @@ def main():
             # Update config suggestion
             print(f"\n📝 Update config.yaml for user '{username}':")
             print(f"    {username}:")
-            print('      password_hash: "{password_hash}"')
+            print(f'      password_hash: "{password_hash}"')
             break
 
     print("\n✅ All password hashes generated successfully!")

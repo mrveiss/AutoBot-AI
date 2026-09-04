@@ -36,7 +36,7 @@ def _failure_records(caplog, level):
 
 @pytest.mark.asyncio
 async def test_request_failure_logs_error_by_default(caplog):
-    with caplog.at_level(logging.DEBUG, logger="autobot_shared.http_client"):
+    with caplog.at_level(logging.DEBUG, logger="autobot_shared.http_client_manager"):
         await _run_request(suppress=False)
     assert _failure_records(caplog, logging.ERROR), "default failure must log at ERROR"
     assert not _failure_records(caplog, logging.DEBUG)
@@ -44,7 +44,7 @@ async def test_request_failure_logs_error_by_default(caplog):
 
 @pytest.mark.asyncio
 async def test_request_failure_suppressed_logs_debug(caplog):
-    with caplog.at_level(logging.DEBUG, logger="autobot_shared.http_client"):
+    with caplog.at_level(logging.DEBUG, logger="autobot_shared.http_client_manager"):
         await _run_request(suppress=True)
     assert _failure_records(caplog, logging.DEBUG), "suppressed failure must log at DEBUG"
     assert not _failure_records(caplog, logging.ERROR)
@@ -287,7 +287,7 @@ async def test_tracked_request_decrements_on_caller_exception():
     ],
 )
 async def test_egress_guard_permits_private_only_with_the_opt_in(url, allow_private, blocked):
-    from autobot_shared.http_client import EgressBlockedError, _assert_egress_allowed
+    from autobot_shared.http_egress_guard import EgressBlockedError, _assert_egress_allowed
 
     if blocked:
         with pytest.raises(EgressBlockedError):

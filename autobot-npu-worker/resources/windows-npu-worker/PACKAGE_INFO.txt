@@ -53,8 +53,22 @@ Documentation (6 files - 2 NEW):
   - BUILDING.md (400+ lines)           - Build instructions (NEW)
   - PACKAGE_INFO.txt                   - This file (UPDATED)
 
-Application (1 file):
-  - app/npu_worker.py (685 lines)     - Main NPU worker implementation
+Application (14 files, decomposed by #15642 — see app/utils/ for the
+standalone Redis, telemetry and bootstrap clients):
+  - app/npu_worker.py (197 lines)             - Worker assembly and uvicorn entry point
+  - app/worker_settings.py (165 lines)        - Constants, YAML config, logging, device priority
+  - app/worker_identity.py (139 lines)        - Worker ID and pairing state on disk (#641)
+  - app/worker_state.py (144 lines)           - Lock-guarded embedding cache and stats (#68)
+  - app/async_compat.py (60 lines)            - Background-task retention (#15522, mirror)
+  - app/api_schemas.py (66 lines)             - Pydantic request/response bodies
+  - app/model_manager.py (283 lines)          - Model registry and inference sessions
+  - app/onnx_device_selection.py (210 lines)  - OpenVINO device and provider selection
+  - app/model_conversion.py (131 lines)       - HuggingFace download and ONNX export
+  - app/worker_routes.py (315 lines)          - HTTP routes and their handlers
+  - app/worker_pairing.py (202 lines)         - Pairing with the main host (#641)
+  - app/worker_startup.py (423 lines)         - Initialisation and model loading
+  - app/worker_inference.py (206 lines)       - Task dispatch, embeddings, semantic search
+  - app/worker_metrics.py (137 lines)         - NPU metrics, status and benchmark
 
 Configuration (1 file):
   - config/npu_worker.yaml (231 lines) - Windows-specific configuration

@@ -114,7 +114,7 @@ REACH_MARKERS = LAUNCHERS | RETAINERS
 # of the backlog" — each group states what blocks it, and two of the three
 # groups are blocked by something other than effort.
 #
-# GROUP 1 — blocked by the python-file-size ratchet (19 files, 27 sites).
+# GROUP 1 — blocked by the python-file-size ratchet (17 files, 25 sites).
 # Every file here is grandfathered at an EXACT line count in
 # ``scripts/python_file_size_known_large.py``; that mapping only shrinks, and
 # the ``from autobot_shared.async_compat import fire_and_forget`` line a
@@ -151,7 +151,6 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
     "autobot-backend/chat_workflow/tool_handler.py": 2,
     "autobot-backend/initialization/lifespan.py": 1,
     "autobot-backend/knowledge/facts.py": 1,
-    "autobot-backend/llc/services/goal.py": 2,
     "autobot-backend/middleware/audit_middleware.py": 1,
     "autobot-backend/orchestrator.py": 1,
     "autobot-backend/secure_sandbox_executor.py": 1,
@@ -161,20 +160,37 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
     "autobot-backend/utils/service_discovery.py": 1,
     "autobot-backend/workflow_scheduler.py": 2,
     "autobot-infrastructure/shared/scripts/comprehensive_log_aggregator.py": 4,
-    "autobot-npu-worker/resources/windows-npu-worker/app/npu_worker.py": 1,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 1,
     "autobot-slm-backend/api/infrastructure.py": 1,
     "autobot-slm-backend/api/setup_wizard.py": 1,
     "autobot-slm-backend/api/updates.py": 1,
     "autobot-slm-backend/slm/agent/agent.py": 1,
-    "autobot_shared/http_client.py": 1,
     # audit_middleware surfaced only when `run_coroutine_threadsafe` joined
     # LAUNCHERS: it hands an audit write into the loop from another thread and
     # drops the future. Censused, not converted — the fix belongs with #15637,
     # which owns the audit-write path.
-    # Censused rather than converted: each sits in a file grandfathered at an
-    # exact line count, so the one import a conversion needs puts it over the
-    # ceiling. Decompose first -- #15641, #15642.
+}
+
+
+# A scan root whose census reaches ZERO does not stop being swept. The root
+# stays in ``SCAN_ROOTS`` — its file and reach floors still have to hold — and
+# it moves here, where the zero is ASSERTED rather than assumed: the sweep must
+# find no discarded launch under it at all. Deleting the root instead would
+# retire the only thing that can notice the next one, which is the failure this
+# whole file exists to prevent (#15619 lost a whole backend that way).
+#
+# ``autobot_shared/`` earned its zero in #15641: ``http_client.py`` held the
+# tree's last discarded launch, and decomposing the file made room for the
+# ``fire_and_forget`` import that converted it. ``autobot-npu-worker/`` earned
+# its zero in #15642 the same way, except that the Windows worker ships
+# standalone and cannot import ``autobot_shared`` at all -- its retention is a
+# local mirror, ``app/async_compat.py``, recorded in
+# ``docs/developer/ARCHITECTURE_EXCEPTIONS.md`` beside the redis_client mirror
+# it follows. The sweep does not care which module the retainer came from; it
+# cares that the launch keeps its handle.
+PROVEN_ZERO_ROOTS: dict[str, str] = {
+    "autobot_shared/": "#15641 converted the last one (http_client.py)",
+    "autobot-npu-worker/": "#15642 converted the last one (windows npu_worker.py)",
 }
 
 
@@ -281,17 +297,41 @@ def test_the_scan_covers_both_backends():
     )
 
 
-def test_every_scan_root_carries_its_own_census_entries():
+def test_every_scan_root_is_either_censused_or_a_proven_zero():
     """A census entry outside the swept roots can never be re-verified."""
     census_roots = {rel.split("/", 1)[0] + "/" for rel in KNOWN_DISCARDED_LAUNCHES}
     assert census_roots <= set(SCAN_ROOTS), (
         "census entries outside every scan root can never be re-verified: " f"{sorted(census_roots - set(SCAN_ROOTS))}"
     )
-    assert census_roots == set(SCAN_ROOTS), (
-        "a scan root with no census entry means the sweep found nothing there — "
-        "delete the root or prove the zero deliberately; missing: "
-        f"{sorted(set(SCAN_ROOTS) - census_roots)}"
+    assert census_roots.isdisjoint(PROVEN_ZERO_ROOTS), (
+        "a root cannot be both censused and a proven zero — the census says it "
+        f"still holds a discarded launch: {sorted(census_roots & set(PROVEN_ZERO_ROOTS))}"
     )
+    accounted = census_roots | set(PROVEN_ZERO_ROOTS)
+    assert accounted == set(SCAN_ROOTS), (
+        "a scan root with no census entry means the sweep found nothing there — "
+        "delete the root or prove the zero deliberately in PROVEN_ZERO_ROOTS; "
+        f"missing: {sorted(set(SCAN_ROOTS) - accounted)}"
+    )
+
+
+def test_a_proven_zero_root_really_is_zero():
+    """The zero is measured on the tree, not taken on the entry's word.
+
+    A root moves into ``PROVEN_ZERO_ROOTS`` when its last discarded launch is
+    converted. That claim has to keep being true: the root is still swept to
+    both of its floors here, and the sweep must find nothing. A new discarded
+    launch under a converted root therefore fails by that root's name, exactly
+    as a regrown census entry does.
+    """
+    for root in PROVEN_ZERO_ROOTS:
+        assert root in SCAN_ROOTS, f"{root} is claimed as a proven zero but is not swept at all"
+        found = _assert_root_floors(root).discarded
+        assert found == {}, (
+            f"{root} is recorded as a proven zero ({PROVEN_ZERO_ROOTS[root]}) but the sweep "
+            f"found discarded launches there: {found}. Use "
+            "autobot_shared.async_compat.fire_and_forget (#15522)."
+        )
 
 
 def test_the_census_is_pinned_and_may_only_shrink():
