@@ -34,6 +34,9 @@ torchvision>=0.28.0
 torchaudio>=2.11.0
 
 # Text Processing
+# #15551: not directly imported -- kept because llama-index-core (declared at the
+# top of this file) requires `nltk>=3.9.3` transitively, so removing this floor
+# would unpin it rather than uninstall it.
 nltk>=3.10.3
 # spacy: NOT a dependency of the AI stack (#14279). Nothing under
 # autobot-infrastructure/shared/docker/ai-stack/ imports it — the only importer
