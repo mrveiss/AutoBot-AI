@@ -208,10 +208,36 @@ def test_exceeding_the_page_ceiling_raises_instead_of_truncating():
 
     Every page is full, so the `len(body) < PAGE_SIZE` terminator never fires
     and the ceiling is the only thing that stops the walk.
+
+    `_paginate_issues` is a GENERATOR, so the walk -- and therefore every
+    DriftError it can raise, the ceiling and the 4xx alike -- runs only when
+    the caller drains it. Calling it bare raises nothing at all, which is why
+    this consumes with `list()`. `scan` is the only caller and it drains via a
+    `for`, so the guarantee holds there; `test_a_partial_read_is_never_reported`
+    pins that end of it.
     """
     full_page = [_issue(n) for n in range(PAGE_SIZE)]
     api = FakeApi({"open": [list(full_page) for _ in range(MAX_PAGES + 1)]})
 
     with pytest.raises(DriftError, match=f"exceeded {MAX_PAGES} pages"):
-        _paginate_issues(api, "open")
+        list(_paginate_issues(api, "open"))
+
+
+def test_a_partial_read_is_never_reported():
+    """A failure mid-walk must not surface as a short-but-clean population.
+
+    Page 1 is full and page 2 errors, so anything that swallowed the second
+    DriftError would report page 1's issues as the whole repository.
+    """
+
+    class _FailsOnPageTwo:
+        repository = "mrveiss/AutoBot-AI"
+
+        def request(self, method, path, payload=None):  # noqa: ANN001, ANN201, ARG002
+            if "&page=1" in path:
+                return (200, [_issue(n) for n in range(PAGE_SIZE)])
+            return (502, {"message": "bad gateway"})
+
+    with pytest.raises(DriftError, match="page 2"):
+        scan(_FailsOnPageTwo(), ("open",), "umbrella")
 
