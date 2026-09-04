@@ -28,11 +28,17 @@ one host, so two floors for one library make pip unsatisfiable and skew the nump
 on embeddings one role writes and another reads. This is the ansible half of
 `check_constraint_drift.py`, which cannot see these files.
 
-`test_every_cross_manifest_divergence_is_in_the_baseline` is ratcheted, because the
-measured backlog is 55 and asserting it flat would redden the tree rather than
-describe it. `ansible_pip_parity_baseline.txt` records every one, grouped by
-the issue that owns it (#15596, #15597, #15598); the file only shrinks, and a stale
-entry fails just as loudly as a new divergence.
+`test_every_cross_manifest_divergence_is_in_the_baseline` is ratcheted through
+`ansible_pip_parity_baseline.txt`, because the backlog this test first measured
+was 55 and asserting it flat would have reddened the tree rather than described
+it. That backlog is now zero -- #15597 raised the twelve `python_security_updates`
+floors that sat below the shipped requirements, #15598 the sixteen role pip
+tasks, and #15596 stripped the twenty-seven restated versions out of the three
+dormant `packages.python` lists -- so the baseline carries no entries and both
+assertions bite on the first offence. The file only shrinks, and a stale entry
+fails just as loudly as a new divergence; it is kept, empty, as the mechanism
+rather than deleted, because deleting it would make the next divergence's fix a
+matter of re-inventing the ratchet.
 
 Agreement is compared as specifier text, not as a resolved range. `>=0.115.0` and
 `==0.115.0` are treated as different statements of the same version because they are:
@@ -54,7 +60,8 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 _CONSTRAINTS = _REPO_ROOT / "constraints" / "shared.txt"
 # Named `..._pip_parity_...`, NOT `..._requirements_...`: this file RECORDS
-# divergences, it does not DECLARE dependencies. `declared_distributions.py`
+# divergences (none, as of #15596/#15597/#15598), it does not DECLARE
+# dependencies. `declared_distributions.py`
 # globs `*requirements*.txt` to find manifests it must read as declaration
 # sources, and `declared_distributions_test.py` fails on any tracked file
 # matching that glob which the oracle does not read. A recorder that reads as
