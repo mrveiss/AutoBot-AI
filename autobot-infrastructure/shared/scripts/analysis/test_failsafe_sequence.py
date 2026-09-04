@@ -68,7 +68,7 @@ async def test_failsafe_sequence():
 
     except Exception as e:
         elapsed = time.time() - start_time
-        logger.error("❌ chat_completion call failed after {elapsed:.2f}s: %s", e)
+        logger.error("❌ chat_completion call failed after %.2fs: %s", elapsed, e)
         import traceback
 
         traceback.print_exc()
@@ -123,7 +123,7 @@ async def test_direct_ollama_completion():
 
     except Exception as e:
         elapsed = time.time() - start_time
-        logger.error("❌ Direct Ollama call failed after {elapsed:.2f}s: %s", e)
+        logger.error("❌ Direct Ollama call failed after %.2fs: %s", elapsed, e)
         import traceback
 
         traceback.print_exc()

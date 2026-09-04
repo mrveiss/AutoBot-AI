@@ -40,13 +40,13 @@ def check_llm_config():
         logger.info("\n📋 Global LLM Config:")
         llm_config = global_config.get_nested("llm_config", {})
         for key, value in llm_config.items():
-            logger.info("   {key}: %s", value)
+            logger.info("   %s: %s", key, value)
 
         # Check unified LLM config
         logger.info("\n🔗 Unified LLM Config:")
         unified_config = global_config.get_nested("unified_llm_config", {})
         for key, value in unified_config.items():
-            logger.info("   {key}: %s", value)
+            logger.info("   %s: %s", key, value)
 
         # Create LLM interface and check its settings
         logger.info("\n🤖 LLM Interface Settings:")

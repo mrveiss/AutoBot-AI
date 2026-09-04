@@ -532,7 +532,7 @@ async def batch_schedule_workflows(workflows: List[ScheduleWorkflowRequest]):
 
         except Exception as e:
             logger.exception("Unexpected error: %s", e)
-            errors.append("Workflow {i}")
+            errors.append(f"Workflow {i}")
 
     return {
         "success": True,
