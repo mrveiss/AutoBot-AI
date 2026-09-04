@@ -79,6 +79,8 @@ STORE_AUTHORITY: dict[str, Concept] = {
         projections=(Store.REDIS, Store.CHROMADB),
         write_sites=(
             _FACTS,
+            "autobot-backend/knowledge/fact_store.py",
+            "autobot-backend/knowledge/fact_projection.py",
             "autobot-backend/knowledge/ownership.py",
             "autobot-backend/api/knowledge_vectorization.py",
             "autobot-backend/background_vectorization.py",
