@@ -16,6 +16,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.ssot_constants import CategoryDefaults
 
 # Add autobot-backend to Python path so the `utils.*` imports below resolve
@@ -43,9 +44,9 @@ from utils.hardware_metrics import (
     collect_phase9_metrics,
     get_phase9_performance_dashboard,
     hardware_monitor,
-    start_hardware_monitoring as start_phase9_monitoring,
-    stop_hardware_monitoring as stop_phase9_monitoring,
 )
+from utils.hardware_metrics import start_hardware_monitoring as start_phase9_monitoring
+from utils.hardware_metrics import stop_hardware_monitoring as stop_phase9_monitoring
 
 # Configure logging
 logging.basicConfig(
@@ -144,11 +145,11 @@ class HardwareMonitoringManager:
 
             # Start periodic optimization if enabled
             if self.config["gpu_optimization_enabled"]:
-                asyncio.create_task(self._periodic_optimization_loop())
+                fire_and_forget(self._periodic_optimization_loop(), name="hw-monitor-optimization-loop")
 
             # Start monitoring dashboard updates
             if self.config["realtime_dashboard_enabled"]:
-                asyncio.create_task(self._dashboard_update_loop())
+                fire_and_forget(self._dashboard_update_loop(), name="hw-monitor-dashboard-loop")
 
             self.monitoring_active = True
             self.start_time = time.time()
