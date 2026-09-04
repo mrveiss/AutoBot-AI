@@ -63,7 +63,13 @@ _CONSTRAINTS = _REPO_ROOT / "constraints" / "shared.txt"
 # about: a recorder holds a name as data, a manifest holds it as a claim.
 _BASELINE = pathlib.Path(__file__).with_name("ansible_pip_parity_baseline.txt")
 
-_EXCLUDE_DIRS = ("node_modules", ".worktrees", ".git", "__pycache__")
+# `.claude` holds Claude Code's own per-session worktree copies of this repo
+# (see .git/info/exclude). Without it the walk reads another session's
+# requirements manifests as if they were this tree's: measured 65 files
+# locally against 37 with it excluded. CI never has the directory, so the
+# merge gate was unaffected and the omission was invisible there -- which is
+# exactly why it belongs in the list rather than in a note.
+_EXCLUDE_DIRS = ("node_modules", ".worktrees", ".claude", ".git", "__pycache__")
 _PIP_KEYS = ("pip", "ansible.builtin.pip")
 _REQUIREMENT = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(.*)$")
 _SPECIFIER = re.compile(r"^(==|>=|<=|~=|!=|>|<)")
@@ -76,6 +82,10 @@ _MIN_PIP_SITES = 15  # 18 carry at least one name: entry
 _MIN_ANSIBLE_DECLARATIONS = 95  # 115, versioned and bare together
 _MIN_REQUIREMENT_FILES = 30  # 34
 _MIN_REQUIREMENT_PACKAGES = 140  # 161
+# Exact, unlike the others: `constraints/shared.txt` guards two packages and a
+# floor of 2 is the whole population. Legitimately shrinking that file to one
+# guarded package trips this as a walk failure, which it would not be -- so
+# raise the floor with the file rather than reading a red here as a parser bug.
 _MIN_CONSTRAINED_PACKAGES = 2  # numpy, openvino
 
 

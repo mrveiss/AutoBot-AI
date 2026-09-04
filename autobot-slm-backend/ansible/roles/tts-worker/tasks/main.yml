@@ -232,7 +232,7 @@
       # rather than restating the literal that roles/npu-worker and agent_config/openvino
       # still carry: an override of `code_source_dir` is still honoured, but the
       # default no longer hardcodes a path. Those two pre-existing literals are
-      # baselined and tracked separately.
+      # baselined and tracked separately (#15601).
       - numpy
       - scipy>=1.10.0
     virtualenv: "{{ tts_install_dir }}/venv"
