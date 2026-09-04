@@ -23,6 +23,28 @@ document to surface the obligation.
 
 ---
 
+## Windows NPU Worker — Standalone Background-Task Retention
+
+**File:** `autobot-npu-worker/resources/windows-npu-worker/app/async_compat.py`
+**Mirrors:** `autobot_shared/async_compat.py` (`fire_and_forget`)
+**Issue:** #15642
+
+**Reason:** Same packaging constraint as the standalone Redis client above, and established
+from the packaging files rather than assumed: `installer/npu_worker.spec` runs PyInstaller's
+`Analysis` over `app/npu_worker.py` with `pathex=[app]`, and `scripts/install.ps1` copies
+only `app`, `config`, `gui`, `installer`, `nssm`, `scripts`, `tests` and the requirements
+file. `autobot_shared/` is on none of those paths, so importing the canonical
+`fire_and_forget` would ship an `ImportError` to a Windows NPU node. The mirror replicates
+only what the worker needs: a module-level retention set, a done callback that releases the
+reference, and a failure log — the fix #15522 defines for a discarded task launch.
+
+**Sync cadence:** When `autobot_shared/async_compat.py`'s `fire_and_forget` changes,
+manually mirror the change here. `repo_tests/background_task_retention_ratchet_test.py`
+records `autobot-npu-worker/` as a proven zero, so a new discarded launch in this tree
+fails there regardless of which module the retention came from.
+
+---
+
 ## `utils/gpu_vector_search.py` — FAISS-GPU Hybrid Search Client Type
 
 **File:** `autobot-backend/utils/gpu_vector_search.py`

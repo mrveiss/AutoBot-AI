@@ -450,7 +450,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/workers/audit_tasks_test.py": 1197,
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
-    "autobot-npu-worker/resources/windows-npu-worker/app/npu_worker.py": 2248,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 739,
     "autobot-slm-backend/api/code_source.py": 720,
     "autobot-slm-backend/api/code_sync.py": 6091,  # #15462: build/publish logic moved to services/slm_frontend_build.py
@@ -509,7 +508,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/user_management/services/user_service.py": 863,
     "autobot_shared/auth/permissions.py": 631,
     "autobot_shared/env_registry.py": 1270,
-    "autobot_shared/http_client.py": 685,
     "autobot_shared/monitoring/prometheus_metrics.py": 954,
     "autobot_shared/network_constants.py": 616,
     "autobot_shared/npu/integration.py": 929,
