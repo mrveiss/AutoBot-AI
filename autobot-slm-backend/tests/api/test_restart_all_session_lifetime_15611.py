@@ -24,14 +24,21 @@ The failure was silent, which shapes these tests twice over:
   back through a different session, after the deferred work has finished.
 
 Own file rather than an addition to an existing api test module: the tests here
-need the real SQLAlchemy stack that the root conftest stubs, and the harness for
-that is the one ``test_replication_session_lifetime_15549.py`` carries.
+need the real SQLAlchemy stack that the root conftest stubs, and that swap now
+lives in ``_real_orm_import.py`` next door, shared with the other tests/api
+modules that need it (#15640).
+
+#15657 adds the second class below. The fix above commits after *each* service
+rather than once at the end, and the reason is that a single trailing commit
+discards every restart that already succeeded when a later one fails — the same
+silent write loss, one loop iteration wider. That reasoning was carried only by
+a comment until now, so hoisting the commit out of the loop (which reads as
+removing redundant work) passed every test in this file.
 """
 
 from __future__ import annotations
 
 import contextlib
-import importlib
 import sys
 import types
 from pathlib import Path
@@ -40,102 +47,28 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import BackgroundTasks
 
-_SLM_ROOT = Path(__file__).resolve().parents[2]
-if str(_SLM_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SLM_ROOT))
+# The real ORM swap this file needs is shared with the other tests/api modules
+# that must import a router against genuine sqlalchemy and Pydantic rather than
+# the root conftest's MagicMocks (#15640). Same shape as the `_code_sync_import`
+# / `_health_import` helpers next to it.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _real_orm_import import (  # noqa: E402
+    REAL_MODULES,
+    SLM_ROOT,
+    import_modules_with_real_orm,
+    real_modules_swapped,
+)
 
-_SQLALCHEMY_MODULES = ("sqlalchemy", "sqlalchemy.ext", "sqlalchemy.ext.asyncio", "sqlalchemy.orm")
-
-
-def _is_sqlalchemy_key(name: str) -> bool:
-    return name == "sqlalchemy" or name.startswith("sqlalchemy.")
-
-
-def _load_real_module(name: str, path: Path):
-    """Exec *path* under canonical *name* (registered so relative imports work)."""
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    sys.modules[name] = module
-    spec.loader.exec_module(module)  # type: ignore[union-attr]
-    return module
-
-
-def _build_real_modules() -> dict:
-    """One-time real sqlalchemy + models.database/models.schemas snapshot.
-
-    The root conftest stubs these as MagicMocks for import-time safety. The real
-    packages are loaded once here and swapped in on demand, so the router is
-    exercised against genuine ORM machinery rather than mock identity.
-    """
-    saved = {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)}
-    saved.update({name: sys.modules.get(name) for name in ("models.database", "models.schemas")})
-    for name in list(saved):
-        sys.modules.pop(name, None)
-    try:
-        for name in _SQLALCHEMY_MODULES:
-            importlib.import_module(name)
-        importlib.import_module("sqlalchemy.dialects.sqlite")
-        _load_real_module("models.database", _SLM_ROOT / "models" / "database.py")
-        _load_real_module("models.schemas", _SLM_ROOT / "models" / "schemas.py")
-        return {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)} | {
-            "models.database": sys.modules["models.database"],
-            "models.schemas": sys.modules["models.schemas"],
-        }
-    finally:
-        for name in [n for n in sys.modules if _is_sqlalchemy_key(n)]:
-            del sys.modules[name]
-        sys.modules.pop("models.database", None)
-        sys.modules.pop("models.schemas", None)
-        for name, mod in saved.items():
-            if mod is not None:
-                sys.modules[name] = mod
-            else:
-                sys.modules.pop(name, None)
-
-
-_REAL_MODULES = _build_real_modules()
-
-
-@contextlib.contextmanager
-def _real_modules_swapped():
-    """Temporarily put the real sqlalchemy/models modules into sys.modules."""
-    saved = {name: sys.modules.get(name) for name in _REAL_MODULES}
-    sys.modules.update(_REAL_MODULES)
-    try:
-        yield
-    finally:
-        for name, mod in saved.items():
-            if mod is not None:
-                sys.modules[name] = mod
-            else:
-                sys.modules.pop(name, None)
-
-
-def _load_router_and_job_seam():
-    """Import ``api.services`` and ``services.service_restart`` for real.
-
-    Both must see the real ORM: the endpoint's whole contract here is which
-    objects it hands across a background boundary, and an assertion about a
-    ``Service`` row would pass vacuously against a MagicMock. ``sys.modules`` is
-    restored afterwards, leaving the stubs in place for every other test module.
-    """
-    names = ("services.service_restart", "api.services")
-    saved = {name: sys.modules.get(name) for name in names}
-    try:
-        with _real_modules_swapped():
-            restart = _load_real_module("services.service_restart", _SLM_ROOT / "services" / "service_restart.py")
-            sys.modules.pop("api.services", None)
-            return importlib.import_module("api.services"), restart
-    finally:
-        for name, mod in saved.items():
-            if mod is not None:
-                sys.modules[name] = mod
-            else:
-                sys.modules.pop(name, None)
-
-
-_services_api, _restart = _load_router_and_job_seam()
-_db_models = _REAL_MODULES["models.database"]
+# ``api.services`` and ``services.service_restart`` must BOTH see the real ORM:
+# the endpoint's whole contract here is which objects it hands across a
+# background boundary, and an assertion about a ``Service`` row would pass
+# vacuously against a MagicMock. ``services`` is itself a MagicMock rather than
+# a package, so its child is loaded by file spec and re-bound onto that stub.
+_restart, _services_api = import_modules_with_real_orm(
+    import_names=("api.services",),
+    path_loaded={"services.service_restart": SLM_ROOT / "services" / "service_restart.py"},
+)
+_db_models = REAL_MODULES["models.database"]
 
 Base = _db_models.Base
 Node = _db_models.Node
@@ -143,7 +76,7 @@ NodeStatus = _db_models.NodeStatus
 Service = _db_models.Service
 ServiceStatus = _db_models.ServiceStatus
 
-with _real_modules_swapped():
+with real_modules_swapped():
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -187,7 +120,14 @@ class _JobSessionFactory:
     """Stand-in for ``services.database.db_service`` recording what it opens.
 
     ``session()`` mirrors ``DatabaseService.session`` — commit on clean exit,
-    close in ``finally`` — so the job runs the lifecycle it gets in production.
+    roll back and re-raise on an exception, close in ``finally`` — so the job
+    runs the lifecycle it gets in production.
+
+    #15657: the rollback branch is what makes the mid-batch failure test mean
+    anything. ``services/database.py`` really does roll back when the block
+    raises, so a commit hoisted out of the per-service loop loses every write
+    the batch had made; a harness that only skipped the commit would rely on
+    ``close()``'s implicit rollback instead of the explicit one production has.
     """
 
     def __init__(self, sessionmaker):
@@ -201,6 +141,9 @@ class _JobSessionFactory:
         try:
             yield session
             await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
         finally:
             await session.close()
 
@@ -208,7 +151,7 @@ class _JobSessionFactory:
 @pytest.fixture
 async def restart_env(monkeypatch):
     """Real engine, a request-scoped session proxy, and a job session factory."""
-    with _real_modules_swapped():
+    with real_modules_swapped():
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -352,3 +295,70 @@ class TestDeferredSlmRestartOwnsItsSession:
                 assert item is not request_session._session
         assert _NODE_ID in handed_over
         assert ["slm-agent", "slm-backend"] in handed_over
+
+
+class TestOneFailureDoesNotDiscardTheRestartsThatSucceeded:
+    """#15657 — ``restart_slm_services`` commits per service, not once at the end.
+
+    ``services/service_restart.py`` commits inside the loop and says why: "so one
+    failure cannot discard them all". With ``db_service.session()`` committing on
+    clean exit and rolling back on an exception, a single trailing commit throws
+    away every service that restarted before the one that raised.
+
+    Hoisting that commit out of the loop reads like removing redundant work, and
+    every other test in this file still passes when it is: the session is still
+    owned, the boundary still carries scalars, the first service still restarts.
+    Only a batch whose *middle* member fails, read back through a session that
+    was never part of the job, separates the two.
+    """
+
+    async def test_a_mid_batch_failure_keeps_the_service_already_restarted(self, restart_env, monkeypatch):
+        """Service one is durably RUNNING, service three was never attempted.
+
+        The read-back goes through a session the job never touched, because the
+        job's own session would answer from its in-memory identity map and pass
+        on state that was never committed — the exact reason #15611 was silent.
+
+        Against a commit hoisted out of the loop this fails on the first status
+        assertion: the rollback that follows the middle service's exception
+        discards ``slm-agent``'s write, and the verifier reads ``stopped``.
+        """
+        request_session, job_sessions, maker = restart_env
+        ordered = ["slm-agent", "slm-backend", "slm-admin-ui"]
+        await _seed(request_session, ordered)
+
+        attempted: list = []
+
+        async def _action(_node, service_name, _action_name):
+            attempted.append(service_name)
+            if service_name == "slm-backend":
+                raise RuntimeError("ssh transport died mid-batch")
+            return True, "restarted"
+
+        monkeypatch.setattr(_restart, "run_ansible_service_action", _action)
+        await request_session.close()
+
+        with pytest.raises(RuntimeError, match="ssh transport died mid-batch"):
+            await _restart.restart_slm_services(_NODE_ID, ordered)
+
+        # The batch stops at the failure rather than skipping past it: the third
+        # service is never asked to restart, so "untouched" below is a fact about
+        # the loop, not an artefact of the transport double.
+        assert attempted == ["slm-agent", "slm-backend"]
+        assert len(job_sessions.opened) == 1
+
+        first = await _read_service(maker, "slm-agent")
+        assert first.status == ServiceStatus.RUNNING.value, (
+            "the restart that succeeded before the failure was discarded — the commit belongs "
+            "inside the per-service loop (#15657)"
+        )
+        assert first.active_state == "active"
+        assert first.sub_state == "running"
+        assert first.last_checked is not None
+
+        failed = await _read_service(maker, "slm-backend")
+        assert failed.status == ServiceStatus.STOPPED.value
+
+        third = await _read_service(maker, "slm-admin-ui")
+        assert third.status == ServiceStatus.STOPPED.value, "the batch skipped the failure instead of stopping at it"
+        assert third.last_checked is None
