@@ -9,7 +9,6 @@ Endpoints for heartbeat configuration, run history, wakeup requests,
 and agent runtime state inspection.
 """
 
-import asyncio
 import uuid
 from typing import Any, Dict, List
 
@@ -35,6 +34,7 @@ from api.schemas_system import (
 )
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -255,7 +255,7 @@ async def trigger_manual(
     _user=Depends(get_current_user),
 ) -> Dict[str, str]:
     """Immediately queue a manual heartbeat run for an agent (#1407)."""
-    asyncio.create_task(
+    fire_and_forget(
         scheduler._run_once(agent_id, WakeupTrigger.MANUAL),
         name=f"hb-manual-{agent_id}",
     )

@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Coroutine, Dict, List
 from uuid import uuid4
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -129,7 +130,7 @@ class CloudRequestBatcher:
 
             # Check if we should trigger immediate batch
             if len(self._pending_requests) >= self.max_batch_size:
-                asyncio.create_task(self._execute_batch())
+                fire_and_forget(self._execute_batch(), name="cloud-batcher-execute-batch")
             elif self._batch_task is None or self._batch_task.done():
                 # Schedule batch execution after window
                 self._batch_task = asyncio.create_task(self._wait_and_execute())

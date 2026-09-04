@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
@@ -74,7 +75,7 @@ def add_startup_message(
     try:
         # Check if event loop is running - get_running_loop raises RuntimeError if not
         asyncio.get_running_loop()
-        asyncio.create_task(broadcast_startup_message(msg))
+        fire_and_forget(broadcast_startup_message(msg), name="startup-broadcast-message")
     except RuntimeError:
         # No running event loop - this is expected during module import
         # The message is still stored and will be sent when clients connect

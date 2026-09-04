@@ -15,6 +15,7 @@ import json
 import logging
 from typing import Any
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.env_utils import env_int
 
 logger = logging.getLogger(__name__)
@@ -81,11 +82,11 @@ class CodeExecBroker:
         try:
             result = await self._dispatch(tool, params)
             params_hash = hashlib.sha256(json.dumps(params, sort_keys=True).encode()).hexdigest()[:12]
-            asyncio.create_task(self._emit_audit(tool, params_hash, ok=True))
-            asyncio.create_task(self._emit_progress(self._progress_channel, tool))
+            fire_and_forget(self._emit_audit(tool, params_hash, ok=True), name="code-exec-audit-ok")
+            fire_and_forget(self._emit_progress(self._progress_channel, tool), name="code-exec-progress")
             return json.dumps({"id": req_id, "ok": True, "result": result})
         except Exception as exc:  # noqa: BLE001
-            asyncio.create_task(self._emit_audit(tool, "", ok=False))
+            fire_and_forget(self._emit_audit(tool, "", ok=False), name="code-exec-audit-error")
             return json.dumps({"id": req_id, "ok": False, "error": str(exc)})
 
     async def _emit_audit(self, tool: str, params_hash: str, ok: bool) -> None:

@@ -55,7 +55,7 @@ def _parse_priority(priority: Any) -> "MessagePriority":
     return MessagePriority.NORMAL
 
 
-from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.async_compat import fire_and_forget, run_or_schedule
 
 # noqa: E402
 from autobot_shared.redis_client import get_redis_client  # noqa: E402
@@ -392,7 +392,7 @@ class AgentCommunicationProtocol:
         """Remove a communication channel"""
         if channel_id in self.channels:
             channel = self.channels.pop(channel_id)
-            asyncio.create_task(channel.close())
+            fire_and_forget(channel.close(), name="channel-close")
             logger.info("Removed communication channel: %s", channel_id)
 
     def register_message_handler(

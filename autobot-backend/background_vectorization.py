@@ -17,6 +17,7 @@ import threading
 import time
 from datetime import datetime, timezone
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
@@ -91,7 +92,7 @@ class BackgroundVectorizer:
                 source="background_vectorizer",
             )
             # Fire-and-forget async tracking
-            asyncio.create_task(analyzer.record_usage(request))
+            fire_and_forget(analyzer.record_usage(request), name="embedding-usage-tracking")
         except Exception as e:
             logger.debug("Embedding usage tracking failed (non-critical): %s", e)
 

@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 import aiohttp
 from cachetools import TTLCache
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
@@ -102,7 +103,7 @@ class DomainReputationService:
             }
 
             # Schedule initial feed update
-            asyncio.create_task(self._update_threat_feed(feed_name))
+            fire_and_forget(self._update_threat_feed(feed_name), name="threat-feed-update")
 
     def _parse_text_feed(self, content: str) -> set:
         """Parse text format threat feed (Issue #315 - extracted helper)."""
