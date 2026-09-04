@@ -63,7 +63,10 @@ class BackendDiagnostic:
             s.connect((NetworkConstants.LOCALHOST_NAME, NetworkConstants.BACKEND_PORT))
 
             # Try to send a minimal HTTP request
-            request = f"HEAD / HTTP/1.1\r\nHost: {NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}\r\nConnection: close\r\n\r\n".encode()
+            request = (
+                f"HEAD / HTTP/1.1\r\nHost: {NetworkConstants.LOCALHOST_NAME}:"
+                f"{NetworkConstants.BACKEND_PORT}\r\nConnection: close\r\n\r\n"
+            ).encode()
             s.send(request)
 
             # Try to receive response

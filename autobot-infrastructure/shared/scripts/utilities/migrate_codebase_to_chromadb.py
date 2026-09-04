@@ -113,7 +113,7 @@ class CodebaseChromaDBMigration:
                     function_name = key.replace("codebase:functions:", "")
 
                     # Create document text for vectorization
-                    doc_text = """
+                    doc_text = f"""
 Function: {function_name}
 File: {function_data.get('file_path', 'unknown')}
 Lines: {function_data.get('start_line', 'unknown')}-{function_data.get('end_line', 'unknown')}
@@ -171,7 +171,7 @@ Docstring: {function_data.get('docstring', 'No documentation')}
 
                     class_name = key.replace("codebase:classes:", "")
 
-                    doc_text = """
+                    doc_text = f"""
 Class: {class_name}
 File: {class_data.get('file_path', 'unknown')}
 Lines: {class_data.get('start_line', 'unknown')}-{class_data.get('end_line', 'unknown')}
@@ -229,7 +229,7 @@ Docstring: {class_data.get('docstring', 'No documentation')}
 
             for idx, problem in enumerate(problems):
                 try:
-                    doc_text = """
+                    doc_text = f"""
 Problem: {problem.get('type', 'unknown')}
 Severity: {problem.get('severity', 'unknown')}
 File: {problem.get('file_path', 'unknown')}
@@ -278,7 +278,7 @@ Suggestion: {problem.get('suggestion', 'No suggestion')}
 
             stats = json.loads(stats_data)
 
-            doc_text = """
+            doc_text = f"""
 Codebase Statistics:
 Total Files: {stats.get('total_files', 0)}
 Total Lines: {stats.get('total_lines', 0)}

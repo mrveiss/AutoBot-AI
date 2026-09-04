@@ -924,16 +924,28 @@ class MicroserviceArchitectureEvaluator:
         name = service["name"]
 
         if service_type == "api_service":
-            return f"{name} should be a separate service because it handles a distinct domain with {service['estimated_complexity']} endpoints, allowing for independent scaling and development."
+            return (
+                f"{name} should be a separate service because it handles a distinct domain with "
+                f"{service['estimated_complexity']} endpoints, allowing for independent scaling and development."
+            )
 
         elif service_type == "agent_service":
-            return f"{name} should be a separate service because AI agents require specialized resources, can benefit from independent scaling, and have distinct computational requirements."
+            return (
+                f"{name} should be a separate service because AI agents require specialized resources, "
+                "can benefit from independent scaling, and have distinct computational requirements."
+            )
 
         elif service_type == "shared_service":
-            return f"{name} should be a shared service because it provides common functionality needed across multiple services, reducing duplication and ensuring consistency."
+            return (
+                f"{name} should be a shared service because it provides common functionality needed across "
+                "multiple services, reducing duplication and ensuring consistency."
+            )
 
         elif service_type == "data_service":
-            return f"{name} should be a separate service to provide data abstraction, handle database-specific optimizations, and allow for independent data management."
+            return (
+                f"{name} should be a separate service to provide data abstraction, handle database-specific "
+                "optimizations, and allow for independent data management."
+            )
 
         else:
             return f"{name} represents a logical boundary for separation based on functionality and responsibilities."
@@ -1145,7 +1157,8 @@ class MicroserviceArchitectureEvaluator:
         # Recommendations based on analysis
         if file_stats["total_loc"] > 50000:
             recommendations.append(
-                f"🔴 HIGH PRIORITY: Large codebase ({file_stats['total_loc']:,} LOC) - microservices migration recommended"
+                f"🔴 HIGH PRIORITY: Large codebase ({file_stats['total_loc']:,} LOC) - "
+                "microservices migration recommended"
             )
 
         if total_services >= 6:
@@ -1247,7 +1260,7 @@ class MicroserviceArchitectureEvaluator:
 
         # AI Agents
         agents = structure["key_components"]["agents"]
-        report += """
+        report += f"""
 #### AI Agents
 - **Total Agents:** {agents['total_agents']}
 - **Agent Types:** {len(agents['agent_types'])}
@@ -1257,8 +1270,8 @@ class MicroserviceArchitectureEvaluator:
             report += f"- **{agent_type.title()}:** {', '.join(agent_names)}\n"
 
         # Data Models
-        structure["key_components"]["data_models"]
-        report += """
+        models = structure["key_components"]["data_models"]
+        report += f"""
 #### Data Models
 - **Database Files:** {len(models['database_files'])}
 - **Database Types:** {', '.join(models['database_types']) if models['database_types'] else 'None'}
@@ -1267,8 +1280,8 @@ class MicroserviceArchitectureEvaluator:
 """
 
         # Utilities
-        structure["key_components"]["utilities"]
-        report += """#### Utilities
+        utilities = structure["key_components"]["utilities"]
+        report += f"""#### Utilities
 - **Utility Files:** {len(utilities['util_files'])}
 - **Shared Utilities:** {len(utilities['shared_utilities'])}
 - **Utility Types:** {', '.join(utilities['utility_types'].keys())}
@@ -1295,7 +1308,7 @@ class MicroserviceArchitectureEvaluator:
 ### Core Services
 """
         for service in boundaries["proposed_services"]:
-            report += """
+            report += f"""
 #### {service['name']}
 - **Type:** {service['type'].replace('_', ' ').title()}
 - **Complexity:** {service['estimated_complexity']}/10
@@ -1311,7 +1324,7 @@ class MicroserviceArchitectureEvaluator:
 ### Shared Services
 """
             for service in boundaries["shared_services"]:
-                report += """
+                report += f"""
 #### {service['name']}
 - **Utilities:** {', '.join(service.get('utilities', []))}
 - **Purpose:** Provide common {service['name'].replace('Service', '').lower()} functionality
@@ -1322,7 +1335,7 @@ class MicroserviceArchitectureEvaluator:
 ### Data Services
 """
             for service in boundaries["data_services"]:
-                report += """
+                report += f"""
 #### {service['name']}
 - **Database Type:** {service['database_type']}
 - **Purpose:** Manage {service['database_type']} operations
@@ -1342,32 +1355,37 @@ class MicroserviceArchitectureEvaluator:
         migration = self.analysis_results["migration_strategy"]
         recommendations = self.analysis_results["recommendations"]
 
-        report = """# 🏗️ AutoBot Microservice Architecture Evaluation
+        report = f"""# 🏗️ AutoBot Microservice Architecture Evaluation
 
-**Analysis Date:** {self.analysis_results["timestamp"]}
+**Analysis Date:** {self.analysis_results['timestamp']}
 
 ## 📊 Executive Summary
 
-This analysis evaluates the AutoBot codebase for microservice architecture migration potential. The system shows {"strong" if structure["architecture_patterns"]["microservice_readiness"] >= 7 else "moderate" if structure["architecture_patterns"]["microservice_readiness"] >= 4 else "limited"} readiness for microservice decomposition.
+This analysis evaluates the AutoBot codebase for microservice architecture migration potential.
+The system shows {"strong" if structure['architecture_patterns']['microservice_readiness'] >= 7
+else "moderate" if structure['architecture_patterns']['microservice_readiness'] >= 4
+else "limited"} readiness for microservice decomposition.
 
 ### Key Findings
-- **Total Lines of Code:** {structure["file_statistics"]["total_loc"]:,}
-- **Microservice Readiness Score:** {structure["architecture_patterns"]["microservice_readiness"]}/10
-- **Identified Services:** {len(boundaries["proposed_services"]) + len(boundaries["shared_services"]) + len(boundaries["data_services"])}
-- **Migration Phases:** {len(migration["migration_phases"])}
+- **Total Lines of Code:** {structure['file_statistics']['total_loc']:,}
+- **Microservice Readiness Score:** {structure['architecture_patterns']['microservice_readiness']}/10
+- **Identified Services:** {len(boundaries['proposed_services']) + len(boundaries['shared_services'])
++ len(boundaries['data_services'])}
+- **Migration Phases:** {len(migration['migration_phases'])}
 
 ## 🏢 Current Architecture Analysis
 
 ### Project Structure
-- **Total Files:** {structure["file_statistics"]["total_files"]:,}
-- **Python Files:** {structure["file_statistics"]["python_files"]:,}
-- **JavaScript/TypeScript Files:** {structure["file_statistics"]["javascript_files"]:,}
-- **Configuration Files:** {structure["file_statistics"]["config_files"]:,}
+- **Total Files:** {structure['file_statistics']['total_files']:,}
+- **Python Files:** {structure['file_statistics']['python_files']:,}
+- **JavaScript/TypeScript Files:** {structure['file_statistics']['javascript_files']:,}
+- **Configuration Files:** {structure['file_statistics']['config_files']:,}
 
 ### Architecture Patterns
-- **MVC Pattern:** {"✅ Present" if structure["architecture_patterns"]["mvc_pattern"] else "❌ Not Present"}
-- **Layered Architecture:** {"✅ Present" if structure["architecture_patterns"]["layered_architecture"] else "❌ Not Present"}
-- **API Gateway:** {"✅ Present" if structure["architecture_patterns"]["api_gateway_present"] else "❌ Not Present"}
+- **MVC Pattern:** {"✅ Present" if structure['architecture_patterns']['mvc_pattern'] else "❌ Not Present"}
+- **Layered Architecture:** {"✅ Present" if structure['architecture_patterns']['layered_architecture']
+else "❌ Not Present"}
+- **API Gateway:** {"✅ Present" if structure['architecture_patterns']['api_gateway_present'] else "❌ Not Present"}
 
 ### Component Analysis
 
@@ -1386,7 +1404,10 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
         report += f"- **High Coupling Modules:** {len(coupling['high_coupling_modules'])}\n\n"
 
         for module in coupling["high_coupling_modules"][:5]:  # Top 5 highly coupled
-            report += f"- `{module['module']}`: Fan-out({module['fan_out']}) + Fan-in({module['fan_in']}) = {module['coupling_score']}\n"
+            report += (
+                f"- `{module['module']}`: Fan-out({module['fan_out']}) + "
+                f"Fan-in({module['fan_in']}) = {module['coupling_score']}\n"
+            )
 
         report += """
 ### Shared Dependencies
@@ -1409,7 +1430,7 @@ This analysis evaluates the AutoBot codebase for microservice architecture migra
 """
 
         for phase in migration["migration_phases"]:
-            report += """
+            report += f"""
 ### Phase {phase['phase']}: {phase['name']}
 - **Duration:** {phase['estimated_duration_weeks']} weeks
 - **Complexity:** {phase['complexity']}

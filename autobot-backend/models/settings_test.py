@@ -79,9 +79,12 @@ HISTORICAL_SETTINGS = {
 }
 
 # Legacy alias -> the single canonical object that now owns the concern.
+# No "LLMSettings" entry (#15577): that name collides with the live,
+# actively-imported `llm_shared.models.LLMSettings` (Ollama provider config).
+# Nothing imports the shim's bare `LLMSettings`, so it was dropped rather than
+# aliased -- see test_llm_settings_is_not_aliased_here below.
 CANONICAL_ALIASES = {
     "AutoBotSettings": ssot_config.AutoBotConfig,
-    "LLMSettings": ssot_config.LLMConfig,
     "RedisSettings": ssot_config.RedisConfig,
     "DataSettings": ssot_config.PathConfig,
     "BackendSettings": ssot_config.PortConfig,
@@ -130,6 +133,23 @@ def test_shim_assigns_only_aliases_and_documentation():
 def test_legacy_class_name_resolves_to_canonical_object(legacy_name, canonical):
     """The old names still import, and are the canonical classes themselves."""
     assert getattr(shim, legacy_name) is canonical
+
+
+def test_llm_settings_is_not_aliased_here():
+    """#15577: this module must not re-export a bare `LLMSettings`.
+
+    `llm_shared.models.LLMSettings` is a live, actively-imported class
+    (Ollama provider config -- `llm_shared/__init__.py`,
+    `llm_shared/providers/ollama.py`, `ollama_provider.py`). If this shim ever
+    grows an `LLMSettings = LLMConfig` alias again, both names would resolve
+    under `LLMSettings` for two unrelated concepts -- exactly the collision
+    #15577 removed. `LLMConfig` remains the shim's name for this concept.
+    """
+    from llm_shared.models import LLMSettings as live_llm_settings
+
+    assert not hasattr(shim, "LLMSettings"), "models/settings.py re-added the LLMSettings collision (#15577)"
+    assert "LLMSettings" not in shim.__all__
+    assert shim.LLMConfig is not live_llm_settings, "the two LLMSettings concepts must stay distinct classes"
 
 
 def test_settings_singleton_is_the_ssot_singleton():
