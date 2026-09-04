@@ -50,6 +50,16 @@ _CANONICAL = Path("autobot_shared/store_authority.py")
 #: added -- a new dual-store module is the regression this file exists to catch.
 _BASELINE = Path(__file__).parent / "store_authority_baseline.txt"
 
+#: The baseline holds this many entries and may only shrink. Pinned as a COUNT,
+#: not only as a set, because the set comparison cannot catch a two-sided
+#: addition: a change that adds an undeclared dual-store module AND its own
+#: baseline line passes every other assertion here. That is not hypothetical —
+#: `python_file_size_ratchet_test.py` grew this exact ceiling test after a
+#: change slipped 509 entries in that way. Lower it when an entry leaves; never
+#: raise it to admit a new one.
+MAX_BASELINE_ENTRIES = 8
+
+
 # Methods that put bytes somewhere outliving the process, per store. Paired with
 # a receiver test because the names are generic: `add` is ChromaDB's writer, a
 # SQLAlchemy session's writer, and half the sets in the standard library.
@@ -169,8 +179,19 @@ def _declared_write_sites() -> set[str]:
 
 
 def baseline_entries() -> set[str]:
+    """Paths only. An inline ``#`` comment carries the tracking issue.
+
+    The file's header promises an issue beside each entry, so the parser has to
+    allow one: taking the whole line would bake ``# #15670`` into the path and
+    every entry would read as BOTH an undeclared finding and a stale record.
+    """
     lines = _BASELINE.read_text(encoding="utf-8").splitlines()
-    return {line.strip() for line in lines if line.strip() and not line.startswith("#")}
+    entries = set()
+    for line in lines:
+        text = line.split("#", 1)[0].strip() if not line.lstrip().startswith("#") else ""
+        if text:
+            entries.add(text)
+    return entries
 
 
 def test_the_walk_reaches_the_tree():
@@ -359,4 +380,22 @@ def test_no_undeclared_dual_store_module_exists():
     assert not offenders, (
         "module durably writes two stores with no declared system of record -- declare the "
         f"concept in {_CANONICAL} (#15663): {offenders}"
+    )
+
+
+def test_the_baseline_count_may_not_grow():
+    """Catches the two-sided addition `test_the_baseline_only_shrinks` cannot.
+
+    That test compares live detector output against the baseline and checks each
+    entry is still dual-store. Both hold when a change adds a new undeclared
+    module and its baseline line together — the module is genuinely dual-store,
+    so it is not stale, and it is in the baseline, so it is not a finding. Only
+    the count notices.
+    """
+    count = len(baseline_entries())
+    assert count <= MAX_BASELINE_ENTRIES, (
+        f"the store-authority baseline grew to {count} entries, over the recorded "
+        f"ceiling of {MAX_BASELINE_ENTRIES}. Declare the concept in "
+        "autobot_shared/store_authority.py instead — lower this ceiling when an "
+        "entry leaves, never raise it to let a new one in."
     )

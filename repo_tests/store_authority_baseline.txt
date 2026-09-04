@@ -16,17 +16,17 @@
 # code_intelligence/*                 -- analysis output; which of Chroma/Redis is
 #                                        authoritative for a detected pattern is undecided.
 # knowledge/rag_benchmarks.py         -- benchmark corpus, not user data.
-# services/autoresearch/store.py      -- experiments have NO durable home: hset/zadd/sadd with
+# services/autoresearch/store.py  # #15669      -- experiments have NO durable home: hset/zadd/sadd with
 #                                        no TTL and no second store. Same shape as #12733.
 # workers/audit_tasks.py              -- audit filing status split between a file and Redis.
 # scripts/, autobot-infrastructure/   -- one-shot migration and backfill scripts that read one
 #                                        store and write another by design.
 
-autobot-backend/code_intelligence/analytics_infrastructure.py
-autobot-backend/code_intelligence/cross_language_patterns/detector.py
-autobot-backend/knowledge/rag_benchmarks.py
-autobot-backend/services/autoresearch/store.py
-autobot-backend/workers/audit_tasks.py
-autobot-infrastructure/autobot-backend/scripts/migrations/migrate_secrets_ownership.py
-autobot-infrastructure/autobot-backend/scripts/migrations/migrate_sessions_user_attribution.py
-scripts/backfill_session_org_context.py
+autobot-backend/code_intelligence/analytics_infrastructure.py  # #15670
+autobot-backend/code_intelligence/cross_language_patterns/detector.py  # #15670
+autobot-backend/knowledge/rag_benchmarks.py  # #15670
+autobot-backend/services/autoresearch/store.py  # #15669
+autobot-backend/workers/audit_tasks.py  # #15670
+autobot-infrastructure/autobot-backend/scripts/migrations/migrate_secrets_ownership.py  # #15670
+autobot-infrastructure/autobot-backend/scripts/migrations/migrate_sessions_user_attribution.py  # #15670
+scripts/backfill_session_org_context.py  # #15670
