@@ -65,7 +65,7 @@ def _render_request_block(user_request: str) -> Optional[str]:
     caller answers from :meth:`IntentAnalyzer._fallback_intent_analysis` instead.
     That happens in two cases:
 
-    * the shared detector blocks the text (HIGH/CRITICAL risk). Refusing the
+    * the shared detector blocks the text. Refusing the
       model is deliberate: a blocked request still gets a real answer from the
       keyword heuristics, so the conservative verdict costs analysis quality on
       a false positive rather than availability.
@@ -79,6 +79,12 @@ def _render_request_block(user_request: str) -> Optional[str]:
     """
     detector = get_prompt_injection_detector(strict_mode=True)
     result = detector.detect_injection(user_request, context="user_input")
+    # `blocked` is the detector's own verdict, not a risk-level comparison this
+    # module re-derives. It is set by the strict-mode risk assessment AND by
+    # `_check_hard_block`, whose threshold is env-tunable below the HIGH band
+    # (`AUTOBOT_INJECTION_HARDBLOCK_THRESHOLD`, default 0.75). So a deployment
+    # that lowers that threshold refuses more here, which is the safe direction
+    # and the reason this defers to the flag rather than testing `risk_level`.
     if result.blocked:
         logger.warning(
             "Intent analysis skipped the model: request blocked (risk=%s, patterns=%d)",
