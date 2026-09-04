@@ -34,6 +34,7 @@ from llc.models.activity import (  # noqa: F401 — registers LLC tables with me
     LLCBase,
 )
 from migrations.db_url import as_async_url, get_url
+from models.knowledge_fact import KnowledgeFact  # noqa: F401 — #15663, the durable home of a fact
 from models.push_subscription import PushSubscription  # noqa: F401 — GH#4459
 from user_management.models import Base
 

@@ -1,0 +1,32 @@
+# Modules that durably write two stores without a declared system of record (#15663).
+#
+# RECORDS, it does not DECLARE. The declarations live in
+# autobot_shared/store_authority.py; this file is the backlog of concepts whose
+# authority has not been decided yet, so the guard can fail on the FIRST NEW one
+# instead of drowning in the ones that were already here.
+#
+# Shrink-only. An entry leaves when the concept is declared in the table;
+# nothing may be added. A new dual-store module is the regression
+# store_authority_test.py exists to catch -- adding it here instead of declaring
+# it is how the count regrows (#13916 records #6689 consolidating 15+ enums, and
+# 15 existing again today).
+#
+# Each of these is tracked; see the issue linked beside it.
+#
+# code_intelligence/*                 -- analysis output; which of Chroma/Redis is
+#                                        authoritative for a detected pattern is undecided.
+# knowledge/rag_benchmarks.py         -- benchmark corpus, not user data.
+# services/autoresearch/store.py  # #15669      -- experiments have NO durable home: hset/zadd/sadd with
+#                                        no TTL and no second store. Same shape as #12733.
+# workers/audit_tasks.py              -- audit filing status split between a file and Redis.
+# scripts/, autobot-infrastructure/   -- one-shot migration and backfill scripts that read one
+#                                        store and write another by design.
+
+autobot-backend/code_intelligence/analytics_infrastructure.py  # #15670
+autobot-backend/code_intelligence/cross_language_patterns/detector.py  # #15670
+autobot-backend/knowledge/rag_benchmarks.py  # #15670
+autobot-backend/services/autoresearch/store.py  # #15669
+autobot-backend/workers/audit_tasks.py  # #15670
+autobot-infrastructure/autobot-backend/scripts/migrations/migrate_secrets_ownership.py  # #15670
+autobot-infrastructure/autobot-backend/scripts/migrations/migrate_sessions_user_attribution.py  # #15670
+scripts/backfill_session_org_context.py  # #15670
