@@ -56,30 +56,48 @@
     # Phase 2: Verify .env File Location
     # ============================================================
 
-    - name: Check for .env in backend_deployed_root
-      stat:
-        path: "{{ backend_deployed_root }}/.env"
-      register: env_install_dir
-
-    - name: Check for .env in backend_code_dir
+    # #15560/2: the canonical .env location is whatever
+    # roles/backend/templates/autobot-backend.service.j2 renders into its
+    # `EnvironmentFile=` line -- `{{ backend_code_dir }}/.env`. This play used to
+    # render that template and then rewrite the line to
+    # `{{ backend_deployed_root }}/.env` with lineinfile, so one setting had two
+    # writers that disagreed. The template is the canonical writer, so these
+    # checks report against the location it names.
+    - name: Check for .env in the canonical location
       stat:
         path: "{{ backend_code_dir }}/.env"
       register: env_code_dir
 
+    - name: Check for a stray .env at the deploy root
+      stat:
+        path: "{{ backend_deployed_root }}/.env"
+      register: env_deployed_root
+
     - name: Display .env location findings
       debug:
         msg: |
-          .env in {{ backend_deployed_root }}: {{ env_install_dir.stat.exists }}
-          .env in {{ backend_code_dir }}: {{ env_code_dir.stat.exists }}
+          .env in {{ backend_code_dir }} (canonical): {{ env_code_dir.stat.exists }}
+          .env in {{ backend_deployed_root }} (stray): {{ env_deployed_root.stat.exists }}
 
-    - name: Warn if .env in wrong location
+    - name: Warn if the canonical .env is missing
       debug:
-        msg: "⚠️  WARNING: .env found in {{ backend_code_dir }} but service expects {{ backend_deployed_root }}/.env"
-      when: env_code_dir.stat.exists and not env_install_dir.stat.exists
+        msg: >-
+          ⚠️  WARNING: no .env at {{ backend_code_dir }}/.env — that is where the
+          unit's EnvironmentFile= points, so the service would start with none.
+      when: not env_code_dir.stat.exists
 
     # ============================================================
     # Phase 3: Update systemd Service Configuration
     # ============================================================
+    # #15560/2: the unit is rendered from the template and NOT edited afterwards.
+    # Two lineinfile tasks used to rewrite `EnvironmentFile=` and
+    # `Environment="PYTHONPATH=..."` a few lines after the template had already
+    # written both, which is how this play came to be producing
+    # `PYTHONPATH=...:/opt/autobot_shared` -- a directory that does not exist
+    # (#13539/B3). #15559 fixed the rendered value; the hand-written duplicate
+    # was the second, independent writer of the same setting, and it was a
+    # leftover from before the template covered it. Later phases read the value
+    # back out of the rendered unit rather than restating it.
 
     - name: Deploy corrected systemd service file
       template:
@@ -90,21 +108,27 @@
         mode: '0644'
       notify: reload systemd
 
-    - name: Ensure systemd service has correct configuration
-      lineinfile:
-        path: /etc/systemd/system/autobot-backend.service
-        regexp: '^EnvironmentFile={{ backend_code_dir }}/.env'
-        line: 'EnvironmentFile={{ backend_deployed_root }}/.env'
-        state: present
-      notify: reload systemd
+    - name: Read back the rendered systemd unit (#15560)
+      ansible.builtin.slurp:
+        src: /etc/systemd/system/autobot-backend.service
+      register: backend_unit_rendered
 
-    - name: Verify PYTHONPATH includes both directories
-      lineinfile:
-        path: /etc/systemd/system/autobot-backend.service
-        regexp: '^Environment="PYTHONPATH='
-        line: 'Environment="PYTHONPATH={{ backend_deployed_root }}:{{ backend_code_dir }}:{{ backend_deployed_root }}/autobot_shared"'
-        state: present
-      notify: reload systemd
+    - name: Derive the unit's PYTHONPATH from the rendered unit (#15560)
+      ansible.builtin.set_fact:
+        backend_unit_pythonpath: >-
+          {{ ((backend_unit_rendered.content | b64decode)
+              | regex_search('^Environment="PYTHONPATH=([^"]*)"', '\1', multiline=True)
+              | default([], true)) | first | default('') }}
+
+    - name: Fail if the rendered unit carries no PYTHONPATH (#15560)
+      fail:
+        msg: >-
+          The rendered autobot-backend.service has no
+          Environment="PYTHONPATH=..." line.
+          roles/backend/templates/autobot-backend.service.j2 is the only writer
+          of that setting, so an absent one means the template changed shape —
+          this play must not paper over it with a second writer of its own.
+      when: backend_unit_pythonpath | length == 0
 
     # ============================================================
     # Phase 4: Verify Backend Directory Structure
@@ -135,7 +159,7 @@
     - name: Test Python can import main module
       shell: |
         cd {{ backend_code_dir }}
-        export PYTHONPATH={{ backend_deployed_root }}:{{ backend_code_dir }}:{{ backend_deployed_root }}/autobot_shared
+        export PYTHONPATH={{ backend_unit_pythonpath }}
         {{ backend_code_dir }}/venv/bin/python -c "
         import sys
         print('PYTHONPATH:', sys.path[:5])
@@ -187,8 +211,8 @@
           Environment configuration fixed!
 
           Changes applied:
-          - .env path: {{ backend_deployed_root }}/.env
-          - PYTHONPATH: {{ backend_deployed_root }}:{{ backend_code_dir }}:{{ backend_deployed_root }}/autobot_shared
+          - .env path: {{ backend_code_dir }}/.env
+          - PYTHONPATH: {{ backend_unit_pythonpath }}
           - Python venv: {{ backend_code_dir }}/venv (deadsnakes python3.14)
 
           Next steps:

@@ -256,7 +256,17 @@
 
 - name: Create src/ symlinks to backend modules (co-located deployment)
   ansible.builtin.file:
-    src: "{{ backend_install_dir }}/{{ item }}"
+    # #15560/1 (same family as #13539/B4): was "{{ backend_install_dir }}/{{ item }}",
+    # which renders absolute. A link whose target does not depend on where the
+    # link itself lives cannot survive the tree moving -- it re-anchors to the
+    # live root under any deploy-root relocation, which is exactly the property
+    # #13539's release scheme depends on. The link lives at
+    # `{{ ai_install_dir }}/src/`, and ai_install_dir and backend_install_dir are
+    # always siblings under the same deploy root, so `../../<backend dir name>`
+    # resolves identically today and stays correct under a relocation. The
+    # basename is taken FROM backend_install_dir rather than spelled out, so an
+    # install that renames the backend component directory still resolves.
+    src: "../../{{ backend_install_dir | basename }}/{{ item }}"
     dest: "{{ ai_install_dir }}/src/{{ item }}"
     state: link
     owner: "{{ ai_user }}"
