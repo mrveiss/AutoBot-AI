@@ -17,7 +17,6 @@ Key features:
 - Integration with TodoWrite optimizer and Claude API infrastructure
 """
 
-import asyncio
 import json
 import statistics
 from collections import defaultdict, deque
