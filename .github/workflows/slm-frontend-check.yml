@@ -1,4 +1,4 @@
-# SLM Frontend Check — type-check + build + lint for autobot-slm-frontend (#10493)
+# SLM Frontend Check — type-check + lint + build + unit tests for autobot-slm-frontend (#10493)
 #
 # The /slm operator console (autobot-slm-frontend) had NO CI gate, so broken
 # TypeScript/build changes could merge undetected and cross-app migrations
@@ -92,3 +92,13 @@ jobs:
         if: needs.changes.outputs.slm_frontend == 'true'
         # build:slm sets VITE_API_URL=/slm (the co-located base the vite config requires).
         run: npm run build:slm
+
+      # #15640: the vitest suite under autobot-slm-frontend/src ran in NO
+      # workflow — `test:unit` existed in package.json and nothing invoked it,
+      # so every `*.test.ts` in this app was inert. A regression test that never
+      # executes is worse than none, because the coverage looks present. This
+      # step is what makes the composable and component guards added for #15640
+      # actually gate.
+      - name: Unit tests (vitest)
+        if: needs.changes.outputs.slm_frontend == 'true'
+        run: npm run test:unit
