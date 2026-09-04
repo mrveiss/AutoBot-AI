@@ -385,6 +385,61 @@ def test_the_declared_resolution_matches_what_ansible_states() -> None:
     )
 
 
+def test_every_declared_manifest_is_still_installed() -> None:
+    """The other direction: a declared manifest whose install task has gone.
+
+    Containment on its own is one-directional. It catches a manifest the tree
+    installs and the table omits, and misses the reverse -- an entry that keeps
+    naming a manifest after its install task is deleted. `derived` stays a
+    subset of `declared`, nothing fires, and the table quietly stops describing
+    the tree, which is the drift this module exists to prevent.
+
+    Only sites with at least one derivable edge are checked, because a site the
+    walk cannot see at all would otherwise fail for the wrong reason.
+    `LOGICAL_ONLY` names the genuine exceptions with their cause.
+    """
+    bindings = resolution.derived_bindings()
+    dropped = []
+    for site, entry in sorted(resolution.SITE_MANIFESTS.items()):
+        derived = bindings.get(resolution.environment_key(*site), frozenset())
+        if not derived or resolution.EVERY_MANIFEST in entry.manifests:
+            continue
+        for manifest in entry.manifests:
+            if manifest in derived or (site[0], manifest) in resolution.LOGICAL_ONLY:
+                continue
+            dropped.append(f"{site[0]} [{site[1]}] declares {manifest}, nothing installs it")
+
+    assert not dropped, (
+        "These SITE_MANIFESTS entries name a manifest the ansible tree no longer "
+        "installs into that venv. Either the wiring was removed and the entry is "
+        "stale, or the binding is real but underivable and belongs in "
+        "LOGICAL_ONLY with its reason:\n  " + "\n  ".join(dropped)
+    )
+
+
+def test_no_logical_only_exception_is_stale() -> None:
+    """LOGICAL_ONLY shrinks. An exception that stopped being needed must go.
+
+    An exception list that is never re-examined becomes a second table with the
+    same drift problem one level down — so each entry is checked against both
+    the declaration it excuses and the walk it excuses it from.
+    """
+    stale = []
+    for (path, manifest), reason in sorted(resolution.LOGICAL_ONLY.items()):
+        sites = [key for key in resolution.SITE_MANIFESTS if key[0] == path]
+        if not sites:
+            stale.append(f"{path} is no longer a declared site")
+            continue
+        site = sites[0]
+        if manifest not in resolution.SITE_MANIFESTS[site].manifests:
+            stale.append(f"{path} no longer declares {manifest}")
+            continue
+        if manifest in resolution.derived_bindings().get(resolution.environment_key(*site), frozenset()):
+            stale.append(f"{path} now derivably installs {manifest} — drop the exception ({reason})")
+
+    assert not stale, "LOGICAL_ONLY carries entries that no longer describe the tree:\n  " + "\n  ".join(stale)
+
+
 def test_the_pre_15623_ai_stack_floors_are_a_regression_case() -> None:
     """The two floors #15623 raised by hand: flagged then, silent now (#15629)."""
     for package, specifier in _PRE_15623_FLOORS:

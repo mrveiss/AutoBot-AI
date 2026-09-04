@@ -42,7 +42,7 @@ from __future__ import annotations
 import functools
 import pathlib
 import re
-from typing import NamedTuple
+from typing import Dict, NamedTuple, Tuple
 
 import yaml
 
@@ -57,6 +57,26 @@ BACKEND = "autobot-backend/requirements.txt"
 BROWSER = "autobot-browser-worker/requirements.txt"
 NPU = "autobot-npu-worker/requirements.txt"
 NPU_DOCKER = "autobot-infrastructure/autobot-npu-worker/docker/requirements-npu.txt"
+
+#: Declared bindings the ansible walk cannot derive, with the reason each is
+#: real anyway. Shrink-only: if the wiring for one ever becomes derivable, the
+#: entry must go, and the test below fails while it lingers.
+#:
+#: Without this list the containment check is one-directional -- it catches a
+#: manifest the tree installs and the table omits, but not a manifest the table
+#: names after its install task is deleted. A declared entry that quietly stops
+#: being true is the drift this module exists to prevent, so the reverse has to
+#: be asserted too, and the genuine exceptions named rather than tolerated.
+LOGICAL_ONLY: Dict[Tuple[str, str], str] = {
+    (
+        "autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml",
+        NPU_DOCKER,
+    ): "delivered by the NPU worker image build, not by an ansible pip task",
+    (
+        "autobot-slm-backend/ansible/playbooks/deploy-native-services.yml",
+        NPU_DOCKER,
+    ): "same image-delivered manifest, provisioned natively here",
+}
 TTS = "autobot-tts-worker/requirements.txt"
 GPU_TORCH = "requirements-gpu-torch.txt"
 GPU = "requirements-gpu.txt"
@@ -252,6 +272,10 @@ def _shell_install(command: str) -> tuple[str, str] | None:
     return venv, tokens[tokens.index("-r") + 1]
 
 
+# Only a pip task carrying BOTH a literal `requirements:` and a literal
+# `virtualenv:` produces a derived edge. A `name:`-list pip task is invisible
+# here whether or not a manifest exists behind it, so the three "no manifest"
+# sites are asserted by their recorded reason rather than cross-checked.
 def _record_task(key: object, value: object, path: str, edges: _Edges) -> None:
     """Record the delivery and install edges one task key opens."""
     if key in _PIP_TASK_KEYS and isinstance(value, dict):
