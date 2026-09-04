@@ -1,0 +1,104 @@
+# Ansible <-> requirements version divergence baseline (#15568)
+#
+# One `<path-from-repo-root>::<pep503-package-name>` per line. Each entry is a
+# package that an ansible pip declaration site versions differently from every
+# `requirements*.txt` declaration of the same package.
+#
+# `repo_tests/ansible_requirements_parity_test.py` enforces two things:
+#
+#   1. any divergence NOT listed here fails — a new restatement, or a bump that
+#      moved one manifest and not the other, which is the failure #15408 hit
+#      seven times over on `openvino`;
+#   2. any entry listed here that no longer diverges — because it was fixed, or
+#      because the declaration was removed — ALSO fails. A stale entry exempts
+#      nothing while looking authoritative.
+#
+# THIS LIST ONLY SHRINKS. Seeded from the audit #15568 asked for, run
+# 2026-09-04 over 21 ansible pip declaration sites and 34 requirements files.
+# Nothing may be added to it to make a red go away: a new divergence is either
+# fixed at the declaration, or the package moves onto `constraints/shared.txt`.
+#
+# Two divergences found by that audit are absent because they were fixed in the
+# same change: `numpy` in `group_vars/aiml.yml` and in `roles/tts-worker`, both
+# now bare names against `constraints/shared.txt`. Packages the constraints file
+# guards are never eligible for this baseline — a separate assertion in the same
+# test fails them outright.
+#
+# The remaining 55 fall into three classes, one issue each. Every line below is
+# a live finding with an owner, not an accepted state.
+
+# ---------------------------------------------------------------------------
+# #15596 — dormant `packages.python` lists. Nothing reads these three vars, so
+# they install nothing today; each floor is one to two majors below the
+# matching requirements pin. Fix is to wire them or fold them into the roles'
+# own pip tasks, not to bump literals that will re-rot.
+# ---------------------------------------------------------------------------
+autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::aiohttp
+autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::anthropic
+autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::openai
+autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::opencv-python
+autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::pillow
+autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::torch
+autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::torchvision
+autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::transformers
+autobot-slm-backend/ansible/inventory/group_vars/aiml.yml::uvicorn
+autobot-slm-backend/ansible/inventory/group_vars/backend.yml::aiofiles
+autobot-slm-backend/ansible/inventory/group_vars/backend.yml::aiohttp
+autobot-slm-backend/ansible/inventory/group_vars/backend.yml::aiosqlite
+autobot-slm-backend/ansible/inventory/group_vars/backend.yml::prometheus-client
+autobot-slm-backend/ansible/inventory/group_vars/backend.yml::pydantic
+autobot-slm-backend/ansible/inventory/group_vars/backend.yml::python-multipart
+autobot-slm-backend/ansible/inventory/group_vars/backend.yml::redis
+autobot-slm-backend/ansible/inventory/group_vars/backend.yml::structlog
+autobot-slm-backend/ansible/inventory/group_vars/backend.yml::torch
+autobot-slm-backend/ansible/inventory/group_vars/backend.yml::transformers
+autobot-slm-backend/ansible/inventory/group_vars/backend.yml::uvicorn
+autobot-slm-backend/ansible/inventory/group_vars/backend.yml::websockets
+autobot-slm-backend/ansible/inventory/group_vars/browser.yml::beautifulsoup4
+autobot-slm-backend/ansible/inventory/group_vars/browser.yml::opencv-python
+autobot-slm-backend/ansible/inventory/group_vars/browser.yml::pillow
+autobot-slm-backend/ansible/inventory/group_vars/browser.yml::playwright
+autobot-slm-backend/ansible/inventory/group_vars/browser.yml::requests
+autobot-slm-backend/ansible/inventory/group_vars/browser.yml::uvicorn
+
+# ---------------------------------------------------------------------------
+# #15597 — `python_security_updates` floors that sit BELOW the shipped
+# requirements, so the patching run they drive is a no-op while reporting
+# success. `nltk` is here for the same reason as the rest: `>=3.9.3` against a
+# `==3.10.3` pin. It is NOT the #15551 finding, which is about the advisory
+# allowance, and it does not make nltk removable — llama-index-core requires it.
+# ---------------------------------------------------------------------------
+autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::aiohttp
+autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::cryptography
+autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::fastapi
+autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::langchain-core
+autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::markdownify
+autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::nltk
+autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::pillow
+autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::protobuf
+autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::pypdf
+autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::python-multipart
+autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::requests
+autobot-slm-backend/ansible/roles/dependency_patching/defaults/main.yml::starlette
+
+# ---------------------------------------------------------------------------
+# #15598 — live role pip tasks whose floors are below the component's own
+# requirements file. `roles/tts-worker`'s `fastapi>=0.100.0` provisions the very
+# worker whose requirements annotate `fastapi>=0.141.1` as a security floor.
+# ---------------------------------------------------------------------------
+autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::chromadb
+autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::langchain
+autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::pydantic
+autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::redis
+autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::sqlalchemy
+autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::torch
+autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::transformers
+autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml::fastapi
+autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml::uvicorn
+autobot-slm-backend/ansible/roles/redis/tasks/chromadb.yml::chromadb
+autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::aiofiles
+autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::fastapi
+autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::python-multipart
+autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::soundfile
+autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::torch
+autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::uvicorn

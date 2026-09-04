@@ -222,11 +222,19 @@
       # latest-wins resolve.
       - pocket-tts>=2.0.0
       - soundfile>=0.12.0
-      - numpy>=1.24.0
+      # #15568: numpy carries no floor here -- constraints/shared.txt is the
+      # single source of truth for it (#10524), and `autobot-tts-worker/
+      # requirements.txt` already lists it bare against that constraint. The
+      # `>=1.24.0` this replaced admitted numpy 1.x into the very venv the
+      # requirements file pins to >=2.5.2, which is the ABI skew the SSOT
+      # exists to prevent. Same bare-name + `-c` shape as roles/npu-worker.
+      - numpy
       - scipy>=1.10.0
     virtualenv: "{{ tts_install_dir }}/venv"
     state: present
-    extra_args: "--timeout 300"
+    extra_args: >-
+      --timeout 300
+      -c {{ code_source_dir | default('/opt/autobot/code_source') }}/constraints/shared.txt
   become_user: "{{ tts_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "300"
