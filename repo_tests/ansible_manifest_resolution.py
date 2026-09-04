@@ -323,11 +323,20 @@ def _edges() -> _Edges:
 
 
 def _literals(mapping: object, found: dict[str, str]) -> None:
-    """Top-level literal scalars only -- a nested mapping's keys are not variable names."""
+    """Top-level string scalars only -- a nested mapping's keys are not variable names.
+
+    Templated values are kept as well as literal ones. Storing only literals made
+    `_substitute`'s multi-pass loop dead: every scope value would already be
+    final, so the first pass reached a fixed point and the comment promising that
+    a variable defined in terms of another resolves was describing behaviour the
+    data could not produce. A role stating ``venv_dir: "{{ install_root }}/venv"``
+    then contributed no entry at all, and `environment_key` fell back to the
+    verbatim text — so the same venv named two ways keyed two different bindings.
+    """
     if not isinstance(mapping, dict):
         return
     for key, value in mapping.items():
-        if isinstance(key, str) and isinstance(value, str) and "{{" not in value:
+        if isinstance(key, str) and isinstance(value, str):
             found.setdefault(key, value)
 
 

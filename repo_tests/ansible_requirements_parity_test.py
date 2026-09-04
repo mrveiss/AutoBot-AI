@@ -119,7 +119,12 @@ _MIN_REQUIREMENT_PACKAGES = 140  # 161
 # nothing and leave the declared table cross-checked against an empty set, which
 # reads as agreement. `_MIN_SITES_WITH_A_MANIFEST` is the same guarantee for the
 # declared half: emptying entries out to `()` would silence their comparison.
-_MIN_DERIVED_BINDINGS = 5  # 7
+# 6, not 7: `{{ slm_backend_dir }}/venv` and the literal path it expands to
+# used to key two bindings for one venv. Chained variable resolution merged
+# them with no manifest gained or lost. One templated key remains
+# (`{{ backend_code_dir }}/venv`), whose defining role is outside the scope
+# the walk reaches -- recorded rather than papered over.
+_MIN_DERIVED_BINDINGS = 5  # 6
 _MIN_SITES_WITH_A_MANIFEST = 11  # 13 of 18; 2 are host-wide, 3 have no manifest
 # Exact, unlike the others: `constraints/shared.txt` guards two packages and a
 # floor of 2 is the whole population. Legitimately shrinking that file to one
@@ -154,7 +159,14 @@ class Declaration(NamedTuple):
 
     @property
     def key(self) -> str:
-        return f"{self.path}::{self.package}"
+        # The environment belongs in the key because site identity is
+        # (path, environment). One ansible file can hold two pip tasks that
+        # install the same package into different venvs; without it the second
+        # overwrites the first in `_classified`, one divergence goes invisible,
+        # and a baseline line cannot name one site without exempting the other.
+        # That is the same shape of blindness #15629 removed from the
+        # comparison, one level down in the bookkeeping.
+        return f"{self.path}::{self.environment}::{self.package}"
 
     @property
     def site(self) -> tuple[str, str]:
@@ -331,7 +343,14 @@ def test_the_walk_reaches_the_manifests_it_claims_to_read() -> None:
     """A parser that matches nothing would pass every assertion below in silence."""
     declarations, sites, documents = ansible_declarations()
     stated = requirement_specifiers()
-    bound = [entry for entry in resolution.SITE_MANIFESTS.values() if entry.manifests]
+    # The EVERY_MANIFEST sentinel is a non-empty tuple, so counting bare
+    # truthiness would score the two host-wide entries as "bound to a
+    # manifest" and make this floor looser than the population it names.
+    bound = [
+        entry
+        for entry in resolution.SITE_MANIFESTS.values()
+        if entry.manifests and resolution.EVERY_MANIFEST not in entry.manifests
+    ]
     assert documents >= _MIN_ANSIBLE_DOCUMENTS, f"parsed only {documents} ansible documents"
     assert len(sites) >= _MIN_PIP_SITES, f"found only {len(sites)} pip declaration sites"
     assert len(declarations) >= _MIN_ANSIBLE_DECLARATIONS, f"only {len(declarations)} declarations"
