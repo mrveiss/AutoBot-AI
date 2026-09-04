@@ -35,7 +35,7 @@ class _StubDeploymentConfig:
     postgres_port: int = 5432
     postgres_db: str = "test_db"
     postgres_user: str = "test_user"
-    postgres_password: str = "test_pw"  # nosec B105 - test fixture, not a real credential
+    postgres_password: str = "test_pw"  # nosec B105  # test fixture, not a real credential
 
     def __post_init__(self):
         if self.features is None:
