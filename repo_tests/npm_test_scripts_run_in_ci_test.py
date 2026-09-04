@@ -129,23 +129,16 @@ UNINVOKED_TEST_SCRIPTS = {
         "#15678 -- WIRE IN, after harness provisioning. `node ./out/test/runTest.js` "
         "downloads VS Code and needs a virtual display, so it is a job rather than a step"
     ),
-    "autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking::test": (
-        "#15677 -- WIRE IN. jest under --experimental-vm-modules, invoked by nothing; "
-        "the Python half of this same tree is #15178"
-    ),
-    "autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking::test:integration": (
-        "#15677 -- WIRE IN. The integration half of the same jest suite"
-    ),
 }
 
 #: DOWN-ONLY ceiling on packages whose EVERY runner is allowlisted -- a whole
 #: app gated by nothing, which is exactly the #15667 shape. Was 5 on the first
 #: measurement (.mcp, autobot-browser-worker, vscode-autobot,
 #: mcp-structured-thinking, libs/autobot-sdk-ts); npm-package-tests.yml gates
-#: .mcp (#15674) and libs/autobot-sdk-ts (#15676), leaving three. NEVER raise
-#: this to make a new app pass; wire the app in, or this guard has become the
-#: thing it replaced.
-MAX_WHOLLY_UNGATED_PACKAGES = 3
+#: .mcp (#15674), libs/autobot-sdk-ts (#15676) and mcp-structured-thinking
+#: (#15677), leaving two. NEVER raise this to make a new app pass; wire the app
+#: in, or this guard has become the thing it replaced.
+MAX_WHOLLY_UNGATED_PACKAGES = 2
 
 #: Floors, so a regex that stops matching turns this module red instead of green
 #: (the #15018 lesson: a guard that enumerates nothing passes comfortably).
