@@ -21,6 +21,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
+import { useNodeServices } from '@/composables/useNodeServices'
 
 const h = vi.hoisted(() => ({
   getServiceLogs: vi.fn(),
@@ -35,8 +36,6 @@ vi.mock('@/composables/useSlmApi', () => ({
     getNodeServices: h.getNodeServices,
   }),
 }))
-
-import { useNodeServices } from '@/composables/useNodeServices'
 
 const NODE = 'node-alpha'
 const SERVICE = 'slm-backend'

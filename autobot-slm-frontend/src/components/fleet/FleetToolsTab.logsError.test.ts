@@ -63,7 +63,7 @@ interface LogViewerVm {
 }
 
 /** Mount the panel with the log viewer open and a node/service chosen. */
-async function mountLogViewer(): Promise<{ wrapper: ReturnType<typeof mount>; vm: LogViewerVm }> {
+async function mountLogViewer() {
   const wrapper = mount(FleetToolsTab, { global: { plugins: [i18n] } })
   const vm = wrapper.vm as unknown as LogViewerVm
   vm.activeTool = 'log-viewer'
