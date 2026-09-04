@@ -41,6 +41,11 @@ from services.auth import get_current_user
 from services.database import get_db
 from services.journal_fetch import JournalFetchTimeout, build_journal_command, fetch_service_journal
 from services.service_categorizer import categorize_service
+from services.service_restart import (
+    restart_service_list,
+    restart_slm_services,
+    run_ansible_service_action,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["services"])
@@ -56,64 +61,6 @@ async def _get_node_or_404(db: AsyncSession, node_id: str) -> Node:
             detail="Node not found",
         )
     return node
-
-
-def _build_service_ssh_cmd(node: Node, remote_cmd: str) -> list:
-    """Build SSH command list for service action. Ref: #1088."""
-    ssh_user = node.ssh_user or "autobot"
-    ssh_port = node.ssh_port or 22
-    ssh_key = config.path.ssh_key_path  # canonical inter-node key (#12429)
-    return [
-        "/usr/bin/ssh",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        "-o",
-        "ConnectTimeout=10",
-        "-o",
-        "BatchMode=yes",
-        "-i",
-        ssh_key,
-        "-p",
-        str(ssh_port),
-        f"{ssh_user}@{node.ip_address}",
-        remote_cmd,
-    ]
-
-
-async def _run_ansible_service_action(
-    node: Node,
-    service_name: str,
-    action: str,
-) -> Tuple[bool, str]:
-    """Run SSH command to control a service via systemctl. Ref: #1088."""
-    remote_cmd = f"sudo -n systemctl {action} {service_name}"
-    ssh_cmd = _build_service_ssh_cmd(node, remote_cmd)
-
-    try:
-        process = await asyncio.create_subprocess_exec(
-            *ssh_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=30.0,
-        )
-
-        if process.returncode == 0:
-            logger.info("Service %s %s on %s completed", service_name, action, node.hostname)
-            return True, f"Service {service_name} {action} completed"
-        else:
-            error = stderr.decode("utf-8", errors="replace")
-            logger.error("Service action failed on %s: %s", node.hostname, error[:500])
-            return False, f"Failed to {action} service: {error[:200]}"
-
-    except asyncio.TimeoutError:
-        return False, f"Timeout waiting for {action} to complete"
-    except Exception as e:
-        logger.exception("Service action error: %s", e)
-        return False, "Service action failed"
 
 
 # Port mapping for services that bind to specific ports
@@ -448,7 +395,7 @@ async def start_service(
     """Start a service on a node."""
     node = await _get_node_or_404(db, node_id)
 
-    success, message = await _run_ansible_service_action(node, service_name, "start")
+    success, message = await run_ansible_service_action(node, service_name, "start")
 
     # Update service status in DB if we have a record
     if success:
@@ -508,7 +455,7 @@ async def stop_service(
     """Stop a service on a node."""
     node = await _get_node_or_404(db, node_id)
 
-    success, message = await _run_ansible_service_action(node, service_name, "stop")
+    success, message = await run_ansible_service_action(node, service_name, "stop")
 
     if success:
         result = await db.execute(
@@ -563,7 +510,7 @@ async def _perform_port_aware_restart(node: Node, service_name: str, port: int |
     """
     if port:
         # Stop service first
-        await _run_ansible_service_action(node, service_name, "stop")
+        await run_ansible_service_action(node, service_name, "stop")
         # Small delay to let port release
         await asyncio.sleep(1)
         # Kill any orphan processes on the port
@@ -571,10 +518,10 @@ async def _perform_port_aware_restart(node: Node, service_name: str, port: int |
         # Small delay after kill
         await asyncio.sleep(1)
         # Start the service
-        return await _run_ansible_service_action(node, service_name, "start")
+        return await run_ansible_service_action(node, service_name, "start")
     else:
         # Regular restart for services without known ports
-        return await _run_ansible_service_action(node, service_name, "restart")
+        return await run_ansible_service_action(node, service_name, "restart")
 
 
 async def _update_service_after_restart(db: AsyncSession, node_id: str, service_name: str) -> None:
@@ -775,35 +722,6 @@ async def _get_restart_services(
     return _separate_and_order_services(all_services, excluded)
 
 
-async def _restart_service_list(node: Node, services: list, node_id: str, is_slm: bool) -> tuple[list, int, int]:
-    """Restart a list of services sequentially, return results.
-
-    Helper for restart_all_node_services (#816).
-    """
-    results = []
-    successful = 0
-    failed = 0
-    for svc in services:
-        svc_result = await _restart_single_service(node, svc, node_id, is_slm)
-        results.append(svc_result)
-        if svc_result["success"]:
-            successful += 1
-        else:
-            failed += 1
-    return results, successful, failed
-
-
-async def _restart_slm_services_deferred(node: Node, slm_services: list, node_id: str) -> None:
-    """Restart SLM services after HTTP response is sent.
-
-    Runs as a FastAPI background task to avoid killing the connection
-    when the backend restarts itself (#816).
-    """
-    await asyncio.sleep(1)  # Let response flush
-    for svc in slm_services:
-        await _restart_single_service(node, svc, node_id, is_slm=True)
-
-
 def _separate_and_order_services(all_services: list, excluded_services: list) -> tuple[list, list]:
     """
     Separate SLM services from others and return ordered lists.
@@ -828,69 +746,6 @@ def _separate_and_order_services(all_services: list, excluded_services: list) ->
     slm_services.sort(key=lambda s: s.service_name)
 
     return other_services, slm_services
-
-
-async def _restart_single_service(
-    node: Node,
-    svc: Service,
-    node_id: str,
-    is_slm: bool,
-) -> dict:
-    """
-    Execute restart for a single service and handle status updates.
-
-    Updates database status, sends WebSocket notification, and logs results.
-    Returns a result dict with service_name, success, message, is_slm_agent.
-
-    Helper for restart_all_node_services (Issue #665).
-    """
-    logger.info(
-        "Restarting service %s on %s%s",
-        svc.service_name,
-        node.hostname,
-        " (SLM service - last)" if is_slm else "",
-    )
-
-    success, message = await _run_ansible_service_action(node, svc.service_name, "restart")
-
-    result = {
-        "service_name": svc.service_name,
-        "success": success,
-        "message": message,
-        "is_slm_agent": is_slm,
-    }
-
-    if success:
-        svc.status = ServiceStatus.RUNNING.value
-        svc.active_state = "active"
-        svc.sub_state = "running"
-        svc.last_checked = datetime.now(timezone.utc)
-
-        await ws_manager.send_service_status(
-            node_id=node_id,
-            service_name=svc.service_name,
-            status="running",
-            action="restart",
-            success=True,
-            message=message,
-        )
-    else:
-        await ws_manager.send_service_status(
-            node_id=node_id,
-            service_name=svc.service_name,
-            status="unknown",
-            action="restart",
-            success=False,
-            message=message,
-        )
-        logger.error(
-            "Failed to restart %s on %s: %s",
-            svc.service_name,
-            node.hostname,
-            message,
-        )
-
-    return result
 
 
 @router.post(
@@ -922,13 +777,16 @@ async def restart_all_node_services(
         return _build_empty_restart_response(node_id)
 
     # Restart non-SLM services synchronously
-    results, successful, failed = await _restart_service_list(node, other_services, node_id, is_slm=False)
-
-    # Defer SLM services to background task (avoids killing connection)
-    if slm_services:
-        background_tasks.add_task(_restart_slm_services_deferred, node, slm_services, node_id)
+    results, successful, failed = await restart_service_list(node, other_services, node_id, is_slm=False)
 
     await db.commit()
+
+    # Defer SLM services to a background task (avoids killing the connection).
+    # #15611: names only. The task runs after this response is sent, by which
+    # time ``db`` and every row loaded through it are gone, so it reloads them
+    # through a session of its own and commits its own writes.
+    if slm_services:
+        background_tasks.add_task(restart_slm_services, node_id, [svc.service_name for svc in slm_services])
 
     return _build_restart_response(
         node_id,
@@ -1208,7 +1066,7 @@ async def start_fleet_service(
             fail_count += 1
             continue
 
-        success, msg = await _run_ansible_service_action(node, service_name, "start")
+        success, msg = await run_ansible_service_action(node, service_name, "start")
         if success:
             success_count += 1
             svc.status = ServiceStatus.RUNNING.value
@@ -1266,7 +1124,7 @@ async def stop_fleet_service(
             fail_count += 1
             continue
 
-        success, msg = await _run_ansible_service_action(node, service_name, "stop")
+        success, msg = await run_ansible_service_action(node, service_name, "stop")
         if success:
             success_count += 1
             svc.status = ServiceStatus.STOPPED.value
@@ -1324,7 +1182,7 @@ async def restart_fleet_service(
             fail_count += 1
             continue
 
-        success, msg = await _run_ansible_service_action(node, service_name, "restart")
+        success, msg = await run_ansible_service_action(node, service_name, "restart")
         if success:
             success_count += 1
             svc.status = ServiceStatus.RUNNING.value
