@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Dict, List
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import select, update
+from sqlalchemy import select, tuple_, update
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.store_authority import Store, system_of_record
@@ -119,22 +119,32 @@ async def fact_id_for_unique_key(unique_key: str) -> str | None:
 
 
 async def iter_facts(batch_size: int = 500) -> AsyncIterator[List[Dict[str, Any]]]:
-    """Every recorded fact, in id order, a batch at a time.
+    """Every fact recorded when iteration began, oldest first, a batch at a time.
 
-    Ordered and keyset-paged rather than offset-paged so a rebuild that runs
-    while facts are being created cannot skip or repeat a row.
+    Keyset-paged on ``(created_at, id)`` under a captured ceiling, not on ``id``
+    alone. ``id`` is a UUID4, so it carries no order: a row committed during
+    iteration lands at a random point and one that lands *below* the cursor is
+    never seen again. For a rebuild that is the worst possible failure — it
+    reports success having silently skipped a fact.
+
+    ``created_at`` supplies the order and the ceiling excludes anything created
+    after the walk started, which needs no chasing: a fact created now is
+    projected by its own write path. ``id`` breaks ties so two rows sharing a
+    timestamp cannot hide each other.
     """
     factory = get_async_session_factory()
-    after = ""
+    ceiling = datetime.now(tz=timezone.utc)
+    after: tuple[datetime, str] | None = None
     while True:
         async with factory() as session:
-            rows = await session.execute(
-                select(KnowledgeFact).where(KnowledgeFact.id > after).order_by(KnowledgeFact.id).limit(batch_size)
-            )
+            query = select(KnowledgeFact).where(KnowledgeFact.created_at <= ceiling)
+            if after is not None:
+                query = query.where(tuple_(KnowledgeFact.created_at, KnowledgeFact.id) > after)
+            rows = await session.execute(query.order_by(KnowledgeFact.created_at, KnowledgeFact.id).limit(batch_size))
             batch = list(rows.scalars())
         if not batch:
             return
-        after = batch[-1].id
+        after = (batch[-1].created_at, batch[-1].id)
         yield [{"fact_id": r.id, "content": r.content, "metadata": dict(r.metadata_json or {})} for r in batch]
 
 

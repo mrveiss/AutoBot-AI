@@ -68,8 +68,15 @@ _WRITES: dict[Store, tuple[frozenset[str], tuple[str, ...]]] = {
 
 # Reach floor, not a census: it measures how far the walk gets, never how much it
 # finds. Declaring a concept must never trip it -- only a detector that has
-# quietly stopped matching the call shapes it claims to read.
-_MIN_MODULES_SCANNED = 2000  # tracked .py files, well above the current tree
+# quietly stopped reading the tree it claims to read.
+#
+# It counts files that PARSED, not files that git listed. Those are different
+# numbers and the difference is the whole point: if ``ast.parse`` began failing
+# across the tree, ``stores_written`` would return an empty set from its
+# SyntaxError branch for every file, ``dual_store_modules()`` would return {},
+# and every assertion below would pass on a tree the detector had stopped
+# reading. A floor over ``git ls-files`` would not notice; this one does.
+_MIN_MODULES_PARSED = 2000  # 5100+ parse today, well above the current tree
 
 
 def _receiver(node: ast.expr) -> str:
@@ -121,7 +128,23 @@ def _tracked_python_files() -> list[Path]:
 
 
 def _is_test(relative: str) -> bool:
-    return "test" in Path(relative).name or relative.startswith("repo_tests/")
+    """A test module, by this repo's conventions -- not by "test" appearing anywhere.
+
+    A substring check over the filename exempts production modules that merely
+    contain the word: ``env_registry_testing.py``, ``testing_pattern_analyzer.py``
+    and fifteen others in this tree. Any of them could write two durable stores
+    and never appear in :func:`dual_store_modules`, which is the regression this
+    file exists to catch.
+    """
+    path = Path(relative)
+    name = path.name
+    return (
+        name.startswith("test_")
+        or name.endswith("_test.py")
+        or name == "conftest.py"
+        or "tests" in path.parts
+        or path.parts[0] == "repo_tests"
+    )
 
 
 def dual_store_modules() -> dict[str, set[Store]]:
@@ -151,8 +174,46 @@ def baseline_entries() -> set[str]:
 
 
 def test_the_walk_reaches_the_tree():
-    """A detector that stopped reading files would report a clean tree."""
-    assert len(_tracked_python_files()) >= _MIN_MODULES_SCANNED
+    """A detector that stopped parsing files would report a clean tree."""
+    parsed = 0
+    for path in _tracked_python_files():
+        try:
+            ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
+            continue
+        parsed += 1
+    assert parsed >= _MIN_MODULES_PARSED, f"only {parsed} modules parsed; the detector has stopped reading the tree"
+
+
+def test_the_detector_matches_the_shapes_it_claims_to():
+    """Pin ``stores_written`` on known input, in both directions.
+
+    Every other assertion here runs the detector against the live tree, so a
+    hint that stopped matching -- ``redis_client`` renamed, a switch to a
+    pipeline helper -- would shrink the finding set silently and leave
+    ``test_no_undeclared_dual_store_module_exists`` passing on a detector that
+    had gone blind. These cases fail instead.
+    """
+    call_shape = "async def f(self):\n    self.redis_client.hset(k, mapping=m)\n    self.vector_store.add([d])\n"
+    assert stores_written(call_shape) == {Store.REDIS, Store.CHROMADB}
+
+    # The shape knowledge/facts.py actually uses: the method is a reference
+    # handed to a thread, never a call. Reading only ast.Call misses it.
+    thread_shape = (
+        "async def f(self):\n"
+        "    await asyncio.to_thread(self.redis_client.hset, k, mapping=m)\n"
+        "    await asyncio.to_thread(self.vector_store.add, [d])\n"
+    )
+    assert stores_written(thread_shape) == {Store.REDIS, Store.CHROMADB}
+
+    assert stores_written("def f(session, item):\n    session.add(item)\n") == {Store.POSTGRES}
+    assert stores_written("def f(p, text):\n    p.write_text(text)\n") == {Store.DISK}
+
+    # Negatives: reads are not writes, and a same-named method on an unrelated
+    # object is not a store write -- both would inflate the finding set.
+    assert stores_written("def f(self):\n    self.redis_client.hgetall(k)\n") == set()
+    assert stores_written("def f(seen, item):\n    seen.add(item)\n") == set()
+    assert stores_written("def f(x):\n    this is not python\n") == set()
 
 
 def test_every_declared_write_site_exists():

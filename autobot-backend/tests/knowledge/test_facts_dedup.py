@@ -223,6 +223,10 @@ class TestStoreFact:
             # #15663: the durable row is written before the projections, and
             # these tests exercise deduplication rather than persistence.
             patch("knowledge.fact_store.persist_fact", new=AsyncMock()),
+            # Redis reports no hash, so the dedup lookup falls through to the
+            # durable index; without this the result would depend on whatever
+            # rows the developer's database happens to hold.
+            patch("knowledge.fact_store.fact_id_for_content_hash", new=AsyncMock(return_value=None)),
         ):
             result = await kb.store_fact("Completely different content", metadata={"category": "test"})
 
@@ -291,6 +295,10 @@ class TestStoreFact:
             # #15663: the durable row is written before the projections, and
             # these tests exercise deduplication rather than persistence.
             patch("knowledge.fact_store.persist_fact", new=AsyncMock()),
+            # Redis reports no hash, so the dedup lookup falls through to the
+            # durable index; without this the result would depend on whatever
+            # rows the developer's database happens to hold.
+            patch("knowledge.fact_store.fact_id_for_content_hash", new=AsyncMock(return_value=None)),
         ):
             result = await kb.store_fact("Brand new fact", metadata={})
 

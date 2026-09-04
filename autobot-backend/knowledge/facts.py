@@ -1134,10 +1134,8 @@ class FactsMixin(FactProjectionMixin):
 
             # #15663: the durable row first, then the projection. An update that
             # only reached Redis is an update the next restart can undo.
-            # Lazy: fact_store pulls SQLAlchemy, absent from the startup-import smoke env.
-            from knowledge import fact_store
-
-            await fact_store.update_fact(fact_id, decoded["content"], current_metadata)
+            if not await self._durable_update_or_adopt(fact_id, decoded["content"], current_metadata):
+                return {"status": "error", "message": "Fact not found"}
             await asyncio.to_thread(
                 self.redis_client.hset,
                 fact_key,
@@ -1215,7 +1213,6 @@ class FactsMixin(FactProjectionMixin):
         self.ensure_initialized()
 
         try:
-            fact_key = "fact:%s" % fact_id
             current = await self._read_fact_for_write(fact_id)
             if current is None:
                 return {"status": "error", "message": "Fact not found"}
@@ -1225,11 +1222,8 @@ class FactsMixin(FactProjectionMixin):
 
             # #15663: the row is the fact, so removing it is what makes the
             # delete real; the projections are cleaned up after.
-            # Lazy: fact_store pulls SQLAlchemy, absent from the startup-import smoke env.
-            from knowledge import fact_store
-
-            await fact_store.delete_fact(fact_id)
-            await asyncio.to_thread(self.redis_client.delete, fact_key)
+            if not await self._durable_delete(fact_id):
+                return {"status": "error", "message": "Fact not found"}
             await self._cleanup_fact_mappings(fact_id, content, metadata)
             await self._delete_fact_from_vector_store(fact_id)
 

@@ -13,9 +13,11 @@ not a durability guarantee. This revision creates the table that makes the
 ``NO DATA LOSS``: one new table. Nothing existing is altered, rewritten or
 dropped, and no Redis key is touched -- the hashes keep serving reads while the
 write path starts populating the rows beside them. Facts already in Redis are
-backfilled by ``FactsMixin.rebuild_fact_projections(direction="from_redis")``,
-which is a runtime repair rather than a migration step: it needs a Redis
-connection, and the migration gate installs no autobot packages at all.
+adopted by ``FactsMixin.adopt_legacy_facts()``, which ``_init_knowledge_base``
+runs at startup. That has to be a runtime step rather than a migration one: it
+needs a Redis connection, and the migration gate installs no autobot packages at
+all. Until it runs, a pre-existing fact is still Redis-only — so the adoption is
+wired to startup rather than left as a script somebody must remember.
 
 Guarded with ``has_table`` so a database already carrying this shape does not
 hard-fail (the 20260812_073 idiom).

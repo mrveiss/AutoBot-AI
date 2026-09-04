@@ -246,7 +246,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/knowledge/connectors/gitlab.py": 873,
     "autobot-backend/knowledge/connectors/onedrive.py": 642,
     "autobot-backend/knowledge/connectors/tests/test_credential_store.py": 1032,
-    "autobot-backend/knowledge/facts.py": 1808,
+    "autobot-backend/knowledge/facts.py": 1802,
     "autobot-backend/knowledge/ownership.py": 757,
     "autobot-backend/knowledge/pipeline/cognifiers/cognifiers_test.py": 806,
     "autobot-backend/knowledge/rag_benchmarks.py": 1607,

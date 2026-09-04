@@ -145,6 +145,40 @@ class FactProjectionMixin:
             logger.debug("Error checking for existing fact: %s", e)
         return None
 
+    async def _durable_update_or_adopt(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> bool:
+        """Update the row, or write one if this fact predates it. ``False`` if deleted.
+
+        No durable row was affected, and there are two ways to reach that. A fact
+        created before #15663 never had a row written, so its update is the
+        moment to adopt it. A fact deleted concurrently must not be resurrected —
+        recreating its Redis and ChromaDB projections would leave copies with no
+        fact behind them. The Redis key is what tells the two apart.
+        """
+        # Lazy: see the module docstring on why fact_store is not imported at module scope.
+        from knowledge import fact_store
+
+        if await fact_store.update_fact(fact_id, content, metadata):
+            return True
+        if not await asyncio.to_thread(self.redis_client.exists, "fact:%s" % fact_id):
+            return False
+        await fact_store.persist_fact(fact_id, content, metadata)
+        return True
+
+    async def _durable_delete(self, fact_id: str) -> bool:
+        """Remove the row and the hash. ``False`` when neither held the fact.
+
+        Both returns matter. Redis DEL reports how many keys it removed and the
+        durable delete whether a row was affected; if neither removed anything, a
+        concurrent delete won the race and has already decremented the counters.
+        Proceeding would decrement them a second time for one fact.
+        """
+        # Lazy: see the module docstring on why fact_store is not imported at module scope.
+        from knowledge import fact_store
+
+        durable_removed = await fact_store.delete_fact(fact_id)
+        projection_removed = await asyncio.to_thread(self.redis_client.delete, "fact:%s" % fact_id)
+        return bool(durable_removed or projection_removed)
+
     async def _record_vector_observation(self, fact_id: str) -> None:
         """Note on the durable row that ChromaDB was seen holding this vector.
 
@@ -160,6 +194,41 @@ class FactProjectionMixin:
             await fact_store.record_vector_seen(fact_id)
         except Exception as exc:  # noqa: BLE001 - reporting detail, never the write path
             logger.debug("Could not stamp vector_seen_at for fact %s: %s", fact_id, exc)
+
+    async def adopt_legacy_facts(self) -> Dict[str, Any]:
+        """Write a durable row for every fact that exists only as a Redis hash (#15663).
+
+        The migration that created ``knowledge_facts`` creates it **empty**, and
+        it cannot do otherwise: the migration gate installs no autobot packages
+        and has no Redis connection. So on the first boot after this change every
+        pre-existing fact is still Redis-only — exactly the state #12733 lost 43
+        of them from — and a Postgres-driven rebuild would find nothing to
+        rebuild. This is the direction that closes that window, and it runs at
+        startup rather than living as a script nobody remembers to invoke.
+
+        Idempotent and safe to re-run: a fact whose row already exists is
+        skipped, so the second boot adopts nothing and costs one scan.
+        """
+        # Lazy: see the module docstring on why fact_store is not imported at module scope.
+        from knowledge import fact_store
+
+        adopted, already = 0, 0
+        for fact_key in await self._scan_redis_keys_async("fact:*"):
+            fact_id = fact_key.split(":", 1)[1] if ":" in fact_key else fact_key
+            if await fact_store.load_fact(fact_id) is not None:
+                already += 1
+                continue
+            current = await self._read_fact_for_write(fact_id)
+            if current is None:
+                continue
+            decoded, metadata = current
+            await fact_store.persist_fact(fact_id, decoded.get("content", ""), metadata)
+            adopted += 1
+        if adopted:
+            logger.warning("Adopted %d Redis-only facts into knowledge_facts (#15663)", adopted)
+        else:
+            logger.info("No Redis-only facts to adopt; %d already durable", already)
+        return {"status": "success", "adopted": adopted, "already_durable": already}
 
     async def rebuild_fact_projections(self, batch_size: int = 500) -> Dict[str, Any]:
         """Rebuild every Redis projection from the durable rows (#15663 rule 2).
