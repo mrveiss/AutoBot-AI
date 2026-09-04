@@ -17,6 +17,7 @@ Features:
 """
 
 import asyncio
+import concurrent.futures
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,6 +26,7 @@ from typing import Any, Callable, Dict, Set
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
+from autobot_shared.async_compat import fire_and_forget_threadsafe
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
@@ -79,14 +81,21 @@ class DocumentationChangeHandler(FileSystemEventHandler):
 
         # Debounce rapid changes
         now = time.time()
-        if file_path in self._last_event_time:
-            if now - self._last_event_time[file_path] < DEBOUNCE_SECONDS:
-                return
+        last_seen = self._last_event_time.get(file_path)
+        if last_seen is not None and now - last_seen < DEBOUNCE_SECONDS:
+            return
+
+        # #15636: this method runs on the watchdog Observer thread, which has no
+        # running event loop. ``asyncio.create_task`` raised RuntimeError here on
+        # every event, so nothing was ever queued -- and because the debounce
+        # stamp used to be written BEFORE the failing call, the handler looked
+        # alive while doing nothing. The stamp is now written only once the
+        # cross-thread hand-off has actually scheduled the coroutine, so a failed
+        # dispatch is not suppressed as a duplicate next time round.
+        if self.watcher.dispatch_change(path, change_type) is None:
+            return
 
         self._last_event_time[file_path] = now
-
-        # Queue the change for processing
-        asyncio.create_task(self.watcher.queue_change(path, change_type))
 
 
 class DocumentationWatcherService:
@@ -100,6 +109,9 @@ class DocumentationWatcherService:
         """Initialize the documentation watcher service."""
         self._observer: Observer | None = None
         self._handler: DocumentationChangeHandler | None = None
+        # The loop that ``start()`` ran on. The Observer thread needs it to hand
+        # work back across the thread boundary (#15636).
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._is_running = False
         self._pending_changes: Dict[Path, str] = {}  # path -> change_type
         self._change_lock = asyncio.Lock()
@@ -128,6 +140,10 @@ class DocumentationWatcherService:
             if not DOCS_DIR.exists():
                 logger.warning("Documentation directory does not exist: %s", DOCS_DIR)
                 return False
+
+            # Capture the loop before the Observer thread starts: its callbacks
+            # cannot reach a loop they are not running on any other way (#15636).
+            self._loop = asyncio.get_running_loop()
 
             # Create observer and handler
             self._handler = DocumentationChangeHandler(self)
@@ -165,6 +181,7 @@ class DocumentationWatcherService:
                     pass
 
             self._handler = None
+            self._loop = None
             self._is_running = False
             self._pending_changes.clear()
 
@@ -172,6 +189,26 @@ class DocumentationWatcherService:
 
         except Exception as e:
             logger.error("Error stopping documentation watcher: %s", e)
+
+    def dispatch_change(self, file_path: Path, change_type: str) -> concurrent.futures.Future | None:
+        """Hand a file event from the Observer thread to this service's loop.
+
+        Called from the watchdog Observer thread, which is not running the event
+        loop, so :func:`asyncio.create_task` cannot start the coroutine there.
+
+        Args:
+            file_path: Path to the changed file.
+            change_type: Type of change (created, modified, deleted).
+
+        Returns:
+            The retained future, or ``None`` when nothing was scheduled -- the
+            caller must not record the event as handled in that case.
+        """
+        return fire_and_forget_threadsafe(
+            self.queue_change(file_path, change_type),
+            name=f"docs-watcher-{change_type}",
+            loop=self._loop,
+        )
 
     async def queue_change(self, file_path: Path, change_type: str) -> None:
         """

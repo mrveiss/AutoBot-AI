@@ -90,14 +90,31 @@ class WarmContainerPool:
         )
 
     async def stop(self) -> None:
-        """Drain and destroy all containers in the pool."""
+        """Drain and destroy all containers in the pool.
+
+        #15638: clearing ``_running`` is not enough on its own. A replenish that
+        is already inside ``_create_warm_container()`` when ``stop()`` lands
+        returns to a loop that now sees ``_running`` false, and used to drop the
+        container it had just started -- running, unremoved, with nothing left
+        holding a reference to it. One leaked container per start/stop cycle.
+
+        The drain therefore runs under ``_replenish_lock``, which the in-flight
+        replenish holds for the whole create. ``stop()`` cannot return while a
+        create is in progress, and the replenish that owns that create removes
+        what it made rather than dropping it. Cancelling the replenish instead
+        would not do: the create runs in a worker thread via
+        ``asyncio.to_thread``, and cancelling the awaiting task does not stop
+        that thread from finishing the ``containers.run`` call -- it only throws
+        away the handle to the container the thread went on to create.
+        """
         self._running = False
-        while not self._pool.empty():
-            try:
-                container = self._pool.get_nowait()
-                await asyncio.to_thread(container.remove, force=True)
-            except Exception as exc:
-                logger.warning("Error destroying pool container: %s", exc)
+        async with self._replenish_lock:
+            while not self._pool.empty():
+                try:
+                    container = self._pool.get_nowait()
+                    await asyncio.to_thread(container.remove, force=True)
+                except Exception as exc:
+                    logger.warning("Error destroying pool container: %s", exc)
         logger.info("Container pool stopped for %s", self._image)
 
     # ------------------------------------------------------------------
@@ -129,7 +146,8 @@ class WarmContainerPool:
             if container is None:
                 raise RuntimeError(f"Failed to create container for image {self._image}")
 
-        # Refill in the background without blocking the caller
+        # Refill in the background without blocking the caller. Retained by
+        # ``fire_and_forget`` so it cannot be collected before it runs (#15619).
         fire_and_forget(self._replenish(), name="container-pool-replenish")
         return container
 
@@ -208,16 +226,32 @@ class WarmContainerPool:
             return
 
         async with self._replenish_lock:
-            if self._pool.qsize() < self._pool_size:
-                container = await self._create_warm_container()
-                if container and self._running:
-                    await self._pool.put(container)
-                    logger.debug(
-                        "Replenished pool for %s: %d/%d",
-                        self._image,
-                        self._pool.qsize(),
-                        self._pool_size,
-                    )
+            if self._pool.qsize() >= self._pool_size:
+                return
+            container = await self._create_warm_container()
+            if container is None:
+                return
+            if not self._running:
+                # ``stop()`` landed while the create was in flight. The
+                # container exists and only this frame knows about it, so this
+                # frame has to remove it -- dropping it here is the #15638 leak.
+                await self._discard_container(container)
+                return
+            await self._pool.put(container)
+            logger.debug(
+                "Replenished pool for %s: %d/%d",
+                self._image,
+                self._pool.qsize(),
+                self._pool_size,
+            )
+
+    async def _discard_container(self, container: "docker.models.containers.Container") -> None:
+        """Remove a container the pool created but is not going to hand out."""
+        try:
+            await asyncio.to_thread(container.remove, force=True)
+            logger.debug("Removed container %s created after shutdown", container.short_id)
+        except Exception as exc:
+            logger.warning("Failed to remove container created after shutdown: %s", exc)
 
 
 class ContainerPoolRegistry:
