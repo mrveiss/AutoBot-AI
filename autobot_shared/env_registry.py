@@ -15,7 +15,6 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-
 @dataclass(frozen=True)
 class EnvVarSpec:
     """Specification for a single AUTOBOT_* environment variable."""
@@ -29,14 +28,11 @@ class EnvVarSpec:
     deprecated_since: str | None = None
     replaces: list = field(default_factory=list)
 
-
 REGISTRY: dict[str, EnvVarSpec] = {}
-
 
 def register_env_var(spec: EnvVarSpec) -> None:
     """Add a spec to the global registry."""
     REGISTRY[spec.name] = spec
-
 
 def env(name: str, default: Any = None) -> Any:
     """Type-safe env var accessor that enforces registry membership.
@@ -56,7 +52,6 @@ def env(name: str, default: Any = None) -> Any:
         return spec.type(raw)
     except (ValueError, TypeError):
         return spec.default if default is None else default
-
 
 # ---------------------------------------------------------------------------
 # Registered variables — grouped by component
@@ -131,9 +126,7 @@ register_env_var(
     )
 )
 
-
 # --- backend ----------------------------------------------------------------
-
 
 # --- chat -------------------------------------------------------------------
 
@@ -642,7 +635,6 @@ register_env_var(
     )
 )
 
-
 # --- provider OAuth / device-code flow (#14223) ------------------------------
 
 register_env_var(
@@ -758,7 +750,6 @@ register_env_var(
     )
 )
 
-
 # --- gateway connectors (#14223) ---------------------------------------------
 
 register_env_var(
@@ -800,7 +791,6 @@ register_env_var(
         component="gateway",
     )
 )
-
 
 # --- execution sandbox and snapshots (#14223) --------------------------------
 
@@ -858,9 +848,7 @@ register_env_var(
     )
 )
 
-
 # --- worker and analysis pools (#14223) --------------------------------------
-
 
 # --- timeouts and backoffs (#14223) ------------------------------------------
 
@@ -1041,7 +1029,6 @@ register_env_var(
     )
 )
 
-
 # --- storage paths and toolsets (#14223) -------------------------------------
 
 register_env_var(
@@ -1071,7 +1058,6 @@ register_env_var(
     )
 )
 
-
 # --- monitoring endpoints (#14223) -------------------------------------------
 
 register_env_var(
@@ -1097,7 +1083,6 @@ register_env_var(
         component="monitoring",
     )
 )
-
 
 # --- backfilled from the env_utils helper form (#14265) -----------------------
 # These were read via env_int/env_flag/env_str/env_float and were therefore
@@ -1131,7 +1116,6 @@ register_env_var(
         component="execution",
     )
 )
-
 
 register_env_var(
     EnvVarSpec(
@@ -1239,7 +1223,6 @@ register_env_var(
     )
 )
 
-
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_STT_PEAK_WINDOW_MS",
@@ -1252,7 +1235,6 @@ register_env_var(
         component="voice",
     )
 )
-
 
 # Stays here rather than moving to env_registry_backend with the rest of its
 # component: its default is a baselined hardcoded value, and the baseline refuses
@@ -1269,37 +1251,3 @@ register_env_var(
     )
 )
 
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_SLM_RESTART_FLUSH_DELAY_SECONDS",
-        type=float,
-        default=1.0,
-        description=(
-            "Seconds the deferred SLM service restart waits for the HTTP response to "
-            "flush before it starts killing the services that carried it. Too short and "
-            "the caller sees a dropped connection instead of its 202; too long and the "
-            "restart is needlessly delayed, so the right value follows the deployment's "
-            "network rather than anything fixed "
-            "(services/service_restart.py, #15611)."
-        ),
-        component="slm",
-        range=(0.0, 60.0),
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_SLM_RESTART_SSH_TIMEOUT_SECONDS",
-        type=float,
-        default=30.0,
-        description=(
-            "Seconds a single `systemctl restart` over SSH may take before it is "
-            "abandoned and reported as failed. A slow node restarting a heavy unit "
-            "legitimately exceeds a value that is generous on a fast one, so this "
-            "belongs to the deployment "
-            "(services/service_restart.py, #15611)."
-        ),
-        component="slm",
-        range=(1.0, 600.0),
-    )
-)
