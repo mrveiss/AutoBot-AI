@@ -54,8 +54,14 @@ server {
     access_log {{ slm_log_dir }}/nginx-access.log;
     error_log {{ slm_log_dir }}/nginx-error.log;
 
-    # Frontend static files
-    root {{ slm_frontend_dir }}/dist;
+    # Frontend static files.
+    # #15610: `current` is a symlink the publish flips with a single rename(2)
+    # (roles/_shared/tasks/build_publish_slm_frontend.yml). It replaced `dist`,
+    # a directory that was renamed twice per publish and therefore did not
+    # exist between the two renames. nginx resolves root/alias per request and
+    # follows symlinks — there is no open_file_cache and no disable_symlinks in
+    # this config — so a flip is served to the next request without a reload.
+    root {{ slm_frontend_dir }}/current;
     index index.html;
 
 {% if slm_colocated_frontend | default(false) | bool %}
@@ -451,7 +457,8 @@ server {
     }
 
     location /slm/ {
-        alias {{ slm_frontend_dir }}/dist/;
+        # #15610: the atomically-flipped pointer, not a renamed directory.
+        alias {{ slm_frontend_dir }}/current/;
         try_files $uri $uri/ /slm/index.html;
 
         # Prevent index.html from being cached so new deployments are picked up

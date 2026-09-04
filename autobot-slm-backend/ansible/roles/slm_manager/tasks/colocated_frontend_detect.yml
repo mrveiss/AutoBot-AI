@@ -1,0 +1,36 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# Co-located frontend detection (#3013).
+#
+# If the user frontend code exists on this host, the SLM nginx site serves the
+# SLM UI at /slm/ and the user frontend at /. The flag decides whole blocks of
+# autobot-slm.conf.j2, so anything that renders that template must set it
+# first — rendering with the flag defaulted to false on a co-located host drops
+# the user frontend's server blocks.
+#
+# Extracted from tasks/main.yml (#15610) because it now has two callers: the
+# role's own run, which needs the flag BEFORE the frontend build so
+# VITE_API_URL is right, and tasks/nginx_site.yml, which needs it before the
+# template. A second copy is what drifts.
+#
+# Idempotent: a stat and a set_fact that ORs with whatever is already set, so
+# running it twice in one play (main.yml, then again via nginx_site.yml) cannot
+# turn the flag off.
+
+- name: "SLM | Detect co-located user frontend (#3013)"
+  ansible.builtin.stat:
+    path: "{{ frontend_dist_dir | dirname }}/package.json"
+  register: _colocated_frontend_check
+  tags: ['slm', 'frontend', 'nginx']
+
+- name: "SLM | Set co-located frontend flag (#3013)"
+  ansible.builtin.set_fact:
+    slm_colocated_frontend: >-
+      {{
+        (slm_colocated_frontend | default(false) | bool) or
+        (_colocated_frontend_check.stat.exists | default(false) | bool)
+      }}
+  tags: ['slm', 'frontend', 'nginx']

@@ -703,21 +703,12 @@
 # Must run BEFORE frontend builds so VITE_API_URL is correct.
 # Auto-detect: if the user frontend code exists on this host,
 # enable co-located mode (SLM at /slm, user frontend at /).
+# #15610: the detection itself lives in colocated_frontend_detect.yml, because
+# tasks/nginx_site.yml needs the same flag before rendering the site config.
 # ==========================================================
   become: true
-- name: "SLM | Detect co-located user frontend (#3013)"
-  ansible.builtin.stat:
-    path: "{{ frontend_dist_dir | dirname }}/package.json"
-  register: _colocated_frontend_check
-  tags: ['slm', 'frontend', 'nginx']
-
-- name: "SLM | Set co-located frontend flag (#3013)"
-  ansible.builtin.set_fact:
-    slm_colocated_frontend: >-
-      {{
-        (slm_colocated_frontend | default(false) | bool) or
-        (_colocated_frontend_check.stat.exists | default(false) | bool)
-      }}
+- name: "SLM | Detect co-located mode before the frontend build (#3013)"
+  ansible.builtin.include_tasks: colocated_frontend_detect.yml
   tags: ['slm', 'frontend', 'nginx']
 
 # ==========================================================
@@ -912,15 +903,11 @@
     - reload nginx
   tags: ['slm', 'nginx']
 
-- name: "SLM | Deploy nginx configuration"
-  ansible.builtin.template:
-    src: autobot-slm.conf.j2
-    dest: /etc/nginx/sites-available/{{ slm_nginx_config }}
-    mode: "0644"
-    backup: true
-  notify:
-    - test nginx config
-    - reload nginx
+# #15610: the render lives in nginx_site.yml so playbooks/update-all-nodes.yml
+# — which deploys the SLM backend by unarchive and never runs this role — can
+# re-render the site config from the same source after it publishes a bundle.
+- name: "SLM | Deploy nginx configuration (#15610)"
+  ansible.builtin.include_tasks: nginx_site.yml
   tags: ['slm', 'nginx']
 
 - name: "SLM | Stat sites-enabled file to detect non-symlink (#1122)"
@@ -1161,7 +1148,7 @@
     msg:
       - "=== SLM Manager Deployment Complete ==="
       - "Backend: {{ slm_backend_host }}:{{ slm_backend_port }}"
-      - "Frontend: {{ slm_frontend_dir }}/dist"
+      - "Frontend: {{ slm_frontend_dir }}/current -> {{ slm_frontend_dir }}/dist-<build id>"
       - "Nginx: HTTPS on port 443"
       - "TLS cert: {{ slm_tls_cert }}"
       - "Logs: {{ slm_log_dir }}/"

@@ -509,6 +509,12 @@ frontend_setup() {
     info "Building frontend..."
     remote_exec_sudo "cd ${REMOTE_FRONTEND} && npm run build --silent 2>/dev/null" || \
         warn "Frontend build may have warnings, continuing..."
+    # #15610: nginx serves `current`, not the build directory itself, so that
+    # every later publish is a single rename(2) over this symlink rather than a
+    # pair of directory renames with no served path in between. Bootstrap's own
+    # build still lands in dist/; Ansible re-points `current` at a per-build
+    # directory the first time it publishes.
+    remote_exec_sudo "cd ${REMOTE_FRONTEND} && ln -sfn dist current"
     success "Frontend built"
 
     # Generate self-signed certificate
