@@ -207,7 +207,15 @@ def test_the_detector_matches_the_shapes_it_claims_to():
     assert stores_written(thread_shape) == {Store.REDIS, Store.CHROMADB}
 
     assert stores_written("def f(session, item):\n    session.add(item)\n") == {Store.POSTGRES}
-    assert stores_written("def f(p, text):\n    p.write_text(text)\n") == {Store.DISK}
+    assert stores_written("def f(cache_path, text):\n    cache_path.write_text(text)\n") == {Store.DISK}
+
+    # The receiver hint is deliberately narrow, and this is the cost of that:
+    # a disk write through a name carrying neither "path" nor "file" is missed.
+    # Pinned rather than fixed -- widening it to every ``write_text`` would drag
+    # in report writers, log rotation and cache dumps, none of which are a
+    # second copy of a persisted concept. A module that writes user state to a
+    # variable named ``p`` is a naming problem this guard is the wrong tool for.
+    assert stores_written("def f(p, text):\n    p.write_text(text)\n") == set()
 
     # Negatives: reads are not writes, and a same-named method on an unrelated
     # object is not a store write -- both would inflate the finding set.
