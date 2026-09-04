@@ -231,14 +231,16 @@
 # code-sync self-update skip-check (_get_slm_deployed_commit) reads what is
 # really deployed instead of code_source HEAD (which stage 2 of the update
 # pipeline already advances before this check runs).
-- name: "SLM | Record deployed commit marker (#12202)"
-  ansible.builtin.shell:
-    cmd: >-
-      git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}
-      -C {{ code_source_dir | default('/opt/autobot/code_source') }}
-      rev-parse HEAD
-      > {{ slm_backend_dir }}/.deployed_commit
-  changed_when: false
+#
+# #15557: the write is defined once, in
+# _shared/tasks/record_slm_deployed_commit.yml — four entry points install this
+# tree and only two of them recorded who did it.
+- name: "SLM | Record deployed commit marker (#12202, #15557)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/record_slm_deployed_commit.yml
+  vars:
+    deployed_commit_label: "SLM"
+    deployed_commit_dir: "{{ slm_backend_dir }}"
+    deployed_commit_owner: "{{ slm_user }}"
   tags: ['slm', 'backend', 'deploy']
 
 # ==========================================================
@@ -806,18 +808,19 @@
 
 # #10435: SLM UI is always served under /slm (nginx `location /slm/`) and
 # vite.config sets base /slm/. The API base must always be /slm; an unset/empty
-# VITE_API_URL trips the co-located build guard and bakes the wrong base. Use
-# build:slm which exports VITE_API_URL=/slm for every deploy (co-located + standalone).
-- name: "SLM | Build frontend for production (#10435)"
-  ansible.builtin.command:
-    cmd: npm run build:slm
-    chdir: "{{ slm_frontend_dir }}"
-  become_user: "{{ slm_user }}"
+# VITE_API_URL trips the co-located build guard and bakes the wrong base.
+#
+# #15557: this used to run `npm run build:slm` straight into the served dist/,
+# with no gate — a failed build emptied dist/ and every /slm/ path answered 403
+# while the play carried on green. The staged build-then-swap is defined once,
+# in _shared/tasks/build_publish_slm_frontend.yml.
+- name: "SLM | Build and publish frontend for production (#10435, #15557)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/build_publish_slm_frontend.yml
+  vars:
+    slm_frontend_publish_label: "SLM"
+    slm_frontend_publish_dir: "{{ slm_frontend_dir }}"
+    slm_frontend_publish_user: "{{ slm_user }}"
   when: slm_frontend_build and slm_package_json.stat.exists
-  register: slm_frontend_build_result
-  changed_when: slm_frontend_build_result.rc == 0
-  environment:
-    VITE_API_URL: "/slm"
   tags: ['slm', 'frontend']
 
 # ==========================================================

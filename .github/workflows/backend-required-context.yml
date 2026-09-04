@@ -1,0 +1,91 @@
+# Backend startup-import required-context publisher
+#
+# `startup-import-smoke` is a REQUIRED status check on the integration branch.
+# Exactly one of two mutually exclusive jobs publishes it:
+#
+#   backend python changed   -> `startup-import-smoke` in startup-import-smoke.yml,
+#                               the real fresh-import gate (#6789 / #6540). That is
+#                               the real check and it stays there; this workflow
+#                               reports nothing then.
+#   backend python untouched -> `startup-import-smoke` below, which reports the
+#                               context green because the gate does not apply.
+#
+# WHY THIS EXISTS — startup-import-smoke.yml already carries a note saying its
+# job "self-skips (reporting success) when no backend paths are touched". That
+# was not true. A job whose `if:` evaluates false is SKIPPED, and a skipped job
+# publishes a check run whose conclusion is `skipped`, not `success`. With the
+# context required and only that one run under the name, a pull request touching
+# no backend Python sat blocked on a context nothing could turn green — the exact
+# deadlock the same note warns about two lines earlier. Observed on a pull request
+# changing only `scripts/` and `.dockerignore`: `startup-import-smoke` SKIPPED,
+# every other required context SUCCESS, merge refused.
+#
+# WHY ITS OWN FILE — the same reason python-required-context.yml (#14353) and
+# frontend-required-context.yml (#13405) are their own files.
+# startup-import-smoke.yml declares a workflow-level concurrency group with
+# `cancel-in-progress` on pull requests. A shim living inside it shares that
+# group, so a superseded run takes the shim down with it and the required
+# context goes missing exactly when a rapid push sequence needs it most.
+#
+# NO `concurrency:` BLOCK — DELIBERATE, for that same reason. This job finishes
+# in seconds on a GitHub-hosted runner, so there is nothing to save by
+# cancelling it and a great deal to lose.
+#
+# THE FILTER IS SHARED, NOT COPIED — .github/filters/backend-python-paths.yml.
+# The two `if:` conditions are exact complements, and the failure direction is
+# silent: a shim that thinks no backend Python changed while
+# startup-import-smoke.yml thinks otherwise would publish green for a gate that
+# never ran.
+
+name: backend-required-context
+
+on:
+  pull_request:
+    branches: [main, Dev_new_gui, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changed paths (backend required context)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: filter
+        with:
+          # #14054: dorny/paths-filter errors on an event it does not recognise
+          # unless `base` is given. Empty on pull_request, matching the sibling.
+          base: ${{ github.event.merge_group.base_sha || '' }}
+          # #12986: `backend` is defined in the canonical filter file.
+          filters: .github/filters/backend-python-paths.yml
+
+  startup-import-smoke:
+    # IDENTICAL to the job name in startup-import-smoke.yml on purpose: the
+    # required status context is the JOB name, so this reports the same context
+    # when the real gate legitimately does not run.
+    name: startup-import-smoke
+    needs: changes
+    # Exact complement of startup-import-smoke.yml's
+    # `github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true'`.
+    # `merge_group` is absent from this workflow's triggers, so the event half of
+    # that condition cannot be reached here and only the paths half is negated.
+    #
+    # Fail-closed: if `changes` errors, `needs` skips this job rather than
+    # reporting green, so a broken detector can never fake a pass. It leaves the
+    # context unreported, which blocks the pull request — the safe direction.
+    if: needs.changes.outputs.backend != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: No backend Python changes — reporting required context as success
+        run: |
+          echo "No backend Python paths changed in this pull request."
+          echo "The fresh-import gate in startup-import-smoke.yml does not apply,"
+          echo "so the required 'startup-import-smoke' context is reported green"
+          echo "from here."
+          echo "Path set: .github/filters/backend-python-paths.yml (#12986)."

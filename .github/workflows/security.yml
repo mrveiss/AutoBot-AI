@@ -165,10 +165,17 @@ jobs:
     # autobot_shared returns no matches — nothing in this repository imports
     # nltk at all, so none of the vulnerable model-persistence APIs are ever
     # called and pathsec enforcement (opt-in, off by default upstream) is
-    # never reached from AutoBot code. RE-CHECK BY 2026-12-01: re-run
-    # `pip-audit` for a patched nltk release and remove this allowance the
-    # moment the scanner stops reporting it (an allowance the scanner no
-    # longer reports fails the step, so removal is enforced, not optional).
+    # never reached from AutoBot code. #15551 asked whether the cleaner fix is
+    # to delete the dependency instead of allowing the advisory, and resolved
+    # it: no. `llama-index-core` 0.14.24 -- the floor `requirements-ci/
+    # llama-index.txt` declares, and one `requirements-ai.txt` declares too --
+    # lists `nltk>=3.9.3` in its distribution metadata, so nltk is installed
+    # transitively whether or not it is named. Deleting the two declarations
+    # would unpin it and leave this advisory reported exactly as it is now.
+    # RE-CHECK BY 2026-12-01: re-run `pip-audit` for a patched nltk release and
+    # remove this allowance the moment the scanner stops reporting it (an
+    # allowance the scanner no longer reports fails the step, so removal is
+    # enforced, not optional).
     - name: Python Dependency Audit
       run: |
         set -euo pipefail

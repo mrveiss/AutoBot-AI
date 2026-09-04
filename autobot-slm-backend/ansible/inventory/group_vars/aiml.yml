@@ -240,7 +240,10 @@ packages:
     # Computer vision
     - opencv-python>=4.8.0
     - pillow>=10.0.0
-    - numpy>=1.24.0
+    # #15568: numpy is constrained by constraints/shared.txt (#10524) exactly as
+    # openvino above is, so it carries no floor here either. The `>=1.24.0` this
+    # replaced was two majors below the SSOT's >=2.5.2,<3.0.0.
+    - numpy
 
     # Scientific computing
     - scipy>=1.11.0
