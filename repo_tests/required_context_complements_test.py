@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Guards for the `python-suite` required-context split (#14353).
+"""Guards for every required-context complement split (#14353, and the
+`startup-import-smoke` deadlock this file was renamed for).
 
 `python-suite` can only be a required status check if *exactly one* job publishes
 it on every pull request: the real twelve-shard suite in ci.yml when Python paths
@@ -175,3 +176,122 @@ def test_a_workflow_publishing_a_required_context_has_no_pull_request_paths(path
         "misses this filter never starts the run, so the context never reports "
         "and the merge box blocks forever."
     )
+
+# Each row is one required status context published by two mutually exclusive
+# jobs: the real gate when its paths changed, and a shim reporting green when
+# they did not. Adding a third pair is one row here.
+#
+#   (context, real workflow, real `if:` fragment, shim workflow, shim `if:`, filter)
+_COMPLEMENT_PAIRS = (
+    (
+        "python-suite",
+        "ci.yml",
+        "needs.changes.outputs.python == 'true'",
+        "python-required-context.yml",
+        "needs.changes.outputs.python != 'true'",
+        "python-paths.yml",
+    ),
+    (
+        "startup-import-smoke",
+        "startup-import-smoke.yml",
+        "needs.changes.outputs.backend == 'true'",
+        "backend-required-context.yml",
+        "needs.changes.outputs.backend != 'true'",
+        "backend-python-paths.yml",
+    ),
+)
+
+_PAIR_IDS = [p[0] for p in _COMPLEMENT_PAIRS]
+
+
+@pytest.mark.parametrize("pair", _COMPLEMENT_PAIRS, ids=_PAIR_IDS)
+def test_the_pair_publishes_one_context_under_two_complementary_conditions(pair):
+    """The required context is the job NAME, and exactly one side may run."""
+    context, real_wf, real_if, shim_wf, shim_if, _ = pair
+    real = _jobs(WORKFLOW_DIR / real_wf)[context]
+    shim = _jobs(WORKFLOW_DIR / shim_wf)[context]
+
+    assert real.get("name", context) == context
+    assert shim["name"] == context
+    assert real_if in real["if"], f"{real_wf}:{context} no longer carries {real_if!r}"
+    assert shim["if"].strip() == shim_if
+
+
+@pytest.mark.parametrize("pair", _COMPLEMENT_PAIRS, ids=_PAIR_IDS)
+def test_the_shim_cannot_be_cancelled_or_starved(pair):
+    """No shared concurrency group (#13405), and never the self-hosted pool.
+
+    Asserted against the parsed document, not the raw text: each file *explains*
+    why it has no concurrency block, and a substring check fails on its own
+    comment.
+    """
+    context, _, _, shim_wf, _, _ = pair
+    parsed = yaml.safe_load((WORKFLOW_DIR / shim_wf).read_text(encoding="utf-8"))
+
+    assert "concurrency" not in parsed
+    assert "concurrency" not in parsed["jobs"][context]
+    assert parsed["jobs"][context]["runs-on"] == "ubuntu-latest"
+    assert parsed["jobs"]["changes"]["runs-on"] == "ubuntu-latest"
+
+
+@pytest.mark.parametrize("pair", _COMPLEMENT_PAIRS, ids=_PAIR_IDS)
+def test_the_shim_fails_closed_and_reads_the_shared_filter(pair):
+    """A broken detector must block, and neither side may keep its own path copy."""
+    context, real_wf, _, shim_wf, _, filter_name = pair
+    shim_job = _jobs(WORKFLOW_DIR / shim_wf)[context]
+    assert shim_job["needs"] == "changes", "without `needs`, a failed detector would not gate the shim"
+
+    canonical = REPO_ROOT / ".github" / "filters" / filter_name
+    assert canonical.is_file(), f"missing canonical filter: {canonical}"
+    for wf in (real_wf, shim_wf):
+        text = (WORKFLOW_DIR / wf).read_text(encoding="utf-8")
+        assert f".github/filters/{filter_name}" in text, f"{wf} does not read the shared filter"
+
+
+# ── the general catcher ──────────────────────────────────────────────────────
+#
+# Every pair above is one required context published by TWO jobs whose `if:`
+# conditions are exact complements. The pattern only holds while someone
+# remembers to build the second half.
+#
+# `startup-import-smoke` is why this test exists. Its workflow correctly carries
+# no `pull_request.paths` filter, so the test above passed — but its single job
+# was gated on `needs.changes.outputs.backend == 'true'` with no complement, and
+# its own header comment claimed the job "self-skips (reporting success) when no
+# backend paths are touched". A job whose `if:` is false is SKIPPED, and a
+# skipped job publishes a check run whose conclusion is `skipped`, not `success`.
+# A pull request touching only `scripts/` and `.dockerignore` therefore sat
+# blocked on a required context nothing could turn green.
+#
+# The two failure directions are not symmetric. A missing shim BLOCKS, loudly and
+# immediately. A shim whose condition is not an exact complement reports green for
+# a gate that never ran, which is a silent bypass — so the complement assertion in
+# the parametrized tests above matters more than this one.
+_CONDITIONAL_REAL_JOBS = {context: real_if for context, _, real_if, _, _, _ in _COMPLEMENT_PAIRS}
+
+
+def test_every_conditionally_gated_required_context_has_a_complement():
+    """A required job with an `if:` and no complement deadlocks the pull request."""
+    conditional = {}
+    for path in sorted(WORKFLOW_DIR.glob("*.yml")):
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        for job_id, spec in (doc.get("jobs") or {}).items():
+            spec = spec or {}
+            context = spec.get("name", job_id)
+            if context in REQUIRED_CONTEXTS and spec.get("if"):
+                conditional.setdefault(context, []).append(path.name)
+
+    assert conditional, (
+        "no required context is published by a conditional job at all — FIX THE "
+        "SWEEP, this comparison has nothing to compare against"
+    )
+
+    unpaired = sorted(c for c in conditional if c not in _CONDITIONAL_REAL_JOBS)
+    assert not unpaired, (
+        "these required contexts are published only by jobs carrying an `if:`, "
+        "with no complement shim declared in _COMPLEMENT_PAIRS. When the `if:` "
+        "is false the job is SKIPPED, which is not SUCCESS, so the pull request "
+        "blocks on a context nothing can produce:\n  "
+        + "\n  ".join(f"{c} (in {', '.join(sorted(set(conditional[c])))})" for c in unpaired)
+    )
+
