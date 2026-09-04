@@ -48,9 +48,17 @@
     HOME: "{{ chromadb_install_dir }}"
   tags: ['redis', 'chromadb']
 
+# #15598: the standalone ChromaDB service venv has no requirements manifest of
+# its own, so the floor must stay literal here. It is the specifier text
+# `autobot-backend/requirements.txt` and the ai-stack manifest both declare --
+# `>=0.5` admitted a chromadb two majors below the one the backend that reads
+# this instance is built against. The upper bound comes across with the floor
+# for the reason those manifests state next to it -- it guards against breaking
+# API changes above 2.x -- and an unbounded floor in a venv with no `-c` would
+# resolve straight past it.
 - name: "ChromaDB | Install chromadb package"
   ansible.builtin.pip:
-    name: "chromadb>=0.5"
+    name: "chromadb>=1.5.9,<2.0.0"
     state: present
     virtualenv: "{{ chromadb_install_dir }}/venv"
     extra_args: "--timeout 300"

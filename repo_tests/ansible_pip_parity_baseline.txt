@@ -60,25 +60,3 @@ autobot-slm-backend/ansible/inventory/group_vars/browser.yml::pillow
 autobot-slm-backend/ansible/inventory/group_vars/browser.yml::playwright
 autobot-slm-backend/ansible/inventory/group_vars/browser.yml::requests
 autobot-slm-backend/ansible/inventory/group_vars/browser.yml::uvicorn
-
-# ---------------------------------------------------------------------------
-# #15598 — live role pip tasks whose floors are below the component's own
-# requirements file. `roles/tts-worker`'s `fastapi>=0.100.0` provisions the very
-# worker whose requirements annotate `fastapi>=0.141.1` as a security floor.
-# ---------------------------------------------------------------------------
-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::chromadb
-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::langchain
-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::pydantic
-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::redis
-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::sqlalchemy
-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::torch
-autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml::transformers
-autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml::fastapi
-autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml::uvicorn
-autobot-slm-backend/ansible/roles/redis/tasks/chromadb.yml::chromadb
-autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::aiofiles
-autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::fastapi
-autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::python-multipart
-autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::soundfile
-autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::torch
-autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml::uvicorn
