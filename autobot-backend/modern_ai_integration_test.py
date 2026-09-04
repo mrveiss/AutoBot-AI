@@ -119,6 +119,7 @@ def test_the_frame_markers_cannot_be_forged_by_the_goal() -> None:
     assert _END not in body
     assert _BEGIN not in body
 
+
 async def test_an_unblocked_directive_goal_is_scoped_by_the_warning_above_it() -> None:
     """The case the blocked-goal test cannot reach.
 
