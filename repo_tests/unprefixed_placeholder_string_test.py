@@ -118,6 +118,11 @@ _ALLOWED_FIELD_NODES: Tuple[type, ...] = (
 
 #: At least one of these must appear, or the field is a bare name -- the route
 #: decorator shape this detector exists to walk past.
+# The excluded half -- a field that is a bare identifier -- is measured and
+# tracked by #15617, not merely dropped. Review found four genuine missing-`f`
+# bugs of that shape sitting in blocks this guard already flags, so the class is
+# real; it is excluded because every route decorator in the tree has the same
+# shape and would swamp the signal, not because it is empty.
 _REQUIRED_FIELD_NODES: Tuple[type, ...] = (ast.Attribute, ast.Subscript, ast.Call)
 
 #: Prefixes that mark a quoted f-string *inside* a string -- source code held as
