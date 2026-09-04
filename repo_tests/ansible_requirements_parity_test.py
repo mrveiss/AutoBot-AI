@@ -584,12 +584,20 @@ def test_the_npu_worker_venv_is_filled_only_from_its_manifest() -> None:
     strings: emptied of this key it says nothing about WHY the key left, and the
     next role to add a convenient `name:` list here would only have to add one
     line to put it back. This asserts the positive — more than one ansible file
-    fills this venv, and every one of them reads the worker's manifest.
+    fills this venv, every one of them reads a manifest, and the manifest they
+    read is `autobot-npu-worker/requirements.txt` and nothing else.
     """
     shapes = resolution.provisioning_shapes()
+    bindings = resolution.derived_bindings()
     assert _NPU_VENV in shapes, (
         f"{_NPU_VENV} is filled by no pip task the walk can see — roles/npu-worker and "
         "playbooks/deploy-native-services.yml both provision it, so this is a parser failure"
+    )
+    assert bindings.get(_NPU_VENV) == frozenset({resolution.NPU}), (
+        f"{_NPU_VENV} resolves to {sorted(bindings.get(_NPU_VENV) or ())}, not to "
+        f"{resolution.NPU} alone. The shape assertion below cannot see this: three files could "
+        "each carry a `requirements:` and still read three DIFFERENT manifests, which is the same "
+        "two-sources-of-truth defect one level down. One venv, one manifest (#15671)"
     )
     assert shapes[_NPU_VENV] == frozenset({resolution.MANIFEST_SOURCE}), (
         f"{_NPU_VENV} is filled from {sorted(shapes[_NPU_VENV])}. Every path into it must read "

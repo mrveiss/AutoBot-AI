@@ -87,6 +87,10 @@ _WINDOWS_REQUIREMENTS = _REPO_ROOT / "autobot-npu-worker" / "resources" / "windo
 # #15671: the manifest both ansible paths now install, and the only place this
 # worker's openvino spec is written.
 _NATIVE_REQUIREMENTS = _REPO_ROOT / "autobot-npu-worker" / "requirements.txt"
+# Derived, not restated: a rename of the manifest moves this expectation with it.
+# Both ansible sites state a deploy-time path (`/opt/autobot/src/...` on the play,
+# `{{ code_source_dir | ... }}/...` in the role), and both END with this.
+_NATIVE_REQUIREMENTS_REPO_PATH = _NATIVE_REQUIREMENTS.relative_to(_REPO_ROOT).as_posix()
 _CODE_ANALYSIS_SETUP = _REPO_ROOT / "autobot-backend" / "code_analysis" / "setup.py"
 _CODE_ANALYSIS_INSTALL_SH = _REPO_ROOT / "autobot-backend" / "code_analysis" / "install.sh"
 # #15408: the SSOT moved from autobot-npu-worker/requirements.txt (a literal restated in
@@ -133,19 +137,42 @@ def _extra_args_of(task: dict) -> str:
     return " ".join(str(task.get("extra_args", "")).split())
 
 
+def _packages_installed_by(task: dict, label: str) -> list:
+    """The manifest's packages, once the task is proved to install THAT manifest.
+
+    Without this the two ansible factories verified only a task NAME and then read
+    `_NATIVE_REQUIREMENTS` regardless: a task switched to an inline `name:` list or
+    to a different requirements file would still be scored against this manifest,
+    so the guard could report a compliant openvino floor while ansible installed
+    something else. That is the #15671 defect one level down -- two paths into one
+    venv with nothing comparing what they install -- so it is asserted per site
+    rather than assumed once.
+
+    Matched on the tail, because the deploy-time prefixes legitimately differ: the
+    play states `/opt/autobot/src/...` and the role a `code_source_dir` template.
+    """
+    installed = " ".join(str(task.get("requirements", "")).split())
+    assert installed.endswith(_NATIVE_REQUIREMENTS_REPO_PATH), (
+        f"{label} installs {installed!r}, not {_NATIVE_REQUIREMENTS_REPO_PATH} — this guard "
+        "would otherwise check the manifest's openvino spec while ansible installs another "
+        "file, or no file at all (#15671)"
+    )
+    return _parse_requirements_file(_NATIVE_REQUIREMENTS)
+
+
 def _role_site() -> _Site:
     """#15671: the role installs a manifest, so its packages ARE that manifest's.
 
-    Reading the task is still what proves the site exists -- an uncaught lookup
-    on the task name fails loudly if the pip task is renamed or removed, which is
-    the failure a guard reading only the manifest would miss entirely.
+    Reading the task is what proves the site exists -- an uncaught lookup on the
+    task name fails loudly if the pip task is renamed or removed, which a guard
+    reading only the manifest would miss entirely -- and
+    `_packages_installed_by` then proves it installs THIS manifest rather than
+    some other one.
     """
     tasks = yaml.safe_load(_ROLE_TASKS.read_text(encoding="utf-8"))
-    _pip_task_from_task_list(tasks, _ROLE_TASK_NAME, "ansible.builtin.pip")
-    return _Site(
-        label=f"npu-worker role ({_ROLE_TASKS.name}, installing {_NATIVE_REQUIREMENTS.name})",
-        packages=_parse_requirements_file(_NATIVE_REQUIREMENTS),
-    )
+    task = _pip_task_from_task_list(tasks, _ROLE_TASK_NAME, "ansible.builtin.pip")
+    label = f"npu-worker role ({_ROLE_TASKS.name}, installing {_NATIVE_REQUIREMENTS.name})"
+    return _Site(label=label, packages=_packages_installed_by(task, label))
 
 
 def _playbook_site() -> _Site:
@@ -160,10 +187,8 @@ def _playbook_site() -> _Site:
     assert (
         task is not None
     ), f"no task named {_PLAYBOOK_TASK_NAME!r} in any play — this guard is pinned to the wrong name"
-    return _Site(
-        label=f"deploy-native-services.yml ({_PLAYBOOK.name}, installing {_NATIVE_REQUIREMENTS.name})",
-        packages=_parse_requirements_file(_NATIVE_REQUIREMENTS),
-    )
+    label = f"deploy-native-services.yml ({_PLAYBOOK.name}, installing {_NATIVE_REQUIREMENTS.name})"
+    return _Site(label=label, packages=_packages_installed_by(task, label))
 
 
 def _agent_config_site() -> _Site:
