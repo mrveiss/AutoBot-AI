@@ -768,7 +768,7 @@ if __name__ == "__main__":
         # Set up message handlers
         async def handle_request(message: StandardMessage) -> StandardMessage:
             """Handle incoming request and return response message."""
-            logger.info("Agent 2 received request: {message.payload.content}")
+            logger.info(f"Agent 2 received request: {message.payload.content}")
 
             return StandardMessage(
                 header=MessageHeader(message_type=MessageType.RESPONSE),

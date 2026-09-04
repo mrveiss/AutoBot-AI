@@ -728,9 +728,9 @@ if __name__ == "__main__":
         )
 
         logger.info("%s | Risk: %-8s | Blocked: %s", status, result.risk_level.value, result.blocked)
-        logger.info("Input: {test_input}")
+        logger.info(f"Input: {test_input}")
         if result.detected_patterns:
-            logger.info("Patterns: {result.detected_patterns}")
+            logger.info(f"Patterns: {result.detected_patterns}")
 
     # Test context validation
     logger.info("=== Context Poisoning Detection Test ===\n")
@@ -744,4 +744,4 @@ if __name__ == "__main__":
     ]
 
     is_safe = detector.validate_conversation_context(poisoned_context)
-    logger.info("Context validation: {'✅ SAFE' if is_safe else '🚨 POISONED'}")
+    logger.info(f"Context validation: {'✅ SAFE' if is_safe else '🚨 POISONED'}")
