@@ -40,12 +40,28 @@ logger = logging.getLogger(__name__)
 # The build output nginx aliases for this node's UI. Relative to the SSOT
 # base_dir, never a literal path (#15462 review: an absolute default here would
 # be the third place the install location is written down).
-_BUNDLE_DIR = "autobot-slm-frontend/dist"
+#
+# #15610: nginx serves `current`, a symlink the publish flips onto a per-build
+# directory with one rename(2) — it replaced `dist`, which was renamed twice
+# per publish and so did not exist in between. This probe follows the served
+# path, because the outage it detects is "what nginx opens has no index.html".
+_BUNDLE_DIR = "autobot-slm-frontend/current"
+
+# The pre-#15610 served directory. A node that has not published since the
+# migration still serves this one, and reporting `not_applicable` for it would
+# silently stop probing exactly the hosts most likely to be mid-migration.
+# Retired once every node has published under the new layout (#15648).
+_LEGACY_BUNDLE_DIR = "autobot-slm-frontend/dist"
 _ENTRY_POINT = "index.html"
 
 
 def bundle_dir() -> Path:
-    return config.path.resolve(_BUNDLE_DIR)
+    """The directory nginx serves, preferring the #15610 pointer."""
+    current = config.path.resolve(_BUNDLE_DIR)
+    if current.exists():
+        return current
+    legacy = config.path.resolve(_LEGACY_BUNDLE_DIR)
+    return legacy if legacy.is_dir() else current
 
 
 def frontend_bundle_status(directory: Optional[Path] = None) -> str:
