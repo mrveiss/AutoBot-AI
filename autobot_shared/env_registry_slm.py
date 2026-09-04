@@ -58,3 +58,37 @@ register_env_var(
         range=(5.0, 600.0),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_RESTART_FLUSH_DELAY_SECONDS",
+        type=float,
+        default=1.0,
+        description=(
+            "Seconds the deferred SLM service restart waits for the HTTP response to "
+            "flush before it starts killing the services that carried it. Too short and "
+            "the caller sees a dropped connection instead of its 202; too long and the "
+            "restart is needlessly delayed, so the right value follows the deployment's "
+            "network rather than anything fixed "
+            "(services/service_restart.py, #15611)."
+        ),
+        component="slm",
+        range=(0.0, 60.0),
+    )
+)
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_RESTART_SSH_TIMEOUT_SECONDS",
+        type=float,
+        default=30.0,
+        description=(
+            "Seconds a single `systemctl restart` over SSH may take before it is "
+            "abandoned and reported as failed. A slow node restarting a heavy unit "
+            "legitimately exceeds a value that is generous on a fast one, so this "
+            "belongs to the deployment "
+            "(services/service_restart.py, #15611)."
+        ),
+        component="slm",
+        range=(1.0, 600.0),
+    )
+)

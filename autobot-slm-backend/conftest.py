@@ -222,6 +222,7 @@ _EXTRA_SERVICE_MODULES = (
     "services.role_registry",
     "services.service_categorizer",
     "services.service_orchestrator",
+    "services.service_restart",
     "services.tls_credentials",
     "services.vnc_credentials",
 )

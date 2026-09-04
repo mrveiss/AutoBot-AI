@@ -6,12 +6,13 @@
 
 import asyncio
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Coroutine, Dict, List, Optional
 
 from fastapi import HTTPException
 from sqlalchemy import delete, event, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 
 from ..models.goal import GoalLevel, GoalStatus, LLCGoal
@@ -58,6 +59,44 @@ def _validate_level_order(child_level: GoalLevel, parent_level: GoalLevel) -> No
                 f"'{expected.value}', not '{child_level.value}'"
             ),
         )
+
+
+def _schedule_after_commit(
+    session: AsyncSession,
+    name: str,
+    make_coro: Callable[[], Coroutine[Any, Any, None]],
+) -> None:
+    """Run *make_coro()* once *session*'s transaction has actually committed.
+
+    Registration captures a factory rather than a coroutine, so the work is
+    built at fire time and nothing bound to *session* is held across the
+    boundary (#15612) — the row a post-commit hook was told about is detached
+    the moment that session closes, which on this path is immediately after.
+
+    Scheduling goes through ``fire_and_forget``, which keeps a strong reference
+    until the task finishes and logs whatever it raised. The event loop holds
+    only a weak reference, so a bare ``create_task`` whose handle is dropped can
+    be garbage-collected before it runs, taking its exception with it (#15522,
+    converted across the SLM backend in #15524).
+    """
+    try:
+        sync_sess = session.sync_session
+    except AttributeError:
+        return  # Not a real AsyncSession (e.g. test mock); skip registration
+
+    @event.listens_for(sync_sess, "after_commit", once=True)
+    def _after_commit(_ss: Any) -> None:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # Checked before building the coroutine: an un-awaited coroutine
+            # object is a second, noisier failure on top of the first.
+            logger.error("No running event loop after commit — %s was not scheduled", name)
+            return
+        try:
+            fire_and_forget(make_coro(), name=name)
+        except Exception:
+            logger.exception("Could not schedule %s post-commit", name)
 
 
 class GoalService(LLCServiceBase):
@@ -320,28 +359,70 @@ class GoalService(LLCServiceBase):
 
     # --------------------------------------------------------- KB indexing
 
-    async def _index_goal(self, goal: LLCGoal) -> None:
-        """Index goal text into the company-scoped goal KB collection."""
-        try:
-            from utils.async_chromadb_client import get_async_chromadb_client
+    @staticmethod
+    async def _load_goal_snapshot(goal_id: str, company_id: str) -> Optional[Dict[str, Any]]:
+        """Read one goal's indexable fields through a session this call owns.
 
-            client = await get_async_chromadb_client()
-            collection = await client.get_or_create_collection(_goal_collection_name(goal.company_id))
-            doc_id = str(goal.id)
-            text = f"{goal.title}\n{goal.description or ''}".strip()
-            metadata: Dict[str, Any] = {
-                "company_id": goal.company_id,
+        The indexer runs after the request's session has committed and closed,
+        so it cannot read the row that session loaded — it reloads it here,
+        scoped to the owning company, and returns plain values so nothing
+        session-bound escapes with the result (#15612).
+        """
+        from user_management.database import get_async_session_factory
+
+        session_factory = get_async_session_factory()
+        async with session_factory() as session:
+            result = await session.execute(
+                select(LLCGoal).where(LLCGoal.id == uuid.UUID(goal_id), LLCGoal.company_id == company_id)
+            )
+            goal = result.scalar_one_or_none()
+            if goal is None:
+                return None
+            return {
+                "id": str(goal.id),
+                "company_id": str(goal.company_id),
+                "title": goal.title,
+                "description": goal.description,
                 "level": goal.level,
                 "status": goal.status,
-                "owner_agent_id": goal.owner_agent_id or "",
+                "owner_agent_id": goal.owner_agent_id,
             }
-            await collection.upsert(
-                ids=[doc_id],
-                documents=[text],
-                metadatas=[metadata],
-            )
+
+    @staticmethod
+    async def _upsert_goal_document(snapshot: Dict[str, Any]) -> None:
+        """Upsert one goal's document into its company-scoped collection."""
+        from utils.async_chromadb_client import get_async_chromadb_client
+
+        client = await get_async_chromadb_client()
+        collection = await client.get_or_create_collection(_goal_collection_name(snapshot["company_id"]))
+        text = f"{snapshot['title']}\n{snapshot['description'] or ''}".strip()
+        metadata: Dict[str, Any] = {
+            "company_id": snapshot["company_id"],
+            "level": snapshot["level"],
+            "status": snapshot["status"],
+            "owner_agent_id": snapshot["owner_agent_id"] or "",
+        }
+        await collection.upsert(
+            ids=[snapshot["id"]],
+            documents=[text],
+            metadatas=[metadata],
+        )
+
+    async def _index_goal(self, goal_id: str, company_id: str) -> None:
+        """Index goal text into the company-scoped goal KB collection.
+
+        Takes identifiers, not the ``LLCGoal`` row (#15612): this is scheduled
+        from an ``after_commit`` hook and runs once the session that produced
+        the row has been committed and closed.
+        """
+        try:
+            snapshot = await self._load_goal_snapshot(goal_id, company_id)
+            if snapshot is None:
+                logger.warning("Goal %s no longer exists — nothing to index", goal_id)
+                return
+            await self._upsert_goal_document(snapshot)
         except Exception:
-            logger.exception("Failed to index goal %s into KB — non-fatal", goal.id)
+            logger.exception("Failed to index goal %s into KB — non-fatal", goal_id)
 
     async def _delete_from_chromadb(self, company_id: str, ids: List[str]) -> None:
         """Remove goal entries from the company-scoped KB collection."""
@@ -360,36 +441,25 @@ class GoalService(LLCServiceBase):
             logger.exception("Failed to remove goals %s from KB — non-fatal", ids)
 
     def _schedule_post_commit_index(self, session: AsyncSession, goal: LLCGoal) -> None:
-        """Register ChromaDB indexing to fire after DB commit (not after flush)."""
-        goal_ref = goal
-        svc_ref = self
+        """Register ChromaDB indexing to fire after DB commit (not after flush).
 
-        try:
-            sync_sess = session.sync_session
-        except AttributeError:
-            return  # Not a real AsyncSession (e.g. test mock); skip registration
-
-        @event.listens_for(sync_sess, "after_commit", once=True)
-        def _after_commit(ss: Any) -> None:
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(svc_ref._index_goal(goal_ref))
-            except Exception:
-                logger.exception("Could not schedule goal indexing post-commit for %s", goal_ref.id)
+        Identifiers are read off *goal* here, while the row is still live, and
+        they are all that crosses into the task — the row itself belongs to
+        *session* and is detached as soon as the request ends (#15612).
+        """
+        goal_id = str(goal.id)
+        company_id = str(goal.company_id)
+        _schedule_after_commit(
+            session,
+            f"llc-goal-index:{goal_id}",
+            lambda: self._index_goal(goal_id, company_id),
+        )
 
     def _schedule_post_commit_chromadb_delete(self, session: AsyncSession, company_id: str, ids: List[str]) -> None:
         """Register ChromaDB bulk delete to fire after DB commit."""
-        svc_ref = self
-
-        try:
-            sync_sess = session.sync_session
-        except AttributeError:
-            return
-
-        @event.listens_for(sync_sess, "after_commit", once=True)
-        def _after_commit(ss: Any) -> None:
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(svc_ref._delete_from_chromadb(company_id, ids))
-            except Exception:
-                logger.exception("Could not schedule ChromaDB cleanup post-commit for goals %s", ids)
+        doc_ids = list(ids)
+        _schedule_after_commit(
+            session,
+            f"llc-goal-chromadb-delete:{company_id}",
+            lambda: self._delete_from_chromadb(company_id, doc_ids),
+        )

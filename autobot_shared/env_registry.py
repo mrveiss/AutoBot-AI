@@ -131,9 +131,7 @@ register_env_var(
     )
 )
 
-
 # --- backend ----------------------------------------------------------------
-
 
 # --- chat -------------------------------------------------------------------
 
@@ -642,7 +640,6 @@ register_env_var(
     )
 )
 
-
 # --- provider OAuth / device-code flow (#14223) ------------------------------
 
 register_env_var(
@@ -758,7 +755,6 @@ register_env_var(
     )
 )
 
-
 # --- gateway connectors (#14223) ---------------------------------------------
 
 register_env_var(
@@ -800,7 +796,6 @@ register_env_var(
         component="gateway",
     )
 )
-
 
 # --- execution sandbox and snapshots (#14223) --------------------------------
 
@@ -858,9 +853,7 @@ register_env_var(
     )
 )
 
-
 # --- worker and analysis pools (#14223) --------------------------------------
-
 
 # --- timeouts and backoffs (#14223) ------------------------------------------
 
@@ -1041,7 +1034,6 @@ register_env_var(
     )
 )
 
-
 # --- storage paths and toolsets (#14223) -------------------------------------
 
 register_env_var(
@@ -1071,7 +1063,6 @@ register_env_var(
     )
 )
 
-
 # --- monitoring endpoints (#14223) -------------------------------------------
 
 register_env_var(
@@ -1097,7 +1088,6 @@ register_env_var(
         component="monitoring",
     )
 )
-
 
 # --- backfilled from the env_utils helper form (#14265) -----------------------
 # These were read via env_int/env_flag/env_str/env_float and were therefore
@@ -1131,7 +1121,6 @@ register_env_var(
         component="execution",
     )
 )
-
 
 register_env_var(
     EnvVarSpec(
@@ -1239,7 +1228,6 @@ register_env_var(
     )
 )
 
-
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_STT_PEAK_WINDOW_MS",
@@ -1252,7 +1240,6 @@ register_env_var(
         component="voice",
     )
 )
-
 
 # Stays here rather than moving to env_registry_backend with the rest of its
 # component: its default is a baselined hardcoded value, and the baseline refuses
