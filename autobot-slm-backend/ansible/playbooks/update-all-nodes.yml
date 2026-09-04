@@ -547,6 +547,21 @@
       become: true
       tags: [slm, slm-backend, restart]
 
+    # #15610: this play deploys the SLM backend by unarchive and never runs the
+    # slm_manager role, so the nginx site config was refreshed only on a full
+    # provision — the same gap #14624 found for the systemd unit. The served
+    # path moved from `dist/` to the atomically-flipped `current` pointer, so a
+    # host that publishes here and never re-renders would keep serving whatever
+    # bundle the last provision aimed nginx at, silently, after a green deploy.
+    # `tasks_from` rather than a copied template task: a second copy drifts.
+    - name: "[PLAY 1] SLM | Re-render the nginx site config (#15610, #14624)"
+      ansible.builtin.include_role:
+        name: slm_manager
+        tasks_from: nginx_site.yml
+        apply:
+          become: true
+      tags: [slm, slm-frontend, nginx]
+
     - name: "[PLAY 1] SLM | Restart nginx"
       systemd:
         name: nginx

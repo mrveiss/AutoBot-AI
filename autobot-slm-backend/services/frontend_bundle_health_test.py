@@ -13,6 +13,7 @@ reported `healthy`, because every field in that response described a process.
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from services.frontend_bundle_health import frontend_bundle_status
 
@@ -71,5 +72,71 @@ def test_the_default_directory_comes_from_the_ssot(monkeypatch) -> None:
 
     resolved = module.bundle_dir()
 
-    assert resolved.name == "dist"
+    # #15610 replaced the served directory with an atomically-flipped pointer,
+    # so the name is whichever of the two this node actually has. Both are
+    # resolved through the SSOT, which is what this test is about.
+    assert resolved.name in {"current", "dist"}
     assert resolved.parent.name == "autobot-slm-frontend"
+
+
+def test_the_pointer_is_preferred_over_the_legacy_directory(monkeypatch, tmp_path) -> None:
+    """A node that has both must be read through the pointer, not the old path.
+
+    During the rollout a node carries `dist` from its last deploy and `current`
+    from this one. Reading `dist` there would report the health of a bundle
+    nginx has stopped serving — the failure would be a *stale* healthy, which is
+    worse than an error because nothing looks wrong.
+    """
+    from services import frontend_bundle_health as module
+
+    root = tmp_path / "autobot-slm-frontend"
+    (root / "current").mkdir(parents=True)
+    (root / "dist").mkdir()
+    # `config.path` is a pydantic model and rejects setattr, so the module's
+    # own `config` reference is swapped rather than the field mutated.
+    monkeypatch.setattr(module, "config", SimpleNamespace(path=SimpleNamespace(resolve=lambda rel: tmp_path / rel)))
+
+    assert module.bundle_dir().name == "current"
+
+
+def test_a_node_with_only_the_legacy_directory_still_resolves(monkeypatch, tmp_path) -> None:
+    """The fallback is what lets a not-yet-migrated node keep reporting."""
+    from services import frontend_bundle_health as module
+
+    root = tmp_path / "autobot-slm-frontend"
+    (root / "dist").mkdir(parents=True)
+    # `config.path` is a pydantic model and rejects setattr, so the module's
+    # own `config` reference is swapped rather than the field mutated.
+    monkeypatch.setattr(module, "config", SimpleNamespace(path=SimpleNamespace(resolve=lambda rel: tmp_path / rel)))
+
+    assert module.bundle_dir().name == "dist"
+
+
+def test_a_broken_pointer_is_unhealthy_not_not_applicable(monkeypatch, tmp_path) -> None:
+    """A `current` that resolves to nothing is an outage, not an absent frontend.
+
+    A dangling symlink fails `is_dir()`, so without its own branch it lands in
+    the `not_applicable` case — reported as "this node serves no UI" and dropped
+    from health rollups, when in fact the node was publishing and its served
+    target has gone. That is the exact shape this probe exists to catch.
+    """
+    from services import frontend_bundle_health as module
+
+    root = tmp_path / "autobot-slm-frontend"
+    root.mkdir(parents=True)
+    (root / "current").symlink_to(root / "dist-vanished")
+    monkeypatch.setattr(module, "config", SimpleNamespace(path=SimpleNamespace(resolve=lambda rel: tmp_path / rel)))
+
+    status = module.frontend_bundle_status()
+
+    assert status.startswith("unhealthy")
+    assert "not_applicable" not in status
+
+
+def test_a_node_with_no_frontend_at_all_is_still_not_applicable(monkeypatch, tmp_path) -> None:
+    """The other half: a backend-only node must not be dragged down by this probe."""
+    from services import frontend_bundle_health as module
+
+    monkeypatch.setattr(module, "config", SimpleNamespace(path=SimpleNamespace(resolve=lambda rel: tmp_path / rel)))
+
+    assert module.frontend_bundle_status().startswith("not_applicable")
