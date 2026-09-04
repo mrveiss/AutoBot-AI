@@ -111,7 +111,7 @@ class LoggingManager:
                     logger.addHandler(handler)
 
                 # Console handler is intentionally unconditional (#12506).
-                # This used to be gated on `_get_config_manager().get(
+                # This used to be gated on `_get_config_manager().get_nested(
                 # "deployment.mode", "local") == "local"`, i.e. "console
                 # handler = local dev only". That gate was a no-op in every
                 # environment: `ConfigManager.get()` does a flat dict lookup
@@ -138,7 +138,7 @@ class LoggingManager:
             # config/validation.py, mapped from AUTOBOT_LOG_LEVEL) -- there has
             # never been a "logging.level" key, so this lookup always fell
             # through to the "INFO" default regardless of configuration.
-            log_level = getattr(logging, _get_config_manager().get("logging.log_level", "INFO").upper())
+            log_level = getattr(logging, _get_config_manager().get_nested("logging.log_level", "INFO").upper())
             logger.setLevel(log_level)
 
             cls._loggers[logger_key] = logger
@@ -169,7 +169,7 @@ class LoggingManager:
     @classmethod
     def _get_file_handler(cls, log_type: str) -> logging.Handler | None:
         """Get file handler for specific log type"""
-        log_file = _get_config_manager().get(f"logging.file_handlers.{log_type}")
+        log_file = _get_config_manager().get_nested(f"logging.file_handlers.{log_type}")
         if not log_file:
             # Fallback to default path using environment-configurable logs directory
             logs_dir = os.getenv("AUTOBOT_LOGS_DIR", "logs")
@@ -180,8 +180,8 @@ class LoggingManager:
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Use rotating file handler to prevent large log files
-        max_bytes = _get_config_manager().get("logging.rotation.max_bytes", 10485760)  # 10MB
-        backup_count = _get_config_manager().get("logging.rotation.backup_count", 5)
+        max_bytes = _get_config_manager().get_nested("logging.rotation.max_bytes", 10485760)  # 10MB
+        backup_count = _get_config_manager().get_nested("logging.rotation.backup_count", 5)
 
         handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
         handler.setFormatter(cls._get_formatter())
@@ -191,7 +191,9 @@ class LoggingManager:
     @classmethod
     def _get_formatter(cls) -> logging.Formatter:
         """Get log formatter"""
-        log_format = _get_config_manager().get("logging.format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        log_format = _get_config_manager().get_nested(
+            "logging.format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
         return logging.Formatter(log_format)
 
     @classmethod
@@ -220,7 +222,7 @@ class LoggingManager:
         log_types_to_rotate = list(_LOG_TYPES) if not log_type else [log_type]
 
         for lt in log_types_to_rotate:
-            log_file = _get_config_manager().get(f"logging.file_handlers.{lt}")
+            log_file = _get_config_manager().get_nested(f"logging.file_handlers.{lt}")
             if log_file and os.path.exists(log_file):
                 # Create backup using environment-configurable paths
                 logs_dir = os.getenv("AUTOBOT_LOGS_DIR", "logs")
