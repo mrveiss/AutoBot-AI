@@ -259,7 +259,12 @@ def test_the_repository_guarded_sites_stay_visible() -> None:
     # across several physical lines, unlike a per-line marker search).
     must_be_visible = {
         "autobot-slm-backend/ansible/playbooks/sync-code-source.yml": "_code_source_dest",
-        "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml": "code_source_dir",
+        # #15557 extracted the marker write out of update-all-nodes.yml into this
+        # shared include, so the guarded command lives here now and the pin follows
+        # it. The point of the pin is that SOME file still shows the checker a real
+        # guarded `git -C <code_source>`; pinning the old file would only assert
+        # that the extraction never happened.
+        "autobot-slm-backend/ansible/roles/_shared/tasks/record_slm_deployed_commit.yml": "code_source_dir",
         "autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml": "code_source_dir",
     }
     for name, marker in sorted(must_be_visible.items()):

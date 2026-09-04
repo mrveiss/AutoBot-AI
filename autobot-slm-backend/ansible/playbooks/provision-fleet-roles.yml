@@ -543,7 +543,7 @@
       ansible.builtin.include_tasks: ../roles/_shared/tasks/record_slm_deployed_commit.yml
       vars:
         deployed_commit_label: "SLM"
-        deployed_commit_dir: "{{ slm_backend_dir | default('/opt/autobot/autobot-slm-backend') }}"
+        deployed_commit_dir: "{{ slm_backend_dir | default(autobot.base_dir ~ '/autobot-slm-backend') }}"
         deployed_commit_owner: "{{ slm_user | default('autobot') }}"
       when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']

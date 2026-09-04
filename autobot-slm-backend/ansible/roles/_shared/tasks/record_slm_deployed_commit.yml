@@ -33,8 +33,8 @@
 - name: "{{ deployed_commit_label }} | Marker: resolve the installed commit from code_source (#15557)"
   ansible.builtin.command:
     cmd: >-
-      git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}
-      -C {{ code_source_dir | default('/opt/autobot/code_source') }}
+      git -c safe.directory={{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}
+      -C {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}
       rev-parse HEAD
   register: _deployed_commit_git
   changed_when: false
@@ -54,7 +54,7 @@
     msg: >-
       Cannot record {{ deployed_commit_dir }}/.deployed_commit — no commit was
       passed in and code_source
-      ({{ code_source_dir | default('/opt/autobot/code_source') }}) yielded
+      ({{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}) yielded
       none. Writing no marker is what made #15462 unattributable, so this
       deployment stops rather than finishing anonymously.
   when: _deployed_commit_final | length == 0
