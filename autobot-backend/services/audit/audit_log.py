@@ -38,9 +38,9 @@ import uuid
 from enum import Enum
 from typing import Any, Dict, List
 
-from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_write import run_redis_write
 
 logger = get_logger(__name__)
 
