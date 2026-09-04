@@ -265,8 +265,13 @@ class TestPostCommitTasksAreRetained:
     async def test_a_failing_index_task_is_reported_rather_than_collected(self, goal_env, monkeypatch):
         """A failure reaches the done callback instead of vanishing with the task."""
         svc, request_session, _job_sessions = goal_env
+        release = asyncio.Event()
 
         async def _boom(*_args, **_kwargs) -> None:
+            # Held until the assertion below has run: a task that finishes
+            # inside ``commit()``'s own awaits would be released again before
+            # the snapshot, and the retention check would pass vacuously.
+            await release.wait()
             raise RuntimeError("indexing blew up")
 
         monkeypatch.setattr(svc, "_index_goal", _boom)
@@ -276,6 +281,7 @@ class TestPostCommitTasksAreRetained:
         scheduled = [t for t in pending_background_tasks() - before if t.get_name().endswith(str(goal.id))]
         assert len(scheduled) == 1
 
+        release.set()
         await asyncio.gather(*scheduled, return_exceptions=True)
         assert isinstance(scheduled[0].exception(), RuntimeError)
         assert scheduled[0] not in pending_background_tasks()
@@ -284,8 +290,11 @@ class TestPostCommitTasksAreRetained:
         """``_schedule_post_commit_chromadb_delete`` had defect 2 on its own."""
         svc, request_session, _job_sessions = goal_env
         recorded: dict = {}
+        release = asyncio.Event()
 
         async def _record(company_id: str, ids: list) -> None:
+            # Held for the same reason as the index case above.
+            await release.wait()
             recorded["args"] = (company_id, list(ids))
 
         monkeypatch.setattr(svc, "_delete_from_chromadb", _record)
@@ -300,6 +309,7 @@ class TestPostCommitTasksAreRetained:
 
         scheduled = list(pending_background_tasks() - before)
         assert len(scheduled) == 1, "the ChromaDB delete task was scheduled without being retained"
+        release.set()
         await asyncio.gather(*scheduled)
         assert recorded["args"] == (_COMPANY, [str(goal.id)])
 
