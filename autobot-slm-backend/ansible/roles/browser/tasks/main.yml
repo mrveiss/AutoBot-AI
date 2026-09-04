@@ -132,6 +132,15 @@
 # duplicate is not merely untidy. Constraints applied for the same reason every other
 # pip site applies them: without them a transitive pin can drag numpy below its floor
 # and force an unbuildable sdist (#14447).
+#
+# #15601 decision -- this site now honours `code_source_dir` rather than
+# deriving the path from `autobot.base_dir` alone. It was the odd one of four:
+# it carried no literal, but it also ignored an override, so a play setting
+# `code_source_dir` synced the worker from the override (the `src:` above
+# already reads that variable) while constraining against the untouched
+# default. Two paths for one checkout is a worse failure than the literal the
+# other three were fixed for, because it goes wrong silently. All four pip
+# constraint sites are now one shape: override first, SSOT-derived fallback.
 - name: "Browser | Install Playwright and FastAPI dependencies via pip"
   pip:
     name:
@@ -142,7 +151,7 @@
     state: present
     virtualenv: "{{ browser_install_dir }}/venv"
     virtualenv_python: python3.14
-    extra_args: "-c {{ autobot.base_dir }}/code_source/constraints/shared.txt"
+    extra_args: "-c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt"
   become: true
   environment:
     PIP_DEFAULT_TIMEOUT: "120"

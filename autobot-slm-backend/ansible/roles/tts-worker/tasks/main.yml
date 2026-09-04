@@ -244,10 +244,10 @@
       # requirements file pins to >=2.5.2, which is the ABI skew the SSOT
       # exists to prevent. Same bare-name + `-c` shape as roles/npu-worker.
       # The `-c` fallback derives from `autobot.base_dir` (inventory/group_vars/all.yml)
-      # rather than restating the literal that roles/npu-worker and agent_config/openvino
-      # still carry: an override of `code_source_dir` is still honoured, but the
-      # default no longer hardcodes a path. Those two pre-existing literals are
-      # baselined and tracked separately (#15601).
+      # rather than restating a literal: an override of `code_source_dir` is still
+      # honoured, but the default no longer hardcodes a path. #15601 brought
+      # roles/npu-worker, roles/agent_config/openvino and roles/browser onto this
+      # same shape, so all five pip constraint sites now agree.
       - numpy
       - scipy>=1.10.0
     virtualenv: "{{ tts_install_dir }}/venv"

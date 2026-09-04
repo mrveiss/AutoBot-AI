@@ -72,8 +72,14 @@ def env(name: str, default: Any = None) -> Any:
 # with no slack to add the new "terminal" component var inline, so the one
 # "testing" entry that lived at the tail moved out to make room, and the new
 # entry lives in its own sibling module rather than inline here.
+#
+# Same reason again (#15620): the "slm" component moved out whole -- its one
+# pre-existing entry travelled with the new one, so the component lives in one
+# module instead of straddling two, and the relocation pays for its own import
+# line rather than raising the ceiling. See env_registry_slm.py.
 from autobot_shared import env_registry_ai  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
+from autobot_shared import env_registry_slm  # noqa: E402,F401
 from autobot_shared import env_registry_terminal  # noqa: E402,F401
 from autobot_shared import env_registry_testing  # noqa: E402,F401
 
@@ -899,20 +905,6 @@ register_env_var(
             "even when the learner cannot record what it learned."
         ),
         component="redis",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_NODE_PROXY_TIMEOUT_SECONDS",
-        type=float,
-        default=15.0,
-        description=(
-            "Ceiling on a proxied request from the SLM to a node's backend. "
-            "The aggregator fans out across the fleet, so without a bound one "
-            "unresponsive node would hold the whole lifecycle view open."
-        ),
-        component="slm",
     )
 )
 

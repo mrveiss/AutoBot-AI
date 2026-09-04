@@ -57,11 +57,18 @@
 # #15408: the floor is no longer restated here -- constraints/shared.txt is the
 # single source of truth, applied below so no future dependency can drag numpy
 # below its pinned floor either.
+# #15601: the `-c` fallback derives from `autobot.base_dir`
+# (inventory/group_vars/all.yml) rather than restating the install root as a
+# literal. An explicit `code_source_dir` override is still honoured -- only the
+# default stops being a second copy of a value the SSOT already publishes, so a
+# moved base directory cannot leave this role provisioning against the old path
+# (the failure shape #14272 records for ai-stack: a wrong constraints path
+# aborts the pip run). Same shape as roles/tts-worker (#15599).
 - name: Set up OpenVINO environment in venv
   pip:
     name: openvino
     virtualenv: "{{ venv_dir }}"
-    extra_args: "-c {{ code_source_dir | default('/opt/autobot/code_source') }}/constraints/shared.txt"
+    extra_args: "-c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt"
   become_user: "{{ service_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
