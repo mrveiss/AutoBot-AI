@@ -246,14 +246,23 @@ def test_the_scan_covers_both_backends():
     """#15619: re-narrowing the scan must fail here, by count, not go quiet.
 
     The old sweep read one ``SCAN_ROOT`` string. Deleting a root from the
-    mapping, or pointing both entries at the same tree, would shrink coverage
+    mapping, or pointing several entries at the same tree, would shrink coverage
     by an order of magnitude and every other assertion in this file would
     still pass — the census simply stops seeing what it no longer visits.
+
+    The set is pinned by name rather than by size, because "both backends" was
+    the whole defect: a count alone is satisfied by scanning the small tree
+    twice. #15637 added the three trees outside either backend, where a
+    discarded task in ``autobot_shared/`` -- the tree the other guards import
+    their own fix from -- had survived every sweep.
     """
-    assert set(SCAN_ROOTS) == {"autobot-backend/", "autobot-slm-backend/"}, (
-        "FIX THE SWEEP: the scan roots changed. Both backends must be swept — "
-        f"got {sorted(SCAN_ROOTS)}."
-    )
+    assert set(SCAN_ROOTS) == {
+        "autobot-backend/",
+        "autobot-slm-backend/",
+        "autobot_shared/",
+        "autobot-infrastructure/",
+        "autobot-npu-worker/",
+    }, f"FIX THE SWEEP: the scan roots changed. Got {sorted(SCAN_ROOTS)}."
     parsed = {root: _census_for(root).files_parsed for root in SCAN_ROOTS}
     small, large = parsed["autobot-slm-backend/"], parsed["autobot-backend/"]
     assert large > 4 * small, (
@@ -268,8 +277,7 @@ def test_every_scan_root_carries_its_own_census_entries():
     """A census entry outside the swept roots can never be re-verified."""
     census_roots = {rel.split("/", 1)[0] + "/" for rel in KNOWN_DISCARDED_LAUNCHES}
     assert census_roots <= set(SCAN_ROOTS), (
-        "census entries outside every scan root can never be re-verified: "
-        f"{sorted(census_roots - set(SCAN_ROOTS))}"
+        "census entries outside every scan root can never be re-verified: " f"{sorted(census_roots - set(SCAN_ROOTS))}"
     )
     assert census_roots == set(SCAN_ROOTS), (
         "a scan root with no census entry means the sweep found nothing there — "
