@@ -44,6 +44,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 import yaml
@@ -158,6 +159,7 @@ MAX_WHOLLY_UNGATED_PACKAGES = 5
 #: 15 npm script invocations resolved to a tracked package directory. The floors
 #: sit below those so a package removal does not fail the guard, while a
 #: scanner that has stopped reaching the tree still does.
+MIN_YAML_SOURCES = 20
 MIN_PACKAGES_WITH_TEST_SCRIPTS = 6
 MIN_RUNNER_SCRIPTS = 10
 MIN_WORKFLOW_INVOCATIONS = 3
@@ -225,15 +227,23 @@ def is_runner(name: str, body: str) -> bool:
     return not is_pure_delegation(body)
 
 
-def declared_runners(root: Path) -> dict[str, dict[str, str]]:
-    """`<package dir>` -> `{script: body}` for every runner it declares."""
+def declared_scripts(root: Path) -> dict[str, dict[str, str]]:
+    """`<package dir>` -> every script it declares, whatever its shape."""
     declared: dict[str, dict[str, str]] = {}
     for path in tracked_package_files(root):
         manifest = json.loads(path.read_text(encoding="utf-8"))
-        scripts = manifest.get("scripts") or {}
-        runners = {n: b for n, b in scripts.items() if isinstance(b, str) and is_runner(n, b)}
+        scripts = {n: b for n, b in (manifest.get("scripts") or {}).items() if isinstance(b, str)}
+        declared[path.parent.relative_to(root).as_posix()] = scripts
+    return declared
+
+
+def declared_runners(scripts: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
+    """`<package dir>` -> `{script: body}` for every runner a manifest declares."""
+    declared: dict[str, dict[str, str]] = {}
+    for directory, entries in scripts.items():
+        runners = {n: b for n, b in entries.items() if is_runner(n, b)}
         if runners:
-            declared[path.parent.relative_to(root).as_posix()] = runners
+            declared[directory] = runners
     return declared
 
 
@@ -265,6 +275,10 @@ def _run_steps(document: object) -> list[tuple[str | None, dict]]:
     return pairs
 
 
+#: Shell separators, longest first so `||` is never split as two pipes.
+SHELL_SEGMENT = re.compile(r"(&&|\|\||;|\|)")
+
+
 def _normalise(directory: str | None) -> str:
     return "." if directory in (None, "", ".") else Path(directory).as_posix().strip("/")
 
@@ -275,16 +289,49 @@ def _resolve_cd(current: str, target: str) -> str:
     return _normalise(target if current == "." else str(Path(current) / target))
 
 
+def _keys_in_segment(directory: str, segment: str) -> set[str]:
+    return {f"{directory}::{m.group(1)}" for m in SCRIPT_CALL.finditer(segment) if m.group(1) not in NOT_A_SCRIPT}
+
+
+def _calls_in_line(current: str, line: str) -> tuple[str, set[str]]:
+    """Scan one shell line left to right, returning the directory it leaves behind.
+
+    `cd autobot-slm-frontend && npm run test:unit` is one of the two spellings
+    this repository uses, so the `cd` must change the directory for what FOLLOWS
+    it on the same line rather than ending the scan -- treating it as a stop
+    reported a gated runner as ungated, which is a wrong measurement in the one
+    module whose job is measuring reach honestly.
+
+    A `cd` guarded by `||` is the failure branch: `cd missing || npm run test`
+    runs the script in the directory the `cd` did NOT leave, so the pending
+    change is dropped rather than applied.
+    """
+    parts, directory, found, pending = SHELL_SEGMENT.split(line), current, set(), None
+    for index, part in enumerate(parts):
+        if index % 2:  # a separator: && || ; |
+            directory = directory if (pending is None or part == "||") else pending
+            pending = None
+            continue
+        segment = part.strip().lstrip("(").rstrip(")").strip()
+        change = re.match(r"cd\s+([^\s;&|]+)\s*$", segment)
+        pending = _resolve_cd(directory, change.group(1)) if change else None
+        if not change:
+            found |= _keys_in_segment(directory, segment)
+    if "(" in line:
+        # `( cd app && npm run x ) || true` -- resolved above so the call is
+        # scoped correctly, but a subshell's `cd` dies with the subshell, so it
+        # must not carry to the next line. Guessing wide here would manufacture
+        # a gated runner, which is the one error this module must never make.
+        return current, found
+    return (pending if pending is not None else directory), found
+
+
 def _calls_in_step(working_directory: str, run: str) -> set[str]:
     """`<dir>::<script>` keys a single `run:` block invokes."""
     current, found = working_directory, set()
     for line in run.splitlines():
-        line = line.strip()
-        change = re.match(r"cd\s+([^\s;&|]+)", line)
-        if change:
-            current = _resolve_cd(current, change.group(1))
-            continue
-        found |= {f"{current}::{m.group(1)}" for m in SCRIPT_CALL.finditer(line) if m.group(1) not in NOT_A_SCRIPT}
+        current, keys = _calls_in_line(current, line.strip())
+        found |= keys
     return found
 
 
@@ -304,58 +351,96 @@ def workflow_invocations(root: Path) -> set[str]:
     return invoked
 
 
-def covered_scripts(runners: dict[str, dict[str, str]], invoked: set[str]) -> set[str]:
-    """Invoked keys, closed over delegation (`test:all` gates what it chains to)."""
-    covered = {key for key in invoked if key.split("::", 1)[0] in runners}
-    for directory, scripts in runners.items():
-        for name, body in scripts.items():
-            if f"{directory}::{name}" in invoked:
-                covered |= {f"{directory}::{d}" for d in delegates(body)}
+def covered_scripts(scripts: dict[str, dict[str, str]], invoked: set[str]) -> set[str]:
+    """Invoked keys, closed transitively over delegation.
+
+    Walks the COMPLETE script map, not the runner map: a wrapper is classified
+    out of the runner population because it declares no suite of its own, but a
+    workflow can still invoke it, and dropping it would lose the edge that gates
+    what it chains to. The same edge exists for a non-test entry point --
+    `"ci": "npm run lint && npm run test:unit"` gates `test:unit` -- which a
+    test-shaped-only graph could not see either.
+
+    Measured on Dev_new_gui: one such edge exists (`autobot-frontend::test:all`
+    -> test:unit, test:integration, test:playwright) and no workflow invokes it,
+    so this closure changes no number today. It is here so the guard's verdict
+    does not depend on that staying true.
+    """
+    covered = {key for key in invoked if key.split("::", 1)[0] in scripts}
+    frontier = set(covered)
+    while frontier:
+        following = set()
+        for key in frontier:
+            directory, name = key.split("::", 1)
+            body = scripts.get(directory, {}).get(name)
+            if body is not None:
+                following |= {f"{directory}::{d}" for d in delegates(body)} - covered
+        covered |= following
+        frontier = following
     return covered
 
 
+class Measurement(NamedTuple):
+    """One sweep of the checkout: what is declared, and what CI invokes."""
+
+    scripts: dict[str, dict[str, str]]
+    runners: dict[str, dict[str, str]]
+    invoked: set[str]
+    sources: int
+
+    @property
+    def covered(self) -> set[str]:
+        return covered_scripts(self.scripts, self.invoked)
+
+
 @pytest.fixture(scope="module")
-def measurement() -> tuple[dict[str, dict[str, str]], set[str]]:
+def measurement() -> Measurement:
     root = repo_root()
-    return declared_runners(root), workflow_invocations(root)
+    scripts = declared_scripts(root)
+    return Measurement(scripts, declared_runners(scripts), workflow_invocations(root), len(yaml_sources(root)))
 
 
-def test_enumeration_is_not_vacuous(measurement) -> None:
-    """A scanner that finds nothing must fail, not pass (#15018)."""
-    runners, invoked = measurement
-    assert len(runners) >= MIN_PACKAGES_WITH_TEST_SCRIPTS, (
-        f"only {len(runners)} tracked package.json files declare a test runner; "
+def test_enumeration_is_not_vacuous(measurement: Measurement) -> None:
+    """Floors bind to the sweep's REACH, never to a count of findings (#15018).
+
+    Files parsed, manifests reached, runners classified, invocations resolved --
+    each is a number that only a broken scanner can drive down, so fixing a real
+    finding never trips one.
+    """
+    assert (
+        measurement.sources >= MIN_YAML_SOURCES
+    ), f"only {measurement.sources} workflow/action YAML files reached; yaml_sources has stopped walking the tree"
+    assert len(measurement.runners) >= MIN_PACKAGES_WITH_TEST_SCRIPTS, (
+        f"only {len(measurement.runners)} tracked package.json files declare a test runner; "
         "the enumerator has stopped reaching them"
     )
-    declared = sum(len(scripts) for scripts in runners.values())
+    declared = sum(len(entries) for entries in measurement.runners.values())
     assert declared >= MIN_RUNNER_SCRIPTS, (
         f"only {declared} test runner scripts found across those manifests; "
         "TEST_SCRIPT_NAME or is_runner has stopped classifying them"
     )
-    assert len(invoked) >= MIN_WORKFLOW_INVOCATIONS, (
-        f"only {len(invoked)} npm script invocations found across the workflow tree; "
+    assert len(measurement.invoked) >= MIN_WORKFLOW_INVOCATIONS, (
+        f"only {len(measurement.invoked)} npm script invocations found across the workflow tree; "
         "SCRIPT_CALL or the YAML walk has stopped matching"
     )
 
 
-def test_known_invocations_are_detected(measurement) -> None:
+def test_known_invocations_are_detected(measurement: Measurement) -> None:
     """The scanner sees both spellings of a scoped invocation this repo uses."""
-    runners, invoked = measurement
-    missing = sorted(k for k in REQUIRED_DETECTIONS if k not in covered_scripts(runners, invoked))
+    missing = sorted(k for k in REQUIRED_DETECTIONS if k not in measurement.covered)
     assert not missing, (
         "these invocations exist in the workflow tree but the scanner no longer sees "
         f"them, so its verdict is worthless: {missing}"
     )
 
 
-def test_every_test_script_is_invoked_by_a_workflow(measurement) -> None:
+def test_every_test_script_is_invoked_by_a_workflow(measurement: Measurement) -> None:
     """The #15667 assertion: a declared runner that nothing runs is a defect."""
-    runners, invoked = measurement
-    covered = covered_scripts(runners, invoked)
+    covered = measurement.covered
     unaccounted = sorted(
         key
-        for directory, scripts in runners.items()
-        for key in (f"{directory}::{n}" for n in scripts)
+        for directory, entries in measurement.runners.items()
+        for key in (f"{directory}::{n}" for n in entries)
         if key not in covered and key not in UNINVOKED_TEST_SCRIPTS
     )
     assert not unaccounted, (
@@ -365,23 +450,23 @@ def test_every_test_script_is_invoked_by_a_workflow(measurement) -> None:
     )
 
 
-def test_allowlist_entries_are_live_and_carry_an_issue(measurement) -> None:
+def test_allowlist_entries_are_live_and_carry_an_issue(measurement: Measurement) -> None:
     """An entry that no longer describes a gap must be deleted, not left to rot."""
-    runners, invoked = measurement
-    covered = covered_scripts(runners, invoked)
-    declared = {f"{d}::{n}" for d, scripts in runners.items() for n in scripts}
+    covered = measurement.covered
+    declared = {f"{d}::{n}" for d, entries in measurement.runners.items() for n in entries}
     stale = sorted(k for k in UNINVOKED_TEST_SCRIPTS if k not in declared or k in covered)
     assert not stale, f"UNINVOKED_TEST_SCRIPTS entries no longer describe an ungated runner: {stale}"
     unreferenced = sorted(k for k, r in UNINVOKED_TEST_SCRIPTS.items() if not re.search(r"#\d+", r))
     assert not unreferenced, f"allowlist reasons must name the issue that expires them: {unreferenced}"
 
 
-def test_no_new_package_is_gated_by_nothing(measurement) -> None:
+def test_no_new_package_is_gated_by_nothing(measurement: Measurement) -> None:
     """The class statement: a whole app whose every runner is ungated (#15667)."""
-    runners, invoked = measurement
-    covered = covered_scripts(runners, invoked)
+    covered = measurement.covered
     wholly_ungated = sorted(
-        directory for directory, scripts in runners.items() if not any(f"{directory}::{n}" in covered for n in scripts)
+        directory
+        for directory, entries in measurement.runners.items()
+        if not any(f"{directory}::{n}" in covered for n in entries)
     )
     assert len(wholly_ungated) <= MAX_WHOLLY_UNGATED_PACKAGES, (
         f"{len(wholly_ungated)} packages have no gated test runner at all "
@@ -389,3 +474,126 @@ def test_no_new_package_is_gated_by_nothing(measurement) -> None:
         "#15667 shape -- an entire app's suite running nowhere. Wire it in; the "
         "ceiling is DOWN-ONLY."
     )
+
+
+# --------------------------------------------------------------------------
+# Contrast fixtures. Every detector above gets a pair: an input that SHOULD
+# trip it and a near miss that should not. The assertions on the checkout only
+# say what today's tree looks like -- a classifier that matched everything, or
+# nothing, would satisfy them just as comfortably, and both failures are silent.
+# The near misses are drawn from real bodies in this repository, including the
+# one that already bit: `vitest run --config vitest.integration.config.ts`
+# names the watcher twice and was classified as a developer-only mode.
+# --------------------------------------------------------------------------
+
+INTERACTIVE_CONTRASTS = (
+    ("vitest", True),
+    ("vitest --coverage", True),
+    ("vitest --coverage --ui", True),
+    ("playwright test --headed", True),
+    ("playwright show-report", True),
+    ("playwright test --config playwright.visual.config.ts --update-snapshots", True),
+    ("start-server-and-test 'vite dev --port 5173' http://localhost:5173 'cypress open --e2e'", True),
+    ("jest --watch", True),
+    ("vitest run", False),
+    ("vitest run --coverage", False),
+    ("vitest run --config vitest.integration.config.ts", False),
+    ("playwright test", False),
+    ("playwright test --config playwright.visual.config.ts", False),
+    ("start-server-and-test preview http://localhost:5173 'cypress run --e2e'", False),
+    ("node --test autobot-mcp-server.test.js", False),
+    ("node --experimental-vm-modules node_modules/.bin/jest", False),
+)
+
+DELEGATION_CONTRASTS = (
+    ("run-s test:unit test:integration test:playwright", True),
+    ("npm run lint && npm run test:unit", True),
+    ("vitest run --config vitest.integration.config.ts", False),
+    ("playwright test", False),
+    ("node --test autobot-mcp-server.test.js", False),
+    ("npm run build && vitest run", False),
+)
+
+PLACEHOLDER_CONTRASTS = (
+    ('echo "Error: no test specified" && exit 1', True),
+    ("echo 'Error: no test specified' && exit 1", True),
+    ('echo "running the suite" && vitest run', False),
+    ("vitest run", False),
+)
+
+NAME_CONTRASTS = (
+    ("test", True),
+    ("test:unit", True),
+    ("test:e2e:dev", True),
+    ("pretest", False),
+    ("lint", False),
+    ("build:check", False),
+    ("check:i18n", False),
+)
+
+#: `(working-directory, run block)` -> the keys the scanner must find, exactly.
+CALL_CONTRASTS = (
+    ("autobot-slm-frontend", "npm run test:unit", {"autobot-slm-frontend::test:unit"}),
+    (".", "cd autobot-slm-frontend && npm run test:unit", {"autobot-slm-frontend::test:unit"}),
+    (".", "cd autobot-frontend\nnpm run test:coverage", {"autobot-frontend::test:coverage"}),
+    (".", "cd libs/autobot-sdk-ts && npm ci && npm test", {"libs/autobot-sdk-ts::test"}),
+    # A `cd` on the failure branch never happened: the script runs where we were.
+    (".", "cd missing || npm run test", {".::test"}),
+    # A subshell resolves within the line; see _calls_in_line for why it may
+    # not carry past it.
+    (".", "( cd autobot-frontend && npm run test:playwright ) || true", {"autobot-frontend::test:playwright"}),
+    (".", "( cd autobot-frontend && npm ci )\nnpm run test:unit", {".::test:unit"}),
+    (".", "npm ci", set()),
+    (".", "npx playwright install --with-deps chromium", set()),
+    ("autobot-frontend", "rm -rf node_modules dist || true", set()),
+)
+
+
+@pytest.mark.parametrize(("body", "should_trip"), INTERACTIVE_CONTRASTS)
+def test_interactive_body_discriminates(body: str, should_trip: bool) -> None:
+    """INTERACTIVE_BODY separates a watcher from a one-shot run."""
+    assert bool(INTERACTIVE_BODY.search(body)) is should_trip, body
+
+
+@pytest.mark.parametrize(("body", "should_trip"), DELEGATION_CONTRASTS)
+def test_pure_delegation_discriminates(body: str, should_trip: bool) -> None:
+    """A wrapper chains sibling scripts; a runner names a command."""
+    assert is_pure_delegation(body) is should_trip, body
+
+
+@pytest.mark.parametrize(("body", "should_trip"), PLACEHOLDER_CONTRASTS)
+def test_placeholder_body_discriminates(body: str, should_trip: bool) -> None:
+    """The npm-init stub is not a suite; an `echo` before a real run is."""
+    assert bool(PLACEHOLDER_BODY.match(body.strip())) is should_trip, body
+
+
+@pytest.mark.parametrize(("name", "should_trip"), NAME_CONTRASTS)
+def test_test_script_name_discriminates(name: str, should_trip: bool) -> None:
+    """`test` and `test:*` only -- `pretest` is a hook, not a runner."""
+    assert bool(TEST_SCRIPT_NAME.match(name)) is should_trip, name
+
+
+@pytest.mark.parametrize(("directory", "run", "expected"), CALL_CONTRASTS)
+def test_script_call_scanner_discriminates(directory: str, run: str, expected: set[str]) -> None:
+    """Both scoping spellings resolve, and package management is not a script."""
+    assert _calls_in_step(directory, run) == expected, run
+
+
+def test_is_runner_agrees_with_its_parts() -> None:
+    """End to end: the classification a manifest actually gets."""
+    assert is_runner("test:unit", "vitest run")
+    assert is_runner("test", "npx playwright test")
+    assert not is_runner("test", "vitest")
+    assert not is_runner("test:all", "run-s test:unit test:integration")
+    assert not is_runner("test", 'echo "Error: no test specified" && exit 1')
+    assert not is_runner("lint", "eslint .")
+
+
+def test_delegation_closure_gates_what_a_wrapper_chains_to() -> None:
+    """The edge CodeRabbit named: an invoked wrapper covers its targets."""
+    scripts = {"app": {"test:all": "run-s test:unit", "test:unit": "vitest run", "ci": "npm run test:unit"}}
+
+    assert covered_scripts(scripts, {"app::test:all"}) >= {"app::test:all", "app::test:unit"}
+    # And the same edge from a non-test entry point.
+    assert "app::test:unit" in covered_scripts(scripts, {"app::ci"})
+    assert covered_scripts(scripts, {"app::test:unit"}) == {"app::test:unit"}
