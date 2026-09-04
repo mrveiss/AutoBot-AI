@@ -22,15 +22,22 @@ This is that failure shape one layer up: a guard whose *reach* is narrower
 than the thing it claims to cover reads as coverage while providing none. So
 each guard now declares its own ``GUARD_INPUT_PATHS`` (the checker's single
 source of truth for what it reads), and this module re-derives the filter's
-actual reach from ``.github/workflows/code-quality.yml`` and asserts every
+actual reach from ``.github/filters/code-quality-paths.yml`` and asserts every
 guarded path is covered by it.
+
+WHERE THE SET LIVES. It used to be an inline ``filters: |`` block inside
+``.github/workflows/code-quality.yml``. #15608 extracted it to
+``.github/filters/code-quality-paths.yml`` so the complement shim in
+``.github/workflows/code-quality-required-context.yml`` could read the SAME set
+by reference instead of carrying a second copy that drifts. This checker follows
+the set to its new home rather than keeping a third reader of the old location.
 
 WHY THIS IS A SCRIPT AND NOT ONLY A TEST. The failure direction needs a
 REQUIRED check for the same reason as its siblings: removing a path filter
 entry, or forgetting to add one for a new guard input, makes this scan find
-FEWER uncovered paths and go GREENER. ``.github/workflows/code-quality.yml``
-itself is always in scope (it is a filter entry in its own right), so this
-check runs on any edit to the filter. ``repo_tests/code_quality_guard_reach_test.py``
+FEWER uncovered paths and go GREENER. ``.github/filters/code-quality-paths.yml``
+is itself in scope (it is a filter entry in its own right), so this check runs
+on any edit to the filter. ``repo_tests/code_quality_guard_reach_test.py``
 imports these functions rather than restating the rule.
 """
 
@@ -49,6 +56,7 @@ import sys
 logger = logging.getLogger(__name__)
 
 _WORKFLOW = ".github/workflows/code-quality.yml"
+_FILTER_FILE = ".github/filters/code-quality-paths.yml"
 
 #: Checkers whose GUARD_INPUT_PATHS this meta-guard enforces. Add a new entry
 #: here whenever a new required-check script gains its own GUARD_INPUT_PATHS.
@@ -63,6 +71,10 @@ _GUARDED_CHECKERS = (
 
 _FILTER_BULLET_RE = re.compile(r"^\s*-\s*'([^']+)'\s*$")
 _FILTER_COMMENT_RE = re.compile(r"^\s*#")
+#: The canonical key, anchored at column zero. A nested ``backend:`` -- a
+#: composed filter, or one inside a workflow's ``filters: |`` literal -- is a
+#: different set and must not be picked up as this one.
+_FILTER_KEY_RE = re.compile(r"^backend:\s*$")
 
 
 def repo_root() -> pathlib.Path:
@@ -90,45 +102,44 @@ def guarded_input_paths(root: pathlib.Path | None = None) -> dict[str, tuple[str
 
 
 def backend_filter_patterns(root: pathlib.Path | None = None) -> list[str]:
-    """The dorny/paths-filter ``backend`` bullet list, parsed without a YAML lib.
+    """The canonical ``backend`` bullet list, parsed without a YAML lib.
 
     ``configparser``/stdlib ``tomllib`` cannot read a YAML file, and
     ``code-quality`` installs no third-party YAML parser, so this reads the
-    literal ``filters: |`` block by locating it explicitly rather than
-    trusting the first ``backend:`` in the file — ``outputs: backend: ...``
-    two lines above the real filter list would otherwise match first.
+    bullets literally. The block is located by its column-zero ``backend:``
+    key: a nested one -- a composed filter, or a copy inside a workflow's
+    ``filters: |`` literal -- is a different set and must not match first.
 
     Skips blank lines and full-line ``#`` comments WITHOUT ending the block --
-    #14650 (landed the same week as this checker) added a multi-line comment
-    INSIDE the filters list for the first time, between two bullets. The
-    original version treated any non-bullet line as the end of the list, so
-    it silently truncated at that comment and read every entry after it,
+    #14650 added a multi-line comment INSIDE the list for the first time, and
+    the original version treated any non-bullet line as the end of it, so it
+    silently truncated at that comment and read every entry after it,
     including this checker's own guarded paths, as uncovered -- caught by
     rebasing #14550/#14551 onto that change, not by design. dorny/paths-filter
-    itself parses this block as real YAML and is unaffected by comments; this
+    itself parses the file as real YAML and is unaffected by comments; this
     mirror must not diverge from that by treating one as a terminator.
+
+    Returns ``[]`` when the file or the key is missing, which ``audit_reach``
+    turns into a FAILURE rather than a clean scan of nothing (#15608 moved this
+    file; a move that silently emptied the set would go greener, not redder).
     """
     base = root if root is not None else repo_root()
-    path = base / _WORKFLOW
+    path = base / _FILTER_FILE
     if not path.is_file():
         return []
-    text = path.read_text(encoding="utf-8")
-    filters_idx = text.find("filters: |")
-    if filters_idx == -1:
-        return []
-    backend_idx = text.find("backend:", filters_idx)
-    if backend_idx == -1:
-        return []
     patterns: list[str] = []
-    for line in text[backend_idx:].splitlines()[1:]:
+    in_block = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not in_block:
+            in_block = bool(_FILTER_KEY_RE.match(line))
+            continue
         match = _FILTER_BULLET_RE.match(line)
         if match:
             patterns.append(match.group(1))
             continue
         if not line.strip() or _FILTER_COMMENT_RE.match(line):
             continue  # blank line or full-line comment -- keep scanning
-        if patterns:
-            break  # first genuine non-bullet, non-comment line ends the block
+        break  # first genuine non-bullet, non-comment line ends the block
     return patterns
 
 
@@ -171,17 +182,19 @@ def audit_reach(root: pathlib.Path | None = None) -> tuple[int, list[str]]:
 
     patterns = backend_filter_patterns(base)
     if not patterns:
-        return total, [f"{_WORKFLOW} parsed to zero `backend` filter patterns — the guard checked nothing."]
+        return total, [f"{_FILTER_FILE} parsed to zero `backend` filter patterns — the guard checked nothing."]
 
     missed = uncovered_paths(guarded, patterns)
     if missed:
         for checker, paths in missed.items():
             problems.append(
-                f"{checker} reads {paths}, none of which is covered by {_WORKFLOW}'s "
-                "`backend` path filter — a PR touching only that path skips the "
-                "`code-quality` job entirely, and a skipped required job satisfies "
-                "branch protection. Add a matching entry to both the `on.push.paths` "
-                "list and the `changes` job's `filters.backend` list."
+                f"{checker} reads {paths}, none of which is covered by the "
+                f"`backend` path set in {_FILTER_FILE} — a PR touching only that "
+                "path skips the `code-quality` job entirely, and a skipped required "
+                "job satisfies branch protection. Add a matching entry to that file "
+                f"AND to {_WORKFLOW}'s `on.push.paths` list, which GitHub gives no "
+                "include mechanism for (parity is enforced by "
+                "pipeline-scripts/check_workflow_path_filters.py)."
             )
 
     return total, problems
