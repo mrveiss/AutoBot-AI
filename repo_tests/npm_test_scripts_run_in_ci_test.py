@@ -50,6 +50,10 @@ import pytest
 import yaml
 
 from autobot_shared.paths import GitRepoRootUnavailable, git_repo_root, scrubbed_git_env
+from repo_tests.npm_test_scripts_allowlist import (
+    MAX_WHOLLY_UNGATED_PACKAGES,
+    UNINVOKED_TEST_SCRIPTS,
+)
 
 #: A script name this repository treats as a test runner: `test` or `test:*`.
 TEST_SCRIPT_NAME = re.compile(r"^test(?::|$)")
@@ -100,58 +104,6 @@ NOT_A_SCRIPT = frozenset(
         "--",
     }
 )
-
-#: `<package dir>::<script>` -> the DECISION taken, and the issue that expires
-#: the entry. Every reason must name an issue number: "nothing runs it" is a
-#: description of the defect, not a decision about it.
-UNINVOKED_TEST_SCRIPTS = {
-    ".mcp::test": (
-        "#15674 -- WIRE IN. `node --test autobot-mcp-server.test.js`, invoked by " "no workflow and no composite action"
-    ),
-    "autobot-browser-worker::test": (
-        "#15675 -- WIRE IN, after browser provisioning. `npx playwright test` "
-        "needs `playwright install --with-deps` on the runner; visual-regression.yml "
-        "already carries that pattern to mirror"
-    ),
-    "autobot-frontend::test:unit": (
-        "#10365 -- COVERED ELSEWHERE. frontend-test.yml runs `test:coverage`, which "
-        "is `vitest run --coverage` over the same default config, so a separate "
-        "`test:unit` step would run every unit test twice. The suite IS gated; only "
-        "this spelling of it is not"
-    ),
-    "autobot-frontend::test:e2e": (
-        "#15679 -- DECISION OUTSTANDING. `cypress run --e2e` behind "
-        "start-server-and-test, invoked by nothing; whether cypress is superseded by "
-        "the playwright suites is the open question, not a wiring fix"
-    ),
-    "autobot-frontend::test:playwright": (
-        "#15679 -- WIRE IN. `playwright test`, invoked by nothing, while "
-        "visual-regression.yml proves the playwright runner already works here"
-    ),
-    "autobot-infrastructure/shared/ide-extensions/vscode-autobot::test": (
-        "#15678 -- WIRE IN, after harness provisioning. `node ./out/test/runTest.js` "
-        "downloads VS Code and needs a virtual display, so it is a job rather than a step"
-    ),
-    "autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking::test": (
-        "#15677 -- WIRE IN. jest under --experimental-vm-modules, invoked by nothing; "
-        "the Python half of this same tree is #15178"
-    ),
-    "autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking::test:integration": (
-        "#15677 -- WIRE IN. The integration half of the same jest suite"
-    ),
-    "libs/autobot-sdk-ts::test": (
-        "#15676 -- WIRE IN. jest, invoked by nothing. marker-tests.yml reaches `libs` "
-        "for its PYTHON marker-selected suite only; the TypeScript SDK's own suite "
-        "has no runner"
-    ),
-}
-
-#: DOWN-ONLY ceiling on packages whose EVERY runner is allowlisted -- a whole
-#: app gated by nothing, which is exactly the #15667 shape. Measured on
-#: Dev_new_gui: .mcp, autobot-browser-worker, vscode-autobot,
-#: mcp-structured-thinking, libs/autobot-sdk-ts. NEVER raise this to make a new
-#: app pass; wire the app in, or this guard has become the thing it replaced.
-MAX_WHOLLY_UNGATED_PACKAGES = 5
 
 #: Floors, so a regex that stops matching turns this module red instead of green
 #: (the #15018 lesson: a guard that enumerates nothing passes comfortably).
