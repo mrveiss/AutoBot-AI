@@ -443,7 +443,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/utils/task_queue.py": 890,
     "autobot-backend/utils/timeout_migration_examples.py": 1024,
     "autobot-backend/utils/todowrite_optimizer.py": 806,
-    "autobot-backend/utils/tool_pattern_analyzer.py": 918,
+    "autobot-backend/utils/tool_pattern_analyzer.py": 917,
     "autobot-backend/utils/validators.py": 696,
     "autobot-backend/voice_interface.py": 910,
     "autobot-backend/workers/audit_tasks.py": 1085,
