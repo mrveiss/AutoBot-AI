@@ -119,7 +119,7 @@ class WorkflowDemo:
         """Demonstrate a specific scenario."""
 
         logger.info(f"{index}. {scenario['name']}")
-        logger.info("   Query: \"{scenario['request']}\"")
+        logger.info(f"   Query: \"{scenario['request']}\"")
         logger.info(f"   Expected: {scenario['expected']}")
         logger.info("   " + "-" * 60)
 

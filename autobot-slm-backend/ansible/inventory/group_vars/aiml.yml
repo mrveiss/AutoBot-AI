@@ -215,44 +215,64 @@ packages:
     - libpng-dev
     - libglib2.0-dev
 
+  # DECISION (#15596): the group's role and the component requirements file are
+  # the source of versions -- NOT this list. Nothing reads `packages.python`
+  # (nor `packages.system`): grepped across ansible `*.yml`/`*.j2` for
+  # `packages.python`, `packages['python']`, `packages.system` and every
+  # `{{ ... packages ... }}`, and every reader-shaped hit is a different
+  # variable (`system_packages`, `python_interpreter_packages`,
+  # `required_packages`, `role_configs[node_role].packages`, or a registered
+  # result). `deploy-aiml.yml` runs `roles/ai-stack`, which installs from
+  # `autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt`.
+  #
+  # So the list installs nothing today, and every floor it carried had drifted
+  # one to two majors below that manifest -- `torch>=2.0.0` against its
+  # `>=2.13.0`. It is kept as a names-only inventory of what a node in this
+  # group needs, and now restates NO versions, which is the defect: an
+  # uninstalled list cannot be caught by anything except the drift itself.
+  #
+  # Wiring it to a pip task was considered and rejected: that would be a SECOND
+  # install path for libraries `roles/ai-stack` already installs from that
+  # manifest, which is the co-located-roles hazard `constraints/shared.txt`
+  # documents in its own header. If it is ever wired, install with `-r`
+  # against the manifest and `-c constraints/shared.txt` -- never with floors
+  # typed here.
+  #
+  # The wire-or-remove decision for the whole `packages` dict -- both halves,
+  # all three groups -- is #15621, together with `scipy`, the one name here
+  # that no shipped manifest declares at all.
   python:
     # Core AI/ML packages
-    - torch>=2.0.0
-    - torchvision>=0.15.0
-    - transformers>=4.55.2
-    - sentence-transformers>=2.2.0
-    - openai>=1.0.0
-    - anthropic>=0.7.0
+    - torch
+    - torchvision
+    - transformers
+    - sentence-transformers
+    - openai
+    - anthropic
 
     # Intel OpenVINO Python API
     # #14476: openvino-dev dropped -- it is a deprecated meta-package frozen at
     # 2024.6.0 with no release compatible with openvino 2026.x (#14447).
-    # Currently dormant: no playbook reads packages.python from this file
-    # (verified via grep -- deploy-aiml.yml references neither `packages` nor
-    # `openvino`), so this list installs nothing today. Left in place per the
-    # never-delete-code rule rather than removed.
-    # #15408: no version restated here -- if this list is ever wired to an
-    # actual `pip install`, pass `-c constraints/shared.txt` the same way
-    # roles/npu-worker, roles/agent_config and deploy-native-services.yml do,
-    # which is what constrains the bare name below to the SSOT floor.
+    # #15408: constraints/shared.txt (#10524) is the SSOT for its floor, which
+    # is what a `-c` on the install above would bind this bare name to.
     - openvino
 
     # Computer vision
-    - opencv-python>=4.8.0
-    - pillow>=10.0.0
+    - opencv-python
+    - pillow
     # #15568: numpy is constrained by constraints/shared.txt (#10524) exactly as
-    # openvino above is, so it carries no floor here either. The `>=1.24.0` this
-    # replaced was two majors below the SSOT's >=2.5.2,<3.0.0.
+    # openvino above is. The `>=1.24.0` this replaced was two majors below the
+    # SSOT's >=2.5.2,<3.0.0.
     - numpy
 
     # Scientific computing
-    - scipy>=1.11.0
-    - scikit-learn>=1.3.0
+    - scipy
+    - scikit-learn
 
     # Async and web framework
-    - fastapi>=0.115.0
-    - uvicorn>=0.30.0
-    - aiohttp>=3.12.15
+    - fastapi
+    - uvicorn
+    - aiohttp
 
 # ==========================================
 # GPU/NPU HARDWARE CONFIGURATION
