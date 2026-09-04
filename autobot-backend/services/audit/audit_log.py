@@ -38,9 +38,9 @@ import uuid
 from enum import Enum
 from typing import Any, Dict, List
 
-from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_write import run_redis_write
 
 logger = get_logger(__name__)
 
@@ -143,8 +143,11 @@ def audit_record(
 ) -> None:
     """Fire-and-forget wrapper around :func:`record_event`.
 
-    Safe to call from any sync or async context.  Errors are swallowed at
-    DEBUG level so audit writes never propagate to the caller.
+    Safe to call from any sync or async context.  A failure is logged at ERROR
+    and never propagated to the caller (#15637 — it used to be logged at DEBUG,
+    so a lost audit record produced no warning at all). Await
+    :func:`record_event` directly where the record must be durable before the
+    caller continues.
 
     Args:
         user_id: Identifier of the user who performed the action.
