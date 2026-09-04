@@ -1,4 +1,5 @@
-# SLM Frontend Check — type-check + build + lint for autobot-slm-frontend (#10493)
+# SLM Frontend Check — type-check + lint + build + unit tests for autobot-slm-frontend
+# (#10493, #15667)
 #
 # The /slm operator console (autobot-slm-frontend) had NO CI gate, so broken
 # TypeScript/build changes could merge undetected and cross-app migrations
@@ -92,3 +93,13 @@ jobs:
         if: needs.changes.outputs.slm_frontend == 'true'
         # build:slm sets VITE_API_URL=/slm (the co-located base the vite config requires).
         run: npm run build:slm
+
+      # #15667: this app's 55 vitest files — an entire suite, including the
+      # #15640 regression guards — were invoked by no workflow at all. Every
+      # `vitest` / `test:unit` reference in the other workflows belongs to
+      # autobot-frontend, a different app. Gated on the same changes filter as
+      # its sibling steps, and deliberately WITHOUT continue-on-error: a gate
+      # that cannot turn the check red is not a gate.
+      - name: Unit tests (vitest)
+        if: needs.changes.outputs.slm_frontend == 'true'
+        run: npm run test:unit

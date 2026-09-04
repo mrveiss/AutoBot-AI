@@ -259,7 +259,7 @@ async def import_agent_knowledge(
 ) -> KnowledgeImportResponse:
     """Persist a reviewer-curated strategy, sanitizing untrusted free-text first (GH#11151)."""
     from agents.task_pattern_learner import LearnedStrategy, TaskPatternLearner
-    from orchestration.orchestrator_prompts import _sanitize_injected
+    from autobot_shared.prompt_rules import sanitize_injected
 
     learner = _get_learner()
     task_type = TaskPatternLearner.normalize_task_type(payload.task_type or agent_id)
@@ -267,12 +267,12 @@ async def import_agent_knowledge(
         task_type=task_type,
         # Imported free-text is untrusted — neutralize it exactly like a learned
         # template before it can ever reach the planner prompt (#11060).
-        best_approach=_sanitize_injected(payload.best_approach, _IMPORT_TEXT_MAX),
-        best_prompt_template=_sanitize_injected(payload.best_prompt_template, _IMPORT_TEXT_MAX),
+        best_approach=sanitize_injected(payload.best_approach, _IMPORT_TEXT_MAX),
+        best_prompt_template=sanitize_injected(payload.best_prompt_template, _IMPORT_TEXT_MAX),
         avg_score=payload.avg_score,
         sample_size=payload.sample_size,
         confidence=payload.confidence,
-        failure_patterns=[_sanitize_injected(fp, _IMPORT_TEXT_MAX) for fp in payload.failure_patterns],
+        failure_patterns=[sanitize_injected(fp, _IMPORT_TEXT_MAX) for fp in payload.failure_patterns],
     )
     await learner.save_strategy(strategy, tenant_id=_caller_tenant(current_user))
     return KnowledgeImportResponse(

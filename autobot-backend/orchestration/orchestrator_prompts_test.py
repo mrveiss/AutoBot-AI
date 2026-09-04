@@ -7,8 +7,8 @@ poisoned) task outcomes, so it is untrusted. It must be substituted safely,
 sanitized, and data-framed before it enters the planning prompt.
 """
 
+from autobot_shared.prompt_rules import frame_untrusted_block
 from orchestration.orchestrator_prompts import (
-    _frame_untrusted_block,
     _render_learned_template_section,
     _render_similar_trajectories_section,
 )
@@ -16,7 +16,7 @@ from orchestration.orchestrator_prompts import (
 
 def test_frame_untrusted_block_shape():
     """The shared helper frames warnings + body between <<<BEGIN_{label}>>>/<<<END_{label}>>> (#11074)."""
-    out = _frame_untrusted_block("DEMO", ["warn one", "warn two"], ["line a", "line b"])
+    out = frame_untrusted_block("DEMO", ["warn one", "warn two"], ["line a", "line b"])
     assert out == (
         "\n        warn one"
         "\n        warn two"
