@@ -1,0 +1,99 @@
+# Code-quality required-context publisher
+#
+# `code-quality` is a REQUIRED status check on the integration branch. Exactly
+# one of two mutually exclusive jobs publishes it:
+#
+#   a filtered path changed   -> `code-quality` in code-quality.yml, the real
+#                                lint/guard audit. That is the real check and it
+#                                stays there; this workflow reports nothing then.
+#   no filtered path changed  -> `code-quality` below, which reports the context
+#                                green because the audit does not apply.
+#
+# WHY THIS EXISTS — code-quality.yml's own note says its job "self-skips
+# (reporting success) when no backend paths are touched". That is not true. A
+# job whose `if:` evaluates false is SKIPPED, and a skipped job publishes a check
+# run whose conclusion is `skipped`, not `success`. With the context required and
+# only that one run under the name, a pull request touching none of the filtered
+# paths sits blocked on a context nothing can turn green (#15608, the same class
+# as #15606 and found by the general catcher added for it).
+#
+# It had not fired yet only because the path set is unusually broad — `**/*.py`,
+# `docs/**`, `repo_tests/**` and twenty more — so most changes match something.
+# That width was standing in for a complement, and it is not universal: a pull
+# request touching only frontend TypeScript matches nothing in the set.
+#
+# WHY ITS OWN FILE — the same reason python-required-context.yml (#14353),
+# frontend-required-context.yml (#13405) and backend-required-context.yml
+# (#15606) are their own files. code-quality.yml declares a workflow-level
+# concurrency group with `cancel-in-progress` on pull requests. A shim living
+# inside it shares that group, so a superseded run takes the shim down with it
+# and the required context goes missing exactly when a rapid push sequence needs
+# it most.
+#
+# NO `concurrency:` BLOCK — DELIBERATE, for that same reason. This job finishes
+# in seconds on a GitHub-hosted runner, so there is nothing to save by cancelling
+# it and a great deal to lose. Registered in
+# `repo_tests/workflow_concurrency_guard_test.py`'s DELIBERATELY_EXEMPT.
+#
+# NO `pull_request.paths` FILTER — DELIBERATE. A required-context publisher that
+# filters its own trigger never starts on the pull requests it exists to rescue,
+# which is the deadlock it is here to prevent (#12934).
+#
+# THE FILTER IS SHARED, NOT COPIED — .github/filters/code-quality-paths.yml,
+# extracted from code-quality.yml's inline block by #15608 precisely so this
+# shim could exist without a second copy. The two `if:` conditions are exact
+# complements, and the failure direction is silent: a shim that thinks nothing
+# changed while code-quality.yml thinks otherwise would publish green for an
+# audit that never ran.
+
+name: code-quality-required-context
+
+on:
+  pull_request:
+    branches: [main, Dev_new_gui, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changed paths (code-quality required context)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: filter
+        with:
+          # #14054: dorny/paths-filter errors on an event it does not recognise
+          # unless `base` is given. Empty on pull_request, matching the sibling.
+          base: ${{ github.event.merge_group.base_sha || '' }}
+          # #15608: `backend` is defined in the canonical filter file.
+          filters: .github/filters/code-quality-paths.yml
+
+  code-quality:
+    # IDENTICAL to the job name in code-quality.yml on purpose: the required
+    # status context is the JOB name, so this reports the same context when the
+    # real gate legitimately does not run.
+    name: code-quality
+    needs: changes
+    # Exact complement of code-quality.yml's
+    # `github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true'`.
+    # `merge_group` is absent from this workflow's triggers, so the event half of
+    # that condition cannot be reached here and only the paths half is negated.
+    #
+    # Fail-closed: if `changes` errors, `needs` skips this job rather than
+    # reporting green, so a broken detector can never fake a pass. It leaves the
+    # context unreported, which blocks the pull request — the safe direction.
+    if: needs.changes.outputs.backend != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: No code-quality paths changed — reporting required context as success
+        run: |
+          echo "No path in the code-quality filter changed in this pull request."
+          echo "The lint and guard audit in code-quality.yml does not apply, so the"
+          echo "required 'code-quality' context is reported green from here."
+          echo "Path set: .github/filters/code-quality-paths.yml (#15608)."

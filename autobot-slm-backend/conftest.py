@@ -260,6 +260,13 @@ for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_M
 #                      exactly the regression the counterweight test exists
 #                      to catch. Needs ``ansible_utils`` (also real-loaded,
 #                      above) for ``_extract_failure_summary``.
+#   journal_fetch      #15620 — ``fetch_service_journal()`` is awaited by
+#                      ``api/services.py``, and a bare MagicMock is not
+#                      awaitable. It also exports ``JournalFetchTimeout``,
+#                      which that module names in an ``except`` clause — and
+#                      ``except <MagicMock>`` raises TypeError rather than
+#                      catching, so the stub would turn the very distinction
+#                      this module exists to draw back into a crash.
 #   process_divergence #15323 — ``compute_process_divergence()`` is awaited by
 #                      ``api/code_sync.py``; a bare MagicMock is not
 #                      awaitable, and this module's whole job is to never
@@ -281,6 +288,7 @@ _REAL_SERVICE_MODULES = (
     "ansible_utils",
     "provision_progress",
     "process_divergence",
+    "journal_fetch",
     # #15462: has a co-located test that imports it, so it must be real-loaded
     # here or it resolves to a MagicMock depending on shard order
     # (tests/test_real_service_modules_14307.py enforces this).

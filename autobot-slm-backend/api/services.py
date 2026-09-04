@@ -39,6 +39,7 @@ from models.schemas import (
 )
 from services.auth import get_current_user
 from services.database import get_db
+from services.journal_fetch import JournalFetchTimeout, build_journal_command, fetch_service_journal
 from services.service_categorizer import categorize_service
 
 logger = logging.getLogger(__name__)
@@ -187,58 +188,13 @@ async def _run_ansible_get_logs(
     """
     Fetch service logs via SSH and journalctl.
 
-    Returns (success, logs_or_error).
+    Wiring only: the ceiling, the three outcomes and the orphan cleanup live in
+    services/journal_fetch.py (#15620). The argv comes from the same helper
+    _run_ansible_service_action uses, rather than a second copy that can drift
+    from it.
     """
-    # Build journalctl command (sudo -n for non-interactive)
-    journal_cmd = f"sudo -n journalctl -u {service_name} -n {lines} --no-pager"
-    if since:
-        journal_cmd += f" --since='{since}'"
-
-    # Build SSH command
-    ssh_user = node.ssh_user or "autobot"
-    ssh_port = node.ssh_port or 22
-    ssh_key = config.path.ssh_key_path  # canonical inter-node key (#12429)
-
-    ssh_cmd = [
-        "/usr/bin/ssh",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        "-o",
-        "ConnectTimeout=10",
-        "-o",
-        "BatchMode=yes",
-        "-i",
-        ssh_key,
-        "-p",
-        str(ssh_port),
-        f"{ssh_user}@{node.ip_address}",
-        journal_cmd,
-    ]
-
-    try:
-        process = await asyncio.create_subprocess_exec(
-            *ssh_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=30.0,
-        )
-
-        if process.returncode == 0:
-            logs = stdout.decode("utf-8", errors="replace")
-            return True, logs
-        else:
-            error = stderr.decode("utf-8", errors="replace")
-            return False, f"Failed to fetch logs: {error[:200]}"
-
-    except asyncio.TimeoutError:
-        return False, "Timeout fetching logs"
-    except Exception as e:
-        logger.exception("Get logs error: %s", e)
-        return False, "Failed to fetch logs"
+    journal_cmd = build_journal_command(service_name, lines, since)
+    return await fetch_service_journal(_build_service_ssh_cmd(node, journal_cmd), service_name)
 
 
 def _build_scan_failure_response(node_id: str, message: str) -> ServiceScanResponse:
@@ -710,7 +666,15 @@ async def get_service_logs(
     """Get logs for a service on a node."""
     node = await _get_node_or_404(db, node_id)
 
-    success, logs = await _run_ansible_get_logs(node, service_name, lines, since)
+    try:
+        success, logs = await _run_ansible_get_logs(node, service_name, lines, since)
+    except JournalFetchTimeout as exc:
+        # 504, not 500 and not an empty 200: the distinction between "this node
+        # logged nothing" and "we stopped waiting" has to survive to the caller.
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=str(exc),
+        ) from exc
 
     if not success:
         raise HTTPException(
