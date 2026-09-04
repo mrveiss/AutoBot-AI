@@ -30,7 +30,7 @@ on embeddings one role writes and another reads. This is the ansible half of
 
 `test_every_cross_manifest_divergence_is_in_the_baseline` is ratcheted, because the
 measured backlog is 55 and asserting it flat would redden the tree rather than
-describe it. `ansible_requirements_parity_baseline.txt` records every one, grouped by
+describe it. `ansible_pip_parity_baseline.txt` records every one, grouped by
 the issue that owns it (#15596, #15597, #15598); the file only shrinks, and a stale
 entry fails just as loudly as a new divergence.
 
@@ -53,7 +53,15 @@ yaml = pytest.importorskip("yaml")
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 _CONSTRAINTS = _REPO_ROOT / "constraints" / "shared.txt"
-_BASELINE = pathlib.Path(__file__).with_name("ansible_requirements_parity_baseline.txt")
+# Named `..._pip_parity_...`, NOT `..._requirements_...`: this file RECORDS
+# divergences, it does not DECLARE dependencies. `declared_distributions.py`
+# globs `*requirements*.txt` to find manifests it must read as declaration
+# sources, and `declared_distributions_test.py` fails on any tracked file
+# matching that glob which the oracle does not read. A recorder that reads as
+# a manifest would have every package name in it counted as "declared here"
+# by three downstream guards (#15518). The distinction is the one #15566 is
+# about: a recorder holds a name as data, a manifest holds it as a claim.
+_BASELINE = pathlib.Path(__file__).with_name("ansible_pip_parity_baseline.txt")
 
 _EXCLUDE_DIRS = ("node_modules", ".worktrees", ".git", "__pycache__")
 _PIP_KEYS = ("pip", "ansible.builtin.pip")
