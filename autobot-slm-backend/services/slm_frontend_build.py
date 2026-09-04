@@ -28,12 +28,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-
-from autobot_shared.env_utils import env_int_clamped
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
+from autobot_shared.env_utils import env_int_clamped
 from services.deployed_dir_resolver import get_release_component_dir
 
 logger = logging.getLogger(__name__)
