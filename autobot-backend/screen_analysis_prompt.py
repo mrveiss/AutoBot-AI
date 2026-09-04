@@ -67,6 +67,7 @@ def _render_goal_block(analysis_goal: str) -> str:
 
     return frame_untrusted_block("ANALYSIS_GOAL", list(_GOAL_FRAME_WARNING), [body])
 
+
 def build_screen_analysis_prompts(analysis_goal: str) -> tuple[str, str]:
     """
     Build system message and rendered prompt for screen analysis.
