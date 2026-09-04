@@ -521,15 +521,31 @@
       when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
-    - name: "SLM | Rebuild SLM frontend with co-located API prefix (#3268)"
-      ansible.builtin.command:
-        cmd: npm run build
-        chdir: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
-      become_user: "{{ slm_user | default('autobot') }}"
-      environment:
-        VITE_API_URL: "/slm"
+    # #15557: this used to run a plain `npm run build` straight into the served
+    # dist/. Two defects in one task — `build:slm` is the canonical script (a
+    # plain build bakes the wrong API base, #9563/#9710/#10435), and vite empties
+    # the outDir first, so a failed build left nginx answering 403 for every
+    # /slm/ path with nothing failing the play. Both are fixed once, in
+    # roles/_shared/tasks/build_publish_slm_frontend.yml.
+    - name: "SLM | Rebuild and publish SLM frontend with co-located API prefix (#3268, #15557)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
+      vars:
+        slm_frontend_publish_label: "SLM"
+        slm_frontend_publish_dir: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
+        slm_frontend_publish_user: "{{ slm_user | default('autobot') }}"
       when: _is_slm_frontend_colocated | bool
-      changed_when: true
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    # #15557: fleet provisioning rebuilt the SLM tree and recorded nothing about
+    # which deployment produced it. This phase runs on the SLM manager host,
+    # which carries code_source, so the shared task resolves the commit there.
+    - name: "SLM | Record the deployed commit marker (#15557)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/record_slm_deployed_commit.yml
+      vars:
+        deployed_commit_label: "SLM"
+        deployed_commit_dir: "{{ slm_backend_dir | default('/opt/autobot/autobot-slm-backend') }}"
+        deployed_commit_owner: "{{ slm_user | default('autobot') }}"
+      when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
     # #9933: In co-located mode the SLM nginx config (autobot-slm) owns the

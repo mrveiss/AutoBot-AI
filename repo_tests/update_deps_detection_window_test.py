@@ -95,9 +95,9 @@ def test_dependency_diffs_are_based_on_the_deployed_commit() -> None:
     for index, line in enumerate(lines):
         if "diff --name-only" in line:
             base_line = lines[index + 1]
-            assert "deps_diff_base" in base_line, (
-                f"dependency diff at line {index + 1} does not use deps_diff_base: {base_line.strip()}"
-            )
+            assert (
+                "deps_diff_base" in base_line
+            ), f"dependency diff at line {index + 1} does not use deps_diff_base: {base_line.strip()}"
 
 
 def test_an_unknown_deployed_commit_installs_rather_than_skips() -> None:
@@ -119,8 +119,7 @@ def test_an_unknown_deployed_commit_installs_rather_than_skips() -> None:
         expression = str(facts.get(flag, ""))
         assert expression, f"{flag} is not set"
         assert "deps_diff_base" in expression and "length == 0" in expression, (
-            f"{flag} does not fall back to True when the deployed commit is unknown (#15430): "
-            f"{expression}"
+            f"{flag} does not fall back to True when the deployed commit is unknown (#15430): " f"{expression}"
         )
 
 
@@ -149,19 +148,46 @@ def test_an_already_drifted_install_is_detected_without_a_manifest_change() -> N
     )
 
 
+def _staged_publish_tasks() -> tuple[Path, list[dict]]:
+    """The task file this playbook delegates its frontend publish to (#15557).
+
+    The staged build used to be spelled out in update-all-nodes.yml, and three
+    other entry points carried an unstaged copy of the same step. #15557 moved
+    the logic into a shared task file and pointed all four at it, so this guard
+    follows the include rather than asserting on the playbook's own text — the
+    property is where the logic is, not where it used to be. The include target
+    is resolved from the playbook, so renaming the shared file fails here too.
+    """
+    included = [
+        task[key]
+        for task in _tasks()
+        for key in ("ansible.builtin.include_tasks", "include_tasks")
+        if isinstance(task.get(key), str) and "build_publish_slm_frontend" in task[key]
+    ]
+    assert len(included) == 1, (
+        "update-all-nodes.yml no longer delegates its SLM frontend build to exactly one shared "
+        f"task file (found {included!r}) — a build outside the shared staged publish can empty "
+        "the served dist/ (#15430, #15557)"
+    )
+    shared = (_PLAYBOOK.parent / included[0]).resolve()
+    assert shared.is_file(), f"the shared staged-publish task file is missing: {shared}"
+    document = yaml.safe_load(shared.read_text(encoding="utf-8"))
+    return shared, [task for task in document if isinstance(task, dict)]
+
+
 def test_a_failed_frontend_build_cannot_publish_an_empty_bundle() -> None:
     """The outage was a failed build leaving dist/ empty behind nginx."""
-    text = _text()
+    shared, tasks = _staged_publish_tasks()
 
-    assert "dist.staging" in text, (
+    assert "dist.staging" in shared.read_text(encoding="utf-8"), (
         "the frontend build still writes straight into the served directory (#15430) — "
         "a failed build empties it and every /slm/ path answers 403"
     )
 
-    names = [task["name"] for task in _tasks() if isinstance(task.get("name"), str)]
-    assert any("no index.html" in name for name in names), (
-        "nothing refuses to publish a bundle without an index.html"
+    names = [task["name"] for task in tasks if isinstance(task.get("name"), str)]
+    assert len(names) >= 5, (
+        f"the shared staged publish carries only {len(names)} named tasks — build, failure gate, "
+        "entrypoint check, refusal, rotate and publish are six steps, so the extraction collapsed"
     )
-    assert any("build failed" in name for name in names), (
-        "a failed build does not fail the play with its own stderr"
-    )
+    assert any("no index.html" in name for name in names), "nothing refuses to publish a bundle without an index.html"
+    assert any("build failed" in name for name in names), "a failed build does not fail the play with its own stderr"

@@ -93,6 +93,19 @@
           - "Cache dir   : {{ slm_cache_dir | default('/opt/autobot/cache') }}"
           - ""
 
+    # #15557: this playbook deploys from the SLM's cache to a node that has no
+    # code_source checkout of its own, so the commit the marker must record is
+    # resolved HERE — on the SLM that owns the cache — and handed to Play 2.
+    - name: "Resolve the commit the SLM cache was built from (#15557)"
+      ansible.builtin.command:
+        cmd: >-
+          git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}
+          -C {{ code_source_dir | default('/opt/autobot/code_source') }}
+          rev-parse HEAD
+      register: slm_cache_commit
+      changed_when: false
+      when: "'autobot-slm-backend' in resolved_role_names"
+
 # ---------------------------------------------------------------------------
 # Play 2 – Deploy cached roles to target node
 # ---------------------------------------------------------------------------
@@ -171,17 +184,36 @@
 
     # #10435: SLM UI is served under /slm; build:slm exports VITE_API_URL=/slm so
     # the API base is baked correctly (plain build leaves it unset → guard fails).
-    - name: "Rebuild autobot-slm-frontend production dist (#10435)"
-      ansible.builtin.command:
-        cmd: npm run build:slm
-        chdir: "{{ install_base }}/autobot-slm-frontend"
-      environment:
-        VITE_API_URL: "/slm"
-      register: slm_frontend_build
+    #
+    # #15557: this used to build straight into the served dist/ with no gate —
+    # vite empties the outDir first, so a failed build left nginx answering 403
+    # for every /slm/ path while this play carried on and marked the node
+    # UP_TO_DATE. The staged build-then-swap is defined once, in
+    # roles/_shared/tasks/build_publish_slm_frontend.yml.
+    - name: "Build and publish autobot-slm-frontend (staged, #10435, #15557)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
+      vars:
+        slm_frontend_publish_label: "Node update"
+        slm_frontend_publish_dir: "{{ install_base }}/autobot-slm-frontend"
+        slm_frontend_publish_user: autobot
       when: >
         'autobot-slm-frontend' in deploy_roles
         and (cache_stat.results | selectattr('item', 'equalto', 'autobot-slm-frontend') | map(attribute='stat.exists') | first | default(false))
-      changed_when: slm_frontend_build.rc == 0
+
+    # #15557: a cache-deployed node recorded nothing about which deployment put
+    # it in the state it is in — the absence that made the #15462 incident
+    # unattributable. The commit comes from Play 1 because the target node has
+    # no code_source of its own; the SLM that owns the cache does.
+    - name: "Record the deployed commit marker (#15557)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/record_slm_deployed_commit.yml
+      vars:
+        deployed_commit_label: "Node update"
+        deployed_commit_dir: "{{ install_base }}/autobot-slm-backend"
+        deployed_commit_owner: autobot
+        deployed_commit_value: "{{ hostvars['localhost']['slm_cache_commit'].stdout | default('') }}"
+      when: >
+        'autobot-slm-backend' in deploy_roles
+        and (cache_stat.results | selectattr('item', 'equalto', 'autobot-slm-backend') | map(attribute='stat.exists') | first | default(false))
 
     # ------------------------------------------------------------------
     # Service restart for each deployed role

@@ -1,0 +1,71 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The ONE way provisioning records which commit it installed (#15557).
+#
+# `_get_slm_deployed_commit()` (autobot-slm-backend/api/code_sync.py) reads this
+# marker to decide whether the self-update needs to fire, and an operator reads
+# it to find out which deployment produced the state a host is in. Its absence
+# on the live host is what made the #15462 incident unattributable: ten services
+# reported active, /slm/ answered 403, and nothing on the box said which run had
+# put it there.
+#
+# #15557: `playbooks/update-all-nodes.yml` and `roles/slm_manager/tasks/main.yml`
+# each spelled this out for themselves (and update-all-nodes needed a second
+# task afterwards to fix the ownership the shell redirect got wrong), while
+# `playbooks/update-node.yml` and `playbooks/provision-fleet-roles.yml` wrote no
+# marker at all. One definition, four callers.
+#
+# Contract:
+#   deployed_commit_label  (str) Display label for task names, e.g. "SLM".
+#   deployed_commit_dir    (str) Component directory the marker is written into
+#                                (the marker is always `<dir>/.deployed_commit`).
+#   deployed_commit_owner  (str) Account that must own the marker — the service
+#                                user, so a later unprivileged run can rewrite it.
+#   deployed_commit_value  (str, optional) Commit to record. Omit on a host that
+#                                carries code_source and it is resolved there;
+#                                pass it when the target has no checkout of its
+#                                own (update-node.yml deploys from the SLM's
+#                                cache to a node that has none).
+
+- name: "{{ deployed_commit_label }} | Marker: resolve the installed commit from code_source (#15557)"
+  ansible.builtin.command:
+    cmd: >-
+      git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}
+      -C {{ code_source_dir | default('/opt/autobot/code_source') }}
+      rev-parse HEAD
+  register: _deployed_commit_git
+  changed_when: false
+  when: deployed_commit_value | default('') | length == 0
+  tags: ['slm', 'deploy']
+
+- name: "{{ deployed_commit_label }} | Marker: settle on the commit to record (#15557)"
+  ansible.builtin.set_fact:
+    _deployed_commit_final: >-
+      {{ (deployed_commit_value | default('') | trim)
+         if (deployed_commit_value | default('') | trim | length > 0)
+         else (_deployed_commit_git.stdout | default('') | trim) }}
+  tags: ['slm', 'deploy']
+
+- name: "{{ deployed_commit_label }} | Marker: fail loudly when the commit cannot be identified (#15557)"
+  ansible.builtin.fail:
+    msg: >-
+      Cannot record {{ deployed_commit_dir }}/.deployed_commit — no commit was
+      passed in and code_source
+      ({{ code_source_dir | default('/opt/autobot/code_source') }}) yielded
+      none. Writing no marker is what made #15462 unattributable, so this
+      deployment stops rather than finishing anonymously.
+  when: _deployed_commit_final | length == 0
+  tags: ['slm', 'deploy']
+
+- name: "{{ deployed_commit_label }} | Marker: write .deployed_commit (#15557)"
+  ansible.builtin.copy:
+    content: "{{ _deployed_commit_final }}\n"
+    dest: "{{ deployed_commit_dir }}/.deployed_commit"
+    owner: "{{ deployed_commit_owner }}"
+    group: "{{ deployed_commit_owner }}"
+    mode: "0644"
+  become: true
+  tags: ['slm', 'deploy']
