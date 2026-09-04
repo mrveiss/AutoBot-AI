@@ -15,6 +15,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
+
 @dataclass(frozen=True)
 class EnvVarSpec:
     """Specification for a single AUTOBOT_* environment variable."""
@@ -28,11 +29,14 @@ class EnvVarSpec:
     deprecated_since: str | None = None
     replaces: list = field(default_factory=list)
 
+
 REGISTRY: dict[str, EnvVarSpec] = {}
+
 
 def register_env_var(spec: EnvVarSpec) -> None:
     """Add a spec to the global registry."""
     REGISTRY[spec.name] = spec
+
 
 def env(name: str, default: Any = None) -> Any:
     """Type-safe env var accessor that enforces registry membership.
@@ -52,6 +56,7 @@ def env(name: str, default: Any = None) -> Any:
         return spec.type(raw)
     except (ValueError, TypeError):
         return spec.default if default is None else default
+
 
 # ---------------------------------------------------------------------------
 # Registered variables — grouped by component
@@ -1250,4 +1255,3 @@ register_env_var(
         component="backend",
     )
 )
-
