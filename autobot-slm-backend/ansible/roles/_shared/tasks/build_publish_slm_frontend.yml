@@ -244,6 +244,10 @@
   ansible.builtin.shell:
     executable: /bin/bash
     cmd: |
+      # No `pipefail`: the pipeline below cannot fail meaningfully (find reads
+      # the directory the build just wrote), while `rm` failing still aborts
+      # under `set -e`. A cleanup hiccup must not fail a deploy that has
+      # already published.
       set -eu
       cd "{{ slm_frontend_publish_dir }}"
       keep_current=$(readlink current || true)
