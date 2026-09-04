@@ -22,6 +22,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from constants.threshold_constants import TimingConstants
+from knowledge.vector_membership import vectorized_ids
 
 # Redis set holding fact ids that still need (re)vectorization (#11296). The
 # reconciler reads only this set on the hot loop instead of SCANning every
@@ -102,27 +103,39 @@ class BackgroundVectorizer:
             return value.decode("utf-8")
         return str(value) if value else default
 
-    async def _get_vectorization_status(self, kb, batch: list) -> list:
-        """Get vectorization status for a batch (Issue #336 - extracted helper)."""
-        async with kb.redis().pipeline() as pipe:
-            for fact_key in batch:
-                await pipe.hget(fact_key, "vectorization_status")
-            return await pipe.execute()
+    async def _get_vectorization_status(self, kb, batch: list) -> list | None:
+        """Which facts in *batch* ChromaDB actually holds a vector for (#15663).
 
-    def _filter_pending_facts(self, batch: list, all_status: list) -> tuple:
-        """Filter out completed facts (Issue #336 - extracted helper).
+        Issue #336 extracted this helper; it read ``vectorization_status`` off the
+        Redis hash, which is a claim about ChromaDB written beside the fact. The
+        reconciler exists to repair drift between those two stores, so trusting
+        that flag defeated it exactly when it was needed: a fact whose vector was
+        lost but whose stamp survived read as ``completed`` and was skipped
+        forever. That is the #12733 symptom in the one component meant to fix it.
+
+        Returns the vectorized ids, or ``None`` when the vector store cannot be
+        reached — a "don't know", not "none of them".
+        """
+        return await vectorized_ids(kb, [self._fact_id(key) for key in batch])
+
+    def _filter_pending_facts(self, batch: list, vectorized: set | None) -> tuple:
+        """Split *batch* into what needs embedding and what ChromaDB already has.
 
         Returns (facts_to_process, skipped_count, completed_keys). completed_keys
         lets the reconciler SREM already-embedded facts from the pending set (#11296).
+
+        #15663: an unreachable vector store (``vectorized is None``) processes the
+        whole batch. Re-embedding a fact that turns out to have a vector costs an
+        embedding; skipping one that has none loses it from search indefinitely.
         """
+        if vectorized is None:
+            return list(batch), 0, []
         facts_to_process = []
         completed_keys = []
-        for fact_key, status_bytes in zip(batch, all_status):
-            if status_bytes:
-                status = self._decode_bytes(status_bytes)
-                if status == "completed":
-                    completed_keys.append(fact_key)
-                    continue
+        for fact_key in batch:
+            if self._fact_id(fact_key) in vectorized:
+                completed_keys.append(fact_key)
+                continue
             facts_to_process.append(fact_key)
         return facts_to_process, len(completed_keys), completed_keys
 
@@ -230,8 +243,8 @@ class BackgroundVectorizer:
         batch_start_time = time.time()
         stats = {"success": 0, "skipped": 0, "failed": 0, "tokens": 0}
 
-        all_status = await self._get_vectorization_status(kb, batch)
-        facts_to_process, already_skipped, completed_keys = self._filter_pending_facts(batch, all_status)
+        vectorized = await self._get_vectorization_status(kb, batch)
+        facts_to_process, already_skipped, completed_keys = self._filter_pending_facts(batch, vectorized)
         stats["skipped"] += already_skipped
 
         # Pending-set maintenance (#11296): mark still-pending facts, drop the

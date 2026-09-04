@@ -219,7 +219,10 @@ class TestStoreFact:
             ),
             patch("autobot_shared.ssot_config.config", self._make_config_mock()),
             patch.object(FactsMixin, "_vectorize_fact_in_chromadb", new=AsyncMock()),
-            patch.object(FactsMixin, "_store_fact_in_redis", new=AsyncMock()),
+            patch.object(FactsMixin, "_project_fact_to_redis", new=AsyncMock()),
+            # #15663: the durable row is written before the projections, and
+            # these tests exercise deduplication rather than persistence.
+            patch("knowledge.fact_store.persist_fact", new=AsyncMock()),
         ):
             result = await kb.store_fact("Completely different content", metadata={"category": "test"})
 
@@ -284,7 +287,10 @@ class TestStoreFact:
             ),
             patch("autobot_shared.ssot_config.config", self._make_config_mock()),
             patch.object(FactsMixin, "_vectorize_fact_in_chromadb", new=AsyncMock()),
-            patch.object(FactsMixin, "_store_fact_in_redis", new=AsyncMock()),
+            patch.object(FactsMixin, "_project_fact_to_redis", new=AsyncMock()),
+            # #15663: the durable row is written before the projections, and
+            # these tests exercise deduplication rather than persistence.
+            patch("knowledge.fact_store.persist_fact", new=AsyncMock()),
         ):
             result = await kb.store_fact("Brand new fact", metadata={})
 

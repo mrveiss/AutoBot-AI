@@ -27,6 +27,7 @@ from knowledge.backends import get_async_default_client
 from knowledge.pipeline.base import PipelineContext
 from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCognifier
 from knowledge.pipeline.models.chunk import ProcessedChunk
+from knowledge.vector_membership import vectorized_ids
 from knowledge.schemas.vectorization import (
     BackgroundVectorizationResponse,
     BatchVectorizeRequest,
@@ -59,31 +60,12 @@ router = APIRouter(tags=["knowledge_vectorization"])
 async def _vectorized_ids_from_vector_store(kb_instance, fact_ids: List[str]) -> set | None:
     """Ask ChromaDB which of *fact_ids* actually have a vector (#12733).
 
-    Vectorization status used to be read from a Redis key
-    (``llama_index/vector_{id}``), i.e. a flag written beside the fact rather
-    than the vector store's own membership. Any Redis/ChromaDB drift therefore
-    made the indicator wrong — and when facts were lost while their 22 vectors
-    survived, the browser reported everything unvectorized on every reload.
-
-    Returns ``None`` (not an empty set) when the vector store cannot be reached,
-    so the caller can fall back rather than report all facts unvectorized — a
-    false "nothing is vectorized" is worse than a stale flag.
+    #15663: the implementation moved to ``knowledge.vector_membership`` so the
+    background reconciler answers this question the same way this endpoint does.
+    Two components deciding "is it vectorized" by different means is how the
+    indicator and the repair loop drifted apart in the first place.
     """
-    try:
-        from knowledge.backends import get_default_client
-
-        client = await asyncio.to_thread(
-            get_default_client,
-            db_path=str(kb_instance.chromadb_path),
-            allow_reset=False,
-            anonymized_telemetry=False,
-        )
-        collection = await asyncio.to_thread(client.get_collection, kb_instance.chromadb_collection)
-        found = await asyncio.to_thread(collection.get, ids=list(fact_ids), include=[])
-        return set(found.get("ids") or [])
-    except Exception as exc:  # noqa: BLE001 - status must degrade, never fail the request
-        logger.warning("Vector-store membership check unavailable, falling back to Redis flags: %s", exc)
-        return None
+    return await vectorized_ids(kb_instance, fact_ids)
 
 
 async def _execute_pipeline_exists_check(kb_instance, vector_keys: List[str]) -> list:

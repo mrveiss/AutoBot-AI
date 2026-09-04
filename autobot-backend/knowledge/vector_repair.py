@@ -7,9 +7,13 @@
 ``BackgroundVectorizer._extract_fact_content`` read the fact hash with **bytes**
 keys against a ``decode_responses=True`` client, so every fact the reconciler
 touched was inserted as ``Document(text="")`` and then stamped
-``vectorization_status=completed`` (#13274). The status stamp makes the row
-invisible to the fixed reconciler — ``_filter_pending_facts`` skips
-``completed`` — so the code fix cannot reach the existing damage.
+``vectorization_status=completed`` (#13274). The damage is invisible to the
+fixed reconciler either way: it used to be hidden by the ``completed`` stamp,
+and since #15663 ``_filter_pending_facts`` skips on the vector store's own
+membership instead — which a poisoned row satisfies, because an empty document
+is still a document. Deriving status from ChromaDB closes the *drift* class of
+bug; a row that is present but wrong is this module's job, so the code fix still
+cannot reach the existing damage.
 
 Three properties of the write path, verified against the pinned
 ``chromadb``/``llama-index`` versions, shape this module:
