@@ -507,7 +507,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/user_management/services/sso_service.py": 778,
     "autobot-slm-backend/user_management/services/user_service.py": 863,
     "autobot_shared/auth/permissions.py": 631,
-    "autobot_shared/env_registry.py": 1270,
+    "autobot_shared/env_registry.py": 1257,
     "autobot_shared/monitoring/prometheus_metrics.py": 954,
     "autobot_shared/network_constants.py": 616,
     "autobot_shared/npu/integration.py": 929,
