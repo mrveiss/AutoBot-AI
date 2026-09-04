@@ -186,10 +186,13 @@ EXCLUDED_DIR_NAMES = {"__pycache__", "tests", "test", ".pytest_cache", "node_mod
 #: Substring marking archived/vendored copies that are not live code.
 EXCLUDED_DIR_SUBSTRING = "archive"
 
-#: Files exempt from the ceiling. ``autobot_shared/http_client.py`` is the
-#: pooled client itself — constructing the shared session is precisely its job.
-#: Matched on the trailing path so a vendored/synced copy is exempt too.
-EXEMPT_SUFFIXES = (pathlib.Path("autobot_shared") / "http_client.py",)
+#: Files exempt from the ceiling. ``autobot_shared/http_client_manager.py`` is
+#: the pooled client itself — constructing the shared session is precisely its
+#: job. Matched on the trailing path so a vendored/synced copy is exempt too.
+#: #15641 moved the construction there out of ``http_client.py``, which now
+#: holds only the process-wide singleton and constructs no session at all; the
+#: exemption follows the ``ClientSession(...)`` call, not the module name.
+EXEMPT_SUFFIXES = (pathlib.Path("autobot_shared") / "http_client_manager.py",)
 
 
 def _directory_parts(path: pathlib.Path) -> tuple[str, ...]:

@@ -85,13 +85,13 @@ ANNOTATED_AS_LIVE = _BASELINE_MODULE.ANNOTATED_AS_LIVE
 # an entry; never raise it to let a new one in without that being the point
 # of the diff.
 #
-# 512 is the population the walk measured on the merge that lands this change,
-# not a number chosen to fit: the repo recorded three ceilings before it, and
-# the other 509 files were over MAX_LINES with nothing recording them at all.
-# The count starts at whatever the walk finds the day it is switched on, and
-# only falls after, because from then an unlisted oversized file fails the
-# audit instead of joining the list.
-MAX_KNOWN_LARGE_ENTRIES = 512
+# 512 was the population the walk measured when this landed, and entries then
+# left without the number following them down: at 499 against 512 the slack
+# was room for thirteen silent additions, which is the slack this guard exists
+# to deny. #15641/#15642 re-pinned it to the measured population. It starts at
+# whatever the walk finds and only falls after, because an unlisted oversized
+# file now fails the audit instead of joining the list.
+MAX_KNOWN_LARGE_ENTRIES = 497
 
 
 # Floor for the tracked-Python enumeration (4958 files at the time of writing).
