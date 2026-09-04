@@ -110,8 +110,13 @@ from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Set,
 # this shipped-tree module out of every image, because the transport it imports
 # is excluded from the build context (#14127).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline-scripts"))
+# The repository root too, for `autobot_shared.paths` -- the same one-line
+# bootstrap `check_script_exec_bits.py` uses to reach it from `scripts/`.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ci_dispatch_watchdog import GitHubApi  # noqa: E402
+
+from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082): this runs as a bare CLI, where
 # autobot_shared.logging_manager would pull in config a script does not have.
@@ -464,6 +469,12 @@ def index_from_checkout(repo_root: Path) -> TreeIndex:
         text=True,
         encoding="utf-8",
         check=False,
+        # An inherited GIT_DIR outranks `cwd=`, so without this the call
+        # enumerates whatever checkout the environment points at and answers
+        # confidently about the wrong tree -- no error, just a different repo.
+        # Same defect class as #15176, and `check_git_toplevel_env_scrubbed`
+        # is the guard that catches it.
+        env=scrubbed_git_env(),
     )
     if listed.returncode != 0 or not listed.stdout.strip():
         raise ReachError(f"FIX THE SWEEP: git ls-files listed nothing in {repo_root}")
