@@ -18,7 +18,7 @@ no longer holds a replacement field, is what the defect itself would pass.
 
 import json
 from types import SimpleNamespace
-from typing import Any, Dict, List
+from typing import Any, List
 
 from modern_ai_integration import (
     _GOAL_FALLBACK,
@@ -88,7 +88,7 @@ async def test_the_response_schema_reaches_the_model_as_single_braces() -> None:
     assert '"summary":' in prompt
     assert "{{" not in prompt
     assert "}}" not in prompt
-    schema = prompt[prompt.index('{\n') :] if '{\n' in prompt else prompt
+    schema = prompt[prompt.index("{\n") :] if "{\n" in prompt else prompt
     assert schema.count("{") == schema.count("}")
 
 

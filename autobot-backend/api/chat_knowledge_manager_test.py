@@ -53,9 +53,7 @@ def _manager(messages: List[Dict[str, Any]]) -> tuple[ChatKnowledgeManager, _Rec
     manager = object.__new__(ChatKnowledgeManager)
     llm = _RecordingLLM()
     manager.llm_interface = llm
-    manager.chat_history_manager = SimpleNamespace(
-        get_chat_history=lambda _chat_id: {"messages": messages}
-    )
+    manager.chat_history_manager = SimpleNamespace(get_chat_history=lambda _chat_id: {"messages": messages})
     manager.chat_contexts = {}
     manager.file_associations = {}
     manager.knowledge_base = _StubKnowledgeBase()
