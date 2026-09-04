@@ -82,6 +82,14 @@ NOT_CONSUMERS: dict[str, str] = {
         "shared tree they must nonetheless watch (#14885) is asserted by "
         "SHARED_TREE_WATCHERS below instead."
     ),
+    "backend-required-context.yml": (
+        "the complement shim publishing the required 'startup-import-smoke' "
+        "context (#15606). It reads the canonical file through its `changes` job "
+        "but declares NO `paths:` of its own, deliberately: a required-context "
+        "publisher that filters its trigger never starts on the pull requests it "
+        "is meant to rescue, which is the deadlock it exists to prevent. There "
+        "is no inline list here to keep in step with the canonical set."
+    ),
 }
 
 # The shared-Python prefix, derived from the canonical set rather than retyped.

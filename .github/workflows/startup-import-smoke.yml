@@ -31,13 +31,21 @@ on:
       - '**/requirements*.txt'
       - 'requirements-ci/**'
       - '.github/workflows/startup-import-smoke.yml'
+      - '.github/workflows/backend-required-context.yml'
   # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
   # required-check context ("startup-import-smoke") always reports a conclusion.
   # A path-filtered required check that never triggers leaves the PR deadlocked
   # on "Expected — Waiting for status". The real work is gated on the `changes`
-  # job below and self-skips (reporting success) when no backend paths are
-  # touched. Branch-protection promotion to required is the separate
-  # owner-confirmed follow-up (#10022).
+  # job below.
+  #
+  # That gating job SKIPS when no backend paths are touched — it does NOT report
+  # success, which is what this comment used to claim. A skipped job publishes a
+  # check run whose conclusion is `skipped`, and branch protection does not accept
+  # that for a required context, so a pull request touching no backend Python sat
+  # blocked on a context nothing could turn green. The green in that case comes
+  # from the complement shim in backend-required-context.yml, exactly as
+  # python-required-context.yml serves `python-suite` (#14353).
+  # Branch-protection promotion to required happened separately (#10022).
   pull_request:
     branches: [main, Dev_new_gui, develop]
 

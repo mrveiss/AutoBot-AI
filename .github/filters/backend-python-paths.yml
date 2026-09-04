@@ -83,6 +83,9 @@ backend:
   - '**/requirements*.txt'
   - 'requirements-ci/**'
   - '.github/workflows/startup-import-smoke.yml'
+  # The complement shim publishing the same required context. Editing it must
+  # run the REAL gate, not the shim reporting green on its own change.
+  - '.github/workflows/backend-required-context.yml'
 
 # .github/workflows/api-wiring.yml — job `changes`, output `wiring`.
 #
