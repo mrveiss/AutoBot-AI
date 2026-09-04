@@ -59,6 +59,19 @@ class _ConfigManagerFallback:
     def get(key, default=None):  # noqa: ANN001, ANN205
         return default
 
+    @staticmethod
+    def get_nested(path, default=None):  # noqa: ANN001, ANN205
+        """Dotted-path reads fall back too (#15575).
+
+        Every read in this module moved from ``get`` to ``get_nested`` because
+        the real ConfigManager's ``get`` is a FLAT lookup and silently missed
+        every dotted key. This stub must grow the same accessor or the backends
+        that rely on it -- autobot-slm-backend among them -- raise AttributeError
+        at import, which is precisely the "logging must not crash the app"
+        failure #11283 added this class to prevent.
+        """
+        return default
+
 
 class LoggingManager:
     """
