@@ -563,6 +563,7 @@ To add a new variable:
 | `AUTOBOT_SKILL_DISTILLATION_MAX_FAILURES` | backend | int | `3` | Consecutive failures on the SAME conversation before the distillation pass stops waiting for it and moves on. Below this the pass halts and retries next run, so a transient fault costs nothing; at it, the conversation is quarantined with a warning and the cursor advances, so one unreadable conversation cannot starve every newer one behind it in an oldest-first queue (#14255). A success resets the count. |
 | `AUTOBOT_SKILL_DISTILLATION_MAX_SESSIONS` | backend | int | `10` | Conversations distilled per pass. Bounds the LLM spend of any one run; the remainder is picked up next time because the cursor only advances over what was handled. |
 | `AUTOBOT_SKILL_DISTILLATION_MIN_MESSAGES` | backend | int | `4` | Minimum messages a conversation needs before distillation attempts it. Shorter ones cannot contain a reusable workflow and the extractor rejects them anyway. |
+| `AUTOBOT_SLM_JOURNAL_SSH_TIMEOUT_SECONDS` | slm | float | `30.0` | Wall-clock ceiling on the journalctl-over-SSH fetch behind GET /nodes/{node_id}/services/{service_name}/logs (api/services.py, #15620). Fetching journal entries from a node under load is slower than restarting a unit on it, and the request is operator-facing, so the cost runs both ways: raise it and an API worker stays occupied that much longer per unresponsive node, which a fleet-wide log sweep multiplies; lower it and a busy node answers HTTP 504 instead of returning its logs, and the operator has to retry asking for fewer lines. Tune it to the slowest link in the fleet, not to the fastest. Range: 5.0–600.0. |
 | `AUTOBOT_SNAPSHOT_STORAGE_PATH` | execution | str | `""` | Directory holding execution snapshots. Empty means 'derive it' — the default is `<project root>/snapshots`, so it follows the install location rather than being pinned to one path. |
 | `AUTOBOT_SNAPSHOT_TTL_DAYS` | execution | int | `7` | Age at which the cleanup task removes an execution snapshot. Snapshots are a debugging aid, so the default is deliberately short. |
 | `AUTOBOT_STT_NO_SPEECH_PROB_THRESHOLD` | voice | float | `0.8` | Decoder no-speech probability at or above which an STT transcript is discarded as a silence hallucination (#13104). Range: 0.0–1.0. |
@@ -588,5 +589,5 @@ To add a new variable:
 | `AUTOBOT_USERS_DATABASE_URL` | postgres | str | *(none)* | Full SQLAlchemy connection URL for the users database. Overrides AUTOBOT_POSTGRES_* individual vars when set. |
 | `AUTOBOT_VOICE_TOOLSETS` | voice | str | `'voice_safe'` | Comma-separated toolset bundles a voice session may call. Defaults to the restricted `voice_safe` bundle — voice input is harder to confirm than typed input, so the surface is narrowed by default. |
 
-*150 variables registered as of last generation.*
+*151 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->

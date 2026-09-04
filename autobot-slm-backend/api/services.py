@@ -10,6 +10,7 @@ Related to Issue #728.
 """
 
 import asyncio
+import contextlib
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Tuple
@@ -20,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api.websocket import ws_manager
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.ssot_config import config
 from models.database import Node, Service, ServiceConflict, ServiceStatus
 from models.schemas import (
@@ -43,6 +45,23 @@ from services.service_categorizer import categorize_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["services"])
+
+# Module-level constant backed by an env var, never a literal (CLAUDE.md).
+# Registered in autobot_shared/env_registry_slm.py, which records what raising
+# or lowering it costs (#15620).
+_JOURNAL_SSH_TIMEOUT_SECONDS = env_float_clamped("AUTOBOT_SLM_JOURNAL_SSH_TIMEOUT_SECONDS", 30.0, 5.0, 600.0)
+
+
+class JournalFetchTimeout(RuntimeError):
+    """The journal fetch was cut short by its own ceiling (#15620).
+
+    A distinct type, not a `(False, "...")` tuple, because the string slot of
+    that tuple is the same slot the logs themselves travel in: a fetch that
+    timed out and a unit that genuinely logged nothing both reached the caller
+    as "no text to show", and an operator reads the second explanation for the
+    first. Raising instead forces the route to answer differently -- 504, with
+    the ceiling named -- so "incomplete" can never render as "empty".
+    """
 
 
 async def _get_node_or_404(db: AsyncSession, node_id: str) -> Node:
@@ -187,33 +206,18 @@ async def _run_ansible_get_logs(
     """
     Fetch service logs via SSH and journalctl.
 
-    Returns (success, logs_or_error).
+    Returns (success, logs_or_error). Raises JournalFetchTimeout when the fetch
+    ran out of time -- never a bare empty-looking success, which is what a unit
+    with no journal entries legitimately returns (#15620).
     """
     # Build journalctl command (sudo -n for non-interactive)
     journal_cmd = f"sudo -n journalctl -u {service_name} -n {lines} --no-pager"
     if since:
         journal_cmd += f" --since='{since}'"
 
-    # Build SSH command
-    ssh_user = node.ssh_user or "autobot"
-    ssh_port = node.ssh_port or 22
-    ssh_key = config.path.ssh_key_path  # canonical inter-node key (#12429)
-
-    ssh_cmd = [
-        "/usr/bin/ssh",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        "-o",
-        "ConnectTimeout=10",
-        "-o",
-        "BatchMode=yes",
-        "-i",
-        ssh_key,
-        "-p",
-        str(ssh_port),
-        f"{ssh_user}@{node.ip_address}",
-        journal_cmd,
-    ]
+    # Same argv _run_ansible_service_action builds, so it comes from the one
+    # helper rather than a second copy that can drift from it (#15620).
+    ssh_cmd = _build_service_ssh_cmd(node, journal_cmd)
 
     try:
         process = await asyncio.create_subprocess_exec(
@@ -224,7 +228,7 @@ async def _run_ansible_get_logs(
 
         stdout, stderr = await asyncio.wait_for(
             process.communicate(),
-            timeout=30.0,
+            timeout=_JOURNAL_SSH_TIMEOUT_SECONDS,
         )
 
         if process.returncode == 0:
@@ -234,8 +238,18 @@ async def _run_ansible_get_logs(
             error = stderr.decode("utf-8", errors="replace")
             return False, f"Failed to fetch logs: {error[:200]}"
 
-    except asyncio.TimeoutError:
-        return False, "Timeout fetching logs"
+    except asyncio.TimeoutError as exc:
+        # wait_for cancels communicate() but leaves the ssh child running, so a
+        # slow node would accumulate one orphan per attempt. ProcessLookupError
+        # means it exited between the cancellation and here -- the outcome kill
+        # was asking for, not an error to report.
+        with contextlib.suppress(ProcessLookupError):
+            process.kill()
+        raise JournalFetchTimeout(
+            f"Journal fetch for '{service_name}' did not complete within "
+            f"{_JOURNAL_SSH_TIMEOUT_SECONDS:g}s. Any logs it had read are incomplete, "
+            "not absent -- raise AUTOBOT_SLM_JOURNAL_SSH_TIMEOUT_SECONDS or ask for fewer lines."
+        ) from exc
     except Exception as e:
         logger.exception("Get logs error: %s", e)
         return False, "Failed to fetch logs"
@@ -710,7 +724,15 @@ async def get_service_logs(
     """Get logs for a service on a node."""
     node = await _get_node_or_404(db, node_id)
 
-    success, logs = await _run_ansible_get_logs(node, service_name, lines, since)
+    try:
+        success, logs = await _run_ansible_get_logs(node, service_name, lines, since)
+    except JournalFetchTimeout as exc:
+        # 504, not 500 and not an empty 200: the distinction between "this node
+        # logged nothing" and "we stopped waiting" has to survive to the caller.
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=str(exc),
+        ) from exc
 
     if not success:
         raise HTTPException(
