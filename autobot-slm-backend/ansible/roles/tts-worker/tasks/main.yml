@@ -183,13 +183,22 @@
   timeout: 120  # Issue #2835: prevent indefinite hang on network issues
   tags: ['tts', 'venv']
 
+# #15598: every floor here is now the specifier text `autobot-tts-worker/
+# requirements.txt` declares. This role provisions the very worker whose
+# manifest annotates `fastapi>=0.141.1` as a SECURITY UPDATE requiring starlette
+# >=0.52.1, and it asked for `>=0.100.0` -- so a fresh provision satisfied the
+# task below the floor the security note exists to hold, and the role never
+# installs that manifest to correct it afterwards. `-r` is not used because the
+# worker's packages are split across three pip tasks by index (torch comes from
+# the CPU-only wheel index below); the parity guard (#15568) binds the literals
+# to the manifest instead.
 - name: "TTS Worker | Install FastAPI and server dependencies"
   ansible.builtin.pip:
     name:
-      - fastapi>=0.100.0
-      - uvicorn[standard]>=0.20.0
-      - python-multipart>=0.0.6
-      - aiofiles>=23.0.0
+      - fastapi>=0.141.1
+      - uvicorn[standard]>=0.52.4
+      - python-multipart>=0.0.32
+      - aiofiles>=25.1.0
     virtualenv: "{{ tts_install_dir }}/venv"
     state: present
   become_user: "{{ tts_user }}"
@@ -198,10 +207,14 @@
   timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
   tags: ['tts', 'packages']
 
-- name: "TTS Worker | Install torch CPU-only (Pocket TTS requires >=2.5)"
+# #15598: floor raised from `>=2.5.0` to the `>=2.13.0` that
+# `autobot-tts-worker/requirements.txt` declares. Pocket TTS needs >=2.5, but
+# the worker ships against 2.13 and this task is what actually populates its
+# venv, so the lower number was the one that bound.
+- name: "TTS Worker | Install torch CPU-only from the CPU wheel index"
   ansible.builtin.pip:
     name:
-      - "torch>=2.5.0"
+      - "torch>=2.13.0"
     virtualenv: "{{ tts_install_dir }}/venv"
     state: present
     extra_args: "--index-url https://download.pytorch.org/whl/cpu --timeout 300"
@@ -221,7 +234,9 @@
       # the worker's streaming code path, rather than an unbounded
       # latest-wins resolve.
       - pocket-tts>=2.0.0
-      - soundfile>=0.12.0
+      # #15598: `>=0.14.0` is the floor `autobot-tts-worker/requirements.txt`
+      # declares for this worker; `>=0.12.0` here undercut it by two minors.
+      - soundfile>=0.14.0
       # #15568: numpy carries no floor here -- constraints/shared.txt is the
       # single source of truth for it (#10524), and `autobot-tts-worker/
       # requirements.txt` already lists it bare against that constraint. The
