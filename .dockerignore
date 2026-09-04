@@ -46,6 +46,9 @@ scripts/backfill_relationships.py
 # Same reasoning, same fix: reuses the identical GitHubApi transport and has no
 # runtime role either (#15440).
 scripts/umbrella_label_drift.py
+# Same reasoning again: reads live issue bodies through the identical
+# GitHubApi transport, reports only, and has no runtime role (#15566).
+scripts/scope_box_artefact_drift.py
 
 # Documentation (not needed in containers)
 docs
