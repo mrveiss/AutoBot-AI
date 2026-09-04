@@ -267,4 +267,3 @@ class TestFireAndForgetThreadsafe:
 
         assert ran == []
         assert "probe-no-loop" in "\n".join(record.getMessage() for record in caplog.records)
-

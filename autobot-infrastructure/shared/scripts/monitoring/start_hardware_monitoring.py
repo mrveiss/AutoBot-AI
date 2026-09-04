@@ -44,9 +44,9 @@ from utils.hardware_metrics import (
     collect_phase9_metrics,
     get_phase9_performance_dashboard,
     hardware_monitor,
-    start_hardware_monitoring as start_phase9_monitoring,
-    stop_hardware_monitoring as stop_phase9_monitoring,
 )
+from utils.hardware_metrics import start_hardware_monitoring as start_phase9_monitoring
+from utils.hardware_metrics import stop_hardware_monitoring as stop_phase9_monitoring
 
 # Configure logging
 logging.basicConfig(

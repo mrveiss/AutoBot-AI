@@ -89,8 +89,7 @@ class TestDocumentationWatcher:
         assert raised == [], f"the observer thread raised instead of scheduling: {raised!r}"
 
         assert await _drain(lambda: bool(service._pending_changes)), (
-            "the file change never reached the queue — the coroutine was not scheduled from "
-            "the observer thread"
+            "the file change never reached the queue — the coroutine was not scheduled from " "the observer thread"
         )
         assert service._pending_changes == {Path("/docs/guide.md"): "modified"}
 
@@ -121,8 +120,7 @@ class TestKBFolderWatcher:
         assert raised == [], f"the observer thread raised instead of scheduling: {raised!r}"
 
         assert await _drain(lambda: bool(service._pending_changes)), (
-            "the file change never reached the queue — the coroutine was not scheduled from "
-            "the observer thread"
+            "the file change never reached the queue — the coroutine was not scheduled from " "the observer thread"
         )
         assert service._pending_changes["f1"] == [(Path("/kb/report.md"), "created")]
 
@@ -134,9 +132,9 @@ class TestKBFolderWatcher:
 
         _raise_on_observer_thread(handler.on_created, _Event("/kb/report.md"))
 
-        assert handler._last_event_time == {}, (
-            "the debounce timestamp was recorded for an event that was never scheduled"
-        )
+        assert (
+            handler._last_event_time == {}
+        ), "the debounce timestamp was recorded for an event that was never scheduled"
         assert service._pending_changes == {}
 
 
@@ -168,9 +166,9 @@ class TestHotReloadManager:
 
         _raise_on_observer_thread(handler.on_modified, _Event("/backend/api/agent.py"))
 
-        assert handler.last_reload_time == {}, (
-            "the debounce timestamp was recorded for an event that was never scheduled"
-        )
+        assert (
+            handler.last_reload_time == {}
+        ), "the debounce timestamp was recorded for an event that was never scheduled"
 
 
 async def _noop_batch_pass(*_args: Any, **_kwargs: Any) -> None:

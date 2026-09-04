@@ -395,9 +395,7 @@ class KBFolderWatcherService:
         except Exception as e:
             logger.error("Error stopping watch folder %s: %s", folder_id, e)
 
-    def dispatch_change(
-        self, folder_id: str, file_path: Path, change_type: str
-    ) -> concurrent.futures.Future | None:
+    def dispatch_change(self, folder_id: str, file_path: Path, change_type: str) -> concurrent.futures.Future | None:
         """Hand a file event from an Observer thread to this service's loop.
 
         Returns the retained future, or ``None`` when nothing was scheduled --
