@@ -73,9 +73,9 @@ def env(name: str, default: Any = None) -> Any:
 # "testing" entry that lived at the tail moved out to make room, and the new
 # entry lives in its own sibling module rather than inline here.
 from autobot_shared import env_registry_ai  # noqa: E402,F401
+from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_terminal  # noqa: E402,F401
 from autobot_shared import env_registry_testing  # noqa: E402,F401
-from autobot_shared import env_registry_backend  # noqa: E402,F401
 
 # --- events (#14817, #14818) -------------------------------------------------
 
