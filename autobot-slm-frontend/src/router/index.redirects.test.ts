@@ -64,7 +64,8 @@ describe('router redirects — retired SLM-frontend surfaces (#15224, #15225)', 
     // it ever lost priority to `/backups/:tab?` below it, this would match
     // `backups` with params.tab === 'replications' instead — a silent
     // regression back to a tab that no longer exists.
-    expect(router.resolve('/backups/replications').matched.at(-1)?.path).toBe('/backups/replications')
+    const matched = router.resolve('/backups/replications').matched
+    expect(matched[matched.length - 1]?.path).toBe('/backups/replications')
 
     await router.push('/backups/replications')
 
