@@ -216,6 +216,7 @@ _EXTRA_SERVICE_MODULES = (
     "services.code_status",
     "services.deployment",
     "services.encryption",
+    "services.journal_fetch",
     "services.reconciler",
     "services.replication",
     "services.replication_jobs",
