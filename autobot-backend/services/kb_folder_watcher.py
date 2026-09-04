@@ -18,6 +18,7 @@ Features:
 """
 
 import asyncio
+import concurrent.futures
 import json
 import time
 from pathlib import Path
@@ -26,6 +27,7 @@ from typing import Any, Dict, List, Optional
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
+from autobot_shared.async_compat import fire_and_forget_threadsafe
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
@@ -135,14 +137,19 @@ class KBFolderChangeHandler(FileSystemEventHandler):
 
         # Debounce rapid changes
         now = time.time()
-        if file_path in self._last_event_time:
-            if now - self._last_event_time[file_path] < DEBOUNCE_SECONDS:
-                return
+        last_seen = self._last_event_time.get(file_path)
+        if last_seen is not None and now - last_seen < DEBOUNCE_SECONDS:
+            return
+
+        # #15636: this runs on the watchdog Observer thread, which has no running
+        # event loop, so ``asyncio.create_task`` raised RuntimeError on every
+        # event and nothing was ever queued. The debounce stamp used to be
+        # written before that failing call, which made the handler look alive;
+        # it is now written only after the cross-thread hand-off succeeded.
+        if self.watcher.dispatch_change(self.config.folder_id, path, change_type) is None:
+            return
 
         self._last_event_time[file_path] = now
-
-        # Queue the change for processing
-        asyncio.create_task(self.watcher.queue_change(self.config.folder_id, path, change_type))
 
 
 class KBFolderWatcherService:
@@ -161,6 +168,9 @@ class KBFolderWatcherService:
         self._pending_changes: Dict[str, List[tuple]] = {}  # folder_id -> [(path, change_type)]
         self._change_lock = asyncio.Lock()
         self._processing_tasks: Dict[str, asyncio.Task] = {}
+        # The loop the watchers were started on; the Observer threads need it to
+        # hand work back across the thread boundary (#15636).
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._stats: Dict[str, Dict[str, Any]] = {}  # folder_id -> stats
 
     async def initialize(self) -> bool:
@@ -336,6 +346,10 @@ class KBFolderWatcherService:
                 logger.warning("Watch folder path does not exist: %s", config.path)
                 return False
 
+            # Capture the loop before the Observer thread starts: its callbacks
+            # have no other way to reach a loop they do not run on (#15636).
+            self._loop = asyncio.get_running_loop()
+
             # Create observer and handler
             handler = KBFolderChangeHandler(self, config)
             observer = Observer()
@@ -380,6 +394,20 @@ class KBFolderWatcherService:
 
         except Exception as e:
             logger.error("Error stopping watch folder %s: %s", folder_id, e)
+
+    def dispatch_change(
+        self, folder_id: str, file_path: Path, change_type: str
+    ) -> concurrent.futures.Future | None:
+        """Hand a file event from an Observer thread to this service's loop.
+
+        Returns the retained future, or ``None`` when nothing was scheduled --
+        the caller must not record the event as handled in that case (#15636).
+        """
+        return fire_and_forget_threadsafe(
+            self.queue_change(folder_id, file_path, change_type),
+            name=f"kb-folder-watcher-{change_type}",
+            loop=self._loop,
+        )
 
     async def queue_change(self, folder_id: str, file_path: Path, change_type: str) -> None:
         """
