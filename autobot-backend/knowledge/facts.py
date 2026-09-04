@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.fact_projection import FactProjectionMixin
 
 if TYPE_CHECKING:
     import aioredis
@@ -409,7 +410,7 @@ def _apply_provenance_defaults(metadata: Dict[str, Any]) -> None:
             metadata[field] = default
 
 
-class FactsMixin:
+class FactsMixin(FactProjectionMixin):
     """
     Facts management mixin for knowledge base.
 
@@ -452,79 +453,6 @@ class FactsMixin:
             asyncio.create_task(searcher.recompute_corpus_stats())
         except Exception as exc:
             logger.warning("BM25 stats refresh scheduling failed: %s", exc)
-
-    async def _find_fact_by_unique_key(self, unique_key: str) -> Dict[str, Any] | None:
-        """
-        Find an existing fact by unique key (fast Redis SET lookup).
-        Issue #315: Refactored to use helper for reduced nesting.
-
-        Args:
-            unique_key: The unique key to search for (e.g., "machine:os:command:section")
-
-        Returns:
-            Dict with fact info if found, None otherwise
-        """
-        try:
-            # Check Redis SET for unique key mapping
-            unique_key_name = "unique_key:man_page:%s" % unique_key
-            fact_id = await asyncio.to_thread(self.redis_client.get, unique_key_name)
-
-            if not fact_id:
-                return None
-
-            # Decode bytes if necessary
-            if isinstance(fact_id, bytes):
-                fact_id = fact_id.decode("utf-8")
-
-            # Get the actual fact data
-            fact_key = "fact:%s" % fact_id
-            fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
-
-            if not fact_data:
-                return None
-
-            # Use helper for decoding (Issue #315: extracted)
-            decoded_data = _decode_redis_hash(fact_data)
-
-            return {
-                "fact_id": fact_id,
-                "content": decoded_data.get("content", ""),
-                "metadata": decoded_data.get("_parsed_metadata", {}),
-            }
-
-        except Exception as e:
-            logger.debug("Error finding fact by unique key: %s", e)
-
-        return None
-
-    async def _find_existing_fact(self, content: str, metadata: Dict[str, Any]) -> str | None:
-        """
-        Check if a fact with identical content and metadata already exists.
-
-        Args:
-            content: Fact content
-            metadata: Fact metadata
-
-        Returns:
-            Existing fact_id if found, None otherwise
-        """
-        try:
-            # Create content hash for deduplication
-            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
-
-            # Check if hash exists in Redis
-            hash_key = "content_hash:%s" % content_hash
-            existing_id = await asyncio.to_thread(self.redis_client.get, hash_key)
-
-            if existing_id:
-                if isinstance(existing_id, bytes):
-                    return existing_id.decode("utf-8")
-                return existing_id
-
-        except Exception as e:
-            logger.debug("Error checking for existing fact: %s", e)
-
-        return None
 
     async def _find_duplicate(self, content: str, threshold: float = 0.92) -> Dict[str, Any] | None:
         """Check ChromaDB for near-duplicate content before inserting.
@@ -623,9 +551,15 @@ class FactsMixin:
 
         return None
 
-    async def _store_fact_in_redis(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> None:
+    async def _project_fact_to_redis(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> None:
         """
-        Store fact data in Redis with hash mappings.
+        Project a stored fact into Redis: the hash plus its lookup indexes.
+
+        Issue #15663: this writes a **projection**, not the fact. The durable row
+        in ``knowledge_facts`` is the fact; everything written here is derivable
+        from it and is rebuilt by :meth:`rebuild_fact_projections`. Losing these
+        keys costs a rebuild, which is the whole point — before #15663 it cost
+        the knowledge base (#12733).
 
         Issue #281: Extracted helper for Redis storage operations.
         Issue #547: Added session-fact relationship tracking for orphan cleanup.
@@ -719,9 +653,15 @@ class FactsMixin:
         and then succeeds inline is marked ``completed`` and dropped from the pending
         set immediately, rather than lingering as ``failed`` until the next reconcile
         cycle. Mirrors ``BackgroundVectorizer._mark_vectorization_complete`` (#11296).
+
+        Issue #15663: what is written here is the record of an *attempt*, not the
+        answer to "is this fact vectorized". That question is put to ChromaDB —
+        see ``knowledge.vector_membership`` — because a stamp beside the fact is
+        a claim about another store and drifts the moment the two disagree.
         """
         from background_vectorization import PENDING_SET_KEY
 
+        await self._record_vector_observation(fact_id)
         try:
             fact_key = "fact:%s" % fact_id
             await asyncio.to_thread(
@@ -818,8 +758,18 @@ class FactsMixin:
         return metadata
 
     async def _store_and_vectorize_fact(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Store fact in Redis, vectorize, and update stats (Issue #398: extracted)."""
-        await self._store_fact_in_redis(fact_id, content, metadata)
+        """Record the fact durably, then project it into Redis and ChromaDB.
+
+        Issue #398: extracted. Issue #15663: the durable write comes first and is
+        allowed to raise. A projection that fails is repaired by the reconciler;
+        a row that was never written is a fact the user believes they stored and
+        will not find again, which is #12733.
+        """
+        # Lazy: fact_store pulls SQLAlchemy, absent from the startup-import smoke env.
+        from knowledge import fact_store
+
+        await fact_store.persist_fact(fact_id, content, metadata)
+        await self._project_fact_to_redis(fact_id, content, metadata)
         await self._vectorize_fact_in_chromadb(fact_id, content, metadata)
         await asyncio.gather(
             self._increment_stat("total_facts"),
@@ -1166,20 +1116,10 @@ class FactsMixin:
 
         try:
             fact_key = "fact:%s" % fact_id
-            exists = await asyncio.to_thread(self.redis_client.exists, fact_key)
-            if not exists:
+            current = await self._read_fact_for_write(fact_id)
+            if current is None:
                 return {"status": "error", "message": "Fact not found"}
-
-            fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
-            decoded = self._decode_fact_data(fact_data)
-
-            current_metadata = {}
-            if "metadata" in decoded:
-                try:
-                    raw = decoded["metadata"]
-                    current_metadata = raw if isinstance(raw, dict) else json.loads(raw)
-                except (json.JSONDecodeError, TypeError):
-                    pass
+            decoded, current_metadata = current
 
             if content is not None:
                 # Issue #1375: Refresh dedup key + fingerprint on content change
@@ -1192,6 +1132,10 @@ class FactsMixin:
                 current_metadata.update(metadata)
             current_metadata["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
+            # #15663: the durable row first, then the projection. An update that
+            # only reached Redis is an update the next restart can undo.
+            if not await self._durable_update_or_adopt(fact_id, decoded["content"], current_metadata):
+                return {"status": "error", "message": "Fact not found"}
             await asyncio.to_thread(
                 self.redis_client.hset,
                 fact_key,
@@ -1269,16 +1213,17 @@ class FactsMixin:
         self.ensure_initialized()
 
         try:
-            fact_key = "fact:%s" % fact_id
-            fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
-            if not fact_data:
+            current = await self._read_fact_for_write(fact_id)
+            if current is None:
                 return {"status": "error", "message": "Fact not found"}
 
-            decoded = _decode_redis_hash(fact_data)
+            decoded, metadata = current
             content = decoded.get("content", "")
-            metadata = decoded.get("_parsed_metadata", {})
 
-            await asyncio.to_thread(self.redis_client.delete, fact_key)
+            # #15663: the row is the fact, so removing it is what makes the
+            # delete real; the projections are cleaned up after.
+            if not await self._durable_delete(fact_id):
+                return {"status": "error", "message": "Fact not found"}
             await self._cleanup_fact_mappings(fact_id, content, metadata)
             await self._delete_fact_from_vector_store(fact_id)
 

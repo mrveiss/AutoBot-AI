@@ -54,5 +54,6 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 | Logging | `from autobot_shared.logging_manager import get_logger` → `get_logger(__name__)` / `createLogger('Name')` — no `print()` or `console.*`; stdlib `logging` only where a config-mocking test harness forbids it (see `autobot_shared/user_management/password_epoch.py`) |
 | Encoding | Always `encoding='utf-8'` explicitly |
 | Cache TTL | Never hard-code — module-level constant from an env var (see `chat_history/cache.py`) |
+| Store authority | Persisting a concept? `from autobot_shared.store_authority import system_of_record` — one store is durable, every other copy is a rebuildable projection |
 | LEDGER/EXECUTOR | Coordination tools complete instantly — do NOT wait; continue immediately with execution tools |
 | Copyright | `mrveiss` is sole owner and author |
