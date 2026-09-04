@@ -42,6 +42,7 @@ from services.database import get_db
 from services.journal_fetch import JournalFetchTimeout, build_journal_command, fetch_service_journal
 from services.service_categorizer import categorize_service
 from services.service_restart import (
+    build_service_ssh_cmd,
     restart_service_list,
     restart_slm_services,
     run_ansible_service_action,
@@ -141,7 +142,7 @@ async def _run_ansible_get_logs(
     from it.
     """
     journal_cmd = build_journal_command(service_name, lines, since)
-    return await fetch_service_journal(_build_service_ssh_cmd(node, journal_cmd), service_name)
+    return await fetch_service_journal(build_service_ssh_cmd(node, journal_cmd), service_name)
 
 
 def _build_scan_failure_response(node_id: str, message: str) -> ServiceScanResponse:
