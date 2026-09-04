@@ -85,13 +85,19 @@ ANNOTATED_AS_LIVE = _BASELINE_MODULE.ANNOTATED_AS_LIVE
 # an entry; never raise it to let a new one in without that being the point
 # of the diff.
 #
-# 512 is the population the walk measured on the merge that lands this change,
-# not a number chosen to fit: the repo recorded three ceilings before it, and
-# the other 509 files were over MAX_LINES with nothing recording them at all.
-# The count starts at whatever the walk finds the day it is switched on, and
-# only falls after, because from then an unlisted oversized file fails the
-# audit instead of joining the list.
-MAX_KNOWN_LARGE_ENTRIES = 512
+# 512 was the population the walk measured on the merge that landed this
+# change, not a number chosen to fit: the repo recorded three ceilings before
+# it, and the other 509 files were over MAX_LINES with nothing recording them
+# at all. The count starts at whatever the walk finds the day it is switched
+# on, and only falls after, because from then an unlisted oversized file fails
+# the audit instead of joining the list.
+#
+# #15641 re-measured it. Entries had been leaving without this number
+# following them down — 498 entries against a ceiling of 512 left room for
+# fourteen silent additions, which is exactly the slack this guard exists to
+# deny. It is now pinned to the measured population again, and every
+# decomposition that empties an entry lowers it by hand in the same commit.
+MAX_KNOWN_LARGE_ENTRIES = 497
 
 
 # Floor for the tracked-Python enumeration (4958 files at the time of writing).
