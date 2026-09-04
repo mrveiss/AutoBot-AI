@@ -384,6 +384,26 @@ def check_shared_tree_watchers(canonical: list[str]) -> tuple[list[str], int]:
     return failures, checked
 
 
+def check_code_quality_set() -> tuple[list[str], int]:
+    """The second canonical set (#15608), through the same two checks.
+
+    Its own function rather than more lines in ``main``: a second registration
+    must cost a table entry and one call, or the next one gets folded in by
+    copy-paste and the two sets stop being policed the same way.
+    """
+    code_quality = canonical_paths(CODE_QUALITY_FILE, CODE_QUALITY_KEY)
+    print(  # noqa: print
+        f"check-workflow-path-filters: canonical '{CODE_QUALITY_KEY}' in "
+        f"{CODE_QUALITY_FILE} = {len(code_quality)} entries\n"
+    )
+    failures, checked = check_inline_consumers(code_quality, CODE_QUALITY_INLINE_CONSUMERS)
+    failures += check_no_undeclared_consumer(
+        CODE_QUALITY_FILE,
+        frozenset(CODE_QUALITY_INLINE_CONSUMERS) | frozenset(CODE_QUALITY_NOT_CONSUMERS),
+    )
+    return failures, checked
+
+
 def check_declarations_resolve() -> list[str]:
     """Every declared workflow must exist.
 
@@ -411,11 +431,6 @@ def main(argv: list[str] | None = None) -> int:
 
     canonical = canonical_paths()
     print(f"check-workflow-path-filters: canonical '{CANONICAL_KEY}' = {canonical}\n")  # noqa: print
-    code_quality = canonical_paths(CODE_QUALITY_FILE, CODE_QUALITY_KEY)
-    print(  # noqa: print
-        f"check-workflow-path-filters: {CODE_QUALITY_FILE} '{CODE_QUALITY_KEY}' "
-        f"= {len(code_quality)} entries\n"
-    )
 
     failures = check_declarations_resolve()
     if failures:  # a stale table cannot be used to judge anything else
@@ -430,13 +445,8 @@ def main(argv: list[str] | None = None) -> int:
     failures += check_required_absences()
     failures += check_no_undeclared_consumer()
 
-    # The second canonical set (#15608), through the same two checks.
-    cq_failures, cq_checked = check_inline_consumers(code_quality, CODE_QUALITY_INLINE_CONSUMERS)
+    cq_failures, cq_checked = check_code_quality_set()
     failures += cq_failures
-    failures += check_no_undeclared_consumer(
-        CODE_QUALITY_FILE,
-        frozenset(CODE_QUALITY_INLINE_CONSUMERS) | frozenset(CODE_QUALITY_NOT_CONSUMERS),
-    )
 
     if checked == 0 or shared_checked == 0 or cq_checked == 0:
         print(  # noqa: print
@@ -452,8 +462,7 @@ def main(argv: list[str] | None = None) -> int:
     if not failures:
         print(  # noqa: print
             f"\ncheck-workflow-path-filters: {checked + cq_checked} inline path list(s) match their "
-            f"canonical set, "
-            f"{shared_checked} shared-tree watcher(s) still name it"
+            f"canonical set, {shared_checked} shared-tree watcher(s) still name it"
         )
         return 0
 
