@@ -1,8 +1,19 @@
 # Ansible <-> requirements version divergence baseline (#15568)
 #
 # One `<path-from-repo-root>::<pep503-package-name>` per line. Each entry is a
-# package that an ansible pip declaration site versions differently from every
-# `requirements*.txt` declaration of the same package.
+# package that an ansible pip declaration site versions differently from the
+# manifest THAT SITE PROVISIONS -- not from every `requirements*.txt` in the tree.
+#
+# The distinction is #15629, and it is why this file did not grow when the
+# comparison was sharpened. Comparing against the union let a floor that matched
+# some OTHER component's manifest read as agreement: `roles/ai-stack` carried
+# `fastapi>=0.115.0` and `uvicorn[standard]>=0.35.0` against an ai-stack manifest
+# declaring `>=0.141.1` and `>=0.52.4`, `docs/guides/requirements-local.txt`
+# states the older pair verbatim, and the union found it. #15623 raised both by
+# reading; nothing would have caught the next one.
+# `repo_tests/ansible_manifest_resolution.py` now resolves each site to the
+# manifest(s) it actually provisions, and a site it cannot resolve is a failure
+# rather than a skipped comparison.
 #
 # THIS FILE IS NOW EMPTY, AND THAT IS THE POINT.
 #
@@ -23,8 +34,8 @@
 # no entries left both now bite on the first offence:
 #
 #   1. any divergence NOT listed here fails — a new restatement, or a bump that
-#      moved one manifest and not the other, which is the failure #15408 hit
-#      seven times over on `openvino`;
+#      moved a site's own manifest and not the site, which is the failure #15408
+#      hit seven times over on `openvino`;
 #   2. any entry listed here that no longer diverges — because it was fixed, or
 #      because the declaration was removed — ALSO fails. A stale entry exempts
 #      nothing while looking authoritative.
