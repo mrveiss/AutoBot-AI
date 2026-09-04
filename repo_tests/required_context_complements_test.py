@@ -16,6 +16,7 @@ properties that prevent it: the job names match, and both sides read the same
 filter file rather than keeping copies that can drift.
 """
 
+import re
 from pathlib import Path
 
 import pytest
