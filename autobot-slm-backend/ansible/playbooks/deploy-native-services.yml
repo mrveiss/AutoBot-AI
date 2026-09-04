@@ -403,36 +403,37 @@
     # the whole web stack this play installs separately. The file's relative
     # `-e ../autobot_shared` and `-c ../constraints/shared.txt` resolve because
     # the task above syncs the full source tree to /opt/autobot/src/.
-    - name: Install Python dependencies for NPU Worker
+    #
+    # #15671: `-c` is stated here as well as inside the manifest. The file's own
+    # `-c ../constraints/shared.txt` resolves to the same path from
+    # /opt/autobot/src, but it was the ONLY thing applying the shared pins on
+    # this play, and roles/npu-worker states the constraints at the task. One
+    # shape on both paths, so a reader of either sees the pins being applied.
+    - name: Install NPU Worker dependencies from its manifest
       pip:
         requirements: /opt/autobot/src/autobot-npu-worker/requirements.txt
         virtualenv: "{{ npu_venv }}"
         virtualenv_python: python3.14
+        extra_args: "--timeout 120 -c /opt/autobot/src/constraints/shared.txt"
       become_user: autobot-service
       environment:
         PIP_DEFAULT_TIMEOUT: "120"
       timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
 
-    # #14452: the same defect as #14447/#14449 -- openvino-dev is a deprecated
-    # meta-package frozen at 2024.6.0 with no release compatible with openvino
-    # 2026.x, so pip backtracks through every version of it until it reaches a
-    # numpy with no cp314 wheel and the sdist build dies on
-    # setuptools.build_meta. This task adds the [pytorch,tensorflow] extras the
-    # task above's plain requirements.txt install does not carry; #15408 stopped
-    # restating the floor here -- constraints/shared.txt (below) is the single
-    # source of truth, same as the numpy line already pinned that way. The
-    # constraints path is relative to /opt/autobot/src, the destination the
-    # task above already syncs the full source tree to.
-    - name: Install OpenVINO runtime for NPU Worker
-      pip:
-        name:
-          - openvino[pytorch,tensorflow]
-        virtualenv: "{{ npu_venv }}"
-        extra_args: "-c /opt/autobot/src/constraints/shared.txt"
-      become_user: autobot-service
-      environment:
-        PIP_DEFAULT_TIMEOUT: "120"
-      timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
+    # #15671: the "Install OpenVINO runtime for NPU Worker" task that used to
+    # sit here is gone. It re-installed openvino as
+    # `openvino[pytorch,tensorflow]` immediately after the manifest install
+    # above, which is why the same venv held a different openvino depending on
+    # whether this play or roles/npu-worker had run last.
+    #
+    # openvino declares no extras at all -- its metadata carries `numpy` and
+    # `openvino-telemetry` and nothing conditional -- so pip warned and ignored
+    # those two names on every run. They were `openvino-dev`'s extras, carried
+    # over when #14452 dropped that deprecated meta-package (#14447/#14449/
+    # #14453 record the same backtrack in the role). The manifest above states
+    # `openvino` bare against constraints/shared.txt, which is the whole of
+    # what the removed task achieved, so the extras question is now settled in
+    # exactly one place.
 
     - name: Create NPU Worker configuration
       template:

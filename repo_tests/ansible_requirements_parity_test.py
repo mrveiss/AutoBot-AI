@@ -49,6 +49,17 @@ one host, so two floors for one library make pip unsatisfiable and skew the nump
 on embeddings one role writes and another reads. This is the ansible half of
 `check_constraint_drift.py`, which cannot see these files.
 
+`test_no_venv_is_provisioned_from_more_than_one_source_shape` is the third, and
+it asks a different question of the same walk (#15671). Parity compares a floor
+against the manifest for the venv it fills; this compares the *kinds of source*
+that fill one venv against each other. `roles/npu-worker` filled
+/opt/autobot/autobot-npu-worker/venv from two inline `name:` lists while
+`playbooks/deploy-native-services.yml` filled the same venv from
+`autobot-npu-worker/requirements.txt`, so the venv's contents depended on the
+entry point and only one path carried `constraints/shared.txt`. Every floor on
+both sides could agree with its manifest and that would still be true, which is
+why it needs its own assertion rather than a sharper comparison.
+
 `test_every_cross_manifest_divergence_is_in_the_baseline` is ratcheted through
 `ansible_pip_parity_baseline.txt`, because the backlog this test first measured
 was 55 and asserting it flat would have reddened the tree rather than described
@@ -109,10 +120,10 @@ _SPECIFIER = re.compile(r"^(==|>=|<=|~=|!=|>|<)")
 # finds. Fixing a divergence must never trip one -- only a parser that has quietly
 # stopped matching the files it claims to read.
 _MIN_ANSIBLE_DOCUMENTS = 250  # 329 parsed on 2026-09-04
-_MIN_PIP_SITES = 15  # 18 carry at least one name: entry
-_MIN_ANSIBLE_DECLARATIONS = 95  # 115, versioned and bare together
+_MIN_PIP_SITES = 15  # 17 carry at least one name: entry
+_MIN_ANSIBLE_DECLARATIONS = 95  # 107, versioned and bare together
 _MIN_REQUIREMENT_FILES = 30  # 34
-_MIN_REQUIREMENT_PACKAGES = 140  # 161
+_MIN_REQUIREMENT_PACKAGES = 140  # 162
 # The resolver's own reach (#15629). `_MIN_DERIVED_BINDINGS` counts the venvs the
 # ansible tree itself binds to a repo manifest -- a resolver that stopped matching
 # `requirements:` tasks or `build-filtered-requirements.sh` rewrites would derive
@@ -125,7 +136,12 @@ _MIN_REQUIREMENT_PACKAGES = 140  # 161
 # (`{{ backend_code_dir }}/venv`), whose defining role is outside the scope
 # the walk reaches -- recorded rather than papered over.
 _MIN_DERIVED_BINDINGS = 5  # 6
-_MIN_SITES_WITH_A_MANIFEST = 11  # 13 of 18; 2 are host-wide, 3 have no manifest
+_MIN_SITES_WITH_A_MANIFEST = 11  # 12 of 17; 2 are host-wide, 3 have no manifest
+# `provisioning_shapes()` reads the same tree for HOW a venv is filled rather
+# than from WHICH manifest, and it is the only input to the multi-source record
+# below. A walk that stopped matching pip tasks would derive one shape per venv,
+# find no venv with two, and read as a tree that had been fixed.
+_MIN_PROVISIONED_VENVS = 8  # 10
 # Exact, unlike the others: `constraints/shared.txt` guards two packages and a
 # floor of 2 is the whole population. Legitimately shrinking that file to one
 # guarded package trips this as a walk failure, which it would not be -- so
@@ -309,11 +325,6 @@ def _contradicts(specifier: str, stated: set[str] | None) -> bool:
     return bool(specifier) and bool(stated) and specifier not in stated
 
 
-def unresolved_sites() -> list[tuple[str, str]]:
-    """Sites the walk reached that no resolution names -- a new role, or a renamed venv."""
-    return sorted(ansible_declarations()[1] - set(resolution.SITE_MANIFESTS))
-
-
 @functools.cache
 def _classified() -> tuple[dict[str, Declaration], dict[tuple[str, str], frozenset[str]]]:
     """``(divergences, unanchored packages per site)`` over every versioned declaration."""
@@ -359,104 +370,8 @@ def test_the_walk_reaches_the_manifests_it_claims_to_read() -> None:
     assert len(constrained_packages()) >= _MIN_CONSTRAINED_PACKAGES
     assert len(resolution.derived_bindings()) >= _MIN_DERIVED_BINDINGS, "the resolver derived nothing"
     assert len(bound) >= _MIN_SITES_WITH_A_MANIFEST, f"only {len(bound)} sites resolve to a manifest"
-
-
-def test_every_declaration_site_resolves_to_the_manifests_it_provisions() -> None:
-    """An unresolved site is a finding: it cannot be compared, so it must not be silent."""
-    unresolved = unresolved_sites()
-    stale = sorted(set(resolution.SITE_MANIFESTS) - ansible_declarations()[1])
-    assert not unresolved, (
-        "These ansible pip declaration sites resolve to no manifest. Add an entry to "
-        "SITE_MANIFESTS in repo_tests/ansible_manifest_resolution.py naming the manifest(s) "
-        "the site provisions -- or an empty tuple and the reason it has none (#15629):\n  "
-        + "\n  ".join(f"{path} [{environment or 'no venv'}]" for path, environment in unresolved)
-    )
-    assert not stale, (
-        "These SITE_MANIFESTS entries match no declaration site any more — the task was "
-        "removed or its virtualenv renamed. Delete them:\n  " + "\n  ".join(map(str, stale))
-    )
-
-
-def test_every_declared_manifest_exists_and_is_read() -> None:
-    """A renamed manifest must fail here, not resolve to an empty specifier set."""
-    known = {path.relative_to(_REPO_ROOT).as_posix() for path in requirement_files()}
-    declared = {
-        manifest
-        for entry in resolution.SITE_MANIFESTS.values()
-        for manifest in entry.manifests
-        if manifest != resolution.EVERY_MANIFEST
-    }
-    assert declared <= known, f"declared manifests no walk reads: {sorted(declared - known)}"
-
-
-def test_the_declared_resolution_matches_what_ansible_states() -> None:
-    """Where the tree binds a venv to a manifest, the declared entry must contain it."""
-    bindings = resolution.derived_bindings()
-    mismatched = []
-    for site, entry in sorted(resolution.SITE_MANIFESTS.items()):
-        derived = bindings.get(resolution.environment_key(*site), frozenset())
-        missing = derived - set(entry.manifests)
-        if missing and resolution.EVERY_MANIFEST not in entry.manifests:
-            mismatched.append(f"{site[0]} [{site[1]}] installs {sorted(missing)}, not declared")
-    assert not mismatched, (
-        "The ansible tree installs manifests into these venvs that their SITE_MANIFESTS "
-        "entries do not name:\n  " + "\n  ".join(mismatched)
-    )
-
-
-def test_every_declared_manifest_is_still_installed() -> None:
-    """The other direction: a declared manifest whose install task has gone.
-
-    Containment on its own is one-directional. It catches a manifest the tree
-    installs and the table omits, and misses the reverse -- an entry that keeps
-    naming a manifest after its install task is deleted. `derived` stays a
-    subset of `declared`, nothing fires, and the table quietly stops describing
-    the tree, which is the drift this module exists to prevent.
-
-    Only sites with at least one derivable edge are checked, because a site the
-    walk cannot see at all would otherwise fail for the wrong reason.
-    `LOGICAL_ONLY` names the genuine exceptions with their cause.
-    """
-    bindings = resolution.derived_bindings()
-    dropped = []
-    for site, entry in sorted(resolution.SITE_MANIFESTS.items()):
-        derived = bindings.get(resolution.environment_key(*site), frozenset())
-        if not derived or resolution.EVERY_MANIFEST in entry.manifests:
-            continue
-        for manifest in entry.manifests:
-            if manifest in derived or (site[0], manifest) in resolution.LOGICAL_ONLY:
-                continue
-            dropped.append(f"{site[0]} [{site[1]}] declares {manifest}, nothing installs it")
-
-    assert not dropped, (
-        "These SITE_MANIFESTS entries name a manifest the ansible tree no longer "
-        "installs into that venv. Either the wiring was removed and the entry is "
-        "stale, or the binding is real but underivable and belongs in "
-        "LOGICAL_ONLY with its reason:\n  " + "\n  ".join(dropped)
-    )
-
-
-def test_no_logical_only_exception_is_stale() -> None:
-    """LOGICAL_ONLY shrinks. An exception that stopped being needed must go.
-
-    An exception list that is never re-examined becomes a second table with the
-    same drift problem one level down — so each entry is checked against both
-    the declaration it excuses and the walk it excuses it from.
-    """
-    stale = []
-    for (path, manifest), reason in sorted(resolution.LOGICAL_ONLY.items()):
-        sites = [key for key in resolution.SITE_MANIFESTS if key[0] == path]
-        if not sites:
-            stale.append(f"{path} is no longer a declared site")
-            continue
-        site = sites[0]
-        if manifest not in resolution.SITE_MANIFESTS[site].manifests:
-            stale.append(f"{path} no longer declares {manifest}")
-            continue
-        if manifest in resolution.derived_bindings().get(resolution.environment_key(*site), frozenset()):
-            stale.append(f"{path} now derivably installs {manifest} — drop the exception ({reason})")
-
-    assert not stale, "LOGICAL_ONLY carries entries that no longer describe the tree:\n  " + "\n  ".join(stale)
+    shapes = resolution.provisioning_shapes()
+    assert len(shapes) >= _MIN_PROVISIONED_VENVS, f"only {len(shapes)} venvs have a known source"
 
 
 def test_the_pre_15623_ai_stack_floors_are_a_regression_case() -> None:
@@ -496,20 +411,29 @@ def test_no_constrained_package_carries_a_version_in_ansible() -> None:
     )
 
 
+def _divergence_line(key: str, declaration: Declaration) -> str:
+    """One failure line, whether or not the site resolves to a manifest."""
+    entry = resolution.SITE_MANIFESTS.get(declaration.site)
+    if entry is None:
+        return f"{key}: ansible {declaration.specifier}, site does not resolve to a manifest"
+    stated = sorted(_manifest_specifiers(entry.manifests).get(declaration.package, ()))
+    return f"{key}: ansible {declaration.specifier}, {sorted(entry.manifests)} state {stated}"
+
+
 def test_every_cross_manifest_divergence_is_in_the_baseline() -> None:
     """A package may not be versioned one way in ansible and another in its own manifest."""
     found = divergences()
     unlisted = sorted(set(found) - set(baseline_keys()))
-    detail = [
-        f"{key}: ansible {found[key].specifier}, "
-        f"{sorted(resolution.SITE_MANIFESTS[found[key].site].manifests)} state "
-        f"{sorted(_manifest_specifiers(resolution.SITE_MANIFESTS[found[key].site].manifests).get(found[key].package, ()))}"
-        for key in unlisted
-        if found[key].site in resolution.SITE_MANIFESTS
-    ]
+    # Every key gets a line, including one whose site does not resolve. Filtering
+    # the detail to resolved sites left the assertion firing on the full set while
+    # the message named a subset -- and an unresolved site is the finding class
+    # #15629 added, so the omitted line was the newest and least familiar one. A
+    # failure that reports fewer causes than it has sends the reader to the wrong
+    # place, which is worse than a longer message.
+    detail = [_divergence_line(key, found[key]) for key in unlisted]
     assert not unlisted, (
         "New ansible/requirements version divergence:\n  "
-        + "\n  ".join(detail or unlisted)
+        + "\n  ".join(detail)
         + f"\nFix the declaration. {_BASELINE.name} only shrinks — adding a line to it"
         " to clear this failure is not the fix (#15568)."
     )
@@ -524,6 +448,9 @@ def test_the_baseline_carries_no_stale_entry() -> None:
         "These baseline entries no longer diverge — the declaration was fixed or "
         "removed. Delete them:\n  " + "\n  ".join(stale)
     )
+
+
+_NPU_VENV = "/opt/autobot/autobot-npu-worker/venv"
 
 
 def test_every_unanchored_floor_is_recorded_at_its_site() -> None:

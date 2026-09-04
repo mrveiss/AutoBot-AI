@@ -1274,7 +1274,6 @@
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/prometheus.yml|https://github.com/prometheus/prometheus/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/nodejs/tasks/main.yml|https://deb.nodesource.com/setup_{{
 1|other|autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml|120
-1|other|autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml|300
 1|other|autobot-slm-backend/ansible/roles/postgresql/tasks/install.yml|https://apt.postgresql.org/pub/repos/apt
 1|other|autobot-slm-backend/ansible/roles/postgresql/tasks/install.yml|https://www.postgresql.org/media/keys/ACCC4CF8.asc
 1|other|autobot-slm-backend/ansible/roles/redis-replication/defaults/main.yml|60

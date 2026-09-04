@@ -8,3 +8,13 @@ numpy  # version from constraints/shared.txt
 huggingface_hub>=1.29.0
 aiofiles>=25.1.0
 python-multipart>=0.0.32          # SECURITY UPDATE - arbitrary file write fix
+
+# #15660: both are installed into the worker venv by `roles/tts-worker` and
+# were declared by no manifest, so a `pip install -r` of this file did not
+# reproduce the venv ansible builds. The floors are the text the role states.
+# pocket-tts is imported directly by the worker (`tts-worker.py.j2` and
+# `predownload-model.py.j2` both `from pocket_tts import TTSModel`); scipy is
+# pocket-tts's own unconditional dependency (`Requires-Dist: scipy>=1.5.0`),
+# declared here because this worker holds it above that upstream floor.
+pocket-tts>=2.0.0
+scipy>=1.10.0
