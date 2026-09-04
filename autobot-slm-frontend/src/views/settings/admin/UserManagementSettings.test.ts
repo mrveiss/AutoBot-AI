@@ -16,6 +16,8 @@
  */
 
 import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
@@ -168,8 +170,18 @@ describe('UserManagementSettings RBAC transport (#13079)', () => {
  * too.
  */
 
+/**
+ * #15667: the contract must be located WITHOUT `new URL(<literal>,
+ * import.meta.url)`. Vite statically rewrites that exact form into an asset
+ * reference, so under vitest it evaluates to a dev-server URL
+ * (`http://localhost:<port>/openapi.json`) and `readFileSync` rejects it with
+ * "The URL must be of scheme file", failing this whole file at import time.
+ * A bare `import.meta.url` is left alone by that transform.
+ */
+const CONTRACT_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../openapi.json')
+
 const CONTRACT_PATHS: string[] = Object.keys(
-  JSON.parse(readFileSync(new URL('../../../../openapi.json', import.meta.url), 'utf-8')).paths,
+  JSON.parse(readFileSync(CONTRACT_PATH, 'utf-8')).paths,
 )
 
 /** True when `endpoint` matches a contract path, treating `{...}` as one segment. */
