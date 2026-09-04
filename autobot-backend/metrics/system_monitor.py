@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Mapping
 
 import psutil
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
@@ -70,7 +71,7 @@ class SystemResourceMonitor:
         logger.info("Started system resource monitoring")
 
         # Run monitoring loop
-        asyncio.create_task(self._monitoring_loop())
+        fire_and_forget(self._monitoring_loop(), name="system-resource-monitor")
 
     async def stop_monitoring(self):
         """Stop system monitoring"""

@@ -12,11 +12,11 @@ are already defined in llm_shared.models.
 
 from __future__ import annotations
 
-import asyncio
 import time
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, List, Optional
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from circuit_breaker import (
     CircuitBreaker,
@@ -183,7 +183,7 @@ class BaseProvider(ABC):
     def _notify_request_started(request: LLMRequest, provider_key: str) -> None:
         """Fire-and-forget notify_request (GH#6593, #14211)."""
         try:
-            asyncio.get_running_loop().create_task(obs_registry.notify_request(request, {"provider": provider_key}))
+            fire_and_forget(obs_registry.notify_request(request, {"provider": provider_key}), name="llm-notify-request")
         except RuntimeError:
             pass
 
@@ -191,7 +191,7 @@ class BaseProvider(ABC):
     def _notify_response(response: LLMResponse, latency_ms: float) -> None:
         """Fire-and-forget notify_response (GH#6593)."""
         try:
-            asyncio.get_running_loop().create_task(obs_registry.notify_response(response, latency_ms, 0.0))
+            fire_and_forget(obs_registry.notify_response(response, latency_ms, 0.0), name="llm-notify-response")
         except RuntimeError:
             pass
 
@@ -199,7 +199,7 @@ class BaseProvider(ABC):
     def _notify_error(exc: Exception, request: LLMRequest) -> None:
         """Fire-and-forget notify_error (GH#6593)."""
         try:
-            asyncio.get_running_loop().create_task(obs_registry.notify_error(exc, request))
+            fire_and_forget(obs_registry.notify_error(exc, request), name="llm-notify-error")
         except RuntimeError:
             pass
 

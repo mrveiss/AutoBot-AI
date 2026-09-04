@@ -14,6 +14,7 @@ the pool stays at the target size.
 import asyncio
 from typing import Any, Dict
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 
 try:
@@ -129,7 +130,7 @@ class WarmContainerPool:
                 raise RuntimeError(f"Failed to create container for image {self._image}")
 
         # Refill in the background without blocking the caller
-        asyncio.create_task(self._replenish())
+        fire_and_forget(self._replenish(), name="container-pool-replenish")
         return container
 
     async def release(self, container: "docker.models.containers.Container") -> None:

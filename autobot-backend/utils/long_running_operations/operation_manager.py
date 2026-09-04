@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 
@@ -176,7 +177,7 @@ class LongRunningOperationManager:
                                 manager.active_operations -= 1
 
                         def callback(t):
-                            asyncio.create_task(decrement())
+                            fire_and_forget(decrement(), name="operation-slot-release")
 
                         return callback
 

@@ -36,6 +36,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from api.ws_security import enforce_ws_origin
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.personality_service import resolve_voice_id
@@ -206,7 +207,7 @@ async def _start_tts_stream(
         if get_state_fn() == "speaking":
             await set_state_fn("idle")
 
-    asyncio.create_task(_on_done(task))
+    fire_and_forget(_on_done(task), name="voice-tts-completion-watcher")
     return task
 
 

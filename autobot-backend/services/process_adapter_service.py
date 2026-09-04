@@ -34,6 +34,7 @@ from typing import Any, Dict, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import TimingConstants
@@ -166,7 +167,7 @@ class ProcessAdapterService:
         while self._running_counts.get(agent_id, 0) >= self._max_concurrency:
             await asyncio.sleep(TimingConstants.SHORT_DELAY)
         self._running_counts[agent_id] = self._running_counts.get(agent_id, 0) + 1
-        asyncio.create_task(self._run_process(run_id, agent_id), name=f"proc-{run_id}")
+        fire_and_forget(self._run_process(run_id, agent_id), name=f"proc-{run_id}")
 
     async def _fetch_agent_id(self, run_id: uuid.UUID) -> str | None:
         """Load agent_id for a run. Helper (#1406)."""

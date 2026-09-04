@@ -14,7 +14,7 @@ import asyncio  # Added back asyncio import
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Set
 
-from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.async_compat import fire_and_forget, run_or_schedule
 from autobot_shared.config_file_loading import SOURCE_BUILTIN_DEFAULTS, load_config_file
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -139,7 +139,8 @@ class EventManager:
             for listener in self._listeners[event_type]:
                 # Run listeners in a non-blocking way if they are async
                 if asyncio.iscoroutinefunction(listener):
-                    asyncio.create_task(listener(event_data))
+                    listener_name = getattr(listener, "__name__", "listener")
+                    fire_and_forget(listener(event_data), name=f"event-listener-{event_type}-{listener_name}")
                 else:
                     listener(event_data)
 

@@ -17,6 +17,7 @@ from typing import Dict, List
 
 import aiofiles
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_constants import REDIS_KEY
@@ -72,7 +73,10 @@ class ConversationHandlerMixin:
             logger.debug("Loaded conversation history from file for session %s", session_id)
             # Repopulate Redis cache (non-blocking, fire-and-forget)
             if self.redis_client is not None:
-                asyncio.create_task(self._save_conversation_history(session_id, history))
+                fire_and_forget(
+                    self._save_conversation_history(session_id, history),
+                    name="conversation-history-cache-refill",
+                )
 
             return history
 

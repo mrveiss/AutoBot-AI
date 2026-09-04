@@ -16,6 +16,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.status_enums import Severity
@@ -497,7 +498,7 @@ class ProjectStateTracker:
                 except Exception as e:
                     logger.error("Error in background tracking: %s", e)
 
-        asyncio.create_task(tracking_loop())
+        fire_and_forget(tracking_loop(), name="project-state-tracking-loop")
 
     async def get_state_summary(self) -> Dict[str, Any]:
         """Get comprehensive state summary."""
