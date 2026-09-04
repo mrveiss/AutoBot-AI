@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from models.database import BackupServiceType, Node, Replication, ReplicationStatus
+from models.database import Node, Replication, ReplicationStatus
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class ReplicationService:
     ) -> "Replication" | None:
         """Log the replication attempt and load the DB record.
 
-        Helper for setup_replication. Ref: #1088.
+        Helper for run_replication_steps. Ref: #1088.
         """
         logger.info(
             "Setting up replication %s: %s -> %s",
@@ -53,88 +53,22 @@ class ReplicationService:
         )
         return await self._get_replication_record(db, replication_id)
 
-    async def _load_replication_nodes(
-        self,
-        db: AsyncSession,
-        source_node_id: str,
-        target_node_id: str,
-    ) -> Tuple[Node, Node] | None:
-        """Load both replication endpoints through the job's own session.
-
-        Helper for setup_replication (#15549). The job owns its session, so the
-        ORM rows it works with are loaded here rather than handed across the
-        background boundary still bound to the request's session.
-
-        Args:
-            db: Database session owned by the background job
-            source_node_id: Primary/master node id
-            target_node_id: Replica node id
-
-        Returns:
-            (source_node, target_node), or None if either id is unknown
-        """
-        result = await db.execute(select(Node).where(Node.node_id.in_([source_node_id, target_node_id])))
-        by_id = {node.node_id: node for node in result.scalars().all()}
-        source_node = by_id.get(source_node_id)
-        target_node = by_id.get(target_node_id)
-        if source_node is None or target_node is None:
-            return None
-        return source_node, target_node
-
-    async def setup_replication(
-        self,
-        replication_id: str,
-        source_node_id: str,
-        target_node_id: str,
-        service_type: BackupServiceType = BackupServiceType.REDIS,
-    ) -> Tuple[bool, str]:
-        """Set up replication from source to target using Ansible.
-
-        #15549: this runs as a background job that outlives the HTTP request
-        which started it, so it opens and owns its own session instead of
-        borrowing the caller's — the same idiom as ``_run_deployment`` in
-        ``services/deployment.py``. Only plain identifiers cross the background
-        boundary; a request-scoped ``AsyncSession`` is closed in FastAPI's
-        dependency teardown as soon as the response is sent, and the ORM rows
-        loaded through it are detached from that point on.
-
-        Args:
-            replication_id: Replication ID to track
-            source_node_id: Primary/master node id
-            target_node_id: Replica node id
-            service_type: Service to replicate (currently only REDIS supported)
-
-        Returns:
-            Tuple of (success, message)
-        """
-        # #13578: identity against the member. The string comparison this
-        # replaces only worked because ``BackupServiceType`` subclasses ``str``;
-        # it would have silently passed a plain "redis" from any caller and
-        # silently failed on any other spelling.
-        if service_type is not BackupServiceType.REDIS:
-            return False, f"Unsupported service type: {service_type.value}"
-
-        from services.database import db_service
-
-        async with db_service.session() as db:
-            nodes = await self._load_replication_nodes(db, source_node_id, target_node_id)
-            if nodes is None:
-                return False, "Source or target node not found"
-            return await self._setup_replication_in_session(db, replication_id, *nodes)
-
-    async def _setup_replication_in_session(
+    async def run_replication_steps(
         self,
         db: AsyncSession,
         replication_id: str,
         source_node: Node,
         target_node: Node,
     ) -> Tuple[bool, str]:
-        """Run the replication setup against a session this job owns.
+        """Run the replication steps against a session the CALLER owns.
 
-        Helper for setup_replication (#15549 / #665).
+        #15549: the session lifecycle belongs to ``services/replication_jobs.py``,
+        which opens one for the background job and loads both nodes through it.
+        This method only composes the steps; it is never handed a request-scoped
+        session, which FastAPI closes as soon as the response is sent.
 
         Args:
-            db: Database session owned by the background job
+            db: Database session owned by the caller
             replication_id: Replication ID to track
             source_node: Primary/master node loaded through *db*
             target_node: Replica node loaded through *db*
@@ -180,7 +114,7 @@ class ReplicationService:
     async def _get_replication_record(self, db: AsyncSession, replication_id: str) -> Replication | None:
         """Fetch replication record and update to syncing status.
 
-        Helper for setup_replication (Issue #665).
+        Helper for run_replication_steps (Issue #665).
 
         Args:
             db: Database session
@@ -202,7 +136,7 @@ class ReplicationService:
     async def _mark_replication_failed(self, db: AsyncSession, replication: Replication, error_message: str) -> None:
         """Set replication to failed status with error message.
 
-        Helper for setup_replication (Issue #665).
+        Helper for run_replication_steps (Issue #665).
 
         Args:
             db: Database session
@@ -223,7 +157,7 @@ class ReplicationService:
     ) -> Tuple[bool, str] | None:
         """Configure Ansible replication and verify sync.
 
-        Helper for setup_replication (Issue #665).
+        Helper for run_replication_steps (Issue #665).
 
         Args:
             db: Database session
@@ -271,7 +205,7 @@ class ReplicationService:
     ) -> None:
         """Update replication to active status and start monitoring.
 
-        Helper for setup_replication (Issue #665).
+        Helper for run_replication_steps (Issue #665).
 
         Args:
             db: Database session

@@ -218,6 +218,7 @@ _EXTRA_SERVICE_MODULES = (
     "services.encryption",
     "services.reconciler",
     "services.replication",
+    "services.replication_jobs",
     "services.role_registry",
     "services.service_categorizer",
     "services.service_orchestrator",
