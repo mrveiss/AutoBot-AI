@@ -88,6 +88,23 @@ _MIN_NGINX_FILES_SWEPT = 20
 #: means the sweep stopped finding one of them, not that one stopped existing.
 _MIN_SERVED_PATH_DIRECTIVES = 2
 
+#: Templates rendered onto an SLM host — nginx sites, systemd units, helper
+#: scripts. The served path is named outside nginx too: `slm-admin-ui.service`
+#: probes the bundle's index.html, and a probe left on the pre-#15610 directory
+#: fails permanently on a host provisioned after this change, because that
+#: directory is never created there.
+_TEMPLATE_ROOTS = (
+    _ANSIBLE_ROOT / "roles" / "slm_manager" / "templates",
+    _REPO_ROOT / "autobot-infrastructure" / "autobot-slm-frontend" / "templates",
+)
+
+#: Well below this and the template sweep collapsed rather than being clean.
+_MIN_TEMPLATE_FILES_SWEPT = 8
+
+#: How the retired directory is spelled where the path is built from the SSOT
+#: variable, and where it is a literal. Both forms are the same mistake.
+_RETIRED_PATH_FORMS = ("slm_frontend_dir }}/dist", "autobot-slm-frontend/dist")
+
 #: The pre-#15610 publish, kept ONLY as the contrast-mutation input for the
 #: detector — never as a value under test.
 _HISTORICAL_TWO_RENAME_PUBLISH: list[dict[str, Any]] = [
@@ -306,6 +323,38 @@ def test_every_nginx_config_serves_the_flipped_pointer() -> None:
         f"these nginx configs still serve a directory the publish renames: {wrong}. The publish "
         f"points `{_SERVED_LINK}` at each build; a config naming anything else serves a stale "
         "bundle after a green deploy, or 403s once that directory is pruned (#15610)."
+    )
+
+
+def _template_files() -> list[Path]:
+    return sorted(
+        path for root in _TEMPLATE_ROOTS if root.is_dir() for path in root.rglob("*") if path.is_file()
+    )
+
+
+def test_no_slm_host_template_still_names_the_retired_directory() -> None:
+    """The served path is named outside nginx too.
+
+    `slm-admin-ui.service` tests `<bundle>/index.html` before curling the UI. A
+    host provisioned after #15610 never has the pre-#15610 directory, so a probe
+    left pointing at it fails forever while nginx serves the bundle correctly —
+    a monitor that reports an outage that is not happening, which is how the
+    real one stops being believed.
+    """
+    swept = _template_files()
+    assert len(swept) >= _MIN_TEMPLATE_FILES_SWEPT, (
+        f"swept only {len(swept)} SLM host template files (floor {_MIN_TEMPLATE_FILES_SWEPT}) — "
+        "the sweep collapsed rather than the templates being clean."
+    )
+    offenders = {}
+    for path in swept:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        hits = [form for form in _RETIRED_PATH_FORMS if f"{form}/" in text]
+        if hits:
+            offenders[str(path.relative_to(_REPO_ROOT))] = hits
+    assert not offenders, (
+        f"these templates still name the pre-#15610 build directory: {offenders}. It is the "
+        f"directory a publish replaced; `{_SERVED_LINK}` is the one that exists on every node."
     )
 
 

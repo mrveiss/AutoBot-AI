@@ -14,7 +14,12 @@ Group=autobot
 
 # Health check: verify SLM frontend is built and nginx can serve it.
 # --cacert pins the self-signed cert installed at TLS bootstrap (#7024).
-ExecStart=/bin/sh -c 'test -f /opt/autobot/autobot-slm-frontend/dist/index.html && curl -sf --cacert /etc/autobot/certs/server-cert.pem https://127.0.0.1/slm/ > /dev/null'
+# #15610: `current` is the path nginx serves — a symlink the publish flips onto
+# a per-build directory. It replaced `dist`, which on a node provisioned after
+# this change never exists, so the probe would have failed permanently while
+# nginx served the UI correctly. Rendered from slm_frontend_dir rather than a
+# literal, so the install location is written down once.
+ExecStart=/bin/sh -c 'test -f {{ slm_frontend_dir }}/current/index.html && curl -sf --cacert {{ slm_tls_cert }} https://127.0.0.1/slm/ > /dev/null'
 
 # Mark service as successful if health check passes
 RemainAfterExit=yes
