@@ -117,9 +117,7 @@ def _prune_old_builds(root: Path) -> None:
     at an older bundle, and deleting the bundle being served is the outage this
     module exists to prevent.
     """
-    reachable = {
-        os.readlink(root / name) for name in (_CURRENT_LINK, _PREVIOUS_LINK) if (root / name).is_symlink()
-    }
+    reachable = {os.readlink(root / name) for name in (_CURRENT_LINK, _PREVIOUS_LINK) if (root / name).is_symlink()}
     builds = sorted(
         (p.name for p in root.iterdir() if p.name.startswith(_BUILD_PREFIX) and p.is_dir() and not p.is_symlink()),
         reverse=True,

@@ -152,12 +152,13 @@ def test_publish_replaces_current_with_one_rename(tmp_path) -> None:
     ):
         assert _run(_publish_build(str(frontend_dir), "20260102T000000000Z")) is True
 
-    assert [e for e in events if e == ("replace", "current")] == [("replace", "current")], (
-        f"the served name must be replaced exactly once, by one rename(2); saw {events!r}"
-    )
-    assert ("unlink", "current") not in events, (
-        f"the publish unlinked the served name — that is the #15610 window, restored: {events!r}"
-    )
+    assert [e for e in events if e == ("replace", "current")] == [
+        ("replace", "current")
+    ], f"the served name must be replaced exactly once, by one rename(2); saw {events!r}"
+    assert (
+        "unlink",
+        "current",
+    ) not in events, f"the publish unlinked the served name — that is the #15610 window, restored: {events!r}"
     assert ("rmtree", "current") not in events, f"the publish removed the served name: {events!r}"
     assert _served(frontend_dir) == "NEW-BUNDLE"
 
