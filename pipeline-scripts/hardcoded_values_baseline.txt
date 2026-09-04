@@ -1184,7 +1184,6 @@
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|"/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|"/opt/autobot/{{ item }}
 3|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|"/tmp/autobot-deploy
-2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|'/opt/autobot/code_source
 2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|30
 2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|60
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|chown --no-dereference -R autobot:autobot
@@ -1292,7 +1291,7 @@
 1|other|autobot-slm-backend/ansible/roles/slm_agent/tasks/node_exporter.yml|https://github.com/prometheus/node_exporter/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/grafana.yml|https://apt.grafana.com
 1|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/grafana.yml|https://apt.grafana.com/gpg.key
-6|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml|'/opt/autobot/code_source
+4|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml|120
 2|other|autobot-slm-backend/ansible/roles/time_sync/tasks/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/time_sync/vars/main.yml|120
