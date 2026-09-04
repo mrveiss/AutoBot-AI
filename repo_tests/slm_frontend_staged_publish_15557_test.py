@@ -243,14 +243,20 @@ def test_the_shared_publish_never_builds_into_the_served_directory() -> None:
     builds = [cmd for mapping in _walk(tasks) for cmd in _command_strings(mapping)]
     build_cmds = [cmd for cmd in builds if "build:slm" in cmd]
     assert len(build_cmds) == 1, f"expected exactly one build command, found {build_cmds!r}"
-    assert "--outDir dist.staging" in build_cmds[0], (
-        f"the shared build does not target dist.staging: {build_cmds[0]!r}. vite empties its "
-        "outDir before writing, so building into the served dist/ is the defect itself."
+    # #15610 renamed the build's target from the single `dist.staging` to this
+    # build's own `dist-<build id>`; the property is the same one #15557
+    # asserted. vite empties its outDir before writing, so building into what
+    # nginx serves is the defect itself.
+    assert "--outDir dist-{{ " in build_cmds[0], (
+        f"the shared build does not target a per-build directory: {build_cmds[0]!r}."
+    )
+    assert "--outDir current" not in build_cmds[0], (
+        f"the shared build targets the served pointer itself: {build_cmds[0]!r}."
     )
 
     text = _SHARED_BUILD.read_text(encoding="utf-8")
-    assert "dist.staging/index.html" in text, (
-        "the shared publish does not verify dist.staging/index.html — a build that reports "
+    assert "dist-{{ _slm_frontend_build_id.stdout }}/index.html" in text, (
+        "the shared publish does not verify the built bundle's index.html — a build that reports "
         "success but produces no entry point makes every /slm/ path 403 (#15462)."
     )
 
