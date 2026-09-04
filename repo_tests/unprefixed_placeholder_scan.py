@@ -25,7 +25,7 @@ import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 import sys
 from functools import lru_cache
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from autobot_shared.paths import scrubbed_git_env
 
@@ -61,8 +61,54 @@ _ALLOWED_FIELD_NODES: Tuple[type, ...] = (
 
 #: At least one of these must appear, or the field is a bare name -- the route
 #: decorator shape the first category exists to walk past. The bare half it
-#: drops is carried by :func:`companion_interpolations`, not discarded (#15617).
+#: drops is carried by :func:`companion_interpolations` (#15617) and by
+#: :func:`emitted_bare_interpolations` (#15628), not discarded.
+#:
+#: WHAT THE DROPPED HALF ACTUALLY HOLDS, measured rather than assumed (#15628).
+#: 1,452 bare fields stand outside any file this guard flags. Partitioned by
+#: shape: 1,201 are decorator path segments naming a parameter of their own
+#: handler, 138 have an identifier that is a keyword to a ``format`` call in
+#: the same file, 6 are other decorator strings, and 107 are the residue.
+#: All 107 were read at their sites. 13 were real missing prefixes; 11 of those
+#: stand in an emitted message, which is the shape the fourth category below
+#: carries. The remaining 94 are route text outside a decorator (index maps,
+#: contract fixtures, path-normalisation sentinels, prose), prompt and HTML
+#: templates rendered by a ``format`` call in another module, and quoted
+#: JSON/JS fixtures -- none of them an interpolation site. That is why the
+#: condition stays: widening it reaches 1,452 strings to find 11.
 _REQUIRED_FIELD_NODES: Tuple[type, ...] = (ast.Attribute, ast.Subscript, ast.Call)
+
+#: The conditional-expression shape :data:`_ALLOWED_FIELD_NODES` drops (#15627).
+#: A ternary is an ``ast.IfExp`` and its test is ordinarily a comparison or a
+#: boolean operator, none of which that set admits, so a field holding one is
+#: discarded before any category sees it -- even when its names are bound and
+#: even when it sits beside a confirmed finding, which is how ten of them
+#: reached the tree. Kept separate rather than merged into the allowed set so
+#: the three populations the test module's docstring records keep their counts.
+_CONDITIONAL_FIELD_NODES: Tuple[type, ...] = _ALLOWED_FIELD_NODES + (
+    ast.IfExp,
+    ast.Compare,
+    ast.BoolOp,
+    ast.And,
+    ast.Or,
+    ast.Not,
+    ast.Eq,
+    ast.NotEq,
+    ast.Lt,
+    ast.LtE,
+    ast.Gt,
+    ast.GtE,
+    ast.Is,
+    ast.IsNot,
+    ast.In,
+    ast.NotIn,
+)
+
+#: Calls whose positional arguments carry a message meant for a human to read.
+#: A bare identifier here is the only bug-bearing shape in the 1,452 (#15628).
+_EMIT_METHODS = frozenset(
+    {"debug", "info", "warning", "warn", "error", "exception", "critical", "log", "fatal", "print"}
+)
 
 #: Prefixes that mark a quoted f-string *inside* a string -- source code held as
 #: data (a generated script, a documented example). Its braces belong to the
@@ -265,6 +311,123 @@ def _decorator_string_ids(tree: ast.AST) -> Set[int]:
     return ids
 
 
+@lru_cache(maxsize=16384)
+def _conditional_field_names(field: str) -> Optional[FrozenSet[str]]:
+    """Every name a conditional-expression field interpolates, or ``None`` (#15627).
+
+    ``None`` when the field is not one of those: it does not parse, it reaches
+    outside the conditional grammar, or it holds no ternary at all. An empty
+    result is a ternary over constants alone, which interpolates nothing and is
+    therefore not a stranded interpolation either.
+    """
+    try:
+        parsed = ast.parse(field, mode="eval")
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
+        return None
+    nodes = list(ast.walk(parsed))
+    if not all(isinstance(node, _CONDITIONAL_FIELD_NODES) for node in nodes):
+        return None
+    if not any(isinstance(node, ast.IfExp) for node in nodes):
+        return None
+    return frozenset(node.id for node in nodes if isinstance(node, ast.Name))
+
+
+def _conditional_findings_in(view: ModuleView) -> Findings:
+    """#15627 -- a ternary field, invisible to all three categories above.
+
+    Every name in the field must be bound, not only one root: a ternary carries
+    a root per branch plus one in its test, and a field the module can resolve
+    only half of is a template addressed elsewhere rather than a lost prefix.
+    """
+    _, names, strings = view
+    findings: Findings = []
+    for node, fields in strings:
+        for field in fields:
+            interpolated = _conditional_field_names(field)
+            if interpolated and interpolated <= names:
+                findings.append((node.lineno, field))
+    return findings
+
+
+def _called_name(func: ast.AST) -> Optional[str]:
+    """The attribute or bare name a call names, so ``logger.info`` and ``print`` both resolve."""
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return func.id if isinstance(func, ast.Name) else None
+
+
+def _emitted_string_ids(tree: ast.AST) -> Set[int]:
+    """Ids of strings standing in a positional argument of a logging or ``print`` call."""
+    ids: Set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or _called_name(node.func) not in _EMIT_METHODS:
+            continue
+        for argument in node.args:
+            found = (p for p in ast.walk(argument) if isinstance(p, ast.Constant) and isinstance(p.value, str))
+            ids.update(id(part) for part in found)
+    return ids
+
+
+def _function_bindings(node: ast.AST) -> Set[str]:
+    """Parameters, assignments, loop targets and caught exceptions of one function body.
+
+    The walk stops at nested ``def``/``lambda``/``class`` boundaries. ``ast.walk``
+    descends into them, which would report a name bound only inside an inner
+    function as bound in the outer one -- and this set is what licenses the
+    bare-identifier rule to call a field a genuine missing prefix. A name that
+    is real but scoped to a nested function would then be "fixed" by adding
+    ``f``, which raises ``NameError`` at runtime: the guard would have created
+    the bug it exists to find.
+    """
+    bound = set(_parameter_names(node.args))
+    pending = list(node.body)
+    while pending:
+        inner = pending.pop()
+        if isinstance(inner, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+            continue
+        if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Store):
+            bound.add(inner.id)
+        elif isinstance(inner, ast.ExceptHandler) and inner.name:
+            bound.add(inner.name)
+        pending.extend(ast.iter_child_nodes(inner))
+    return bound
+
+
+def _local_bindings(node: ast.AST, bound: FrozenSet[str], scopes: Dict[int, FrozenSet[str]]) -> None:
+    """Tag every string with the names its enclosing functions bind locally."""
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, ast.Constant) and isinstance(child.value, str):
+            scopes[id(child)] = bound
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            _local_bindings(child, bound | _function_bindings(child), scopes)
+        else:
+            _local_bindings(child, bound, scopes)
+
+
+def _emitted_bare_findings_in(view: ModuleView) -> Findings:
+    """#15628 -- a bare identifier in an emitted message, bound where the message is built.
+
+    Both conditions are what make this half of the bare population readable.
+    Message position alone reaches 12 of the 1,452 and one of the twelve is a
+    ``print`` documenting a route shape; requiring the root to be local to the
+    enclosing function drops exactly that one, because a runtime value being
+    emitted is bound where the emitting happens. 1,452 -> 11, all eleven real.
+    """
+    tree, names, strings = view
+    emitted = _emitted_string_ids(tree)
+    candidates = [(node, fields) for node, fields in strings if fields and id(node) in emitted]
+    if not candidates:
+        return []  # the scope tagging below costs a walk per function; most files never need it
+    scopes: Dict[int, FrozenSet[str]] = {}
+    _local_bindings(tree, frozenset(), scopes)
+    findings: Findings = []
+    for node, fields in candidates:
+        local = scopes.get(id(node), frozenset())
+        roots = ((field, _field_root(field, qualified=False)) for field in fields)
+        findings.extend((node.lineno, field) for field, root in roots if root in local and root in names)
+    return findings
+
+
 def _unimported_module_findings_in(view: ModuleView) -> Findings:
     """#15614 -- a field rooted at a standard-library module the file never imports."""
     _, names, strings = view
@@ -283,6 +446,8 @@ CATEGORIES: Tuple[Tuple[str, Callable[[ModuleView], Findings]], ...] = (
     ("stranded", _findings_in),
     ("companion", _companion_findings_in),
     ("unimported_module", _unimported_module_findings_in),
+    ("conditional", _conditional_findings_in),
+    ("emitted_bare", _emitted_bare_findings_in),
 )
 
 
@@ -312,6 +477,16 @@ def companion_interpolations(source: str) -> Findings:
 def unimported_module_interpolations(source: str) -> Findings:
     """``(line, field)`` for every field reaching a stdlib module *source* never imports (#15614)."""
     return _examine(source, _unimported_module_findings_in)
+
+
+def conditional_interpolations(source: str) -> Findings:
+    """``(line, field)`` for every stranded field holding a conditional expression (#15627)."""
+    return _examine(source, _conditional_findings_in)
+
+
+def emitted_bare_interpolations(source: str) -> Findings:
+    """``(line, field)`` for every bare identifier stranded in an emitted message (#15628)."""
+    return _examine(source, _emitted_bare_findings_in)
 
 
 def tracked_python_files() -> Tuple[str, ...]:

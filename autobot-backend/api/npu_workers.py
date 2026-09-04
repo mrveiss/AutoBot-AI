@@ -887,7 +887,7 @@ async def _check_worker_health(client: httpx.AsyncClient, worker_url: str) -> Wo
         return info
 
     except httpx.RequestError:
-        raise_invalid_input("worker_url", "Cannot reach worker at {worker_url}")
+        raise_invalid_input("worker_url", f"Cannot reach worker at {worker_url}")
 
 
 def _generate_worker_id(health_info: WorkerHealthInfo) -> str:
