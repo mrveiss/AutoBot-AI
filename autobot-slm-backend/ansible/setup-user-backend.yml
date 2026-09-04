@@ -35,7 +35,15 @@
     backend_deployed_root: /opt/autobot
     backend_install_dir: "{{ backend_deployed_root }}/autobot-backend"
     backend_code_dir: "{{ backend_install_dir }}"
-    backend_shared_dir: "{{ backend_deployed_root }}/autobot_shared"
+    # #15560/3: this was `backend_shared_dir` -- the right value under a name
+    # nothing consumes. The `backend` role (and the `autobot_shared` role it
+    # sits beside) reads `backend_shared_standalone_dir`, whose default is a
+    # hardcoded /opt/autobot/autobot_shared that does NOT follow the
+    # backend_deployed_root this play declares. So the play's deploy root was
+    # silently not reaching the one directory the standalone PYTHONPATH copy
+    # lands in. Renamed to the consumed name rather than deleted: the omission
+    # was the bug.
+    backend_shared_standalone_dir: "{{ backend_deployed_root }}/autobot_shared"
     backend_user: autobot
     backend_group: autobot
     backend_port: 8001

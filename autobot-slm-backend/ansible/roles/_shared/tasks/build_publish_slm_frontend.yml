@@ -1,0 +1,134 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The ONE way provisioning builds and publishes the SLM frontend (#15557).
+#
+# vite empties its outDir before writing, so a build that fails leaves `dist/`
+# with nothing in it. nginx serves that directory with
+# `try_files $uri $uri/ /slm/index.html` and autoindex off, so a missing
+# index.html answers 403 for EVERY path under /slm/ — a build failure becomes a
+# total outage of the dashboard, including the maintenance and code-sync screens
+# an operator would use to recover (#15430, #15462).
+#
+# So the build goes into `dist.staging` and is promoted only after it is proven
+# to carry a real entry point; a failed or partial build leaves the previously
+# working bundle serving and fails the play loudly.
+#
+# #15557: this logic existed four times — `playbooks/update-all-nodes.yml` had
+# it, and `roles/slm_manager/tasks/main.yml`, `playbooks/update-node.yml` and
+# `playbooks/provision-fleet-roles.yml` each built straight into the served
+# `dist/` with no gate at all. Three copies were still the pre-#15430 shape
+# because a fix applied to one copy is not applied to the others. It lives here
+# now, and each entry point delegates.
+#
+# Sweep result (#15557 AC 6) — every SLM-frontend build site in the tree:
+#   playbooks/update-all-nodes.yml ............ delegates here
+#   roles/slm_manager/tasks/main.yml .......... delegates here
+#   playbooks/update-node.yml ................. delegates here
+#   playbooks/provision-fleet-roles.yml ....... delegates here
+#   services/slm_frontend_build.py ............ same mechanism, Python side
+#                                               (the code-sync self-update path;
+#                                               it cannot include an Ansible task
+#                                               file, see the seam note below)
+# The user-frontend (`autobot-frontend`) build sites carry the same unstaged
+# shape and are tracked separately — they are a different component with a
+# different nginx site, and are NOT silently in scope here.
+#
+# The seam: an Ansible task file, not a call into
+# `autobot-slm-backend/services/slm_frontend_build.py`. The Python module runs
+# inside the SLM backend's own venv on the SLM host and resolves its paths from
+# SLM_DEPLOYED_ROOT; three of the four callers here are plays that run against
+# an arbitrary target node, before (or without) that backend being able to
+# serve a request at all — `update-node.yml` in particular deploys to a node
+# that has no SLM backend. A task file is the only seam all four can reach.
+#
+# Contract:
+#   slm_frontend_publish_label  (str) Display label for task names, e.g. "SLM".
+#   slm_frontend_publish_dir    (str) Absolute path of the autobot-slm-frontend
+#                                     package directory (the one holding
+#                                     package.json and the served dist/).
+#   slm_frontend_publish_user   (str) Service account that owns that tree; the
+#                                     build and the swap both run as it, so the
+#                                     published bundle is never root-owned.
+
+- name: "{{ slm_frontend_publish_label }} | Frontend: build into dist.staging (#15557)"
+  ansible.builtin.command:
+    # build:slm = "VITE_API_URL=/slm vite build" — the SLM UI is always served
+    # under `location /slm/` and vite.config sets base /slm/, so a plain
+    # `npm run build` bakes in the wrong API base and the dashboard calls the
+    # user backend's endpoints instead (#9563, #9710, #10435).
+    cmd: npm run build:slm -- --outDir dist.staging --emptyOutDir
+    chdir: "{{ slm_frontend_publish_dir }}"
+  become: true
+  become_user: "{{ slm_frontend_publish_user }}"
+  environment:
+    VITE_API_URL: "/slm"
+  register: _slm_frontend_staged_build
+  # Held so the next task can report the build's own stderr. Diagnosing the
+  # #15430 outage needed the filesystem, because the unit exited 2 with no npm
+  # output anywhere in the journal.
+  failed_when: false
+  changed_when: _slm_frontend_staged_build.rc == 0
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+- name: "{{ slm_frontend_publish_label }} | Frontend: fail loudly if the build failed (#15557)"
+  ansible.builtin.fail:
+    msg: |
+      SLM frontend build failed in {{ slm_frontend_publish_dir }}
+      (rc={{ _slm_frontend_staged_build.rc | default('?') }}).
+      The previous bundle is still being served — dist/ was not touched.
+      stderr:
+      {{ _slm_frontend_staged_build.stderr | default('(no stderr captured)') }}
+      stdout:
+      {{ _slm_frontend_staged_build.stdout | default('(no stdout captured)') }}
+  when: _slm_frontend_staged_build.rc | default(1) != 0
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+- name: "{{ slm_frontend_publish_label }} | Frontend: verify the staged build produced an entrypoint (#15557)"
+  ansible.builtin.stat:
+    path: "{{ slm_frontend_publish_dir }}/dist.staging/index.html"
+  register: _slm_frontend_staged_index
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+- name: "{{ slm_frontend_publish_label }} | Frontend: refuse to publish a bundle with no index.html (#15557)"
+  ansible.builtin.fail:
+    msg: >-
+      SLM frontend build in {{ slm_frontend_publish_dir }} reported success but
+      produced no usable index.html in dist.staging — publishing it would make
+      every /slm/ path answer 403. The previous bundle is still being served.
+  # Size as well as existence: a zero-byte index.html satisfies nginx's
+  # try_files and then serves a blank page, which no health check notices.
+  when: >-
+    not _slm_frontend_staged_index.stat.exists
+    or (_slm_frontend_staged_index.stat.size | default(0) | int) == 0
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+- name: "{{ slm_frontend_publish_label }} | Frontend: clear the previous bundle slot (#15557)"
+  ansible.builtin.file:
+    path: "{{ slm_frontend_publish_dir }}/dist.previous"
+    state: absent
+  become: true
+  become_user: "{{ slm_frontend_publish_user }}"
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+- name: "{{ slm_frontend_publish_label }} | Frontend: keep the current bundle as a fallback (#15557)"
+  ansible.builtin.command:
+    cmd: >-
+      mv {{ slm_frontend_publish_dir }}/dist
+         {{ slm_frontend_publish_dir }}/dist.previous
+    removes: "{{ slm_frontend_publish_dir }}/dist"
+  become: true
+  become_user: "{{ slm_frontend_publish_user }}"
+  tags: ['slm', 'frontend', 'slm-frontend']
+
+- name: "{{ slm_frontend_publish_label }} | Frontend: publish the staged build (#15557)"
+  ansible.builtin.command:
+    cmd: >-
+      mv {{ slm_frontend_publish_dir }}/dist.staging
+         {{ slm_frontend_publish_dir }}/dist
+    creates: "{{ slm_frontend_publish_dir }}/dist"
+  become: true
+  become_user: "{{ slm_frontend_publish_user }}"
+  tags: ['slm', 'frontend', 'slm-frontend']

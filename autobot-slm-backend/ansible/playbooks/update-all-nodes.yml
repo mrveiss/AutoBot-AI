@@ -361,15 +361,18 @@
     # written and _get_slm_deployed_commit() always returns None (self-update
     # always fires, never skips-when-current). Record the just-deployed commit
     # here too, mirroring the slm_manager role, so the skip-check works.
-    - name: "[PLAY 1] SLM | Record deployed commit marker (#12223, #12202)"
-      ansible.builtin.shell:
-        cmd: >-
-          git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}
-          -C {{ code_source_dir | default('/opt/autobot/code_source') }}
-          rev-parse HEAD
-          > /opt/autobot/autobot-slm-backend/.deployed_commit
-      changed_when: false
-      become: true
+    #
+    # #15557: the write itself is defined once, in
+    # roles/_shared/tasks/record_slm_deployed_commit.yml — this play used to
+    # spell it out with a shell redirect and then fix the ownership that
+    # redirect got wrong in a second task, while two of the four SLM entry
+    # points wrote no marker at all.
+    - name: "[PLAY 1] SLM | Record deployed commit marker (#12223, #12202, #15557)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/record_slm_deployed_commit.yml
+      vars:
+        deployed_commit_label: "[PLAY 1] SLM"
+        deployed_commit_dir: /opt/autobot/autobot-slm-backend
+        deployed_commit_owner: autobot
       tags: [slm]
 
     # #14624: render the systemd unit from the SAME task file the role uses.
@@ -388,15 +391,6 @@
         name: slm_manager
         tasks_from: service_units.yml
       tags: [slm, systemd]
-
-    - name: "[PLAY 1] SLM | Own the deployed-commit marker (#12223)"
-      file:
-        path: /opt/autobot/autobot-slm-backend/.deployed_commit
-        owner: autobot
-        group: autobot
-        mode: "0644"
-      become: true
-      tags: [slm]
 
     # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
     - name: "[PLAY 1] SLM Agent | Create autobot_shared symlink for agent imports"
@@ -501,76 +495,18 @@
       register: slm_npm_install
       tags: [slm, slm-frontend, deps]
 
-    # #15430: vite empties its outDir before writing, so a build that fails
-    # leaves `dist/` with nothing in it. nginx serves that directory with
-    # `try_files $uri $uri/ /slm/index.html` and autoindex off, so a missing
-    # index.html answers 403 for EVERY path under /slm/ — a build failure became
-    # a total outage of the dashboard, including the maintenance and code-sync
-    # screens an operator would use to recover.
-    #
-    # Build into a staging directory and publish only on success, so a failed
-    # build leaves the previous working bundle serving.
-    - name: "[PLAY 1] SLM | Rebuild frontend production build (staged, #15430)"
-      command:
-        # build:slm = "VITE_API_URL=/slm vite build" — the SLM frontend is served
-        # under /slm, so a plain `npm run build` bakes in the wrong API base and
-        # the SLM dashboard calls the wrong endpoints (#9563, #9710). Matches the
-        # canonical ansible/update-all-nodes.yml.
-        cmd: npm run build:slm -- --outDir dist.staging --emptyOutDir
-        chdir: /opt/autobot/autobot-slm-frontend
-      register: slm_build
-      failed_when: false
-      tags: [slm, slm-frontend]
-
-    - name: "[PLAY 1] SLM | Fail loudly if the frontend build failed (#15430)"
-      ansible.builtin.fail:
-        # The build's own stderr, not just a non-zero exit: diagnosing the
-        # #15430 outage needed the filesystem because the unit exited 2 with no
-        # npm output anywhere in the journal.
-        msg: |
-          SLM frontend build failed (rc={{ slm_build.rc | default('?') }}).
-          The previous bundle is still being served — dist/ was not touched.
-          stderr:
-          {{ slm_build.stderr | default('(no stderr captured)') }}
-      when: slm_build.rc | default(1) != 0
-      tags: [slm, slm-frontend]
-
-    - name: "[PLAY 1] SLM | Verify the staged build produced an entrypoint (#15430)"
-      ansible.builtin.stat:
-        path: /opt/autobot/autobot-slm-frontend/dist.staging/index.html
-      register: slm_staged_index
-      tags: [slm, slm-frontend]
-
-    - name: "[PLAY 1] SLM | Refuse to publish a bundle with no index.html (#15430)"
-      ansible.builtin.fail:
-        msg: >-
-          SLM frontend build reported success but produced no index.html in
-          dist.staging — publishing it would make every /slm/ path 403.
-      when: not slm_staged_index.stat.exists
-      tags: [slm, slm-frontend]
-
-    - name: "[PLAY 1] SLM | Clear the previous bundle slot (#15430)"
-      ansible.builtin.file:
-        path: /opt/autobot/autobot-slm-frontend/dist.previous
-        state: absent
-      become: true
-      become_user: autobot
-      tags: [slm, slm-frontend]
-
-    - name: "[PLAY 1] SLM | Keep the current bundle as a fallback (#15430)"
-      ansible.builtin.command:
-        cmd: mv /opt/autobot/autobot-slm-frontend/dist /opt/autobot/autobot-slm-frontend/dist.previous
-        removes: /opt/autobot/autobot-slm-frontend/dist
-      become: true
-      become_user: autobot
-      tags: [slm, slm-frontend]
-
-    - name: "[PLAY 1] SLM | Publish the staged build (#15430)"
-      ansible.builtin.command:
-        cmd: mv /opt/autobot/autobot-slm-frontend/dist.staging /opt/autobot/autobot-slm-frontend/dist
-        creates: /opt/autobot/autobot-slm-frontend/dist
-      become: true
-      become_user: autobot
+    # #15430/#15557: vite empties its outDir before writing, so a build that
+    # fails leaves `dist/` with nothing in it and nginx answers 403 for every
+    # /slm/ path. The staged build-then-swap that prevents that is defined once,
+    # in roles/_shared/tasks/build_publish_slm_frontend.yml, because it used to
+    # live here and in three other entry points that never received the fix
+    # (#15557).
+    - name: "[PLAY 1] SLM | Build and publish the frontend (staged, #15557)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
+      vars:
+        slm_frontend_publish_label: "[PLAY 1] SLM"
+        slm_frontend_publish_dir: /opt/autobot/autobot-slm-frontend
+        slm_frontend_publish_user: autobot
       tags: [slm, slm-frontend]
 
     # #11480/#11492: redeploy the slm-agent BEFORE the backend restart. The
