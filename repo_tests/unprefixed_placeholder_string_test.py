@@ -68,6 +68,46 @@ narrowed until the noise the parent condition removed stays removed:
   (``secure_llm_command_parser.py`` line 484 was one), and that is the price of
   not readmitting 1,479 route segments. Recorded here so the next reader does
   not re-litigate the exclusion.
+* **Conditional-expression fields (#15627).** A ternary is an ``ast.IfExp``,
+  which the second condition's allowed set does not hold, so a field holding
+  one was discarded before any category saw it -- invisible with its names
+  bound, and invisible sitting beside a confirmed finding, which is how ten of
+  them reached the tree and were repaired by hand in PR #15626.
+  :func:`conditional_interpolations` resolves through the ternary instead and
+  requires *every* name in the field to be bound rather than one root, because
+  a ternary carries a root per branch plus one in its test. A ternary's test is
+  ordinarily a comparison, so the comparison and boolean nodes ride along:
+  admitting them changes the measured count by nothing and the reach by every
+  realistic ternary. Measured on the tree: 0, so this category lands
+  fail-closed rather than with a census.
+* **Bare identifiers in an emitted message (#15628).** The rule above holds 8
+  of the bare population; #15617 left the rest counted but never read. Reading
+  them meant partitioning them first. 1,452 bare fields stand outside any file
+  this guard flags: 1,201 are decorator path segments naming a parameter of
+  their own handler, 138 have an identifier that is a keyword to a ``format``
+  call in the same file, 6 are other decorator strings, and 107 are the
+  residue. All 107 were read at their sites and 13 were real missing prefixes.
+  What separates those 13 from the other 94 is position: 11 of them stand in a
+  positional argument of a logging or ``print`` call and none of the 94 do --
+  the 94 are route text outside a decorator (index maps, contract fixtures,
+  path-normalisation sentinels, prose), prompt and HTML templates rendered by a
+  ``format`` call in another module, and quoted JSON and JS fixtures.
+  :func:`emitted_bare_interpolations` takes exactly that position and adds one
+  condition: the field's root must be bound *in the enclosing function*.
+  Position alone reaches 12, and the twelfth is a ``print`` documenting a
+  websocket route shape; a runtime value being emitted is bound where the
+  emitting happens, so the locality condition drops that one and keeps the
+  eleven. 1,487 -> 1,452 -> 11, every one of the eleven real and repaired here,
+  so this category is fail-closed too. The other two of the 13 sit in an
+  ``append`` and in a helper call -- a batch scheduler's loop index and a 400
+  detail's worker URL -- and no rule narrow enough to stay quiet reaches them;
+  they were repaired by hand. The 94 are deliberately NOT pinned in a census:
+  26 are template constants and 13 are route index-map values, populations that
+  grow legitimately every time a prompt or an API index gains an entry, so a
+  shrink-only pin over them would redden on correct work. The partition above
+  is the record instead, and it is cited beside ``_REQUIRED_FIELD_NODES``, at
+  the line that drops the class, so the next reader finds it rather than
+  re-deriving it.
 * **Roots the module never imports (#15614).** 15 in the tree, of which ten are
   the workflow-DSL templates and poison fixtures the third condition exists to
   remove, plus a dict comprehension quoted inside a markdown code sample. Every
@@ -95,6 +135,8 @@ from typing import Dict
 
 from repo_tests.unprefixed_placeholder_scan import (
     companion_interpolations,
+    conditional_interpolations,
+    emitted_bare_interpolations,
     stranded_interpolations,
     sweep,
     unimported_module_interpolations,
@@ -189,6 +231,24 @@ def test_no_field_reaches_for_a_module_the_file_never_imports():
     assert not findings, (
         "A replacement field is rooted at a standard-library module this file never imports. "
         f"Add the import as well as the prefix -- the prefix alone raises NameError: {findings}"
+    )
+
+
+def test_no_conditional_expression_field_is_stranded():
+    """#15627 -- a ternary field that no other category can see, and none ever counted."""
+    findings = _category("conditional")
+    assert not findings, (
+        "A replacement field holds a conditional expression with every name bound. No other "
+        f"category can see this shape -- add the missing f prefix: {findings}"
+    )
+
+
+def test_no_bare_identifier_is_stranded_in_an_emitted_message():
+    """#15628 -- the only bug-bearing shape in the 1,452 the first condition drops."""
+    findings = _category("emitted_bare")
+    assert not findings, (
+        "A bare-identifier replacement field stands in a logging or print message and names a "
+        f"local of the function building it. Add the f prefix, or pass it lazily: {findings}"
     )
 
 
@@ -327,6 +387,79 @@ def test_the_same_field_with_the_import_present_is_the_ordinary_kind():
     assert stranded_interpolations(_IMPORTED_ROOT) == [(5, "json.dumps(payload)")]
 
 
+#: The real shape PR #15626 repaired by hand, with its prefix taken back off:
+#: ``security_verification.py`` wrote eight of these and nothing could see one.
+_TERNARY_STRIPPED = 'def report(result):\n    logger.info("Result: ' + _field("'PASS' if result else 'FAIL'") + '")\n'
+
+#: The same site as it stands on the branch.
+_TERNARY_KEPT = 'def report(result):\n    logger.info(f"Result: ' + _field("'PASS' if result else 'FAIL'") + '")\n'
+
+#: A ternary whose test is a comparison -- the ordinary shape, and the reason
+#: the comparison nodes ride along in the conditional grammar.
+_TERNARY_COMPARED = 'def grade(score):\n    return "band ' + _field("'high' if score > 90 else 'low'") + '"\n'
+
+#: The same ternary with neither branch nor test bound anywhere in the module.
+_TERNARY_UNBOUND = 'BANNER = "band ' + _field("'high' if score > 90 else 'low'") + '"\n'
+
+
+def test_a_stranded_ternary_is_caught_at_its_line():
+    """#15627 -- the shape ten hand-repaired bugs had, which no other category reports."""
+    assert conditional_interpolations(_TERNARY_STRIPPED) == [(2, "'PASS' if result else 'FAIL'")]
+    assert stranded_interpolations(_TERNARY_STRIPPED) == []
+    assert companion_interpolations(_TERNARY_STRIPPED) == []
+    assert unimported_module_interpolations(_TERNARY_STRIPPED) == []
+
+
+def test_the_same_ternary_with_its_prefix_is_silent():
+    """The other half of the pair -- without it the test above proves only that something fires."""
+    assert conditional_interpolations(_TERNARY_KEPT) == []
+
+
+def test_a_ternary_tested_by_a_comparison_is_a_finding():
+    """A ternary test is ordinarily a comparison, so the grammar has to admit one."""
+    assert conditional_interpolations(_TERNARY_COMPARED) == [(2, "'high' if score > 90 else 'low'")]
+
+
+def test_a_ternary_the_module_cannot_resolve_is_not_a_finding():
+    """Identical text, and the only difference is that nothing binds the name its test reads."""
+    assert conditional_interpolations(_TERNARY_UNBOUND) == []
+
+
+#: A bare identifier in a logging message, bound by the function that logs it.
+_EMITTED_BARE = 'def run(elapsed):\n    logger.error("failed after ' + _field("elapsed") + 's")\n'
+
+#: The same call with its prefix.
+_EMITTED_PREFIXED = 'def run(elapsed):\n    logger.error(f"failed after ' + _field("elapsed") + 's")\n'
+
+#: The identical field emitted by a function that does not bind it -- the route
+#: documentation shape that message position alone would have readmitted.
+_EMITTED_NONLOCAL = 'chat_id = "seed"\n\n\ndef usage():\n    print("connect to /ws/' + _field("chat_id") + '")\n'
+
+#: The identical field, locally bound, in a route index map rather than a message.
+_UNEMITTED_BARE = 'def routes(session_id):\n    return {"get": "/sessions/' + _field("session_id") + '"}\n'
+
+
+def test_a_bare_identifier_in_an_emitted_message_is_a_finding():
+    """#15628 -- 11 of the 1,452 had this shape and every one was a missing prefix."""
+    assert emitted_bare_interpolations(_EMITTED_BARE) == [(2, "elapsed")]
+    assert companion_interpolations(_EMITTED_BARE) == []
+
+
+def test_the_same_message_with_its_prefix_is_silent():
+    """The pair's other half: identical position, identical field, prefix present."""
+    assert emitted_bare_interpolations(_EMITTED_PREFIXED) == []
+
+
+def test_an_emitted_field_the_function_does_not_bind_is_not_a_finding():
+    """Route documentation reads a module constant; a runtime value is bound where it is emitted."""
+    assert emitted_bare_interpolations(_EMITTED_NONLOCAL) == []
+
+
+def test_the_same_local_field_outside_a_message_is_not_a_finding():
+    """The other half of the position pair: a route index map is not a message to a reader."""
+    assert emitted_bare_interpolations(_UNEMITTED_BARE) == []
+
+
 def test_neither_half_of_the_guard_ever_reports_its_own_source():
     """A guard about placeholder syntax that trips on itself gets an exemption or gets narrowed."""
     for path in (Path(__file__).resolve(), _SCAN_MODULE):
@@ -334,3 +467,5 @@ def test_neither_half_of_the_guard_ever_reports_its_own_source():
         assert stranded_interpolations(own) == [], path.name
         assert companion_interpolations(own) == [], path.name
         assert unimported_module_interpolations(own) == [], path.name
+        assert conditional_interpolations(own) == [], path.name
+        assert emitted_bare_interpolations(own) == [], path.name
