@@ -4,4 +4,40 @@
 torch>=2.13.0
 -c ../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
+# #15671: bare, and the only statement of this worker's openvino extras
+# anywhere. `roles/npu-worker` installed openvino bare while
+# `playbooks/deploy-native-services.yml` re-installed it as
+# `openvino[pytorch,tensorflow]` straight afterwards, so which one bound
+# depended on the entry point. openvino declares no extras at all -- its
+# metadata carries `numpy` and `openvino-telemetry` and nothing conditional --
+# so pip warns and ignores those two names. They were `openvino-dev`'s extras,
+# carried over when #14452 dropped that deprecated meta-package. Stated once,
+# here, without them.
 openvino  # version from constraints/shared.txt (#15408)
+
+# Web server (#15671). The worker serves a FastAPI app -- both the role's
+# rendered `npu-worker.py` and the container entry point import `fastapi` and
+# `uvicorn` -- but only `roles/npu-worker` declared them, inline, so a
+# `pip install -r` of this file could not reproduce the venv ansible builds.
+# Both floors are the text
+# `autobot-infrastructure/autobot-npu-worker/docker/requirements-npu.txt`
+# already states for the same worker; fastapi's is a security floor (it
+# requires starlette >=0.52.1, the O(n^2) Range-header DoS).
+fastapi>=0.141.1
+uvicorn[standard]>=0.52.4
+
+# Model tooling (#15671), moved here from the same inline `name:` list.
+# pillow carries the floor `autobot-backend/requirements.txt` states for it
+# (SECURITY UPDATE - OOB write fix); the role installed it unpinned, so a fresh
+# provision could land below that fix.
+pillow>=12.3.0
+# transformers is deliberately BARE, unlike every other manifest in this repo,
+# which states `>=5.16.1`. `optimum[openvino]` below pulls `optimum-intel`,
+# whose newest release (2.1.0) requires `transformers<5.6,>=4.51` -- so
+# `>=5.16.1` and `optimum[openvino]` are unsatisfiable together at every
+# published version, and writing the floor here would break the resolve rather
+# than describe it. Left bare so this file states what the role installs; the
+# choice between dropping optimum and holding transformers back for this one
+# worker is #15680.
+transformers
+optimum[openvino]

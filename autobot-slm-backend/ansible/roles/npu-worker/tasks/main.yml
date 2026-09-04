@@ -189,63 +189,36 @@
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 120  # Issue #2835: prevent indefinite hang on network issues
 
-- name: Check if OpenVINO is already installed
-  ansible.builtin.command:
-    cmd: "{{ npu_install_dir }}/venv/bin/pip show openvino"
-  register: _openvino_check
-  changed_when: false
-  # (#2872) Intentional: pip show exits rc=1 when package is not installed;
-  # the result gates conditional OpenVINO installation below.
-  failed_when: false
-  become_user: "{{ npu_user }}"
-
-# #15598: floors raised to the specifier text `autobot-infrastructure/
-# autobot-npu-worker/docker/requirements-npu.txt` declares for the same two
-# packages. `>=0.100.0` let a fresh provision satisfy this task four minors
-# below the floor `fastapi>=0.141.1` carries for a security reason (it requires
-# starlette >=0.52.1, the O(n^2) Range-header DoS), and the worker's own
-# manifest is not installed by this role, so nothing downstream corrected it.
-# The parity guard (#15568) now fails any PR that moves one side alone.
-- name: Install FastAPI and web server dependencies
-  ansible.builtin.pip:
-    name:
-      - fastapi>=0.141.1
-      - uvicorn[standard]>=0.52.4
-    virtualenv: "{{ npu_install_dir }}/venv"
-    state: present
-  become_user: "{{ npu_user }}"
-  environment:
-    PIP_DEFAULT_TIMEOUT: "120"
-  timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
-
-# #14447: the deprecated meta-package is gone and the floor matches the SSOT.
+# #15671: ONE pip invocation, reading the worker's own manifest.
 #
-# It was frozen at 2024.6.0 and no release of it is compatible with openvino
-# 2026.x, so pip backtracked through every version of it down to 2022.3.2, each
-# pinning numpy lower, until it reached numpy==1.25.2 -- which has no cp314
-# wheel. Building that sdist under Python 3.14 died with "Cannot import
-# 'setuptools.build_meta'", an error naming the build backend and saying
-# nothing about the package that caused it.
+# This role used to fill the venv from two inline `name:` lists while
+# `playbooks/deploy-native-services.yml` filled the SAME venv
+# (/opt/autobot/autobot-npu-worker/venv, #13746) from
+# `autobot-npu-worker/requirements.txt`, so what a node ended up with depended
+# on which entry point had run. The role installed five packages the manifest
+# had never heard of -- fastapi, uvicorn, pillow, transformers and optimum --
+# and openvino three different ways between the two files. Only the manifest
+# path applied `constraints/shared.txt`, so the ABI pins #10524 exists to hold
+# were absent on this one. All of it is now declared in the manifest and
+# installed from there, the shape roles/backend and roles/ai-stack already use.
 #
-# The loose `>=2024.0` floor is what let the resolver walk backwards at all.
-# #15408: the floor is no longer restated here -- constraints/shared.txt is the
-# single source of truth for both openvino and numpy, so a dependabot bump
-# there needs no edit here.
-# #15601: the `-c` fallback derives from `autobot.base_dir`
-# (inventory/group_vars/all.yml) rather than restating the install root as a
-# literal. An explicit `code_source_dir` override is still honoured -- only the
-# default stops being a second copy of a value the SSOT already publishes, so a
-# moved base directory cannot leave this role provisioning against the old path
-# (the failure shape #14272 records for ai-stack: a wrong constraints path
-# aborts the pip run). Same shape as roles/tts-worker (#15599).
-- name: Install OpenVINO and dependencies
+# The manifest is read from the checkout rather than from the deployed worker
+# tree because its `-e ../autobot_shared` and `-c ../constraints/shared.txt`
+# resolve relative to the file, and only the full checkout has both siblings.
+# `code_source_dir` is the same override-first, SSOT-derived fallback the `-c`
+# below already used (#15601) -- one path for the manifest and the constraints,
+# not two.
+#
+# The `pip show openvino` gate that used to guard the second list is gone with
+# it: it skipped the WHOLE list once openvino was present, so a host that had
+# openvino never had numpy, pillow, transformers or optimum updated again. Its
+# `npu_install_openvino` toggle went the same way -- nothing in the tree ever
+# set it false, the manifest declares openvino unconditionally, and the
+# playbook path never honoured it.
+- name: "NPU Worker | Install worker dependencies from its manifest"
   ansible.builtin.pip:
-    name:
-      - openvino
-      - numpy
-      - pillow
-      - transformers
-      - optimum[openvino]
+    requirements: >-
+      {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-npu-worker/requirements.txt
     virtualenv: "{{ npu_install_dir }}/venv"
     state: present
     extra_args: >-
@@ -255,9 +228,6 @@
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
-  when:
-    - npu_install_openvino | default(true)
-    - _openvino_check.rc != 0
 
 # #13460: these service files are defined once, in code_only.yml, so the
 # builtin updater can deliver them without re-running provisioning. Copying
