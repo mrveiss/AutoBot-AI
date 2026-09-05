@@ -99,7 +99,10 @@ def _is_bare_getenv_cast(value: ast.expr) -> str | None:
     if not isinstance(value, ast.Call):
         return None
     if isinstance(value.func, ast.Name) and value.func.id in _TRANSPARENT_WRAPPERS:
-        for arg in value.args:
+        # Keywords as well as positionals: `max(0, key=int(os.getenv(...)))`
+        # evaluates the cast before the wrapper is called, so it raises at
+        # import exactly as a positional one does.
+        for arg in [*value.args, *(kw.value for kw in value.keywords)]:
             found = _is_bare_getenv_cast(arg)
             if found:
                 return found
@@ -122,22 +125,43 @@ def _is_bare_getenv_cast(value: ast.expr) -> str | None:
     return func.id if is_os_getenv else None
 
 
+def _target_key(target: ast.expr) -> str | None:
+    """A stable name for an assignment target, or ``None`` when it has none.
+
+    Plain names are the common case. An ATTRIBUTE target -- `settings.timeout =
+    int(os.getenv(...))` -- used to yield nothing, so the site was detected and
+    then dropped for want of a key: the guard saw the cast and accepted it
+    silently. A subscript (`cfg["t"] = ...`) genuinely has no stable name; it is
+    reported under its own marker rather than discarded.
+    """
+    if isinstance(target, ast.Name):
+        return target.id
+    if isinstance(target, ast.Attribute):
+        base = _target_key(target.value)
+        return f"{base}.{target.attr}" if base else target.attr
+    if isinstance(target, (ast.Subscript, ast.Tuple, ast.List, ast.Starred)):
+        return "<unnamed-target>"
+    return None
+
+
 def _assigned_names(node: ast.Assign | ast.AnnAssign) -> list[str]:
     targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-    return [t.id for t in targets if isinstance(t, ast.Name)]
+    return [key for key in (_target_key(t) for t in targets) if key]
 
 
 def bare_casts_in_file(path: Path) -> list[str]:
     """Variable names bound to a bare ``int``/``float`` ``os.getenv`` cast at
-    module level in *path*, or ``[]`` for an unreadable/unparseable file.
+    module level in *path*.
+
+    Raises rather than returning ``[]`` on an unparseable file. Swallowing the
+    error returned "no casts here" while the caller still counted the file as
+    scanned, so the reach floor was satisfied by files nothing had read -- a
+    parse failure could hide an unallowlisted cast behind a green sweep.
 
     Module level only: this walks ``tree.body`` directly and never descends
     into a function or class, matching the guard's own stated scope.
     """
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    except (SyntaxError, UnicodeDecodeError, OSError):
-        return []
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     found = []
     for node in tree.body:
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
@@ -149,8 +173,9 @@ def bare_casts_in_file(path: Path) -> list[str]:
 class Measurement(NamedTuple):
     """One sweep of the checkout: every bare cast this guard's scope covers."""
 
-    files_scanned: int
+    files_scanned: int  # files actually PARSED, not files listed
     found: dict[str, list[str]]  # rel path -> variable names
+    unparsed: tuple[str, ...]  # tracked files the walk could not read
 
     @property
     def keys(self) -> set[str]:
@@ -160,15 +185,39 @@ class Measurement(NamedTuple):
 @pytest.fixture(scope="module")
 def measurement() -> Measurement:
     root = repo_root()
-    rels = tracked_python_files(root)
-    found = {rel: names for rel in rels if (names := bare_casts_in_file(root / rel))}
-    return Measurement(len(rels), found)
+    found: dict[str, list[str]] = {}
+    unparsed: list[str] = []
+    parsed = 0
+    for rel in tracked_python_files(root):
+        try:
+            names = bare_casts_in_file(root / rel)
+        except (SyntaxError, UnicodeDecodeError, OSError):
+            unparsed.append(rel)
+            continue
+        parsed += 1
+        if names:
+            found[rel] = names
+    return Measurement(parsed, found, tuple(unparsed))
 
 
 #: Floor on files reached, so a scanner that has stopped walking the tree
 #: fails loudly instead of passing on an empty sweep (the #15018 lesson).
 #: Measured on Dev_new_gui: comfortably above 1000 tracked, non-test .py files.
 MIN_FILES_SCANNED = 500
+
+
+def test_every_tracked_file_was_actually_parsed(measurement: Measurement) -> None:
+    """A file the walk could not read is not a file with no casts.
+
+    Swallowing the parse error returned "nothing here" while the file still
+    counted toward the reach floor, so an unallowlisted cast could sit behind a
+    green sweep in a file nothing had read. Reach now counts files PARSED, and
+    a failure is named rather than absorbed.
+    """
+    assert not measurement.unparsed, (
+        "these tracked Python files could not be parsed, so the sweep cannot "
+        f"speak for them: {list(measurement.unparsed)}"
+    )
 
 
 def test_enumeration_is_not_vacuous(measurement: Measurement) -> None:
@@ -234,6 +283,10 @@ CAST_CONTRASTS = (
     # The wrapper is only transparent when a cast is actually inside it.
     ('_X = max(1, int(some_other_call("VAR")))', None),
     ('_X = max(1, 2)', None),
+    # A keyword argument is evaluated before the wrapper is called, so a cast
+    # hidden there raises at import exactly as a positional one does.
+    ('_X = max(0, key=int(os.getenv("VAR", "1")))', "int"),
+    ('_X = max(0, key=len)', None),
     # A crash-safe reader is not this shape at all.
     ('_X = env_int("VAR", 1)', None),
     # A cast of something other than a bare os.getenv call.
@@ -262,3 +315,24 @@ def test_bare_cast_at_module_level_is_found(tmp_path: Path) -> None:
     target = tmp_path / "sample.py"
     target.write_text('import os\n\n_TIMEOUT = int(os.getenv("VAR", "1"))\n', encoding="utf-8")
     assert bare_casts_in_file(target) == ["_TIMEOUT"]
+
+
+def test_an_attribute_target_is_reported_not_dropped(tmp_path: Path) -> None:
+    """A detected cast must never be discarded for want of a name.
+
+    `settings.timeout = int(os.getenv(...))` reaches the classifier, but an
+    attribute target yielded no key, so the finding was collected and then
+    thrown away -- the guard saw the defect and accepted it. Reported under its
+    dotted name now.
+    """
+    target = tmp_path / "attr.py"
+    target.write_text('import os\nsettings.timeout = int(os.getenv("VAR", "1"))\n', encoding="utf-8")
+    assert bare_casts_in_file(target) == ["settings.timeout"]
+
+
+def test_an_unparseable_file_raises_rather_than_reading_as_clean(tmp_path: Path) -> None:
+    """The contrast to the reach floor: 'cannot read' is not 'nothing here'."""
+    target = tmp_path / "broken.py"
+    target.write_text("def (:\n", encoding="utf-8")
+    with pytest.raises(SyntaxError):
+        bare_casts_in_file(target)
