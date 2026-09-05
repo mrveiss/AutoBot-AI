@@ -180,7 +180,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/code_intelligence/bug_predictor.py": 1502,
     "autobot-backend/code_intelligence/bug_predictor_test.py": 759,
     "autobot-backend/code_intelligence/co_change_test.py": 736,
-    "autobot-backend/code_intelligence/code_evolution_miner.py": 699,
+    "autobot-backend/code_intelligence/code_evolution_miner.py": 698,
     "autobot-backend/code_intelligence/code_fingerprinting_test.py": 896,
     "autobot-backend/code_intelligence/code_review_engine.py": 1237,
     "autobot-backend/code_intelligence/code_review_engine_test.py": 1010,
