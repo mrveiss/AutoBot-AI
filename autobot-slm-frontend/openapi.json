@@ -19140,7 +19140,7 @@
     },
     "/api/code-sync/self-update": {
       "post": {
-        "description": "Trigger an Ansible-based update of the SLM server itself (#9073).\n\nLooks up the SLM's own node record by matching the external_url IP,\nthen runs update-all-nodes.yml against it as a fire-and-forget task\n(the service restarts mid-run, so the caller should poll health).\nReturns immediately with a queued message.",
+        "description": "Trigger an Ansible-based update of the SLM server itself (#9073).\n\nLooks up the SLM's own node record by matching the external_url IP,\nthen runs update-all-nodes.yml against it as a fire-and-forget task\n(the service restarts mid-run, so the caller should poll health).\nReturns immediately with a queued message.\n\nRequires an authenticated user -- unchanged by #15728. The credential-free\non-host trigger is a completely separate listener\n(``services/local_admin_socket.py``); it does not touch this dependency.",
         "operationId": "self_update_api_code_sync_self_update_post",
         "parameters": [
           {
