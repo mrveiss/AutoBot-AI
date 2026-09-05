@@ -25,13 +25,18 @@ company *data*, and a service-layer check holding for every caller is the right
 property. This guards the authorization graph itself, and a check that cannot be
 read from the route is a check nobody can audit.
 
-``require_company_admin_route`` is a **placeholder for
-``admin.reporting_line.write``**, which the auth owner is landing with its
-enforcement in one change (#15738: a permission that exists and gates nothing is
-worse than one that does not). Until then this route declares the narrower gate
-— company admin — which is never wider than the eventual permission, so ordering
-can slip either way without opening anything. Swapping it is a one-line change
-at the decorator, which is the point of it being declared here.
+The gate is ``require_reporting_line_write`` — the ``admin.reporting_line.write``
+permission (#15793). It replaced a deliberately narrower placeholder that was
+declared here from the first commit: a route gated in the service and
+"promoted" later spends the interval reading as unguarded to anything that
+inspects routes, which is the state #15737 documents. Because the placeholder
+was declared rather than called, the swap was one line at each decorator and
+``test_the_write_gate_is_a_declared_dependency`` held across it.
+
+The permission is deliberately unable to see hierarchy data: its dependency
+takes only the tenant context and the current user — no subject id, no session
+— so a later edit cannot make it consult the very graph it guards without first
+changing a signature that fails loudly.
 """
 
 from __future__ import annotations
@@ -43,14 +48,18 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user_management.dependencies import get_current_user, require_org_context
+from api.user_management.dependencies import (
+    get_current_user,
+    require_org_context,
+    require_reporting_line_write,
+)
 from autobot_shared.singleton_factory import lazy_singleton
 from llc.deps import assert_company_access
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ..models.enums import RoleHolderType
-from ..services.authz import NotAuthorisedError, require_company_admin
+from ..services.authz import NotAuthorisedError
 from ..services.reporting_line import Holder, ReportingLineService
 from ._common import actor_id, bad_request, forbidden
 
@@ -59,24 +68,6 @@ router = APIRouter(prefix="/reporting-lines", tags=["llc-reporting-lines"])
 _get_lines = lazy_singleton(ReportingLineService)
 
 _HOLDER_TYPES = (RoleHolderType.USER.value, RoleHolderType.AGENT.value)
-
-
-async def require_company_admin_route(
-    company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
-    current_user: dict = Depends(get_current_user),
-) -> None:
-    """Declared stand-in for ``admin.reporting_line.write``.
-
-    Exists so the gate is in the ``Dependant`` tree from the first commit rather
-    than being added later — a route that ships gated in the service and is
-    "promoted" afterwards spends the interval reading as unguarded to anything
-    that inspects routes, which is exactly what #15737 documents.
-    """
-    try:
-        await require_company_admin(session, company_id, actor_id(current_user))
-    except NotAuthorisedError as exc:
-        raise forbidden(exc) from exc
 
 
 class HolderRef(BaseModel):
@@ -153,7 +144,7 @@ async def get_direct_reports(
 @router.put(
     "/{company_id}/{subject_type}/{subject_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_company_admin_route)],
+    dependencies=[Depends(require_reporting_line_write)],
 )
 async def set_reporting_line(
     company_id: uuid.UUID,
@@ -183,7 +174,7 @@ async def set_reporting_line(
 @router.delete(
     "/{company_id}/{subject_type}/{subject_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_company_admin_route)],
+    dependencies=[Depends(require_reporting_line_write)],
 )
 async def clear_reporting_line(
     company_id: uuid.UUID,

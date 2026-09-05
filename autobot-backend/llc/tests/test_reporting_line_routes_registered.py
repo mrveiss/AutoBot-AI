@@ -35,6 +35,12 @@ _EXPECTED = {
 #: authority over whom. Reads are not gated by this.
 _WRITE_METHODS = {"PUT", "DELETE"}
 
+#: The exact dependency the mutating routes must declare (#15793). Named rather
+#: than pattern-matched: the whole point of the permission is that it is
+#: narrower than an admin check, so a test accepting "something admin-ish"
+#: would not notice it being swapped for one.
+_GATE = "require_reporting_line_write"
+
 
 def _mounted() -> set:
     return {
@@ -72,9 +78,14 @@ def test_reads_carry_auth_and_tenant_dependencies() -> None:
 def test_the_write_gate_is_a_declared_dependency() -> None:
     """Every mutating route carries the gate in its ``Dependant`` tree.
 
-    This is the assertion that a service-layer check cannot satisfy. When
-    ``admin.reporting_line.write`` is minted, the declared name changes and this
-    test is where that swap is noticed — which is the point of naming it here.
+    This is the assertion that a service-layer check cannot satisfy.
+
+    It names the gate **exactly**. While the permission was still being minted
+    this also accepted a narrower company-admin placeholder, which was right
+    then and is wrong now: a loose match would keep passing if someone replaced
+    the permission with a generic admin check, and that is a real regression —
+    ``admin.reporting_line.write`` exists precisely because company admin is
+    not the right authority for re-parenting.
     """
     ungated = []
     checked = 0
@@ -89,12 +100,7 @@ def test_the_write_gate_is_a_declared_dependency() -> None:
             getattr(d.call, "__name__", "")
             for d in getattr(dependant, "dependencies", [])
         }
-        if not any(
-            n.startswith("require_")
-            and "admin" in n
-            or n == "require_reporting_line_write"
-            for n in names
-        ):
+        if _GATE not in names:
             ungated.append((sorted(m.methods), m.path, sorted(names)))
     assert checked == 2, f"expected 2 mutating routes, saw {checked}"
     assert not ungated, f"mutating routes with no declared write gate: {ungated}"
