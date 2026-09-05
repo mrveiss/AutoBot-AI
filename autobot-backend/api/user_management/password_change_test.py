@@ -27,7 +27,6 @@ from user_management.services.user_service import (
 # ---------------------------------------------------------------------------
 
 
-
 async def _call_change_password(user_id, pwd_change, user_service, current_user, context):
     """Resolve the route's gate the way FastAPI does, then call the handler.
 
@@ -135,7 +134,6 @@ class TestPasswordChangeRateLimiting:
     ):
         """Rate limit should be checked before attempting password change."""
         with _patched_limiter(mock_rate_limiter):
-            from api.user_management.password_change import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
@@ -159,7 +157,6 @@ class TestPasswordChangeRateLimiting:
         )
 
         with _patched_limiter(mock_rate_limiter):
-            from api.user_management.password_change import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
@@ -182,7 +179,6 @@ class TestPasswordChangeRateLimiting:
     ):
         """Successful password change should clear rate limit counters."""
         with _patched_limiter(mock_rate_limiter):
-            from api.user_management.password_change import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
@@ -206,7 +202,6 @@ class TestPasswordChangeRateLimiting:
         )
 
         with _patched_limiter(mock_rate_limiter):
-            from api.user_management.password_change import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
@@ -240,7 +235,6 @@ class TestPasswordChangeResponses:
         mock_user_service.change_password = AsyncMock(side_effect=UserNotFoundError(f"User {user_id} not found"))
 
         with _patched_limiter(mock_rate_limiter):
-            from api.user_management.password_change import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
@@ -266,7 +260,6 @@ class TestPasswordChangeResponses:
         )
 
         with _patched_limiter(mock_rate_limiter):
-            from api.user_management.password_change import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
@@ -289,11 +282,12 @@ class TestPasswordChangeResponses:
     ):
         """Should return success message on successful password change."""
         with _patched_limiter(mock_rate_limiter):
-            from api.user_management.password_change import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
-            response = await _call_change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
+            response = await _call_change_password(
+                user_id, pwd_change, mock_user_service, mock_current_user, self_context
+            )
 
             assert response.success is True
             assert response.message == "Password changed successfully"
@@ -325,7 +319,7 @@ class TestPasswordChangeAuthorization:
         context = TenantContext(user_id=attacker_id, is_platform_admin=False)
 
         with _patched_limiter(mock_rate_limiter):
-            from api.user_management.password_change import change_password
+            pass
 
             pwd_change = _new_password_only("StolenP@ss1")
 
@@ -348,7 +342,7 @@ class TestPasswordChangeAuthorization:
         on a self-service request must still require verification -- the
         old code derived ``require_current`` from this exact absence."""
         with _patched_limiter(mock_rate_limiter):
-            from api.user_management.password_change import change_password
+            pass
 
             pwd_change = _new_password_only("NewP@ssw0rd!")
             await _call_change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
@@ -372,7 +366,6 @@ class TestPasswordChangeAuthorization:
         (``require_current`` is derived from identity, not from what was
         sent)."""
         with _patched_limiter(mock_rate_limiter):
-            from api.user_management.password_change import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
@@ -395,7 +388,7 @@ class TestPasswordChangeAuthorization:
         context = TenantContext(user_id=admin_id, is_platform_admin=True)
 
         with _patched_limiter(mock_rate_limiter):
-            from api.user_management.password_change import change_password
+            pass
 
             pwd_change = _new_password_only("ResetP@ss1")
             response = await _call_change_password(user_id, pwd_change, mock_user_service, current_user, context)
@@ -419,7 +412,7 @@ class TestPasswordChangeAuthorization:
         context = TenantContext(user_id=caller_id, is_platform_admin=False)
 
         with _patched_limiter(mock_rate_limiter):
-            from api.user_management.password_change import change_password
+            pass
 
             pwd_change = _new_password_only("StolenP@ss1")
 
