@@ -78,6 +78,34 @@
   when: slm_self_update_socket_enabled | bool
   tags: ['slm', 'backend', 'systemd']
 
+- name: "SLM | Tear down local self-update admin socket when disabled (#15728)"
+  when: not (slm_self_update_socket_enabled | bool)
+  become: true
+  tags: ['slm', 'backend', 'systemd']
+  block:
+    # Turning the flag off must actually remove the socket, not merely stop
+    # managing it. A host provisioned with it enabled would otherwise keep an
+    # ENABLED .socket unit and its unit file, so the credential-free trigger
+    # stays live on a host whose configuration says it is off -- the most
+    # dangerous shape of drift for this particular feature.
+    - name: "SLM | Stop and disable the self-update socket unit"
+      ansible.builtin.systemd:
+        name: "{{ slm_self_update_socket_service }}.socket"
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: "SLM | Remove the self-update socket unit and tmpfiles config"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/etc/systemd/system/{{ slm_self_update_socket_service }}.socket"
+        - "/etc/tmpfiles.d/{{ slm_self_update_socket_service }}.conf"
+      notify:
+        - reload systemd
+        - restart slm backend
+
 - name: "SLM | Deploy backend systemd service"
   ansible.builtin.template:
     src: autobot-slm-backend.service.j2

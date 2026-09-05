@@ -232,6 +232,17 @@ curl -s --unix-socket /run/autobot/slm-self-update.sock \
   -X POST http://localhost/self-update
 ```
 
+`/run/autobot/slm-self-update.sock` is the **default** path, not a fixed one:
+it comes from the `slm_self_update_socket_path` variable in the `slm_manager`
+role's defaults, and a deployment may override it. On a host where it has been
+overridden the command above targets a socket that does not exist and fails
+with a connection error rather than anything explanatory. Confirm the actual
+path first:
+
+```bash
+systemctl show autobot-slm-self-update.socket -p Listen
+```
+
 This reaches a second ASGI listener bound ONLY to a Unix domain socket that
 systemd's `autobot-slm-self-update.socket` unit creates and owns. The
 socket file's own permissions (root, or a member of the backend's service

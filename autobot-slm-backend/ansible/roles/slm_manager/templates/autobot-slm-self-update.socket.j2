@@ -9,6 +9,12 @@ Documentation=https://github.com/mrveiss/AutoBot-AI
 # asks for, enforced by the OS rather than reimplemented in application
 # code. RemoveOnStop unlinks it when the socket unit stops so a stale file
 # from a previous boot never lingers with the wrong permissions.
+# Socket activation targets a unit named after the SOCKET by default --
+# autobot-slm-self-update.service, which does not exist here. The backend's
+# Sockets= line hands over the fd but does NOT redirect activation, so without
+# this a connection arriving while the backend is down would try to start a
+# phantom unit and fail (#15728).
+Service={{ slm_backend_service }}.service
 ListenStream={{ slm_self_update_socket_path }}
 SocketMode={{ slm_self_update_socket_mode }}
 SocketUser={{ slm_user }}

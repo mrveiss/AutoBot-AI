@@ -50,6 +50,21 @@ def _defaults_mode() -> str:
     raise AssertionError(f"{_MODE_KEY} is not defined in {_DEFAULTS.name}")
 
 
+#: The role contract. Owner/group read-write, nothing for "other".
+_REQUIRED_MODE = "0660"
+
+#: Each systemd directive and the role variable it must interpolate. Pinning the
+#: VARIABLE (not a literal) is the point: a template that hardcoded a mode would
+#: satisfy a directive-name check while ignoring the defaults this file guards.
+_REQUIRED_ASSIGNMENTS = {
+    "ListenStream": "slm_self_update_socket_path",
+    "SocketMode": "slm_self_update_socket_mode",
+    "SocketUser": "slm_user",
+    "SocketGroup": "slm_group",
+    "Service": "slm_backend_service",
+}
+
+
 def test_the_shipped_socket_mode_grants_nothing_to_other():
     """The default mode must not be readable or writable by "other"."""
     mode = _defaults_mode()
@@ -58,6 +73,65 @@ def test_the_shipped_socket_mode_grants_nothing_to_other():
         "authentication, so a world-accessible mode hands an unauthenticated "
         "update trigger to every process on the host (#15728)"
     )
+
+
+def test_the_shipped_socket_mode_is_exactly_the_contract():
+    """Not-world-accessible is necessary but not sufficient.
+
+    ``_mode_is_world_accessible`` also accepts ``0600`` and ``0000``, which lock
+    ``slm_group`` out entirely -- the socket stops being reachable by the
+    operators it exists for, and the "no credential needed" path silently
+    becomes root-only. Failing open and failing shut are both failures; this
+    pins the contract from the other side.
+    """
+    mode = _defaults_mode().strip().strip("\"'")
+    assert mode == _REQUIRED_MODE, (
+        f"{_MODE_KEY} is {mode!r}, expected {_REQUIRED_MODE!r} -- widening hands "
+        "the trigger to every local process, narrowing locks out the slm_group "
+        "operators this path exists for (#15728)"
+    )
+
+
+def _assignment(unit: str, directive: str) -> str | None:
+    """The right-hand side of ``directive=`` in a unit file, or None."""
+    for line in unit.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(f"{directive}="):
+            return stripped.split("=", 1)[1].strip()
+    return None
+
+
+def test_the_socket_unit_interpolates_the_role_variables():
+    """Each directive must take its value from the role variable, not a literal.
+
+    A template that wrote ``SocketMode=0666`` directly would pass every check
+    that only looks for the directive NAME, and the defaults this file guards
+    would have no effect on the deployed socket.
+    """
+    unit = _UNIT.read_text(encoding="utf-8")
+    for directive, variable in _REQUIRED_ASSIGNMENTS.items():
+        value = _assignment(unit, directive)
+        assert value is not None, f"{_UNIT.name} has no {directive}= line (#15728)"
+        assert variable in value, (
+            f"{_UNIT.name}: {directive}={value} does not interpolate "
+            f"{{{{ {variable} }}}} -- a literal here silently overrides the role defaults"
+        )
+
+
+def test_the_assignment_reader_rejects_a_hardcoded_widened_mode():
+    """Contrast case for the reader above.
+
+    Without it, an ``_assignment`` that returned the directive name, or always
+    returned a truthy string, would report a hardcoded ``0666`` template as
+    correctly interpolated.
+    """
+    bad = "[Socket]\nSocketMode=0666\nListenStream=/tmp/anywhere.sock\n"
+    assert _assignment(bad, "SocketMode") == "0666"
+    assert "slm_self_update_socket_mode" not in _assignment(bad, "SocketMode")
+    assert _assignment(bad, "SocketGroup") is None
+
+    good = "[Socket]\nSocketMode={{ slm_self_update_socket_mode }}\n"
+    assert "slm_self_update_socket_mode" in _assignment(good, "SocketMode")
 
 
 def test_a_world_accessible_mode_is_rejected():
