@@ -254,3 +254,89 @@ def test_a_baselined_name_still_unregistered_is_not_reported(checker, monkeypatc
     that reports every baseline entry."""
     monkeypatch.setattr(checker, "_UNREGISTERED_BASELINE", frozenset({"AUTOBOT_NEVER_REGISTERED_ANYWHERE"}))
     assert checker._stale_baseline_entries() == []
+
+
+# ---------------------------------------------------------------------------
+# Full-repo sweep (#15807). Before it, `main([])` inspected nothing and returned
+# 0, so "the registry is clean" and "no files were handed to the checker" were
+# the same answer. Every fixture below is synthetic: a sweep proved only against
+# the live tree passes vacuously the moment the tree is clean, which it is.
+# ---------------------------------------------------------------------------
+def _sweep_over(checker, monkeypatch, files: dict[str, str], tmp_path: Path) -> int:
+    """Run the no-argument sweep over exactly *files*, and nothing else."""
+    written = []
+    for name, body in files.items():
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(textwrap.dedent(body), encoding="utf-8")
+        # Absolute: `repo_root / "/abs"` is `/abs` in pathlib, so the sweep reads
+        # exactly these files and nothing from the real tree.
+        written.append(str(target))
+    monkeypatch.setattr(checker, "_discover_python_files", lambda root: written)
+    monkeypatch.setattr(checker, "MIN_SCANNED_PY_FILES", 1)
+    monkeypatch.setattr(checker, "check_docs_freshness", lambda: [])
+    return checker.main([])
+
+
+def test_the_sweep_finds_an_unregistered_read(checker, monkeypatch, tmp_path):
+    """The defect the sweep exists for: a reader nobody staged."""
+    exit_code = _sweep_over(
+        checker,
+        monkeypatch,
+        {"reader.py": "import os\n\nX = os.getenv('AUTOBOT_NOT_REGISTERED_ANYWHERE', '1')\n"},
+        tmp_path,
+    )
+
+    assert exit_code == 1
+
+
+def test_the_sweep_accepts_a_registered_read(checker, monkeypatch, tmp_path):
+    """The contrast, so the sweep cannot pass by rejecting everything."""
+    registered = sorted(checker.REGISTRY)[0]
+    exit_code = _sweep_over(
+        checker,
+        monkeypatch,
+        {"reader.py": f"import os\n\nX = os.getenv('{registered}', '1')\n"},
+        tmp_path,
+    )
+
+    assert exit_code == 0
+
+
+def test_a_registration_dropped_while_its_reader_is_untouched_is_caught(checker, monkeypatch, tmp_path):
+    """The merge case, which a staged-file check structurally cannot see.
+
+    Two PRs each append a registration to the same module, so they conflict by
+    construction; `-X ours` resolves to a file that compiles, imports and passes
+    every test while dropping one. The staged file is the *registry* — the file
+    that reads the dropped variable is untouched, so the pre-commit hook never
+    looks at it. Only a sweep does.
+    """
+    dropped = sorted(checker.REGISTRY)[0]
+    monkeypatch.setattr(checker, "REGISTRY", {k: v for k, v in checker.REGISTRY.items() if k != dropped})
+
+    exit_code = _sweep_over(
+        checker,
+        monkeypatch,
+        {"untouched_reader.py": f"import os\n\nX = os.getenv('{dropped}', '1')\n"},
+        tmp_path,
+    )
+
+    assert exit_code == 1, f"a reader of the dropped {dropped} was not reported"
+
+
+def test_a_sweep_that_reaches_too_few_files_fails(checker, monkeypatch):
+    """A glob that silently matches nothing prints the same clean line as a
+    clean tree — the defect this whole issue is about, one level down."""
+    monkeypatch.setattr(checker, "_discover_python_files", lambda root: [])
+    monkeypatch.setattr(checker, "MIN_SCANNED_PY_FILES", 10)
+
+    assert checker.main([]) == 1
+
+
+def test_the_live_tree_is_above_the_reach_floor(checker):
+    """The floor is only meaningful if the real sweep clears it comfortably."""
+    repo_root = Path(__file__).resolve().parents[1]
+    discovered = checker._discover_python_files(repo_root)
+
+    assert len(discovered) >= checker.MIN_SCANNED_PY_FILES, f"only {len(discovered)} tracked .py files reached"
