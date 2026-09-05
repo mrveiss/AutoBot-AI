@@ -15,7 +15,6 @@ import subprocess
 import pytest
 
 from autobot_shared import git_probe
-
 from autobot_shared.git_probe import run_git, start_git
 from autobot_shared.paths import AMBIENT_GIT_VARS
 
