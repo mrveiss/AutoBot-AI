@@ -18,6 +18,20 @@ Regression guarantee: if ``Depends(...)`` is ever removed again,
 ``dependency_overrides`` has nothing to hook, the endpoint runs
 unconditionally, and the expected 401 in
 ``test_seed_returns_401_without_admin`` is never returned.
+
+GH #15796: the ``auth_middleware`` stub below used to be a bare
+``sys.modules["auth_middleware"] = ...`` assignment, installed once at
+import time and never removed. That let this module's allow-all
+``check_admin_permission`` leak into every test collected afterward in the
+same pytest process, and made the winner (this stub vs. whatever else was
+already there) depend on collection order. The stub is now installed and
+reverted inside a ``try/finally`` scoped tightly around the one import that
+needs it -- ``api.knowledge_cognition``'s own module-level
+``from auth_middleware import check_admin_permission``. Every test below
+keys ``dependency_overrides`` off ``api.knowledge_cognition.check_admin_permission``
+(not a fresh ``from auth_middleware import ...``), because that name is
+bound once, at router-import time, and stays the same object regardless of
+what ``auth_middleware`` becomes afterward.
 """
 
 import sys
@@ -33,19 +47,40 @@ from fastapi.testclient import TestClient
 
 
 def _stub_check_admin_permission(request: Request) -> bool:
-    """Default stub: approves all requests (overridden per-test via dependency_overrides)."""
+    """Import-time stub: approves all requests so the router import below can
+    inspect and register ``Depends(check_admin_permission)``. Never consulted
+    at test time -- every test overrides it via ``dependency_overrides``.
+    """
     return True
 
 
-if "auth_middleware" not in sys.modules:
-    _auth_stub = types.ModuleType("auth_middleware")
-    _auth_stub.check_admin_permission = _stub_check_admin_permission
-    _auth_stub.get_auth_middleware = MagicMock()
-    _auth_stub.raise_auth_error = MagicMock(side_effect=HTTPException(status_code=401))
-    sys.modules["auth_middleware"] = _auth_stub
+def _build_auth_middleware_stub() -> types.ModuleType:
+    """A fresh, FastAPI-inspectable ``auth_middleware`` stub module."""
+    stub = types.ModuleType("auth_middleware")
+    stub.check_admin_permission = _stub_check_admin_permission
+    stub.get_auth_middleware = MagicMock()
+    stub.raise_auth_error = MagicMock(side_effect=HTTPException(status_code=401))
+    return stub
 
-# ── import the real cognition router (fix applied -- now wired via Depends) ──
-from api.knowledge_cognition import router as _cognition_router  # noqa: E402
+
+# Save whatever (if anything) already occupies the canonical name so it can
+# be put back exactly as found -- unconditionally, so the outcome never
+# depends on whether some other module imported ``auth_middleware`` first.
+_prior_auth_middleware = sys.modules.get("auth_middleware")
+sys.modules["auth_middleware"] = _build_auth_middleware_stub()
+
+try:
+    # ── import the real cognition router (fix applied -- now wired via Depends) ──
+    from api.knowledge_cognition import router as _cognition_router  # noqa: E402
+finally:
+    # The router already captured `check_admin_permission` as a Python object
+    # inside its Depends(...) -- reverting `auth_middleware` here cannot
+    # un-bind it. Nothing below needs the stub to remain the canonical
+    # `auth_middleware` module.
+    if _prior_auth_middleware is None:
+        sys.modules.pop("auth_middleware", None)
+    else:
+        sys.modules["auth_middleware"] = _prior_auth_middleware
 
 # ── test helpers ──────────────────────────────────────────────────────────────
 
@@ -60,10 +95,17 @@ def _allow_admin() -> bool:
 
 
 def _make_client(*, allow: bool) -> TestClient:
-    """TestClient with check_admin_permission overridden to allow or reject."""
+    """TestClient with check_admin_permission overridden to allow or reject.
+
+    Keyed off ``api.knowledge_cognition.check_admin_permission`` rather than a
+    fresh ``from auth_middleware import check_admin_permission`` (GH #15796):
+    the router's ``Depends(check_admin_permission)`` was bound to whatever
+    object that name resolved to at router-import time, and ``auth_middleware``
+    itself is reverted to its prior state immediately after that import.
+    """
     app = FastAPI()
     app.include_router(_cognition_router, prefix="/api/knowledge")
-    from auth_middleware import check_admin_permission
+    from api.knowledge_cognition import check_admin_permission
 
     app.dependency_overrides[check_admin_permission] = _allow_admin if allow else _raise_401
     return TestClient(app, raise_server_exceptions=False)
@@ -123,3 +165,25 @@ class TestCognitionSeedAuthenticatedSuccess:
             )
         assert resp.status_code == 200
         assert resp.json()["status"] == "seeding_started"
+
+
+class TestAuthMiddlewareStubDoesNotLeak:
+    """GH #15796: the router-import stub must not outlive the import it existed for."""
+
+    def test_auth_middleware_restored_after_module_import(self):
+        """``auth_middleware`` must not still be this module's stub.
+
+        The module-level ``try/finally`` above installed
+        ``_stub_check_admin_permission`` only for the duration of the
+        ``api.knowledge_cognition`` import and reverted it immediately
+        afterward -- before any test in this file (including this one) runs.
+        Importing ``auth_middleware`` fresh here must resolve to whatever was
+        there before this test module existed, never to this file's stub.
+        """
+        import auth_middleware as _reimported
+
+        assert _reimported.check_admin_permission is not _stub_check_admin_permission, (
+            "auth_middleware.check_admin_permission is still this test module's "
+            "import-time stub -- the stub's scope leaked past the router import "
+            "it existed for (GH #15796)."
+        )
