@@ -54,6 +54,34 @@ from src.auth_rbac import (
 )
 ```
 
+### 3. Per-Route Enforcement for User-Management Routes (Issue #15737)
+
+`AuthenticationMiddleware` above is a `lazy_singleton`
+(`auth_middleware.get_auth_middleware()`), not a Starlette middleware — it is never passed to
+`app.add_middleware()`. For `/api/user-management/*` routes (`api/user_management/users.py`,
+`teams.py`, `organizations.py`) nothing at the route decorator calls it directly either: no
+route there declares `dependencies=[Depends(get_current_user)]`. Authentication is enforced
+transitively, through the dependency chain each route already needs for its data access:
+
+```
+get_user_service / get_team_service / get_organization_service   (dependencies.py:306-326)
+    -> get_tenant_context                                        (dependencies.py:157)
+        -> get_current_user                                     (dependencies.py:53)
+```
+
+`get_current_user` calls `get_auth_middleware().get_user_from_request(request)` and raises
+`401 {"detail": "Authentication required"}` when it returns `None`. That is the mechanism
+behind the 401 a live probe of `POST /api/user-management/users` returns (#15736, #15737) —
+found by tracing this chain, not by reading the route decorator.
+
+The `dependencies=[Depends(user_management_route_marker)]` present on most of these routes is
+**not** this gate: see that function's docstring (`api/user_management/dependencies.py`) — it
+is a no-op, renamed from `require_user_management_enabled` because the old name read as a live
+authorization check when it has unconditionally passed since #10636. Per-route authorization
+posture (open / authenticated / admin-only) for every route this chain reaches is asserted in
+`api/user_management/user_management_route_posture_test.py`; read that file, not this
+paragraph, if the two ever disagree.
+
 ## Roles
 
 | Role | Description | Access Level |
@@ -338,7 +366,9 @@ The guest role fallback has been removed (Issue #744). All endpoints now require
 
 > Issue #1801: Self-registration endpoint for new users
 
-AutoBot supports user self-registration in `multi_user` deployment mode. New accounts are created through `POST /auth/signup` without requiring an existing admin session.
+AutoBot supports user self-registration unconditionally (see "Deployment Modes" correction
+below — no deployment mode disables it). New accounts are created through `POST /auth/signup`
+without requiring an existing admin session.
 
 ### Endpoint
 
@@ -384,33 +414,29 @@ The new account is assigned the `user` system role automatically. An admin must 
 
 | HTTP Status | Condition |
 |---|---|
-| `400 Bad Request` | `single_user` deployment mode — self-registration is disabled |
 | `409 Conflict` | Username or email already exists |
 | `422 Unprocessable Entity` | Field validation failure (see `detail` array) |
 | `500 Internal Server Error` | Unexpected registration failure |
 
-### When Signup Is Enabled vs Disabled
+### Deployment Modes (correction, Issue #15737)
 
-| Deployment Mode | Signup Endpoint | Behaviour |
-|---|---|---|
-| `single_user` | Disabled | Returns `400` with message: "Self-registration is not available in single-user mode" |
-| `multi_user` | Enabled | Creates account in PostgreSQL and assigns `user` role |
+Earlier revisions of this document described a `single_user` / `multi_user` deployment mode
+that gated signup and user-management behind 400/503 responses. That mode does not exist in
+the current codebase: #10636/#10713 retired it outright, together with every bypass and gate
+it powered. Concretely, none of the following happens today: `POST /auth/signup` never
+returns 400 for a deployment mode, `GET /user-management/users/me` never returns a synthetic
+admin (see Issue #2953 for that removal), and no `/user-management/*` route returns 503 for
+"user management not enabled" — `user_management_route_marker`
+(`api/user_management/dependencies.py`) is the retained, permanently-passing remnant of that
+gate. AutoBot always runs full, Postgres-backed user management.
 
-The deployment mode is controlled by `AUTOBOT_DEPLOYMENT_MODE`. In `single_user` mode the entire user management subsystem is disabled and no PostgreSQL connection is required.
+The only remaining mode axis for this subsystem is `AUTOBOT_USER_MODE` (`single_company` /
+`multi_company` / `provider` — see `user_management/config.py`'s `DeploymentMode`), which
+toggles feature flags (team switcher, SSO, billing) but never disables authentication or the
+signup endpoint. `AUTOBOT_DEPLOYMENT_MODE` is a separate, infrastructure-only setting
+(`hybrid` / `local` / `distributed`) and has no bearing on user-management authorization.
 
-### single_user Mode Behaviour
-
-When `AUTOBOT_DEPLOYMENT_MODE=single_user`:
-
-- `POST /auth/signup` returns HTTP 400 immediately — no database call is made.
-- `POST /auth/login` returns a synthetic admin token without querying PostgreSQL (see Issue #2953).
-- `GET /user-management/users/me` returns a synthetic admin `UserResponse` with `is_platform_admin: true`.
-- All `/user-management/users/*` write endpoints return HTTP 503 (user management not enabled).
-- `GET /user-management/users/search` returns `available: false` with an empty list.
-
-This allows the frontend to degrade gracefully — search dialogs show a "not available" state instead of crashing.
-
-### Onboarding Flow (multi_user Mode)
+### Onboarding Flow
 
 ```
 New user visits /signup
