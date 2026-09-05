@@ -38,10 +38,18 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # Restoring it surfaced three pre-existing print() calls in that file -- a lint
 # tool reporting findings to a terminal, which is what print is for -- so they
 # carry `# noqa: print` and the count drops by exactly three. The other ~22
-# files under tools/lint/ share the shape and are NOT exempt from the hook's
-# path allowlist; that gap is #15730, and closing it will move this number
-# again.
-_KNOWN_REPO_VIOLATIONS = 499
+# files under tools/lint/ share the shape and were NOT exempt from the hook's
+# path allowlist; that gap was #15730.
+# 444 since #15730: tools/lint/ (the substring match also covers the nested
+# tools/lint/canonical/ package) joined the path allowlist next to
+# code_analysis/ and ansible/ in get_staged_python_files(), on the same
+# reasoning as code_analysis/ -- the directory's entire purpose is emitting
+# findings to a terminal, so bare print() there is the mechanism, not a
+# violation. The ~22 files #14982 identified carry 55 print() call sites
+# between them (several files call print() more than once) -- measured by
+# running this hook over tools/lint/ before the allowlist change, matching
+# the whole-repo delta: 499 - 55 = 444.
+_KNOWN_REPO_VIOLATIONS = 444
 
 
 def _test_git_env() -> dict[str, str]:
