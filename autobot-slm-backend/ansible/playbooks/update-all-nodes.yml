@@ -478,7 +478,7 @@
       command:
         cmd: /opt/autobot/autobot-slm-backend/venv/bin/pip install
              -r /opt/autobot/autobot-slm-backend/requirements.txt
-             -c {{ autobot.base_dir }}/code_source/constraints/shared.txt
+             -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
              --quiet --timeout 120
       become: true
       become_user: autobot
@@ -764,7 +764,7 @@
       command:
         cmd: /opt/autobot/autobot-backend/venv/bin/pip install
              -r /opt/autobot/autobot-backend/requirements.txt
-             -c {{ autobot.base_dir }}/code_source/constraints/shared.txt
+             -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
              --quiet --timeout 120
       become: true
       become_user: autobot
@@ -1203,7 +1203,7 @@
       command:
         cmd: /opt/autobot/autobot-npu-worker/venv/bin/pip install
              -r /opt/autobot/autobot-npu-worker/requirements.txt
-             -c {{ autobot.base_dir }}/code_source/constraints/shared.txt
+             -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
              --quiet --timeout 120
       become: true
       become_user: autobot
@@ -1332,7 +1332,7 @@
       command:
         cmd: /opt/autobot/autobot-browser-worker/venv/bin/pip install
              -r /opt/autobot/autobot-browser-worker/requirements.txt
-             -c {{ autobot.base_dir }}/code_source/constraints/shared.txt
+             -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
              --quiet --timeout 120
       become: true
       become_user: autobot

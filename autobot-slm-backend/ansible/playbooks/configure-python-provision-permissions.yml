@@ -38,7 +38,8 @@
     # matches the command literally, so these MUST equal the argv the backend
     # builds in _ensure_target_python_installed.
     ansible_playbook_bin: "/usr/bin/ansible-playbook"
-    # #15705 decision -- this literal STAYS. It is not a restatement of
+    # #15705 decision -- this literal STAYS, and #15707 tracks the check it
+    # still lacks. It is not a restatement of
     # `autobot.base_dir`; it mirrors a value produced on the Python side, and the
     # two must be byte-identical or sudo stops working. api/code_sync.py builds
     # `_PROVISION_PYTHON_PLAYBOOK` from `DEFAULT_REPO_PATH` and runs it as
@@ -46,7 +47,10 @@
     # exact-matches that argv. Deriving this from the ansible SSOT would give the
     # path two independent sources that agree today by coincidence, and a
     # divergence would not surface as a wrong directory -- it would surface as
-    # sudo refusing the command.
+    # sudo refusing the command. And the divergence is one env var away, not a
+    # hypothetical relocation: services/git_tracker.py:33 reads
+    # `SLM_REPO_PATH`, so any deployment setting it moves the Python side while
+    # this literal and the sudoers rule below stay put.
     provision_playbook: "/opt/autobot/code_source/autobot-slm-backend/ansible/playbooks/provision-local-python.yml"
 
   pre_tasks:
