@@ -40,10 +40,19 @@
 
   vars:
     github_repo: "https://github.com/mrveiss/AutoBot-AI.git"
-    # #15705: the code_source checkout root, derived rather than restated.
-    # This is an alias for `code_source_dir` -- same directory, and the
-    # messages below already call it code_source -- so an explicit
-    # `code_source_dir` override steers it too.
+    # #15705 derived this from `autobot.base_dir`; #15731 had to take the
+    # base_dir half back out. This play runs on `hosts: localhost`, and
+    # referencing ANY key of the `autobot` mapping makes Ansible render the
+    # WHOLE mapping -- including `autobot.services.frontend`, which is
+    # "http://{{ frontend_host }}:{{ frontend_port }}". Those host vars exist
+    # only for real inventory hosts, so on localhost the lookup dies with
+    # "'frontend_host' is undefined" before task one, taking every self-update
+    # with it. The four pip sites in Plays 1/2/2b keep the derived form: they
+    # run against inventory hosts where the mapping renders.
+    #
+    # An explicit `code_source_dir` override still steers this; only the
+    # fallback is a literal, and it cannot be derived until
+    # `autobot.services` stops carrying unrendered templates (#15731).
     git_repo_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
     deploy_ref: "Dev_new_gui"
     allowed_branches:
