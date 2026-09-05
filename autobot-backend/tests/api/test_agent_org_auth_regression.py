@@ -63,9 +63,7 @@ def _app_with(overrides: dict) -> FastAPI:
 
 def _unauthenticated():  # noqa: ANN202
     async def _raise():  # noqa: ANN202
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
     return _raise
 
@@ -78,9 +76,7 @@ def test_reporting_line_writes_reject_an_unauthenticated_caller(method: str) -> 
     app = _app_with({get_current_user: _unauthenticated()})
     client = TestClient(app, raise_server_exceptions=False)
 
-    resp = getattr(client, method)(
-        f"/agents/{uuid.uuid4()}/org", json={"reports_to": str(uuid.uuid4())}
-    )
+    resp = getattr(client, method)(f"/agents/{uuid.uuid4()}/org", json={"reports_to": str(uuid.uuid4())})
     assert resp.status_code == status.HTTP_401_UNAUTHORIZED, resp.text
 
 
@@ -113,9 +109,7 @@ def test_reporting_line_writes_reject_a_caller_without_the_permission(
     )
     client = TestClient(app, raise_server_exceptions=False)
 
-    resp = getattr(client, method)(
-        f"/agents/{uuid.uuid4()}/org", json={"reports_to": str(uuid.uuid4())}
-    )
+    resp = getattr(client, method)(f"/agents/{uuid.uuid4()}/org", json={"reports_to": str(uuid.uuid4())})
     assert resp.status_code == status.HTTP_403_FORBIDDEN, resp.text
 
 
