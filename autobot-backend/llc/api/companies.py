@@ -35,11 +35,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user_management.dependencies import (
-    _parse_uuid_safe,
-    get_current_user,
-    require_org_context,
-)
+from api.user_management.dependencies import _parse_uuid_safe, get_current_user, require_org_context
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.user_management.models.user import resolve_display_name
@@ -58,11 +54,10 @@ from llc.models.enums import (
     LLCAgentStatus,
     LLCCompanyStatus,
     MembershipRole,
-    RoleHolderType,
     WorkItemStatus,
 )
 from llc.models.membership import LLCCompanyMembership
-from llc.models.reporting_line import LLCReportingLine
+from llc.services.org_chart_placement import apply_reporting_lines, assemble_forest
 from llc.services.backlog import BacklogService
 from llc.services.company import (
     CompanyBudgetError,
@@ -248,11 +243,7 @@ async def create_company(
         # harmless empty collections that the next create call reuses. create()'s
         # INSERT populates updated_at via RETURNING, so no refresh is needed here.
         read = _to_read(org)
-        for suffix in (
-            None,
-            KbCollectionManager.AGENTS_SUFFIX,
-            KbCollectionManager.DECISIONS_SUFFIX,
-        ):
+        for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
             await _kb_manager.ensure_collection(KbCollectionManager.COMPANY_PREFIX, org.id, suffix)
         await svc.session.commit()
         return read
@@ -261,16 +252,10 @@ async def create_company(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
     except CompanyBudgetError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Internal server error",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     except CompanyCycleError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Internal server error",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     except CompanyNotFoundError:
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
@@ -322,16 +307,10 @@ async def update_company(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
     except CompanyBudgetError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Internal server error",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     except CompanyCycleError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Internal server error",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     except Exception:
         await svc.session.rollback()
         raise
@@ -353,11 +332,7 @@ async def delete_company(
         # loop makes (base, agents, decisions). Derived from the same constants
         # rather than restated, so a fourth suffix cannot be created and then
         # silently never cleaned up.
-        for suffix in (
-            None,
-            KbCollectionManager.AGENTS_SUFFIX,
-            KbCollectionManager.DECISIONS_SUFFIX,
-        ):
+        for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
             await _kb_manager.drop_collection(KbCollectionManager.COMPANY_PREFIX, company_id, suffix)
     except CompanyNotFoundError:
         await svc.session.rollback()
@@ -1162,61 +1137,6 @@ def _compose_agent_node(
     )
 
 
-async def _apply_reporting_lines(session: AsyncSession, company_id: uuid.UUID, flat: Dict[str, OrgChartNode]) -> None:
-    """Set ``parent_id`` from ``llc_reporting_lines`` for people and agents alike.
-
-    **Two id spaces meet here and picking the wrong one is silent.**
-
-    * ``OrgChartNode.id`` is the *display* id — an agent slug, or ``user:{uuid}``
-      for a person. It is what the legacy ``agent_org_nodes.reports_to`` column
-      references, and it is what ``flat`` is keyed by.
-    * ``OrgChartNode.node_id`` is the *assignment* keyspace (#10032):
-      ``str(AgentOrgNode.id)`` for an agent, the user id for a person. It is
-      what ``assignee_agent_id``, ``holder_agent_id`` and
-      ``llc_reporting_lines`` all reference.
-
-    A parent map built from ``id`` looks right and places nobody: the reporting
-    rows simply fail to match, every node keeps the parent it already had, and
-    the chart renders perfectly with the wrong shape. There is no error to see.
-    So the lookup is keyed by ``(holder type, node_id)`` and the result is
-    translated back to a display id before it is stored on the node.
-
-    An explicit line wins over whatever ``reports_to`` produced, because it is
-    the newer store and the one the migration carried those edges into. Nodes
-    with no line keep what they had, which is how the legacy column stays
-    readable until it is retired.
-    """
-    from sqlalchemy import select  # noqa: PLC0415
-
-    by_holder: Dict[tuple[str, str], OrgChartNode] = {}
-    for node in flat.values():
-        holder_type = RoleHolderType.USER.value if node.is_human else RoleHolderType.AGENT.value
-        if node.node_id:
-            by_holder[(holder_type, str(node.node_id))] = node
-
-    rows = (
-        (await session.execute(select(LLCReportingLine).where(LLCReportingLine.company_id == company_id)))
-        .scalars()
-        .all()
-    )
-
-    for row in rows:
-        subject_id, manager_id = row.subject_id, row.manager_id
-        if subject_id is None or manager_id is None:
-            # A row whose discriminator disagrees with its populated columns is
-            # corrupt; skipping beats guessing a column, which is the same
-            # contract as LLCReportingLine.subject_id itself.
-            continue
-        subject = by_holder.get((row.subject_type, str(subject_id)))
-        manager = by_holder.get((row.manager_type, str(manager_id)))
-        if subject is None or manager is None:
-            # An edge naming somebody outside this chart — a departed member,
-            # or an agent in another company. Leaving the subject where it is
-            # beats attaching it to nothing.
-            continue
-        subject.parent_id = manager.id
-
-
 @router.get("/{company_id}/org-chart", response_model=OrgChartResponse)
 async def get_org_chart(
     company_id: uuid.UUID,
@@ -1316,43 +1236,15 @@ async def get_org_chart(
         for row in org_rows
     }
 
-    def _chain_resolves_to_root(agent_id: str) -> bool:
-        """True if following reports_to from ``agent_id`` ends at a node with no
-        (or missing/self) parent without revisiting a node — i.e. no cycle."""
-        seen: set[str] = set()
-        cur: Optional[OrgChartNode] = flat.get(agent_id)
-        while cur is not None and cur.parent_id:
-            if cur.id in seen:
-                return False  # cycle
-            seen.add(cur.id)
-            parent = flat.get(cur.parent_id)
-            if parent is None or parent.id == cur.id:
-                return True  # parent absent/self → effectively rooted
-            cur = parent
-        return True
-
-    # People are part of the hierarchy, not siblings of it (#15763). Before
-    # this they were appended as roots, because memberships carried no
-    # reporting edge — so a company with twenty people rendered twenty roots
-    # and the agent hierarchy sat beside them, unconnected.
+    # People are part of the hierarchy, not siblings of it (#15763). They were
+    # appended as roots because memberships carried no reporting edge, so a
+    # company with twenty people rendered twenty roots beside the agent tree.
     for human in await _compose_human_nodes(session, company_id):
         flat[human.id] = human
 
-    await _apply_reporting_lines(session, company_id, flat)
+    await apply_reporting_lines(session, company_id, flat)
 
-    # Assemble the forest. Attach a node to its parent only when its chain is
-    # acyclic; cycle members (and nodes whose parent is absent/self) become
-    # roots with no parent edge, so the output is always a true forest — every
-    # node appears exactly once, never infinitely nested.
-    roots: List[OrgChartNode] = []
-    for node in flat.values():
-        parent = flat.get(node.parent_id) if node.parent_id else None
-        if parent is not None and parent.id != node.id and _chain_resolves_to_root(node.id):
-            parent.children.append(node)
-        else:
-            roots.append(node)
-
-    return OrgChartResponse(nodes=roots)
+    return OrgChartResponse(nodes=assemble_forest(flat))
 
 
 # ------------------------------------------------------------------
@@ -1516,11 +1408,7 @@ async def get_work_item_executor_rollup(
     executor_class = _executor_class_case(LLCWorkItem).label("executor_class")
     rows = (
         await session.execute(
-            select(
-                executor_class,
-                LLCWorkItem.status,
-                func.count(LLCWorkItem.id).label("item_count"),
-            )
+            select(executor_class, LLCWorkItem.status, func.count(LLCWorkItem.id).label("item_count"))
             .where(LLCWorkItem.company_id == company_id)
             .group_by(executor_class, LLCWorkItem.status)
         )
@@ -1528,11 +1416,7 @@ async def get_work_item_executor_rollup(
 
     return ExecutorRollupResponse(
         cells=[
-            ExecutorRollupCell(
-                executor_class=row.executor_class,
-                status=row.status,
-                count=row.item_count,
-            )
+            ExecutorRollupCell(executor_class=row.executor_class, status=row.status, count=row.item_count)
             for row in rows
         ]
     )
@@ -1760,12 +1644,7 @@ async def get_company_teams(
 
     return CompanyTeamsResponse(
         teams=[
-            CompanyTeam(
-                id=str(team.id),
-                name=team.name,
-                member_user_ids=members_by_team[team.id],
-            )
-            for team in team_rows
+            CompanyTeam(id=str(team.id), name=team.name, member_user_ids=members_by_team[team.id]) for team in team_rows
         ]
     )
 
@@ -1850,9 +1729,7 @@ async def search_agents(
 
 
 # Export endpoints (GH#8245)
-def _get_portability_service(
-    session: AsyncSession = Depends(get_async_session),
-) -> PortabilityService:
+def _get_portability_service(session: AsyncSession = Depends(get_async_session)) -> PortabilityService:
     return PortabilityService(session=session)
 
 
