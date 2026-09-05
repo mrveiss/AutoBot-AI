@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import sys
 import types
+from unittest.mock import MagicMock
 
 # Module scope, deliberately. ``from __future__ import annotations`` above makes
 # every annotation a lazy string, and FastAPI resolves ``get_current_user``'s
@@ -38,7 +39,6 @@ import types
 # "`TypeAdapter[Annotated[ForwardRef('_FastAPIRequest') ...]]` is not fully
 # defined" -- which took out repo_tests/conftest.py's SDK request oracle.
 from fastapi import Request as _FastAPIRequest
-from unittest.mock import MagicMock
 
 
 def _current_user_payload() -> dict:
