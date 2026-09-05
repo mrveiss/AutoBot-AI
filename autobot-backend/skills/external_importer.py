@@ -20,6 +20,7 @@ from urllib.parse import urlparse
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import scrubbed_git_env
 from skills.manifest_parser import parse_manifest
 from skills.models import SkillActivationLevel, SkillPackage, SkillState
 
@@ -148,6 +149,7 @@ async def _git_available() -> bool:
             "--version",
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
+            env=scrubbed_git_env(),
         )
         await proc.wait()
         return proc.returncode == 0
@@ -158,11 +160,7 @@ async def _git_available() -> bool:
 async def _run_git(*args: str, cwd: str | None = None) -> None:
     """Run a git command; raise RuntimeError on non-zero exit."""
     proc = await asyncio.create_subprocess_exec(
-        "git",
-        *args,
-        cwd=cwd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+        "git", *args, cwd=cwd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=scrubbed_git_env()
     )
     _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT)
     if proc.returncode != 0:
