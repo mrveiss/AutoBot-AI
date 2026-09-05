@@ -87,7 +87,7 @@
   vars:
     autobot_root: /opt/autobot
     key_generator: >-
-      {{ autobot_root }}/autobot-infrastructure/shared/scripts/generate_service_keys.py
+      {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-infrastructure/shared/scripts/generate_service_keys.py
     keys_backup_dir: "{{ autobot_root }}/config/service-keys"
     redis_host: >-
       {{ hostvars[groups['database'][0]]['ansible_host']

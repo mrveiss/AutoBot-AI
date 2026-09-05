@@ -341,3 +341,83 @@ class TestTheRoleIsReachableFromAPlaybookTheProductInvokes:
     def test_the_task_file_the_playbooks_name_exists(self):
         """`tasks_from` naming a file that is not there fails only on a host."""
         assert (_ROLE / "tasks" / f"{_TASK_FILE}.yml").exists()
+
+
+#: Roots that some task actually populates on a host. `project_root` is NOT one
+#: of them for this tree: nothing in the ansible layout deploys
+#: `{{ project_root }}/autobot-infrastructure/`, so a path resolved against it
+#: is satisfiable only on a host where the directory happens to survive from
+#: install time (#15726).
+_MAINTAINED_INFRA_ROOTS = ("code_source_dir", "playbook_dir")
+
+#: Floor on the sweep's REACH -- variables examined, never findings. A floor on
+#: findings passes when the walk reads nothing, and then fixing a real one
+#: trips it.
+_MIN_INFRA_REFERENCES = 3
+
+#: A Jinja root immediately preceding the tree, with or without `../` traversal.
+#: Anchoring on the root is what separates a real filesystem reference from
+#: prose in a failure message ("Ensure autobot-infrastructure/... exists") and
+#: from a git pathspec ("git archive ... -- autobot-infrastructure/"), neither
+#: of which resolves against a root at all.
+_ROOTED_INFRA_PATH = re.compile(r"\}\}(?:/\.\.)*/autobot-infrastructure/")
+
+
+def _infra_references(root) -> list[tuple[str, str, str]]:
+    """(file, key, value) for every ansible var resolving into the infra tree."""
+    found: list[tuple[str, str, str]] = []
+    ansible = root / "autobot-slm-backend" / "ansible"
+    for path in sorted(ansible.rglob("*.yml")):
+        try:
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - a jinja-templated file ansible renders before parsing
+            continue
+        # Recursive: the four sibling consumers write their reference as a
+        # task-level `src:`, not as a top-level variable. A walk that reads only
+        # document keys sees one reference and calls the tree clean -- which is
+        # the same reach failure this guard exists to catch, one level up.
+        _collect_infra_strings(document, str(path.relative_to(root)), found)
+    return found
+
+
+def _collect_infra_strings(node, where: str, found: list, key: str = "") -> None:
+    if isinstance(node, dict):
+        for k, v in node.items():
+            _collect_infra_strings(v, where, found, str(k) if isinstance(k, str) else key)
+    elif isinstance(node, list):
+        for item in node:
+            _collect_infra_strings(item, where, found, key)
+    elif isinstance(node, str) and _ROOTED_INFRA_PATH.search(node):
+        found.append((where, key, node))
+
+
+def test_no_ansible_variable_reads_the_infra_tree_from_an_undeployed_root() -> None:
+    """#15726: the defect was a path only satisfiable where nothing maintains it.
+
+    `roles/access_control` resolved the enforcement seeder against
+    `{{ project_root }}/autobot-infrastructure/`, a tree no task deploys. On the
+    live SLM that directory dated from install time, so a seeder added months
+    later was absent and the role hard-failed EVERY self-update -- 126 tasks ok,
+    one fatal, and the fleet stuck 34 commits behind.
+
+    The repo-side guard above could not see it: the file exists in the
+    repository, which is all it asserted. This binds the other half.
+    """
+    root = _SEEDER.resolve().parents[4]
+    references = _infra_references(root)
+
+    assert len(references) >= _MIN_INFRA_REFERENCES, (
+        f"the walk found only {len(references)} ansible variables resolving into "
+        f"autobot-infrastructure/ (floor {_MIN_INFRA_REFERENCES}) -- it has stopped reading"
+    )
+
+    unmaintained = [
+        f"{where}: {key} -> {value.strip()}"
+        for where, key, value in references
+        if not any(maintained in value for maintained in _MAINTAINED_INFRA_ROOTS)
+    ]
+    assert not unmaintained, (
+        "these resolve into autobot-infrastructure/ from a root nothing deploys, so they are "
+        "satisfiable only where the directory survives from install time (#15726). Resolve "
+        f"against {' or '.join(_MAINTAINED_INFRA_ROOTS)} instead:\n  " + "\n  ".join(unmaintained)
+    )
