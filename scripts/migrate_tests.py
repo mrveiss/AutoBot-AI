@@ -18,7 +18,17 @@ import argparse
 import logging
 import re
 import subprocess
+import sys
 from pathlib import Path
+
+# `autobot_shared` lives at the repository root, which is not on the path when
+# this script is run standalone. The scrub it provides is what keeps an
+# inherited GIT_DIR from redirecting the git calls below (#15783).
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.paths import scrubbed_git_env  # noqa: E402 - follows the sys.path setup above
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -239,16 +249,14 @@ def migrate_file(
 
     # Git add new file and remove old
     subprocess.run(
-        ["git", "add", str(dest_path)],
-        cwd=PROJECT_ROOT,
-        check=True,
-        capture_output=True,
+        ["git", "add", str(dest_path)], cwd=PROJECT_ROOT, check=True, capture_output=True, env=scrubbed_git_env()
     )
     subprocess.run(
         ["git", "rm", "--quiet", str(src_path)],
         cwd=PROJECT_ROOT,
         check=True,
         capture_output=True,
+        env=scrubbed_git_env(),
     )
 
     return str(src_path.relative_to(PROJECT_ROOT)), str(dest_path.relative_to(PROJECT_ROOT))
