@@ -775,6 +775,11 @@
              -r /opt/autobot/autobot-backend/requirements.txt
              -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
              --quiet --timeout 120
+        # #15733: pip resolves a relative editable in a requirements file
+        # against the CWD, not against the file. This manifest opens with
+        # "-e ../autobot_shared", so with no chdir it resolved against the
+        # remote user home and pip refused the entire install.
+        chdir: "{{ autobot.base_dir }}/autobot-backend"
       become: true
       become_user: autobot
       environment:
@@ -1214,6 +1219,11 @@
              -r /opt/autobot/autobot-npu-worker/requirements.txt
              -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
              --quiet --timeout 120
+        # #15733: pip resolves a relative editable in a requirements file
+        # against the CWD, not against the file. This manifest opens with
+        # "-e ../autobot_shared", so with no chdir it resolved against the
+        # remote user home and pip refused the entire install.
+        chdir: "{{ autobot.base_dir }}/autobot-npu-worker"
       become: true
       become_user: autobot
       environment:
@@ -1343,6 +1353,11 @@
              -r /opt/autobot/autobot-browser-worker/requirements.txt
              -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
              --quiet --timeout 120
+        # #15733: pip resolves a relative editable in a requirements file
+        # against the CWD, not against the file. This manifest opens with
+        # "-e ../autobot_shared", so with no chdir it resolved against the
+        # remote user home and pip refused the entire install.
+        chdir: "{{ autobot.base_dir }}/autobot-browser-worker"
       become: true
       become_user: autobot
       environment:
