@@ -223,7 +223,17 @@ def test_local_self_update_route_delegates_to_the_shared_trigger():
 
 def test_http_self_update_route_still_requires_get_current_user():
     """#15728 AC3: the authenticated remote path's own auth must be
-    completely unchanged by adding the local socket."""
+    completely unchanged by adding the local socket.
+
+    Asserted by IDENTITY against the symbol the route module holds, not by
+    name. ``import_code_sync()`` installs stand-ins for ``services.auth``, so
+    under this harness ``get_current_user`` is a ``MagicMock`` and reading
+    ``__name__`` off it yields ``"MagicMock"`` -- a name comparison passes or
+    fails depending on which test imported the module first, which is no test
+    at all. Identity against ``code_sync.get_current_user`` says the real
+    thing: whatever that symbol resolves to, this route depends on it, and
+    removing the dependency fails here.
+    """
     route = next(r for r in code_sync.router.routes if r.path == "/code-sync/self-update")
-    dep_names = {d.call.__name__ for d in route.dependant.dependencies if d.call is not None}
-    assert "get_current_user" in dep_names
+    deps = [d.call for d in route.dependant.dependencies if d.call is not None]
+    assert code_sync.get_current_user in deps, f"observed {len(deps)} dependencies, none of them the auth symbol"
