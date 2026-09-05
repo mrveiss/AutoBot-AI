@@ -278,8 +278,34 @@ def test_the_dormant_baseline_has_no_stale_entries(guard):
         for config_path in guard._CONFIG_PATHS
         for _, entry in guard._local_hook_entries(root / config_path)
     }
+    assert targets, "no local hook entries found -- this check would pass vacuously"
+
     stale = guard._KNOWN_DORMANT - targets
     assert not stale, f"_KNOWN_DORMANT names paths no hook references any more: {sorted(stale)}"
+
+
+def test_the_staleness_check_would_catch_a_dead_entry(guard, monkeypatch):
+    """Contrast case, and the reason it is needed right now.
+
+    ``_KNOWN_DORMANT`` is empty as of #15750, so the check above subtracts an
+    empty set and passes no matter what -- true, and vacuous. A reader seeing it
+    green would reasonably conclude the baseline is being policed; it is not,
+    because there is nothing left to police.
+
+    This pins that the *check* still works, so refilling the baseline later
+    restores a real guarantee rather than a green tick. It does not substitute
+    for the missing shrink-side check -- that an entry is still an actual
+    violation, not merely still some hook's entry -- which is #15762.
+    """
+    monkeypatch.setattr(guard, "_KNOWN_DORMANT", frozenset({"tools/lint/no_hook_references_this.py"}))
+
+    root = guard._repo_root()
+    targets = {
+        entry.split()[0]
+        for config_path in guard._CONFIG_PATHS
+        for _, entry in guard._local_hook_entries(root / config_path)
+    }
+    assert guard._KNOWN_DORMANT - targets, "a dead baseline entry must be detected as stale"
 
 
 def test_a_slashless_entry_is_left_to_pre_commits_path_search(guard, tmp_path, monkeypatch):
