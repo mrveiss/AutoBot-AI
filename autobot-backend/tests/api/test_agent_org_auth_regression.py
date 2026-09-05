@@ -196,7 +196,7 @@ def test_the_route_passes_the_callers_company_to_the_service(
     client = TestClient(app, raise_server_exceptions=False)
 
     getattr(client, method)(
-        f"/agents/some-agent/org", json={"reports_to": "a-manager", "name": "n"}
+        "/agents/some-agent/org", json={"reports_to": "a-manager", "name": "n"}
     )
 
     assert seen.get("company_id") == company, (
