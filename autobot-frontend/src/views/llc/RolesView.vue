@@ -274,6 +274,7 @@
               panel-key="tools"
               :title="t('llcRoles.tools')"
               :items="tools"
+              :options="toolOptions"
               :add-label="t('llcRoles.attach')"
               :remove-label="t('llcRoles.detach')"
               :empty-label="t('llcRoles.noTools')"
@@ -365,11 +366,31 @@ const { t } = useI18n()
 const route = useRoute()
 const api = useApiClient()
 
+interface ToolCatalogueEntry {
+  name: string
+  description: string
+  tags: string[]
+  url: string | null
+  logo_url: string | null
+  role_count: number
+}
+
 const roles = ref<RoleRow[]>([])
 const holders = ref<HolderRow[]>([])
 const permissions = ref<string[]>([])
 const workflows = ref<string[]>([])
 const tools = ref<string[]>([])
+/**
+ * The company's tool catalogue (#14852) — registry identity plus this
+ * company's own URL and logo. Company-scoped, so it loads with the role list
+ * rather than per role: it does not change when the selection does.
+ *
+ * Empty is a valid state and must not block the tab. A 503 here means the tool
+ * registry is unpopulated, which is an environment problem; the panel falls
+ * back to its text box rather than presenting an empty picker that reads as
+ * "this company has no tools".
+ */
+const toolCatalogue = ref<ToolCatalogueEntry[]>([])
 const credentials = ref<string[]>([])
 
 /**
@@ -461,6 +482,20 @@ const newRoleName = ref('')
 const newRoleDescription = ref('')
 
 const companyId = computed(() => (route.params.companyId as string) || '')
+
+/**
+ * Picker options for the tools panel. `undefined` — not an empty array — when
+ * the catalogue is unavailable, because the panel treats "no options prop" as
+ * "use the text box" and an empty array as "a catalogue exists and is empty".
+ */
+const toolOptions = computed(() =>
+  toolCatalogue.value.length
+    ? toolCatalogue.value.map((entry) => ({
+        value: entry.name,
+        label: entry.description ? `${entry.name} — ${entry.description}` : entry.name,
+      }))
+    : undefined,
+)
 const selectedRole = computed(
   () => roles.value.find((role) => role.id === selectedRoleId.value) ?? null,
 )
@@ -484,6 +519,7 @@ async function loadRoles(): Promise<void> {
   try {
     const loaded = await api.get<RoleRow[]>(`/api/llc/roles/${companyId.value}`)
     roles.value = Array.isArray(loaded) ? loaded : []
+    await loadToolCatalogue()
     if (roles.value.length > 0 && !selectedRoleId.value) {
       await selectRole(roles.value[0].id)
     }
@@ -492,6 +528,24 @@ async function loadRoles(): Promise<void> {
     errorMessage.value = describeError(error, 'llcRoles.errorLoad')
   } finally {
     isLoading.value = false
+  }
+}
+
+/**
+ * The catalogue is a convenience, not a prerequisite: a failure here leaves the
+ * tools panel on its text box, which still works. So this swallows the error
+ * rather than surfacing it on the tab — a red banner over a working Roles tab
+ * because a picker could not be populated would be worse than the picker's
+ * absence, and the attach call reports a bad name on its own anyway.
+ */
+async function loadToolCatalogue(): Promise<void> {
+  if (!companyId.value) return
+  try {
+    const loaded = await api.get<ToolCatalogueEntry[]>(`/api/llc/tools/${companyId.value}`)
+    toolCatalogue.value = Array.isArray(loaded) ? loaded : []
+  } catch (error) {
+    logger.warn('Tool catalogue unavailable; the tools panel falls back to free text', error)
+    toolCatalogue.value = []
   }
 }
 
