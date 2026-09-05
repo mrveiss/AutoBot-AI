@@ -2075,15 +2075,21 @@ _DB_BACKUP_KEEP: int = env_int("AUTOBOT_DB_BACKUP_KEEP", 5)
 # non-failed unit — rollback is gated on a genuine systemd 'failed' state, not on
 # the timeout (see _wait_component_healthy), so the shorter window cannot cause a
 # false rollback of a slow-but-healthy deploy.
-_HEALTH_POLL_TIMEOUT: float = env_float("AUTOBOT_HEALTH_POLL_TIMEOUT", 180.0)
+_DEFAULT_HEALTH_POLL_TIMEOUT_S = 180.0
+_HEALTH_POLL_TIMEOUT: float = env_float("AUTOBOT_HEALTH_POLL_TIMEOUT", _DEFAULT_HEALTH_POLL_TIMEOUT_S)
 # Fast window for restarts that did NOT recreate the venv (warm interpreter).
-_FAST_HEALTH_POLL_TIMEOUT: float = env_float("AUTOBOT_HEALTH_POLL_TIMEOUT_FAST", 60.0)
+_FAST_HEALTH_POLL_TIMEOUT_S = 60.0
+_FAST_HEALTH_POLL_TIMEOUT: float = env_float("AUTOBOT_HEALTH_POLL_TIMEOUT_FAST", _FAST_HEALTH_POLL_TIMEOUT_S)
 # Per-attempt connect timeout (seconds) when probing the health endpoint.
-_HEALTH_POLL_CONNECT_TIMEOUT: float = env_float("AUTOBOT_HEALTH_POLL_CONNECT_TIMEOUT", 3.0)
+_DEFAULT_HEALTH_POLL_CONNECT_TIMEOUT_S = 3.0
+_HEALTH_POLL_CONNECT_TIMEOUT: float = env_float(
+    "AUTOBOT_HEALTH_POLL_CONNECT_TIMEOUT", _DEFAULT_HEALTH_POLL_CONNECT_TIMEOUT_S
+)
 # Delay between health-probe attempts (seconds). Env-overridable alongside the
 # windows above so the whole poll shape is configurable from one place rather
 # than a literal buried in the loop.
-_HEALTH_POLL_INTERVAL: float = env_float("AUTOBOT_HEALTH_POLL_INTERVAL", 2.0)
+_DEFAULT_HEALTH_POLL_INTERVAL_S = 2.0
+_HEALTH_POLL_INTERVAL: float = env_float("AUTOBOT_HEALTH_POLL_INTERVAL", _DEFAULT_HEALTH_POLL_INTERVAL_S)
 # Per-component health URLs (localhost only — never egress). Pre-existing
 # hardcoded ports, not touched by #15063 — resolving these through
 # ssot_config is separate, tracked work under the canonical-debt umbrella.
