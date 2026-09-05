@@ -9,8 +9,11 @@ like a working one from inside its own module — the defect this surface shippe
 four times (#14221 steps 1-3 and 5).
 
 **Gate visibility**, because the write gate is what makes re-parenting an
-authority change (#15765). A gate called inside a handler body never enters the
-``Dependant`` tree: #15743's fix closed its hole while the posture suite kept
+authority change (#15765). These assertions inspect a route's **direct**
+dependencies — the contract is a declaration on the route itself, not a gate
+inherited from somewhere up the tree, so a recursive walk would accept exactly
+what this is meant to reject. A gate called inside a handler body never enters
+the ``Dependant`` tree at all: #15743's fix closed its hole while the posture suite kept
 reporting the route as merely authenticated, for exactly that reason (#15737).
 So this asserts the dependency is *declared*, not merely that unauthorised
 callers are refused — a service-layer check would satisfy the second and fail
@@ -43,7 +46,9 @@ _GATE = "require_reporting_line_write"
 
 
 def _mounted() -> set:
-    return {(method, m.path) for m in effective_routes(llc_router) for method in m.methods}
+    return {
+        (method, m.path) for m in effective_routes(llc_router) for method in m.methods
+    }
 
 
 def test_every_reporting_line_route_is_mounted() -> None:
@@ -59,12 +64,17 @@ def test_reads_carry_auth_and_tenant_dependencies() -> None:
             continue
         checked += 1
         dependant = getattr(m.route, "dependant", None)
-        names = {getattr(d.call, "__name__", "") for d in getattr(dependant, "dependencies", [])}
+        names = {
+            getattr(d.call, "__name__", "")
+            for d in getattr(dependant, "dependencies", [])
+        }
         if "get_current_user" not in names or "require_org_context" not in names:
             unguarded.append((sorted(m.methods), m.path, sorted(names)))
     # Presence first: a wrong prefix matches nothing and the assertion below
     # passes having verified nothing at all.
-    assert checked == len(_EXPECTED), f"expected {len(_EXPECTED)} routes to inspect, saw {checked}"
+    assert checked == len(_EXPECTED), (
+        f"expected {len(_EXPECTED)} routes to inspect, saw {checked}"
+    )
     assert not unguarded, f"routes missing auth/tenant dependencies: {unguarded}"
 
 
@@ -89,7 +99,10 @@ def test_the_write_gate_is_a_declared_dependency() -> None:
             continue
         checked += 1
         dependant = getattr(m.route, "dependant", None)
-        names = {getattr(d.call, "__name__", "") for d in getattr(dependant, "dependencies", [])}
+        names = {
+            getattr(d.call, "__name__", "")
+            for d in getattr(dependant, "dependencies", [])
+        }
         if _GATE not in names:
             ungated.append((sorted(m.methods), m.path, sorted(names)))
     assert checked == 2, f"expected 2 mutating routes, saw {checked}"

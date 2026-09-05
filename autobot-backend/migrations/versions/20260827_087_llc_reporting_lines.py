@@ -17,7 +17,10 @@ which is the assignment keyspace that ``assignee_agent_id`` and
 ``holder_agent_id`` already use (#10032). So this is not a copy: every slug is
 resolved to its node's id through a self-join, and:
 
-* a slug that resolves becomes a row in the new table;
+* a slug that resolves becomes a row in the new table, unless one is
+  already there — the backfill is idempotent, because ``upgrade`` creates
+  the table only when absent but always reaches the backfill, so a re-run
+  would otherwise be rejected by the partial unique index;
 * a slug that does **not** resolve — a dangling manager reference, which the
   old column had no foreign key to prevent — is left exactly where it is.
 
@@ -149,6 +152,17 @@ def _backfill_agent_edges(bind: sa.engine.Connection, inspector: sa.Inspector) -
             WHERE child.reports_to IS NOT NULL
               AND child.company_id IS NOT NULL
               AND parent.id <> child.id
+              -- Idempotent: upgrade() creates the table only when absent but
+              -- always reaches this backfill, so a re-run (a manual replay, or
+              -- a retry after a later failure in the chain) would re-insert
+              -- every resolved edge. The partial unique index would reject
+              -- them, turning a harmless repeat into a failed migration.
+              AND NOT EXISTS (
+                  SELECT 1 FROM llc_reporting_lines existing
+                  WHERE existing.company_id = child.company_id
+                    AND existing.subject_type = 'agent'
+                    AND existing.subject_agent_id = child.id
+              )
             """))
 
 
