@@ -140,9 +140,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _scan_helpers import EXCLUDED_DIR_NAMES, enforce_reach, scan_python_files  # noqa: E402
 
-
 #: The canonical scrubbing helper, ``autobot_shared.paths.scrubbed_git_env``.
 SCRUB_HELPER = "scrubbed_git_env"
+
+#: Its stricter sibling, ``autobot_shared.paths.strict_git_env`` — every ``GIT_``
+#: name rather than the ambient four (#15783 review). Accepted equally: it is a
+#: superset of the scrub, in the same canonical module, so a call passing it is
+#: strictly safer than one passing ``scrubbed_git_env``.
+STRICT_SCRUB_HELPER = "strict_git_env"
+
+#: Both spellings a call may pass, and both a local wrapper may be built from.
+SCRUB_HELPERS = frozenset({SCRUB_HELPER, STRICT_SCRUB_HELPER})
 
 #: The shell-side equivalent, ``scripts/lib/git-root.sh``'s function of the
 #: same shape (#15245). A ``.sh`` line naming this is read as scrubbed even
@@ -316,9 +324,10 @@ def _is_git_argv(node: ast.Call) -> bool:
     (``subprocess.run("git status", shell=True)``). Argv built through a
     variable stays invisible -- the same documented gap as the token scan.
     """
-    if not node.args:
+    arguments = _command_arguments(node)
+    if not arguments:
         return False
-    first = node.args[0]
+    first = arguments[0]
     if isinstance(first, (ast.List, ast.Tuple)) and first.elts:
         head = first.elts[0]
         return isinstance(head, ast.Constant) and isinstance(head.value, str) and _names_git(head.value)
@@ -346,9 +355,21 @@ def is_production_path(rel: str) -> bool:
     return "/tests/" not in f"/{rel}"
 
 
+def _command_arguments(node: ast.Call) -> list[ast.expr]:
+    """Positional arguments plus a literal ``args=`` keyword.
+
+    ``subprocess.run(args=["git", "status"])`` is an ordinary spelling, and
+    reading only ``node.args`` meant such a call was neither gated nor counted
+    toward the discovery floor -- a blind spot in the matcher rather than in the
+    enumeration, which the reach floor cannot detect (#15783 review).
+    """
+    keyword_args = [kw.value for kw in node.keywords if kw.arg == "args"]
+    return list(node.args) + keyword_args
+
+
 def _gated_token(node: ast.Call) -> str | None:
     """The :data:`GATED_TOKENS` key a string argument of *node* carries, if any."""
-    for arg in node.args:
+    for arg in _command_arguments(node):
         for child in ast.walk(arg):
             if not (isinstance(child, ast.Constant) and isinstance(child.value, str)):
                 continue
@@ -379,7 +400,7 @@ def scrub_wrappers(tree: ast.AST) -> Set[str]:
             continue
         for child in ast.walk(node):
             attr = child.attr if isinstance(child, ast.Attribute) else getattr(child, "id", None)
-            if attr == SCRUB_HELPER:
+            if attr in SCRUB_HELPERS:
                 names.add(node.name)
                 break
     return names
@@ -401,7 +422,10 @@ def _scrubs(node: ast.Call, accepted: Set[str]) -> bool:
 #: Substrings that make a file worth parsing. The first two are the original
 #: token gates; the rest are the spellings of ``git`` as argv[0], which is what
 #: the widened gate keys on.
-_CHEAP_GATE = tuple(GATED_TOKENS) + ('"git"', "'git'", '"git ', "'git ")
+#: ``_names_git`` accepts ``/usr/bin/git``, so the pre-gate has to as well:
+#: a file whose only git call is absolute was returned unparsed, and an
+#: unparsed file is invisible to the discovery floor too (#15783 review).
+_CHEAP_GATE = tuple(GATED_TOKENS) + ('git"', "git'", '"git ', "'git ")
 
 
 def scan_with_counts(path: Path, repo_root: Path) -> Tuple[List[Tuple[int, str]], int]:
@@ -434,7 +458,7 @@ def scan_with_counts(path: Path, repo_root: Path) -> Tuple[List[Tuple[int, str]]
         return [], 0
     modules, functions = subprocess_names(tree)
     async_modules, async_functions = asyncio_names(tree)
-    accepted = {SCRUB_HELPER} | scrub_wrappers(tree)
+    accepted = set(SCRUB_HELPERS) | scrub_wrappers(tree)
     production = is_production_path(rel)
     findings: List[Tuple[int, str]] = []
     discovered = 0

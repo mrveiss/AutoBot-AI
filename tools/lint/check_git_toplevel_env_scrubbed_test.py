@@ -427,3 +427,57 @@ def test_the_docstring_lists_every_pinned_gap() -> None:
     assert "KNOWN GAPS" in doc
     for phrase in ("through a variable", "Wrappers", "shadowed scrub helper"):
         assert phrase in doc, phrase
+
+
+_ARGS_KEYWORD = """
+import subprocess
+
+def status(path):
+    return subprocess.run(args=["git", "-C", path, "status"]).stdout
+"""
+
+_ARGS_KEYWORD_TOPLEVEL = """
+import subprocess
+
+def root():
+    return subprocess.run(args=["git", "rev-parse", "--show-toplevel"]).stdout
+"""
+
+_ABSOLUTE_GIT = """
+import subprocess
+
+def status(path):
+    return subprocess.run(["/usr/bin/git", "-C", path, "status"]).stdout
+"""
+
+
+def test_args_keyword_is_inspected(tmp_path: Path) -> None:
+    """`subprocess.run(args=[...])` is an ordinary spelling, not an evasion."""
+    findings = scan(_write(tmp_path, _ARGS_KEYWORD), tmp_path)
+
+    assert len(findings) == 1
+    assert "#15783" in findings[0][1]
+
+
+def test_args_keyword_reaches_the_token_gate_too(tmp_path: Path) -> None:
+    """A --show-toplevel behind args= gets the toplevel message, not the generic one."""
+    findings = scan(_write(tmp_path, _ARGS_KEYWORD_TOPLEVEL, name="sample_test.py"), tmp_path)
+
+    assert len(findings) == 1
+    assert "#15176" in findings[0][1]
+
+
+def test_an_absolute_git_path_is_not_skipped_by_the_pre_gate(tmp_path: Path) -> None:
+    """The cheap gate must admit every spelling `_names_git` accepts."""
+    findings = scan(_write(tmp_path, _ABSOLUTE_GIT), tmp_path)
+
+    assert len(findings) == 1
+
+
+def test_the_args_keyword_and_absolute_paths_count_toward_discovery(tmp_path: Path) -> None:
+    """A call the matcher cannot see is also missing from the vacuity floor."""
+    _, args_form = scan_with_counts(_write(tmp_path, _ARGS_KEYWORD, name="a.py"), tmp_path)
+    _, absolute_form = scan_with_counts(_write(tmp_path, _ABSOLUTE_GIT, name="b.py"), tmp_path)
+
+    assert args_form == 1
+    assert absolute_form == 1

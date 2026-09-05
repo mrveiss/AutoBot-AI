@@ -25,7 +25,7 @@ from typing import Dict, List
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.paths import strict_git_env
 from code_intelligence.anti_pattern_detector import AntiPatternDetector
 
 logger = get_logger(__name__)
@@ -106,7 +106,7 @@ def git_env() -> dict:
     already on disk — so nothing clones, fetches or authenticates, and no
     ``GIT_SSH_*`` or credential variable is load-bearing.
     """
-    return {k: v for k, v in scrubbed_git_env().items() if not k.startswith("GIT_")}
+    return strict_git_env()
 
 
 #: Back-compat alias — this module's own call site and the tests both import it.

@@ -287,6 +287,35 @@ def scrubbed_git_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
     return {key: value for key, value in source.items() if key not in AMBIENT_GIT_VARS}
 
 
+def strict_git_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """*env* minus **every** ``GIT_`` variable, not only the ambient four.
+
+    :func:`scrubbed_git_env` answers "which repository does git act on"; this
+    answers "what else can the environment make git do". They are different
+    questions and the second one only matters for a subset of callers -- but
+    that subset is the dangerous one:
+
+    * ``GIT_CONFIG_COUNT`` / ``GIT_CONFIG_KEY_n`` / ``GIT_CONFIG_VALUE_n`` set
+      arbitrary config for the child, including ``core.sshCommand`` -- which is
+      a command git then executes
+    * ``GIT_SSH_COMMAND`` and ``GIT_PROXY_COMMAND`` redirect transport. This
+      repository already classifies the first as a hijack variable and strips it
+      from executed environments (``services/execution/env_sanitizer.py``)
+    * ``GIT_NAMESPACE`` silently changes which refs a fetch or push sees
+
+    So anything that fetches, pulls, or resolves refs over a transport uses this
+    rather than the ambient scrub (#15783 review, CWE-15). It is a prefix rule,
+    not a list, because a denylist of these is the mistake #13882 already made
+    once: git gains variables between releases and the list is only ever
+    extended one incident at a time.
+
+    Wholesale is safe for that subset because none of them commit: stripping
+    ``GIT_AUTHOR_*`` / ``GIT_COMMITTER_*`` costs nothing when nothing authors.
+    SSH agent auth is unaffected -- ``SSH_AUTH_SOCK`` is not a ``GIT_`` name.
+    """
+    return {key: value for key, value in scrubbed_git_env(env).items() if not key.startswith("GIT_")}
+
+
 def git_repo_root(start: Path | str | None = None) -> Path:
     """Repository root containing *start*, asked of git with the environment scrubbed.
 

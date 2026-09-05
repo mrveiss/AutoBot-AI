@@ -11,6 +11,13 @@ fifth author forgets, and four independent fixes for one defect
 Here the scrub is not an argument — there is no spelling of these functions
 that inherits the ambient git environment.
 
+The environment is **strict** by default -- every ``GIT_`` variable removed,
+not only the four that pick the work tree. Callers that fetch, pull or resolve
+refs over a transport are the reason (#15783 review, CWE-15): ``GIT_CONFIG_*``
+can set ``core.sshCommand``, which git then executes. ``strict=False`` narrows
+it back to the ambient scrub and has to be spelled out, so forgetting the
+argument yields the safer environment rather than the weaker one.
+
 ``argv`` never carries ``"git"``: the subcommand is the first element, so a
 call site cannot accidentally address a different binary, and the argv reads
 as the git command it is.
@@ -28,7 +35,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from autobot_shared.env_utils import env_int
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.paths import scrubbed_git_env, strict_git_env
 
 #: Ceiling for a probe that would otherwise hang on a lock or a prompt. Env-var
 #: backed rather than literal, per the repository's TTL rule.
@@ -47,12 +54,18 @@ def _reject_env(kwargs: dict[str, Any]) -> None:
         raise TypeError("run_git/start_git scrub the environment themselves; passing env= would defeat that (#15783)")
 
 
+def _env_for(strict: bool) -> dict[str, str]:
+    """Strict by default: forgetting the argument gives the safer environment."""
+    return strict_git_env() if strict else scrubbed_git_env()
+
+
 def run_git(
     argv: Sequence[str],
     *,
     cwd: str | Path | None = None,
     timeout: float | None = None,
     check: bool = False,
+    strict: bool = True,
     **kwargs: Any,
 ) -> subprocess.CompletedProcess:
     """Run ``git <argv>`` synchronously with the git environment scrubbed.
@@ -71,12 +84,12 @@ def run_git(
         cwd=cwd,
         timeout=GIT_PROBE_TIMEOUT_SECONDS if timeout is None else timeout,
         check=check,
-        env=scrubbed_git_env(),
+        env=_env_for(strict),
         **options,
     )
 
 
-async def start_git(*argv: str, **kwargs: Any) -> asyncio.subprocess.Process:
+async def start_git(*argv: str, strict: bool = True, **kwargs: Any) -> asyncio.subprocess.Process:
     """Start ``git <argv>`` asynchronously with the git environment scrubbed.
 
     Both pipes are captured by default because every call site converted to
@@ -89,4 +102,4 @@ async def start_git(*argv: str, **kwargs: Any) -> asyncio.subprocess.Process:
         "stderr": asyncio.subprocess.PIPE,
     }
     options.update(kwargs)
-    return await asyncio.create_subprocess_exec("git", *argv, env=scrubbed_git_env(), **options)
+    return await asyncio.create_subprocess_exec("git", *argv, env=_env_for(strict), **options)

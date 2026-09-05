@@ -14,6 +14,8 @@ import subprocess
 
 import pytest
 
+from autobot_shared import git_probe
+
 from autobot_shared.git_probe import run_git, start_git
 from autobot_shared.paths import AMBIENT_GIT_VARS
 
@@ -83,11 +85,55 @@ async def test_start_git_answers_about_the_repository_it_was_given(tmp_path, mon
     assert stdout.decode() == "", "async probe answered about the wrong repository"
 
 
-def test_every_ambient_variable_is_removed(monkeypatch):
-    """Not one of them survives into the child, whatever the caller's shell holds."""
-    for name in AMBIENT_GIT_VARS:
-        monkeypatch.setenv(name, "/nonexistent/should-not-survive")
+def test_the_child_environment_is_asserted_directly(monkeypatch):
+    """Inspect the env actually handed to the child, not a proxy for it.
 
+    `git --version` reads no repository state, so it succeeds whether or not
+    the scrub happened -- a regression that forwarded the whole environment
+    would pass a test that only checked the exit code. Capturing the `env=`
+    argument is the property the guard actually promises (#15783 review).
+    """
+    for name in (*AMBIENT_GIT_VARS, "GIT_SSH_COMMAND", "GIT_CONFIG_COUNT", "GIT_NAMESPACE"):
+        monkeypatch.setenv(name, "should-not-survive")
+    captured = {}
+
+    def _capture(argv, **kwargs):
+        captured["argv"] = argv
+        captured["env"] = kwargs["env"]
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(git_probe.subprocess, "run", _capture)
+    run_git(["status"])
+
+    leaked = [name for name in captured["env"] if name.startswith("GIT_")]
+    assert leaked == [], f"these reached the child: {leaked}"
+    assert captured["argv"][0] == "git"
+    assert "PATH" in captured["env"], "the non-git environment must survive"
+
+
+def test_the_ambient_scrub_is_still_reachable_and_narrower(monkeypatch):
+    """The contrast: strict=False keeps GIT_ names that are not ambient.
+
+    Without this the strict default could be a no-op difference and the test
+    above would still pass.
+    """
+    monkeypatch.setenv("GIT_DIR", "/should-not-survive")
+    monkeypatch.setenv("GIT_SSH_COMMAND", "ssh -o Foo=bar")
+    captured = {}
+
+    def _capture(argv, **kwargs):
+        captured["env"] = kwargs["env"]
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(git_probe.subprocess, "run", _capture)
+    run_git(["status"], strict=False)
+
+    assert "GIT_DIR" not in captured["env"], "the ambient scrub still applies"
+    assert captured["env"].get("GIT_SSH_COMMAND") == "ssh -o Foo=bar"
+
+
+def test_git_still_runs_under_the_strict_environment():
+    """The behavioural half: stripping every GIT_ name does not break git."""
     result = run_git(["--version"])
 
     assert result.returncode == 0, result.stderr
