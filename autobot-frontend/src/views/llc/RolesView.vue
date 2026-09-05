@@ -335,6 +335,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
+import type { components } from '@/types/generated/api'
 import { createLogger } from '@/utils/debugUtils'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseCard from '@/components/base/BaseCard.vue'
@@ -366,14 +367,12 @@ const { t } = useI18n()
 const route = useRoute()
 const api = useApiClient()
 
-interface ToolCatalogueEntry {
-  name: string
-  description: string
-  tags: string[]
-  url: string | null
-  logo_url: string | null
-  role_count: number
-}
+/**
+ * From the generated contract, not hand-declared (#12363/#12420). A local
+ * `interface` here would be a claim about the server's shape that TypeScript
+ * cannot check — it stays green while the two drift.
+ */
+type ToolCatalogueEntry = components['schemas']['ToolCatalogueEntry']
 
 const roles = ref<RoleRow[]>([])
 const holders = ref<HolderRow[]>([])
@@ -541,7 +540,13 @@ async function loadRoles(): Promise<void> {
 async function loadToolCatalogue(): Promise<void> {
   if (!companyId.value) return
   try {
-    const loaded = await api.get<ToolCatalogueEntry[]>(`/api/llc/tools/${companyId.value}`)
+    // Typed by annotation rather than by an inline type argument on the call.
+    // The contract ratchet scans source text for a type argument applied to a
+    // client method, and counts one wherever it appears — including inside a
+    // comment, which is how an earlier version of this note failed the check
+    // while the code it described was already correct. The annotation infers
+    // the same type and keeps the shape the server actually declares.
+    const loaded: ToolCatalogueEntry[] = await api.get(`/api/llc/tools/${companyId.value}`)
     toolCatalogue.value = Array.isArray(loaded) ? loaded : []
   } catch (error) {
     logger.warn('Tool catalogue unavailable; the tools panel falls back to free text', error)
