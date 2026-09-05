@@ -35,53 +35,78 @@ class RateLimitExceeded(Exception):
 
 
 class PasswordChangeRateLimiter:
-    """Rate limits password change attempts per user."""
+    """Rate limits password change attempts per target user, and per calling
+    actor when the actor differs from the target.
+
+    Issue #15743: a target-only key constrains repeated attempts against one
+    victim, but not a caller walking many different target ids (the admin-
+    reset path, since self-service always has actor == target). Both are
+    enforced when an ``actor_id`` is supplied.
+    """
 
     MAX_ATTEMPTS = 3  # Strict security
     WINDOW_SECONDS = 1800  # 30 minutes
 
-    async def check_rate_limit(self, user_id: uuid.UUID) -> tuple[bool, int]:
+    def _keys(self, user_id: uuid.UUID, actor_id: uuid.UUID | None) -> list[str]:
+        """Redis keys to enforce for this attempt (#15743)."""
+        keys = [f"password_change_attempts:{user_id}"]
+        if actor_id is not None and actor_id != user_id:
+            keys.append(f"password_change_attempts:by-caller:{actor_id}")
+        return keys
+
+    async def check_rate_limit(
+        self,
+        user_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+    ) -> tuple[bool, int]:
         """
-        Check if user has exceeded rate limit.
+        Check if the target or the calling actor has exceeded the limit.
 
         Args:
-            user_id: User ID to check
+            user_id: Target user id being changed
+            actor_id: Caller's own id, if known (#15743)
 
         Returns:
             (is_allowed, attempts_remaining)
 
         Raises:
-            RateLimitExceeded: If limit exceeded
+            RateLimitExceeded: If either key is at or over the limit
         """
         redis_client = await get_async_redis_client(database="main")
-        key = f"password_change_attempts:{user_id}"
+        remaining = self.MAX_ATTEMPTS
+        for key in self._keys(user_id, actor_id):
+            attempts = await redis_client.get(key)
+            current = int(attempts) if attempts else 0
+            if current >= self.MAX_ATTEMPTS:
+                ttl = await redis_client.ttl(key)
+                raise RateLimitExceeded(f"Too many attempts. Try again in {ttl // 60} minutes.")
+            remaining = min(remaining, self.MAX_ATTEMPTS - current)
 
-        attempts = await redis_client.get(key)
-        current = int(attempts) if attempts else 0
+        return True, remaining
 
-        if current >= self.MAX_ATTEMPTS:
-            ttl = await redis_client.ttl(key)
-            raise RateLimitExceeded(f"Too many attempts. Try again in {ttl // 60} minutes.")
-
-        return True, self.MAX_ATTEMPTS - current
-
-    async def record_attempt(self, user_id: uuid.UUID, success: bool) -> None:
+    async def record_attempt(
+        self,
+        user_id: uuid.UUID,
+        success: bool,
+        actor_id: uuid.UUID | None = None,
+    ) -> None:
         """
-        Record password change attempt.
+        Record a password change attempt against every enforced key.
 
         Args:
-            user_id: User ID
-            success: Whether attempt was successful
+            user_id: Target user id being changed
+            success: Whether the attempt succeeded
+            actor_id: Caller's own id, if known (#15743)
         """
         redis_client = await get_async_redis_client(database="main")
-        key = f"password_change_attempts:{user_id}"
+        for key in self._keys(user_id, actor_id):
+            if success:
+                await redis_client.delete(key)
+            else:
+                await redis_client.incr(key)
+                await redis_client.expire(key, self.WINDOW_SECONDS)
 
         if success:
-            # Clear attempts on success
-            await redis_client.delete(key)
             logger.info("Cleared rate limit for user %s", user_id)
         else:
-            # Increment failed attempts
-            await redis_client.incr(key)
-            await redis_client.expire(key, self.WINDOW_SECONDS)
             logger.warning("Failed password change attempt for user %s", user_id)

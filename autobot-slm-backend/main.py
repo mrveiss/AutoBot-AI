@@ -89,6 +89,7 @@ from services.compose_fleet import (
 )
 from services.database import db_service
 from services.git_tracker import start_version_checker
+from services.local_admin_socket import start_local_admin_socket
 from services.node_seeder import sync_slm_node_roles
 from services.reconciler import reconciler_service
 from services.schedule_executor import start_schedule_executor, stop_schedule_executor
@@ -322,11 +323,20 @@ async def lifespan(app: FastAPI):
     a2a_card_task = start_card_refresh_task()
     logger.info("A2A card refresh task started")
 
+    # Credential-free local admin socket for the self-update trigger (#15728).
+    # None whenever this process was not started via systemd socket
+    # activation (dev checkout, CI, an install predating the socket unit) --
+    # never fatal, the authenticated HTTP path keeps working either way.
+    local_admin_socket = await start_local_admin_socket()
+
     logger.info("SLM Backend ready")
 
     yield
 
     logger.info("Shutting down SLM Backend")
+    if local_admin_socket is not None:
+        await local_admin_socket.stop()
+        logger.info("Local self-update admin socket stopped")
     self_heartbeat_task.cancel()
     version_checker_task.cancel()
     a2a_card_task.cancel()

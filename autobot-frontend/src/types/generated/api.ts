@@ -3243,26 +3243,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/user-management/users/{user_id}/change-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Change password
-         * @description Change a user's password.
-         */
-        post: operations["change_password_api_user_management_users__user_id__change_password_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/user-management/users/{user_id}/roles/{role_id}": {
         parameters: {
             query?: never;
@@ -3301,6 +3281,26 @@ export interface paths {
          */
         put: operations["set_user_role_api_user_management_users__user_id__role_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/user-management/users/{user_id}/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change password
+         * @description Change a user's password.
+         */
+        post: operations["change_password_api_user_management_users__user_id__change_password_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -107969,41 +107969,6 @@ export interface operations {
             };
         };
     };
-    change_password_api_user_management_users__user_id__change_password_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PasswordChange"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PasswordChangedResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     assign_role_api_user_management_users__user_id__roles__role_id__post: {
         parameters: {
             query?: never;
@@ -108090,6 +108055,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoleUpdateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_password_api_user_management_users__user_id__change_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordChangedResponse"];
                 };
             };
             /** @description Validation Error */

@@ -36,6 +36,24 @@ slm_backend_port: 8000
 slm_manager_redis_host: "{{ redis_host | default('127.0.0.1') }}"
 
 # ==========================================================
+# Local self-update admin socket (#15728)
+# ==========================================================
+# Credential-free on-host trigger for POST /code-sync/self-update: a systemd
+# .socket unit owns creation of this Unix domain socket -- and its
+# permissions -- BEFORE autobot-slm-backend.service ever starts, then hands
+# the backend the already-open fd via sd_listen_fds(). Filesystem
+# permissions on the socket are the access control; nothing here is a
+# credential. Set slm_self_update_socket_enabled: false to omit both the
+# socket unit and the backend unit's Sockets= wiring entirely.
+slm_self_update_socket_enabled: true
+slm_self_update_socket_service: autobot-slm-self-update
+slm_self_update_socket_path: /run/autobot/slm-self-update.sock
+# Owner/group read-write, nothing for "other": root always bypasses DAC, and
+# an operator who is a member of slm_group gets access without ever typing a
+# password or a token.
+slm_self_update_socket_mode: "0660"
+
+# ==========================================================
 # TLS Configuration
 # ==========================================================
 slm_tls_cert: "{{ slm_certs_dir }}/server-cert.pem"
