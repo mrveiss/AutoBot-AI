@@ -506,16 +506,27 @@ frontend_setup() {
     remote_exec_sudo "cd ${REMOTE_FRONTEND} && npm install --silent 2>/dev/null"
     success "npm dependencies installed"
 
-    info "Building frontend..."
-    remote_exec_sudo "cd ${REMOTE_FRONTEND} && npm run build --silent 2>/dev/null" || \
-        warn "Frontend build may have warnings, continuing..."
-    # #15610: nginx serves `current`, not the build directory itself, so that
-    # every later publish is a single rename(2) over this symlink rather than a
-    # pair of directory renames with no served path in between. Bootstrap's own
-    # build still lands in dist/; Ansible re-points `current` at a per-build
-    # directory the first time it publishes.
-    remote_exec_sudo "cd ${REMOTE_FRONTEND} && ln -sfn dist current"
-    success "Frontend built"
+    # #15650, #15689: the shell equivalent of
+    # roles/_shared/tasks/build_publish_slm_frontend.yml -- build:slm (not a
+    # plain `npm run build`, which bakes in the wrong API base, #9563/#9710/
+    # #10435), a build failure that aborts loudly instead of warning and
+    # continuing, and a build that lands in its own fresh directory, published
+    # by an atomic symlink flip only after a non-empty index.html is proven
+    # (#15430, #15462, #15557, #15610). One file, installed here and by
+    # sync-frontend.sh, so the idiom is not copied a third time in shell.
+    info "Installing build+publish helper..."
+    cat "${INFRA_ROOT}/autobot-slm-frontend/templates/build-publish-slm-frontend.sh" | \
+        remote_exec_sudo "cat > ${REMOTE_FRONTEND}/build-publish.sh"
+    remote_exec_sudo "chmod +x ${REMOTE_FRONTEND}/build-publish.sh"
+
+    info "Building and publishing frontend..."
+    # No `|| warn ... continuing` here: a failed build must abort bootstrap,
+    # not silently promote an empty/partial dist- directory. vite empties its
+    # outDir before writing, so publishing a failed build serves 403 for
+    # every /slm/ path (#15430, #15462) -- exactly what #15650 found this
+    # script doing.
+    remote_exec_sudo "cd ${REMOTE_FRONTEND} && ./build-publish.sh"
+    success "Frontend built and published"
 
     # Generate self-signed certificate
     info "Generating self-signed TLS certificate..."
