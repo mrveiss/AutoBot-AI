@@ -36,13 +36,21 @@ narrows to a test-shaped script rather than every npm invocation:
   inside a function or class. A cast inside a function re-runs and re-raises
   on every call, so a caller already sees it; it is the IMPORT-time crash
   this guard exists for.
-* **a direct ``int(...)``/``float(...)`` wrapping ``os.getenv(...)`` OR
-  ``os.environ.get(...)`` specifically** -- not one nested inside another
-  call such as ``max(1, int(os.getenv(...)))`` (already partly mitigated --
-  it has a floor -- so it is a smaller, different defect from the bare crash
-  this guard tracks), and not a subscript form (``os.environ["VAR"]``),
-  which raises ``KeyError`` rather than silently defaulting and so is a
-  different, already-loud failure mode this guard does not need to cover.
+* **an ``int(...)``/``float(...)`` wrapping ``os.getenv(...)`` OR
+  ``os.environ.get(...)``**, either directly or through a transparent
+  wrapper -- ``max``, ``min``, ``abs``, ``round``, in a positional or a
+  keyword argument. A floor does NOT make the cast safe: ``max(1,
+  int(os.getenv(...)))`` evaluates the cast first, so it dies at import
+  exactly as the bare form does, and the floor applies to the parsed number
+  rather than to the parse. An earlier draft of this guard excluded that
+  shape as "already partly mitigated", which protected the population it
+  drained while leaving eleven converted sites free to come back.
+
+  Not covered: a subscript form (``os.environ["VAR"]``), which raises
+  ``KeyError`` rather than silently defaulting and so is a different,
+  already-loud failure mode; and a cast embedded in a larger expression
+  such as ``int(os.environ.get(...)) * 1024`` (#15717), which is the same
+  crash in a shape this classifier does not yet reach.
 """
 
 from __future__ import annotations
