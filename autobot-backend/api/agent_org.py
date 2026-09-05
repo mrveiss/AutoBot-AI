@@ -26,14 +26,30 @@ from api.schemas_agent import (
     UpdateOrgRequest,
     UpsertOrgRequest,
 )
-from api.user_management.dependencies import get_db_session, get_optional_db_session
+from api.user_management.dependencies import (
+    get_current_user,
+    get_db_session,
+    get_optional_db_session,
+    require_reporting_line_write,
+)
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.agent_org_service import AgentOrgService
 from services.delegation_service import DelegationService
 
 logger = get_logger(__name__)
-router = APIRouter()
+# Every route here requires an authenticated caller (#15794). The router
+# carried no dependencies at all, so the whole agent org chart — who reports to
+# whom, roles, titles, capabilities — was readable and writable by anyone who
+# could reach the port.
+#
+# Applied at the router rather than per route deliberately: a per-route list is
+# a thing to forget when the next endpoint is added here, and the eleven routes
+# below are exactly what that omission produced. The two that write
+# ``reports_to`` additionally declare ``require_reporting_line_write``, because
+# a reporting line is an authority-granting edge (#15765) rather than ordinary
+# agent metadata.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 # -- Fallback: in-memory agents when PG is unavailable (#10511) ------------
@@ -185,6 +201,14 @@ async def get_direct_reports(
     "/{agent_id}/org",
     response_model=AgentSummary,
     tags=["agent-org"],
+    # #15794: this writes ``reports_to``, and a reporting line is an
+    # authority-granting edge once the hierarchy gates card edits (#15765) —
+    # the new manager gains edit rights over the moved subject. This route
+    # carried NO caller identity at all, so the gate on
+    # ``PUT /llc/reporting-lines/...`` protected one of two paths to the same
+    # write and this was the easier one to reach. A permission whose bypass
+    # ships beside it is not a permission.
+    dependencies=[Depends(require_reporting_line_write)],
 )
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -232,6 +256,8 @@ async def update_agent_org(
     response_model=AgentSummary,
     tags=["agent-org"],
     status_code=status.HTTP_200_OK,
+    # #15794: same reasoning as the PATCH above — this upserts ``reports_to``.
+    dependencies=[Depends(require_reporting_line_write)],
 )
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

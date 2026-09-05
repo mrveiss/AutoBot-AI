@@ -496,6 +496,7 @@ To add a new variable:
 | `AUTOBOT_FACT_FORCING` | ai | bool | false | Enable the fact-forcing gate, which requires an answer to cite retrieved facts. |
 | `AUTOBOT_GATEWAY_REQUIRE_OUTBOUND_APPROVAL` | gateway | bool | false | Require approval before the Gateway hands an agent-authored message to a channel adapter. Off means audit-only: every governed send is recorded, none is blocked. On fails closed — no registered approver, a denial, or an approver error all deny the send. |
 | `AUTOBOT_GIT_BRANCH` | system | str | `'Dev_new_gui'` | Git branch that the running instance was built from. |
+| `AUTOBOT_GIT_PROBE_TIMEOUT_SECONDS` | backend | int | `30` | Seconds a git subprocess started through autobot_shared.git_probe may run before it is abandoned, so a probe cannot hang on a lock or a prompt (#15783). |
 | `AUTOBOT_GRAFANA_PORT` | monitoring | str | `'3000'` | TCP port of the Grafana instance. Also declared in ssot_config.py; 3000 is Grafana's own default and is NOT the browser service, which is 9001 (#4052, #14198). |
 | `AUTOBOT_GRAPH_PATH_TIMEOUT_SECONDS` | kb | float | `10.0` | Ceiling on a knowledge-graph path search. Path queries are unbounded in the worst case, so this is what stops one request occupying a worker indefinitely. |
 | `AUTOBOT_HEALTH_POLL_CONNECT_TIMEOUT` | slm | float | `3.0` | Per-attempt connect timeout, in seconds, when probing a just-restarted component's health endpoint. Raising it tolerates a service that is slower to accept connections; lowering it fails an unreachable endpoint faster (autobot-slm-backend/api/code_sync.py, #11378). |
@@ -638,5 +639,5 @@ To add a new variable:
 | `AUTOBOT_WORKSPACE_MAX_COUNT` | workspace | int | `20` | Maximum number of concurrent task workspace containers allowed (GH#10544). Raising it allows more concurrent workspaces at the cost of more host resource usage; lowering it caps concurrent workspace count more tightly (services/docker_task_workspace.py). |
 | `AUTOBOT_WORKSPACE_PIDS_LIMIT` | workspace | int | `512` | PID-count limit (Linux pids cgroup) applied to a task workspace container, capping process count so a fork-bomb inside it cannot exhaust host PIDs (GH#11059). Raising it allows more processes inside a workspace; lowering it hardens against a fork-bomb more tightly, at the risk of limiting legitimate parallelism (services/docker_task_workspace.py). |
 
-*200 variables registered as of last generation.*
+*201 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->

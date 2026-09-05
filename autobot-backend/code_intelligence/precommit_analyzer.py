@@ -18,7 +18,6 @@ Parent Epic: #217 - Advanced Code Intelligence
 
 import concurrent.futures
 import re
-import subprocess  # nosec B404  # controlled git process execution
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -26,6 +25,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.git_probe import run_git
 from autobot_shared.logging_manager import get_logger
 from utils.line_index import LineIndex  # #12884
 
@@ -374,12 +374,8 @@ class PrecommitAnalyzer:
     def get_staged_files(self) -> List[str]:
         """Get list of files staged for commit."""
         try:
-            result = subprocess.run(  # nosec B603 B607  # fixed git argv, no user input
-                ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                cwd=str(self.project_root),
+            result = run_git(
+                ["diff", "--cached", "--name-only", "--diff-filter=ACMR"], timeout=10, cwd=str(self.project_root)
             )
             if result.returncode == 0:
                 return [f for f in result.stdout.strip().split("\n") if f]
@@ -392,13 +388,7 @@ class PrecommitAnalyzer:
         """Get content of a staged file."""
         try:
             # Try to get staged content first (what will be committed)
-            result = subprocess.run(  # nosec B603 B607  # fixed git argv, no user input
-                ["git", "show", f":{filepath}"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                cwd=str(self.project_root),
-            )
+            result = run_git(["show", f":{filepath}"], timeout=5, cwd=str(self.project_root))
             if result.returncode == 0:
                 return result.stdout
 

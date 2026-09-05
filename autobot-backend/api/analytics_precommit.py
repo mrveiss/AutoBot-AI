@@ -34,6 +34,7 @@ from api.schemas_analytics import (
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import scrubbed_git_env
 from code_intelligence.precommit_analyzer import BUILTIN_CHECKS as _ENGINE_BUILTIN_CHECKS
 from code_intelligence.precommit_analyzer import CheckDefinition as _EngineCheckDefinition
 from code_intelligence.precommit_analyzer import CheckResult as _EngineCheckResult
@@ -107,6 +108,7 @@ def get_staged_files() -> list[str]:
             capture_output=True,
             text=True,
             timeout=5,
+            env=scrubbed_git_env(),
         )
         if result.returncode == 0:
             return [f for f in result.stdout.strip().split("\n") if f]
@@ -121,10 +123,7 @@ def get_file_content(filepath: str) -> str | None:
     try:
         # Try to get staged content first
         result = subprocess.run(  # nosec B603 B607  # fixed argv, no user input
-            ["git", "show", f":{filepath}"],
-            capture_output=True,
-            text=True,
-            timeout=5,
+            ["git", "show", f":{filepath}"], capture_output=True, text=True, timeout=5, env=scrubbed_git_env()
         )
         if result.returncode == 0:
             return result.stdout

@@ -145,7 +145,62 @@ def _require_the_defect_is_reproducible(env: dict[str, str]) -> None:
 def test_scrubbed_git_env_drops_every_ambient_variable() -> None:
     scrubbed = scrubbed_git_env({"GIT_DIR": "/x", "GIT_WORK_TREE": "/y", "PATH": "/bin"})
     assert scrubbed == {"PATH": "/bin"}
-    assert set(AMBIENT_GIT_VARS) == {"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"}
+    assert set(AMBIENT_GIT_VARS) == {
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_COMMON_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    }
+
+
+@pytest.mark.parametrize("variable", ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"])
+def test_an_object_directory_variable_reads_another_repositorys_objects(tmp_path, variable: str) -> None:
+    """Both are the GIT_DIR shape: exit 0 and the wrong repository's content (#15783).
+
+    Measured rather than assumed, and the contrast is the point — the same
+    command in the same repository exits 128 without the variable. A silent
+    wrong answer is what makes these worth scrubbing; a `fatal` would not be.
+    """
+    donor, borrower = tmp_path / "donor", tmp_path / "borrower"
+    for repo in (donor, borrower):
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q", str(repo)], check=True, env=scrubbed_git_env())
+    (donor / "f.txt").write_text("content from the donor\n", encoding="utf-8")
+    commit_env = {
+        **scrubbed_git_env(),
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@e",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@e",
+    }
+    subprocess.run(["git", "-C", str(donor), "add", "-A"], check=True, env=commit_env)
+    subprocess.run(["git", "-C", str(donor), "commit", "-qm", "seed"], check=True, env=commit_env)
+    blob = subprocess.run(
+        ["git", "-C", str(donor), "rev-parse", "HEAD:f.txt"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=scrubbed_git_env(),
+    ).stdout.strip()
+
+    without = subprocess.run(
+        ["git", "-C", str(borrower), "cat-file", "-p", blob], capture_output=True, text=True, env=scrubbed_git_env()
+    )
+    with_variable = subprocess.run(
+        ["git", "-C", str(borrower), "cat-file", "-p", blob],
+        capture_output=True,
+        text=True,
+        env={**scrubbed_git_env(), variable: str(donor / ".git" / "objects")},
+    )
+
+    if without.returncode == 0:
+        pytest.skip("this git no longer isolates objects per repository; the contrast cannot be measured")
+    assert with_variable.returncode == 0, f"{variable} did not redirect object lookup on this git"
+    assert (
+        "content from the donor" in with_variable.stdout
+    ), "the leak this variable causes is the reason it is scrubbed"
 
 
 def test_git_repo_root_ignores_an_ambient_git_dir(monkeypatch: pytest.MonkeyPatch) -> None:
