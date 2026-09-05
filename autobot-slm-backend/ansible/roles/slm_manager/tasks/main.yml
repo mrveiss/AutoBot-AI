@@ -199,7 +199,7 @@
 # ==========================================================
 - name: "SLM | Sync SLM backend code from code_source"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-slm-backend/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-backend/"
     dest: "{{ slm_backend_dir }}/"
     rsync_opts:
       # Re-includes come first -- rsync applies the first matching rule, and
@@ -722,7 +722,7 @@
 # and Vite's rolldown bundler fails to resolve the import at build time.
 - name: "SLM | Sync autobot-plugins from code_source (MVA-893)"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-plugins/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-plugins/"
     dest: "{{ slm_base_dir }}/autobot-plugins/"
     rsync_opts:
       - "--exclude=node_modules"
@@ -750,7 +750,7 @@
 # bundler fails to resolve the import at build time (same failure mode as MVA-893).
 - name: "SLM | Sync libs (shared @autobot/ui kit) from code_source (#10750 C2c)"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/libs/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/libs/"
     dest: "{{ slm_base_dir }}/libs/"
     rsync_opts:
       - "--exclude=node_modules"
@@ -1135,7 +1135,7 @@
 # ==========================================================
 - name: "SLM | Install autobot-admin CLI"
   ansible.builtin.copy:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-slm-backend/scripts/autobot-admin.py"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-backend/scripts/autobot-admin.py"
     dest: /usr/local/bin/autobot-admin
     owner: root
     group: root

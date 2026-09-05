@@ -13,7 +13,11 @@ backend_user: autobot
 backend_group: autobot
 
 # Canonical git checkout on the box that the deployer pulls into (#3649).
-code_source_dir: /opt/autobot/code_source
+# #15632: derived from the SSOT rather than restated. A role default beats a
+# task-level `default(...)` filter, so a literal here silently shadowed every
+# derived fallback in this role -- had `autobot.base_dir` moved, sync-code-source
+# would have written one path while these tasks read another.
+code_source_dir: "{{ autobot.base_dir ~ '/code_source' }}"
 
 # Standalone PYTHONPATH copy imported by backend, Celery, and MCP-bridge
 # services. The backend's embedded autobot_shared path is a symlink here

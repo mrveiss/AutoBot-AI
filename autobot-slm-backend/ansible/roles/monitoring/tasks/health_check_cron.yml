@@ -42,7 +42,7 @@
 
 - name: "Health Check Cron | Deploy health check scripts from code_source (MVA-1038)"
   ansible.builtin.copy:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/scripts/{{ item }}"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/scripts/{{ item }}"
     dest: "{{ autobot_repo_dir }}/scripts/{{ item }}"
     owner: root
     group: root
