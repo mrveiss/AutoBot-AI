@@ -25,7 +25,7 @@ from initialization.integrity_handlers import register_integrity_handlers
 
 class _PsycopgLike(Exception):
     def __init__(self, sqlstate: str) -> None:
-        super().__init__(f"duplicate key value violates unique constraint \"users_email_key\" ({sqlstate})")
+        super().__init__(f'duplicate key value violates unique constraint "users_email_key" ({sqlstate})')
         self.sqlstate = sqlstate
 
 
