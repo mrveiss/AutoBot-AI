@@ -30,6 +30,7 @@ from api.schemas_code import (
     FileSandboxViewResponse,
 )
 from auth_middleware import get_auth_middleware
+from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import SandboxPathError, resolve_within_sandbox
 from constants.error_constants import ERR_DIRECTORY_NOT_FOUND, ERR_FILE_NOT_FOUND
@@ -48,7 +49,7 @@ _sandbox_root_ready = False
 # Recursive delete is unrecoverable -- no trash, no snapshot, no undo -- and
 # this endpoint is agent-callable, so the guards below are the only thing
 # between a stale path and someone's uncommitted work (#15777).
-_GIT_STATUS_TIMEOUT_SECONDS = int(os.getenv("AUTOBOT_SANDBOX_GIT_STATUS_TIMEOUT_SECONDS", "10"))
+_GIT_STATUS_TIMEOUT_SECONDS = env_int("AUTOBOT_SANDBOX_GIT_STATUS_TIMEOUT_SECONDS", 10)
 
 
 def ensure_sandbox_root() -> None:

@@ -16,6 +16,7 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 
+from autobot_shared.env_utils import env_float, env_int_clamped
 from autobot_shared.stream_logging import build_stderr_handler, build_stdout_handler
 
 if TYPE_CHECKING:
@@ -34,9 +35,9 @@ _LOG_TYPES = ("backend", "frontend", "llm", "debug", "audit")
 # ssot-config-exempt: pre-init logging -- this module must not import config
 # (see _get_config_manager), so the knobs are env-var-backed module constants.
 _FLOOD_ENABLED = os.getenv("AUTOBOT_LOG_FLOOD_ENABLED", "true").strip().lower() not in ("0", "false", "no", "off")
-_FLOOD_THRESHOLD = max(1, int(os.getenv("AUTOBOT_LOG_FLOOD_THRESHOLD", "5")))
-_FLOOD_WINDOW_SECONDS = float(os.getenv("AUTOBOT_LOG_FLOOD_WINDOW_SECONDS", "60"))
-_FLOOD_MAX_KEYS = max(1, int(os.getenv("AUTOBOT_LOG_FLOOD_MAX_KEYS", "2048")))
+_FLOOD_THRESHOLD = env_int_clamped("AUTOBOT_LOG_FLOOD_THRESHOLD", 5, min_v=1)
+_FLOOD_WINDOW_SECONDS = env_float("AUTOBOT_LOG_FLOOD_WINDOW_SECONDS", 60.0)
+_FLOOD_MAX_KEYS = env_int_clamped("AUTOBOT_LOG_FLOOD_MAX_KEYS", 2048, min_v=1)
 
 
 class LogFloodSuppressionFilter(logging.Filter):

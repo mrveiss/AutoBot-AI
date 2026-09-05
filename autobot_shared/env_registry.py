@@ -76,6 +76,7 @@ from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_ai  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
+from autobot_shared import env_registry_logging  # noqa: E402,F401
 from autobot_shared import env_registry_slm  # noqa: E402,F401
 from autobot_shared import env_registry_terminal  # noqa: E402,F401
 from autobot_shared import env_registry_testing  # noqa: E402,F401
@@ -276,75 +277,6 @@ register_env_var(
 
 # --- logging ----------------------------------------------------------------
 
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_LOGS_BACKUP_DIR",
-        type=str,
-        default="backup",
-        description="Directory where rotated log archives are written.",
-        component="logging",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_LOGS_DIR",
-        type=str,
-        default="logs",
-        description="Primary directory for application log files.",
-        component="logging",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_LOG_FLOOD_ENABLED",
-        type=bool,
-        default=True,
-        description="Bound how many identical WARNING/ERROR records one call site may emit per window (#15774).",
-        component="logging",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_LOG_FLOOD_THRESHOLD",
-        type=int,
-        default=5,
-        description="Records one log call site may emit per flood window before the rest are suppressed.",
-        component="logging",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_LOG_FLOOD_WINDOW_SECONDS",
-        type=int,
-        default=60,
-        description="Length of the log-flood suppression window, in seconds.",
-        component="logging",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_LOG_FLOOD_MAX_KEYS",
-        type=int,
-        default=2048,
-        description="Maximum distinct call sites tracked by the log-flood guard before least-recent eviction.",
-        component="logging",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_LOG_VIEWER_URL",
-        type=str,
-        default="http://localhost:5341",
-        description="Base URL of the Seq (or compatible) structured-log viewer.",
-        component="logging",
-    )
-)
 
 # --- otel -------------------------------------------------------------------
 
