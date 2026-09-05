@@ -126,9 +126,27 @@ def admin_client(app):
 
 @pytest.fixture
 def temp_allowed_dir(tmp_path):
-    """Create temporary directory within allowed paths for testing"""
-    # Use /tmp/autobot/ which is in ALLOWED_DIRECTORIES
-    test_dir = Path("/tmp/autobot/test_security")  # nosec B108  # test/controlled code uses tmpdir intentionally
+    """A per-test directory under an allowed root.
+
+    The path must live under ``/tmp/autobot/`` because that is what
+    ``ALLOWED_DIRECTORIES`` permits -- ``tmp_path`` itself is deliberately
+    outside it. But the *leaf* is unique per test, which the previous fixed
+    ``/tmp/autobot/test_security`` was not.
+
+    That shared path was a real cross-test hazard, not untidiness: the teardown
+    below rmtree's it unconditionally, so two tests using this fixture in
+    different shards or workers delete each other's directory mid-run. The
+    symptom is an inverted SECURITY assertion rather than a missing-file error
+    -- with the forbidden target deleted, a symlink chain into it dangles, and
+    a dangling link resolves to a non-existent path that is still under the
+    allowed root, so ``is_path_allowed`` returns True and the test reports
+    "symlink chain escape was not blocked". The escape was not the bug; the
+    fixture was.
+
+    ``tmp_path`` supplies the uniqueness because pytest already guarantees it
+    is distinct per test and per worker.
+    """
+    test_dir = Path("/tmp/autobot") / f"test_security_{tmp_path.name}"  # nosec B108  # allowed root, unique leaf
     test_dir.mkdir(parents=True, exist_ok=True)
     yield test_dir
     # Cleanup
