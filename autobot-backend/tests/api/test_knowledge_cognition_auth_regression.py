@@ -71,10 +71,8 @@ sys.modules["auth_middleware"] = _build_auth_middleware_stub()
 
 try:
     # ── import the real cognition router (fix applied -- now wired via Depends) ──
-    from api.knowledge_cognition import (  # noqa: E402
-        check_admin_permission as _bound_admin_check,
-        router as _cognition_router,
-    )
+    from api.knowledge_cognition import check_admin_permission as _bound_admin_check  # noqa: E402
+    from api.knowledge_cognition import router as _cognition_router
 finally:
     # The router captured `check_admin_permission` as a Python object inside its
     # Depends(...), so reverting `auth_middleware` cannot un-bind it -- and that
