@@ -95,31 +95,17 @@ class PatternLifecycle:
 
 
 def git_env() -> dict:
-    """The ambient environment minus everything that redirects git off ``-C``.
+    """The canonical scrub, narrowed to every ``GIT_`` name (#13882, #13983).
 
-    Left in place, such a variable makes ``-C repo_path`` advisory and git reads
-    whatever the ambient environment points at (#13983). A crawler asked to
-    analyse one repository must not silently analyse another — the caller gets a
-    plausible history for the wrong tree, which is worse than an error.
+    Why any scrub at all, and why wholesale beats a hand-written denylist, is
+    recorded once in :func:`autobot_shared.paths.scrubbed_git_env` — which this
+    composes since #15783 rather than repeating (the previous copy of that
+    reasoning lived here, and a fifth author still re-derived it).
 
-    #13882: this was a hand-written list of seven names, and its sibling in the
-    test fixture was a list of nine. Both are denylists — narrower than their own
-    subject, correct for the failures already seen and silently wrong for the
-    next one. Git has more than nine such variables and gains new ones between
-    releases, so neither list could ever be finished, only extended once per
-    incident. Inverted here: strip everything beginning with ``GIT_``.
-
-    Safe to strip wholesale because every caller is read-only and local —
-    ``_run_git`` passes ``-C`` and runs ``log``/``show`` against a path that is
-    already on disk. Nothing here clones, fetches or authenticates, so no
+    Narrowing further is safe *here* specifically: every caller is read-only and
+    local — ``_run_git`` passes ``-C`` and runs ``log``/``show`` against a path
+    already on disk — so nothing clones, fetches or authenticates, and no
     ``GIT_SSH_*`` or credential variable is load-bearing.
-
-    Built on :func:`autobot_shared.paths.scrubbed_git_env` since #15783 rather
-    than beside it. The canonical helper removes the four variables measured to
-    override ``-C``/``cwd=``; this narrows further to every ``GIT_`` name for
-    the reason above. Composing keeps one implementation of "what the ambient
-    environment is" while leaving this module's stricter policy visible where
-    the policy is decided.
     """
     return {k: v for k, v in scrubbed_git_env().items() if not k.startswith("GIT_")}
 
