@@ -29,6 +29,15 @@ from __future__ import annotations
 
 import sys
 import types
+
+# Module scope, deliberately. ``from __future__ import annotations`` above makes
+# every annotation a lazy string, and FastAPI resolves ``get_current_user``'s
+# against THIS MODULE's globals when it builds the OpenAPI schema. Imported
+# inside the factory it was a local name, so the annotation stayed an
+# unresolved ForwardRef and every schema build died with
+# "`TypeAdapter[Annotated[ForwardRef('_FastAPIRequest') ...]]` is not fully
+# defined" -- which took out repo_tests/conftest.py's SDK request oracle.
+from fastapi import Request as _FastAPIRequest
 from unittest.mock import MagicMock
 
 
@@ -67,8 +76,6 @@ def _auth_stub_getattr(attr: str):
 
 def build_auth_middleware_stub() -> types.ModuleType:
     """Construct the ``auth_middleware`` stub module. Does not touch ``sys.modules``."""
-    from fastapi import Request as _FastAPIRequest
-
     auth_stub = types.ModuleType("auth_middleware")
     auth_stub.__path__ = []  # type: ignore[attr-defined]
     auth_stub.__package__ = "auth_middleware"
