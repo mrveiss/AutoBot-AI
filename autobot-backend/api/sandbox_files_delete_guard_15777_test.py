@@ -165,14 +165,18 @@ class TestHermeticGitProbe:
     @pytest.mark.asyncio
     async def test_status_ignores_an_inherited_git_dir(self, tmp_path, monkeypatch):
         """The regression itself: -C must win over an exported GIT_DIR."""
-        _init_repo(tmp_path)
-        elsewhere = tmp_path.parent / "elsewhere"
-        elsewhere.mkdir()
-        _init_repo(elsewhere)
+        # Both repositories live inside this test's own tmp_path: writing the
+        # second into tmp_path.parent leaves an artefact in the shared session
+        # base and makes a rerun in the same session fail on mkdir.
+        target = tmp_path / "target"
+        elsewhere = tmp_path / "elsewhere"
+        for repo in (target, elsewhere):
+            repo.mkdir()
+            _init_repo(repo)
         (elsewhere / "noise.txt").write_text("dirty over there\n", encoding="utf-8")
         monkeypatch.setenv("GIT_DIR", str(elsewhere / ".git"))
 
-        lines = await _uncommitted_entries(tmp_path, tmp_path)
+        lines = await _uncommitted_entries(target, target)
 
         assert lines == [], f"probe answered about the wrong repository: {lines}"
 
@@ -257,3 +261,32 @@ class TestTheAuditLineSurvivesTheFloodGuard:
         await sandbox_files.delete_file.__wrapped__(request=None, path="work", recursive=True, force=True)
 
         assert recorded["extra"] == {"flood_exempt": True}
+
+
+class TestTheSandboxRootBound:
+    def test_discovery_stops_at_the_sandbox_root(self, tmp_path, monkeypatch):
+        """A checkout *above* the sandbox root must not capture every delete.
+
+        On a developer machine the sandbox often sits inside a clone, so without
+        this bound `_enclosing_work_tree` walks up into it and the dirty-tree
+        guard refuses deletes over unrelated uncommitted work. Both other
+        discovery tests run outside `SANDBOX_FILES_ROOT`, so the break was never
+        taken.
+        """
+        checkout = tmp_path / "checkout"
+        (checkout / ".git").mkdir(parents=True)
+        sandbox_root = checkout / "sandbox"
+        target = sandbox_root / "scratch"
+        target.mkdir(parents=True)
+        monkeypatch.setattr(sandbox_files, "SANDBOX_FILES_ROOT", sandbox_root)
+
+        assert sandbox_files._enclosing_work_tree(target) is None
+
+    def test_a_repository_inside_the_sandbox_is_still_found(self, tmp_path, monkeypatch):
+        """The contrast: the bound stops the walk, it does not disable it."""
+        sandbox_root = tmp_path / "sandbox"
+        repo = sandbox_root / "work"
+        (repo / ".git").mkdir(parents=True)
+        monkeypatch.setattr(sandbox_files, "SANDBOX_FILES_ROOT", sandbox_root)
+
+        assert sandbox_files._enclosing_work_tree(repo) == repo

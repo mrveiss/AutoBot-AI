@@ -114,6 +114,11 @@ class LogFloodSuppressionFilter(logging.Filter):
                 return True
 
             entry[1] += 1
+            # Refresh recency, or _evict is insertion-order rather than
+            # least-recent: an actively noisy key would be evicted ahead of an
+            # idle one and immediately granted a fresh threshold allowance,
+            # which is the flood the guard exists to stop.
+            self._state.move_to_end(key)
             if entry[2] < self._threshold:
                 entry[2] += 1
                 return True
