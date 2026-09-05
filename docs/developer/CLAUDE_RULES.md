@@ -518,6 +518,10 @@ To add a new variable:
 | `AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS` | ai | int | `86400` | Seconds a run's cumulative token counter survives in Redis, bounding memory for abandoned sessions. Refreshed on every increment. |
 | `AUTOBOT_LOGS_BACKUP_DIR` | logging | str | `'backup'` | Directory where rotated log archives are written. |
 | `AUTOBOT_LOGS_DIR` | logging | str | `'logs'` | Primary directory for application log files. |
+| `AUTOBOT_LOG_FLOOD_ENABLED` | logging | bool | true | Bound how many identical WARNING/ERROR records one call site may emit per window (#15774). |
+| `AUTOBOT_LOG_FLOOD_MAX_KEYS` | logging | int | `2048` | Maximum distinct call sites tracked by the log-flood guard before least-recent eviction. |
+| `AUTOBOT_LOG_FLOOD_THRESHOLD` | logging | int | `5` | Records one log call site may emit per flood window before the rest are suppressed. |
+| `AUTOBOT_LOG_FLOOD_WINDOW_SECONDS` | logging | float | `60.0` | Length of the log-flood suppression window, in seconds. |
 | `AUTOBOT_LOG_VIEWER_URL` | logging | str | `'http://localhost:5341'` | Base URL of the Seq (or compatible) structured-log viewer. |
 | `AUTOBOT_MATRIX_E2EE` | gateway | bool | false | Opt in to end-to-end encryption for the Matrix adapter. Off by default because E2EE needs the optional olm dependency and a persisted device store. |
 | `AUTOBOT_MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S` | backend | int | `3600` | How often to re-broadcast that a node is still at MAX_REMEDIATION_ATTEMPTS. Once exhausted, last_attempt freezes and this refusal is refused again on every reconcile pass forever — unthrottled, that is once per reconcile_interval (services/reconciler.py, #14465). |
@@ -583,6 +587,7 @@ To add a new variable:
 | `AUTOBOT_RISK_K` | code_analysis | float | `5.0` | Decay constant controlling how steeply a file's runtime_risk score saturates toward 1 as its raw risk grows (a file at raw_risk == K scores about 0.63). Raising it makes the score saturate more slowly; lowering it saturates faster (code_analysis/src/runtime_risk.py). |
 | `AUTOBOT_RUN_CHECKPOINT_TTL_SECONDS` | agent_loop | int | `86400` | TTL, in seconds, for a run's durable progress checkpoint in Redis (GH#11175). Raising it lets a crashed/restarted run resume from a checkpoint over a longer window; lowering it expires stale checkpoints sooner (agent_loop/loop.py). |
 | `AUTOBOT_RUN_JWT_DENYLIST_TIMEOUT_S` | auth | float | `2.0` | Redis lookup budget, in seconds, for the run-JWT denylist check on the auth path (#12751). Raising it tolerates a slower Redis before treating it as unavailable (fail-closed); lowering it falls over to fail-closed sooner on a slow Redis (services/run_jwt.py). |
+| `AUTOBOT_SANDBOX_GIT_STATUS_TIMEOUT_SECONDS` | backend | int | `10` | Seconds the sandbox delete guard waits for `git status --porcelain` before treating the work tree as unverifiable and refusing the recursive delete (api/sandbox_files.py, #15777). |
 | `AUTOBOT_SELF_IMPROVEMENT_MAX_CONCURRENCY` | orchestration | int | `2` | Maximum concurrent background self-improvement (judge-LLM) tasks the workflow runner allows (#11014). Raising it lets more workflow completions trigger learning concurrently; lowering it bounds concurrent judge-LLM load more tightly (orchestration/workflow_runner.py). |
 | `AUTOBOT_SERVICE_RESTART_PLAYBOOK_TIMEOUT_S` | backend | int | `2100` | Wall-clock ceiling on _restart_service_via_ansible when it restarts an arbitrary ServiceCategory.AUTOBOT unit (_remediate_failed_service), as opposed to the lightweight slm-agent restart (AUTOBOT_REMEDIATION_PLAYBOOK_TIMEOUT_S). That category is populated by unit-name pattern match (postgresql*, redis*, docker*, ...), an open-ended set that includes Type=oneshot units with a multi-minute TimeoutStartSec (autobot-pg-backup.service.j2 declares 1800s) -- reusing the slm-agent budget here would SIGKILL a legitimate long-running restart (services/reconciler.py, #14524). |
 | `AUTOBOT_SESSION_ROLE_TTL_SECONDS` | chat_workflow | int | `86400` | TTL, in seconds, for a chat session's role binding in Redis. Raising it keeps a session's assigned role valid longer between activity; lowering it expires it sooner, requiring the role to be re-resolved (chat_workflow/session_role.py). |
@@ -638,5 +643,5 @@ To add a new variable:
 | `AUTOBOT_WORKSPACE_MAX_COUNT` | workspace | int | `20` | Maximum number of concurrent task workspace containers allowed (GH#10544). Raising it allows more concurrent workspaces at the cost of more host resource usage; lowering it caps concurrent workspace count more tightly (services/docker_task_workspace.py). |
 | `AUTOBOT_WORKSPACE_PIDS_LIMIT` | workspace | int | `512` | PID-count limit (Linux pids cgroup) applied to a task workspace container, capping process count so a fork-bomb inside it cannot exhaust host PIDs (GH#11059). Raising it allows more processes inside a workspace; lowering it hardens against a fork-bomb more tightly, at the risk of limiting legitimate parallelism (services/docker_task_workspace.py). |
 
-*200 variables registered as of last generation.*
+*205 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->
