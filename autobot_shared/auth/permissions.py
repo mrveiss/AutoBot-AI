@@ -51,7 +51,6 @@ class Permission(str, Enum):
     ANALYTICS_EXPORT = "analytics.export"
     ANALYTICS_MANAGE = "analytics.manage"
     ANALYTICS_LOGS = "analytics.logs"
-
     # === Agent ===
     AGENT_VIEW = "agent.view"
     AGENT_EXECUTE = "agent.execute"
@@ -82,6 +81,9 @@ class Permission(str, Enum):
     ADMIN_CONFIG_READ = "admin.config.read"
     ADMIN_CONFIG_WRITE = "admin.config.write"
     ADMIN_SYSTEM = "admin.system"
+    # Authority-granting (#15765): grant explicitly, never derive from hierarchy
+    # position -- a project-scoped grant (#15767) must never confer it (#15766).
+    ADMIN_REPORTING_LINE_WRITE = "admin.reporting_line.write"
 
     # === MCP (Model Context Protocol) ===
     MCP_READ = "mcp.read"
@@ -113,15 +115,12 @@ class Permission(str, Enum):
     BATCH_CREATE = "batch.create"
     BATCH_EXECUTE = "batch.execute"
     BATCH_MANAGE = "batch.manage"
-
     # === Sandbox ===
     SANDBOX_VIEW = "sandbox.view"
     SANDBOX_EXECUTE = "sandbox.execute"
     SANDBOX_MANAGE = "sandbox.manage"
-
     # === Service Lifecycle Manager ===
     SERVICE_MANAGEMENT = "service.management"
-
     # === Shell Execution (dangerous — no single-user bypass allowed) ===
     SHELL_EXECUTE = "allow_shell_execute"
 
@@ -305,6 +304,7 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.ADMIN_CONFIG_READ,
         Permission.ADMIN_CONFIG_WRITE,
         Permission.ADMIN_SYSTEM,
+        Permission.ADMIN_REPORTING_LINE_WRITE,
         Permission.MCP_READ,
         Permission.MCP_EXECUTE,
         Permission.MCP_MANAGE,
