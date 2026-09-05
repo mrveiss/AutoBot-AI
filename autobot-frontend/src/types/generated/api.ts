@@ -112856,9 +112856,7 @@ export interface operations {
     };
     trigger_cognition_seed_api_knowledge_cognition_store_seed_post: {
         parameters: {
-            query?: {
-                _user?: unknown;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;

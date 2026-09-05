@@ -83,9 +83,10 @@ Reused from #15737's own working example
    above -- for a reference to a helper whose own code references
    ``get_auth_middleware``/``get_user_from_request``. This is a structural
    reading of the real call graph, not a name guess: it is why ``files``
-   (gated, via ``_check_file_permission``) and ``knowledge_cognition``
-   (NOT gated -- see below) come out on opposite sides despite neither one
-   using ``Depends(...)`` for its check.
+   (gated, via ``_check_file_permission``) and ``transcriber`` (NOT gated --
+   its ``request.state.user`` is never populated, so every caller resolves to
+   the same placeholder) come out on opposite sides despite neither one using
+   ``Depends(...)`` for its check.
 
 ## The exemption list is two different things, not one
 
@@ -103,14 +104,17 @@ equivalent gate) to the router itself and that removes the entry here as a
 consequence of the fix landing, not a prerequisite edit to make this file
 agree with a gate someone already added elsewhere.
 
-``_TRACKED_BY_OTHER_ISSUES``: two more ungated routers this guard's own
-construction surfaced, neither one part of #15745's ten and neither one the
-same defect shape as those ten:
+``_TRACKED_BY_OTHER_ISSUES``: ungated routers this guard's own construction
+surfaced, neither part of #15745's ten nor the same defect shape as those ten.
+It surfaced two; one has since been fixed and removed:
 
-* ``knowledge_cognition`` -- #15759. ``api/knowledge_cognition.py``'s
-  ``trigger_cognition_seed`` names ``_user=check_admin_permission`` with no
-  ``Depends(...)``; the check is never invoked. Worse than an openly-absent
-  gate, because it reads as present.
+* ``knowledge_cognition`` -- #15759, **fixed and no longer listed**.
+  ``trigger_cognition_seed`` named ``_user=check_admin_permission`` with no
+  ``Depends(...)``, so the check was never invoked -- worse than an openly
+  absent gate, because it read as present. When the gate went in, this file's
+  ``test_every_recorded_exemption_is_still_ungated`` failed on the entry and
+  forced its removal, which is precisely the shrink-side behaviour a recorded
+  exemption needs and which the exec-bit baseline lacks (#15762).
 * ``transcriber`` -- #15758. #15745 rejected this one as "auth lives in
   nested sub-routers" (transcriber_router aggregates
   ``transcriber/routes/*.py``). Building this guard required tracing that
@@ -185,7 +189,11 @@ _TRACKED_BY_15745 = {
 # their own issues since neither is the same defect shape as #15745's ten.
 # See the module docstring.
 _TRACKED_BY_OTHER_ISSUES = {
-    "knowledge_cognition": "#15759 -- admin check named but never Depends()-wired, so it never runs",
+    # knowledge_cognition came off here when #15759 landed: its admin check is
+    # now Depends()-wired and actually runs, so the router is gated and the
+    # entry would be a stale record. That removal is a CONSEQUENCE of the fix,
+    # which is what test_every_recorded_exemption_is_still_ungated exists to
+    # force -- it failed on this exact entry the moment the gate went in.
     "transcriber": "#15758 -- request.state.user is set nowhere in production; every caller is DEFAULT_USER",
 }
 
