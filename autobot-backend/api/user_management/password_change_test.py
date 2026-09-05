@@ -427,3 +427,92 @@ class TestPasswordChangeAuthorization:
                 await _call_change_password(user_id, pwd_change, mock_user_service, current_user, context)
 
             assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+
+
+class TestRequireCurrentCannotArriveFromTheWire:
+    """FastAPI must never bind ``require_current`` from the request (#15743).
+
+    Every other test in this file resolves the gate by hand, so none of them
+    exercise FastAPI's own parameter binding -- and binding is precisely where
+    the original defect lived. The generated OpenAPI schema shows
+    ``require_current`` absent from the wire surface, but a schema is a side
+    effect: it does not fail when someone later changes the signature. These
+    two tests assert the property directly, through a real client.
+
+    The route is mounted on a throwaway app rather than the full application so
+    the assertion is about this route's binding and nothing else.
+    """
+
+    @staticmethod
+    def _client(recorder):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.user_management import password_change as module
+
+        app = FastAPI()
+        app.include_router(module.router, prefix="/user-management")
+
+        caller = uuid.uuid4()
+
+        async def _fake_service():
+            service = AsyncMock()
+            service.change_password = AsyncMock(side_effect=recorder)
+            return service
+
+        app.dependency_overrides[module.get_user_service] = _fake_service
+        app.dependency_overrides[module.get_current_user] = lambda: {
+            "user_id": str(caller),
+            "token": "caller.jwt",
+        }
+        app.dependency_overrides[module.get_tenant_context] = lambda: TenantContext(
+            user_id=caller, is_platform_admin=False
+        )
+        return TestClient(app), caller
+
+    def _post(self, url_suffix: str, body: dict):
+        seen = {}
+
+        async def _record(**kwargs):
+            seen.update(kwargs)
+
+        with patch(
+            "api.user_management.password_change.PasswordChangeRateLimiter",
+            return_value=AsyncMock(check_rate_limit=AsyncMock(), record_attempt=AsyncMock()),
+        ):
+            client, caller = self._client(_record)
+            response = client.post(
+                f"/user-management/users/{caller}/change-password{url_suffix}",
+                json=body,
+            )
+        return response, seen
+
+    def test_a_require_current_query_parameter_is_ignored(self):
+        """``?require_current=false`` must not reach the service.
+
+        A ``bool`` parameter whose default is ``Depends(...)`` should be
+        dependency-bound rather than query-bound -- but "should be" is the
+        reasoning that produced the original bug, so it is asserted.
+        """
+        response, seen = self._post("?require_current=false", {"new_password": "N3wP@ssword!"})
+
+        assert response.status_code == status.HTTP_200_OK, response.text
+        assert seen.get("require_current") is True
+
+    def test_a_require_current_body_field_is_ignored(self):
+        """Same property from the body, the channel the original bug used.
+
+        Weaker than the query case, and worth saying so: making the parameter
+        wire-bindable turns it into a QUERY parameter, which the test above
+        catches. This one covers the other route in -- someone adding
+        ``require_current`` to the ``PasswordChange`` model and reading it off
+        ``password_data`` -- and it fails only against that change. Two
+        channels, two tests; neither subsumes the other.
+        """
+        response, seen = self._post(
+            "",
+            {"new_password": "N3wP@ssword!", "require_current": False},
+        )
+
+        assert response.status_code == status.HTTP_200_OK, response.text
+        assert seen.get("require_current") is True
