@@ -84,3 +84,10 @@ python:
   - 'autobot-slm-backend/ansible/**'
   - 'tools/git-hooks/**'
   - 'scripts/install-git-hooks.sh'
+
+  # #15650: repo_tests/slm_frontend_shell_publish_test.py reads this script to
+  # prove the SLM frontend build-and-publish cannot drift back to the shape that
+  # caused the #15430/#15462 outages. Without an entry here, editing the script
+  # is exactly the change that skips the suite guarding it -- the guard would be
+  # bypassable by touching the one file it exists to watch.
+  - 'sync-frontend.sh'
