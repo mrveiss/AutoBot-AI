@@ -66,5 +66,21 @@ python:
   # infrastructure-only change now runs python-suite; the alternative is a
   # filter that is narrower than the guard it gates.
   - 'autobot-infrastructure/**'
+
+  # #15713: the same shape a third time, for the ansible tree. EIGHTEEN files
+  # under repo_tests/ read it -- role defaults, playbooks, group_vars,
+  # templates -- and the filter named only three .j2 files from it, added
+  # one at a time by #14544 as each broke. #15704 changed role defaults only,
+  # touched no `**/*.py`, took the shim's green, and merged: it left
+  # Dev_new_gui red on all twelve shards, because two of those eighteen
+  # resolve role defaults and neither could resolve one deriving from
+  # `autobot.base_dir`.
+  #
+  # The whole tree, not the three subpaths that broke. Those three were
+  # correct on the day they were written, which is exactly the property the
+  # comment above says decays silently -- and it did, twice. A guard that
+  # reads role defaults, playbooks and inventory cannot be gated by a list of
+  # the individual files someone has already been burned by.
+  - 'autobot-slm-backend/ansible/**'
   - 'tools/git-hooks/**'
   - 'scripts/install-git-hooks.sh'
