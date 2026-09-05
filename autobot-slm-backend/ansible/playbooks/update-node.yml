@@ -99,8 +99,8 @@
     - name: "Resolve the commit the SLM cache was built from (#15557)"
       ansible.builtin.command:
         cmd: >-
-          git -c safe.directory={{ code_source_dir | default('/opt/autobot/code_source') }}
-          -C {{ code_source_dir | default('/opt/autobot/code_source') }}
+          git -c safe.directory={{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}
+          -C {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}
           rev-parse HEAD
       register: slm_cache_commit
       changed_when: false

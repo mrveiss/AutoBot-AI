@@ -46,14 +46,27 @@ autobot:
   group: "autobot"
   home_dir: "/home/autobot"
 
-  # Service URLs - derived from infrastructure.yml SSOT (#808)
-  services:
-    frontend: "http://{{ frontend_host }}:{{ frontend_port }}"
-    backend: "http://{{ backend_host }}:{{ backend_port }}"
-    database: "redis://{{ redis_host }}:{{ redis_port }}"
-    ai_stack: "http://{{ ai_stack_host }}:{{ ai_stack_port }}"
-    npu_worker: "http://{{ npu_worker_host }}:{{ npu_worker_port }}"
-    browser: "http://{{ browser_host }}:{{ browser_port }}"
+# Service URLs - derived from infrastructure.yml SSOT (#808).
+#
+# #15731: these live OUTSIDE the `autobot` mapping, and must stay outside it.
+# Ansible resolves a variable whole, so while these sat under `autobot.services`
+# every read of `autobot.base_dir` -- a plain string -- forced them to render
+# too. `frontend_host` and its siblings are host vars defined only in
+# production.yml, so any play targeting localhost died with
+# "'frontend_host' is undefined" before its first task. That took out every
+# self-update on the fleet until it was found.
+#
+# Nothing consumed `autobot.services` in any spelling when this moved; it was
+# breaking controller plays for no reader at all. Kept rather than deleted
+# because the URLs are still the derived SSOT form the #808 note describes, and
+# a future consumer wants them here rather than reinvented.
+autobot_services:
+  frontend: "http://{{ frontend_host }}:{{ frontend_port }}"
+  backend: "http://{{ backend_host }}:{{ backend_port }}"
+  database: "redis://{{ redis_host }}:{{ redis_port }}"
+  ai_stack: "http://{{ ai_stack_host }}:{{ ai_stack_port }}"
+  npu_worker: "http://{{ npu_worker_host }}:{{ npu_worker_port }}"
+  browser: "http://{{ browser_host }}:{{ browser_port }}"
 
 # ==========================================
 # NETWORK CONFIGURATION

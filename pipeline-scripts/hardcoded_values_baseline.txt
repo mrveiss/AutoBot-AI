@@ -754,7 +754,6 @@
 1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|"/opt/autobot/autobot-frontend/package.json
 1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|"/opt/autobot/venv
 1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|https://github.com
-1|other|autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml|https://github.com/mrveiss/AutoBot-AI.git
 1|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|'/opt/autobot/autobot-frontend/dist
 1|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|https://github.com/mrveiss/AutoBot-AI.git
@@ -762,14 +761,12 @@
 1|other|autobot-slm-backend/ansible/playbooks/rotate-certs.yml|120
 1|other|autobot-slm-backend/ansible/playbooks/rotate-certs.yml|30
 1|other|autobot-slm-backend/ansible/playbooks/rotate-certs.yml|60
-1|other|autobot-slm-backend/ansible/playbooks/rotate-service-keys.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/playbooks/setup-vm-names-and-lvm.yml|300
 1|other|autobot-slm-backend/ansible/playbooks/sync-user-backend.yml|"/opt/autobot
 1|other|autobot-slm-backend/ansible/playbooks/sync-user-backend.yml|"/opt/autobot/autobot-backend/{{ item }}
 1|other|autobot-slm-backend/ansible/playbooks/system-update.yml|120
 1|other|autobot-slm-backend/ansible/playbooks/system-update.yml|30
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|"/opt/autobot/{{ item }}
-1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|chown --no-dereference -R autobot:autobot
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|https://github.com/mrveiss/AutoBot-AI.git
 1|other|autobot-slm-backend/ansible/playbooks/update-node.yml|"/opt/autobot
@@ -1243,7 +1240,6 @@
 2|other|autobot-slm-backend/ansible/playbooks/system-update.yml|60
 2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|30
 2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|60
-2|other|autobot-slm-backend/ansible/playbooks/update-node.yml|'/opt/autobot/code_source
 2|other|autobot-slm-backend/ansible/roles/_shared/tasks/clean_legacy_dir.yml|"/opt/autobot/{{ dir_name }}/data
 2|other|autobot-slm-backend/ansible/roles/backend/tasks/main.yml|60
 2|other|autobot-slm-backend/ansible/roles/centralized_logging/defaults/main.yml|https://github.com/grafana/loki/releases/download/v{{
