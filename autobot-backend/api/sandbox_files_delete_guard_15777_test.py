@@ -21,10 +21,12 @@ from fastapi import HTTPException
 from api import sandbox_files
 from api.sandbox_files import (
     _assert_directory_deletable,
+    _entry_count,
     _enclosing_work_tree,
     _hermetic_git_env,
     _uncommitted_entries,
 )
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import scrubbed_git_env
 
 
@@ -59,7 +61,9 @@ class TestNonEmptyDirectory:
         (tmp_path / "a.txt").write_text("x", encoding="utf-8")
 
         with pytest.raises(HTTPException) as exc:
-            await _assert_directory_deletable(tmp_path, "work", recursive=False, force=False)
+            await _assert_directory_deletable(
+                tmp_path, "work", recursive=False, force=False, entries=_entry_count(tmp_path)
+            )
 
         assert exc.value.status_code == 409
         assert "1 entries" in exc.value.detail
@@ -67,13 +71,15 @@ class TestNonEmptyDirectory:
     @pytest.mark.asyncio
     async def test_empty_directory_still_deletes(self, tmp_path):
         """The pre-existing behaviour for scratch directories is unchanged."""
-        await _assert_directory_deletable(tmp_path, "empty", recursive=False, force=False)
+        await _assert_directory_deletable(
+            tmp_path, "empty", recursive=False, force=False, entries=_entry_count(tmp_path)
+        )
 
     @pytest.mark.asyncio
     async def test_non_empty_directory_passes_with_recursive(self, tmp_path):
         (tmp_path / "a.txt").write_text("x", encoding="utf-8")
 
-        await _assert_directory_deletable(tmp_path, "work", recursive=True, force=False)
+        await _assert_directory_deletable(tmp_path, "work", recursive=True, force=False, entries=_entry_count(tmp_path))
 
 
 class TestDirtyWorkTree:
@@ -83,7 +89,9 @@ class TestDirtyWorkTree:
         (tmp_path / "unsaved.txt").write_text("hours of work\n", encoding="utf-8")
 
         with pytest.raises(HTTPException) as exc:
-            await _assert_directory_deletable(tmp_path, "repo", recursive=True, force=False)
+            await _assert_directory_deletable(
+                tmp_path, "repo", recursive=True, force=False, entries=_entry_count(tmp_path)
+            )
 
         assert exc.value.status_code == 409
         assert "uncommitted" in exc.value.detail
@@ -93,14 +101,14 @@ class TestDirtyWorkTree:
         """The other direction: a guard that refuses a clean tree is useless."""
         _init_repo(tmp_path)
 
-        await _assert_directory_deletable(tmp_path, "repo", recursive=True, force=False)
+        await _assert_directory_deletable(tmp_path, "repo", recursive=True, force=False, entries=_entry_count(tmp_path))
 
     @pytest.mark.asyncio
     async def test_force_overrides_a_dirty_tree(self, tmp_path):
         _init_repo(tmp_path)
         (tmp_path / "unsaved.txt").write_text("deliberate\n", encoding="utf-8")
 
-        await _assert_directory_deletable(tmp_path, "repo", recursive=True, force=True)
+        await _assert_directory_deletable(tmp_path, "repo", recursive=True, force=True, entries=_entry_count(tmp_path))
 
     @pytest.mark.asyncio
     async def test_unverifiable_git_state_fails_closed(self, tmp_path, monkeypatch):
@@ -113,7 +121,9 @@ class TestDirtyWorkTree:
         monkeypatch.setattr("api.sandbox_files._uncommitted_entries", _unanswerable)
 
         with pytest.raises(HTTPException) as exc:
-            await _assert_directory_deletable(tmp_path, "repo", recursive=True, force=False)
+            await _assert_directory_deletable(
+                tmp_path, "repo", recursive=True, force=False, entries=_entry_count(tmp_path)
+            )
 
         assert exc.value.status_code == 409
         assert "Cannot verify" in exc.value.detail
@@ -290,3 +300,27 @@ class TestTheSandboxRootBound:
         monkeypatch.setattr(sandbox_files, "SANDBOX_FILES_ROOT", sandbox_root)
 
         assert sandbox_files._enclosing_work_tree(repo) == repo
+
+
+class TestTheCountIsTakenOnce:
+    @pytest.mark.asyncio
+    async def test_a_directory_that_vanishes_does_not_become_a_500(self, tmp_path, monkeypatch):
+        """The guard is given the count, so it never re-scans a gone directory.
+
+        Re-counting inside the audit line meant a directory deleted between the
+        two reads raised FileNotFoundError out of a handler that had already
+        decided the request was valid -- a 500 for a race that deserved the 404
+        it would have received a moment earlier.
+        """
+        target = tmp_path / "gone"
+        target.mkdir()
+        entries = sandbox_files._entry_count(target)
+        target.rmdir()
+
+        await sandbox_files._assert_directory_deletable(target, "gone", recursive=True, force=True, entries=entries)
+
+    def test_the_timeout_cannot_be_configured_below_one(self, monkeypatch):
+        """At 0 the probe times out before git answers and every delete 409s."""
+        monkeypatch.setenv("AUTOBOT_SANDBOX_GIT_STATUS_TIMEOUT_SECONDS", "0")
+
+        assert env_int_clamped("AUTOBOT_SANDBOX_GIT_STATUS_TIMEOUT_SECONDS", 10, min_v=1) == 1

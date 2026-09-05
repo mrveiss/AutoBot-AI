@@ -61,8 +61,8 @@ register_env_var(
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_LOG_FLOOD_WINDOW_SECONDS",
-        type=int,
-        default=60,
+        type=float,
+        default=60.0,
         description="Length of the log-flood suppression window, in seconds.",
         component="logging",
     )

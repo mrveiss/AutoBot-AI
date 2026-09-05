@@ -31,7 +31,7 @@ from api.schemas_code import (
     FileSandboxViewResponse,
 )
 from auth_middleware import get_auth_middleware
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.security.path_validator import SandboxPathError, resolve_within_sandbox
@@ -51,7 +51,11 @@ _sandbox_root_ready = False
 # Recursive delete is unrecoverable -- no trash, no snapshot, no undo -- and
 # this endpoint is agent-callable, so the guards below are the only thing
 # between a stale path and someone's uncommitted work (#15777).
-_GIT_STATUS_TIMEOUT_SECONDS = env_int("AUTOBOT_SANDBOX_GIT_STATUS_TIMEOUT_SECONDS", 10)
+#: Clamped, not merely read: at 0 the probe times out before `git status`
+#: can answer, `_uncommitted_entries` returns None, and every delete inside
+#: a work tree becomes an unconditional 409 -- a misconfiguration that
+#: disables the feature while looking like the guard working.
+_GIT_STATUS_TIMEOUT_SECONDS = env_int_clamped("AUTOBOT_SANDBOX_GIT_STATUS_TIMEOUT_SECONDS", 10, min_v=1)
 
 
 def ensure_sandbox_root() -> None:
@@ -288,9 +292,14 @@ async def _uncommitted_entries(work_tree: Path, target: Path) -> list[str] | Non
     return [line for line in stdout.decode("utf-8", errors="replace").splitlines() if line.strip()]
 
 
-async def _assert_directory_deletable(target_path: Path, path: str, recursive: bool, force: bool) -> None:
-    """Refuse a recursive delete that would take unsaved work with it (#15777)."""
-    entries = await run_in_file_executor(_entry_count, target_path)
+async def _assert_directory_deletable(target_path: Path, path: str, recursive: bool, force: bool, entries: int) -> None:
+    """Refuse a recursive delete that would take unsaved work with it (#15777).
+
+    *entries* is counted once by the caller and passed in: counting again for
+    the audit line scanned every directory twice, and a directory that vanished
+    between the two reads raised ``FileNotFoundError`` -- a 500 where the
+    request deserved the 404 it would have got a moment earlier.
+    """
     if entries and not recursive:
         raise HTTPException(
             status_code=409,
@@ -337,11 +346,12 @@ async def delete_file(request: Request, path: str, recursive: bool = False, forc
         await run_in_file_executor(target_path.unlink)
         return {"message": f"File '{path}' deleted successfully"}
 
-    await _assert_directory_deletable(target_path, path, recursive, force)
+    entries = await run_in_file_executor(_entry_count, target_path)
+    await _assert_directory_deletable(target_path, path, recursive, force, entries)
     logger.warning(
         "sandbox recursive delete: path=%s entries=%s forced=%s actor=%s",
         path,
-        await run_in_file_executor(_entry_count, target_path),
+        entries,
         force,
         user.get("username") or user.get("user_id") or "unknown",
         # An audit record for a destructive operation is never a candidate for
