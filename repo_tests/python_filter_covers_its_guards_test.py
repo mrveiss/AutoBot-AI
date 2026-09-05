@@ -41,6 +41,14 @@ _GUARD_DIR = _REPO_ROOT / "repo_tests"
 #: reads of the tree.
 _QUOTED_PATH = re.compile(r"""["']([a-z0-9_.-]+/[A-Za-z0-9_./*-]+)["']""")
 
+#: The same read written segment by segment: `_REPO_ROOT / "tree" / "file.yml"`.
+#: Fifty-two guards build their subjects this way, and none of those literals
+#: contains a slash -- so a detector keyed on the quoted form alone reports a
+#: tree as unread while a guard reads it every run, which is the reach failure
+#: this whole guard exists to prevent, committed by the guard itself.
+_COMPOSED_PATH = re.compile(r"""_REPO_ROOT\s*((?:/\s*["'][A-Za-z0-9_.*-]+["']\s*)+)""")
+_SEGMENT = re.compile(r"""["']([A-Za-z0-9_.*-]+)["']""")
+
 #: Trees whose contents no guard reads directly, so the filter need not name
 #: them even when a path string mentions one.
 _NOT_A_READ = frozenset({"repo_tests", "pipeline-scripts", "scripts", "tools", "libs"})
@@ -79,6 +87,18 @@ def _is_covered(path: str, patterns: list[str]) -> bool:
     return False
 
 
+def _record(candidate: str, guard: str, patterns: list[str], reads: dict[str, set[str]]) -> None:
+    """Note *candidate* as an uncovered read, if it is one."""
+    tree = candidate.split("/", 1)[0]
+    if tree in _NOT_A_READ or not (_REPO_ROOT / tree).is_dir():
+        return
+    if not (_REPO_ROOT / candidate).is_file():
+        return  # a prefix or a glob, not a file this guard reads
+    if _is_covered(candidate, patterns):
+        return
+    reads.setdefault(candidate, set()).add(guard)
+
+
 def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
     """`uncovered path -> guards reading it`, and how many guards were parsed."""
     reads: dict[str, set[str]] = {}
@@ -86,16 +106,14 @@ def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
     for path in sorted(_GUARD_DIR.glob("*.py")):
         source = path.read_text(encoding="utf-8")
         parsed += 1
-        for match in _QUOTED_PATH.finditer(source):
-            candidate = match.group(1)
-            tree = candidate.split("/", 1)[0]
-            if tree in _NOT_A_READ or not (_REPO_ROOT / tree).is_dir():
-                continue
-            if not (_REPO_ROOT / candidate).is_file():
-                continue  # a prefix or a glob, not a file this guard reads
-            if _is_covered(candidate, patterns):
-                continue
-            reads.setdefault(candidate, set()).add(path.name)
+        composed = (
+            "/".join(_SEGMENT.findall(match.group(1)))
+            for match in _COMPOSED_PATH.finditer(source)
+        )
+        for candidate in (m.group(1) for m in _QUOTED_PATH.finditer(source)):
+            _record(candidate, path.name, patterns, reads)
+        for candidate in composed:
+            _record(candidate, path.name, patterns, reads)
     return reads, parsed
 
 
@@ -128,14 +146,17 @@ def test_the_uncovered_record_only_shrinks() -> None:
     next person spends the same afternoon re-deriving why.
     """
     uncovered, _ = _uncovered_reads(_filter_patterns())
-    assert len(uncovered) <= MAX_UNCOVERED_READS, (
-        f"{len(uncovered)} uncovered guard inputs against a ceiling of {MAX_UNCOVERED_READS}"
+    assert len(uncovered) == MAX_UNCOVERED_READS, (
+        f"{len(uncovered)} uncovered guard inputs, but MAX_UNCOVERED_READS says "
+        f"{MAX_UNCOVERED_READS}. Equality, not a bound: headroom under a ceiling is "
+        "room for a new bypass to appear with nothing failing. Widening the filter "
+        "means removing the entry AND lowering this number in the same commit."
     )
 
     stale = sorted(path for path in UNCOVERED_READS if path not in uncovered)
     assert not stale, (
         "the filter now covers these, so they are no longer bypasses — remove them from "
-        f"UNCOVERED_READS and lower MAX_UNCOVERED_READS to match:\n  " + "\n  ".join(stale)
+        "UNCOVERED_READS and lower MAX_UNCOVERED_READS to match:\n  " + "\n  ".join(stale)
     )
 
 
@@ -159,3 +180,30 @@ COVERAGE_CONTRASTS = (
 @pytest.mark.parametrize(("path", "expected"), COVERAGE_CONTRASTS)
 def test_coverage_classifier_discriminates(path: str, expected: bool) -> None:
     assert _is_covered(path, _filter_patterns()) is expected, path
+
+
+def test_composed_paths_are_detected_not_only_quoted_ones(tmp_path: Path) -> None:
+    """A guard that builds its subject segment by segment must still be seen.
+
+    `_REPO_ROOT / "tree" / "file.yml"` contains no literal with a slash in it,
+    so a detector keyed on the quoted form alone reports the tree as unread
+    while a guard reads it every run. Fifty-two guards here build paths this
+    way -- a reach failure inside the guard that exists to prevent reach
+    failures.
+    """
+    guard = tmp_path / "sample_test.py"
+    guard.write_text(
+        'A = _REPO_ROOT / "docker" / "with-secrets.sh"\n'
+        'B = "docker/secrets-init.sh"\n',
+        encoding="utf-8",
+    )
+    composed = ["/".join(_SEGMENT.findall(m.group(1))) for m in _COMPOSED_PATH.finditer(guard.read_text(encoding="utf-8"))]
+    quoted = [m.group(1) for m in _QUOTED_PATH.finditer(guard.read_text(encoding="utf-8"))]
+
+    assert composed == ["docker/with-secrets.sh"], composed
+    assert "docker/secrets-init.sh" in quoted
+
+
+def test_a_composed_path_with_no_repo_root_base_is_ignored() -> None:
+    """The contrast: only a `_REPO_ROOT`-anchored chain is a repository read."""
+    assert not _COMPOSED_PATH.findall('X = somewhere / "docker" / "with-secrets.sh"')
