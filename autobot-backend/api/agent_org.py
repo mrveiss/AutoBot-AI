@@ -35,6 +35,7 @@ from api.user_management.dependencies import (
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.agent_org_service import AgentOrgService
+from user_management.services import TenantContext
 from services.delegation_service import DelegationService
 
 logger = get_logger(__name__)
@@ -208,7 +209,11 @@ async def get_direct_reports(
     # ``PUT /llc/reporting-lines/...`` protected one of two paths to the same
     # write and this was the easier one to reach. A permission whose bypass
     # ships beside it is not a permission.
-    dependencies=[Depends(require_reporting_line_write)],
+    # The gate is bound as a parameter rather than listed here, so its return
+    # value — the caller's resolved TenantContext — reaches the handler. It is
+    # still a declared dependency in the Dependant tree either way; what the
+    # parameter form adds is that the company used for scoping comes from the
+    # authenticated context and can never come from the request body.
 )
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -218,6 +223,12 @@ async def get_direct_reports(
 async def update_agent_org(
     agent_id: str,
     body: UpdateOrgRequest,
+    # Declared BEFORE the session on purpose: FastAPI resolves parameter
+    # dependencies in signature order, so the authority check runs before a
+    # database session is acquired rather than after. A gate that fires only
+    # once the handler is already holding resources is a gate in the wrong
+    # place, even when it still refuses.
+    context: TenantContext = Depends(require_reporting_line_write),
     session: AsyncSession = Depends(get_db_session),
 ) -> AgentSummary:
     """
@@ -234,6 +245,8 @@ async def update_agent_org(
             org_role=body.org_role,
             title=body.title,
             capabilities=body.capabilities,
+            # From the authenticated context, never the body (#15794).
+            company_id=context.org_id,
         )
     except ValueError as exc:
         detail = str(exc)
@@ -257,7 +270,6 @@ async def update_agent_org(
     tags=["agent-org"],
     status_code=status.HTTP_200_OK,
     # #15794: same reasoning as the PATCH above — this upserts ``reports_to``.
-    dependencies=[Depends(require_reporting_line_write)],
 )
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -267,6 +279,12 @@ async def update_agent_org(
 async def upsert_agent_org(
     agent_id: str,
     body: UpsertOrgRequest,
+    # Declared BEFORE the session on purpose: FastAPI resolves parameter
+    # dependencies in signature order, so the authority check runs before a
+    # database session is acquired rather than after. A gate that fires only
+    # once the handler is already holding resources is a gate in the wrong
+    # place, even when it still refuses.
+    context: TenantContext = Depends(require_reporting_line_write),
     session: AsyncSession = Depends(get_db_session),
 ) -> AgentSummary:
     """
@@ -280,6 +298,8 @@ async def upsert_agent_org(
         name=body.name,
         org_role=body.org_role,
         reports_to=body.reports_to,
+        # From the authenticated context, never the body (#15794).
+        company_id=context.org_id,
         title=body.title,
         capabilities=body.capabilities,
     )

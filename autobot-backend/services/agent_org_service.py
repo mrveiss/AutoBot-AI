@@ -221,7 +221,7 @@ class AgentOrgService:
         org_role: str | None = None,
         title: str | None = None,
         capabilities: str | None = None,
-        company_id: str | None = None,
+        company_id: "str | uuid.UUID | None" = None,
     ) -> AgentOrgNode:
         """
         Update reporting line with cycle detection (#1405).
@@ -232,6 +232,24 @@ class AgentOrgService:
         node = await self.get_node(agent_id)
         if node is None:
             raise ValueError(f"Agent not found in org hierarchy: {agent_id!r}")
+
+        # Tenant scoping (#15794, CWE-862). ``get_node`` looks the target up by
+        # ``agent_id`` alone, and ``new_manager_id`` was accepted as given, so a
+        # caller holding admin.reporting_line.write could re-parent an agent in
+        # ANY company and name a manager from any other. The permission answers
+        # "may this caller edit reporting lines"; it cannot answer "whose".
+        #
+        # Enforced only when a company is supplied, because this service is also
+        # called from paths that legitimately have no tenant (seeding, and the
+        # pre-tenancy callers). Those pass None and are unchanged; the HTTP
+        # routes always pass the caller's own context, never a body value.
+        if company_id is not None:
+            if str(node.company_id) != str(company_id):
+                raise ValueError(f"Agent not found in org hierarchy: {agent_id!r}")
+            if new_manager_id is not None:
+                manager = await self.get_node(new_manager_id)
+                if manager is None or str(manager.company_id) != str(company_id):
+                    raise ValueError(f"Manager not in this company: {new_manager_id!r}")
 
         if new_manager_id is not None and new_manager_id != node.reports_to:
             if await self.detect_cycle(agent_id, new_manager_id):
@@ -284,7 +302,7 @@ class AgentOrgService:
         reports_to: str | None = None,
         title: str | None = None,
         capabilities: str | None = None,
-        company_id: str | None = None,
+        company_id: "str | uuid.UUID | None" = None,
     ) -> AgentOrgNode:
         """
         Create or update an agent_org_nodes record (#1405).
@@ -293,6 +311,22 @@ class AgentOrgService:
         Triggers capability indexing into company KB when company_id is provided (#8244).
         """
         node = await self.get_node(agent_id)
+
+        # Tenant scoping (#15794). Same reasoning as update_reporting_line: the
+        # permission says the caller may edit reporting lines, not whose. An
+        # existing node belonging to another company must read as absent rather
+        # than be updated, and a manager must be in this company.
+        #
+        # Absent, not forbidden: a distinct error would tell an unauthorised
+        # caller that an agent exists in a company they cannot see.
+        if company_id is not None:
+            if node is not None and str(node.company_id) != str(company_id):
+                raise ValueError(f"Agent not found in org hierarchy: {agent_id!r}")
+            if reports_to is not None:
+                manager = await self.get_node(reports_to)
+                if manager is None or str(manager.company_id) != str(company_id):
+                    raise ValueError(f"Manager not in this company: {reports_to!r}")
+
         if node is None:
             node = AgentOrgNode(
                 id=uuid.uuid4(),
