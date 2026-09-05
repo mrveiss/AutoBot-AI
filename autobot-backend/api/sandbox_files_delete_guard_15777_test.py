@@ -21,8 +21,8 @@ from fastapi import HTTPException
 from api import sandbox_files
 from api.sandbox_files import (
     _assert_directory_deletable,
-    _entry_count,
     _enclosing_work_tree,
+    _entry_count,
     _hermetic_git_env,
     _uncommitted_entries,
 )
