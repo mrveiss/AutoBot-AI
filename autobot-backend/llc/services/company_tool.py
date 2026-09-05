@@ -80,9 +80,7 @@ class CompanyToolService(LLCServiceBase):
             after=after,
         )
 
-    async def get(
-        self, session: AsyncSession, company_id: uuid.UUID, tool_name: str
-    ) -> Optional[LLCCompanyTool]:
+    async def get(self, session: AsyncSession, company_id: uuid.UUID, tool_name: str) -> Optional[LLCCompanyTool]:
         """This company's overlay row for one tool, or None when none exists."""
         result = await session.execute(
             select(LLCCompanyTool).where(
@@ -92,17 +90,11 @@ class CompanyToolService(LLCServiceBase):
         )
         return result.scalar_one_or_none()
 
-    async def _overlays(
-        self, session: AsyncSession, company_id: uuid.UUID
-    ) -> Dict[str, LLCCompanyTool]:
-        result = await session.execute(
-            select(LLCCompanyTool).where(LLCCompanyTool.company_id == company_id)
-        )
+    async def _overlays(self, session: AsyncSession, company_id: uuid.UUID) -> Dict[str, LLCCompanyTool]:
+        result = await session.execute(select(LLCCompanyTool).where(LLCCompanyTool.company_id == company_id))
         return {row.tool_name: row for row in result.scalars()}
 
-    async def _role_counts(
-        self, session: AsyncSession, company_id: uuid.UUID
-    ) -> Dict[str, int]:
+    async def _role_counts(self, session: AsyncSession, company_id: uuid.UUID) -> Dict[str, int]:
         result = await session.execute(
             select(LLCRoleTool.tool_name, func.count(LLCRoleTool.role_id.distinct()))
             .where(LLCRoleTool.company_id == company_id)
@@ -111,9 +103,7 @@ class CompanyToolService(LLCServiceBase):
         return {name: count for name, count in result.all()}
 
     @staticmethod
-    def _entry(
-        tool: RegisteredTool, overlay: Optional[LLCCompanyTool], role_count: int
-    ) -> CatalogueEntry:
+    def _entry(tool: RegisteredTool, overlay: Optional[LLCCompanyTool], role_count: int) -> CatalogueEntry:
         return CatalogueEntry(
             name=tool.name,
             description=tool.description,
@@ -123,9 +113,7 @@ class CompanyToolService(LLCServiceBase):
             role_count=role_count,
         )
 
-    async def catalogue(
-        self, session: AsyncSession, company_id: uuid.UUID
-    ) -> List[CatalogueEntry]:
+    async def catalogue(self, session: AsyncSession, company_id: uuid.UUID) -> List[CatalogueEntry]:
         """Every registered tool, carrying this company's facts where recorded.
 
         Driven by the registry, not by the overlay table: a tool nobody has
@@ -134,14 +122,9 @@ class CompanyToolService(LLCServiceBase):
         tools = registered_tools()
         overlays = await self._overlays(session, company_id)
         counts = await self._role_counts(session, company_id)
-        return [
-            self._entry(tools[name], overlays.get(name), counts.get(name, 0))
-            for name in sorted(tools)
-        ]
+        return [self._entry(tools[name], overlays.get(name), counts.get(name, 0)) for name in sorted(tools)]
 
-    async def usage(
-        self, session: AsyncSession, company_id: uuid.UUID, tool_name: str
-    ) -> Dict[str, List[str]]:
+    async def usage(self, session: AsyncSession, company_id: uuid.UUID, tool_name: str) -> Dict[str, List[str]]:
         """Which roles carry this tool, and which workflows those roles run.
 
         Scoped by ``company_id`` on both queries — a dropped filter on either

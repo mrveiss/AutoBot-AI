@@ -55,19 +55,13 @@ class LLCCompanyTool(Base):
 
     __tablename__ = "llc_company_tools"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
 
     #: A registry key, not free text. Validated by the service on write, for the
     #: same reason ``llc_role_tools`` is: the authority for "is this a real
     #: tool" is the registry, and a foreign key cannot reach it.
-    tool_name: Mapped[str] = mapped_column(
-        sa.String(TOOL_NAME_LENGTH), nullable=False, index=True
-    )
+    tool_name: Mapped[str] = mapped_column(sa.String(TOOL_NAME_LENGTH), nullable=False, index=True)
 
     url: Mapped[str | None] = mapped_column(sa.String(URL_LENGTH), nullable=True)
     logo_url: Mapped[str | None] = mapped_column(sa.String(URL_LENGTH), nullable=True)
@@ -84,11 +78,7 @@ class LLCCompanyTool(Base):
 
     #: One overlay per tool per company. Without this a second row would shadow
     #: the first and which one won would depend on row order.
-    __table_args__ = (
-        sa.UniqueConstraint(
-            "company_id", "tool_name", name="uq_llc_company_tools_company_tool"
-        ),
-    )
+    __table_args__ = (sa.UniqueConstraint("company_id", "tool_name", name="uq_llc_company_tools_company_tool"),)
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return f"<LLCCompanyTool company={self.company_id} tool={self.tool_name!r}>"

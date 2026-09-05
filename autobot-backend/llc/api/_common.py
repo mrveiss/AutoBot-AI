@@ -43,6 +43,4 @@ def registry_unavailable(exc: Exception) -> HTTPException:
     a bad request tells the caller to fix their input when there is nothing
     wrong with it.
     """
-    return HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
-    )
+    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))

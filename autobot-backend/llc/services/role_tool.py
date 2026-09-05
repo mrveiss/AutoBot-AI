@@ -65,12 +65,8 @@ class RoleToolService(LLCServiceBase):
             after=after,
         )
 
-    async def _require_role(
-        self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID
-    ) -> None:
-        result = await session.execute(
-            select(Role.id).where(Role.id == role_id, Role.org_id == company_id)
-        )
+    async def _require_role(self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> None:
+        result = await session.execute(select(Role.id).where(Role.id == role_id, Role.org_id == company_id))
         if result.scalar_one_or_none() is None:
             raise ValueError(f"role {role_id} does not exist in company {company_id}")
 
@@ -104,9 +100,7 @@ class RoleToolService(LLCServiceBase):
         if await self.get(session, company_id, role_id, cleaned) is not None:
             raise ValueError(f"tool {cleaned!r} is already attached to role {role_id}")
 
-        attachment = LLCRoleTool(
-            company_id=company_id, role_id=role_id, tool_name=cleaned
-        )
+        attachment = LLCRoleTool(company_id=company_id, role_id=role_id, tool_name=cleaned)
         session.add(attachment)
         await session.flush()
         await self._record(
@@ -134,9 +128,7 @@ class RoleToolService(LLCServiceBase):
         )
         return result.scalar_one_or_none()
 
-    async def list_for_role(
-        self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID
-    ) -> List[str]:
+    async def list_for_role(self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> List[str]:
         """Tool names this role carries — independent of who currently holds it."""
         result = await session.execute(
             select(LLCRoleTool.tool_name)

@@ -88,12 +88,8 @@ def upgrade() -> None:
             # shadow the first and which won would depend on row order.
             sa.UniqueConstraint("company_id", "tool_name", name=_TOOL_UNIQUE),
         )
-        op.create_index(
-            "ix_llc_company_tools_company_id", "llc_company_tools", ["company_id"]
-        )
-        op.create_index(
-            "ix_llc_company_tools_tool_name", "llc_company_tools", ["tool_name"]
-        )
+        op.create_index("ix_llc_company_tools_company_id", "llc_company_tools", ["company_id"])
+        op.create_index("ix_llc_company_tools_tool_name", "llc_company_tools", ["tool_name"])
 
 
 def downgrade() -> None:

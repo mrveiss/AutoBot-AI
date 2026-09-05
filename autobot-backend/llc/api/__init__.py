@@ -31,13 +31,13 @@ from .portability import router as portability_router
 from .replay import router as replay_router
 from .review_gate_policies import router as review_gate_router
 from .roles import router as roles_router
-from .tools import router as tools_router
 from .routines import router as routines_router
 from .runs import heartbeat_runs_router
 from .runs import router as runs_router
 from .secrets import router as secrets_router
 from .sprints import router as sprints_router
 from .templates import router as templates_router
+from .tools import router as tools_router
 from .work_items import router as work_items_router
 from .workflows import router as workflows_router
 

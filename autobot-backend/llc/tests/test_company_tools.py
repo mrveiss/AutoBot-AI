@@ -87,10 +87,8 @@ def registry(monkeypatch):  # noqa: ANN001, ANN201
 
 @pytest_asyncio.fixture
 async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
-    engine = (
-        create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
-            "sqlite+aiosqlite:///:memory:"
-        )
+    engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
+        "sqlite+aiosqlite:///:memory:"
     )
     tables = [
         Role.__table__,
@@ -134,16 +132,12 @@ async def _grant_admin(session_factory, company_id: uuid.UUID) -> None:  # noqa:
 async def _seed_role(session_factory, company_id: uuid.UUID, name: str) -> uuid.UUID:  # noqa: ANN001
     await _grant_admin(session_factory, company_id)
     async with session_factory() as session:
-        role = await RoleService().create(
-            session, company_id=company_id, name=name, actor_user_id=_ADMIN_USER
-        )
+        role = await RoleService().create(session, company_id=company_id, name=name, actor_user_id=_ADMIN_USER)
         await session.commit()
         return role.id
 
 
-async def _attach(
-    session_factory, company_id: uuid.UUID, role_id: uuid.UUID, tool: str
-) -> None:  # noqa: ANN001
+async def _attach(session_factory, company_id: uuid.UUID, role_id: uuid.UUID, tool: str) -> None:  # noqa: ANN001
     async with session_factory() as session:
         await RoleToolService().attach(
             session,
@@ -224,9 +218,7 @@ async def test_upsert_replaces_rather_than_duplicates(session_factory, registry)
 
     async with session_factory() as session:
         rows = await session.execute(
-            sa.select(sa.func.count())
-            .select_from(LLCCompanyTool)
-            .where(LLCCompanyTool.company_id == company)
+            sa.select(sa.func.count()).select_from(LLCCompanyTool).where(LLCCompanyTool.company_id == company)
         )
         assert rows.scalar_one() == 1
         entries = _by_name(await service.catalogue(session, company))
@@ -372,10 +364,6 @@ async def test_the_catalogue_does_not_leak_another_company(session_factory, regi
         entries = _by_name(await CompanyToolService().catalogue(session, mine))
         usage = await CompanyToolService().usage(session, mine, _TOOL)
 
-    assert entries[_TOOL].url is None, (
-        "another company's overlay leaked into this catalogue"
-    )
-    assert entries[_TOOL].role_count == 0, (
-        "another company's attachment was counted here"
-    )
+    assert entries[_TOOL].url is None, "another company's overlay leaked into this catalogue"
+    assert entries[_TOOL].role_count == 0, "another company's attachment was counted here"
     assert usage["role_ids"] == []

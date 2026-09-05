@@ -28,11 +28,7 @@ _EXPECTED = {
 
 def _mounted() -> set:
     """(method, path) pairs reachable through the assembled LLC router."""
-    return {
-        (method, mounted.path)
-        for mounted in effective_routes(llc_router)
-        for method in mounted.methods
-    }
+    return {(method, mounted.path) for mounted in effective_routes(llc_router) for method in mounted.methods}
 
 
 def test_every_tool_route_is_mounted_on_the_llc_router() -> None:
@@ -53,16 +49,11 @@ def test_tool_routes_require_authentication() -> None:
             continue
         checked += 1
         dependant = getattr(mounted.route, "dependant", None)
-        names = {
-            getattr(dep.call, "__name__", "")
-            for dep in getattr(dependant, "dependencies", [])
-        }
+        names = {getattr(dep.call, "__name__", "") for dep in getattr(dependant, "dependencies", [])}
         if "get_current_user" not in names or "require_org_context" not in names:
             unguarded.append((sorted(mounted.methods), mounted.path, sorted(names)))
     # Presence check first: with a wrong prefix this loop matches nothing and
     # the assertion below passes while having verified nothing at all — an
     # empty result reading as a clean result.
-    assert checked == len(_EXPECTED), (
-        f"expected {len(_EXPECTED)} tool routes to inspect, saw {checked}"
-    )
+    assert checked == len(_EXPECTED), f"expected {len(_EXPECTED)} tool routes to inspect, saw {checked}"
     assert not unguarded, f"tool routes missing auth/tenant dependencies: {unguarded}"
