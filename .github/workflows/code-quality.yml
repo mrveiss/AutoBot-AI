@@ -495,6 +495,19 @@ jobs:
           exit 1
         }
 
+    - name: Sweep the whole tree for unregistered AUTOBOT_* env vars (#15807)
+      run: |
+        # The pre-commit hook only sees staged files, so a variable whose read
+        # landed in one commit and whose registration was dropped in another --
+        # the additive merge conflict in env_registry_backend.py produces exactly
+        # that -- was never inspected by anything. With no arguments this now
+        # sweeps every tracked .py file, and fails if the sweep itself reaches
+        # too few of them.
+        python3 pipeline-scripts/check_env_var_registry.py || {
+          echo "An AUTOBOT_* env var is read somewhere but not registered."
+          exit 1
+        }
+
     - name: Type-check autobot_shared (required)
       run: |
         # autobot_shared is the shared library and must be strictly typed.
