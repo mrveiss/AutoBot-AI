@@ -253,7 +253,19 @@ def test_code_source_dir_is_a_role_default_not_a_repeated_inline_literal() -> No
     assert BACKEND_DEFAULTS.is_file(), f"{BACKEND_DEFAULTS} missing"
     defaults = yaml.safe_load(BACKEND_DEFAULTS.read_text(encoding="utf-8"))
     assert isinstance(defaults, dict)
-    assert defaults.get("code_source_dir") == "/opt/autobot/code_source", (
-        f"roles/backend/defaults/main.yml must define code_source_dir; got "
-        f"{defaults.get('code_source_dir')!r}"
+    declared = defaults.get("code_source_dir")
+    assert declared, "roles/backend/defaults/main.yml must define code_source_dir"
+
+    # #15632 moved this default off the literal: a role default beats a
+    # task-level `default(...)` filter, so a hardcoded value here silently
+    # shadowed every derived fallback in the role and would diverge the moment
+    # `autobot.base_dir` moved. This test's point is that the value is declared
+    # ONCE rather than repeated inline -- which spelling it uses is #15632's
+    # call, and pinning the old literal would re-forbid the fix.
+    assert "/opt/autobot" not in declared, (
+        f"code_source_dir restates the install root instead of deriving it from "
+        f"autobot.base_dir (#15632); got {declared!r}"
+    )
+    assert "autobot.base_dir" in declared, (
+        f"code_source_dir must derive from the inventory SSOT (#15632); got {declared!r}"
     )

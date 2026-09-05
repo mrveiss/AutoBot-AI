@@ -91,6 +91,8 @@ class Resolution(NamedTuple):
     unanchored: tuple[str, ...] = ()
 
 
+from repo_tests.ansible_inventory_scope import inventory_globals
+
 _ROLES = "autobot-slm-backend/ansible/roles"
 _INVENTORY = "autobot-slm-backend/ansible/inventory/group_vars"
 
@@ -273,7 +275,10 @@ _FILTER_SCRIPT = "build-filtered-requirements.sh"
 # Whitespace-split, but a `{{ ... }}` template counts as one token: without that,
 # `-r {{ backend_code_dir }}/requirements.txt` splits into three and the path is lost.
 _TOKEN = re.compile(r"(?:\{\{[^{}]*\}\}|[^\s{}])+")
-_VARIABLE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
+#: A `{{ name }}` reference. Dots are allowed so a role default deriving from an
+#: inventory mapping resolves (#15632); without them the reference matched
+#: nothing and the manifest it named read as no longer installed.
+_VARIABLE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\}\}")
 # Where a deploy path is stated relative to the checked-out source tree, the rest of
 # it IS the repo-relative path. `{{ playbook_dir }}` is deliberately absent: its depth
 # depends on which playbook included the role, so `../..` from it cannot be resolved.
@@ -459,7 +464,10 @@ def _role_of(path: str) -> str:
 
 def _scope_for(path: str) -> dict[str, str]:
     role_scope, file_scope = _scopes()
-    return dict(role_scope.get(_role_of(path), {}), **file_scope.get(path, {}))
+    return dict(
+        inventory_globals(ansible_documents(), _INVENTORY),
+        **dict(role_scope.get(_role_of(path), {}), **file_scope.get(path, {})),
+    )
 
 
 def _substitute(text: str, scope: dict[str, str]) -> str:
