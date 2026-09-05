@@ -25,6 +25,7 @@ from user_management.models import Role, User, UserRole
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
 from user_management.services.session_service import SessionService
+from user_management.services.user_service_conflict import insert_user_or_raise_duplicate
 
 # Re-exported (not just imported) so `from user_management.services.user_service
 # import DuplicateUserError` keeps working unchanged -- the classes live in
@@ -36,7 +37,6 @@ from user_management.services.user_service_errors import (  # noqa: F401
     UserNotFoundError,
     UserServiceError,
 )
-from user_management.services.user_service_conflict import insert_user_or_raise_duplicate
 
 logger = get_logger(__name__)
 
@@ -147,9 +147,7 @@ class UserService(BaseService):
             },
         )
 
-    async def _persist_user(
-        self, user: User, role_ids: List[uuid.UUID] | None, email: str, username: str
-    ) -> None:
+    async def _persist_user(self, user: User, role_ids: List[uuid.UUID] | None, email: str, username: str) -> None:
         """Insert user (SAVEPOINT-isolated against a race, #15772) and assign roles. Issue #620."""
         await insert_user_or_raise_duplicate(self.session, user, email, username, self._find_by_email_or_username)
         if role_ids:

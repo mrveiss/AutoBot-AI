@@ -37,7 +37,9 @@ from user_management.models.base import Base
 from user_management.services.user_service import UserService
 
 _SQLITE_URL = "sqlite+aiosqlite://"  # canonical: ignore py-adhoc-db-engine (test-local engine, in-memory only)
-_TEST_CREDENTIAL = "".join(["Sup3r", "Secret", "Val1"])  # not a real credential -- assembled to dodge the secret-scan hook
+_TEST_CREDENTIAL = "".join(
+    ["Sup3r", "Secret", "Val1"]
+)  # not a real credential -- assembled to dodge the secret-scan hook
 
 
 @compiles(JSONB, "sqlite")
