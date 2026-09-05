@@ -62,23 +62,20 @@ def env(name: str, default: Any = None) -> Any:
 # Registered variables — grouped by component
 # ---------------------------------------------------------------------------
 
-# The "ai" component (LLM/model config, delegation, chat trajectories) lives in
-# a sibling module, split out to keep this file under its file-size ceiling
-# (#14236, #14856). Importing it here — after EnvVarSpec/register_env_var/REGISTRY
-# are defined above, and before anything below can observe the registry — is a
-# side effect that fully populates the "ai" entries. See env_registry_ai.py.
-#
-# Same reason, same mechanism (#14961): this file was still at its ceiling
-# with no slack to add the new "terminal" component var inline, so the one
-# "testing" entry that lived at the tail moved out to make room, and the new
-# entry lives in its own sibling module rather than inline here.
-#
-# Same reason again (#15620): the "slm" component moved out whole -- its one
-# pre-existing entry travelled with the new one, so the component lives in one
-# module instead of straddling two, and the relocation pays for its own import
-# line rather than raising the ceiling. See env_registry_slm.py.
+# Split into per-component sibling modules as this file reaches its
+# grandfathered file-size ceiling (#14236) with no slack left inline: ai
+# (#14856), terminal/testing (#14961), slm (#15620), and agent_runtime /
+# backend_services (#15710, the os.environ.get sweep the registry checker
+# had never seen either). Importing each here -- after
+# EnvVarSpec/register_env_var/REGISTRY are defined above, and before
+# anything below can observe the registry -- is a side effect that fully
+# populates that module's entries; see each sibling's own docstring for why
+# its variables live there instead of inline.
+
+from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_ai  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
+from autobot_shared import env_registry_backend_services  # noqa: E402,F401
 from autobot_shared import env_registry_slm  # noqa: E402,F401
 from autobot_shared import env_registry_terminal  # noqa: E402,F401
 from autobot_shared import env_registry_testing  # noqa: E402,F401
