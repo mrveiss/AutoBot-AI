@@ -224,13 +224,13 @@ def main(argv: List[str]) -> int:
     print(
         f"\n[{HOOK_ID}] Found {len(all_violations)} blocking-I/O call(s) inside `async def` " "bodies (#7444):\n",
         file=sys.stderr,
-    )
+    )  # noqa: print -- CLI diagnostic output on stderr, same as every other tools/lint/ checker
     for v in all_violations:
-        print(v.format(), file=sys.stderr)
+        print(v.format(), file=sys.stderr)  # noqa: print
     print(
         f"\nIf the call genuinely runs in a thread (rare), append " f"`# {NOQA_TOKEN}` to that line.\n",
         file=sys.stderr,
-    )
+    )  # noqa: print
     return 1
 
 

@@ -16,11 +16,12 @@ below imports only ``os``/``logging``/``pytest`` at module scope).
 
 ``real_auth_middleware`` (moved up from tests/integration/conftest.py in
 #11791 so root-level tests can use it too): the backend root conftest stubs
-``auth_middleware`` in ``sys.modules`` (its module-level ``__getattr__``
-mints a fresh MagicMock per attribute access), so tests that exercise the
-REAL middleware (run-JWT / device-JWT path guards, WebSocket auth) would
-silently assert on mocks. The fixture loads the real module under an ALIAS
-key so the stub — and every other test relying on it — stays untouched (no
+``auth_middleware`` in ``sys.modules`` (testkit/auth_middleware_stub.py --
+each exported name is a real callable with test-fixture data, not the real
+JWT/session logic), so tests that exercise the REAL middleware (run-JWT /
+device-JWT path guards, WebSocket auth) would silently assert on the stub's
+fixture data instead. The fixture loads the real module under an ALIAS key so
+the stub — and every other test relying on it — stays untouched (no
 ``sys.modules`` pollution of the canonical name). Issue #11648.
 """
 

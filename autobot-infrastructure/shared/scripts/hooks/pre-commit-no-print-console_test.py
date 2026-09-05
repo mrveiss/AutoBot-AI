@@ -33,7 +33,15 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # them and the changed-lines gate flagged both. print IS the mechanism there
 # -- it is a deprecated stdout-only entry point -- so the two lines carry
 # `# noqa: print` and the whole-repo count drops by exactly two.
-_KNOWN_REPO_VIOLATIONS = 502
+# 499 since #14982: tools/lint/check_no_blocking_io_in_async.py was missing its
+# executable bit, which blocked every commit touching autobot-backend/*.py.
+# Restoring it surfaced three pre-existing print() calls in that file -- a lint
+# tool reporting findings to a terminal, which is what print is for -- so they
+# carry `# noqa: print` and the count drops by exactly three. The other ~22
+# files under tools/lint/ share the shape and are NOT exempt from the hook's
+# path allowlist; that gap is #15730, and closing it will move this number
+# again.
+_KNOWN_REPO_VIOLATIONS = 499
 
 
 def _test_git_env() -> dict[str, str]:
