@@ -23,13 +23,14 @@ from typing import Optional
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.env_utils import env_int
 from llc.models.attachment import LLCWorkItemAttachment
 
 logger = logging.getLogger(__name__)
 
 # Configurable max upload size (bytes). Default 20 MB.
 _DEFAULT_MAX_BYTES = 20 * 1024 * 1024
-LLC_ATTACHMENT_MAX_BYTES = int(os.getenv("LLC_ATTACHMENT_MAX_BYTES", str(_DEFAULT_MAX_BYTES)))
+LLC_ATTACHMENT_MAX_BYTES = env_int("LLC_ATTACHMENT_MAX_BYTES", _DEFAULT_MAX_BYTES)
 
 # Text-extractable suffix set (lowercase).
 _TEXT_SUFFIXES = {".txt", ".md", ".py", ".ts", ".js", ".json", ".yaml", ".yml", ".toml", ".csv"}

@@ -39,10 +39,10 @@ flight" — that is the same shape of silent pass this issue is about.
 from __future__ import annotations
 
 import asyncio
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from services.playbook_executor import SELF_UPDATE_DETACH_UNIT_PREFIX, SELF_UPDATE_LOG_PATH
 from services.self_update_log_reader import read_self_update_verdict
@@ -52,7 +52,7 @@ logger = get_logger(__name__)
 #: Wall-clock ceiling for the systemctl query. The drift endpoint must answer
 #: even on a host where systemd is slow or absent, so this is short and a
 #: timeout degrades to "unknown" rather than hanging the request.
-DEPLOY_ACTIVITY_QUERY_TIMEOUT_S: float = float(os.getenv("SLM_DEPLOY_ACTIVITY_TIMEOUT_S", "3.0"))
+DEPLOY_ACTIVITY_QUERY_TIMEOUT_S: float = env_float("SLM_DEPLOY_ACTIVITY_TIMEOUT_S", 3.0)
 
 #: Unit pattern for the detached self-update run. Derived from the executor's
 #: own prefix rather than restated, so renaming the unit cannot leave this

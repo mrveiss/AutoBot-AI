@@ -12,12 +12,12 @@ Issue #285: Integrated with Embedding Pattern Analyzer for cost tracking.
 """
 
 import asyncio
-import os
 import threading
 import time
 from datetime import datetime, timezone
 
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
@@ -33,7 +33,7 @@ PENDING_SET_KEY = "kb:vectorize:pending"
 
 # Run the full fact:* safety-net reconcile every Nth cycle (default 12 → hourly
 # at the 5-minute check_interval). Env-tunable; never hard-coded per cadence.
-FULL_SCAN_EVERY_N_CYCLES = max(1, int(os.environ.get("KB_VECTORIZE_FULL_SCAN_EVERY_N_CYCLES", "12")))
+FULL_SCAN_EVERY_N_CYCLES = env_int_clamped("KB_VECTORIZE_FULL_SCAN_EVERY_N_CYCLES", 12, min_v=1)
 
 # Embedding analytics integration (Issue #285)
 try:

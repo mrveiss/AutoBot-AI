@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List
 
-from autobot_shared.env_utils import env_float_clamped, env_int_clamped
+from autobot_shared.env_utils import env_float, env_float_clamped, env_int_clamped
 from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
 from services.inventory_builder import (
@@ -82,7 +82,7 @@ SELF_UPDATE_SHARED_DIR = Path(os.getenv("SLM_SELF_UPDATE_SHARED_DIR", "/opt/auto
 # run deliberately outlives this process (Play 1 restarts us), so the caller
 # cannot reliably delete these itself — see _stage_dir_for_run. Pruning on the
 # next run keeps the directory bounded without ever racing a live run.
-SELF_UPDATE_STAGE_TTL_SECONDS = float(os.getenv("SLM_SELF_UPDATE_STAGE_TTL_SECONDS", "86400"))
+SELF_UPDATE_STAGE_TTL_SECONDS = env_float("SLM_SELF_UPDATE_STAGE_TTL_SECONDS", 86400)
 
 # Env vars forwarded to the detached scope via explicit --setenv=NAME=VALUE.
 # `sudo` (env_reset, see setup-passwordless-sudo.yml) strips the environment
@@ -140,7 +140,7 @@ SELF_UPDATE_RUN_HEADER: str = "SELF-UPDATE RUN STARTED"
 SELF_UPDATE_LOG_FALLBACK_PATH = Path(ANSIBLE_LOCAL_TMP) / "self-update-ansible.log"
 
 # Poll interval while tailing the detached run's log file for live progress.
-SELF_UPDATE_LOG_TAIL_POLL_SEC = float(os.getenv("SLM_SELF_UPDATE_LOG_TAIL_POLL_SEC", "1.0"))
+SELF_UPDATE_LOG_TAIL_POLL_SEC = env_float("SLM_SELF_UPDATE_LOG_TAIL_POLL_SEC", 1.0)
 
 # #14524: grace period between SIGTERM and SIGKILL when a timed-out playbook
 # subprocess's WHOLE process group (see _kill_process_group) does not exit on
