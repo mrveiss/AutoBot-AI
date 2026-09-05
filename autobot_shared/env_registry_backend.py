@@ -498,6 +498,19 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_GIT_PROBE_TIMEOUT_SECONDS",
+        type=int,
+        default=30,
+        description=(
+            "Seconds a git subprocess started through autobot_shared.git_probe may run "
+            "before it is abandoned, so a probe cannot hang on a lock or a prompt (#15783)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_SANDBOX_GIT_STATUS_TIMEOUT_SECONDS",
         type=int,
         default=10,

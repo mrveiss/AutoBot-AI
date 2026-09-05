@@ -29,7 +29,6 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 
 import asyncio
 import re
-import subprocess  # nosec B404  # required for git operations
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -89,6 +88,7 @@ def _calculate_threshold_score(value: int, thresholds: list[tuple[int, int]], de
 # ============================================================================
 
 
+from autobot_shared.git_probe import run_git
 from autobot_shared.status_enums import RiskLevel  # noqa: E402  # #6689 consolidation
 
 
@@ -773,18 +773,9 @@ class BugPredictor(_BaseClass):
         self._change_freq_cache = {}
         self._change_freq_cache_time = time.monotonic()
         try:
-            result = subprocess.run(  # nosec B603 B607  # fixed git argv, no user input
-                [
-                    "git",
-                    "log",
-                    "--since=90 days ago",
-                    "--name-only",
-                    "--pretty=format:",
-                ],
-                capture_output=True,
-                text=True,
+            result = run_git(
+                ["log", "--since=90 days ago", "--name-only", "--pretty=format:"],
                 timeout=TimingConstants.SHORT_TIMEOUT,
-                encoding="utf-8",
                 cwd=self.project_root,
             )
 
@@ -845,9 +836,8 @@ class BugPredictor(_BaseClass):
             for kw in self.bug_keywords:
                 grep_args.extend(["--grep", kw])
 
-            result = subprocess.run(  # nosec B603 B607  # fixed git argv, no user input
+            result = run_git(
                 [
-                    "git",
                     "log",
                     "--since=1 year ago",
                     *grep_args,
@@ -856,10 +846,7 @@ class BugPredictor(_BaseClass):
                     "--format=%H|%ad|%s",
                     "--date=iso",
                 ],
-                capture_output=True,
-                text=True,
                 timeout=TimingConstants.STANDARD_TIMEOUT,
-                encoding="utf-8",
                 cwd=self.project_root,
             )
 

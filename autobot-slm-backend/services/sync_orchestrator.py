@@ -46,6 +46,7 @@ class SyncNodeContext:
 
 # Code cache directory
 from autobot_shared.env_utils import env_int
+from autobot_shared.git_probe import start_git
 
 CODE_CACHE_DIR = Path(os.environ.get("SLM_CODE_CACHE", "/var/lib/slm/code-cache"))
 
@@ -477,16 +478,7 @@ class SyncOrchestrator:
     async def _git_pull_local(self, repo_path: str, branch: str) -> Tuple[bool, str]:
         """Run git pull origin <branch> in a local repo. Helper for #1194."""
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "git",
-                "-C",
-                repo_path,
-                "pull",
-                "origin",
-                branch,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
+            proc = await start_git("-C", repo_path, "pull", "origin", branch, stderr=asyncio.subprocess.STDOUT)
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
             output = stdout.decode("utf-8", errors="replace")
             if proc.returncode != 0:
@@ -503,15 +495,7 @@ class SyncOrchestrator:
     async def _get_local_git_commit(self, repo_path: str) -> str | None:
         """Get git HEAD commit from a local repo without SSH. Helper for #1194."""
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "git",
-                "-C",
-                repo_path,
-                "rev-parse",
-                "HEAD",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+            proc = await start_git("-C", repo_path, "rev-parse", "HEAD")
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
             commit = stdout.decode("utf-8", errors="replace").strip()
             if len(commit) == 40 and commit.isalnum():

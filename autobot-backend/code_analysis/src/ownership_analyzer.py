@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import scrubbed_git_env
 
 # Issue #542: Handle imports for both standalone execution and backend import
 _project_root = Path(__file__).resolve().parents[3]
@@ -421,6 +422,7 @@ class OwnershipAnalyzer:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
             cwd=str(root),
+            env=scrubbed_git_env(),
         )
         try:
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_BLAME_TIMEOUT_SECONDS)

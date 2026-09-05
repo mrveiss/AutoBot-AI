@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Callable, Dict, List
 
 from autobot_shared.env_utils import env_float, env_float_clamped, env_int_clamped
+from autobot_shared.git_probe import start_git
 from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
 from services.inventory_builder import (
@@ -576,15 +577,7 @@ class PlaybookExecutor:
         ``self._kill_process_group`` reuse the same whole-process-group kill
         ``_run_subprocess`` uses, and never block unboundedly themselves.
         """
-        proc = await asyncio.create_subprocess_exec(
-            "git",
-            "-C",
-            str(code_source_dir),
-            *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            start_new_session=True,
-        )
+        proc = await start_git("-C", str(code_source_dir), *args, start_new_session=True)
         try:
             await asyncio.wait_for(proc.communicate(), timeout=GIT_COMMAND_TIMEOUT_S)
         except asyncio.TimeoutError:
@@ -601,15 +594,12 @@ class PlaybookExecutor:
         than _run_git's original bare ``proc.kill()``: an orphan, not just a
         leaked pipe wait).
         """
-        proc = await asyncio.create_subprocess_exec(
-            "git",
+        proc = await start_git(
             "-C",
             str(code_source_dir),
             "rev-parse",
             "--short",
             "HEAD",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
         )
         try:
