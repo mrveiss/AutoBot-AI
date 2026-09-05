@@ -30,9 +30,7 @@ def _init_repo(root: Path) -> None:
     subprocess.run(["git", "init", "-q", str(root)], check=True, env={**env, "PATH": "/usr/bin:/bin"})
     (root / "tracked.txt").write_text("committed\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, env={**env, "PATH": "/usr/bin:/bin"})
-    subprocess.run(
-        ["git", "-C", str(root), "commit", "-qm", "seed"], check=True, env={**env, "PATH": "/usr/bin:/bin"}
-    )
+    subprocess.run(["git", "-C", str(root), "commit", "-qm", "seed"], check=True, env={**env, "PATH": "/usr/bin:/bin"})
 
 
 class TestNonEmptyDirectory:

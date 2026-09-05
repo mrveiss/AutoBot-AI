@@ -245,7 +245,13 @@ async def _uncommitted_entries(work_tree: Path, target: Path) -> list[str] | Non
     """Porcelain status lines for `target`; ``None`` when git cannot answer."""
     try:
         proc = await asyncio.create_subprocess_exec(
-            "git", "-C", str(work_tree), "status", "--porcelain", "--", str(target),
+            "git",
+            "-C",
+            str(work_tree),
+            "status",
+            "--porcelain",
+            "--",
+            str(target),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
             env=_hermetic_git_env(),
