@@ -11,9 +11,12 @@ import logging
 import logging.handlers
 import os
 import threading
+import time
+from collections import OrderedDict
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 
+from autobot_shared.env_utils import env_flag, env_float, env_int_clamped
 from autobot_shared.stream_logging import build_stderr_handler, build_stdout_handler
 
 if TYPE_CHECKING:
@@ -24,6 +27,110 @@ _logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for log types
 _LOG_TYPES = ("backend", "frontend", "llm", "debug", "audit")
+
+# Log-flood suppression (#15774). A hot failure path -- a retry loop against a
+# dependency that is down -- logs once per attempt with no ceiling, so a
+# recoverable outage fills the disk and takes every other service on the node
+# with it. Bound how much one repeating call site can emit per window.
+# ssot-config-exempt: pre-init logging -- this module must not import config
+# (see _get_config_manager), so the knobs are env-var-backed module constants.
+_FLOOD_ENABLED = env_flag("AUTOBOT_LOG_FLOOD_ENABLED", default=True)
+_FLOOD_THRESHOLD = env_int_clamped("AUTOBOT_LOG_FLOOD_THRESHOLD", 5, min_v=1)
+_FLOOD_WINDOW_SECONDS = env_float("AUTOBOT_LOG_FLOOD_WINDOW_SECONDS", 60.0)
+_FLOOD_MAX_KEYS = env_int_clamped("AUTOBOT_LOG_FLOOD_MAX_KEYS", 2048, min_v=1)
+
+
+class LogFloodSuppressionFilter(logging.Filter):
+    """Cap the records one repeating log site emits per window (#15774).
+
+    Applied to WARNING and ERROR only: DEBUG/INFO are already rate-limited by
+    the level itself, and CRITICAL is never suppressed -- losing the one line
+    that explains an outage is worse than the disk cost of printing it.
+
+    A record carrying ``extra={"flood_exempt": True}`` is never suppressed
+    either. That escape hatch exists because of a defect found in review of
+    #15777: an audit line for a destructive operation is emitted from ONE call
+    site with ONE template, so every delete -- different path, different actor
+    -- collapsed to a single key and the sixth in a window was dropped. The
+    alternative fix, keying on the interpolated message, was rejected: a retry
+    loop logging ``"redis down: attempt %s"`` is the exact shape this guard
+    exists to collapse, and keying on the formatted string would mint a fresh
+    key per attempt and suppress nothing. The distinction that matters is not
+    how varied the text is, it is whether losing a line is acceptable -- and
+    for an audit record it never is.
+
+    The suppression key is the message *template* plus the call site, never the
+    formatted message, so ``logger.error("redis down: %s", attempt)`` collapses
+    to one key instead of minting a new one per attempt.
+    """
+
+    def __init__(
+        self,
+        threshold: int = _FLOOD_THRESHOLD,
+        window_seconds: float = _FLOOD_WINDOW_SECONDS,
+        max_keys: int = _FLOOD_MAX_KEYS,
+    ) -> None:
+        super().__init__()
+        self._threshold = max(1, threshold)
+        self._window = window_seconds
+        self._max_keys = max(1, max_keys)
+        # key -> [window_start, seen_in_window, emitted_in_window]
+        self._state: "OrderedDict[tuple, list]" = OrderedDict()
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _key(record: logging.LogRecord) -> tuple:
+        return (record.name, record.levelno, str(record.msg), record.pathname, record.lineno)
+
+    def _evict(self) -> None:
+        """Bound the state map so the guard cannot itself leak memory."""
+        while len(self._state) > self._max_keys:
+            self._state.popitem(last=False)
+
+    @staticmethod
+    def _annotate(record: logging.LogRecord, suppressed: int) -> None:
+        """Carry the suppressed count on the first record of the next window."""
+        record.flood_suppressed = suppressed
+        if isinstance(record.msg, str):
+            record.msg = f"{record.msg} [log-flood guard: {suppressed} identical records suppressed]"
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.CRITICAL or record.levelno < logging.WARNING:
+            return True
+        if getattr(record, "flood_exempt", False):
+            return True
+
+        now = time.monotonic()
+        key = self._key(record)
+        with self._lock:
+            entry = self._state.get(key)
+            if entry is None or (now - entry[0]) >= self._window:
+                suppressed = 0 if entry is None else entry[1] - entry[2]
+                self._state[key] = [now, 1, 1]
+                self._state.move_to_end(key)
+                self._evict()
+                if suppressed > 0:
+                    self._annotate(record, suppressed)
+                return True
+
+            entry[1] += 1
+            # Refresh recency, or _evict is insertion-order rather than
+            # least-recent: an actively noisy key would be evicted ahead of an
+            # idle one and immediately granted a fresh threshold allowance,
+            # which is the flood the guard exists to stop.
+            self._state.move_to_end(key)
+            if entry[2] < self._threshold:
+                entry[2] += 1
+                return True
+            return False
+
+
+_flood_filter: LogFloodSuppressionFilter | None = LogFloodSuppressionFilter() if _FLOOD_ENABLED else None
+
+
+def get_flood_filter() -> LogFloodSuppressionFilter | None:
+    """The process-wide flood guard, or ``None`` when disabled by env."""
+    return _flood_filter
 
 
 def _get_config_manager() -> "ConfigManager":
@@ -153,6 +260,12 @@ class LoggingManager:
             # through to the "INFO" default regardless of configuration.
             log_level = getattr(logging, _get_config_manager().get_nested("logging.log_level", "INFO").upper())
             logger.setLevel(log_level)
+
+            # Flood guard (#15774): attached to the logger, not the handlers,
+            # so one filter covers the file, stdout and stderr handlers at once.
+            if _flood_filter is not None and not getattr(logger, "_autobot_flood_guarded", False):
+                logger.addFilter(_flood_filter)
+                logger._autobot_flood_guarded = True  # type: ignore[attr-defined]
 
             cls._loggers[logger_key] = logger
             return logger
