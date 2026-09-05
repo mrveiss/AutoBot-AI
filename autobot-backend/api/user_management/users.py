@@ -26,7 +26,7 @@ from api.user_management.dependencies import (
     get_current_user,
     get_user_service,
     require_platform_admin,
-    require_user_management_enabled,
+    user_management_route_marker,
 )
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
@@ -63,7 +63,7 @@ logger = get_logger(__name__)
     response_model=UserListResponse,
     summary="List users",
     description="List users with pagination and optional search filter.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def list_users(
     pagination: PaginationParams = Depends(),
@@ -159,7 +159,7 @@ async def _search_users_from_db(q: str, limit: int) -> UserSearchResponse:
     status_code=status.HTTP_201_CREATED,
     summary="Create user",
     description="Create a new user account.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def create_user(
     user_data: UserCreate,
@@ -193,7 +193,7 @@ async def create_user(
     response_model=UserResponse,
     summary="Get current user",
     description="Get the currently authenticated user's profile.",
-    # Note: No require_user_management_enabled - /me works in all modes
+    # Note: No user_management_route_marker - /me works in all modes
 )
 async def get_current_user_profile(
     current_user: dict = Depends(get_current_user),
@@ -231,7 +231,7 @@ async def get_current_user_profile(
     response_model=UserResponse,
     summary="Get user",
     description="Get a specific user by ID.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def get_user(
     user_id: uuid.UUID,
@@ -253,7 +253,7 @@ async def get_user(
     response_model=UserResponse,
     summary="Update user",
     description="Update a user's profile.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def update_user(
     user_id: uuid.UUID,
@@ -291,7 +291,7 @@ async def update_user(
     response_model=UserDeletedResponse,
     summary="Delete user",
     description="Delete a user account (soft delete by default).",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def delete_user(
     user_id: uuid.UUID,
@@ -323,7 +323,7 @@ async def delete_user(
     response_model=UserResponse,
     summary="Activate user",
     description="Activate a deactivated user account.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def activate_user(
     user_id: uuid.UUID,
@@ -347,7 +347,7 @@ async def activate_user(
     response_model=UserResponse,
     summary="Deactivate user",
     description="Deactivate a user account.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def deactivate_user(
     user_id: uuid.UUID,
@@ -376,7 +376,7 @@ async def deactivate_user(
     response_model=PasswordChangedResponse,
     summary="Change password",
     description="Change a user's password.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def change_password(
     user_id: uuid.UUID,
@@ -443,7 +443,7 @@ async def change_password(
     response_model=RoleAssignmentResponse,
     summary="Assign role",
     description="Assign a role to a user.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def assign_role(
     user_id: uuid.UUID,
@@ -469,7 +469,7 @@ async def assign_role(
     response_model=RoleAssignmentResponse,
     summary="Revoke role",
     description="Revoke a role from a user.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def revoke_role(
     user_id: uuid.UUID,
@@ -504,7 +504,7 @@ async def revoke_role(
         "Requires admin privilege. Issue #1801."
     ),
     dependencies=[
-        Depends(require_user_management_enabled),
+        Depends(user_management_route_marker),
         Depends(require_platform_admin),
     ],
 )
