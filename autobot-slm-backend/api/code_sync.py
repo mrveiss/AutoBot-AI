@@ -3479,17 +3479,20 @@ async def _ansible_self_update(node_id: str) -> None:
         await _clear_resume_plan()
 
 
-@router.post("/self-update", response_model=NodeSyncResponse)
-async def self_update(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-) -> NodeSyncResponse:
-    """Trigger an Ansible-based update of the SLM server itself (#9073).
+async def resolve_and_queue_self_update(db: AsyncSession) -> NodeSyncResponse:
+    """Look up this SLM's own node row and fire a full-machine update (#9073, #15728).
 
-    Looks up the SLM's own node record by matching the external_url IP,
-    then runs update-all-nodes.yml against it as a fire-and-forget task
-    (the service restarts mid-run, so the caller should poll health).
-    Returns immediately with a queued message.
+    The actual trigger logic, shared by two entry points that must never
+    diverge:
+
+    * ``POST /code-sync/self-update`` below -- the authenticated HTTP route the
+      maintenance UI and ``/recovery`` (#15462) both call.
+    * ``services/local_admin_socket.py`` -- the credential-free local admin
+      socket (#15728). It calls this SAME function so "trigger a self-update
+      from the host" is one code path with two doors, not a second updater to
+      keep in sync with the first.
+
+    Auth is each caller's own concern -- this function takes none, on purpose.
     """
     slm_own_ip = urlparse(settings.external_url).hostname or ""
     if not slm_own_ip:
@@ -3510,6 +3513,25 @@ async def self_update(
     fire_and_forget(_ansible_self_update(slm_node.node_id), name=f"ansible-self-update:{slm_node.node_id}")
 
     return NodeSyncResponse(success=True, message=_SELF_UPDATE_QUEUED_MESSAGE, node_id=slm_node.node_id, job_id=None)
+
+
+@router.post("/self-update", response_model=NodeSyncResponse)
+async def self_update(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeSyncResponse:
+    """Trigger an Ansible-based update of the SLM server itself (#9073).
+
+    Looks up the SLM's own node record by matching the external_url IP,
+    then runs update-all-nodes.yml against it as a fire-and-forget task
+    (the service restarts mid-run, so the caller should poll health).
+    Returns immediately with a queued message.
+
+    Requires an authenticated user -- unchanged by #15728. The credential-free
+    on-host trigger is a completely separate listener
+    (``services/local_admin_socket.py``); it does not touch this dependency.
+    """
+    return await resolve_and_queue_self_update(db)
 
 
 async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) -> None:

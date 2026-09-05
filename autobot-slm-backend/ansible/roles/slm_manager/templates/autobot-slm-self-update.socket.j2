@@ -1,0 +1,19 @@
+[Unit]
+Description=AutoBot SLM local self-update admin socket (#15728)
+Documentation=https://github.com/mrveiss/AutoBot-AI
+
+[Socket]
+# systemd creates this file itself, with these exact permissions, BEFORE
+# {{ slm_backend_service }}.service ever starts (see that unit's Sockets=
+# line) -- the socket's own ownership/mode IS the access control #15728
+# asks for, enforced by the OS rather than reimplemented in application
+# code. RemoveOnStop unlinks it when the socket unit stops so a stale file
+# from a previous boot never lingers with the wrong permissions.
+ListenStream={{ slm_self_update_socket_path }}
+SocketMode={{ slm_self_update_socket_mode }}
+SocketUser={{ slm_user }}
+SocketGroup={{ slm_group }}
+RemoveOnStop=true
+
+[Install]
+WantedBy=sockets.target

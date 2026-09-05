@@ -30,6 +30,16 @@
   failed_when: false
   become: true
 
+- name: restart slm self-update socket
+  ansible.builtin.systemd:
+    name: "{{ slm_self_update_socket_service }}.socket"
+    state: restarted
+  # #15728: a ListenStream=/SocketMode= change only takes effect on the next
+  # bind, same reasoning as "restart slm backend" above -- during initial
+  # provisioning the socket unit may not be deployed yet when this fires.
+  failed_when: false
+  become: true
+
 - name: test nginx config
   ansible.builtin.command:
     cmd: nginx -t
