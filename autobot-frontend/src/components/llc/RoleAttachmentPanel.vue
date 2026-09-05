@@ -42,7 +42,25 @@
 
     <form class="attachment-add" @submit.prevent="submit">
       <label class="attachment-add-label" :for="inputId">{{ addLabel }}</label>
+      <select
+        v-if="options"
+        :id="inputId"
+        v-model="draft"
+        :disabled="busy"
+        class="attachment-input"
+      >
+        <option value="">{{ placeholder }}</option>
+        <option
+          v-for="option in options"
+          :key="option.value"
+          :value="option.value"
+          :disabled="items.includes(option.value)"
+        >
+          {{ option.label }}
+        </option>
+      </select>
       <input
+        v-else
         :id="inputId"
         v-model="draft"
         type="text"
@@ -80,6 +98,20 @@ const props = defineProps<{
   removeLabel: string
   emptyLabel: string
   placeholder?: string
+  /**
+   * When supplied, the free-text box becomes a picker over these options
+   * (#14852). Tools pass the company catalogue; permissions, workflows and
+   * credentials keep the text box, because their valid values are not a list
+   * this component can be handed.
+   *
+   * Typing a tool name was the only way to attach one, so a typo surfaced as a
+   * server rejection after the round trip, and nothing told you what was
+   * available in the first place. An option already in `items` renders
+   * disabled rather than hidden: "already attached" and "does not exist" are
+   * different answers, and hiding it gives the first the appearance of the
+   * second.
+   */
+  options?: { value: string; label: string }[]
   /** Set while a call is in flight, so a double submit cannot fire twice. */
   busy?: boolean
 }>()
