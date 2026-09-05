@@ -158,9 +158,7 @@ def _is_platform_admin(current_user: dict) -> bool:
     and derive admin status from the JWT the same way the tenant-context
     dependency does: an explicit ``is_platform_admin`` flag or ``role == "admin"``.
     """
-    return bool(current_user.get("is_platform_admin")) or is_admin_role(
-        current_user.get("role")
-    )
+    return bool(current_user.get("is_platform_admin")) or is_admin_role(current_user.get("role"))
 
 
 def _current_user_id(current_user: dict) -> str:
@@ -171,14 +169,10 @@ def _current_user_id(current_user: dict) -> str:
     a clean 401, not a 500 later when it reaches a ``uuid.UUID(user_id)`` cast in
     the membership query.
     """
-    raw = (
-        current_user.get("user_id") or current_user.get("id") or current_user.get("sub")
-    )
+    raw = current_user.get("user_id") or current_user.get("id") or current_user.get("sub")
     parsed = _parse_uuid_safe(str(raw)) if raw else None
     if parsed is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     return str(parsed)
 
 
@@ -236,20 +230,14 @@ async def create_company(
     """
     user_id = _current_user_id(current_user)
     if body.parent_org_id is not None and not _is_platform_admin(current_user):
-        if not await membership_svc.is_member(
-            svc.session, str(body.parent_org_id), user_id
-        ):
+        if not await membership_svc.is_member(svc.session, str(body.parent_org_id), user_id):
             # 404 (not 403): a cross-tenant caller must not distinguish "not my
             # company" from "doesn't exist" — identical semantics to
             # assert_company_access (#12238).
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Company not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     try:
         org = await svc.create(body)
-        await membership_svc.add_member(
-            svc.session, str(org.id), user_id, MembershipRole.OWNER
-        )
+        await membership_svc.add_member(svc.session, str(org.id), user_id, MembershipRole.OWNER)
         # GH#12323: serialize the response AND ensure the KB collections BEFORE
         # commit — mirroring the #12309/#12321 "serialize before commit" invariant
         # the transition handlers use. If either step fails the except handler's
@@ -265,16 +253,12 @@ async def create_company(
             KbCollectionManager.AGENTS_SUFFIX,
             KbCollectionManager.DECISIONS_SUFFIX,
         ):
-            await _kb_manager.ensure_collection(
-                KbCollectionManager.COMPANY_PREFIX, org.id, suffix
-            )
+            await _kb_manager.ensure_collection(KbCollectionManager.COMPANY_PREFIX, org.id, suffix)
         await svc.session.commit()
         return read
     except CompanyIssuePrefixConflictError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
     except CompanyBudgetError:
         await svc.session.rollback()
         raise HTTPException(
@@ -289,9 +273,7 @@ async def create_company(
         )
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except Exception:
         await svc.session.rollback()
         raise
@@ -311,9 +293,7 @@ async def get_company(
         org = await svc.get(company_id)
         return _to_read(org)
     except CompanyNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
 
 
 @router.patch("/{company_id}", response_model=CompanyRead)
@@ -336,14 +316,10 @@ async def update_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except CompanyIssuePrefixConflictError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
     except CompanyBudgetError:
         await svc.session.rollback()
         raise HTTPException(
@@ -382,19 +358,13 @@ async def delete_company(
             KbCollectionManager.AGENTS_SUFFIX,
             KbCollectionManager.DECISIONS_SUFFIX,
         ):
-            await _kb_manager.drop_collection(
-                KbCollectionManager.COMPANY_PREFIX, company_id, suffix
-            )
+            await _kb_manager.drop_collection(KbCollectionManager.COMPANY_PREFIX, company_id, suffix)
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except CompanyHasChildrenError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
     except Exception:
         await svc.session.rollback()
         raise
@@ -431,14 +401,10 @@ async def activate_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from None
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -465,14 +431,10 @@ async def suspend_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from None
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -500,14 +462,10 @@ async def offboard_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from None
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -533,14 +491,10 @@ async def archive_company(
         return read
     except CompanyNotFoundError:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from None
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -558,9 +512,7 @@ async def get_company_tree(
     try:
         return await svc.get_sub_company_tree(company_id)
     except CompanyNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
 
 
 @router.get("/{company_id}/ancestry", response_model=List[CompanyAncestor])
@@ -584,9 +536,7 @@ async def get_company_ancestry(
             for a in ancestors
         ]
     except CompanyNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
 
 
 # ------------------------------------------------------------------
@@ -602,9 +552,7 @@ class KbAncestryCollection(BaseModel):
     weight: float
 
 
-@router.get(
-    "/{company_id}/kb/ancestry-collections", response_model=List[KbAncestryCollection]
-)
+@router.get("/{company_id}/kb/ancestry-collections", response_model=List[KbAncestryCollection])
 async def get_kb_ancestry_collections(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
@@ -626,9 +574,7 @@ async def get_kb_ancestry_collections(
     try:
         chain = await resolver.get_query_collections(session, str(company_id))
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
 
     return [
         KbAncestryCollection(
@@ -677,9 +623,7 @@ async def list_members(
         # fall back to and the two-rung rule is complete.
         rows = (
             await session.execute(
-                select(User.id, User.full_name, User.is_active, User.deleted_at).where(
-                    User.id.in_(user_ids)
-                )
+                select(User.id, User.full_name, User.is_active, User.deleted_at).where(User.id.in_(user_ids))
             )
         ).all()
         names = {uid: name for uid, name, _ia, _da in rows}
@@ -709,21 +653,15 @@ async def add_member(
     # Issue #12233: tenant authz — caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
-        membership = await svc.add_member(
-            session, str(company_id), str(body.user_id), body.role
-        )
+        membership = await svc.add_member(session, str(company_id), str(body.user_id), body.role)
         await session.commit()
         return _to_member_read(membership)
     except MemberAlreadyExistsError:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
 
 
-@router.delete(
-    "/{company_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/{company_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_member(
     company_id: uuid.UUID,
     user_id: uuid.UUID,
@@ -739,9 +677,7 @@ async def remove_member(
         await session.commit()
     except MemberNotFoundError:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
 
 
 # ------------------------------------------------------------------
@@ -775,13 +711,9 @@ async def set_pm_config(
 
     from autobot_shared.field_encryption import encrypt_field
 
-    row = await session.execute(
-        select(Organization.id).where(Organization.id == company_id)
-    )
+    row = await session.execute(select(Organization.id).where(Organization.id == company_id))
     if row.one_or_none() is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Company not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     encrypted = encrypt_field(json.dumps(body.credentials, ensure_ascii=False))
     await session.execute(
         update(Organization)
@@ -809,15 +741,11 @@ async def test_pm_config(
     from autobot_shared.field_encryption import decrypt_field
 
     row = await session.execute(
-        select(Organization.external_pm_type, Organization.external_pm_config).where(
-            Organization.id == company_id
-        )
+        select(Organization.external_pm_type, Organization.external_pm_config).where(Organization.id == company_id)
     )
     result = row.one_or_none()
     if result is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Company not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     pm_type, encrypted_config = result
     if not pm_type or pm_type == "none" or not encrypted_config:
         raise HTTPException(
@@ -838,9 +766,7 @@ async def test_pm_config(
     return {"ok": health.get("ok", False), "details": health}
 
 
-async def _test_pm_connectivity(
-    pm_type: str, pm_config: Dict[str, Any]
-) -> Dict[str, Any]:
+async def _test_pm_connectivity(pm_type: str, pm_config: Dict[str, Any]) -> Dict[str, Any]:
     from integrations.base import IntegrationConfig, IntegrationStatus
     from integrations.project_management_integration import (
         AsanaIntegration,
@@ -865,9 +791,7 @@ async def _test_pm_connectivity(
         )
         health = await TrelloIntegration(cfg).test_connection()
     elif pm_type == "asana":
-        cfg = IntegrationConfig(
-            name="asana", provider="asana", token=pm_config.get("token", "")
-        )
+        cfg = IntegrationConfig(name="asana", provider="asana", token=pm_config.get("token", ""))
         health = await AsanaIntegration(cfg).test_connection()
     else:
         return {"ok": False, "error": f"Unsupported pm_type: {pm_type}"}
@@ -1041,14 +965,10 @@ def _heartbeat_status_to_org_status(run_status: Optional[str]) -> str:
 # status (#14108). Both are terminal *from the org chart's point of view*: an
 # agent an operator paused or terminated must read that way even while a
 # stale/queued heartbeat run would otherwise derive ``active`` or ``idle``.
-_STOP_STATUSES = frozenset(
-    {LLCAgentStatus.PAUSED.value, LLCAgentStatus.TERMINATED.value}
-)
+_STOP_STATUSES = frozenset({LLCAgentStatus.PAUSED.value, LLCAgentStatus.TERMINATED.value})
 
 
-def _resolve_org_status(
-    persisted_status: Optional[str], run_status: Optional[str]
-) -> str:
+def _resolve_org_status(persisted_status: Optional[str], run_status: Optional[str]) -> str:
     """Combine ``agent_org_nodes.status`` with the derived heartbeat status.
 
     Precedence rule (#14108): an explicit *stop* lifecycle state — ``paused``
@@ -1079,9 +999,7 @@ def _resolve_org_status(
 _HUMAN_ADAPTER_TYPE = "human"
 
 
-async def _compose_human_nodes(
-    session: AsyncSession, company_id: uuid.UUID
-) -> List[OrgChartNode]:
+async def _compose_human_nodes(session: AsyncSession, company_id: uuid.UUID) -> List[OrgChartNode]:
     """Return the company's people as org-chart nodes (#13936).
 
     The org chart is the native place to display the people of a company, not
@@ -1126,22 +1044,16 @@ async def _compose_human_nodes(
     # agent query: one grouped statement, no N+1, terminal states excluded.
     count_rows = (
         await session.execute(
-            select(
-                LLCWorkItem.assignee_user_id, func.count(LLCWorkItem.id).label("cnt")
-            )
+            select(LLCWorkItem.assignee_user_id, func.count(LLCWorkItem.id).label("cnt"))
             .where(
                 LLCWorkItem.company_id == company_id,
                 LLCWorkItem.assignee_user_id.isnot(None),
-                LLCWorkItem.status.notin_(
-                    [WorkItemStatus.DONE, WorkItemStatus.CANCELLED]
-                ),
+                LLCWorkItem.status.notin_([WorkItemStatus.DONE, WorkItemStatus.CANCELLED]),
             )
             .group_by(LLCWorkItem.assignee_user_id)
         )
     ).all()
-    human_counts: Dict[uuid.UUID, int] = {
-        row.assignee_user_id: row.cnt for row in count_rows
-    }
+    human_counts: Dict[uuid.UUID, int] = {row.assignee_user_id: row.cnt for row in count_rows}
 
     nodes: List[OrgChartNode] = []
     for user_id, role, display_name, username, is_active, deleted_at in member_rows:
@@ -1240,9 +1152,7 @@ def _compose_agent_node(
         # Liveness: latest run is picked by created_at; a just-queued run
         # may have no started_at, so fall back to created_at.
         last_heartbeat=(
-            (run.started_at or run.created_at).isoformat()
-            if run and (run.started_at or run.created_at)
-            else None
+            (run.started_at or run.created_at).isoformat() if run and (run.started_at or run.created_at) else None
         ),
         budget_spent=b_spent,
         budget_total=b_total,
@@ -1252,9 +1162,7 @@ def _compose_agent_node(
     )
 
 
-async def _apply_reporting_lines(
-    session: AsyncSession, company_id: uuid.UUID, flat: Dict[str, OrgChartNode]
-) -> None:
+async def _apply_reporting_lines(session: AsyncSession, company_id: uuid.UUID, flat: Dict[str, OrgChartNode]) -> None:
     """Set ``parent_id`` from ``llc_reporting_lines`` for people and agents alike.
 
     **Two id spaces meet here and picking the wrong one is silent.**
@@ -1282,20 +1190,12 @@ async def _apply_reporting_lines(
 
     by_holder: Dict[tuple[str, str], OrgChartNode] = {}
     for node in flat.values():
-        holder_type = (
-            RoleHolderType.USER.value if node.is_human else RoleHolderType.AGENT.value
-        )
+        holder_type = RoleHolderType.USER.value if node.is_human else RoleHolderType.AGENT.value
         if node.node_id:
             by_holder[(holder_type, str(node.node_id))] = node
 
     rows = (
-        (
-            await session.execute(
-                select(LLCReportingLine).where(
-                    LLCReportingLine.company_id == company_id
-                )
-            )
-        )
+        (await session.execute(select(LLCReportingLine).where(LLCReportingLine.company_id == company_id)))
         .scalars()
         .all()
     )
@@ -1344,24 +1244,12 @@ async def get_org_chart(
 
     # 1. Hierarchy rows for the company.
     org_rows = (
-        (
-            await session.execute(
-                select(AgentOrgNode).where(AgentOrgNode.company_id == company_id)
-            )
-        )
-        .scalars()
-        .all()
+        (await session.execute(select(AgentOrgNode).where(AgentOrgNode.company_id == company_id))).scalars().all()
     )
 
     # 2. Budgets keyed by agent_id.
     budget_rows = (
-        (
-            await session.execute(
-                select(LLCAgentBudget).where(LLCAgentBudget.company_id == cid)
-            )
-        )
-        .scalars()
-        .all()
+        (await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.company_id == cid))).scalars().all()
     )
     budgets = {b.agent_id: b for b in budget_rows}
 
@@ -1380,8 +1268,7 @@ async def get_org_chart(
             await session.execute(
                 select(LLCHeartbeatRun).join(
                     subq,
-                    (LLCHeartbeatRun.agent_id == subq.c.agent_id)
-                    & (LLCHeartbeatRun.created_at == subq.c.latest_at),
+                    (LLCHeartbeatRun.agent_id == subq.c.agent_id) & (LLCHeartbeatRun.created_at == subq.c.latest_at),
                 )
             )
         )
@@ -1409,13 +1296,13 @@ async def get_org_chart(
         .where(
             LLCWorkItem.company_id == company_id,
             LLCWorkItem.assignee_agent_id.isnot(None),
-            LLCWorkItem.status.notin_([WorkItemStatus.DONE, WorkItemStatus.CANCELLED]),  # noqa: E501 — see GH#9980 (enum NAME-vs-value drift)
+            LLCWorkItem.status.notin_(
+                [WorkItemStatus.DONE, WorkItemStatus.CANCELLED]
+            ),  # noqa: E501 — see GH#9980 (enum NAME-vs-value drift)
         )
         .group_by(AgentOrgNode.agent_id)
     )
-    assigned_counts: Dict[str, int] = {
-        row.agent_id: row.cnt for row in (await session.execute(assign_q)).all()
-    }
+    assigned_counts: Dict[str, int] = {row.agent_id: row.cnt for row in (await session.execute(assign_q)).all()}
 
     # Compose flat nodes — per-row composition lives in `_compose_agent_node`
     # (#14184's extraction), mirroring the human branch's `_compose_human_nodes`.
@@ -1460,11 +1347,7 @@ async def get_org_chart(
     roots: List[OrgChartNode] = []
     for node in flat.values():
         parent = flat.get(node.parent_id) if node.parent_id else None
-        if (
-            parent is not None
-            and parent.id != node.id
-            and _chain_resolves_to_root(node.id)
-        ):
+        if parent is not None and parent.id != node.id and _chain_resolves_to_root(node.id):
             parent.children.append(node)
         else:
             roots.append(node)
@@ -1601,9 +1484,7 @@ def _executor_class_case(work_item_model):
     )
 
 
-@router.get(
-    "/{company_id}/work-items/executor-rollup", response_model=ExecutorRollupResponse
-)
+@router.get("/{company_id}/work-items/executor-rollup", response_model=ExecutorRollupResponse)
 async def get_work_item_executor_rollup(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
@@ -1855,9 +1736,7 @@ async def get_company_teams(
     team_rows = (
         (
             await session.execute(
-                select(Team)
-                .where(Team.org_id == company_id, Team.deleted_at.is_(None))
-                .order_by(Team.name)
+                select(Team).where(Team.org_id == company_id, Team.deleted_at.is_(None)).order_by(Team.name)
             )
         )
         .scalars()
@@ -1902,9 +1781,7 @@ _AGENT_SEARCH_MAX_LIMIT = 100
 @router.get("/{company_id}/agents/search")
 async def search_agents(
     company_id: uuid.UUID,
-    q: str = Query(
-        ..., min_length=1, description="Search query for agent capabilities"
-    ),
+    q: str = Query(..., min_length=1, description="Search query for agent capabilities"),
     limit: int = Query(
         _AGENT_SEARCH_DEFAULT_LIMIT,
         ge=1,
@@ -1951,9 +1828,7 @@ async def search_agents(
         agents = []
         if results.get("ids") and len(results["ids"]) > 0:
             docs = results.get("documents", [[]])[0] if results.get("documents") else []
-            for idx, (doc_id, metadata) in enumerate(
-                zip(results["ids"][0], results.get("metadatas", [[]])[0])
-            ):
+            for idx, (doc_id, metadata) in enumerate(zip(results["ids"][0], results.get("metadatas", [[]])[0])):
                 agents.append(
                     AgentSearchResult(
                         agent_id=metadata.get("agent_id", ""),

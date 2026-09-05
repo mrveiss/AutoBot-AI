@@ -211,9 +211,7 @@ async def create_loop_schema(engine) -> None:  # noqa: ANN001
     """Create only the loop's tables on the given async engine."""
     tables = loop_tables()
     async with engine.begin() as conn:
-        await conn.run_sync(
-            lambda sync_conn: Base.metadata.create_all(sync_conn, tables=tables)
-        )
+        await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=tables))
 
 
 # ---------------------------------------------------------------------------

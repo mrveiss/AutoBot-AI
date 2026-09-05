@@ -55,10 +55,8 @@ _FIXED_USER_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
 @pytest_asyncio.fixture
 async def engine():  # noqa: ANN201
-    eng = (
-        create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
-            "sqlite+aiosqlite:///:memory:"
-        )
+    eng = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
+        "sqlite+aiosqlite:///:memory:"
     )
     await harness.create_loop_schema(eng)
     yield eng
@@ -243,14 +241,10 @@ async def test_org_chart_forest_shape_and_budget(app, client, session_factory): 
         role=OrgRole.MANAGER.value,
         title="VP Eng",
     )
-    report_id = await _seed_org_node(
-        session_factory, company_id, name="Report", reports_to=manager_id
-    )
+    report_id = await _seed_org_node(session_factory, company_id, name="Report", reports_to=manager_id)
 
     # Budget composition (optional assert): manager carries a budget row.
-    await _seed_budget(
-        session_factory, company_id, manager_id, limit="100.000000", spent="42.500000"
-    )
+    await _seed_budget(session_factory, company_id, manager_id, limit="100.000000", spent="42.500000")
 
     resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
     assert resp.status_code == 200, resp.text
@@ -291,29 +285,15 @@ async def test_org_chart_status_mapping(app, client, session_factory):  # noqa: 
     app.state.tenant["org_id"] = str(company_id)
     app.state.tenant["is_platform_admin"] = False
 
-    timeout_agent = await _seed_org_node(
-        session_factory, company_id, name="Timeout Agent"
-    )
-    completed_agent = await _seed_org_node(
-        session_factory, company_id, name="Completed Agent"
-    )
-    running_agent = await _seed_org_node(
-        session_factory, company_id, name="Running Agent"
-    )
-    no_run_agent = await _seed_org_node(
-        session_factory, company_id, name="No Run Agent"
-    )
+    timeout_agent = await _seed_org_node(session_factory, company_id, name="Timeout Agent")
+    completed_agent = await _seed_org_node(session_factory, company_id, name="Completed Agent")
+    running_agent = await _seed_org_node(session_factory, company_id, name="Running Agent")
+    no_run_agent = await _seed_org_node(session_factory, company_id, name="No Run Agent")
 
     # H1: enum value is "timeout" (NOT "timed_out") and must map to error.
-    await _seed_run(
-        session_factory, company_id, timeout_agent, LLCRunStatus.TIMEOUT.value
-    )
-    await _seed_run(
-        session_factory, company_id, completed_agent, LLCRunStatus.COMPLETED.value
-    )
-    await _seed_run(
-        session_factory, company_id, running_agent, LLCRunStatus.RUNNING.value
-    )
+    await _seed_run(session_factory, company_id, timeout_agent, LLCRunStatus.TIMEOUT.value)
+    await _seed_run(session_factory, company_id, completed_agent, LLCRunStatus.COMPLETED.value)
+    await _seed_run(session_factory, company_id, running_agent, LLCRunStatus.RUNNING.value)
 
     resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
     assert resp.status_code == 200, resp.text
@@ -410,9 +390,7 @@ async def test_org_chart_pause_survives_reload(app, client, session_factory):  #
     assert resp.status_code == 200, resp.text
     nodes = resp.json()["nodes"]
     assert len(nodes) == 1
-    assert nodes[0]["status"] == "paused", (
-        "a paused agent must not read back as the derived heartbeat status"
-    )
+    assert nodes[0]["status"] == "paused", "a paused agent must not read back as the derived heartbeat status"
 
 
 @pytest.mark.asyncio
@@ -449,9 +427,7 @@ async def test_org_chart_terminate_survives_reload(app, client, session_factory)
     assert resp.status_code == 200, resp.text
     nodes = resp.json()["nodes"]
     assert len(nodes) == 1
-    assert nodes[0]["status"] == "terminated", (
-        "a terminated agent must never read back as active/idle"
-    )
+    assert nodes[0]["status"] == "terminated", "a terminated agent must never read back as active/idle"
 
 
 @pytest.mark.asyncio
@@ -476,14 +452,10 @@ async def test_org_chart_resume_falls_back_to_heartbeat(app, client, session_fac
         return_value=_mock_redis(),
     ):
         async with session_factory() as session:
-            await svc.pause_agent(
-                session, company_id.hex, agent_id, actor_user_id=str(_FIXED_USER_ID)
-            )
+            await svc.pause_agent(session, company_id.hex, agent_id, actor_user_id=str(_FIXED_USER_ID))
             await session.commit()
         async with session_factory() as session:
-            await svc.resume_agent(
-                session, company_id.hex, agent_id, actor_user_id=str(_FIXED_USER_ID)
-            )
+            await svc.resume_agent(session, company_id.hex, agent_id, actor_user_id=str(_FIXED_USER_ID))
             await session.commit()
 
     resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
@@ -528,18 +500,14 @@ async def test_org_chart_adapter_type_is_the_real_adapter(app, client, session_f
 
 
 @pytest.mark.asyncio
-async def test_org_chart_adapter_type_null_is_empty_not_role(
-    app, client, session_factory
-):  # noqa: ANN001
+async def test_org_chart_adapter_type_null_is_empty_not_role(app, client, session_factory):  # noqa: ANN001
     """A NULL ``adapter_type`` renders as "" — the documented fallback — never
     the role (#14109's fix must not reintroduce the role as a fallback)."""
     company_id = uuid.uuid4()
     app.state.tenant["org_id"] = str(company_id)
     app.state.tenant["is_platform_admin"] = False
 
-    agent_id = await _seed_org_node(
-        session_factory, company_id, name="No Adapter", role=OrgRole.SPECIALIST.value
-    )
+    agent_id = await _seed_org_node(session_factory, company_id, name="No Adapter", role=OrgRole.SPECIALIST.value)
 
     resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
     assert resp.status_code == 200, resp.text
@@ -566,16 +534,8 @@ async def test_org_chart_cycle_safety(app, client, session_factory):  # noqa: AN
     from sqlalchemy import update
 
     async with session_factory() as session:
-        await session.execute(
-            update(AgentOrgNode)
-            .where(AgentOrgNode.agent_id == agent_a)
-            .values(reports_to=agent_b)
-        )
-        await session.execute(
-            update(AgentOrgNode)
-            .where(AgentOrgNode.agent_id == agent_b)
-            .values(reports_to=agent_a)
-        )
+        await session.execute(update(AgentOrgNode).where(AgentOrgNode.agent_id == agent_a).values(reports_to=agent_b))
+        await session.execute(update(AgentOrgNode).where(AgentOrgNode.agent_id == agent_b).values(reports_to=agent_a))
         await session.commit()
 
     resp = await client.get(f"/api/llc/companies/{company_id}/org-chart")
@@ -586,9 +546,7 @@ async def test_org_chart_cycle_safety(app, client, session_factory):  # noqa: AN
     all_ids = _collect_ids(nodes)
     # Both agents appear exactly once across the whole forest.
     assert sorted(all_ids) == sorted([agent_a, agent_b]), all_ids
-    assert len(all_ids) == len(set(all_ids)), (
-        f"duplicated node in cycle output: {all_ids}"
-    )
+    assert len(all_ids) == len(set(all_ids)), f"duplicated node in cycle output: {all_ids}"
 
 
 # ---------------------------------------------------------------------------
@@ -597,9 +555,7 @@ async def test_org_chart_cycle_safety(app, client, session_factory):  # noqa: AN
 
 
 @pytest.mark.asyncio
-async def test_org_chart_tenant_403_for_mismatched_non_admin(
-    app, client, session_factory
-):  # noqa: ANN001
+async def test_org_chart_tenant_403_for_mismatched_non_admin(app, client, session_factory):  # noqa: ANN001
     company_id = uuid.uuid4()
     await _seed_org_node(session_factory, company_id, name="Solo")
 
@@ -642,19 +598,13 @@ async def test_org_chart_matching_org_allowed(app, client, session_factory):  # 
 # ---------------------------------------------------------------------------
 
 
-async def _seed_person(
-    session_factory, company_id: uuid.UUID, role: str = "member"
-) -> uuid.UUID:  # noqa: ANN001
+async def _seed_person(session_factory, company_id: uuid.UUID, role: str = "member") -> uuid.UUID:  # noqa: ANN001
     """Seed one company membership and return its user id."""
     from llc.models.membership import LLCCompanyMembership
 
     user_id = uuid.uuid4()
     async with session_factory() as session:
-        session.add(
-            LLCCompanyMembership(
-                id=uuid.uuid4(), company_id=company_id, user_id=user_id, role=role
-            )
-        )
+        session.add(LLCCompanyMembership(id=uuid.uuid4(), company_id=company_id, user_id=user_id, role=role))
         await session.commit()
     return user_id
 
@@ -709,11 +659,7 @@ async def test_a_person_is_placed_under_their_manager_not_appended_as_a_root(  #
     async with session_factory() as session:
         from sqlalchemy import select as _select  # noqa: PLC0415
 
-        row = (
-            await session.execute(
-                _select(AgentOrgNode).where(AgentOrgNode.agent_id == agent_slug)
-            )
-        ).scalar_one()
+        row = (await session.execute(_select(AgentOrgNode).where(AgentOrgNode.agent_id == agent_slug))).scalar_one()
         agent_pk = row.id
 
     person_id = await _seed_person(session_factory, company_id)
@@ -745,9 +691,7 @@ async def test_a_person_is_placed_under_their_manager_not_appended_as_a_root(  #
 
 
 @pytest.mark.asyncio
-async def test_a_person_with_no_reporting_line_still_appears(
-    app, client, session_factory
-):  # noqa: ANN001
+async def test_a_person_with_no_reporting_line_still_appears(app, client, session_factory):  # noqa: ANN001
     """No line is not the same as no node.
 
     Until a CEO exists (#15770) an unplaced person has nothing to default to,
@@ -769,9 +713,7 @@ async def test_a_person_with_no_reporting_line_still_appears(
 
 
 @pytest.mark.asyncio
-async def test_another_companys_reporting_line_does_not_reparent_anyone(  # noqa: ANN001
-    app, client, session_factory
-):
+async def test_another_companys_reporting_line_does_not_reparent_anyone(app, client, session_factory):  # noqa: ANN001
     """The reporting-line query is company-scoped.
 
     Without the filter, a line belonging to another company is loaded and
@@ -791,16 +733,8 @@ async def test_another_companys_reporting_line_does_not_reparent_anyone(  # noqa
     async with session_factory() as session:
         from llc.models.membership import LLCCompanyMembership
 
-        session.add(
-            LLCCompanyMembership(
-                id=uuid.uuid4(), company_id=theirs, user_id=subject_id, role="member"
-            )
-        )
-        session.add(
-            LLCCompanyMembership(
-                id=uuid.uuid4(), company_id=theirs, user_id=boss_id, role="member"
-            )
-        )
+        session.add(LLCCompanyMembership(id=uuid.uuid4(), company_id=theirs, user_id=subject_id, role="member"))
+        session.add(LLCCompanyMembership(id=uuid.uuid4(), company_id=theirs, user_id=boss_id, role="member"))
         await session.commit()
 
     # The line exists only in the OTHER company.
