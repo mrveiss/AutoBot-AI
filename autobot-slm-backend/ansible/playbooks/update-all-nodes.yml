@@ -40,7 +40,11 @@
 
   vars:
     github_repo: "https://github.com/mrveiss/AutoBot-AI.git"
-    git_repo_root: "/opt/autobot/code_source"
+    # #15705: the code_source checkout root, derived rather than restated.
+    # This is an alias for `code_source_dir` -- same directory, and the
+    # messages below already call it code_source -- so an explicit
+    # `code_source_dir` override steers it too.
+    git_repo_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
     deploy_ref: "Dev_new_gui"
     allowed_branches:
       - Dev_new_gui
@@ -474,7 +478,7 @@
       command:
         cmd: /opt/autobot/autobot-slm-backend/venv/bin/pip install
              -r /opt/autobot/autobot-slm-backend/requirements.txt
-             -c {{ autobot.base_dir }}/code_source/constraints/shared.txt
+             -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
              --quiet --timeout 120
       become: true
       become_user: autobot
@@ -760,7 +764,7 @@
       command:
         cmd: /opt/autobot/autobot-backend/venv/bin/pip install
              -r /opt/autobot/autobot-backend/requirements.txt
-             -c {{ autobot.base_dir }}/code_source/constraints/shared.txt
+             -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
              --quiet --timeout 120
       become: true
       become_user: autobot
@@ -1199,7 +1203,7 @@
       command:
         cmd: /opt/autobot/autobot-npu-worker/venv/bin/pip install
              -r /opt/autobot/autobot-npu-worker/requirements.txt
-             -c {{ autobot.base_dir }}/code_source/constraints/shared.txt
+             -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
              --quiet --timeout 120
       become: true
       become_user: autobot
@@ -1328,7 +1332,7 @@
       command:
         cmd: /opt/autobot/autobot-browser-worker/venv/bin/pip install
              -r /opt/autobot/autobot-browser-worker/requirements.txt
-             -c {{ autobot.base_dir }}/code_source/constraints/shared.txt
+             -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
              --quiet --timeout 120
       become: true
       become_user: autobot
