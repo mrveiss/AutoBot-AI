@@ -37,10 +37,11 @@ the org chart reads the new table (#15763's remaining scope): dropping the only
 existing store in the same migration that introduces its replacement leaves no
 way back if the new read path is wrong.
 
-Ordering note: this chains from ``20260825_085`` because #15753's
-``20260826_086`` is not merged yet. Whichever lands second must renumber onto
-the other, or alembic ends up with two heads off 085 — the single-head check
-will catch it.
+Ordering note, and it played out exactly as written: this originally chained
+from ``20260825_085`` while #15753's ``20260826_086`` was still open. That one
+merged first, leaving two revisions off 085 — two alembic heads — and the
+migration matrix failed on it, which is what the single-head check exists for.
+Renumbered onto ``20260826_086``.
 """
 
 from typing import Sequence, Union
@@ -48,8 +49,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260826_086b"
-down_revision: Union[str, None] = "20260825_085"
+revision: str = "20260827_087"
+down_revision: Union[str, None] = "20260826_086"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
