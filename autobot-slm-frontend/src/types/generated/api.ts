@@ -1455,6 +1455,10 @@ export interface paths {
          *     then runs update-all-nodes.yml against it as a fire-and-forget task
          *     (the service restarts mid-run, so the caller should poll health).
          *     Returns immediately with a queued message.
+         *
+         *     Requires an authenticated user -- unchanged by #15728. The credential-free
+         *     on-host trigger is a completely separate listener
+         *     (``services/local_admin_socket.py``); it does not touch this dependency.
          */
         post: operations["self_update_api_code_sync_self_update_post"];
         delete?: never;

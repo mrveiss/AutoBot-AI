@@ -215,6 +215,53 @@ this is the situation you are in, versus a process actually being down.
 
 ---
 
+## Triggering a self-update from the SLM host itself, with no credentials (#15728)
+
+`POST /api/code-sync/self-update` requires an authenticated user — correct
+for the network-facing API, but it means routine maintenance run from a
+shell already on the box still needs a password every time, which is
+exactly the kind of place a credential ends up typed into a script or a
+CI job where it shouldn't be.
+
+An operator with a shell on the SLM host has a second, credential-free way
+to fire the SAME update — no login, no bearer token, nothing on a command
+line to leak into shell history:
+
+```bash
+curl -s --unix-socket /run/autobot/slm-self-update.sock \
+  -X POST http://localhost/self-update
+```
+
+`/run/autobot/slm-self-update.sock` is the **default** path, not a fixed one:
+it comes from the `slm_self_update_socket_path` variable in the `slm_manager`
+role's defaults, and a deployment may override it. On a host where it has been
+overridden the command above targets a socket that does not exist and fails
+with a connection error rather than anything explanatory. Confirm the actual
+path first:
+
+```bash
+systemctl show autobot-slm-self-update.socket -p Listen
+```
+
+This reaches a second ASGI listener bound ONLY to a Unix domain socket that
+systemd's `autobot-slm-self-update.socket` unit creates and owns. The
+socket file's own permissions (root, or a member of the backend's service
+group) ARE the access control — the same boundary that already lets that
+operator restart every service on the box by hand. Nothing here is a secret
+to type, store, or rotate: reachability of the socket IS the credential.
+
+Ansible role `slm_manager`'s `slm_self_update_socket_enabled` (default
+`true`) can turn both the socket unit and the backend's `Sockets=` wiring
+off for a host that should not carry this surface at all.
+
+This is deliberately NOT a replacement for `/recovery` above: `/recovery`
+solves a BROKEN frontend, reachable from any browser, off-host included.
+This solves "trigger routine maintenance from a shell that already has
+root, without a password" — a different problem, and neither folds into
+the other.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -245,3 +292,4 @@ this is the situation you are in, versus a process actually being down.
 - `scripts/hooks/slm-post-commit` — post-commit hook
 - `docs/runbooks/SYSTEM_UPDATE.md` — OS package updates (separate from code)
 - `autobot-slm-backend/static/recovery.html` — backend-served recovery page (#15462)
+- `autobot-slm-backend/services/local_admin_socket.py` — credential-free local self-update socket (#15728)

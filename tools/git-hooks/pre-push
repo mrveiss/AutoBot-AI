@@ -174,8 +174,20 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   # ----- Backend (Python) -------------------------------------------------
-  py_changed=$(echo "$changed" | grep -E '\.py$' | grep -v '_test\.py$' || true)
-  py_tests=$(echo "$changed" | grep -E '_test\.py$' || true)
+  # #15751: `git diff --name-only` lists every path touched anywhere in the
+  # range, including one a later commit in the same push renamed or deleted
+  # -- git does not collapse a pure rename into one name here, and a delete
+  # across separate commits in the range still shows both paths. Handing a
+  # since-deleted path to pytest is a collection ERROR (blocks the push),
+  # not a skip, so both lists are filtered to paths still on disk first.
+  existing_py_files() {
+    local f
+    while IFS= read -r f; do
+      [ -n "$f" ] && [ -f "$REPO_ROOT/$f" ] && echo "$f"
+    done
+  }
+  py_changed=$(echo "$changed" | grep -E '\.py$' | grep -v '_test\.py$' | existing_py_files || true)
+  py_tests=$(echo "$changed" | grep -E '_test\.py$' | existing_py_files || true)
   if [ -n "$py_changed" ] || [ -n "$py_tests" ]; then
     # Co-located: foo.py is tested by foo_test.py in the same dir
     sibling_tests=""

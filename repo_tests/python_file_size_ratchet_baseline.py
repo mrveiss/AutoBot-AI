@@ -452,7 +452,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 739,
     "autobot-slm-backend/api/code_source.py": 720,
-    "autobot-slm-backend/api/code_sync.py": 6089,  # #15710: env-cast conversion, named defaults kept
+    "autobot-slm-backend/api/code_sync.py": 6111,  # #15728: local-admin socket self-update helper extracted
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,
     "autobot-slm-backend/api/monitoring.py": 1096,
@@ -468,7 +468,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/api/stateful.py": 692,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1129,
-    "autobot-slm-backend/main.py": 796,
+    "autobot-slm-backend/main.py": 806,  # #15728: local admin socket lifespan wiring
     "autobot-slm-backend/models/database.py": 1234,
     "autobot-slm-backend/models/schemas.py": 2335,
     "autobot-slm-backend/monitoring/advanced_apm_system.py": 877,

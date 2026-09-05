@@ -13,7 +13,6 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from api.schemas_agent import (
-    PasswordChangedResponse,
     RoleAssignmentResponse,
     RoleUpdateRequest,
     RoleUpdateResponse,
@@ -31,12 +30,7 @@ from api.user_management.dependencies import (
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
-from user_management.middleware.rate_limit import (
-    PasswordChangeRateLimiter,
-    RateLimitExceeded,
-)
 from user_management.schemas import (
-    PasswordChange,
     UserCreate,
     UserListResponse,
     UserResponse,
@@ -45,7 +39,6 @@ from user_management.schemas import (
 from user_management.services import UserService
 from user_management.services.user_service import (
     DuplicateUserError,
-    InvalidCredentialsError,
     UserNotFoundError,
 )
 
@@ -366,71 +359,9 @@ async def deactivate_user(
         )
 
 
-# -------------------------------------------------------------------------
-# Password Management
-# -------------------------------------------------------------------------
-
-
-@router.post(
-    "/{user_id}/change-password",
-    response_model=PasswordChangedResponse,
-    summary="Change password",
-    description="Change a user's password.",
-    dependencies=[Depends(user_management_route_marker)],
-)
-async def change_password(
-    user_id: uuid.UUID,
-    password_data: PasswordChange,
-    user_service: UserService = Depends(get_user_service),
-    current_user: dict = Depends(get_current_user),
-):
-    """Change user password with rate limiting and session invalidation."""
-    rate_limiter = PasswordChangeRateLimiter()
-
-    # Check rate limit before attempting password change.
-    # The limiter's message carries the caller-facing retry window ("Too many
-    # attempts. Try again in N minutes.") and discloses nothing sensitive, so
-    # it is returned verbatim — the previous "Internal server error" detail
-    # contradicted the 429 status and stripped the retry guidance.
-    try:
-        await rate_limiter.check_rate_limit(user_id)
-    except RateLimitExceeded as exc:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=str(exc),
-        ) from exc
-
-    try:
-        # Extract current token to preserve this session
-        current_token = current_user.get("token")
-
-        await user_service.change_password(
-            user_id=user_id,
-            current_password=password_data.current_password,
-            new_password=password_data.new_password,
-            require_current=password_data.current_password is not None,
-            current_token=current_token,
-        )
-
-        # Record successful attempt (clears rate limit counter)
-        await rate_limiter.record_attempt(user_id, success=True)
-
-        return PasswordChangedResponse(
-            message="Password changed successfully",
-        )
-
-    except UserNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User {user_id} not found",
-        )
-    except InvalidCredentialsError:
-        # Record failed attempt
-        await rate_limiter.record_attempt(user_id, success=False)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Current password is incorrect",
-        )
+# Password Management: split into api/user_management/password_change.py (#15743) --
+# the account-takeover fix there needed a caller-identity gate of its own, and this
+# file was already at the repo's file-size ceiling.
 
 
 # -------------------------------------------------------------------------

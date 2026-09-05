@@ -2,6 +2,13 @@
 Description=AutoBot SLM Backend Service
 After=network-online.target redis-stack-server.service postgresql.service
 Wants=network-online.target redis-stack-server.service postgresql.service
+{% if slm_self_update_socket_enabled %}
+# #15728: the local self-update admin socket is created by its OWN unit,
+# with its own permissions, before this service starts -- see
+# autobot-slm-self-update.socket.j2 and the Sockets= line below.
+After={{ slm_self_update_socket_service }}.socket
+Wants={{ slm_self_update_socket_service }}.socket
+{% endif %}
 # #4090: these live in [Unit], NOT [Service]. systemd's own verdict on the
 # wrong placement is "Unknown key name 'StartLimitIntervalSec' in section
 # 'Service', ignoring" — so the fix merged for #4090 was discarded on every unit
@@ -46,6 +53,12 @@ EnvironmentFile=-{{ slm_credentials_dir }}/{{ slm_credentials_file }}
 # #12488: --log-config splits uvicorn's own logger output by level (DEBUG/INFO
 # -> stdout, WARNING+ -> stderr) — see autobot_shared/uvicorn_log_config.json.
 ExecStart={{ slm_backend_dir }}/venv/bin/uvicorn main:app --host {{ slm_backend_host }} --port {{ slm_backend_port }} --timeout-graceful-shutdown {{ slm_backend_graceful_shutdown_sec | default(30) }} --log-config {{ slm_shared_dir }}/uvicorn_log_config.json
+{% if slm_self_update_socket_enabled %}
+# #15728: hands this process the pre-opened, pre-permissioned local
+# admin socket fd via sd_listen_fds() -- systemd's own socket-activation
+# protocol, not an AutoBot-invented one.
+Sockets={{ slm_self_update_socket_service }}.socket
+{% endif %}
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=5
