@@ -11,13 +11,12 @@ half and be useless in production.
 
 from __future__ import annotations
 
+import asyncio
 import subprocess
 from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
-
-import asyncio
 
 from api import sandbox_files
 from api.sandbox_files import (
