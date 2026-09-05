@@ -36,6 +36,14 @@ Editing rules:
 #: across 31 files, triaged startup-path modules first. 36 were converted to
 #: ``env_int``/``env_float``/``env_int_clamped``/``env_float_clamped``; the 7
 #: recorded here are what is left.
+#:
+#: The guard also looks through a transparent wrapper -- ``max(1, int(os.getenv(
+#: ...)))`` raises at import exactly as the bare form does, since the floor
+#: applies to the parsed number and not to the parse. Eleven sites of that shape
+#: were converted alongside the 43. Without them in scope the guard would have
+#: protected the population it drained while leaving the sites it fixed free to
+#: come back, which is the failure this repo keeps finding in its own checks.
+#: Widening it changes nothing here: the count is still 7.
 BARE_ENV_CASTS = {
     # Standalone operator-run maintenance/analysis scripts (#15691): invoked
     # directly via `python3 <script>`, never imported by a running service,

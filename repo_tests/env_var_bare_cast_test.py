@@ -81,10 +81,28 @@ def tracked_python_files(root: Path) -> list[str]:
     return [rel for rel in out if _is_scanned(rel)]
 
 
+#: Calls that wrap a cast without changing when it raises. ``max(1, int(...))``
+#: still evaluates the cast first, so it crashes at import on a malformed value
+#: exactly as the bare form does -- the floor applies to the parsed number, not
+#: to the parse. #15691 converted eleven of these; without them in scope the
+#: guard would protect the sites it drained and not the ones it fixed.
+_TRANSPARENT_WRAPPERS = frozenset({"max", "min", "abs", "round"})
+
+
 def _is_bare_getenv_cast(value: ast.expr) -> str | None:
-    """``"int"``/``"float"`` when *value* is that cast directly wrapping
-    ``os.getenv(...)``; ``None`` otherwise."""
+    """``"int"``/``"float"`` when *value* is that cast wrapping ``os.getenv(...)``.
+
+    Looks through a transparent wrapper: the cast inside ``max(1, int(os.getenv(
+    ...)))`` raises at the same moment the bare one does, so treating the two
+    differently would let the shape come back under a floor.
+    """
     if not isinstance(value, ast.Call):
+        return None
+    if isinstance(value.func, ast.Name) and value.func.id in _TRANSPARENT_WRAPPERS:
+        for arg in value.args:
+            found = _is_bare_getenv_cast(arg)
+            if found:
+                return found
         return None
     func = value.func
     if not (isinstance(func, ast.Name) and func.id in ("int", "float")):
@@ -207,8 +225,15 @@ CAST_CONTRASTS = (
     ('_X = float(os.getenv("VAR", "1.0"))', "float"),
     # os.environ.get is a different, untracked population (#15710).
     ('_X = int(os.environ.get("VAR", "1"))', None),
-    # Already floored via max()/min() -- a smaller, different defect (#15691).
-    ('_X = max(1, int(os.getenv("VAR", "1")))', None),
+    # A floor does not make the cast safe: max() evaluates int() first, so this
+    # dies at import on a malformed value exactly as the bare form does. #15691
+    # converted eleven of these, so the classifier must see them or the guard
+    # would protect the population it drained and not the sites it fixed.
+    ('_X = max(1, int(os.getenv("VAR", "1")))', "int"),
+    ('_X = min(60.0, float(os.getenv("VAR", "1.0")))', "float"),
+    # The wrapper is only transparent when a cast is actually inside it.
+    ('_X = max(1, int(some_other_call("VAR")))', None),
+    ('_X = max(1, 2)', None),
     # A crash-safe reader is not this shape at all.
     ('_X = env_int("VAR", 1)', None),
     # A cast of something other than a bare os.getenv call.
