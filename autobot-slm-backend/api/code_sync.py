@@ -640,10 +640,9 @@ async def _get_tracker_for_db(db: AsyncSession):
 # polled status endpoint doesn't re-checksum every deployed component per call.
 _STALE_COMPONENTS_TTL_SECONDS = env_int("SLM_STALE_COMPONENTS_TTL_SECONDS", 60)
 
-# #14683: how long the update-all orchestration waits for a fired self-update
-# play to report a completion before giving up on it. Generous: the play covers
-# every deployed role on the box. The poll floor is 1s so a misconfigured
-# interval cannot turn the wait into a busy loop.
+# #14683: how long update-all waits for a fired self-update play to report
+# completion -- generous, the play covers every deployed role on the box. The
+# min_v=1 poll floor stops a misconfigured interval busy-looping.
 _SELF_UPDATE_WATCH_TIMEOUT_SECONDS = env_int_clamped("SLM_SELF_UPDATE_WATCH_TIMEOUT_SECONDS", 3600, min_v=1)
 _SELF_UPDATE_WATCH_POLL_SECONDS = env_int_clamped("SLM_SELF_UPDATE_WATCH_POLL_SECONDS", 15, min_v=1)
 
