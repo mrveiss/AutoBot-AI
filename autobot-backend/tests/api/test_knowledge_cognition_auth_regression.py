@@ -73,6 +73,13 @@ try:
     # ── import the real cognition router (fix applied -- now wired via Depends) ──
     from api.knowledge_cognition import check_admin_permission as _bound_admin_check  # noqa: E402
     from api.knowledge_cognition import router as _cognition_router
+
+    # The module OBJECT, retained deliberately. It is evicted from sys.modules
+    # below, so a later ``patch("api.knowledge_cognition.X")`` would re-import a
+    # SECOND module object and patch that one, while the router under test still
+    # belongs to this one. Patching through this reference keeps the target and
+    # the code under test the same object.
+    _cognition_module = sys.modules["api.knowledge_cognition"]
 finally:
     # The router captured `check_admin_permission` as a Python object inside its
     # Depends(...), so reverting `auth_middleware` cannot un-bind it -- and that
@@ -168,9 +175,10 @@ class TestCognitionSeedAuthenticatedSuccess:
     def test_seed_reaches_handler_when_admin(self):
         """Auth passes -> business logic executes -> background seed scheduled."""
         with (
-            patch("api.knowledge_cognition.os.path.isfile", return_value=True),
-            patch(
-                "api.knowledge_cognition.get_cognition_seeder",
+            patch.object(_cognition_module.os.path, "isfile", return_value=True),
+            patch.object(
+                _cognition_module,
+                "get_cognition_seeder",
                 new=AsyncMock(return_value=_mock_seeder()),
             ),
         ):
