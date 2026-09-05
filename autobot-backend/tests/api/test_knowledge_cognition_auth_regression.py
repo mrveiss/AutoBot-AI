@@ -71,12 +71,29 @@ sys.modules["auth_middleware"] = _build_auth_middleware_stub()
 
 try:
     # ── import the real cognition router (fix applied -- now wired via Depends) ──
-    from api.knowledge_cognition import router as _cognition_router  # noqa: E402
+    from api.knowledge_cognition import (  # noqa: E402
+        check_admin_permission as _bound_admin_check,
+        router as _cognition_router,
+    )
 finally:
-    # The router already captured `check_admin_permission` as a Python object
-    # inside its Depends(...) -- reverting `auth_middleware` here cannot
-    # un-bind it. Nothing below needs the stub to remain the canonical
-    # `auth_middleware` module.
+    # The router captured `check_admin_permission` as a Python object inside its
+    # Depends(...), so reverting `auth_middleware` cannot un-bind it -- and that
+    # is exactly why restoring `auth_middleware` alone is NOT enough.
+    #
+    # `api.knowledge_cognition` is a shared singleton: `initialization/
+    # router_registry/core_routers.py:55` imports the same module to build the
+    # real application. Leaving it cached here would hand every later importer
+    # -- including the real app inside the same pytest process -- a router whose
+    # admin dependency is this file's allow-all stub. That is the original
+    # defect moved one level down, and strictly worse: a leak into
+    # `sys.modules["auth_middleware"]` only affects code that imports that name
+    # afterwards, while a leak into the cached router affects the app itself.
+    #
+    # Dropping the module entry forces the next importer to re-import against
+    # the real `auth_middleware`. The reference bound above stays valid for this
+    # file's own TestClient, which is the only thing that should see the stub.
+    for _cached in ("api.knowledge_cognition",):
+        sys.modules.pop(_cached, None)
     if _prior_auth_middleware is None:
         sys.modules.pop("auth_middleware", None)
     else:
@@ -97,15 +114,16 @@ def _allow_admin() -> bool:
 def _make_client(*, allow: bool) -> TestClient:
     """TestClient with check_admin_permission overridden to allow or reject.
 
-    Keyed off ``api.knowledge_cognition.check_admin_permission`` rather than a
-    fresh ``from auth_middleware import check_admin_permission`` (GH #15796):
-    the router's ``Depends(check_admin_permission)`` was bound to whatever
-    object that name resolved to at router-import time, and ``auth_middleware``
-    itself is reverted to its prior state immediately after that import.
+    Keyed off ``_bound_admin_check`` -- the object captured at router-import
+    time -- rather than any later import (GH #15796). Both restorations above
+    make a fresh import return a *different* function: ``auth_middleware`` is
+    reverted, and ``api.knowledge_cognition`` is evicted so the real app
+    re-imports it cleanly. ``dependency_overrides`` is keyed by object identity,
+    so only the captured reference matches what the router actually bound.
     """
     app = FastAPI()
     app.include_router(_cognition_router, prefix="/api/knowledge")
-    from api.knowledge_cognition import check_admin_permission
+    check_admin_permission = _bound_admin_check
 
     app.dependency_overrides[check_admin_permission] = _allow_admin if allow else _raise_401
     return TestClient(app, raise_server_exceptions=False)
@@ -169,6 +187,23 @@ class TestCognitionSeedAuthenticatedSuccess:
 
 class TestAuthMiddlewareStubDoesNotLeak:
     """GH #15796: the router-import stub must not outlive the import it existed for."""
+
+    def test_the_shared_router_module_is_not_left_cached_with_the_stub(self):
+        """The stub must not survive in ``sys.modules["api.knowledge_cognition"]``.
+
+        That module is a singleton: ``initialization/router_registry/
+        core_routers.py:55`` imports it to build the real application. Leaving it
+        cached here hands every later importer -- the real app included -- a
+        router whose admin dependency is this file's allow-all stub. Restoring
+        ``auth_middleware`` alone does not undo that, because the router bound
+        the function object, not the module name.
+        """
+        cached = sys.modules.get("api.knowledge_cognition")
+        if cached is not None:
+            assert cached.check_admin_permission is not _stub_check_admin_permission, (
+                "api.knowledge_cognition is cached with the allow-all stub bound -- "
+                "the real app would import this router with no admin check"
+            )
 
     def test_auth_middleware_restored_after_module_import(self):
         """``auth_middleware`` must not still be this module's stub.
