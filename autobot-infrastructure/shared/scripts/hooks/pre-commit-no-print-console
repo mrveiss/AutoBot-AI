@@ -37,6 +37,10 @@
 #   violations elsewhere in the file, fixed by --changed-lines-only, not by
 #   this recognition change.
 # - ansible/ (deployed copies with doctest examples)
+# - tools/lint/ (#15730 — same case as code_analysis/: CLI checks whose
+#   entire purpose is emitting findings to a terminal; see the reason
+#   recorded next to code_analysis/ and ansible/ in
+#   get_staged_python_files() below)
 #
 # Issue: #1082 - Pre-commit hooks not blocking print/console violations
 # Issue: #14051 - multi-line noqa recognition + changed-lines scoping (CI wrapper)
@@ -187,7 +191,8 @@ get_staged_python_files() {
         grep -v -E '(conftest\.py$|test_.*\.py$)' | \
         grep -v -E '(autobot-infrastructure/)' | \
         grep -v -E '(code_analysis/)' | \
-        grep -v -E '(ansible/)' || true  # code_analysis: CLI output; ansible: deployed copies with doctest examples
+        grep -v -E '(ansible/)' | \
+        grep -v -E '(tools/lint/)' || true  # code_analysis, tools/lint: CLI output (#15730); ansible: doctest examples
 }
 
 # Get TypeScript/Vue files to scan (production code only).

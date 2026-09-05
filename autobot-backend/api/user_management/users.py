@@ -181,10 +181,10 @@ async def create_user(
             user=_user_to_response(user),
         )
 
-    except DuplicateUserError:
+    except DuplicateUserError as exc:  # not admin-gated (#15736)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Internal server error",
+            detail=f"A user with this {exc.field} already exists",
         )
 
 
@@ -279,10 +279,10 @@ async def update_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
-    except DuplicateUserError:
+    except DuplicateUserError as exc:  # not admin-gated either (#15736)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Internal server error",
+            detail=f"A user with this {exc.field} already exists",
         )
 
 

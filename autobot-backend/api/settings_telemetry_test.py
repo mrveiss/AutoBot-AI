@@ -10,12 +10,16 @@ Covers:
   - Audit trail is called when session is present, skipped when None
   - GET returns 200 and correct field values
 
-The conftest.py auth_middleware stub uses __getattr__ = lambda: MagicMock(), which
-creates a new MagicMock object on every attribute access.  FastAPI stores the specific
-object that was passed to Depends() at route-registration time, so overrides keyed on
-a fresh import of the same attribute name miss.  We resolve this by extracting the
-registered dependency objects directly from the route via _registered_deps() and keying
-dependency_overrides on those exact objects.
+The auth_middleware stub (testkit/auth_middleware_stub.py) no longer has a
+__getattr__ catch-all that hands out a fresh MagicMock per access (#14982) --
+named exports like get_current_user and check_admin_permission are real,
+stable callables, so a plain re-import of those names would in fact match the
+object FastAPI captured in Depends() at route-registration time. The
+workaround is kept anyway because it makes this test independent of that
+implementation detail: _registered_deps() reads the dependency object
+directly off the registered route, so overrides stay correct regardless of
+which module a route's parameter is wired to, or whether a future stub
+change reintroduces per-access freshness.
 """
 
 import inspect
