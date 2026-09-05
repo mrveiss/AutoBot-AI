@@ -219,7 +219,22 @@ def resolve_project_root(start: Path) -> Path:
 #: somewhere else -- a helper passing ``cwd=``, a test module, a CI step
 #: invoking a guard directly. That is the whole distance between "correct today"
 #: and "correct".
-AMBIENT_GIT_VARS = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE")
+#: The two object-directory variables joined the list in #15783, measured on
+#: git 2.34.1 the same way the rest were. In a repository that does NOT contain
+#: an object, ``git cat-file -p <sha>`` exits 128 ("Not a valid object name");
+#: with either variable pointing at another repository's ``objects``, the same
+#: command exits **0 and prints that repository's content**. Both are therefore
+#: the ``GIT_DIR`` shape — a wrong answer with a successful exit — and neither
+#: is the loud failure they are sometimes assumed to be, which is why both are
+#: listed rather than only the one that looks more obviously dangerous.
+AMBIENT_GIT_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+)
 
 
 class GitRepoRootUnavailable(RuntimeError):
