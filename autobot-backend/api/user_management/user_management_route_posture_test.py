@@ -29,12 +29,17 @@ update this file as a consequence, not a cause.
 from __future__ import annotations
 
 from api.user_management.dependencies import get_current_user, require_platform_admin
+from api.user_management.password_change import authorize_password_change
 from api.user_management.router import router as user_management_router
 from autobot_shared.api_routing.router_routes import effective_routes
 
 _OPEN = "open"
 _AUTHENTICATED = "authenticated"
 _ADMIN = "admin"
+#: Authenticated, and additionally gated on being the target OR a platform admin.
+#: A conditional posture the flat tiers above cannot express: change-password is
+#: reachable by any authenticated caller but only ACTS for self or an admin (#15743).
+_SELF_OR_ADMIN = "self-or-admin"
 
 #: (method, path) pairs whose posture is #15738's confirmed finding: logged in,
 #: no admin or ownership check. See the module docstring's guardrail.
@@ -49,13 +54,6 @@ _TRACKED_BY_15738 = frozenset(
     }
 )
 
-# #15743: change-password observes as _AUTHENTICATED, and that is the whole
-# problem -- `require_current` is derived from the request body, so an
-# authenticated caller can omit `current_password` and reset any user id.
-# Recorded here for the same reason as the set above: so the row cannot be
-# read as a certification, and so the fix shows up as a posture change.
-_TRACKED_BY_15743 = frozenset({("POST", "/user-management/users/{user_id}/change-password")})
-
 #: Every route mounted under ``api.user_management.router:router``, and its
 #: observed posture. A route missing here, or an entry here with no matching
 #: route, both fail in ``TestUserManagementRoutePostureIsComplete``.
@@ -69,9 +67,8 @@ _EXPECTED_POSTURE = {
     ("DELETE", "/user-management/users/{user_id}"): _AUTHENTICATED,  # delete_user
     ("POST", "/user-management/users/{user_id}/activate"): _AUTHENTICATED,
     ("POST", "/user-management/users/{user_id}/deactivate"): _AUTHENTICATED,
-    # Authenticated, but see #15743: the body decides whether the current
-    # password is verified, so this row records a takeover path, not a safe one.
-    ("POST", "/user-management/users/{user_id}/change-password"): _AUTHENTICATED,
+    # #15743 closed: the gate is a declared dependency, so it is visible here.
+    ("POST", "/user-management/users/{user_id}/change-password"): _SELF_OR_ADMIN,
     ("POST", "/user-management/users/{user_id}/roles/{role_id}"): _AUTHENTICATED,  # assign_role
     ("DELETE", "/user-management/users/{user_id}/roles/{role_id}"): _AUTHENTICATED,  # revoke_role
     ("PUT", "/user-management/users/{user_id}/role"): _ADMIN,  # set_user_role (#1801)
@@ -124,7 +121,15 @@ def _flatten_dependency_names(dependant) -> set[str]:
 
 
 def _classify(names: set[str]) -> str:
-    """open / authenticated / admin, from the dependency names on one route."""
+    """open / authenticated / self-or-admin / admin, from one route's dependency names.
+
+    ``_SELF_OR_ADMIN`` is checked BEFORE ``_ADMIN``: a self-or-admin gate reaches
+    ``require_platform_admin`` on one of its branches, so testing for admin first
+    would report the conditional gate as unconditionally admin-only and hide the
+    self-service branch entirely.
+    """
+    if authorize_password_change.__name__ in names:
+        return _SELF_OR_ADMIN
     if require_platform_admin.__name__ in names:
         return _ADMIN
     if get_current_user.__name__ in names:
@@ -216,30 +221,14 @@ class TestUserManagementRoutePosture:
                 "file to match a gate added elsewhere"
             )
 
-    def test_the_15743_change_password_route_is_recorded_not_certified(self):
-        """change-password observes as authenticated-only, which is the defect.
-
-        #15743: ``require_current`` is derived from the request body
-        (``users.py`` passes ``current_password is not None``), so an
-        authenticated caller who simply omits the field resets the password of
-        whatever ``user_id`` they name. Nothing on this route compares the
-        caller to that id. The row exists so the takeover path is on record and
-        so closing #15743 shows up here as a posture change rather than passing
-        unnoticed.
-        """
-        posture = _observed_posture()
-        assert _TRACKED_BY_15743, "the #15743 tracked-route set is empty"
-        for key in _TRACKED_BY_15743:
-            assert _EXPECTED_POSTURE[key] == _AUTHENTICATED, f"{key} must be on record as _AUTHENTICATED"
-            assert posture.get(key) == _AUTHENTICATED, (
-                f"{key}: expected the #15743-tracked posture (authenticated, no "
-                f"ownership or admin gate) but observed {posture.get(key)!r} -- "
-                "if a gate was added here, close #15743 with that change"
-            )
-
 
 class _FakeDependant:
-    """Minimal stand-in for FastAPI's ``Dependant`` -- only what the walker reads."""
+    """Minimal stand-in for FastAPI's ``Dependant``, for the classifier's unit tests.
+
+    Only ``call`` and ``dependencies`` are read by ``_flatten_dependency_names``,
+    so a real ``Dependant`` is unnecessary here -- and using a fake keeps these
+    cases independent of FastAPI's internal shape.
+    """
 
     def __init__(self, call, dependencies=None):
         self.call = call
@@ -274,3 +263,16 @@ class TestClassifyHelperContrastPair:
         middle = _FakeDependant(call=_unrelated_dependency, dependencies=[inner])
         outer = _FakeDependant(call=_unrelated_dependency, dependencies=[middle])
         assert _classify(_flatten_dependency_names(outer)) == _AUTHENTICATED
+
+    def test_a_self_or_admin_gate_outranks_the_admin_name_it_contains(self):
+        """The ordering case for ``_SELF_OR_ADMIN`` (#15743).
+
+        ``authorize_password_change`` reaches ``require_platform_admin`` on its
+        non-self branch, so both names appear on the route. Classifying admin
+        first would report the route as unconditionally admin-only and erase
+        the self-service branch -- a posture claim that is simply false, and
+        one that would then "pass" for the wrong reason. The pair below pins
+        both directions: together they are self-or-admin, admin alone is admin.
+        """
+        assert _classify({"authorize_password_change", "require_platform_admin", "get_current_user"}) == _SELF_OR_ADMIN
+        assert _classify({"require_platform_admin", "get_current_user"}) == _ADMIN

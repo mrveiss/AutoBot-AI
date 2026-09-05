@@ -27,6 +27,26 @@ from user_management.services.user_service import (
 # ---------------------------------------------------------------------------
 
 
+
+async def _call_change_password(user_id, pwd_change, user_service, current_user, context):
+    """Resolve the route's gate the way FastAPI does, then call the handler.
+
+    ``authorize_password_change`` is a route DEPENDENCY, not a call inside the
+    handler body -- deliberately, so the gate is visible in the ``Dependant``
+    tree that ``user_management_route_posture_test.py`` reads (#15737).
+
+    That makes this helper load-bearing rather than cosmetic: calling
+    ``change_password`` directly would bypass the gate entirely, and every
+    assertion in this file -- including the takeover case -- would then pass
+    against a completely ungated handler. Resolving the dependency here is what
+    keeps these tests testing the real path.
+    """
+    from api.user_management.password_change import authorize_password_change, change_password
+
+    require_current = await authorize_password_change(user_id, context)
+    return await change_password(user_id, pwd_change, user_service, current_user, context, require_current)
+
+
 @pytest.fixture
 def mock_user_service():
     """Create mock user service."""
@@ -119,7 +139,7 @@ class TestPasswordChangeRateLimiting:
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
-            await change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
+            await _call_change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
 
             mock_rate_limiter.check_rate_limit.assert_called_once_with(user_id, actor_id=user_id)
 
@@ -145,7 +165,7 @@ class TestPasswordChangeRateLimiting:
             pwd_change = PasswordChange(**password_data)
 
             with pytest.raises(HTTPException) as exc_info:
-                await change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
+                await _call_change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
 
             assert exc_info.value.status_code == status.HTTP_429_TOO_MANY_REQUESTS
             assert "Too many attempts" in str(exc_info.value.detail)
@@ -166,7 +186,7 @@ class TestPasswordChangeRateLimiting:
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
-            await change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
+            await _call_change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
 
             mock_rate_limiter.record_attempt.assert_called_once_with(user_id, success=True, actor_id=user_id)
 
@@ -192,7 +212,7 @@ class TestPasswordChangeRateLimiting:
             pwd_change = PasswordChange(**password_data)
 
             with pytest.raises(HTTPException) as exc_info:
-                await change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
+                await _call_change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
 
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
             mock_rate_limiter.record_attempt.assert_called_once_with(user_id, success=False, actor_id=user_id)
@@ -226,7 +246,7 @@ class TestPasswordChangeResponses:
             pwd_change = PasswordChange(**password_data)
 
             with pytest.raises(HTTPException) as exc_info:
-                await change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
+                await _call_change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
 
             assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
 
@@ -252,7 +272,7 @@ class TestPasswordChangeResponses:
             pwd_change = PasswordChange(**password_data)
 
             with pytest.raises(HTTPException) as exc_info:
-                await change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
+                await _call_change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
 
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
             assert "Current password is incorrect" in str(exc_info.value.detail)
@@ -273,7 +293,7 @@ class TestPasswordChangeResponses:
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
-            response = await change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
+            response = await _call_change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
 
             assert response.success is True
             assert response.message == "Password changed successfully"
@@ -310,7 +330,7 @@ class TestPasswordChangeAuthorization:
             pwd_change = _new_password_only("StolenP@ss1")
 
             with pytest.raises(HTTPException) as exc_info:
-                await change_password(user_id, pwd_change, mock_user_service, current_user, context)
+                await _call_change_password(user_id, pwd_change, mock_user_service, current_user, context)
 
             assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
             mock_user_service.change_password.assert_not_called()
@@ -331,7 +351,7 @@ class TestPasswordChangeAuthorization:
             from api.user_management.password_change import change_password
 
             pwd_change = _new_password_only("NewP@ssw0rd!")
-            await change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
+            await _call_change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
 
             mock_user_service.change_password.assert_called_once()
             _, kwargs = mock_user_service.change_password.call_args
@@ -356,7 +376,7 @@ class TestPasswordChangeAuthorization:
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
-            await change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
+            await _call_change_password(user_id, pwd_change, mock_user_service, mock_current_user, self_context)
 
             _, kwargs = mock_user_service.change_password.call_args
             assert kwargs["require_current"] is True
@@ -378,7 +398,7 @@ class TestPasswordChangeAuthorization:
             from api.user_management.password_change import change_password
 
             pwd_change = _new_password_only("ResetP@ss1")
-            response = await change_password(user_id, pwd_change, mock_user_service, current_user, context)
+            response = await _call_change_password(user_id, pwd_change, mock_user_service, current_user, context)
 
             assert response.success is True
             _, kwargs = mock_user_service.change_password.call_args
@@ -404,6 +424,6 @@ class TestPasswordChangeAuthorization:
             pwd_change = _new_password_only("StolenP@ss1")
 
             with pytest.raises(HTTPException) as exc_info:
-                await change_password(user_id, pwd_change, mock_user_service, current_user, context)
+                await _call_change_password(user_id, pwd_change, mock_user_service, current_user, context)
 
             assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN

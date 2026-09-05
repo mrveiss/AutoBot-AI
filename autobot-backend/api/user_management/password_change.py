@@ -24,7 +24,7 @@ from api.user_management.dependencies import (
     get_tenant_context,
     get_user_service,
     require_platform_admin,
-    require_user_management_enabled,
+    user_management_route_marker,
 )
 from autobot_shared.logging_manager import get_logger
 from user_management.middleware.rate_limit import (
@@ -42,18 +42,34 @@ router = APIRouter(prefix="/users", tags=["Users"])
 logger = get_logger(__name__)
 
 
-async def _authorize_password_change(user_id: uuid.UUID, context: TenantContext) -> bool:
+async def authorize_password_change(
+    user_id: uuid.UUID,
+    context: TenantContext = Depends(get_tenant_context),
+) -> bool:
     """Gate change-password by the caller's identity, never the request body.
+
+    Returns the value of ``require_current`` the service must be called with.
 
     Issue #15743: the request used to control ``require_current`` directly
     (omit ``current_password`` and verification switched itself off), and
     nothing compared the caller to the path's ``user_id`` at all.
 
     Self-service (caller == target) always re-verifies the current
-    password. Any other target requires an actual platform-admin check --
-    the same ``require_platform_admin`` gate ``set_user_role`` uses, reused
-    here rather than a second admin check -- and only then skips
-    verification (the admin-reset path), never the other way around.
+    password -- an admin changing their OWN password gets no shortcut. Any
+    other target requires an actual platform-admin check, the same
+    ``require_platform_admin`` gate ``set_user_role`` uses rather than a
+    second admin mechanism, and only then skips verification (the
+    admin-reset path). Never the other way around.
+
+    Declared as a route DEPENDENCY, not called from inside the handler, and
+    that is deliberate (#15737). A gate invoked in a function body is
+    invisible to anything reading the route: it does not appear in the
+    ``Dependant`` tree, so
+    ``api/user_management/user_management_route_posture_test.py`` would keep
+    reporting this route as plain "authenticated" after the hole was closed,
+    and a future reader would trace the same four layers #15737 documents
+    and reach the same wrong conclusion. Being a dependency is what makes
+    the gate legible and what makes the posture suite able to see it.
     """
     if context.user_id == user_id:
         return True
@@ -67,7 +83,7 @@ async def _authorize_password_change(user_id: uuid.UUID, context: TenantContext)
     response_model=PasswordChangedResponse,
     summary="Change password",
     description="Change a user's password.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def change_password(
     user_id: uuid.UUID,
@@ -75,11 +91,10 @@ async def change_password(
     user_service: UserService = Depends(get_user_service),
     current_user: dict = Depends(get_current_user),
     context: TenantContext = Depends(get_tenant_context),
+    require_current: bool = Depends(authorize_password_change),
 ):
     """Change a password: self-service with the current one, or an actual
     platform admin resetting another user's without it (#15743)."""
-    require_current = await _authorize_password_change(user_id, context)
-
     rate_limiter = PasswordChangeRateLimiter()
 
     # Check rate limit before attempting password change.
