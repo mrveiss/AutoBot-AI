@@ -142,3 +142,46 @@ async def test_untenanted_callers_are_unaffected(session_factory):  # noqa: ANN0
             agent_id="agent-a", new_manager_id="agent-b", company_id=None
         )
         assert node.reports_to == "agent-b"
+
+
+@pytest.mark.asyncio
+async def test_upsert_cannot_name_a_manager_from_another_company(session_factory):  # noqa: ANN001
+    """The `upsert_node` manager arm, which the target-arm test cannot reach.
+
+    Flagged in review and confirmed by mutation: deleting the manager check from
+    `upsert_node` left the entire suite green. `update_reporting_line` had a case
+    per arm and `upsert_node` had only one, so half its guard was decorative —
+    the same "two-armed guard, one arm tested" gap found in the LLC service's
+    IDOR check on #15792.
+    """
+    mine, theirs = uuid.uuid4(), uuid.uuid4()
+    await _seed(session_factory, mine, "my-agent")
+    await _seed(session_factory, theirs, "their-manager")
+
+    async with session_factory() as session:
+        with pytest.raises(ValueError, match="Manager not in this company"):
+            await AgentOrgService(session).upsert_node(
+                agent_id="my-agent", name="Mine", reports_to="their-manager", company_id=mine
+            )
+
+
+@pytest.mark.asyncio
+async def test_a_string_company_id_is_accepted(session_factory):  # noqa: ANN001
+    """A caller passing a string must not fail at the write.
+
+    `AgentOrgNode.company_id` is `UUID(as_uuid=True)`, so assigning a plain
+    string fails during binding at flush() — a valid caller with a valid id,
+    failing at the write rather than at the door. The HTTP routes pass the
+    tenant context's UUID; older in-process callers pass strings. Normalising
+    once means the comparisons and the assignment agree by construction rather
+    than because each site happened to call str().
+    """
+    company = uuid.uuid4()
+    await _seed(session_factory, company, "agent-a")
+    await _seed(session_factory, company, "agent-b")
+
+    async with session_factory() as session:
+        node = await AgentOrgService(session).update_reporting_line(
+            agent_id="agent-a", new_manager_id="agent-b", company_id=str(company)
+        )
+        assert node.reports_to == "agent-b"

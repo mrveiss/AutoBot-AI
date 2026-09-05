@@ -223,11 +223,19 @@ async def get_direct_reports(
 async def update_agent_org(
     agent_id: str,
     body: UpdateOrgRequest,
-    # Declared BEFORE the session on purpose: FastAPI resolves parameter
-    # dependencies in signature order, so the authority check runs before a
-    # database session is acquired rather than after. A gate that fires only
-    # once the handler is already holding resources is a gate in the wrong
-    # place, even when it still refuses.
+    # Declared before the session so the authority check is resolved first.
+    #
+    # It does NOT mean no session is opened before the check: the gate resolves
+    # `get_tenant_context`, which itself depends on `get_db_session`, so an
+    # unauthorised caller still consumes a session on the way to its 403. An
+    # earlier version of this comment claimed otherwise — flagged in review on
+    # #15804 — and the claim was wrong in the direction that matters, since it
+    # described a property nobody had checked.
+    #
+    # Closing that properly means splitting the permission check from tenant
+    # resolution, which is the auth owner's surface (#15793) rather than this
+    # route's. Ordering here is still worth keeping: it is the half this file
+    # controls, and it costs nothing.
     context: TenantContext = Depends(require_reporting_line_write),
     session: AsyncSession = Depends(get_db_session),
 ) -> AgentSummary:
@@ -279,11 +287,19 @@ async def update_agent_org(
 async def upsert_agent_org(
     agent_id: str,
     body: UpsertOrgRequest,
-    # Declared BEFORE the session on purpose: FastAPI resolves parameter
-    # dependencies in signature order, so the authority check runs before a
-    # database session is acquired rather than after. A gate that fires only
-    # once the handler is already holding resources is a gate in the wrong
-    # place, even when it still refuses.
+    # Declared before the session so the authority check is resolved first.
+    #
+    # It does NOT mean no session is opened before the check: the gate resolves
+    # `get_tenant_context`, which itself depends on `get_db_session`, so an
+    # unauthorised caller still consumes a session on the way to its 403. An
+    # earlier version of this comment claimed otherwise — flagged in review on
+    # #15804 — and the claim was wrong in the direction that matters, since it
+    # described a property nobody had checked.
+    #
+    # Closing that properly means splitting the permission check from tenant
+    # resolution, which is the auth owner's surface (#15793) rather than this
+    # route's. Ordering here is still worth keeping: it is the half this file
+    # controls, and it costs nothing.
     context: TenantContext = Depends(require_reporting_line_write),
     session: AsyncSession = Depends(get_db_session),
 ) -> AgentSummary:

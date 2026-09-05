@@ -59,6 +59,24 @@ _ROLE_TO_ACTIVITY_TYPE: Dict[str, str] = {
 }
 
 
+def _normalise_company_id(company_id: "str | uuid.UUID | None") -> "uuid.UUID | None":
+    """Coerce a company id to UUID before it reaches a comparison or the ORM.
+
+    ``AgentOrgNode.company_id`` is ``UUID(as_uuid=True)``, so assigning a plain
+    string fails at ``flush()`` on SQLite during binding — a valid caller with a
+    valid id, failing at the write rather than at the door. Callers legitimately
+    pass either form: the HTTP routes pass the tenant context's UUID, and older
+    in-process callers pass strings.
+
+    Normalising once means the tenant comparisons and the assignment all use the
+    same type, rather than each site deciding for itself with ``str()`` and
+    happening to agree.
+    """
+    if company_id is None:
+        return None
+    return company_id if isinstance(company_id, uuid.UUID) else uuid.UUID(str(company_id))
+
+
 class AgentOrgService:
     """Service for agent organizational hierarchy operations (#1405)."""
 
@@ -243,12 +261,13 @@ class AgentOrgService:
         # called from paths that legitimately have no tenant (seeding, and the
         # pre-tenancy callers). Those pass None and are unchanged; the HTTP
         # routes always pass the caller's own context, never a body value.
-        if company_id is not None:
-            if str(node.company_id) != str(company_id):
+        company_uuid = _normalise_company_id(company_id)
+        if company_uuid is not None:
+            if node.company_id != company_uuid:
                 raise ValueError(f"Agent not found in org hierarchy: {agent_id!r}")
             if new_manager_id is not None:
                 manager = await self.get_node(new_manager_id)
-                if manager is None or str(manager.company_id) != str(company_id):
+                if manager is None or manager.company_id != company_uuid:
                     raise ValueError(f"Manager not in this company: {new_manager_id!r}")
 
         if new_manager_id is not None and new_manager_id != node.reports_to:
@@ -264,8 +283,8 @@ class AgentOrgService:
             node.title = title
         if capabilities is not None:
             node.capabilities = capabilities
-        if company_id is not None:
-            node.company_id = company_id
+        if company_uuid is not None:
+            node.company_id = company_uuid
 
         await self.session.flush()
         logger.info(
@@ -319,12 +338,13 @@ class AgentOrgService:
         #
         # Absent, not forbidden: a distinct error would tell an unauthorised
         # caller that an agent exists in a company they cannot see.
-        if company_id is not None:
-            if node is not None and str(node.company_id) != str(company_id):
+        company_uuid = _normalise_company_id(company_id)
+        if company_uuid is not None:
+            if node is not None and node.company_id != company_uuid:
                 raise ValueError(f"Agent not found in org hierarchy: {agent_id!r}")
             if reports_to is not None:
                 manager = await self.get_node(reports_to)
-                if manager is None or str(manager.company_id) != str(company_id):
+                if manager is None or manager.company_id != company_uuid:
                     raise ValueError(f"Manager not in this company: {reports_to!r}")
 
         if node is None:
@@ -336,7 +356,7 @@ class AgentOrgService:
                 reports_to=reports_to,
                 title=title,
                 capabilities=capabilities,
-                company_id=company_id,
+                company_id=company_uuid,
             )
             self.session.add(node)
             logger.info(
@@ -354,7 +374,7 @@ class AgentOrgService:
             if capabilities is not None:
                 node.capabilities = capabilities
             if company_id is not None:
-                node.company_id = company_id
+                node.company_id = company_uuid
             logger.info("Updated org node agent_id=%s", agent_id)
 
         await self.session.flush()
