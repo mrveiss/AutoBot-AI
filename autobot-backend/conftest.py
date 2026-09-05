@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from autobot_shared.ssot_config import config
+from testkit.auth_middleware_stub import install_auth_middleware_stub
 
 # Ensure autobot-backend and autobot_shared are importable
 project_root = Path(__file__).parent.parent
@@ -811,102 +812,11 @@ if "llm_shared" not in sys.modules:
     if _sc_mod is not None and hasattr(_sc_mod, "SemanticLLMCache"):
         _llm_stub.SemanticLLMCache = _sc_mod.SemanticLLMCache  # type: ignore[attr-defined]
 
-# auth_middleware stub — the real module pulls in the full config/Redis chain
-# at import time (config.manager, error_catalog, etc.) which fails in the dev
-# venv.  Every name exported here must be a real callable with a real
-# signature, because routers capture them in ``Depends(...)`` at import time.
-if "auth_middleware" not in sys.modules:
-    from fastapi import Request as _FastAPIRequest
-
-    _auth_stub = types.ModuleType("auth_middleware")
-    _auth_stub.__path__ = []  # type: ignore[attr-defined]
-    _auth_stub.__package__ = "auth_middleware"
-
-    # get_current_user must be a real callable, not a bare MagicMock (#13253).
-    # ``inspect.signature(MagicMock())`` is ``(*args, **kwargs)``; FastAPI's
-    # get_dependant() does not skip VAR_POSITIONAL/VAR_KEYWORD parameters, so
-    # both become REQUIRED query parameters. Every request to any router that
-    # declares ``Depends(get_current_user)`` then fails validation with
-    # ``422 {'loc': ['query', 'args'], 'msg': 'Field required'}`` before the
-    # handler ever runs — same failure mode as #10472 below.
-    # The ``request`` parameter is annotated ``Request`` so FastAPI injects it
-    # instead of treating it as a request field, and defaults to None so
-    # direct ``get_current_user()`` call sites keep working.
-    def _get_current_user_stub(request: _FastAPIRequest = None) -> dict:  # type: ignore[assignment] # noqa: E301
-        return {
-            "username": "test-user",
-            "user_id": "test-user",
-            "role": "admin",
-            "auth_method": "stub",
-        }
-
-    _auth_stub.get_current_user = _get_current_user_stub  # type: ignore[attr-defined]
-
-    # check_admin_permission must be a proper no-arg callable so FastAPI can
-    # inspect its signature at route-registration time without producing spurious
-    # (*args, **kwargs) query parameters (#10472).
-    def _check_admin_permission_stub():  # noqa: E301
-        return True
-
-    _auth_stub.check_admin_permission = _check_admin_permission_stub  # type: ignore[attr-defined]
-
-    # require_device_jwt is a dependency FACTORY (GH#9493/#11736) invoked at
-    # module import time — it must return a no-arg callable so FastAPI can
-    # inspect the signature at route registration without producing spurious
-    # (*args, **kwargs) query parameters (same rationale as above, #10472).
-    def _require_device_jwt_stub(min_scope: str = "read"):  # noqa: E301
-        def _device_jwt_dep():
-            return {
-                "username": "device:stub-device",
-                "user_id": "stub-user",
-                "role": "device",
-                "device_id": "00000000-0000-0000-0000-000000000000",
-                "scope": min_scope,
-                "auth_method": "device_jwt",
-            }
-
-        return _device_jwt_dep
-
-    _auth_stub.require_device_jwt = _require_device_jwt_stub  # type: ignore[attr-defined]
-
-    # get_auth_middleware must yield a middleware whose get_user_from_request()
-    # returns a REAL dict -- #13253's rule applied to this module's sibling
-    # accessor, which it missed (#14944).
-    #
-    # Without this, the catch-all below hands out a bare MagicMock, so
-    # ``get_auth_middleware().get_user_from_request(request)`` auto-vivifies a
-    # mock "user", and ``user.get("role")`` auto-vivifies another. Nothing
-    # errored, because everything downstream stringified it: the old
-    # ``is_admin_role`` computed ``str(<MagicMock ...>).lower()``, matched
-    # nothing, and returned False. Twelve tests across three shards asserted
-    # non-admin behaviour and passed for that reason rather than on the auth
-    # logic they name. Typing ``role_value`` strictly (#14944) turned that
-    # silent wrong answer into a TypeError, which is how the gap surfaced.
-    #
-    # Only get_user_from_request is pinned. The middleware carries a dozen other
-    # attributes (create_jwt_token, security_layer, enable_auth, ...) that tests
-    # legitimately auto-mock, so the object stays a MagicMock and only the value
-    # whose *shape* is load-bearing is made real -- a fresh dict per call, so a
-    # test mutating it cannot leak into the next.
-    _auth_middleware_stub_instance = MagicMock()
-    _auth_middleware_stub_instance.get_user_from_request.side_effect = (
-        lambda *_args, **_kwargs: _get_current_user_stub()
-    )
-
-    def _get_auth_middleware_stub():  # noqa: E301
-        return _auth_middleware_stub_instance
-
-    _auth_stub.get_auth_middleware = _get_auth_middleware_stub  # type: ignore[attr-defined]
-
-    # NOTE: this catch-all is why the gap above was silent -- a name nobody
-    # stubbed becomes a MagicMock that answers every call rather than an
-    # AttributeError that names the missing stub. It is deliberately left in
-    # place here: `authenticate_websocket`, `verify_internal_api_key` and
-    # `AuthenticationMiddleware` still reach it, and several tests configure
-    # them as mocks, so removing it belongs in its own change with its own CI
-    # run rather than riding along inside an auth fix (#14982).
-    _auth_stub.__getattr__ = lambda attr: MagicMock()  # type: ignore[attr-defined]
-    sys.modules["auth_middleware"] = _auth_stub
+# auth_middleware stub -- moved to testkit/auth_middleware_stub.py (#14982,
+# #13257) so removing the module's auto-vivifying __getattr__ catch-all did
+# not grow this file past its grandfathered line-count ceiling. See that
+# module's docstring for the stub's contract and rationale.
+install_auth_middleware_stub()
 
 # autobot_shared.redis_management stubs — the real package tries to open
 # sockets at import time; tests must not do that.
