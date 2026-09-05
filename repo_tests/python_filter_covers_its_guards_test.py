@@ -36,6 +36,14 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _FILTER = _REPO_ROOT / ".github" / "filters" / "python-paths.yml"
 _GUARD_DIR = _REPO_ROOT / "repo_tests"
 
+#: This module is skipped when sweeping. Its contrast fixtures are path
+#: literals by construction -- a detector proved on real-looking paths is the
+#: only kind worth having -- so scanning itself would attribute reads to a
+#: guard that only ever writes those strings into a tmp_path. The narrow
+#: exclusion is deliberate: a general "ignore strings that look like fixtures"
+#: rule is not decidable, and would quietly shrink the sweep everywhere.
+_SELF = Path(__file__).name
+
 #: A repo-relative path mentioned in a guard's source. Deliberately anchored on
 #: a quote: an unquoted match picks up prose and import paths, which are not
 #: reads of the tree.
@@ -90,7 +98,13 @@ def _is_covered(path: str, patterns: list[str]) -> bool:
 def _record(candidate: str, guard: str, patterns: list[str], reads: dict[str, set[str]]) -> None:
     """Note *candidate* as an uncovered read, if it is one."""
     tree = candidate.split("/", 1)[0]
-    if tree in _NOT_A_READ or not (_REPO_ROOT / tree).is_dir():
+    if tree in _NOT_A_READ:
+        return
+    # A repository-ROOT file has no tree component: `_REPO_ROOT / "pyproject.toml"`
+    # yields `pyproject.toml`, whose first segment is a file. Requiring a
+    # directory there dropped every root-level input, so a filter entry naming
+    # one could be deleted with nothing detecting the bypass.
+    if "/" in candidate and not (_REPO_ROOT / tree).is_dir():
         return
     if not (_REPO_ROOT / candidate).is_file():
         return  # a prefix or a glob, not a file this guard reads
@@ -104,6 +118,8 @@ def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
     reads: dict[str, set[str]] = {}
     parsed = 0
     for path in sorted(_GUARD_DIR.glob("*.py")):
+        if path.name == _SELF:
+            continue  # its fixtures ARE path literals; see _SELF
         source = path.read_text(encoding="utf-8")
         parsed += 1
         composed = (
@@ -207,3 +223,23 @@ def test_composed_paths_are_detected_not_only_quoted_ones(tmp_path: Path) -> Non
 def test_a_composed_path_with_no_repo_root_base_is_ignored() -> None:
     """The contrast: only a `_REPO_ROOT`-anchored chain is a repository read."""
     assert not _COMPOSED_PATH.findall('X = somewhere / "docker" / "with-secrets.sh"')
+
+
+def test_a_repository_root_file_is_recorded_not_skipped() -> None:
+    """A root-level input has no tree, and must not fall out of the sweep.
+
+    `_REPO_ROOT / "pytest.ini"` yields the candidate `pytest.ini`, whose first
+    segment is a file rather than a directory. Requiring a directory there
+    dropped every root-level input, so a filter entry naming one could be
+    deleted with nothing detecting the bypass.
+    """
+    reads: dict[str, set[str]] = {}
+    _record("pytest.ini", "some_guard_test.py", [], reads)
+    assert reads == {"pytest.ini": {"some_guard_test.py"}}
+
+
+def test_a_root_level_name_that_is_not_a_file_is_ignored() -> None:
+    """The contrast: a bare word is not a repository read."""
+    reads: dict[str, set[str]] = {}
+    _record("notafile", "some_guard_test.py", [], reads)
+    assert reads == {}

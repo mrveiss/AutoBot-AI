@@ -26,7 +26,7 @@ Editing rules:
 * an entry is removed when the filter covers it, never to silence a failure
 """
 
-#: Measured on the sweep that added this guard: 179 guards parsed, 24 of their
+#: Measured on the sweep that added this guard: 178 guards parsed, 27 of their
 #: inputs uncovered. The ansible tree is NOT here -- #15713 covered it in the
 #: same change, because it had already broken `Dev_new_gui` once (#15704) and
 #: eighteen guards read it, which is the largest concentration in the repo.
@@ -56,6 +56,12 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         "docker/generate-secrets.sh",
         "docker/secrets-init.sh",
         "docker/with-secrets.sh",
+        # Repository-root configuration. These have no tree component at all,
+        # which is why the sweep missed them until #15713's review: a guard
+        # reading pytest.ini is bypassed by editing pytest.ini.
+        ".dockerignore",
+        ".pre-commit-config.yaml",
+        "pytest.ini",
         # The constraints SSOT, and docs a guard reads for cross-link integrity.
         "constraints/shared.txt",
         "docs/audit/python_314_consistency.md",
@@ -67,4 +73,4 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 
 #: DOWN-ONLY ceiling. NEVER raise this to let a new uncovered read through:
 #: either widen the filter, or the guard has become the thing it replaced.
-MAX_UNCOVERED_READS = 24
+MAX_UNCOVERED_READS = 27
