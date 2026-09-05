@@ -298,6 +298,46 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_LOG_FLOOD_ENABLED",
+        type=bool,
+        default=True,
+        description="Bound how many identical WARNING/ERROR records one call site may emit per window (#15774).",
+        component="logging",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LOG_FLOOD_THRESHOLD",
+        type=int,
+        default=5,
+        description="Records one log call site may emit per flood window before the rest are suppressed.",
+        component="logging",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LOG_FLOOD_WINDOW_SECONDS",
+        type=int,
+        default=60,
+        description="Length of the log-flood suppression window, in seconds.",
+        component="logging",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LOG_FLOOD_MAX_KEYS",
+        type=int,
+        default=2048,
+        description="Maximum distinct call sites tracked by the log-flood guard before least-recent eviction.",
+        component="logging",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_LOG_VIEWER_URL",
         type=str,
         default="http://localhost:5341",

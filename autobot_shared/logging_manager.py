@@ -11,6 +11,8 @@ import logging
 import logging.handlers
 import os
 import threading
+import time
+from collections import OrderedDict
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 
@@ -24,6 +26,91 @@ _logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for log types
 _LOG_TYPES = ("backend", "frontend", "llm", "debug", "audit")
+
+# Log-flood suppression (#15774). A hot failure path -- a retry loop against a
+# dependency that is down -- logs once per attempt with no ceiling, so a
+# recoverable outage fills the disk and takes every other service on the node
+# with it. Bound how much one repeating call site can emit per window.
+# ssot-config-exempt: pre-init logging -- this module must not import config
+# (see _get_config_manager), so the knobs are env-var-backed module constants.
+_FLOOD_ENABLED = os.getenv("AUTOBOT_LOG_FLOOD_ENABLED", "true").strip().lower() not in ("0", "false", "no", "off")
+_FLOOD_THRESHOLD = max(1, int(os.getenv("AUTOBOT_LOG_FLOOD_THRESHOLD", "5")))
+_FLOOD_WINDOW_SECONDS = float(os.getenv("AUTOBOT_LOG_FLOOD_WINDOW_SECONDS", "60"))
+_FLOOD_MAX_KEYS = max(1, int(os.getenv("AUTOBOT_LOG_FLOOD_MAX_KEYS", "2048")))
+
+
+class LogFloodSuppressionFilter(logging.Filter):
+    """Cap the records one repeating log site emits per window (#15774).
+
+    Applied to WARNING and ERROR only: DEBUG/INFO are already rate-limited by
+    the level itself, and CRITICAL is never suppressed -- losing the one line
+    that explains an outage is worse than the disk cost of printing it.
+
+    The suppression key is the message *template* plus the call site, never the
+    formatted message, so ``logger.error("redis down: %s", attempt)`` collapses
+    to one key instead of minting a new one per attempt.
+    """
+
+    def __init__(
+        self,
+        threshold: int = _FLOOD_THRESHOLD,
+        window_seconds: float = _FLOOD_WINDOW_SECONDS,
+        max_keys: int = _FLOOD_MAX_KEYS,
+    ) -> None:
+        super().__init__()
+        self._threshold = max(1, threshold)
+        self._window = window_seconds
+        self._max_keys = max(1, max_keys)
+        # key -> [window_start, seen_in_window, emitted_in_window]
+        self._state: "OrderedDict[tuple, list]" = OrderedDict()
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _key(record: logging.LogRecord) -> tuple:
+        return (record.name, record.levelno, str(record.msg), record.pathname, record.lineno)
+
+    def _evict(self) -> None:
+        """Bound the state map so the guard cannot itself leak memory."""
+        while len(self._state) > self._max_keys:
+            self._state.popitem(last=False)
+
+    @staticmethod
+    def _annotate(record: logging.LogRecord, suppressed: int) -> None:
+        """Carry the suppressed count on the first record of the next window."""
+        record.flood_suppressed = suppressed
+        if isinstance(record.msg, str):
+            record.msg = f"{record.msg} [log-flood guard: {suppressed} identical records suppressed]"
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.CRITICAL or record.levelno < logging.WARNING:
+            return True
+
+        now = time.monotonic()
+        key = self._key(record)
+        with self._lock:
+            entry = self._state.get(key)
+            if entry is None or (now - entry[0]) >= self._window:
+                suppressed = 0 if entry is None else entry[1] - entry[2]
+                self._state[key] = [now, 1, 1]
+                self._state.move_to_end(key)
+                self._evict()
+                if suppressed > 0:
+                    self._annotate(record, suppressed)
+                return True
+
+            entry[1] += 1
+            if entry[2] < self._threshold:
+                entry[2] += 1
+                return True
+            return False
+
+
+_flood_filter: LogFloodSuppressionFilter | None = LogFloodSuppressionFilter() if _FLOOD_ENABLED else None
+
+
+def get_flood_filter() -> LogFloodSuppressionFilter | None:
+    """The process-wide flood guard, or ``None`` when disabled by env."""
+    return _flood_filter
 
 
 def _get_config_manager() -> "ConfigManager":
@@ -153,6 +240,12 @@ class LoggingManager:
             # through to the "INFO" default regardless of configuration.
             log_level = getattr(logging, _get_config_manager().get_nested("logging.log_level", "INFO").upper())
             logger.setLevel(log_level)
+
+            # Flood guard (#15774): attached to the logger, not the handlers,
+            # so one filter covers the file, stdout and stderr handlers at once.
+            if _flood_filter is not None and not getattr(logger, "_autobot_flood_guarded", False):
+                logger.addFilter(_flood_filter)
+                logger._autobot_flood_guarded = True  # type: ignore[attr-defined]
 
             cls._loggers[logger_key] = logger
             return logger
