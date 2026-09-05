@@ -17,7 +17,6 @@ Features:
 - Evolution reports and visualizations
 """
 
-import os
 import subprocess  # nosec B404  # read-only git log for co-change coupling (#13639)
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
