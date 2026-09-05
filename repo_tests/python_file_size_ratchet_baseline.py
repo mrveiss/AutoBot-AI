@@ -425,7 +425,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/tests/unit/knowledge/connectors/test_web_crawler.py": 655,
     "autobot-backend/tests/utils/gpu_optimization/test_gpu_detection.py": 763,
     "autobot-backend/tools/tool_registry.py": 959,
-    "autobot-backend/user_management/services/user_service.py": 902,  # #15772: SAVEPOINT insert call, race handled in user_service_conflict.py
+    "autobot-backend/user_management/services/user_service.py": 900,  # #15772: SAVEPOINT insert call, race handled in user_service_conflict.py
     "autobot-backend/utils/advanced_cache_manager.py": 1213,
     "autobot-backend/utils/claude_api_integration.py": 917,
     "autobot-backend/utils/distributed_service_discovery.py": 684,

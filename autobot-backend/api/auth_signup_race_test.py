@@ -37,9 +37,12 @@ from user_management.models.base import Base
 from user_management.services.user_service import UserService
 
 _SQLITE_URL = "sqlite+aiosqlite://"  # canonical: ignore py-adhoc-db-engine (test-local engine, in-memory only)
-_TEST_CREDENTIAL = "".join(
-    ["Sup3r", "Secret", "Val1"]
-)  # not a real credential -- assembled to dodge the secret-scan hook
+# Generated per run rather than written as a literal. An earlier version of this
+# line assembled the string from fragments with a comment saying it was done to
+# dodge the secret-scan hook -- which is a working recipe for getting a real
+# secret past that hook, committed next to an explanation of how. There is no
+# credential-shaped literal here to detect, so nothing is being evaded.
+_TEST_CREDENTIAL = f"pytest-{uuid.uuid4().hex[:16]}Aa1!"
 
 
 @compiles(JSONB, "sqlite")
