@@ -20,10 +20,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from _scan_helpers import scan_python_files  # noqa: E402
 from check_git_toplevel_env_scrubbed import (  # noqa: E402
     ALLOWLIST,
+    GIT_CALL_FLOOR,
     main,
     scan,
+    scan_with_counts,
     subprocess_names,
 )
 
@@ -212,8 +215,99 @@ def test_prose_mentioning_the_flag_is_not_a_finding(tmp_path: Path) -> None:
     assert scan(_write(tmp_path, _PROSE_ONLY), tmp_path) == []
 
 
-def test_other_git_subprocesses_are_left_alone(tmp_path: Path) -> None:
-    assert scan(_write(tmp_path, _OTHER_GIT_CALL), tmp_path) == []
+def test_other_git_subprocesses_are_reported_in_production_code(tmp_path: Path) -> None:
+    """#15783 widened the gate: in production, every git call must say env=."""
+    findings = scan(_write(tmp_path, _OTHER_GIT_CALL), tmp_path)
+    assert len(findings) == 1
+    assert "#15783" in findings[0][1]
+
+
+def test_other_git_subprocesses_are_left_alone_in_tests(tmp_path: Path) -> None:
+    """The contrast: a test reading the real repository on purpose is ordinary.
+
+    Without this half the widened gate would read as "gate everything", which
+    is the version that forces an allowlist entry onto every
+    ``repo_tests/*_anchoring_test.py`` and gets switched off a month later.
+    Test-side *writes* are covered instead by check_git_write_env_scrubbed.
+    """
+    assert scan(_write(tmp_path, _OTHER_GIT_CALL, name="sample_test.py"), tmp_path) == []
+    assert scan(_write(tmp_path, _OTHER_GIT_CALL, name="test_sample.py"), tmp_path) == []
+
+
+def test_the_wrapper_gap_is_closed_for_the_call_itself(tmp_path: Path) -> None:
+    """A ``def git(*args): subprocess.run(["git", *args])`` wrapper is caught.
+
+    It used to be a documented gap outright. The flag half is still invisible —
+    the guard cannot attribute ``--show-toplevel`` supplied by a caller — but
+    the wrapper's own unscrubbed git call is now a finding, which is the half
+    that carries the defect.
+    """
+    findings = scan(_write(tmp_path, _WRAPPER), tmp_path)
+    assert len(findings) == 1
+    assert "#15783" in findings[0][1]
+
+
+_ASYNC_UNSCRUBBED = """
+import asyncio
+
+async def status(path):
+    proc = await asyncio.create_subprocess_exec("git", "-C", path, "status", "--porcelain")
+    return await proc.communicate()
+"""
+
+_ASYNC_SCRUBBED = """
+import asyncio
+
+from autobot_shared.paths import scrubbed_git_env
+
+async def status(path):
+    proc = await asyncio.create_subprocess_exec(
+        "git", "-C", path, "status", "--porcelain", env=scrubbed_git_env()
+    )
+    return await proc.communicate()
+"""
+
+_ASYNC_ALIASED = """
+import asyncio as aio
+
+async def status(path):
+    return await aio.create_subprocess_exec("git", "-C", path, "status")
+"""
+
+
+def test_asyncio_git_call_is_a_finding(tmp_path: Path) -> None:
+    """The #15777 shape: the fourth recurrence was an async call site."""
+    findings = scan(_write(tmp_path, _ASYNC_UNSCRUBBED), tmp_path)
+    assert len(findings) == 1
+    assert "#15783" in findings[0][1]
+
+
+def test_scrubbed_asyncio_git_call_is_accepted(tmp_path: Path) -> None:
+    assert scan(_write(tmp_path, _ASYNC_SCRUBBED), tmp_path) == []
+
+
+def test_asyncio_alias_is_resolved(tmp_path: Path) -> None:
+    assert len(scan(_write(tmp_path, _ASYNC_ALIASED), tmp_path)) == 1
+
+
+def test_discovered_count_rises_with_git_call_sites(tmp_path: Path) -> None:
+    """The vacuity floor counts what was inspected, not what was wrong."""
+    _, none_found = scan_with_counts(_write(tmp_path, _PROSE_ONLY), tmp_path)
+    _, one_found = scan_with_counts(_write(tmp_path, _OTHER_GIT_CALL, name="a.py"), tmp_path)
+    _, scrubbed_still_counts = scan_with_counts(_write(tmp_path, _SCRUBBED, name="b.py"), tmp_path)
+
+    assert none_found == 0
+    assert one_found == 1
+    assert scrubbed_still_counts == 1, "a compliant call site is still a call site inspected"
+
+
+def test_the_repository_is_above_the_discovered_floor() -> None:
+    """A sweep that parses nothing reports clean; this is what catches that."""
+    repo_root = Path(__file__).resolve().parents[2]
+    py_files, _ = scan_python_files([], repo_root)
+    discovered = sum(scan_with_counts(path, repo_root)[1] for path in py_files)
+
+    assert discovered >= GIT_CALL_FLOOR, f"only {discovered} git call sites reached"
 
 
 def test_unscrubbed_ls_files_is_a_finding(tmp_path: Path) -> None:
@@ -309,7 +403,6 @@ def test_the_bare_name_stays_covered_when_nothing_imports_it() -> None:
     ("gap", "source"),
     [
         ("argv built through a variable", _VARIABLE_ARGV),
-        ("flag supplied to a wrapper by its caller", _WRAPPER),
         ("a locally shadowed scrubbed_git_env", _SHADOWED_SCRUB_HELPER),
     ],
 )

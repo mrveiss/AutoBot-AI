@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import scrubbed_git_env
 from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
@@ -380,6 +381,7 @@ class PrecommitAnalyzer:
                 text=True,
                 timeout=10,
                 cwd=str(self.project_root),
+                env=scrubbed_git_env(),
             )
             if result.returncode == 0:
                 return [f for f in result.stdout.strip().split("\n") if f]
@@ -398,6 +400,7 @@ class PrecommitAnalyzer:
                 text=True,
                 timeout=5,
                 cwd=str(self.project_root),
+                env=scrubbed_git_env(),
             )
             if result.returncode == 0:
                 return result.stdout

@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Callable, Dict, List
 
 from autobot_shared.env_utils import env_float, env_float_clamped, env_int_clamped
+from autobot_shared.paths import scrubbed_git_env
 from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
 from services.inventory_builder import (
@@ -584,6 +585,7 @@ class PlaybookExecutor:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
+            env=scrubbed_git_env(),
         )
         try:
             await asyncio.wait_for(proc.communicate(), timeout=GIT_COMMAND_TIMEOUT_S)
@@ -611,6 +613,7 @@ class PlaybookExecutor:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
+            env=scrubbed_git_env(),
         )
         try:
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=GIT_REV_PARSE_TIMEOUT_S)

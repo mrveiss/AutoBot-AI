@@ -26,6 +26,7 @@ from typing import Dict, List
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import scrubbed_git_env
 from code_intelligence.anti_pattern_detector import AntiPatternDetector
 
 logger = get_logger(__name__)
@@ -112,8 +113,15 @@ def git_env() -> dict:
     ``_run_git`` passes ``-C`` and runs ``log``/``show`` against a path that is
     already on disk. Nothing here clones, fetches or authenticates, so no
     ``GIT_SSH_*`` or credential variable is load-bearing.
+
+    Built on :func:`autobot_shared.paths.scrubbed_git_env` since #15783 rather
+    than beside it. The canonical helper removes the four variables measured to
+    override ``-C``/``cwd=``; this narrows further to every ``GIT_`` name for
+    the reason above. Composing keeps one implementation of "what the ambient
+    environment is" while leaving this module's stricter policy visible where
+    the policy is decided.
     """
-    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    return {k: v for k, v in scrubbed_git_env().items() if not k.startswith("GIT_")}
 
 
 #: Back-compat alias — this module's own call site and the tests both import it.
@@ -172,7 +180,7 @@ def _run_git(repo_path: str, *args: str) -> str:
             errors="replace",
             timeout=_GIT_TIMEOUT_SECONDS,
             check=False,
-            env=_git_env(),
+            env=git_env(),
         )
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
         logger.warning("git %s failed in %s: %s", args, repo_path, exc)

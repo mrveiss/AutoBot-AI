@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""``git rev-parse --show-toplevel`` must run with the git environment scrubbed (#15176, #15245).
+"""A git subprocess must say what environment it wants (#15176, #15245, #15783).
 
 A git hook run in a **worktree** — this repository's entire workflow — is handed
 ``GIT_DIR=<main>/.git/worktrees/<name>`` and no ``GIT_WORK_TREE`` (measured on
@@ -31,6 +31,28 @@ the rule here is not "scrub it somehow" but "go through the one helper":
 A call is accepted when it passes ``env=scrubbed_git_env(...)`` explicitly —
 that is what ``git_repo_root`` itself does, and it keeps the helper from having
 to exempt itself.
+
+THREE GATE CLASSES
+------------------
+1. ``--show-toplevel`` and ``git ls-files``, in **any** Python or shell file —
+   the original scope (#15176, #14896).
+2. **Any** git subprocess in **production** Python — widened by #15783 after a
+   fourth independent fix for one defect. ``GIT_DIR`` outranks both ``-C`` and
+   ``cwd=``, so an inherited environment silently redirects the call, and the
+   four fixes were each written by someone who had not read the previous three.
+   The fourth is the one that shows why a subcommand allowlist was never going
+   to be enough: a destructive-delete guard's ``git status`` answered about a
+   different tree, so the guard did not fail — it *consented*.
+3. ``asyncio.create_subprocess_exec``/``_shell``, alongside ``subprocess`` —
+   the fourth recurrence lived in one, invisible to a scanner that knew only
+   ``subprocess``.
+
+Test files are deliberately outside class 2: reading the real repository on
+purpose is ordinary there (``repo_tests/*_anchoring_test.py`` enumerate the
+tracked tree), and test-side *writes* are already gated by
+``check_git_write_env_scrubbed.py``. Gating both halves everywhere would force
+an allowlist entry onto dozens of correct call sites, which is how a guard
+gets switched off.
 
 SCOPE, AND WHAT IS DELIBERATELY NOT SCOPED
 ------------------------------------------
@@ -76,9 +98,12 @@ by tests rather than half-implemented.
   call node's arguments hold a ``Name``, not the string. This is the gap most
   likely to be reached by accident, since it is an ordinary refactor rather
   than an evasion.
-* **Wrappers.** A helper that receives the flag from its caller —
-  ``def git(*args): subprocess.run(["git", *args])`` — carries no literal at
-  the call node either.
+* **Wrappers, half-closed.** ``def git(*args): subprocess.run(["git", *args])``
+  used to be invisible entirely. Since #15783 the wrapper's own call is a
+  finding, because ``argv[0]`` is still the literal ``"git"`` — what remains
+  invisible is only the *flag* a caller supplies through it, so a
+  ``--show-toplevel`` routed that way is reported as an inherited-environment
+  finding rather than as a toplevel one. Same fix either way.
 * **A shadowed scrub helper.** ``_scrubs`` accepts ``env=`` whose callee is
   *named* ``scrubbed_git_env``; it does not verify the name resolves to
   ``autobot_shared.paths``. A locally defined function of that name satisfies
@@ -115,6 +140,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _scan_helpers import EXCLUDED_DIR_NAMES, enforce_reach, scan_python_files  # noqa: E402
 
+
 #: The canonical scrubbing helper, ``autobot_shared.paths.scrubbed_git_env``.
 SCRUB_HELPER = "scrubbed_git_env"
 
@@ -126,6 +152,15 @@ SHELL_HELPER = "git_repo_root"
 
 #: Name this guard reports under.
 HOOK_ID = "git-toplevel-env-scrubbed"
+
+#: Floor for git call sites *discovered* by a full-repo sweep -- not for
+#: violations found. 209 call sites were reachable when #15783 landed, so this
+#: sits ~28% below the real count: ordinary churn never trips it, while a sweep
+#: that loses its reach (wrong root, inverted filter, a pre-gate that stops
+#: matching) lands under it and fails instead of printing a clean line. The
+#: distinction is the point: a guard bound to violations reports success most
+#: loudly exactly when it has stopped working.
+GIT_CALL_FLOOR = 150
 
 #: The flag whose answer depends on the work tree git thinks it has.
 TOPLEVEL_FLAG = "--show-toplevel"
@@ -154,6 +189,23 @@ GATED_TOKENS = {
 
 #: ``subprocess`` entry points that start a process.
 _SUBPROCESS_CALLS = frozenset({"run", "Popen", "call", "check_call", "check_output"})
+
+#: ``asyncio``'s process starters. Added by #15783 after the fourth recurrence
+#: landed in one: a delete guard's ``asyncio.create_subprocess_exec("git",
+#: "status", ...)`` inherited ``GIT_DIR`` and reported another repository's
+#: 9890 uncommitted changes. An async call site carries the identical defect
+#: and was invisible to a scanner that only knew ``subprocess``.
+_ASYNC_SUBPROCESS_CALLS = frozenset({"create_subprocess_exec", "create_subprocess_shell"})
+
+#: Message for the widened gate: any git subprocess in production code that
+#: does not say what environment it wants.
+INHERITED_ENV_MESSAGE = (
+    "git subprocess inheriting the caller's environment. GIT_DIR outranks both "
+    "`-C` and `cwd=`, so this answers about whatever repository the environment "
+    "names -- a wrong answer with a zero exit code. Pass "
+    "`env=scrubbed_git_env()` (autobot_shared.paths). Fixed four times before "
+    "this gate existed: #13882/#13983, #15176, #15245/#15303, #15777 (#15783)."
+)
 
 #: Files allowed to call ``--show-toplevel`` with an environment that is NOT
 #: scrubbed, POSIX-relative to the repository root. Each entry is a call that
@@ -214,6 +266,29 @@ def subprocess_names(tree: ast.AST) -> Tuple[Set[str], Set[str]]:
     return modules, functions
 
 
+def asyncio_names(tree: ast.AST) -> Tuple[Set[str], Set[str]]:
+    """``(asyncio aliases, directly imported starters)`` bound in *tree*.
+
+    Deliberately separate from :func:`subprocess_names` rather than folded into
+    it. ``check_git_write_env_scrubbed`` imports that function and pairs it with
+    its own call set, which contains ``run`` -- seeding ``"asyncio"`` into the
+    modules it receives would make every ``asyncio.run(...)`` look like a
+    process start over there. Two functions cost less than that blast radius.
+    """
+    modules: Set[str] = {"asyncio"}
+    functions: Set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "asyncio":
+                    modules.add(alias.asname or alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module == "asyncio":
+            for alias in node.names:
+                if alias.name in _ASYNC_SUBPROCESS_CALLS:
+                    functions.add(alias.asname or alias.name)
+    return modules, functions
+
+
 def _is_subprocess_call(node: ast.Call, modules: Set[str], functions: Set[str]) -> bool:
     func = node.func
     if isinstance(func, ast.Attribute) and func.attr in _SUBPROCESS_CALLS:
@@ -221,6 +296,54 @@ def _is_subprocess_call(node: ast.Call, modules: Set[str], functions: Set[str]) 
     if isinstance(func, ast.Name):
         return func.id in functions
     return False
+
+
+def _is_async_subprocess_call(node: ast.Call, modules: Set[str], functions: Set[str]) -> bool:
+    func = node.func
+    if isinstance(func, ast.Attribute) and func.attr in _ASYNC_SUBPROCESS_CALLS:
+        return isinstance(func.value, ast.Name) and func.value.id in modules
+    if isinstance(func, ast.Name):
+        return func.id in functions
+    return False
+
+
+def _is_git_argv(node: ast.Call) -> bool:
+    """True when the call's first argument names ``git`` as argv[0].
+
+    Covers the three spellings that reach a process: a list/tuple
+    (``subprocess.run(["git", ...])``), a bare positional
+    (``asyncio.create_subprocess_exec("git", ...)``), and a command string
+    (``subprocess.run("git status", shell=True)``). Argv built through a
+    variable stays invisible -- the same documented gap as the token scan.
+    """
+    if not node.args:
+        return False
+    first = node.args[0]
+    if isinstance(first, (ast.List, ast.Tuple)) and first.elts:
+        head = first.elts[0]
+        return isinstance(head, ast.Constant) and isinstance(head.value, str) and _names_git(head.value)
+    if isinstance(first, ast.Constant) and isinstance(first.value, str):
+        return _names_git(first.value.split()[0] if first.value.split() else "")
+    return False
+
+
+def _names_git(argv0: str) -> bool:
+    return argv0 == "git" or argv0.endswith("/git")
+
+
+def is_production_path(rel: str) -> bool:
+    """True for a path that is neither a test module nor a test directory.
+
+    The split matters because the two halves have different correct answers. A
+    test reading the real repository on purpose is ordinary -- and its *writes*
+    are already gated by ``check_git_write_env_scrubbed`` -- whereas production
+    code has no reason to inherit a git environment it never set. Production is
+    also where all four recurrences landed with nothing watching.
+    """
+    name = rel.rsplit("/", 1)[-1]
+    if name.endswith("_test.py") or name.startswith("test_"):
+        return False
+    return "/tests/" not in f"/{rel}"
 
 
 def _gated_token(node: ast.Call) -> str | None:
@@ -275,39 +398,69 @@ def _scrubs(node: ast.Call, accepted: Set[str]) -> bool:
     return False
 
 
-def scan(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
-    """Return ``(line, message)`` for every unscrubbed ``--show-toplevel`` call."""
+#: Substrings that make a file worth parsing. The first two are the original
+#: token gates; the rest are the spellings of ``git`` as argv[0], which is what
+#: the widened gate keys on.
+_CHEAP_GATE = tuple(GATED_TOKENS) + ('"git"', "'git'", '"git ', "'git ")
+
+
+def scan_with_counts(path: Path, repo_root: Path) -> Tuple[List[Tuple[int, str]], int]:
+    """``(findings, git call sites discovered)`` for one file.
+
+    The count is the guard's vacuity floor: a full-repo sweep that finds no
+    violations is only good news if it actually looked at git call sites, and
+    a scanner that silently stops parsing reports exactly the same clean line
+    as a clean tree (#15783).
+    """
     try:
         rel = path.resolve().relative_to(repo_root.resolve()).as_posix()
     except ValueError:
         rel = path.as_posix()
     if rel in ALLOWLIST:
-        return []
+        return [], 0
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        return []
+        return [], 0
     # Cheap gate before the expensive one: full-repo mode walks every tracked
     # .py file, and AST-parsing all of them costs ~20s where a substring test
     # over the same set costs under one.
-    if not any(token in text for token in GATED_TOKENS):
-        return []
+    if not any(token in text for token in _CHEAP_GATE):
+        return [], 0
     try:
         tree = ast.parse(text)
     except SyntaxError:
         # A file that does not parse is another hook's finding, not this one's.
-        return []
+        return [], 0
     modules, functions = subprocess_names(tree)
+    async_modules, async_functions = asyncio_names(tree)
     accepted = {SCRUB_HELPER} | scrub_wrappers(tree)
+    production = is_production_path(rel)
     findings: List[Tuple[int, str]] = []
+    discovered = 0
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or not _is_subprocess_call(node, modules, functions):
+        if not isinstance(node, ast.Call):
+            continue
+        if not (
+            _is_subprocess_call(node, modules, functions)
+            or _is_async_subprocess_call(node, async_modules, async_functions)
+        ):
             continue
         token = _gated_token(node)
-        if token is None or _scrubs(node, accepted):
+        if _is_git_argv(node):
+            discovered += 1
+        if _scrubs(node, accepted):
             continue
-        findings.append((node.lineno, GATED_TOKENS[token]))
-    return findings
+        if token is not None:
+            findings.append((node.lineno, GATED_TOKENS[token]))
+        elif production and _is_git_argv(node):
+            findings.append((node.lineno, INHERITED_ENV_MESSAGE))
+    return findings, discovered
+
+
+def scan(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
+    """Findings only -- :func:`scan_with_counts` without the vacuity count."""
+    return scan_with_counts(path, repo_root)[0]
 
 
 def iter_shell_files(args: List[str], repo_root: Path) -> Iterable[Path]:
@@ -385,7 +538,18 @@ def main(argv: List[str] | None = None) -> int:
     ):
         return 1
     total = 0
-    for path, scanner in [(p, scan) for p in py_files] + [(p, scan_shell) for p in sh_files]:
+    discovered = 0
+    for path in py_files:
+        file_findings, file_discovered = scan_with_counts(path, repo_root)
+        discovered += file_discovered
+        for line_no, message in file_findings:
+            try:
+                rel = path.resolve().relative_to(repo_root).as_posix()
+            except ValueError:
+                rel = path.as_posix()
+            print(f"[{HOOK_ID}] {rel}:{line_no}: {message}", file=sys.stderr)  # noqa: print
+            total += 1
+    for path, scanner in [(p, scan_shell) for p in sh_files]:
         for line_no, message in scanner(path, repo_root):
             try:
                 rel = path.resolve().relative_to(repo_root).as_posix()
@@ -395,10 +559,15 @@ def main(argv: List[str] | None = None) -> int:
             total += 1
     if total:
         print(  # noqa: print
-            f"\n[git-toplevel-env-scrubbed] {total} unscrubbed call(s). "
-            "Resolve the repository root with autobot_shared.paths.git_repo_root() (#15176).",
+            f"\n[{HOOK_ID}] {total} unscrubbed call(s). "
+            "Resolve the repository root with autobot_shared.paths.git_repo_root() (#15176), "
+            "or pass env=scrubbed_git_env() for any other git subprocess (#15783).",
             file=sys.stderr,
         )
+        return 1
+    # Enforced last, and only on a clean full-repo run: "no findings" is the
+    # one result a scanner that parsed nothing also produces.
+    if enforce_reach(discovered, GIT_CALL_FLOOR, hook=HOOK_ID, full_repo=full_repo):
         return 1
     return 0
 

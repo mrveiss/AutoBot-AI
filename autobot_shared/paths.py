@@ -30,6 +30,7 @@ import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 from collections.abc import Mapping
 from pathlib import Path
 
+
 #: Markers that identify a source checkout root and nothing below it. Both must
 #: be present: ``autobot_shared`` alone also matches the package directory's own
 #: parent in some layouts, and ``.git`` alone would match an unrelated repo if
@@ -236,7 +237,37 @@ def scrubbed_git_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
     """*env* (default :data:`os.environ`) minus every :data:`AMBIENT_GIT_VARS` entry.
 
     Use for **any** git subprocess whose answer depends on the work tree, not
-    only ``rev-parse``: ``ls-files`` inherits the same confusion.
+    only ``rev-parse``: ``ls-files`` inherits the same confusion, and so does
+    ``status``.
+
+    THE FAMILY THIS ENDS (#15783)
+    -----------------------------
+    Four independent fixes were written for one defect before anything gated
+    it, each correct and local, none of them preventing the next:
+
+    * #13882 / #13983 — ``code_evolution_miner.git_env()``: a crawler reported
+      another repository's history.
+    * #15176 — two pre-commit guards resolved the wrong root and printed their
+      success line having inspected nothing.
+    * #15245 / #15303 — the same in shell root resolution.
+    * #15777 — a destructive-delete guard's ``git status`` answered about a
+      different tree. That one is the sharpest: the others produced a wrong
+      *answer*, this produced a wrong *permission*, because a guard that asks
+      "is this tree clean?" and hears "yes" about somewhere else does not fail
+      — it consents.
+
+    WHOLESALE VS DENYLIST, DECIDED ONCE
+    -----------------------------------
+    This helper strips the four variables measured to override ``-C``/``cwd=``.
+    A caller that also clones, fetches or authenticates has no reason to keep
+    the rest either, and may narrow further to every ``GIT_`` name — that is
+    what ``code_evolution_miner.git_env()`` does, composing this function
+    rather than repeating it. What is *not* acceptable is a fifth hand-written
+    list: #13882 found one of seven names beside one of nine, both correct for
+    the failure already seen and silently short for the next.
+
+    ``tools/lint/check_git_toplevel_env_scrubbed.py`` is the gate that makes a
+    sixth recurrence a blocked commit rather than a later incident.
     """
     source = os.environ if env is None else env
     return {key: value for key, value in source.items() if key not in AMBIENT_GIT_VARS}

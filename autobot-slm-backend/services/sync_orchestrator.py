@@ -46,6 +46,7 @@ class SyncNodeContext:
 
 # Code cache directory
 from autobot_shared.env_utils import env_int
+from autobot_shared.paths import scrubbed_git_env
 
 CODE_CACHE_DIR = Path(os.environ.get("SLM_CODE_CACHE", "/var/lib/slm/code-cache"))
 
@@ -486,6 +487,7 @@ class SyncOrchestrator:
                 branch,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
+                env=scrubbed_git_env(),
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
             output = stdout.decode("utf-8", errors="replace")
@@ -511,6 +513,7 @@ class SyncOrchestrator:
                 "HEAD",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=scrubbed_git_env(),
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
             commit = stdout.decode("utf-8", errors="replace").strip()

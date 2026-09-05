@@ -89,6 +89,7 @@ def _calculate_threshold_score(value: int, thresholds: list[tuple[int, int]], de
 # ============================================================================
 
 
+from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.status_enums import RiskLevel  # noqa: E402  # #6689 consolidation
 
 
@@ -786,6 +787,7 @@ class BugPredictor(_BaseClass):
                 timeout=TimingConstants.SHORT_TIMEOUT,
                 encoding="utf-8",
                 cwd=self.project_root,
+                env=scrubbed_git_env(),
             )
 
             if result.returncode == 0:
@@ -861,6 +863,7 @@ class BugPredictor(_BaseClass):
                 timeout=TimingConstants.STANDARD_TIMEOUT,
                 encoding="utf-8",
                 cwd=self.project_root,
+                env=scrubbed_git_env(),
             )
 
             if result.returncode != 0:
