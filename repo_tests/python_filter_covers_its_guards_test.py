@@ -119,7 +119,10 @@ def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
     parsed = 0
     for path in sorted(_GUARD_DIR.glob("*.py")):
         if path.name == _SELF:
-            continue  # its fixtures ARE path literals; see _SELF
+            # Skip the TEXT of this module -- its contrast fixtures are path
+            # literals by construction. Its real reads are fed in below, so
+            # skipping it costs no coverage of the module itself.
+            continue
         source = path.read_text(encoding="utf-8")
         parsed += 1
         composed = (
@@ -130,6 +133,13 @@ def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
             _record(candidate, path.name, patterns, reads)
         for candidate in composed:
             _record(candidate, path.name, patterns, reads)
+
+    # This module's own repository reads, taken from the constants rather than
+    # from its source: scanning the source would pick up the fixtures, and
+    # skipping the module entirely would let a non-Python input read HERE fall
+    # outside the filter undetected -- the exact bypass this guard exists for.
+    for own in (_FILTER,):
+        _record(own.relative_to(_REPO_ROOT).as_posix(), _SELF, patterns, reads)
     return reads, parsed
 
 
@@ -243,3 +253,21 @@ def test_a_root_level_name_that_is_not_a_file_is_ignored() -> None:
     reads: dict[str, set[str]] = {}
     _record("notafile", "some_guard_test.py", [], reads)
     assert reads == {}
+
+
+def test_this_modules_own_reads_are_swept() -> None:
+    """Skipping this module's text must not exempt this module.
+
+    Its fixtures are path literals, so the text scan has to skip it -- but a
+    non-Python file read HERE falling outside the filter is the same bypass the
+    guard exists to catch, and excluding the module wholesale would hide it.
+    The real reads are taken from the module's own constants instead, so this
+    asserts the filter file it loads is one the filter covers.
+    """
+    patterns = _filter_patterns()
+    own = _FILTER.relative_to(_REPO_ROOT).as_posix()
+
+    assert _is_covered(own, patterns), (
+        f"{own} is read by this guard on every run but the filter does not cover it — "
+        "editing it would skip the suite that reads it"
+    )
