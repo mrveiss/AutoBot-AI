@@ -57,7 +57,6 @@ from llc.models.enums import (
     WorkItemStatus,
 )
 from llc.models.membership import LLCCompanyMembership
-from llc.services.org_chart_placement import apply_reporting_lines, assemble_forest
 from llc.services.backlog import BacklogService
 from llc.services.company import (
     CompanyBudgetError,
@@ -72,6 +71,7 @@ from llc.services.membership_service import (
     MemberNotFoundError,
     MembershipService,
 )
+from llc.services.org_chart_placement import apply_reporting_lines, assemble_forest
 from llc.services.portability import PortabilityService
 from user_management.database import get_async_session
 from user_management.models.organization import Organization
