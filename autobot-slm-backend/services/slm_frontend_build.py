@@ -32,7 +32,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.env_utils import env_float, env_int_clamped
 from services.deployed_dir_resolver import get_release_component_dir
 
 logger = logging.getLogger(__name__)
@@ -47,8 +47,8 @@ _SLM_FRONTEND_DIR = get_release_component_dir("autobot-slm-frontend")
 # Subprocess ceilings. Env-backed rather than magic numbers at the call site:
 # npm ci and a Vite build are the slow steps, and an install with a cold cache
 # or a slower node legitimately needs longer than this default.
-_CHOWN_TIMEOUT_SECONDS = float(os.getenv("SLM_FRONTEND_CHOWN_TIMEOUT_SECONDS", "30"))
-_NPM_TIMEOUT_SECONDS = float(os.getenv("SLM_FRONTEND_NPM_TIMEOUT_SECONDS", "300"))
+_CHOWN_TIMEOUT_SECONDS = env_float("SLM_FRONTEND_CHOWN_TIMEOUT_SECONDS", 30)
+_NPM_TIMEOUT_SECONDS = env_float("SLM_FRONTEND_NPM_TIMEOUT_SECONDS", 300)
 
 # The #15610 layout, spelled the same way on both halves of the publish:
 # `dist-<build-id>/` per build, `current` the served symlink, `previous` the

@@ -33,6 +33,8 @@ import threading
 import time
 from typing import Any, Dict
 
+from autobot_shared.env_utils import env_float
+
 # stdlib logging avoids circular import: network_constants → config.registry → get_logger
 # → logging_manager → from config import config_manager (partially initialized) GH#7765
 logger = logging.getLogger(__name__)
@@ -45,7 +47,7 @@ REDIS_CONFIG_PREFIX = "autobot:config:"
 # lookup, so a single import that resolves ~29 config keys with Redis
 # unreachable opened 29 connections and tripped the 'main' circuit breaker.
 # Bounded so a Redis that comes up after the config layer is still picked up.
-REDIS_RETRY_INTERVAL_SECONDS = float(os.getenv("AUTOBOT_CONFIG_REGISTRY_REDIS_RETRY_SECONDS", "30"))
+REDIS_RETRY_INTERVAL_SECONDS = env_float("AUTOBOT_CONFIG_REGISTRY_REDIS_RETRY_SECONDS", 30)
 
 
 class ConfigRegistry:

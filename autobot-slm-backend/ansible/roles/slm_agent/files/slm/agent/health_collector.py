@@ -22,6 +22,7 @@ from typing import Dict, List
 
 import psutil
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.service_discovery import SERVICE_DISCOVERY_TTL_S
 from autobot_shared.time_utils import utc_timestamp
@@ -33,7 +34,7 @@ TTS_HEALTH_URL = os.getenv("SLM_AGENT_TTS_HEALTH_URL", "http://127.0.0.1:8083/he
 APP_HEALTH_PROBES: Dict[str, str] = {
     "autobot-tts-worker": TTS_HEALTH_URL,
 }
-APP_HEALTH_TIMEOUT_SECONDS = float(os.getenv("SLM_AGENT_APP_HEALTH_TIMEOUT", "2.0"))
+APP_HEALTH_TIMEOUT_SECONDS = env_float("SLM_AGENT_APP_HEALTH_TIMEOUT", 2.0)
 
 logger = logging.getLogger(__name__)
 

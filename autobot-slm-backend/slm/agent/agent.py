@@ -26,7 +26,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared import env_utils, time_utils
 
 from .health_collector import HealthCollector
 from .port_scanner import get_listening_ports
@@ -70,7 +70,7 @@ def sd_notify(state: str) -> bool:
 logger = logging.getLogger(__name__)
 
 # Local notification server port (for git hooks)
-DEFAULT_NOTIFY_PORT = int(os.getenv("SLM_NOTIFY_PORT", "8000"))
+DEFAULT_NOTIFY_PORT = env_utils.env_int("SLM_NOTIFY_PORT", 8000)
 
 # Standalone agent defaults - agent runs on remote VMs, not AutoBot main host
 # These are configured via CLI args or environment variables at deployment
@@ -174,7 +174,7 @@ class SLMAgent:
         conn = sqlite3.connect(self.buffer_db)
         conn.execute(
             "INSERT INTO event_buffer (timestamp, event_type, data) VALUES (?, ?, ?)",
-            (utc_timestamp(), event_type, json.dumps(data)),
+            (time_utils.utc_timestamp(), event_type, json.dumps(data)),
         )
         conn.commit()
         conn.close()
@@ -579,7 +579,7 @@ class SLMAgent:
                 "node_id": self.node_id,
                 "commit": commit,
                 "is_code_source": True,
-                "timestamp": utc_timestamp(),
+                "timestamp": time_utils.utc_timestamp(),
             }
             async with self._session.post(
                 url,

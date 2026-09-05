@@ -37,6 +37,7 @@ from typing import Any
 
 import aiohttp
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.http_client import get_http_client, sign_request
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ _SERVICE_ID: str = os.getenv("SLM_SERVICE_ID", "slm-backend")
 _SERVICE_KEY: str = os.getenv("SLM_SERVICE_KEY", "")  # HMAC fallback
 _BACKEND_BASE_URL: str = os.getenv("SLM_AUTHORITY_BASE_URL", _ssot_backend_url()).rstrip("/")
 _SYSTEM_VAULT_PATH = "/api/v2/secrets/system"
-_REQUEST_TIMEOUT_SECONDS: float = float(os.getenv("SLM_VAULT_CLIENT_TIMEOUT", "10"))
+_REQUEST_TIMEOUT_SECONDS: float = env_float("SLM_VAULT_CLIENT_TIMEOUT", 10)
 
 
 class VaultClientError(Exception):

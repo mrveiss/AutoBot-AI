@@ -40,17 +40,17 @@ replacement row has been observed in the store.
 from __future__ import annotations
 
 import asyncio
-import os
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Sequence
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
 # Page size for the read-only census walk over the collection. Env-tunable so a
 # large collection can be scanned in smaller bites without a code change.
-SCAN_PAGE_SIZE = max(1, int(os.environ.get("KB_VECTOR_REPAIR_SCAN_PAGE_SIZE", "500")))
+SCAN_PAGE_SIZE = env_int_clamped("KB_VECTOR_REPAIR_SCAN_PAGE_SIZE", 500, min_v=1)
 
 # Metadata keys that can carry the originating fact id, in preference order.
 # ``fact_id`` comes first because it is the only one the inline writer sets to a

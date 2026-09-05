@@ -62,6 +62,7 @@ import time
 from pathlib import Path
 from typing import Dict, Literal, Mapping, Optional, Sequence
 
+from autobot_shared.env_utils import env_float, env_int
 from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
 
 # Plain stdlib logging, deliberately (#15323). This module is real-loaded (not
@@ -79,11 +80,11 @@ DivergenceStatus = Literal["stale", "healthy", "unknown"]
 # _STALE_COMPONENTS_TTL_SECONDS pattern in api/code_sync.py — a full-tree
 # ctime walk plus a systemctl round-trip per unit is cheap but must not run
 # on every /status poll.
-PROCESS_DIVERGENCE_TTL_SECONDS = int(os.getenv("SLM_PROCESS_DIVERGENCE_TTL_SECONDS", "60"))
+PROCESS_DIVERGENCE_TTL_SECONDS = env_int("SLM_PROCESS_DIVERGENCE_TTL_SECONDS", 60)
 
 # Timeout for each `systemctl show` round-trip — a hung systemd must not hang
 # the /status endpoint it is reported through.
-_SYSTEMCTL_TIMEOUT_SECONDS = float(os.getenv("SLM_SYSTEMCTL_SHOW_TIMEOUT_SECONDS", "5"))
+_SYSTEMCTL_TIMEOUT_SECONDS = env_float("SLM_SYSTEMCTL_SHOW_TIMEOUT_SECONDS", 5)
 
 # Reuse the SAME artifact vocabulary drift_checker prunes its walk with
 # (#11459) so a build cache or venv under the deployed tree can never read as

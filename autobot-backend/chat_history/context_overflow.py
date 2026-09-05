@@ -15,9 +15,9 @@ Builds on #8990 (token usage tracking) and #3770 (compression service).
 """
 
 import json
-import os
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value
@@ -38,23 +38,23 @@ _DEFAULT_COMPRESS_THRESHOLD = 0.90  # 90%
 
 # How long to skip compaction after it fails, so a rate-limited provider costs
 # one attempt per window instead of one per turn (#14065 review).
-_SUMMARY_FAILURE_BACKOFF_SECONDS = int(os.getenv("AUTOBOT_SUMMARY_FAILURE_BACKOFF_SECONDS", "300"))
+_SUMMARY_FAILURE_BACKOFF_SECONDS = env_int("AUTOBOT_SUMMARY_FAILURE_BACKOFF_SECONDS", 300)
 
 # How many of the most recent user messages cross a compaction verbatim (#14066).
 # Bounded so repeated compaction cannot grow the preserved set without limit —
 # the bound is what makes preserving them unconditionally safe.
-_PRESERVED_USER_MESSAGE_CAP = int(os.getenv("AUTOBOT_COMPACTION_USER_MESSAGE_CAP", "40"))
+_PRESERVED_USER_MESSAGE_CAP = env_int("AUTOBOT_COMPACTION_USER_MESSAGE_CAP", 40)
 
 # Tool results in the summarized region are clipped to this many characters
 # before the summarizer sees them: a file read many turns ago is cheaper to
 # re-read than to carry (#14066).
-_TOOL_RESULT_CLIP_CHARS = int(os.getenv("AUTOBOT_COMPACTION_TOOL_RESULT_CLIP_CHARS", "400"))
+_TOOL_RESULT_CLIP_CHARS = env_int("AUTOBOT_COMPACTION_TOOL_RESULT_CLIP_CHARS", 400)
 
 # How far back to look for a user turn before settling for any turn start.
-_BOUNDARY_SEARCH_WINDOW = int(os.getenv("AUTOBOT_COMPACTION_BOUNDARY_WINDOW", "10"))
+_BOUNDARY_SEARCH_WINDOW = env_int("AUTOBOT_COMPACTION_BOUNDARY_WINDOW", 10)
 
 # Most recent shell commands named in the extracted state block.
-_STATE_COMMAND_CAP = int(os.getenv("AUTOBOT_COMPACTION_STATE_COMMAND_CAP", "10"))
+_STATE_COMMAND_CAP = env_int("AUTOBOT_COMPACTION_STATE_COMMAND_CAP", 10)
 
 
 class SessionTokenTracker:
