@@ -24,7 +24,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DataError, IntegrityError
 
-from autobot_shared.db_errors import IntegrityKind, classify_integrity_error, detail_for, status_for
+from autobot_shared.db_errors import classify_integrity_error, detail_for, status_for
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -59,16 +59,13 @@ def register_integrity_handlers(app: FastAPI) -> None:
         return _answer(request, exc)
 
     @app.exception_handler(DataError)
-    async def _malformed_value(request: Request, exc: DataError) -> JSONResponse:
-        # A malformed UUID reaching the database is the common case (22P02).
-        # Anything else DataError covers is equally the caller's input.
-        kind = classify_integrity_error(exc)
-        if kind is IntegrityKind.UNKNOWN:
-            kind = IntegrityKind.MALFORMED_VALUE
-        logger.error(
-            "malformed value rejected by the database on %s %s",
-            request.method,
-            request.url.path,
-            exc_info=exc,
-        )
-        return JSONResponse(status_code=status_for(kind), content={"detail": detail_for(kind)})
+    async def _data_error(request: Request, exc: DataError) -> JSONResponse:
+        # Classified exactly like an integrity error, with no DataError-specific
+        # default. An earlier revision forced an unclassified DataError to 422 on
+        # the reasoning that the class is "bad input" -- review of #15775 was
+        # right to reject it. PEP 249 puts division-by-zero in this class too,
+        # and that is a fault in a query WE wrote: answering 422 would tell the
+        # caller their request was wrong when the bug is ours. A malformed UUID
+        # still reaches 422 through SQLSTATE 22P02, which is classification
+        # rather than a guess.
+        return _answer(request, exc)

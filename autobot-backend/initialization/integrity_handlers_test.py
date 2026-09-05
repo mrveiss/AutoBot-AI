@@ -25,7 +25,7 @@ from initialization.integrity_handlers import register_integrity_handlers
 
 class _PsycopgLike(Exception):
     def __init__(self, sqlstate: str) -> None:
-        super().__init__(f"duplicate key value violates unique constraint \"users_email_key\" ({sqlstate})")
+        super().__init__(f'duplicate key value violates unique constraint "users_email_key" ({sqlstate})')
         self.sqlstate = sqlstate
 
 
@@ -59,6 +59,12 @@ def client() -> TestClient:
     async def _malformed_uuid():
         raise DataError("SELECT ...", {}, _PsycopgLike("22P02"))
 
+    @app.get("/unclassified-data-error")
+    async def _unclassified_data_error():
+        # 22012 is division_by_zero -- PEP 249 files it under DataError, and it
+        # is a fault in a query we wrote, not in what the caller sent.
+        raise DataError("SELECT ...", {}, _PsycopgLike("22012"))
+
     @app.get("/handled-by-the-route")
     async def _handled_by_the_route():
         """A route that already knows which field collided keeps saying so."""
@@ -89,6 +95,24 @@ class TestTheFloor:
 
         assert response.status_code == 422
         assert response.json()["detail"] == "A value is not in the expected format"
+
+
+class TestUnclassifiedIsNotGuessed:
+    def test_an_unclassified_data_error_stays_500(self, client: TestClient):
+        """The rule `db_errors` states, enforced where it was previously bent.
+
+        An earlier revision of this handler forced every unclassified DataError
+        to 422. Division by zero is in the same DBAPI class and is a bug in a
+        query we wrote -- answering 422 would blame the caller for our fault.
+        """
+        response = client.get("/unclassified-data-error")
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Internal server error"
+
+    def test_the_classified_one_beside_it_still_reaches_422(self, client: TestClient):
+        """The contrast: dropping the default did not disable the real mapping."""
+        assert client.get("/malformed-uuid").status_code == 422
 
 
 class TestNoDisclosure:
