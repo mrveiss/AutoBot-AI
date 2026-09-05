@@ -6,15 +6,16 @@
 
 Tools have no database table — they register in-process by name via
 ``autobot_shared.tool_sdk.registry``. So the authority for "is this a real tool"
-is the registry, not a foreign key, and validation lives here.
+is the registry, not a foreign key, and validation happens in code rather
+than in the schema.
 
-That raises a failure mode worth naming. If the registry has not been populated
-(import ordering, a stripped-down process), every name looks unknown. Reporting
-that as "unknown tool" would send someone hunting for a typo when the real cause
-is that nothing has registered yet. So the two cases are separated: an empty
-registry raises :class:`ToolRegistryUnavailable`, an absent name raises
-``ValueError``. Same reasoning as the unattributed-workflow branch in step 5 —
-"it isn't there" and "I can't tell" are different answers.
+The check itself now lives in ``tool_registry_ref``, shared with
+``CompanyToolService`` (#14852) so the two cannot disagree about what counts as
+a real tool. It keeps the distinction that matters: an empty registry raises
+:class:`ToolRegistryUnavailable`, an absent name raises ``ValueError``. Same
+reasoning as the unattributed-workflow branch in step 5 — "it isn't there" and
+"I can't tell" are different answers, and collapsing them turns a
+startup-ordering bug into a hunt for a misspelling.
 """
 
 from __future__ import annotations
@@ -32,15 +33,12 @@ from ..models.activity import ActorType
 from ..models.role_tool import LLCRoleTool
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .tool_registry_ref import ToolRegistryUnavailable, require_registered_tool
 
-
-class ToolRegistryUnavailable(RuntimeError):
-    """The tool registry holds no tools, so no name can be validated.
-
-    Distinct from "unknown tool" on purpose: this is an environment problem,
-    not a caller mistake, and conflating them turns a startup-ordering bug into
-    a wild goose chase for a misspelling.
-    """
+#: Re-exported. ``llc/api/roles.py`` imports ``ToolRegistryUnavailable`` from
+#: here; the definition moved to ``tool_registry_ref`` when a second caller
+#: appeared (#14852), and this keeps every existing import site working.
+__all__ = ["RoleToolService", "ToolRegistryUnavailable"]
 
 
 class RoleToolService(LLCServiceBase):
@@ -67,44 +65,25 @@ class RoleToolService(LLCServiceBase):
             after=after,
         )
 
-    async def _require_role(self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> None:
-        result = await session.execute(select(Role.id).where(Role.id == role_id, Role.org_id == company_id))
+    async def _require_role(
+        self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID
+    ) -> None:
+        result = await session.execute(
+            select(Role.id).where(Role.id == role_id, Role.org_id == company_id)
+        )
         if result.scalar_one_or_none() is None:
             raise ValueError(f"role {role_id} does not exist in company {company_id}")
 
     @staticmethod
     def _require_registered_tool(tool_name: str) -> str:
-        """The tool must be registered. Returns the cleaned name."""
-        cleaned = (tool_name or "").strip()
-        if not cleaned:
-            raise ValueError("a tool name is required")
+        """The tool must be registered. Returns the cleaned name.
 
-        # Imported lazily, by the fully-qualified ``autobot_shared.tool_sdk``
-        # path (#14373). Both matter:
-        #
-        # * Lazily, because a module-level import runs while the feature
-        #   routers load, and an ImportError there takes the whole LLC router
-        #   down, not just this service. Every other consumer imports it the
-        #   same way (``tools/tool_registry.py``, ``api/image_generation.py``).
-        # * Fully-qualified, not the bare top-level ``tool_sdk`` path, because
-        #   ``get_tool_registry()`` returns a module-level singleton stored on
-        #   ``autobot_shared/tool_sdk/registry.py``. Reaching that file under a
-        #   second module identity (the bare name) would load a *second* copy
-        #   of it with its own, independently empty, registry — every tool
-        #   would look unregistered while the real registry was fine. The bare
-        #   ``tool_sdk`` path is exactly what caused the original
-        #   ``ModuleNotFoundError`` here (#14373) and is not a supported alias.
-        from autobot_shared.tool_sdk.registry import get_tool_registry  # noqa: PLC0415
-
-        known = {meta.name for meta in get_tool_registry().list_tools()}
-        if not known:
-            raise ToolRegistryUnavailable(
-                "the tool registry is empty, so no tool name can be validated; "
-                "this is an environment problem, not an unknown tool"
-            )
-        if cleaned not in known:
-            raise ValueError(f"unknown tool {cleaned!r}")
-        return cleaned
+        Delegates to ``tool_registry_ref`` so this service and
+        ``CompanyToolService`` (#14852) cannot drift on what counts as a
+        real tool: an overlay written for a name that can never be attached
+        would be a row nothing ever reads.
+        """
+        return require_registered_tool(tool_name)
 
     async def attach(
         self,
@@ -125,7 +104,9 @@ class RoleToolService(LLCServiceBase):
         if await self.get(session, company_id, role_id, cleaned) is not None:
             raise ValueError(f"tool {cleaned!r} is already attached to role {role_id}")
 
-        attachment = LLCRoleTool(company_id=company_id, role_id=role_id, tool_name=cleaned)
+        attachment = LLCRoleTool(
+            company_id=company_id, role_id=role_id, tool_name=cleaned
+        )
         session.add(attachment)
         await session.flush()
         await self._record(
@@ -153,7 +134,9 @@ class RoleToolService(LLCServiceBase):
         )
         return result.scalar_one_or_none()
 
-    async def list_for_role(self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> List[str]:
+    async def list_for_role(
+        self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID
+    ) -> List[str]:
         """Tool names this role carries — independent of who currently holds it."""
         result = await session.execute(
             select(LLCRoleTool.tool_name)
