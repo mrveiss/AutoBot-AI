@@ -25,7 +25,7 @@ from __future__ import annotations
 import asyncio
 import subprocess  # nosec B404  # fixed argv, shell=False, scrubbed env
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.paths import scrubbed_git_env
@@ -35,7 +35,7 @@ from autobot_shared.paths import scrubbed_git_env
 GIT_PROBE_TIMEOUT_SECONDS = env_int("AUTOBOT_GIT_PROBE_TIMEOUT_SECONDS", 30)
 
 
-def _reject_env(kwargs: dict) -> None:
+def _reject_env(kwargs: dict[str, Any]) -> None:
     """An ``env=`` here would be the defect this module exists to remove.
 
     Refused explicitly rather than left to collide with the scrubbed value as a
@@ -53,14 +53,14 @@ def run_git(
     cwd: str | Path | None = None,
     timeout: float | None = None,
     check: bool = False,
-    **kwargs: object,
+    **kwargs: Any,
 ) -> subprocess.CompletedProcess:
     """Run ``git <argv>`` synchronously with the git environment scrubbed.
 
     ``argv`` excludes the ``git`` itself: ``run_git(["log", "-1"])``.
     """
     _reject_env(kwargs)
-    options: dict[str, object] = {
+    options: dict[str, Any] = {
         "capture_output": True,
         "text": True,
         "encoding": "utf-8",
@@ -76,7 +76,7 @@ def run_git(
     )
 
 
-async def start_git(*argv: str, **kwargs: object) -> asyncio.subprocess.Process:
+async def start_git(*argv: str, **kwargs: Any) -> asyncio.subprocess.Process:
     """Start ``git <argv>`` asynchronously with the git environment scrubbed.
 
     Both pipes are captured by default because every call site converted to
@@ -84,7 +84,7 @@ async def start_git(*argv: str, **kwargs: object) -> asyncio.subprocess.Process:
     the streaming shapes are unaffected.
     """
     _reject_env(kwargs)
-    options: dict[str, object] = {
+    options: dict[str, Any] = {
         "stdout": asyncio.subprocess.PIPE,
         "stderr": asyncio.subprocess.PIPE,
     }
