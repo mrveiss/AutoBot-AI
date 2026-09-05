@@ -26,8 +26,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import func
-from sqlalchemy import or_ as sa_or
+from sqlalchemy import func, or_ as sa_or
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
@@ -43,6 +42,7 @@ from api.venv_reconcile import (
 )
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.db_url import assemble_postgres_url
+from autobot_shared.env_utils import env_int, env_int_clamped
 from autobot_shared.security.redaction import redact_mapping
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
@@ -637,20 +637,20 @@ async def _get_tracker_for_db(db: AsyncSession):
 # #11820: TTL for the per-component staleness scan surfaced by GET /status.
 # Never hard-code a cache TTL — read it from the environment so a frequently
 # polled status endpoint doesn't re-checksum every deployed component per call.
-_STALE_COMPONENTS_TTL_SECONDS = int(os.getenv("SLM_STALE_COMPONENTS_TTL_SECONDS", "60"))
+_STALE_COMPONENTS_TTL_SECONDS = env_int("SLM_STALE_COMPONENTS_TTL_SECONDS", 60)
 
 # #14683: how long the update-all orchestration waits for a fired self-update
 # play to report a completion before giving up on it. Generous: the play covers
 # every deployed role on the box. The poll floor is 1s so a misconfigured
 # interval cannot turn the wait into a busy loop.
-_SELF_UPDATE_WATCH_TIMEOUT_SECONDS = max(1, int(os.getenv("SLM_SELF_UPDATE_WATCH_TIMEOUT_SECONDS", "3600")))
-_SELF_UPDATE_WATCH_POLL_SECONDS = max(1, int(os.getenv("SLM_SELF_UPDATE_WATCH_POLL_SECONDS", "15")))
+_SELF_UPDATE_WATCH_TIMEOUT_SECONDS = env_int_clamped("SLM_SELF_UPDATE_WATCH_TIMEOUT_SECONDS", 3600, min_v=1)
+_SELF_UPDATE_WATCH_POLL_SECONDS = env_int_clamped("SLM_SELF_UPDATE_WATCH_POLL_SECONDS", 15, min_v=1)
 
 # #14703: how long an update-all job may make no progress before a new one may
 # supersede it. Generous on purpose -- every stage transition and every fleet
 # node stamps progress, so this bounds the gap between two signs of life, not
 # the job's total duration.
-_UPDATE_ALL_STALE_SECONDS = max(60, int(os.getenv("SLM_UPDATE_ALL_STALE_SECONDS", "1800")))
+_UPDATE_ALL_STALE_SECONDS = env_int_clamped("SLM_UPDATE_ALL_STALE_SECONDS", 1800, min_v=60)
 _stale_components_cache: dict = {"ts": -_STALE_COMPONENTS_TTL_SECONDS - 1.0, "value": []}
 
 

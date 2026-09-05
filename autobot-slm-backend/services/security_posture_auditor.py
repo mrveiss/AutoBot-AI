@@ -17,11 +17,11 @@ Uses the SLM's custom asyncio background-loop pattern (mirrors
 
 import asyncio
 import logging
-import os
 import uuid
 
 from sqlalchemy import select
 
+from autobot_shared.env_utils import env_int
 from models.database import Node, SecurityEvent, SecurityEventSeverity
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ def _get_session():
 
 
 # Poll interval — configurable per deployment; defaults to hourly.
-_AUDIT_INTERVAL_SECONDS: int = int(os.getenv("SLM_SECURITY_AUDIT_INTERVAL_SECONDS", "3600"))
+_AUDIT_INTERVAL_SECONDS: int = env_int("SLM_SECURITY_AUDIT_INTERVAL_SECONDS", 3600)
 
 # Sensitive ports → (service label, SecurityEvent severity). Datastores and
 # message brokers carry unauthenticated-data risk (HIGH); admin/observability

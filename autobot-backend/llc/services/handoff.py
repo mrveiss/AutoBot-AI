@@ -7,7 +7,6 @@
 import asyncio
 import json
 import logging
-import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -16,6 +15,7 @@ from typing import Any, Dict, List, Optional, Set
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp
 
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 _CHECKOUT_REDIS_PREFIX = "llc:checkout:"
 _NOTIFICATION_CHANNEL_PREFIX = "llc:notifications:"
-_LLC_H2A_BRIEF_CACHE_TTL = int(os.getenv("AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL", "86400"))
+_LLC_H2A_BRIEF_CACHE_TTL = env_int("AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL", 86400)
 
 
 class HandoffNotAuthorized(Exception):

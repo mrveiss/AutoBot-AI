@@ -27,11 +27,11 @@ adapter's ``thread_ts`` and is wired in the delivery change, not here.
 
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import dataclass
 from typing import Optional
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
@@ -42,7 +42,7 @@ _DELIVERY_KEY_PREFIX = "approval:delivery:"
 
 #: How long a delivered approval stays correlatable. Beyond this the reply can
 #: no longer be tied to a request, and fail-closed means it resolves nothing.
-REMOTE_APPROVAL_TTL_SECONDS = int(os.getenv("AUTOBOT_REMOTE_APPROVAL_TTL_SECONDS", "86400"))
+REMOTE_APPROVAL_TTL_SECONDS = env_int("AUTOBOT_REMOTE_APPROVAL_TTL_SECONDS", 86400)
 
 #: The correlation token, embedded in the delivered message.
 #: Deliberately narrow: the id charset is bounded so a token cannot be forged by
