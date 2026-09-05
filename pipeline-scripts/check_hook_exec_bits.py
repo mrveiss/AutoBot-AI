@@ -83,12 +83,14 @@ _REQUIRED_MODE = "100755"
 # its violations and flips its exec bit. Adding a new entry is not a way to make
 # this guard quiet -- a *new* hook with a missing exec bit is a plain failure.
 _KNOWN_DORMANT_ISSUE = "#14181"
-_KNOWN_DORMANT = frozenset(
-    {
-        "tools/lint/check_no_blocking_io_in_async.py",
-        "tools/lint/check_no_local_schemas.py",
-    }
-)
+# #15750 removed the last live entry: check_no_local_schemas.py had lost its
+# exec bit on Dev_new_gui itself, and flipping it back takes the entry off this
+# list in the same change, exactly as the rule above requires.
+# check_no_blocking_io_in_async.py was fixed earlier (executable on base) and
+# its entry was never removed -- a stale record this guard could not detect,
+# because the staleness test asks whether a baselined path is still some hook's
+# entry, not whether it is still a violation. Tracked as #15762.
+_KNOWN_DORMANT: frozenset[str] = frozenset()
 
 
 def _repo_root() -> Path:
