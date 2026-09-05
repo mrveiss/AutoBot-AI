@@ -19,6 +19,13 @@ In ``mcp_security_test.py`` that turned a dangling symlink chain into one that
 control failed" (#15785's own writeup). Fixed in #15772 by giving the leaf a
 per-test suffix from ``tmp_path.name``.
 
+The AST scanner itself lives in ``fixture_fixed_path_teardown_guard.py``, a
+plain (non-``_test.py``) sibling module (the same split as
+``sys_modules_leak_guard.py`` / ``sys_modules_leak_guard_test.py``), so the
+scanner's own growth does not also have to fit under this module's line
+budget. This module documents the guard's rationale and carries every
+assertion and contrast fixture.
+
 THE DISCRIMINATOR IS CREATE-AND-REMOVE, NOT A BARE FIXED PATH
 -----------------------------------------------------------------
 ``api/codebase_analytics/endpoints/report_scoping_test.py:384``
@@ -50,7 +57,7 @@ WHY THE FIXTURE IS SYNTHETIC, NOT THE LIVE VIOLATION SET
 The one known instance was fixed in #15772; the live population is zero
 (measured below). Seeding this guard's pass/fail from that population would
 make it vacuous today and break the moment a violation reappears -- the trap
-#15762 records. The contrast pair is two literal fixture sources this file
+#15762 records. Every contrast pair is a literal fixture source this file
 writes itself.
 
 REACH, NOT FINDINGS (the vacuity floor)
@@ -60,7 +67,7 @@ no fixtures would print the identical clean line as one that examined every
 fixture in the tree. ``_MIN_EXPECTED_FIXTURES_SCANNED`` binds the floor to how
 many ``@pytest.fixture`` functions were actually found, not to what they did --
 same shape as ``core_router_auth_guard_test.py``'s
-``_MIN_EXPECTED_CORE_ROUTERS``. Measured at 1,212 fixtures across every
+``_MIN_EXPECTED_CORE_ROUTERS``. Measured at 1,212+ fixtures across every
 tracked ``.py`` file (fixtures live in plain test modules and in
 ``conftest.py``, so the scan is not limited to ``*_test.py`` filenames); the
 floor sits comfortably below that.
@@ -75,240 +82,46 @@ entirely. ``_fixture_alias_names``, ``_if_exhaustively_removes``, and
 ``_derived_names`` close each one respectively; each has its own contrast
 pair below and none may widen what ``tmp_root_exists`` or ``temp_forbidden_dir``
 already pass.
+
+TWO MORE GAPS CLOSED IN REVIEW (#15797 follow-up)
+----------------------------------------------------
+``_if_exhaustively_removes``'s exhaustiveness check used ``ast.walk``, which
+descends into a nested ``FunctionDef``/``Lambda`` body -- a branch that only
+*defines* ``def cleanup(): shutil.rmtree(p)``, without ever calling it, was
+misread as guaranteeing a remove, so an if/else where both branches merely
+define such a helper was misclassified as exhaustive removal and could flag a
+fixture that never removes anything (a FALSE POSITIVE). ``_walk_current_scope``
+closes it by refusing to descend into nested function/lambda bodies at all.
+
+Separately, ``_assignment_pairs`` credited *every* target of a tuple
+assignment with derivation the moment *any* value element read ``tmp_path``
+(``a, b = tmp_path, Path("/tmp/autobot/fixed")`` marked ``b`` derived too), and
+``_call_path_is_derived`` treated *every* argument and keyword of a call as a
+path candidate (an unrelated derived keyword could clear a fixed first
+argument). Both are FALSE NEGATIVES -- a fixed-path create/remove could evade
+the guard whenever an unrelated derived value sat nearby. ``_pair_target_value``
+pairs each target element with its matching value element instead, and
+``_call_path_is_derived`` now inspects only the receiver (for
+``Path.mkdir``/``unlink``/``rmdir``) or the first positional argument (for
+``shutil.rmtree``/``os.remove``/``os.makedirs``).
 """
 
 from __future__ import annotations
 
 import ast
-import subprocess
-from pathlib import Path
-from typing import Iterator, List, Set, Tuple
 
 import pytest
-
-from autobot_shared.paths import scrubbed_git_env
-
-_REPO = Path(__file__).resolve().parents[1]
-
-# pytest's own per-test-unique path sources. A fixture that actually uses one
-# of these to build its path cannot collide across concurrent tests, whatever
-# its teardown does.
-_UNIQUE_SOURCE_PARAMS = frozenset({"tmp_path", "tmp_path_factory", "tmpdir", "tmpdir_factory"})
-
-_CREATE_CALL_NAMES = frozenset({"mkdir", "makedirs"})
-_REMOVE_CALL_NAMES = frozenset({"rmtree", "unlink", "rmdir", "remove"})
-
-_SKIP_PARTS = {"node_modules", ".worktrees", "__pycache__", "venv", ".venv"}
-
-# Bound to REACH (fixtures actually examined), not to how many violations turn
-# up -- see the module docstring.
-_MIN_EXPECTED_FIXTURES_SCANNED = 1000
-
-
-def _fixture_alias_names(tree: ast.Module) -> Set[str]:
-    """Local names bound to ``pytest.fixture`` via ``from pytest import fixture as X`` (#15797).
-
-    ``@pytest.fixture`` is recognised on the attribute alone (any module alias
-    already works), but a bare-name import loses that: ``@repo_fixture`` carries
-    no ``.fixture`` attribute to check, so the alias has to be resolved from the
-    module's own imports instead.
-    """
-    names = {"fixture"}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module in {"pytest", "_pytest.fixtures"}:
-            for alias in node.names:
-                if alias.name == "fixture":
-                    names.add(alias.asname or alias.name)
-    return names
-
-
-def _is_pytest_fixture_decorator(node: ast.expr, fixture_names: Set[str]) -> bool:
-    target = node.func if isinstance(node, ast.Call) else node
-    if isinstance(target, ast.Attribute):
-        return target.attr == "fixture"
-    return isinstance(target, ast.Name) and target.id in fixture_names
-
-
-def _iter_pytest_fixtures(tree: ast.Module) -> Iterator[ast.FunctionDef | ast.AsyncFunctionDef]:
-    fixture_names = _fixture_alias_names(tree)
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if any(_is_pytest_fixture_decorator(dec, fixture_names) for dec in node.decorator_list):
-                yield node
-
-
-def _if_exhaustively_removes(node: ast.If) -> bool:
-    """True when a remove call is guaranteed on every branch of this if/elif/.../else (#15797).
-
-    ``if use_rmtree: rmtree(p) else: rmtree(p)`` removes either way -- treating
-    that as "guarded" because the call sits inside an ``if`` is the false
-    negative. An ``if`` with no ``else`` can never be exhaustive: skipping it
-    entirely is itself a path with no removal, which is exactly the shape
-    ``tmp_root_exists``'s ``if created: ...`` relies on to stay conditional.
-    """
-    if not node.orelse:
-        return False
-    if not _branch_removes(node.body):
-        return False
-    if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
-        return _if_exhaustively_removes(node.orelse[0])
-    return _branch_removes(node.orelse)
-
-
-def _branch_removes(stmts: List[ast.stmt]) -> bool:
-    """True if a remove call is guaranteed to run somewhere in this statement list."""
-    return any(_stmt_guarantees_remove(stmt) for stmt in stmts)
-
-
-def _stmt_guarantees_remove(stmt: ast.stmt) -> bool:
-    """True if *stmt* itself, unconditionally, reaches a remove call.
-
-    A loop, ``try``, or ``with`` may run zero times or raise before the call,
-    so a remove call nested inside one is never guaranteed by this statement
-    alone -- it stays whatever the enclosing construct already tags it as.
-    """
-    if isinstance(stmt, ast.If):
-        return _if_exhaustively_removes(stmt)
-    if isinstance(stmt, (ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith)):
-        return False
-    return any(_call_target_name(call) in _REMOVE_CALL_NAMES for call in ast.walk(stmt) if isinstance(call, ast.Call))
-
-
-def _guarded_child_ids(node: ast.AST) -> Set[int]:
-    """Direct children an ``if``/ternary reaches on only one branch.
-
-    An exhaustive if/else (every branch removes, see above) contributes no
-    guarded ids at all -- the removal it contains is unconditional overall,
-    even though it is lexically inside an ``if``.
-    """
-    if isinstance(node, ast.If):
-        if _if_exhaustively_removes(node):
-            return set()
-        return {id(child) for child in list(node.body) + list(node.orelse)}
-    if isinstance(node, ast.IfExp):
-        return {id(node.body), id(node.orelse)}
-    return set()
-
-
-def _collect_calls(node: ast.AST, guarded: bool = False) -> List[Tuple[ast.Call, bool]]:
-    """Every ``Call`` under *node*, tagged with whether an if/ternary gates it."""
-    calls: List[Tuple[ast.Call, bool]] = []
-    if isinstance(node, ast.Call):
-        calls.append((node, guarded))
-    guarded_ids = _guarded_child_ids(node)
-    for child in ast.iter_child_nodes(node):
-        calls.extend(_collect_calls(child, guarded or id(child) in guarded_ids))
-    return calls
-
-
-def _call_target_name(call: ast.Call) -> str | None:
-    if isinstance(call.func, ast.Attribute):
-        return call.func.attr
-    if isinstance(call.func, ast.Name):
-        return call.func.id
-    return None
-
-
-def _assignment_pairs(func: ast.FunctionDef | ast.AsyncFunctionDef) -> List[Tuple[Set[str], ast.expr]]:
-    """(assigned names, right-hand-side expression) for every simple assignment in *func*."""
-    pairs: List[Tuple[Set[str], ast.expr]] = []
-    for node in ast.walk(func):
-        if isinstance(node, ast.Assign) and node.value is not None:
-            targets = {n.id for t in node.targets for n in ast.walk(t) if isinstance(n, ast.Name)}
-            pairs.append((targets, node.value))
-        elif isinstance(node, ast.AnnAssign) and node.value is not None:
-            targets = {n.id for n in ast.walk(node.target) if isinstance(n, ast.Name)}
-            pairs.append((targets, node.value))
-        elif isinstance(node, ast.NamedExpr):
-            pairs.append(({node.target.id}, node.value))
-    return pairs
-
-
-def _expr_is_derived(expr: ast.expr, derived: Set[str]) -> bool:
-    """True if any name *expr* reads is already known to trace back to a unique source."""
-    return any(isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id in derived for n in ast.walk(expr))
-
-
-def _derived_names(func: ast.FunctionDef | ast.AsyncFunctionDef) -> Set[str]:
-    """Names that trace back to a tmp_path-family source via simple assignment (#15797).
-
-    A unique-source parameter is not proof by itself -- #15772's own pre-fix
-    fixture *took* ``tmp_path`` and ignored it. Only a name actually assigned
-    from one, transitively (``test_dir = tmp_path / "leaf"``), counts, and
-    that fixed point is what ``_call_path_is_derived`` checks the create/remove
-    calls against.
-    """
-    params = [*func.args.args, *func.args.kwonlyargs, *func.args.posonlyargs]
-    derived = {p.arg for p in params} & _UNIQUE_SOURCE_PARAMS
-    assignments = _assignment_pairs(func)
-    changed = True
-    while changed:
-        changed = False
-        for targets, value in assignments:
-            if _expr_is_derived(value, derived) and (targets - derived):
-                derived |= targets
-                changed = True
-    return derived
-
-
-def _call_path_is_derived(call: ast.Call, derived: Set[str]) -> bool:
-    """True if the path *call* operates on -- its object or an argument -- is derived."""
-    candidates: List[ast.expr] = list(call.args) + [kw.value for kw in call.keywords]
-    if isinstance(call.func, ast.Attribute):
-        candidates.append(call.func.value)
-    return any(_expr_is_derived(candidate, derived) for candidate in candidates)
-
-
-def _creates_and_unconditionally_removes(func: ast.FunctionDef | ast.AsyncFunctionDef, derived: Set[str]) -> bool:
-    calls = _collect_calls(func)
-    creates = any(
-        _call_target_name(call) in _CREATE_CALL_NAMES and not _call_path_is_derived(call, derived)
-        for call, _guarded in calls
-    )
-    removes = any(
-        _call_target_name(call) in _REMOVE_CALL_NAMES and not guarded and not _call_path_is_derived(call, derived)
-        for call, guarded in calls
-    )
-    return creates and removes
-
-
-def _is_violation(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    return _creates_and_unconditionally_removes(func, _derived_names(func))
-
-
-def _tracked_python_files() -> List[Path]:
-    listing = subprocess.run(
-        ["git", "ls-files", "-z"],
-        cwd=_REPO,
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    ).stdout
-    paths = (_REPO / rel for rel in listing.split("\0") if rel.endswith(".py"))
-    return [path for path in paths if not _SKIP_PARTS & set(path.relative_to(_REPO).parts)]
-
-
-def _scan_repo() -> Tuple[int, List[Tuple[Path, str, int]], List[Tuple[Path, str]]]:
-    """(fixtures examined, violations, unreadable) across every tracked ``.py`` file."""
-    examined = 0
-    violations: List[Tuple[Path, str, int]] = []
-    unreadable: List[Tuple[Path, str]] = []
-    for path in _tracked_python_files():
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (SyntaxError, UnicodeDecodeError, ValueError, OSError) as failure:
-            unreadable.append((path, f"{type(failure).__name__}: {failure}"))
-            continue
-        for func in _iter_pytest_fixtures(tree):
-            examined += 1
-            if _is_violation(func):
-                violations.append((path, func.name, func.lineno))
-    return examined, violations, unreadable
+from repo_tests.fixture_fixed_path_teardown_guard import (
+    _MIN_EXPECTED_FIXTURES_SCANNED,
+    _REPO,
+    _is_violation,
+    _iter_pytest_fixtures,
+    _scan_repo,
+)
 
 
 @pytest.fixture(scope="module")
-def scan_result() -> Tuple[int, List[Tuple[Path, str, int]], List[Tuple[Path, str]]]:
+def scan_result():
     return _scan_repo()
 
 
@@ -559,3 +372,154 @@ class TestTmpPathMustBeTracedIntoThePath:
 
     def test_tmp_path_actually_used_to_build_the_path_is_recognized(self):
         assert _is_violation(_only_fixture(_TRACED_SAFE_SOURCE)) is False
+
+
+# ============================================================================
+# Review follow-up on #15797: two more gaps, each with its own contrast pair.
+# ============================================================================
+
+_NESTED_DEF_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path, use_helper_a):
+    test_dir = Path("/tmp/autobot/nested_def_safe")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    if use_helper_a:
+        def cleanup():
+            shutil.rmtree(test_dir)
+    else:
+        def cleanup():
+            shutil.rmtree(test_dir)
+"""
+
+_NESTED_DEF_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path, use_helper_a):
+    test_dir = Path("/tmp/autobot/nested_def_hazard")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    if use_helper_a:
+        shutil.rmtree(test_dir)
+    else:
+        shutil.rmtree(test_dir)
+"""
+
+
+class TestNestedFunctionDefinitionDoesNotCountAsRemoval:
+    """Review finding 1: ``ast.walk`` used to enter nested function/lambda bodies.
+
+    ``_NESTED_DEF_SAFE_SOURCE``'s if/else has both branches merely *define* a
+    ``cleanup`` helper that is never called -- nothing is ever removed, so the
+    fixture must not be flagged, even though a naive scan of the branch bodies
+    would find an ``rmtree`` call inside each. ``_NESTED_DEF_HAZARD_SOURCE``
+    is the same shape with the nesting removed -- both branches call
+    ``shutil.rmtree`` directly -- to prove the fix does not just always return
+    False; a real unconditional removal in the same if/else shape still counts.
+    """
+
+    def test_branch_that_only_defines_a_cleanup_helper_is_not_removal(self):
+        assert _is_violation(_only_fixture(_NESTED_DEF_SAFE_SOURCE)) is False
+
+    def test_branch_that_directly_calls_remove_is_still_removal(self):
+        assert _is_violation(_only_fixture(_NESTED_DEF_HAZARD_SOURCE)) is True
+
+
+_TUPLE_ASSIGN_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    a, b = tmp_path, Path("/tmp/autobot/tuple_hazard")
+    b.mkdir(parents=True, exist_ok=True)
+    yield b
+    shutil.rmtree(b)
+"""
+
+_TUPLE_ASSIGN_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    a, b = tmp_path, tmp_path / "tuple_safe"
+    b.mkdir(parents=True, exist_ok=True)
+    yield b
+    shutil.rmtree(b)
+"""
+
+
+class TestTupleAssignmentDoesNotLeakDerivationAcrossTargets:
+    """Review finding 2a: a tuple assignment must pair value elements with the
+    matching target, not credit every target because *any* element derives.
+
+    ``_TUPLE_ASSIGN_HAZARD_SOURCE`` pairs ``a`` with the genuinely-derived
+    ``tmp_path`` and ``b`` with an unrelated fixed path -- ``b`` must stay
+    fixed and the fixture must be flagged. ``_TUPLE_ASSIGN_SAFE_SOURCE`` pairs
+    ``b`` with a value that itself derives from ``tmp_path``, proving the
+    element-wise pairing still recognizes a correctly-paired derivation.
+    """
+
+    def test_unrelated_sibling_in_tuple_assignment_does_not_clear_a_fixed_path(self):
+        assert _is_violation(_only_fixture(_TUPLE_ASSIGN_HAZARD_SOURCE)) is True
+
+    def test_correctly_paired_tuple_element_is_still_recognized_as_derived(self):
+        assert _is_violation(_only_fixture(_TUPLE_ASSIGN_SAFE_SOURCE)) is False
+
+
+_CALL_ARG_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    some_derived_thing = tmp_path / "flag"
+    test_dir = Path("/tmp/autobot/call_arg_hazard")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    shutil.rmtree(test_dir, ignore_errors=some_derived_thing)
+"""
+
+_CALL_ARG_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    some_derived_thing = tmp_path / "flag"
+    test_dir = tmp_path / "call_arg_safe"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    shutil.rmtree(test_dir, ignore_errors=some_derived_thing)
+"""
+
+
+class TestCallArgumentDerivationIsScopedToThePathOperand:
+    """Review finding 2b: only the receiver or the known path argument of a
+    create/remove call is the path operand -- an unrelated derived keyword
+    must not launder a fixed first positional argument.
+
+    ``_CALL_ARG_HAZARD_SOURCE``'s ``ignore_errors`` keyword is derived from
+    ``tmp_path`` but the actual removed path is fixed -- it must stay flagged.
+    ``_CALL_ARG_SAFE_SOURCE`` has the same unrelated derived keyword sitting
+    beside a path that is itself genuinely derived, proving the scoped check
+    still recognizes derivation when it belongs to the real path argument.
+    """
+
+    def test_unrelated_derived_keyword_does_not_clear_the_fixed_path_argument(self):
+        assert _is_violation(_only_fixture(_CALL_ARG_HAZARD_SOURCE)) is True
+
+    def test_actual_path_argument_being_derived_is_still_recognized(self):
+        assert _is_violation(_only_fixture(_CALL_ARG_SAFE_SOURCE)) is False
