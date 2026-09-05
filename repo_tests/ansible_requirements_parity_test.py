@@ -275,7 +275,13 @@ def requirement_files() -> list[pathlib.Path]:
     seen: set[pathlib.Path] = set()
     for pattern in ("requirements*.txt", "requirements*/*.txt"):
         for path in _REPO_ROOT.rglob(pattern):
-            if any(part in _EXCLUDE_DIRS for part in path.parts) or path in seen:
+            # Match the exclusions against the path RELATIVE to the root being
+            # scanned. Testing absolute parts meant a checkout living under a
+            # `.worktrees/` directory excluded its own entire tree -- every file
+            # carries that part -- so this returned nothing and the walk-reach
+            # floor fired. Since a worktree per task is the mandated workflow,
+            # that made the check unrunnable exactly where the work happens.
+            if any(part in _EXCLUDE_DIRS for part in path.relative_to(_REPO_ROOT).parts) or path in seen:
                 continue
             seen.add(path)
             files.append(path)
