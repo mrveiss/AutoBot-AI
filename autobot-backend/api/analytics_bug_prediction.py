@@ -39,8 +39,8 @@ from api.schemas_analytics import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.logging_manager import get_logger
 from autobot_shared.git_probe import start_git
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_5_MINUTES

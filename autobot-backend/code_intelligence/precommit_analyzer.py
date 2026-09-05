@@ -26,8 +26,8 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Dict, List
 
-from autobot_shared.logging_manager import get_logger
 from autobot_shared.git_probe import run_git
+from autobot_shared.logging_manager import get_logger
 from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
