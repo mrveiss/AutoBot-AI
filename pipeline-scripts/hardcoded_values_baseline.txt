@@ -1158,9 +1158,7 @@
 1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|"/opt/autobot/autobot-frontend/package.json
 1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|"/opt/autobot/venv
 1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|https://github.com
-1|other|autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml|"/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml|https://github.com/mrveiss/AutoBot-AI.git
-1|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|"/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|'/opt/autobot/autobot-frontend/dist
 2|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|'/opt/autobot/autobot-slm-frontend
 1|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|https://github.com/mrveiss/AutoBot-AI.git
@@ -1180,7 +1178,6 @@
 1|other|autobot-slm-backend/ansible/playbooks/system-update.yml|30
 7|other|autobot-slm-backend/ansible/playbooks/system-update.yml|300
 2|other|autobot-slm-backend/ansible/playbooks/system-update.yml|60
-1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|"/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|"/opt/autobot/{{ item }}
 3|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|"/tmp/autobot-deploy
 2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|30
