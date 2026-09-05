@@ -194,3 +194,114 @@ class TestReach:
         unreadable = [p.name for p in migrations if guard.revision_of(p.read_text(encoding="utf-8")) is None]
 
         assert unreadable == [], f"these carry no readable revision: {unreadable}"
+
+
+class TestOnlyUpgradeCounts:
+    """A `downgrade()` that drops a column is reversing an `upgrade()` that
+    added one -- the model *should* still declare it, and treating that as a
+    violation is how a guard earns its first `# noqa`.
+
+    Measured on the live tree while building the cross-source check:
+    `20260824_084_device_capability_scoping.py` has all three of its drops in
+    `downgrade()`, and `MobileDevice` still declares all three columns.
+    """
+
+    def test_a_drop_only_in_downgrade_needs_no_marker(self, tmp_path):
+        body = '''
+revision: str = "20260901_090"
+
+def upgrade():
+    op.add_column("t", sa.Column("c", sa.String()))
+
+def downgrade():
+    op.drop_column("t", "c")
+'''
+        assert guard.check(_migration(tmp_path, body)) == []
+
+    def test_the_same_drop_in_upgrade_does_need_one(self, tmp_path):
+        """The contrast: it is the function it sits in that decides."""
+        body = '''
+revision: str = "20260901_090"
+
+def upgrade():
+    op.drop_column("t", "c")
+
+def downgrade():
+    op.add_column("t", sa.Column("c", sa.String()))
+'''
+        findings = guard.check(_migration(tmp_path, body))
+
+        assert len(findings) == 1
+        assert guard.MARKER in findings[0]
+
+
+class TestTheCrossSourceColumnCheck:
+    """The marker is a sentence a human writes; this is a fact about the code."""
+
+    def _model_tree(self, tmp_path, tablename: str, column: str) -> Path:
+        root = tmp_path / "repo"
+        models = root / "autobot-backend" / "models"
+        models.mkdir(parents=True)
+        (models / "thing.py").write_text(
+            "from sqlalchemy import Column, String\n\n"
+            "class Thing(Base):\n"
+            f'    __tablename__ = "{tablename}"\n'
+            f"    {column} = Column(String())\n",
+            encoding="utf-8",
+        )
+        return root
+
+    def test_dropping_a_column_the_model_still_declares_is_reported(self, tmp_path):
+        repo_root = self._model_tree(tmp_path, "things", "still_used")
+        body = '''
+"""NO DATA LOSS: it says so, which is exactly why the sentence is not enough."""
+revision: str = "20260901_090"
+
+def upgrade():
+    op.drop_column("things", "still_used")
+'''
+        findings = guard.check(_migration(tmp_path, body), repo_root)
+
+        assert len(findings) == 1
+        assert "things.still_used" in findings[0]
+        assert "Thing" in findings[0], "the offending model must be named"
+
+    def test_a_column_the_model_no_longer_declares_is_accepted(self, tmp_path):
+        """The contrast, so the check cannot pass by reporting every drop."""
+        repo_root = self._model_tree(tmp_path, "things", "something_else")
+        body = '''
+"""NO DATA LOSS: the model stopped writing it in the previous release."""
+revision: str = "20260901_090"
+
+def upgrade():
+    op.drop_column("things", "still_used")
+'''
+        assert guard.check(_migration(tmp_path, body), repo_root) == []
+
+    def test_a_same_named_column_on_a_different_table_is_not_a_match(self, tmp_path):
+        """`name` and `status` exist on everything; the table ties them together."""
+        repo_root = self._model_tree(tmp_path, "other_table", "name")
+        body = '''
+"""NO DATA LOSS."""
+revision: str = "20260901_090"
+
+def upgrade():
+    op.drop_column("things", "name")
+'''
+        assert guard.check(_migration(tmp_path, body), repo_root) == []
+
+    def test_the_two_checks_carry_different_messages(self, tmp_path):
+        """A missing sentence and a column the release still writes are
+        different defects, and only the second one loses data."""
+        repo_root = self._model_tree(tmp_path, "things", "still_used")
+        body = '''
+revision: str = "20260901_090"
+
+def upgrade():
+    op.drop_column("things", "still_used")
+'''
+        findings = guard.check(_migration(tmp_path, body), repo_root)
+
+        assert len(findings) == 2
+        assert any(guard.MARKER in f for f in findings)
+        assert any("running release writes this column" in f for f in findings)

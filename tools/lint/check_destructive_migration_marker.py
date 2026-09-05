@@ -57,6 +57,17 @@ DATED_REVISION = re.compile(r"^\d{8}_\d{3}[a-z]?$")
 
 DESTRUCTIVE_OPS = ("drop_column", "drop_table", "drop_constraint")
 
+#: Where a model would still declare a column this migration drops. Scoped to
+#: the ORM rather than the whole tree deliberately: a bare grep for a column
+#: named ``name`` or ``status`` matches everywhere and a guard that cries wolf
+#: is a guard someone silences.
+MODEL_ROOTS = (
+    "autobot-backend/models",
+    "autobot-backend/llc/models",
+    "autobot-backend/user_management/models",
+    "autobot-slm-backend/models",
+)
+
 MARKER = "NO DATA LOSS"
 
 #: Floor for migrations *parsed*, not violations found. 90 exist today; a
@@ -85,11 +96,125 @@ def revision_of(source: str) -> str | None:
     return None
 
 
+def upgrade_body(source: str) -> ast.FunctionDef | None:
+    """The ``upgrade()`` definition, which is the only half that can lose data.
+
+    A ``downgrade()`` dropping a column is not destructive in the sense this
+    guard exists for -- it reverses an ``upgrade()`` that added one, and the
+    model *should* still declare it. Scanning the whole module treated a correct
+    downgrade as a violation: measured on
+    ``20260824_084_device_capability_scoping.py``, whose three drops are all in
+    ``downgrade()`` and whose columns the ``MobileDevice`` model still declares,
+    exactly as they should.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return None
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "upgrade":
+            return node
+    return None
+
+
 def is_destructive(source: str) -> bool:
-    return any(op in source for op in DESTRUCTIVE_OPS)
+    """True when ``upgrade()`` drops something -- not merely when the file does."""
+    upgrade = upgrade_body(source)
+    if upgrade is None:
+        return False
+    return any(op in ast.dump(upgrade) for op in DESTRUCTIVE_OPS)
 
 
-def check(path: Path) -> list[str]:
+def dropped_columns(source: str) -> list[tuple[str, str]]:
+    """``(table, column)`` for every ``op.drop_column("t", "c")`` literal.
+
+    Only literal pairs are read. A call built from variables is invisible here,
+    which is a stated gap rather than a silent one -- the marker still applies to
+    it, and pretending otherwise would be the same overreach as a bare grep.
+    """
+    upgrade = upgrade_body(source)
+    if upgrade is None:
+        return []
+    pairs: list[tuple[str, str]] = []
+    for node in ast.walk(upgrade):
+        if not isinstance(node, ast.Call):
+            continue
+        name = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", None)
+        if name != "drop_column" or len(node.args) < 2:
+            continue
+        table, column = node.args[0], node.args[1]
+        if all(isinstance(a, ast.Constant) and isinstance(a.value, str) for a in (table, column)):
+            pairs.append((table.value, column.value))
+    return pairs
+
+
+def _model_files(repo_root: Path) -> list[Path]:
+    return [path for root in MODEL_ROOTS for path in (repo_root / root).rglob("*.py") if "_test" not in path.name]
+
+
+def models_still_declaring(repo_root: Path, table: str, column: str) -> list[str]:
+    """Model files that declare *column* on the class owning *table*.
+
+    The table is matched through ``__tablename__`` and the column through an
+    assignment to ``Column(...)``/``mapped_column(...)``, so the two are tied
+    together by the class rather than by a name appearing somewhere in the same
+    file. That is what keeps this from firing on every ``name`` and ``status``.
+
+    What it proves: the CURRENT tree still declares the column being dropped, so
+    the running release writes it. What it cannot prove is the N-1 case -- that
+    is a fact about deployed code, and it is why the marker is a sentence a human
+    writes rather than a checkbox.
+    """
+    offenders: list[str] = []
+    for path in _model_files(repo_root):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeDecodeError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            if not _declares_tablename(node, table):
+                continue
+            if _declares_column(node, column):
+                offenders.append(f"{path.name}:{node.name}")
+    return offenders
+
+
+def _declares_tablename(class_node: ast.ClassDef, table: str) -> bool:
+    for node in class_node.body:
+        targets = (
+            node.targets if isinstance(node, ast.Assign) else ([node.target] if isinstance(node, ast.AnnAssign) else [])
+        )
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id == "__tablename__":
+                value = node.value
+                if isinstance(value, ast.Constant) and value.value == table:
+                    return True
+    return False
+
+
+def _declares_column(class_node: ast.ClassDef, column: str) -> bool:
+    for node in class_node.body:
+        targets = (
+            node.targets if isinstance(node, ast.Assign) else ([node.target] if isinstance(node, ast.AnnAssign) else [])
+        )
+        value = node.value
+        if value is None or not isinstance(value, ast.Call):
+            continue
+        callee = value.func.attr if isinstance(value.func, ast.Attribute) else getattr(value.func, "id", None)
+        if callee not in ("Column", "mapped_column"):
+            continue
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id == column:
+                return True
+        # Column("explicit_name", ...) overrides the attribute name.
+        if value.args and isinstance(value.args[0], ast.Constant) and value.args[0].value == column:
+            return True
+    return False
+
+
+def check(path: Path, repo_root: Path | None = None) -> list[str]:
     """Findings for one migration. Three conditions, three distinct messages."""
     source = path.read_text(encoding="utf-8")
     revision = revision_of(source)
@@ -112,12 +237,26 @@ def check(path: Path) -> list[str]:
     # 3. The marker itself, for destructive migrations at or above the floor.
     if revision in PRE_CONVENTION or revision < FLOOR:
         return []
+    findings: list[str] = []
     if is_destructive(source) and MARKER not in source:
-        return [
+        findings.append(
             f"{path.name}: drops a column, table or constraint without a "
             f"`{MARKER}` statement saying what it touches and why nothing is lost."
-        ]
-    return []
+        )
+
+    # A separate check with its own message: a missing sentence and a column the
+    # running release still writes are different defects, and only the second one
+    # loses data.
+    if repo_root is not None:
+        for table, column in dropped_columns(source):
+            declarers = models_still_declaring(repo_root, table, column)
+            if declarers:
+                findings.append(
+                    f"{path.name}: drops {table}.{column}, which the model still declares "
+                    f"({', '.join(declarers)}). The running release writes this column -- expand "
+                    f"and dual-write first, contract in the NEXT release."
+                )
+    return findings
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -136,7 +275,7 @@ def main(argv: list[str] | None = None) -> int:
     # changed-file list with no migrations in it.
     if enforce_reach(len(paths), MIGRATION_FLOOR, hook=HOOK_ID, full_repo=full_repo):
         return 1
-    findings = [f for path in paths for f in check(path)]
+    findings = [f for path in paths for f in check(path, repo_root)]
     for finding in findings:
         print(f"[{HOOK_ID}] {finding}", file=sys.stderr)
     return 1 if findings else 0

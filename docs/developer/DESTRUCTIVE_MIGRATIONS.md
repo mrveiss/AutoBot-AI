@@ -62,6 +62,22 @@ Three conditions, three distinct messages:
 Its reach floor counts migrations **parsed**, not violations found: a scanner whose discovery breaks
 finds zero violations and prints the same clean line as a clean tree.
 
-**Not checked, and worth knowing:** the guard cannot tell whether release N-1 still writes the column
-being dropped. That is a fact about deployed code, not about the migration, and it is the thing the
-`NO DATA LOSS:` sentence exists to make a human state explicitly.
+### The cross-source column check
+
+A fourth condition, with its own message: for every `op.drop_column("table", "column")` in
+**`upgrade()`**, the guard looks for a model class declaring `__tablename__ = "table"` and a
+`Column(...)`/`mapped_column(...)` assignment named `column`. If one exists, the *current* tree still
+writes the column being dropped, and the migration is a contract without an expand.
+
+Table and column are tied together through the class rather than by both names appearing in one file
+— a bare grep for a column called `name` or `status` matches everywhere, and a guard that cries wolf
+is a guard someone silences.
+
+**Only `upgrade()` is inspected.** A `downgrade()` dropping a column is reversing an `upgrade()` that
+added one, and the model *should* still declare it. Scanning the whole module reported
+`20260824_084_device_capability_scoping.py` as a violation for exactly this — all three of its drops
+are in `downgrade()`, and `MobileDevice` correctly still declares all three columns.
+
+**Still not checked, and worth knowing:** whether release N-1 writes the column. The check proves the
+*current* tree does not; the previous release is a fact about deployed code, not about this
+repository, and it is what the `NO DATA LOSS:` sentence exists to make a human state explicitly.
