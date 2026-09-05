@@ -16,7 +16,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_middleware import get_auth_middleware
-from autobot_shared.auth.permissions import is_admin_role
+from autobot_shared.auth.permissions import Permission, is_admin_role, role_has_permission
 from user_management.database import get_async_session
 from user_management.services import (
     OrganizationService,
@@ -299,6 +299,31 @@ async def require_platform_admin(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Platform admin privileges required",
+        )
+    return context
+
+
+async def require_reporting_line_write(
+    context: TenantContext = Depends(get_tenant_context),
+    current_user: dict = Depends(get_current_user),
+) -> TenantContext:
+    """
+    Dependency that requires the ``admin.reporting_line.write`` permission (#15765).
+
+    Re-parenting a reporting line is an authority-granting operation, not
+    ordinary data editing: once the hierarchy gates card edits (#15765, parent
+    #13935), the new manager gains edit rights over the moved subject and, at
+    depth two, over everyone that manager manages. The check below is therefore
+    on the caller's *granted* permission only -- it never inspects reporting-line
+    data, so a caller cannot acquire it by becoming someone's manager, which
+    would otherwise let restructuring self-grant further authority.
+
+    Raises HTTPException if the caller does not hold the permission.
+    """
+    if not role_has_permission(current_user.get("role"), Permission.ADMIN_REPORTING_LINE_WRITE.value):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="admin.reporting_line.write permission required",
         )
     return context
 
