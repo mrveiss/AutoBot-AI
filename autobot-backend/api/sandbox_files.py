@@ -10,7 +10,9 @@ Mirrors api/files.py but rooted at sandbox_files_root instead of file_manager_ro
 GH#7409
 """
 
+import asyncio
 import logging
+import os
 import shutil
 from pathlib import Path
 
@@ -42,6 +44,11 @@ logger = logging.getLogger(__name__)
 SANDBOX_FILES_ROOT = get_data_path("sandbox_files_root").resolve()
 
 _sandbox_root_ready = False
+
+# Recursive delete is unrecoverable -- no trash, no snapshot, no undo -- and
+# this endpoint is agent-callable, so the guards below are the only thing
+# between a stale path and someone's uncommitted work (#15777).
+_GIT_STATUS_TIMEOUT_SECONDS = int(os.getenv("AUTOBOT_SANDBOX_GIT_STATUS_TIMEOUT_SECONDS", "10"))
 
 
 def ensure_sandbox_root() -> None:
@@ -196,15 +203,100 @@ async def preview_file(request: Request, path: str):
     }
 
 
+def _entry_count(target: Path) -> int:
+    """Immediate children of `target` -- enough to tell scratch from workload."""
+    with os.scandir(target) as entries:
+        return sum(1 for _ in entries)
+
+
+def _enclosing_work_tree(target: Path) -> Path | None:
+    """Nearest git work tree at or above `target`, bounded by the sandbox root.
+
+    Bounded deliberately: on a developer machine the sandbox root may itself sit
+    inside a checkout, and walking past it would make every delete look like a
+    repository operation.
+    """
+    for candidate in (target, *target.parents):
+        if (candidate / ".git").exists():
+            return candidate
+        if candidate == SANDBOX_FILES_ROOT:
+            break
+    return None
+
+
+def _hermetic_git_env() -> dict[str, str]:
+    """Environment for a git probe that must answer about `-C`, nothing else.
+
+    Every inherited ``GIT_*`` variable is dropped. ``GIT_DIR`` in particular
+    overrides ``-C`` completely, so a process started with one in its
+    environment -- anything spawned from a git hook, a CI step, or a shell
+    where someone exported it -- would get the status of a repository the
+    caller never named, and the guard would then permit or refuse a delete
+    based on an unrelated tree. ``LC_ALL=C`` keeps ``--porcelain`` parsing
+    stable on a host with a translated git.
+    """
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env["LC_ALL"] = "C"
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    return env
+
+
+async def _uncommitted_entries(work_tree: Path, target: Path) -> list[str] | None:
+    """Porcelain status lines for `target`; ``None`` when git cannot answer."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git", "-C", str(work_tree), "status", "--porcelain", "--", str(target),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            env=_hermetic_git_env(),
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_GIT_STATUS_TIMEOUT_SECONDS)
+    except (OSError, asyncio.TimeoutError):
+        return None
+    if proc.returncode != 0:
+        return None
+    return [line for line in stdout.decode("utf-8", errors="replace").splitlines() if line.strip()]
+
+
+async def _assert_directory_deletable(target_path: Path, path: str, recursive: bool, force: bool) -> None:
+    """Refuse a recursive delete that would take unsaved work with it (#15777)."""
+    entries = await run_in_file_executor(_entry_count, target_path)
+    if entries and not recursive:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Directory '{path}' is not empty ({entries} entries); pass recursive=true to delete it",
+        )
+
+    work_tree = await run_in_file_executor(_enclosing_work_tree, target_path)
+    if work_tree is None or force:
+        return
+
+    dirty = await _uncommitted_entries(work_tree, target_path)
+    if dirty is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot verify whether '{path}' holds uncommitted work; pass force=true to delete anyway",
+        )
+    if dirty:
+        raise HTTPException(
+            status_code=409,
+            detail=f"'{path}' holds {len(dirty)} uncommitted change(s); pass force=true to delete anyway",
+        )
+
+
 @router.delete("/delete", response_model=FileSandboxDeleteResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="sandbox_delete_file",
     error_code_prefix="SANDBOX_FILES",
 )
-async def delete_file(request: Request, path: str):
-    """Delete a file or directory within the sandbox."""
-    _check_permission(request, "delete")
+async def delete_file(request: Request, path: str, recursive: bool = False, force: bool = False):
+    """Delete a file or directory within the sandbox.
+
+    A non-empty directory needs `recursive`, and one holding uncommitted work
+    needs `force` on top of it -- see #15777.
+    """
+    user = _check_permission(request, "delete")
     target_path = _validate_path(path)
 
     if not await run_in_file_executor(target_path.exists):
@@ -215,6 +307,14 @@ async def delete_file(request: Request, path: str):
         await run_in_file_executor(target_path.unlink)
         return {"message": f"File '{path}' deleted successfully"}
 
+    await _assert_directory_deletable(target_path, path, recursive, force)
+    logger.warning(
+        "sandbox recursive delete: path=%s entries=%s forced=%s actor=%s",
+        path,
+        await run_in_file_executor(_entry_count, target_path),
+        force,
+        user.get("username") or user.get("user_id") or "unknown",
+    )
     await run_in_file_executor(shutil.rmtree, target_path)
     return {"message": f"Directory '{path}' deleted successfully"}
 

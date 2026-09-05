@@ -495,3 +495,17 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SANDBOX_GIT_STATUS_TIMEOUT_SECONDS",
+        type=int,
+        default=10,
+        description=(
+            "Seconds the sandbox delete guard waits for `git status --porcelain` "
+            "before treating the work tree as unverifiable and refusing the "
+            "recursive delete (api/sandbox_files.py, #15777)."
+        ),
+        component="backend",
+    )
+)
