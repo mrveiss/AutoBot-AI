@@ -39,6 +39,7 @@ _DEPLOY_BACKEND_ENV = _ANSIBLE_ROOT / "playbooks" / "deploy-backend-env.yml"
 _BACKEND_ENV_VARS = _ANSIBLE_ROOT / "playbooks" / "vars" / "backend-env.yml"
 _BACKEND_TASKS = _ANSIBLE_ROOT / "roles" / "backend" / "tasks" / "main.yml"
 _BACKEND_DEFAULTS = _ANSIBLE_ROOT / "roles" / "backend" / "defaults" / "main.yml"
+_GROUP_VARS_ALL = _ANSIBLE_ROOT / "inventory" / "group_vars" / "all.yml"
 _SLM_MANAGER_TASKS = _ANSIBLE_ROOT / "roles" / "slm_manager" / "tasks" / "main.yml"
 _SLM_MANAGER_DEFAULTS = _ANSIBLE_ROOT / "roles" / "slm_manager" / "defaults" / "main.yml"
 
@@ -84,6 +85,23 @@ def _file_module_args(task: dict) -> dict:
     raise AssertionError(f"task {task.get('name')!r} carries no file/ansible.builtin.file module")
 
 
+def _global_context() -> dict:
+    """The inventory-wide vars every role default is rendered against.
+
+    A role default may reference a global -- `roles/backend/defaults/main.yml`
+    derives `code_source_dir` from `autobot.base_dir` (#15632), which is defined
+    in `inventory/group_vars/all.yml`, not beside it. Ansible resolves that
+    because group_vars are in scope for every play; a resolver seeded only with
+    the role's own mapping is not modelling ansible, and raises UndefinedError
+    on a file that is perfectly valid.
+
+    Nested values are kept, not filtered to scalars: `autobot` is a mapping and
+    the reference is to an attribute of it. They are made available for LOOKUP
+    only -- see the render loop below for why they are not resolved themselves.
+    """
+    return dict(_load_yaml(_GROUP_VARS_ALL))
+
+
 def _resolve_defaults(raw: dict) -> dict:
     """Iteratively render a flat defaults/vars mapping against itself.
 
@@ -92,15 +110,25 @@ def _resolve_defaults(raw: dict) -> dict:
     key in the SAME mapping. Plain vars (jinja2) render only one level per pass,
     so this repeats until nothing changes (small, bounded mappings -- never a
     functional loop).
+
+    Rendering happens against the role mapping PLUS the inventory globals, so a
+    default deriving from `autobot.base_dir` resolves here as it does in a real
+    play (#15632).
     """
     jinja2 = pytest.importorskip("jinja2")
     env = jinja2.Environment()  # nosec B701  # compiling repo-owned defaults, never user input
+    globals_ = _global_context()
     context = {k: v for k, v in raw.items() if isinstance(v, (str, int, float, bool))}
     for _ in range(6):
         progressed = False
+        # Only the ROLE's own keys are rendered. The globals are in scope for
+        # lookup but are not themselves resolved here: group_vars/all.yml
+        # contains entries built from ansible's inventory magic vars (`groups`),
+        # which exist only inside a real play. Rendering those would fail on
+        # files this test is not about.
         for key, value in list(context.items()):
             if isinstance(value, str) and "{{" in value:
-                rendered = env.from_string(value).render(**context)
+                rendered = env.from_string(value).render(**{**globals_, **context})
                 if rendered != value:
                     context[key] = rendered
                     progressed = True

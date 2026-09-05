@@ -14,7 +14,7 @@ backend_install_dir: /opt/autobot/autobot-backend
 # instead of relying on a role default -- nine occurrences of the same literal,
 # which is exactly what pipeline-scripts/hardcoded_values_baseline.txt exists
 # to catch (#15162). Defined here once, tasks reference the bare variable.
-code_source_dir: "{{ autobot.base_dir ~ '/code_source' }}"
+code_source_dir: "{{ autobot.base_dir }}/code_source"
 backend_code_dir: "{{ backend_install_dir }}"  # Actual code location (can be overridden by playbook)
 backend_shared_standalone_dir: /opt/autobot/autobot_shared  # Standalone PYTHONPATH copy used by workers (#3649)
 backend_log_dir: /var/log/autobot
