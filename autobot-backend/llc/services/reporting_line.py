@@ -181,6 +181,15 @@ class ReportingLineService(LLCServiceBase):
         Owners terminate — theirs is the absent line that means "top", and
         without that exception the rule makes each of them report to the CEO
         who reports to them.
+
+        **This bound and :meth:`_would_cycle`'s are deliberately different, and
+        unifying them is a bug.** This walk stops at ``max_depth`` because that
+        is all authority needs (#15765). That one is unbounded because a cycle
+        can be closed anywhere in a chain: give it this bound and it admits a
+        loop formed three levels up, and the row it then writes hangs any later
+        unbounded consumer — a different component failing at a different time
+        from the write that caused it. The two look like one traversal and are
+        not.
         """
         managers: List[Holder] = []
         seen = {(subject.type, subject.id)}
