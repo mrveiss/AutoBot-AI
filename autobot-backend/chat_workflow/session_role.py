@@ -19,6 +19,7 @@ import json
 import os
 from typing import List, Optional
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from orchestration.agent_registry import get_default_agents
@@ -26,7 +27,7 @@ from orchestration.agent_registry import get_default_agents
 logger = get_logger(__name__)
 
 # TTL for a session's role binding — env-tunable, never hard-coded.
-SESSION_ROLE_TTL_SECONDS: int = int(os.environ.get("AUTOBOT_SESSION_ROLE_TTL_SECONDS", str(24 * 3600)))
+SESSION_ROLE_TTL_SECONDS: int = env_int("AUTOBOT_SESSION_ROLE_TTL_SECONDS", 24 * 3600)
 
 # GH#11202: master switch for the chat approval gate. OFF by default — the gate
 # routes tool calls through the LangGraph approval interrupt, which the frontend

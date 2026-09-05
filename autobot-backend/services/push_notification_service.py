@@ -17,6 +17,7 @@ import os
 import threading
 from typing import Optional
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 
@@ -27,7 +28,7 @@ metrics = get_metrics_manager()
 _VAPID_PUBLIC_KEY: str = os.environ.get("VAPID_PUBLIC_KEY", "")
 _VAPID_PRIVATE_KEY: str = os.environ.get("VAPID_PRIVATE_KEY", "")
 _VAPID_CLAIMS_SUB: str = os.environ.get("VAPID_CLAIMS_SUB", "mailto:admin@autobot.local")
-_PUSH_NOTIFICATION_TTL: int = int(os.environ.get("AUTOBOT_PUSH_NOTIFICATION_TTL", "86400"))
+_PUSH_NOTIFICATION_TTL: int = env_int("AUTOBOT_PUSH_NOTIFICATION_TTL", 86400)
 logger.debug("Push notification TTL: %ds (AUTOBOT_PUSH_NOTIFICATION_TTL)", _PUSH_NOTIFICATION_TTL)
 
 

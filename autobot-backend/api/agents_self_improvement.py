@@ -9,7 +9,6 @@ Endpoints for accessing task outcome history, learned strategies,
 and resetting learning state per agent/task type.
 """
 
-import os
 from typing import Any, List
 
 from fastapi import APIRouter, Depends, Query
@@ -24,6 +23,7 @@ from api.schemas_agent import (
     TaskOutcomeResponse,
 )
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
@@ -32,13 +32,13 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 # Default confidence floor for exporting a failure pattern (governance review).
-_DEFAULT_MIN_CONFIDENCE = float(os.environ.get("AUTOBOT_KNOWLEDGE_EXPORT_MIN_CONFIDENCE", "0.8"))
+_DEFAULT_MIN_CONFIDENCE = env_float("AUTOBOT_KNOWLEDGE_EXPORT_MIN_CONFIDENCE", 0.8)
 # Max chars kept from untrusted imported free-text (mirrors the learned-template
 # sanitization limit in orchestration/orchestrator_prompts.py, #11060).
-_IMPORT_TEXT_MAX = int(os.environ.get("AUTOBOT_LEARNED_TEMPLATE_MAX", "500"))
+_IMPORT_TEXT_MAX = env_int("AUTOBOT_LEARNED_TEMPLATE_MAX", 500)
 # Max failure patterns scanned for a knowledge export (explicit, not the store's
 # default 50) so a governance export doesn't silently omit patterns (GH#11179).
-_EXPORT_PATTERN_LIMIT = int(os.environ.get("AUTOBOT_KNOWLEDGE_EXPORT_PATTERN_LIMIT", "500"))
+_EXPORT_PATTERN_LIMIT = env_int("AUTOBOT_KNOWLEDGE_EXPORT_PATTERN_LIMIT", 500)
 
 # Module-level singletons initialized on first use
 _judge = None

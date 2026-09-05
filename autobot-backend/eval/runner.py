@@ -23,17 +23,17 @@ replay, a subprocess transcript, or a mock in tests).
 from __future__ import annotations
 
 import asyncio
-import os
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, List
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from eval.report import RegressionReport, TrajectoryOutcome
 from eval.store import GoldenTrajectory
 from rlm.evaluator import ResponseQualityEvaluator
 
 # #11062: a hung/slow candidate must not stall the whole regression run.
-_REPLAY_TIMEOUT_S = float(os.environ.get("EVAL_REPLAY_TIMEOUT_S", "120"))
+_REPLAY_TIMEOUT_S = env_float("EVAL_REPLAY_TIMEOUT_S", 120.0)
 
 logger = get_logger(__name__)
 
