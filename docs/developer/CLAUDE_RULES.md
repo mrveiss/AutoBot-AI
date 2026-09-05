@@ -525,6 +525,7 @@ To add a new variable:
 | `AUTOBOT_MAX_FALLBACK_ATTEMPTS` | llm | int | `3` | Maximum model-level fallback attempts the coordinator makes after a quota/rate-limit exhaustion before giving up. Raising it tries more fallback models before failing; lowering it gives up sooner, failing faster but with less fallback coverage (llm_shared/model_fallback_coordinator.py). |
 | `AUTOBOT_MAX_TASK_TYPE_KEYS_PER_TENANT` | agents | int | `64` | Per-tenant cap on distinct task_type keys the pattern learner tracks in Redis, beyond the known-vocabulary allowlist (GH#11534). Raising it tolerates more distinct task types per tenant before capping; lowering it bounds Redis key growth more tightly against a runaway integration (agents/task_pattern_learner.py). |
 | `AUTOBOT_MAX_UNMATCHED_OUTPUT_CHARS` | tools | int | `20000` | Cap on unmatched tool-output characters retained before the filter truncates. Raising it keeps more raw output for unmatched patterns; lowering it truncates sooner, reducing memory/storage per tool call (services/tool_output_filter.py). |
+| `AUTOBOT_MIGRATION_BACKFILL_BATCH_SIZE` | backend | int | `1000` | Rows per statement when a migration backfills a column in chunks. An unbounded UPDATE holds locks for its whole duration and can exceed the bind-parameter limit, stopping a rolling update mid-flight (migrations/templates/chunked_backfill.py, #15776). |
 | `AUTOBOT_MULTIMODAL_VOICE_CONFIDENCE_THRESHOLD` | voice | float | `0.7` | Fallback confidence threshold for VoiceProcessor when the multimodal.voice config section omits it (#13207). Range: 0.0–1.0. |
 | `AUTOBOT_MULTIMODAL_VOICE_PROCESSING_TIMEOUT` | voice | int | `30` | Fallback processing timeout in seconds for VoiceProcessor when the multimodal.voice config section omits it (#13207). |
 | `AUTOBOT_NODE_PROXY_TIMEOUT_SECONDS` | slm | float | `15.0` | Ceiling on a proxied request from the SLM to a node's backend. The aggregator fans out across the fleet, so without a bound one unresponsive node would hold the whole lifecycle view open. |
@@ -637,5 +638,5 @@ To add a new variable:
 | `AUTOBOT_WORKSPACE_MAX_COUNT` | workspace | int | `20` | Maximum number of concurrent task workspace containers allowed (GH#10544). Raising it allows more concurrent workspaces at the cost of more host resource usage; lowering it caps concurrent workspace count more tightly (services/docker_task_workspace.py). |
 | `AUTOBOT_WORKSPACE_PIDS_LIMIT` | workspace | int | `512` | PID-count limit (Linux pids cgroup) applied to a task workspace container, capping process count so a fork-bomb inside it cannot exhaust host PIDs (GH#11059). Raising it allows more processes inside a workspace; lowering it hardens against a fork-bomb more tightly, at the risk of limiting legitimate parallelism (services/docker_task_workspace.py). |
 
-*199 variables registered as of last generation.*
+*200 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->
