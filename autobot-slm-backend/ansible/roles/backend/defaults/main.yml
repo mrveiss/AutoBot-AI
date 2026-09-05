@@ -9,12 +9,12 @@ backend_user: autobot
 backend_group: autobot
 backend_install_dir: /opt/autobot/autobot-backend
 # Canonical git checkout on the box (#3649), matching the autobot_shared and
-# monitoring role defaults. Every code_source_dir reference in this role's
+# monitoring role defaults, and derived from `autobot.base_dir` since #15632. Every code_source_dir reference in this role's
 # tasks/main.yml used to repeat the default(...) fallback with this literal inline
 # instead of relying on a role default -- nine occurrences of the same literal,
 # which is exactly what pipeline-scripts/hardcoded_values_baseline.txt exists
 # to catch (#15162). Defined here once, tasks reference the bare variable.
-code_source_dir: /opt/autobot/code_source
+code_source_dir: "{{ autobot.base_dir ~ '/code_source' }}"
 backend_code_dir: "{{ backend_install_dir }}"  # Actual code location (can be overridden by playbook)
 backend_shared_standalone_dir: /opt/autobot/autobot_shared  # Standalone PYTHONPATH copy used by workers (#3649)
 backend_log_dir: /var/log/autobot
