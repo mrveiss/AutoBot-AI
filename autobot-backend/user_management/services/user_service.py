@@ -36,6 +36,7 @@ from user_management.services.user_service_errors import (  # noqa: F401
     UserNotFoundError,
     UserServiceError,
 )
+from user_management.services.user_service_conflict import insert_user_or_raise_duplicate
 
 logger = get_logger(__name__)
 
@@ -146,10 +147,11 @@ class UserService(BaseService):
             },
         )
 
-    async def _persist_user(self, user: User, role_ids: List[uuid.UUID] | None) -> None:
-        """Add user to session and assign roles. Issue #620."""
-        self.session.add(user)
-        await self.session.flush()
+    async def _persist_user(
+        self, user: User, role_ids: List[uuid.UUID] | None, email: str, username: str
+    ) -> None:
+        """Insert user (SAVEPOINT-isolated against a race, #15772) and assign roles. Issue #620."""
+        await insert_user_or_raise_duplicate(self.session, user, email, username, self._find_by_email_or_username)
         if role_ids:
             await self._assign_roles(user.id, role_ids)
 
@@ -195,7 +197,7 @@ class UserService(BaseService):
             effective_org_id,
             is_platform_admin,
         )
-        await self._persist_user(user, role_ids)
+        await self._persist_user(user, role_ids, email, username)
         await self._log_user_creation(user, email, username, effective_org_id, is_platform_admin)
         logger.info("Created user: %s (id=%s)", username, user.id)
         return user
