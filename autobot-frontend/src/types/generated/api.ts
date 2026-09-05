@@ -50675,6 +50675,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/tools/{company_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tools */
+        get: operations["list_tools_api_llc_tools__company_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/tools/{company_id}/{tool_name}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tool Usage */
+        get: operations["tool_usage_api_llc_tools__company_id___tool_name__usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/tools/{company_id}/{tool_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upsert Tool Overlay */
+        put: operations["upsert_tool_overlay_api_llc_tools__company_id___tool_name__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/portfolios": {
         parameters: {
             query?: never;
@@ -98115,6 +98166,26 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ToolCatalogueEntry
+         * @description One tool: registry identity, this company's facts, and its reach.
+         */
+        ToolCatalogueEntry: {
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Tags */
+            tags: string[];
+            /** Url */
+            url?: string | null;
+            /** Logo Url */
+            logo_url?: string | null;
+            /** Role Count */
+            role_count: number;
+        } & {
+            [key: string]: unknown;
+        };
         /** ToolInstallRequest */
         ToolInstallRequest: {
             /** Tool Name */
@@ -98164,6 +98235,30 @@ export interface components {
         ToolNodesResponse: {
             /** Nodes */
             nodes: components["schemas"]["ToolNode"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ToolOverlayUpdate
+         * @description This company's own facts about a tool. Both optional, both clearable.
+         */
+        ToolOverlayUpdate: {
+            /** Url */
+            url?: string | null;
+            /** Logo Url */
+            logo_url?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ToolUsage
+         * @description Which roles carry a tool, and which workflows those roles run.
+         */
+        ToolUsage: {
+            /** Role Ids */
+            role_ids: string[];
+            /** Workflow Ids */
+            workflow_ids: string[];
         } & {
             [key: string]: unknown;
         };
@@ -171104,6 +171199,105 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tools_api_llc_tools__company_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolCatalogueEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tool_usage_api_llc_tools__company_id___tool_name__usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                tool_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolUsage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_tool_overlay_api_llc_tools__company_id___tool_name__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                tool_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolOverlayUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolCatalogueEntry"];
+                };
             };
             /** @description Validation Error */
             422: {
