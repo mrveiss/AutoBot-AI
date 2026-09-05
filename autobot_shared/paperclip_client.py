@@ -54,6 +54,7 @@ from urllib.parse import quote as _url_quote
 
 import aiohttp
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,7 @@ logger = logging.getLogger(__name__)
 # Defaults
 # ---------------------------------------------------------------------------
 
-_COMMENT_DEDUP_TTL_SECONDS = int(os.environ.get("AUTOBOT_PAPERCLIP_COMMENT_DEDUP_TTL", 3600))
+_COMMENT_DEDUP_TTL_SECONDS = env_int("AUTOBOT_PAPERCLIP_COMMENT_DEDUP_TTL", 3600)
 _ISSUE_SEARCH_LIMIT = 50  # max results to scan when checking for duplicates
 _REDIS_KEY_PREFIX = "paperclip:idem:"
 

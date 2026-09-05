@@ -20,7 +20,6 @@ Each anti-pattern includes:
 """
 
 import ast
-import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -29,6 +28,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.repo_path import to_repo_relative
 from autobot_shared.status_enums import Severity  # #7253: consolidated onto canonical (#6689)
@@ -50,7 +50,7 @@ _SYSTEMIC_THRESHOLD = 3
 # Sort key per finding: freq(type) * severity_score * (1 + ALPHA * runtime_risk).
 # At ALPHA=0 the boost is inactive; ALPHA=1.0 means a fully-risky file doubles
 # its effective score.  Override via env var when tuning signal weight.
-_RANKING_ALPHA: float = float(os.environ.get("AUTOBOT_RANKING_ALPHA", "1.0"))
+_RANKING_ALPHA: float = env_float("AUTOBOT_RANKING_ALPHA", 1.0)
 
 
 def anti_pattern_score(severity: Severity) -> int:

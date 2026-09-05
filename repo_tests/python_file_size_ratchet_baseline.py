@@ -452,7 +452,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 739,
     "autobot-slm-backend/api/code_source.py": 720,
-    "autobot-slm-backend/api/code_sync.py": 6091,  # #15462: build/publish logic moved to services/slm_frontend_build.py
+    "autobot-slm-backend/api/code_sync.py": 6083,  # #15710: env-cast conversion dropped health-poll scaffolding
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,
     "autobot-slm-backend/api/monitoring.py": 1096,

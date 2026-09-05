@@ -34,6 +34,7 @@ import json
 import os
 from typing import TYPE_CHECKING, Any
 
+from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
 
@@ -49,12 +50,12 @@ logger = get_logger(__name__)
 
 # Maximum number of findings returned by select_targets() per batch.
 # dispatch_proposal also defensively re-caps at this limit.
-REMEDIATION_MAX_BATCH: int = int(os.environ.get("REMEDIATION_MAX_BATCH", "5"))
+REMEDIATION_MAX_BATCH: int = env_int("REMEDIATION_MAX_BATCH", 5)
 
 # Minimum confidence threshold reserved for a future dispatch approval gate.
 # Currently unused — recorded here so the constant is discoverable when
 # the gate is implemented.  At 0.0 all proposals pass (no filtering).
-REMEDIATION_MIN_CONFIDENCE: float = float(os.environ.get("REMEDIATION_MIN_CONFIDENCE", "0.0"))
+REMEDIATION_MIN_CONFIDENCE: float = env_float("REMEDIATION_MIN_CONFIDENCE", 0.0)
 
 # Master gate for dispatch_proposal.  Default is false — the safe path is
 # always the disabled one.  Set REMEDIATION_DISPATCH_ENABLED=true to enable

@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 from api._video_providers_loader import load_video_providers
 from api.schemas_media import ProvidersResponse, ProviderStatus
 from auth_middleware import get_current_user
+from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import redis_get, redis_set
 
@@ -61,7 +62,7 @@ else:  # pragma: no cover - import guard
 router = APIRouter(tags=["video-generation", "media"])
 
 # Job records are short-lived; TTL is env-tunable (no hard-coded magic number).
-_JOB_TTL_S = int(os.environ.get("VIDEO_GEN_JOB_TTL_S", "3600"))
+_JOB_TTL_S = env_int("VIDEO_GEN_JOB_TTL_S", 3600)
 _JOB_KEY_PREFIX = "video_gen:job:"
 
 _PROVIDER_ENV = {"runway": "RUNWAY_API_KEY", "sora": "SORA_API_KEY", "kling": "KLING_API_KEY"}

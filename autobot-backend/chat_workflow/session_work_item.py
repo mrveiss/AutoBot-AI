@@ -23,16 +23,16 @@ tenant predicates added alongside are defence in depth, not the only defence.
 """
 
 import json
-import os
 from typing import NamedTuple, Optional
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
 logger = get_logger(__name__)
 
 # TTL for a session's work-item binding — env-tunable, never hard-coded.
-SESSION_WORK_ITEM_TTL_SECONDS: int = int(os.environ.get("AUTOBOT_SESSION_WORK_ITEM_TTL_SECONDS", str(24 * 3600)))
+SESSION_WORK_ITEM_TTL_SECONDS: int = env_int("AUTOBOT_SESSION_WORK_ITEM_TTL_SECONDS", 24 * 3600)
 
 _KEY = "autobot:session:{session_id}:work_item"
 

@@ -43,7 +43,7 @@ from api.venv_reconcile import (
 )
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.db_url import assemble_postgres_url
-from autobot_shared.env_utils import env_int, env_int_clamped
+from autobot_shared.env_utils import env_float, env_int, env_int_clamped
 from autobot_shared.security.redaction import redact_mapping
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
@@ -1704,10 +1704,10 @@ assert len(_ALL_COMPONENT_PIP_BINS) == len(
 
 # Timeout (seconds) for `npm ci` (dependency install).  Windows-generated
 # package-lock.json on WSL can be slow; 300 s default matches pip (#11351).
-_NPM_INSTALL_TIMEOUT: float = float(os.environ.get("AUTOBOT_NPM_INSTALL_TIMEOUT", "300"))
+_NPM_INSTALL_TIMEOUT: float = env_float("AUTOBOT_NPM_INSTALL_TIMEOUT", 300.0)
 
 # Timeout (seconds) for `npm run <build>` (vite build step) (#11351).
-_NPM_BUILD_TIMEOUT: float = float(os.environ.get("AUTOBOT_NPM_BUILD_TIMEOUT", "300"))
+_NPM_BUILD_TIMEOUT: float = env_float("AUTOBOT_NPM_BUILD_TIMEOUT", 300.0)
 
 # Marker file stored inside node_modules after a successful npm ci.  Holds the
 # sha256 hex-digest of the package-lock.json that was installed (#11351).
@@ -2061,7 +2061,7 @@ _COMPONENT_MIGRATION_CONFIG: Dict[str, str] = {
 # Directory where pg_dump backups are stored; override with AUTOBOT_DB_BACKUP_DIR.
 _DB_BACKUP_DIR: str = os.environ.get("AUTOBOT_DB_BACKUP_DIR", "/opt/autobot/db-backups")
 # Maximum number of backups to retain per component; older ones are pruned.
-_DB_BACKUP_KEEP: int = int(os.environ.get("AUTOBOT_DB_BACKUP_KEEP", "5"))
+_DB_BACKUP_KEEP: int = env_int("AUTOBOT_DB_BACKUP_KEEP", 5)
 
 # --- #11378: post-restart health polling ---------------------------------------
 # Total seconds to wait for a component to become healthy after restart. The
@@ -2075,23 +2075,15 @@ _DB_BACKUP_KEEP: int = int(os.environ.get("AUTOBOT_DB_BACKUP_KEEP", "5"))
 # non-failed unit — rollback is gated on a genuine systemd 'failed' state, not on
 # the timeout (see _wait_component_healthy), so the shorter window cannot cause a
 # false rollback of a slow-but-healthy deploy.
-_DEFAULT_HEALTH_POLL_TIMEOUT_S = "180"
-_HEALTH_POLL_TIMEOUT: float = float(os.environ.get("AUTOBOT_HEALTH_POLL_TIMEOUT", _DEFAULT_HEALTH_POLL_TIMEOUT_S))
+_HEALTH_POLL_TIMEOUT: float = env_float("AUTOBOT_HEALTH_POLL_TIMEOUT", 180.0)
 # Fast window for restarts that did NOT recreate the venv (warm interpreter).
-_FAST_HEALTH_POLL_TIMEOUT_S = "60"
-_FAST_HEALTH_POLL_TIMEOUT: float = float(
-    os.environ.get("AUTOBOT_HEALTH_POLL_TIMEOUT_FAST", _FAST_HEALTH_POLL_TIMEOUT_S)
-)
+_FAST_HEALTH_POLL_TIMEOUT: float = env_float("AUTOBOT_HEALTH_POLL_TIMEOUT_FAST", 60.0)
 # Per-attempt connect timeout (seconds) when probing the health endpoint.
-_DEFAULT_HEALTH_POLL_CONNECT_TIMEOUT_S = "3"
-_HEALTH_POLL_CONNECT_TIMEOUT: float = float(
-    os.environ.get("AUTOBOT_HEALTH_POLL_CONNECT_TIMEOUT", _DEFAULT_HEALTH_POLL_CONNECT_TIMEOUT_S)
-)
+_HEALTH_POLL_CONNECT_TIMEOUT: float = env_float("AUTOBOT_HEALTH_POLL_CONNECT_TIMEOUT", 3.0)
 # Delay between health-probe attempts (seconds). Env-overridable alongside the
 # windows above so the whole poll shape is configurable from one place rather
 # than a literal buried in the loop.
-_DEFAULT_HEALTH_POLL_INTERVAL_S = "2"
-_HEALTH_POLL_INTERVAL: float = float(os.environ.get("AUTOBOT_HEALTH_POLL_INTERVAL", _DEFAULT_HEALTH_POLL_INTERVAL_S))
+_HEALTH_POLL_INTERVAL: float = env_float("AUTOBOT_HEALTH_POLL_INTERVAL", 2.0)
 # Per-component health URLs (localhost only — never egress). Pre-existing
 # hardcoded ports, not touched by #15063 — resolving these through
 # ssot_config is separate, tracked work under the canonical-debt umbrella.
@@ -2530,7 +2522,7 @@ async def _restart_component_services(component: str, steps: List[str], services
 
 
 _SNAPSHOT_BASE_DIR: str = os.environ.get("AUTOBOT_SNAPSHOT_DIR", "/opt/autobot/snapshots")
-_SNAPSHOT_KEEP: int = int(os.environ.get("AUTOBOT_SNAPSHOT_KEEP", "3"))
+_SNAPSHOT_KEEP: int = env_int("AUTOBOT_SNAPSHOT_KEEP", 3)
 
 
 def _prune_old_snapshots(snap_base: Path, component: str, max_keep: int) -> None:
