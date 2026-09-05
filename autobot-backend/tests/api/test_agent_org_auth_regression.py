@@ -195,9 +195,7 @@ def test_the_route_passes_the_callers_company_to_the_service(
     app.dependency_overrides[agent_org.get_db_session] = _session
     client = TestClient(app, raise_server_exceptions=False)
 
-    getattr(client, method)(
-        "/agents/some-agent/org", json={"reports_to": "a-manager", "name": "n"}
-    )
+    getattr(client, method)("/agents/some-agent/org", json={"reports_to": "a-manager", "name": "n"})
 
     assert seen.get("company_id") == company, (
         f"the service received company_id={seen.get('company_id')!r}; the route must pass the "

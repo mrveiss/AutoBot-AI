@@ -38,10 +38,8 @@ from user_management.models.base import Base
 
 @pytest_asyncio.fixture
 async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
-    engine = (
-        create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
-            "sqlite+aiosqlite:///:memory:"
-        )
+    engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
+        "sqlite+aiosqlite:///:memory:"
     )
     table = AgentOrgNode.__table__
     harness._scrub_pg_server_defaults(table)
@@ -125,9 +123,7 @@ async def test_upsert_cannot_claim_an_agent_from_another_company(session_factory
 
     async with session_factory() as session:
         with pytest.raises(ValueError, match="not found in org hierarchy"):
-            await AgentOrgService(session).upsert_node(
-                agent_id="their-agent", name="Renamed", company_id=mine
-            )
+            await AgentOrgService(session).upsert_node(agent_id="their-agent", name="Renamed", company_id=mine)
 
 
 @pytest.mark.asyncio
