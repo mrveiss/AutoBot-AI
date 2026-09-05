@@ -24,6 +24,88 @@
 # "Destination /etc/systemd/system not writable", which aborted the play before
 # the SLM restart and left the whole self-update wedged. Writing a systemd unit
 # needs root whoever asks for it, so the requirement belongs here.
+
+# #15728: the credential-free local self-update admin socket -- both this
+# role's main.yml and Play 1 of update-all-nodes.yml reach it through this
+# same included file, same reasoning as #14624 above: a second copy is what
+# drifts. Three things, strictly in order, all gated on the one enable flag:
+# 1) the tmpfiles.d config, and an immediate `--create` so the runtime
+#    directory exists NOW rather than only after the next reboot;
+# 2) the .socket unit, which binds ListenStream= inside that directory with
+#    its own SocketMode=/SocketUser=/SocketGroup= -- the actual access
+#    control -- before anything below depends on it;
+# 3) the backend service below, whose Sockets= line (see
+#    autobot-slm-backend.service.j2) inherits the fd this socket unit holds
+#    open.
+- name: "SLM | Deploy local self-update socket runtime-directory tmpfiles config (#15728)"
+  ansible.builtin.template:
+    src: autobot-slm-self-update-tmpfiles.conf.j2
+    dest: /etc/tmpfiles.d/autobot-slm-self-update.conf
+    mode: "0644"
+  become: true
+  when: slm_self_update_socket_enabled | bool
+  register: _slm_self_update_tmpfiles
+  tags: ['slm', 'backend', 'systemd']
+
+- name: "SLM | Create local self-update socket runtime directory now (#15728)"
+  ansible.builtin.command:
+    cmd: systemd-tmpfiles --create /etc/tmpfiles.d/autobot-slm-self-update.conf
+  become: true
+  when: slm_self_update_socket_enabled | bool and _slm_self_update_tmpfiles.changed
+  changed_when: true
+  tags: ['slm', 'backend', 'systemd']
+
+- name: "SLM | Deploy local self-update admin socket unit (#15728)"
+  ansible.builtin.template:
+    src: autobot-slm-self-update.socket.j2
+    dest: /etc/systemd/system/{{ slm_self_update_socket_service }}.socket
+    mode: "0644"
+  become: true
+  when: slm_self_update_socket_enabled | bool
+  notify:
+    - reload systemd
+    - restart slm self-update socket
+    - restart slm backend
+  tags: ['slm', 'backend', 'systemd']
+
+- name: "SLM | Enable local self-update admin socket unit (#15728)"
+  ansible.builtin.systemd:
+    name: "{{ slm_self_update_socket_service }}.socket"
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+  when: slm_self_update_socket_enabled | bool
+  tags: ['slm', 'backend', 'systemd']
+
+- name: "SLM | Tear down local self-update admin socket when disabled (#15728)"
+  when: not (slm_self_update_socket_enabled | bool)
+  become: true
+  tags: ['slm', 'backend', 'systemd']
+  block:
+    # Turning the flag off must actually remove the socket, not merely stop
+    # managing it. A host provisioned with it enabled would otherwise keep an
+    # ENABLED .socket unit and its unit file, so the credential-free trigger
+    # stays live on a host whose configuration says it is off -- the most
+    # dangerous shape of drift for this particular feature.
+    - name: "SLM | Stop and disable the self-update socket unit"
+      ansible.builtin.systemd:
+        name: "{{ slm_self_update_socket_service }}.socket"
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: "SLM | Remove the self-update socket unit and tmpfiles config"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/etc/systemd/system/{{ slm_self_update_socket_service }}.socket"
+        - "/etc/tmpfiles.d/{{ slm_self_update_socket_service }}.conf"
+      notify:
+        - reload systemd
+        - restart slm backend
+
 - name: "SLM | Deploy backend systemd service"
   ansible.builtin.template:
     src: autobot-slm-backend.service.j2
