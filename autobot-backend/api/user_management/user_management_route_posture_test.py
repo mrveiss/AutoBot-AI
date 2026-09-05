@@ -49,6 +49,13 @@ _TRACKED_BY_15738 = frozenset(
     }
 )
 
+# #15743: change-password observes as _AUTHENTICATED, and that is the whole
+# problem -- `require_current` is derived from the request body, so an
+# authenticated caller can omit `current_password` and reset any user id.
+# Recorded here for the same reason as the set above: so the row cannot be
+# read as a certification, and so the fix shows up as a posture change.
+_TRACKED_BY_15743 = frozenset({("POST", "/user-management/users/{user_id}/change-password")})
+
 #: Every route mounted under ``api.user_management.router:router``, and its
 #: observed posture. A route missing here, or an entry here with no matching
 #: route, both fail in ``TestUserManagementRoutePostureIsComplete``.
@@ -62,6 +69,8 @@ _EXPECTED_POSTURE = {
     ("DELETE", "/user-management/users/{user_id}"): _AUTHENTICATED,  # delete_user
     ("POST", "/user-management/users/{user_id}/activate"): _AUTHENTICATED,
     ("POST", "/user-management/users/{user_id}/deactivate"): _AUTHENTICATED,
+    # Authenticated, but see #15743: the body decides whether the current
+    # password is verified, so this row records a takeover path, not a safe one.
     ("POST", "/user-management/users/{user_id}/change-password"): _AUTHENTICATED,
     ("POST", "/user-management/users/{user_id}/roles/{role_id}"): _AUTHENTICATED,  # assign_role
     ("DELETE", "/user-management/users/{user_id}/roles/{role_id}"): _AUTHENTICATED,  # revoke_role
@@ -205,6 +214,27 @@ class TestUserManagementRoutePosture:
                 f"admin gate) but observed {posture.get(key)!r} -- if a gate was "
                 "added here, close #15738 with that change; do not edit this "
                 "file to match a gate added elsewhere"
+            )
+
+    def test_the_15743_change_password_route_is_recorded_not_certified(self):
+        """change-password observes as authenticated-only, which is the defect.
+
+        #15743: ``require_current`` is derived from the request body
+        (``users.py`` passes ``current_password is not None``), so an
+        authenticated caller who simply omits the field resets the password of
+        whatever ``user_id`` they name. Nothing on this route compares the
+        caller to that id. The row exists so the takeover path is on record and
+        so closing #15743 shows up here as a posture change rather than passing
+        unnoticed.
+        """
+        posture = _observed_posture()
+        assert _TRACKED_BY_15743, "the #15743 tracked-route set is empty"
+        for key in _TRACKED_BY_15743:
+            assert _EXPECTED_POSTURE[key] == _AUTHENTICATED, f"{key} must be on record as _AUTHENTICATED"
+            assert posture.get(key) == _AUTHENTICATED, (
+                f"{key}: expected the #15743-tracked posture (authenticated, no "
+                f"ownership or admin gate) but observed {posture.get(key)!r} -- "
+                "if a gate was added here, close #15743 with that change"
             )
 
 
