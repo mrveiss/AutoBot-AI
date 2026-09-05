@@ -30,7 +30,6 @@ import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 from collections.abc import Mapping
 from pathlib import Path
 
-
 #: Markers that identify a source checkout root and nothing below it. Both must
 #: be present: ``autobot_shared`` alone also matches the package directory's own
 #: parent in some layouts, and ``.git`` alone would match an unrelated repo if
