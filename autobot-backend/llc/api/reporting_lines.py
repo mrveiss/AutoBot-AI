@@ -117,14 +117,10 @@ async def get_chain(
     assert_company_access(ctx, company_id)
     subject = _holder(HolderRef(type=subject_type, id=subject_id))
     chain = await _get_lines().chain_up(session, company_id, subject)
-    return ChainResponse(
-        managers=[_ref(h) for h in chain.managers], ended=chain.ended.value
-    )
+    return ChainResponse(managers=[_ref(h) for h in chain.managers], ended=chain.ended.value)
 
 
-@router.get(
-    "/{company_id}/{subject_type}/{subject_id}/reports", response_model=List[HolderRef]
-)
+@router.get("/{company_id}/{subject_type}/{subject_id}/reports", response_model=List[HolderRef])
 async def get_direct_reports(
     company_id: uuid.UUID,
     subject_type: str,
@@ -136,9 +132,7 @@ async def get_direct_reports(
     """Who reports to this holder — derived from the stored edge, never stored."""
     assert_company_access(ctx, company_id)
     manager = _holder(HolderRef(type=subject_type, id=subject_id))
-    return [
-        _ref(h) for h in await _get_lines().direct_reports(session, company_id, manager)
-    ]
+    return [_ref(h) for h in await _get_lines().direct_reports(session, company_id, manager)]
 
 
 @router.put(
@@ -196,7 +190,5 @@ async def clear_reporting_line(
     except NotAuthorisedError as exc:
         raise forbidden(exc) from exc
     if not removed:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="No reporting line to clear"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No reporting line to clear")
     await session.commit()

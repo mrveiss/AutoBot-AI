@@ -52,10 +52,8 @@ def _agent(aid: uuid.UUID | None = None) -> Holder:
 
 @pytest_asyncio.fixture
 async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
-    engine = (
-        create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
-            "sqlite+aiosqlite:///:memory:"
-        )
+    engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
+        "sqlite+aiosqlite:///:memory:"
     )
     tables = [LLCCompanyMembership.__table__, LLCReportingLine.__table__]
     for table in tables:
@@ -69,15 +67,9 @@ async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     await engine.dispose()
 
 
-async def _member(
-    session_factory, company: uuid.UUID, user_id: uuid.UUID, role: str
-) -> None:  # noqa: ANN001
+async def _member(session_factory, company: uuid.UUID, user_id: uuid.UUID, role: str) -> None:  # noqa: ANN001
     async with session_factory() as session:
-        session.add(
-            LLCCompanyMembership(
-                id=uuid.uuid4(), company_id=company, user_id=user_id, role=role
-            )
-        )
+        session.add(LLCCompanyMembership(id=uuid.uuid4(), company_id=company, user_id=user_id, role=role))
         await session.commit()
 
 
@@ -111,10 +103,7 @@ async def test_an_agent_can_report_to_a_person_and_back(session_factory):  # noq
     async with session_factory() as session:
         service = ReportingLineService()
         assert await service.explicit_manager(session, company, agent) == person
-        assert (
-            await service.explicit_manager(session, company, other_person)
-            == other_agent
-        )
+        assert await service.explicit_manager(session, company, other_person) == other_agent
 
 
 @pytest.mark.asyncio
@@ -238,14 +227,10 @@ async def test_setting_a_line_replaces_rather_than_accumulates(session_factory):
 
     async with session_factory() as session:
         rows = await session.execute(
-            sa.select(sa.func.count())
-            .select_from(LLCReportingLine)
-            .where(LLCReportingLine.company_id == company)
+            sa.select(sa.func.count()).select_from(LLCReportingLine).where(LLCReportingLine.company_id == company)
         )
         assert rows.scalar_one() == 1
-        assert (
-            await ReportingLineService().explicit_manager(session, company, me)
-        ) == second
+        assert (await ReportingLineService().explicit_manager(session, company, me)) == second
 
 
 @pytest.mark.asyncio
@@ -257,16 +242,12 @@ async def test_clearing_returns_the_subject_to_the_default(session_factory):  # 
     await _set(session_factory, company, me, boss)
 
     async with session_factory() as session:
-        removed = await ReportingLineService().clear_line(
-            session, company_id=company, subject=me, actor_user_id=_ADMIN
-        )
+        removed = await ReportingLineService().clear_line(session, company_id=company, subject=me, actor_user_id=_ADMIN)
         await session.commit()
     assert removed is True
 
     async with session_factory() as session:
-        assert (
-            await ReportingLineService().explicit_manager(session, company, me) is None
-        )
+        assert await ReportingLineService().explicit_manager(session, company, me) is None
 
 
 @pytest.mark.asyncio

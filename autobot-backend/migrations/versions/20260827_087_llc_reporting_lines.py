@@ -134,9 +134,7 @@ def _backfill_agent_edges(bind: sa.engine.Connection, inspector: sa.Inspector) -
     # column had no foreign key, so a manager slug naming a node that no longer
     # exists is possible, and inventing a parent for it would be worse than
     # leaving it where it is.
-    bind.execute(
-        sa.text(
-            """
+    bind.execute(sa.text("""
             INSERT INTO llc_reporting_lines (
                 id, company_id, subject_type, subject_agent_id,
                 manager_type, manager_agent_id, created_at, updated_at
@@ -151,9 +149,7 @@ def _backfill_agent_edges(bind: sa.engine.Connection, inspector: sa.Inspector) -
             WHERE child.reports_to IS NOT NULL
               AND child.company_id IS NOT NULL
               AND parent.id <> child.id
-            """
-        )
-    )
+            """))
 
 
 def downgrade() -> None:

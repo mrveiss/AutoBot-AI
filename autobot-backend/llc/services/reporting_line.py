@@ -96,9 +96,7 @@ class ReportingLineService(LLCServiceBase):
     # Reading
     # ------------------------------------------------------------------
 
-    async def explicit_manager(
-        self, session: AsyncSession, company_id: uuid.UUID, subject: Holder
-    ) -> Optional[Holder]:
+    async def explicit_manager(self, session: AsyncSession, company_id: uuid.UUID, subject: Holder) -> Optional[Holder]:
         """The stored manager for one subject, or None when none is recorded.
 
         None means "no explicit line", which is not the same as "no manager" —
@@ -121,9 +119,7 @@ class ReportingLineService(LLCServiceBase):
             return None
         return Holder(type=row.manager_type, id=row.manager_id)
 
-    async def direct_reports(
-        self, session: AsyncSession, company_id: uuid.UUID, manager: Holder
-    ) -> List[Holder]:
+    async def direct_reports(self, session: AsyncSession, company_id: uuid.UUID, manager: Holder) -> List[Holder]:
         """Who names this holder as their manager — derived, never stored."""
         column = (
             LLCReportingLine.manager_user_id
@@ -143,9 +139,7 @@ class ReportingLineService(LLCServiceBase):
                 reports.append(Holder(type=row.subject_type, id=row.subject_id))
         return reports
 
-    async def _owners(
-        self, session: AsyncSession, company_id: uuid.UUID
-    ) -> List[Holder]:
+    async def _owners(self, session: AsyncSession, company_id: uuid.UUID) -> List[Holder]:
         """Every owner of the company. Peers with identical standing (#15763)."""
         result = await session.execute(
             select(LLCCompanyMembership.user_id).where(
@@ -153,13 +147,9 @@ class ReportingLineService(LLCServiceBase):
                 LLCCompanyMembership.role == MembershipRole.OWNER.value,
             )
         )
-        return [
-            Holder(type=RoleHolderType.USER.value, id=row) for row in result.scalars()
-        ]
+        return [Holder(type=RoleHolderType.USER.value, id=row) for row in result.scalars()]
 
-    async def _resolve_ceo(
-        self, session: AsyncSession, company_id: uuid.UUID
-    ) -> Optional[Holder]:
+    async def _resolve_ceo(self, session: AsyncSession, company_id: uuid.UUID) -> Optional[Holder]:
         """The company's CEO, or None while no company designates one.
 
         The seam for #15770. Returning None is the truthful answer today, not a
@@ -198,9 +188,7 @@ class ReportingLineService(LLCServiceBase):
         for _ in range(max_depth):
             nxt = await self.explicit_manager(session, company_id, current)
             if nxt is None:
-                return await self._default_step(
-                    session, company_id, current, managers, max_depth
-                )
+                return await self._default_step(session, company_id, current, managers, max_depth)
             key = (nxt.type, nxt.id)
             if key in seen:
                 # A row pointing back into its own chain. Stopping here rather
@@ -228,9 +216,7 @@ class ReportingLineService(LLCServiceBase):
         if ceo is None:
             return Chain(tuple(managers), ChainEnd.NO_CEO)
 
-        if (ceo.type, ceo.id) != (current.type, current.id) and len(
-            managers
-        ) < max_depth:
+        if (ceo.type, ceo.id) != (current.type, current.id) and len(managers) < max_depth:
             managers.append(ceo)
 
         # Owners sit above the CEO, all of them, as equals. They are appended
@@ -242,9 +228,7 @@ class ReportingLineService(LLCServiceBase):
                     managers.append(owner)
         return Chain(tuple(managers), ChainEnd.OWNER)
 
-    async def _is_owner(
-        self, session: AsyncSession, company_id: uuid.UUID, holder: Holder
-    ) -> bool:
+    async def _is_owner(self, session: AsyncSession, company_id: uuid.UUID, holder: Holder) -> bool:
         if holder.type != RoleHolderType.USER.value:
             return False
         result = await session.execute(
@@ -344,19 +328,11 @@ class ReportingLineService(LLCServiceBase):
         row = LLCReportingLine(
             company_id=company_id,
             subject_type=subject.type,
-            subject_user_id=subject.id
-            if subject.type == RoleHolderType.USER.value
-            else None,
-            subject_agent_id=subject.id
-            if subject.type == RoleHolderType.AGENT.value
-            else None,
+            subject_user_id=subject.id if subject.type == RoleHolderType.USER.value else None,
+            subject_agent_id=subject.id if subject.type == RoleHolderType.AGENT.value else None,
             manager_type=manager.type,
-            manager_user_id=manager.id
-            if manager.type == RoleHolderType.USER.value
-            else None,
-            manager_agent_id=manager.id
-            if manager.type == RoleHolderType.AGENT.value
-            else None,
+            manager_user_id=manager.id if manager.type == RoleHolderType.USER.value else None,
+            manager_agent_id=manager.id if manager.type == RoleHolderType.AGENT.value else None,
         )
         session.add(row)
         await session.flush()
@@ -401,9 +377,7 @@ class ReportingLineService(LLCServiceBase):
             )
         return removed
 
-    async def _clear(
-        self, session: AsyncSession, company_id: uuid.UUID, subject: Holder
-    ) -> bool:
+    async def _clear(self, session: AsyncSession, company_id: uuid.UUID, subject: Holder) -> bool:
         column = (
             LLCReportingLine.subject_user_id
             if subject.type == RoleHolderType.USER.value

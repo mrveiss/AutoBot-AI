@@ -43,9 +43,7 @@ _GATE = "require_reporting_line_write"
 
 
 def _mounted() -> set:
-    return {
-        (method, m.path) for m in effective_routes(llc_router) for method in m.methods
-    }
+    return {(method, m.path) for m in effective_routes(llc_router) for method in m.methods}
 
 
 def test_every_reporting_line_route_is_mounted() -> None:
@@ -61,17 +59,12 @@ def test_reads_carry_auth_and_tenant_dependencies() -> None:
             continue
         checked += 1
         dependant = getattr(m.route, "dependant", None)
-        names = {
-            getattr(d.call, "__name__", "")
-            for d in getattr(dependant, "dependencies", [])
-        }
+        names = {getattr(d.call, "__name__", "") for d in getattr(dependant, "dependencies", [])}
         if "get_current_user" not in names or "require_org_context" not in names:
             unguarded.append((sorted(m.methods), m.path, sorted(names)))
     # Presence first: a wrong prefix matches nothing and the assertion below
     # passes having verified nothing at all.
-    assert checked == len(_EXPECTED), (
-        f"expected {len(_EXPECTED)} routes to inspect, saw {checked}"
-    )
+    assert checked == len(_EXPECTED), f"expected {len(_EXPECTED)} routes to inspect, saw {checked}"
     assert not unguarded, f"routes missing auth/tenant dependencies: {unguarded}"
 
 
@@ -96,10 +89,7 @@ def test_the_write_gate_is_a_declared_dependency() -> None:
             continue
         checked += 1
         dependant = getattr(m.route, "dependant", None)
-        names = {
-            getattr(d.call, "__name__", "")
-            for d in getattr(dependant, "dependencies", [])
-        }
+        names = {getattr(d.call, "__name__", "") for d in getattr(dependant, "dependencies", [])}
         if _GATE not in names:
             ungated.append((sorted(m.methods), m.path, sorted(names)))
     assert checked == 2, f"expected 2 mutating routes, saw {checked}"
