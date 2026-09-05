@@ -32,11 +32,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from llc.models.enums import MembershipRole, RoleHolderType
 from llc.models.membership import LLCCompanyMembership
-from models.agent_org import AgentOrgNode
 from llc.models.reporting_line import LLCReportingLine
 from llc.services.authz import NotAuthorisedError
 from llc.services.reporting_line import ChainEnd, Holder, ReportingLineService
 from llc.tests import _e2e_harness as harness
+from models.agent_org import AgentOrgNode
 from user_management.models.base import Base
 
 _ADMIN = uuid.uuid4()
