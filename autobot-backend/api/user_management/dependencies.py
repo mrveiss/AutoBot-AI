@@ -236,13 +236,28 @@ async def get_tenant_context(
     )
 
 
-def require_user_management_enabled():
-    """
-    Dependency that ensures user management is enabled.
+def user_management_route_marker():
+    """No-op route marker — performs no authentication or authorization check.
 
-    AutoBot always runs full, Postgres-backed user management (#10636), so this
-    gate always passes.  Retained as a dependency hook for the user-management
-    routers.
+    Formerly named ``require_user_management_enabled``: AutoBot ran a
+    ``single_user`` deployment mode that disabled user management entirely and
+    this dependency returned a 503 while it was active. #10636 retired that
+    mode outright (AutoBot always runs full, Postgres-backed user management),
+    which left the function permanently passing — but its old name still read
+    as a live gate to anyone tracing a route's authorization posture (#15737).
+
+    It gates nothing and never has raised since #10636. Renamed rather than
+    deleted: every ``/user-management/*`` route still carries it in its
+    ``dependencies=[...]`` list as a grep-able marker of module membership, and
+    removing it as part of a legibility-only change would touch every route's
+    behaviour for no gain.
+
+    Real authentication for these routes is enforced elsewhere — see
+    ``docs/developer/AUTHENTICATION_RBAC.md``'s "Per-Route Enforcement for
+    User-Management Routes" section, or trace ``get_current_user`` (this
+    module, line 53) through ``get_tenant_context`` (line 157) and
+    ``get_user_service``/``get_team_service``/``get_organization_service``
+    (lines 306-326), which every route below actually depends on.
     """
     return None
 

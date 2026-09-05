@@ -28,7 +28,7 @@ from api.schemas_agent import (
 from api.user_management.dependencies import (
     get_team_service,
     require_org_context,
-    require_user_management_enabled,
+    user_management_route_marker,
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
@@ -54,7 +54,7 @@ logger = get_logger(__name__)
     summary="List teams",
     description="List teams in the current organization.",
     dependencies=[
-        Depends(require_user_management_enabled),
+        Depends(user_management_route_marker),
         Depends(require_org_context),
     ],
 )
@@ -85,7 +85,7 @@ async def list_teams(
     summary="Create team",
     description="Create a new team in the current organization.",
     dependencies=[
-        Depends(require_user_management_enabled),
+        Depends(user_management_route_marker),
         Depends(require_org_context),
     ],
 )
@@ -119,7 +119,7 @@ async def create_team(
     response_model=TeamResponse,
     summary="Get team",
     description="Get a specific team by ID.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def get_team(
     team_id: uuid.UUID,
@@ -141,7 +141,7 @@ async def get_team(
     response_model=TeamResponse,
     summary="Update team",
     description="Update a team's details.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def update_team(
     team_id: uuid.UUID,
@@ -176,7 +176,7 @@ async def update_team(
     response_model=TeamDeletedResponse,
     summary="Delete team",
     description="Delete a team (soft delete by default).",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def delete_team(
     team_id: uuid.UUID,
@@ -207,7 +207,7 @@ async def delete_team(
     response_model=List[MemberResponse],
     summary="List team members",
     description="List all members of a team.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def list_team_members(
     team_id: uuid.UUID,
@@ -225,7 +225,7 @@ async def list_team_members(
     status_code=status.HTTP_201_CREATED,
     summary="Add team member",
     description="Add a user to a team.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def add_team_member(
     team_id: uuid.UUID,
@@ -258,7 +258,7 @@ async def add_team_member(
     response_model=MemberRemovedResponse,
     summary="Remove team member",
     description="Remove a user from a team.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def remove_team_member(
     team_id: uuid.UUID,
@@ -284,7 +284,7 @@ async def remove_team_member(
     response_model=MemberResponse,
     summary="Update member role",
     description="Change a team member's role.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def update_member_role(
     team_id: uuid.UUID,
@@ -314,7 +314,7 @@ async def update_member_role(
     response_model=List[TeamResponse],
     summary="Get my teams",
     description="Get all teams the current user is a member of.",
-    dependencies=[Depends(require_user_management_enabled)],
+    dependencies=[Depends(user_management_route_marker)],
 )
 async def get_my_teams(
     context: TenantContext = Depends(require_org_context),
