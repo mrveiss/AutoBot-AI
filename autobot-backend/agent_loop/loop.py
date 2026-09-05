@@ -20,7 +20,6 @@ and Think Tool into a cohesive execution system.
 import asyncio
 import hashlib
 import json
-import os
 import time
 import uuid
 from typing import Any
@@ -44,6 +43,7 @@ from agent_loop.types import (
     TaskContext,
     ThinkCategory,
 )
+from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import (
     CRITICAL_ERROR_TYPES,
     FALLBACK_ERROR_TYPES,
@@ -97,7 +97,7 @@ _STAGNATION_SENTINEL = "__stagnation_halt__"
 # Durable run checkpointing (GH#11175). A run's progress snapshot is persisted to
 # Redis after each iteration so a crashed/restarted process can resume via
 # resume_run(). TTL is env-tunable so stale checkpoints self-expire.
-_RUN_CHECKPOINT_TTL_SECONDS: int = int(os.environ.get("AUTOBOT_RUN_CHECKPOINT_TTL_SECONDS", str(24 * 3600)))
+_RUN_CHECKPOINT_TTL_SECONDS: int = env_int("AUTOBOT_RUN_CHECKPOINT_TTL_SECONDS", 24 * 3600)
 
 
 def _run_checkpoint_key(task_id: str) -> str:

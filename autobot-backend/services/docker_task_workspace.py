@@ -43,6 +43,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from constants.ttl_constants import TTL_7_DAYS
@@ -53,14 +54,13 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Quota / lifecycle constants — all env-configurable (GH#10544 constraint)
 # ---------------------------------------------------------------------------
-_MAX_WORKSPACES: int = int(os.environ.get("AUTOBOT_WORKSPACE_MAX_COUNT", "20"))
-_DISK_QUOTA_MB: int = int(os.environ.get("AUTOBOT_WORKSPACE_DISK_MB", "2048"))
-_IDLE_EXPIRY_SECONDS: int = int(os.environ.get("AUTOBOT_WORKSPACE_IDLE_SECONDS", str(4 * 3600)))
+_MAX_WORKSPACES: int = env_int("AUTOBOT_WORKSPACE_MAX_COUNT", 20)
+_DISK_QUOTA_MB: int = env_int("AUTOBOT_WORKSPACE_DISK_MB", 2048)
+_IDLE_EXPIRY_SECONDS: int = env_int("AUTOBOT_WORKSPACE_IDLE_SECONDS", 4 * 3600)
 _WORKSPACE_MEMORY_LIMIT: str = os.environ.get("AUTOBOT_WORKSPACE_MEM_LIMIT", "512m")
-_WORKSPACE_CPU_QUOTA: int = int(os.environ.get("AUTOBOT_WORKSPACE_CPU_QUOTA", "100000"))
-# GH#11059: cap process count so a fork-bomb in the workspace can't exhaust host
-# PIDs. Universally supported by the Linux pids cgroup controller.
-_WORKSPACE_PIDS_LIMIT: int = int(os.environ.get("AUTOBOT_WORKSPACE_PIDS_LIMIT", "512"))
+_WORKSPACE_CPU_QUOTA: int = env_int("AUTOBOT_WORKSPACE_CPU_QUOTA", 100000)
+# GH#11059: caps PIDs so a workspace fork-bomb cannot exhaust the host (Linux pids cgroup controller).
+_WORKSPACE_PIDS_LIMIT: int = env_int("AUTOBOT_WORKSPACE_PIDS_LIMIT", 512)
 _WORKSPACE_IMAGE: str = os.environ.get("AUTOBOT_WORKSPACE_IMAGE", "alpine:3.18")
 _CONTAINER_PREFIX: str = "autobot-workspace-"
 _REDIS_KEY_PREFIX: str = "autobot:workspace:"

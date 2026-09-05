@@ -66,6 +66,7 @@ from autobot_shared.auth.jwt_core import (
     decode_jwt,
     encode_jwt,
 )
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_write import run_redis_write
@@ -252,9 +253,7 @@ async def _add_to_denylist(jti: str, remaining_ttl: int) -> None:
 # than stall the request. Deliberately short — a revocation lookup that cannot
 # answer in this budget is treated as "Redis unavailable" and follows the same
 # fail-closed policy.
-DENYLIST_TIMEOUT_S: float = float(
-    os.environ.get("AUTOBOT_RUN_JWT_DENYLIST_TIMEOUT_S", "2.0")  # ssot-config-exempt: dynamic env var name
-)
+DENYLIST_TIMEOUT_S: float = env_float("AUTOBOT_RUN_JWT_DENYLIST_TIMEOUT_S", 2.0)
 
 
 async def _is_denied(jti: str) -> bool:

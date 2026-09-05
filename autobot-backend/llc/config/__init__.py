@@ -14,6 +14,7 @@ import logging
 import os
 from decimal import Decimal, InvalidOperation
 
+from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.ssot_config import config as _ssot_config
 
 _cfg_logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ DEFAULT_BUDGET_LIMIT: Decimal = _env_decimal("LLC_DEFAULT_BUDGET_LIMIT", "10.00"
 
 # Default streaming watchdog timeout (seconds of silence before kill).
 # Per-agent override via adapter_config["streaming_watchdog_timeout_seconds"].
-DEFAULT_STREAMING_WATCHDOG_TIMEOUT = int(os.environ.get("LLC_STREAMING_WATCHDOG_TIMEOUT", "120"))
+DEFAULT_STREAMING_WATCHDOG_TIMEOUT = env_int("LLC_STREAMING_WATCHDOG_TIMEOUT", 120)
 
 # Placeholder written into heartbeat context by HeartbeatContextBuilder before a
 # real run-scoped key is issued at dispatch time. Subprocess adapters skip this
@@ -59,12 +60,12 @@ AGENT_API_KEY_PLACEHOLDER = "<injected-at-runtime>"
 # meaningful. Below this, the score is still returned but flagged
 # ``low_sample=True`` so callers don't rank a 2-run agent above a 200-run one
 # on a raw ratio alone.
-SCORECARD_MIN_RUNS_FOR_CONFIDENT_RANKING = int(os.environ.get("LLC_SCORECARD_MIN_RUNS_FOR_CONFIDENT_RANKING", "5"))
+SCORECARD_MIN_RUNS_FOR_CONFIDENT_RANKING = env_int("LLC_SCORECARD_MIN_RUNS_FOR_CONFIDENT_RANKING", 5)
 
 # Z-score for the Wilson score interval lower bound used as the low-n-aware
 # "reliability_score" (1.96 = 95% confidence). Higher = more conservative
 # (shrinks harder toward 0 for small sample sizes).
-SCORECARD_WILSON_Z_SCORE = float(os.environ.get("LLC_SCORECARD_WILSON_Z_SCORE", "1.96"))
+SCORECARD_WILSON_Z_SCORE = env_float("LLC_SCORECARD_WILSON_Z_SCORE", 1.96)
 
 __all__ = [
     "AGENT_API_BASE_URL",

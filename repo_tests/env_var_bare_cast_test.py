@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""A module-level ``int(os.getenv(...))`` crashes a service at import (#15691).
+"""A module-level ``int(os.getenv(...))`` crashes a service at import (#15691, #15710).
 
 ``_TIMEOUT = float(os.getenv("SOME_VAR", "30"))`` at module level raises
 ``ValueError`` on a malformed value -- not at the call site where the bad
@@ -16,9 +16,18 @@ for exactly this shape.
 Three were fixed one reviewer-catch at a time before this guard existed
 (#15618, #15688) -- that is how a population of this shape reaches 47 without
 anyone deciding it should. #15691 re-derived the population with an AST pass
-and converted 36 of the 43 it found; this guard is what keeps the other 36
-converted and stops a new bare cast from joining the 7 still recorded in
-``env_var_bare_cast_allowlist.py``.
+over the ``os.getenv(...)`` spelling and converted 36 of the 43 it found.
+``os.getenv`` is implemented as ``os.environ.get(key, default)`` in CPython,
+so the same shape written the other way -- ``int(os.environ.get(...))`` --
+is the identical import-time crash, but #15691's own matcher covered only
+the literal ``os.getenv`` spelling and never sized or triaged it. #15710
+extended the matcher to the ``os.environ.get(...)`` spelling too, re-derived
+that population (58 sites across 31 files) and converted every one of them --
+there was no operator-run-script or packaging-isolation reason to leave any
+of them bare, unlike the #15691 sweep. This guard is what keeps both
+spellings' converted sites converted and stops a new bare cast, in either
+spelling, from joining the 7 still recorded in
+``env_var_bare_cast_allowlist.py`` (all from the original #15691 population).
 
 Matches deliberately narrow, the same way ``npm_test_scripts_run_in_ci_test``
 narrows to a test-shaped script rather than every npm invocation:
@@ -27,14 +36,21 @@ narrows to a test-shaped script rather than every npm invocation:
   inside a function or class. A cast inside a function re-runs and re-raises
   on every call, so a caller already sees it; it is the IMPORT-time crash
   this guard exists for.
-* **a direct ``int(...)``/``float(...)`` wrapping ``os.getenv(...)``
-  specifically** -- not ``os.environ.get(...)`` (issue #15710 tracks that
-  spelling separately: same behaviour, since ``os.getenv`` is implemented as
-  ``os.environ.get(key, default)``, but a different population #15691 did not
-  size or triage), and not one nested inside another call such as
-  ``max(1, int(os.getenv(...)))`` (already partly mitigated -- it has a
-  floor -- so it is a smaller, different defect from the bare crash this
-  guard tracks).
+* **an ``int(...)``/``float(...)`` wrapping ``os.getenv(...)`` OR
+  ``os.environ.get(...)``**, either directly or through a transparent
+  wrapper -- ``max``, ``min``, ``abs``, ``round``, in a positional or a
+  keyword argument. A floor does NOT make the cast safe: ``max(1,
+  int(os.getenv(...)))`` evaluates the cast first, so it dies at import
+  exactly as the bare form does, and the floor applies to the parsed number
+  rather than to the parse. An earlier draft of this guard excluded that
+  shape as "already partly mitigated", which protected the population it
+  drained while leaving eleven converted sites free to come back.
+
+  Not covered: a subscript form (``os.environ["VAR"]``), which raises
+  ``KeyError`` rather than silently defaulting and so is a different,
+  already-loud failure mode; and a cast embedded in a larger expression
+  such as ``int(os.environ.get(...)) * 1024`` (#15717), which is the same
+  crash in a shape this classifier does not yet reach.
 """
 
 from __future__ import annotations
@@ -89,8 +105,36 @@ def tracked_python_files(root: Path) -> list[str]:
 _TRANSPARENT_WRAPPERS = frozenset({"max", "min", "abs", "round"})
 
 
-def _is_bare_getenv_cast(value: ast.expr) -> str | None:
-    """``"int"``/``"float"`` when *value* is that cast wrapping ``os.getenv(...)``.
+def _is_os_getenv_call(call: ast.Call) -> bool:
+    """``True`` for ``os.getenv(...)`` specifically."""
+    func = call.func
+    return isinstance(func, ast.Attribute) and func.attr == "getenv" and _is_os_name(func.value)
+
+
+def _is_os_environ_get_call(call: ast.Call) -> bool:
+    """``True`` for ``os.environ.get(...)`` specifically.
+
+    Not the subscript form ``os.environ["VAR"]`` -- that raises ``KeyError``
+    immediately rather than silently accepting a malformed default, so it is
+    already a loud failure and not this guard's shape.
+    """
+    func = call.func
+    if not (isinstance(func, ast.Attribute) and func.attr == "get"):
+        return False
+    environ_attr = func.value
+    return (
+        isinstance(environ_attr, ast.Attribute) and environ_attr.attr == "environ" and _is_os_name(environ_attr.value)
+    )
+
+
+def _is_os_name(node: ast.expr) -> bool:
+    return isinstance(node, ast.Name) and node.id == "os"
+
+
+def _is_bare_env_cast(value: ast.expr) -> str | None:
+    """``"int"``/``"float"`` when *value* is that cast wrapping ``os.getenv(...)``
+    or ``os.environ.get(...)`` (#15691, #15710 -- the same crash, two spellings:
+    ``os.getenv`` is implemented as ``os.environ.get(key, default)`` in CPython).
 
     Looks through a transparent wrapper: the cast inside ``max(1, int(os.getenv(
     ...)))`` raises at the same moment the bare one does, so treating the two
@@ -103,7 +147,7 @@ def _is_bare_getenv_cast(value: ast.expr) -> str | None:
         # evaluates the cast before the wrapper is called, so it raises at
         # import exactly as a positional one does.
         for arg in [*value.args, *(kw.value for kw in value.keywords)]:
-            found = _is_bare_getenv_cast(arg)
+            found = _is_bare_env_cast(arg)
             if found:
                 return found
         return None
@@ -115,14 +159,8 @@ def _is_bare_getenv_cast(value: ast.expr) -> str | None:
     inner = value.args[0]
     if not isinstance(inner, ast.Call):
         return None
-    inner_func = inner.func
-    is_os_getenv = (
-        isinstance(inner_func, ast.Attribute)
-        and inner_func.attr == "getenv"
-        and isinstance(inner_func.value, ast.Name)
-        and inner_func.value.id == "os"
-    )
-    return func.id if is_os_getenv else None
+    is_bare_env_read = _is_os_getenv_call(inner) or _is_os_environ_get_call(inner)
+    return func.id if is_bare_env_read else None
 
 
 def _target_key(target: ast.expr) -> str | None:
@@ -150,8 +188,8 @@ def _assigned_names(node: ast.Assign | ast.AnnAssign) -> list[str]:
 
 
 def bare_casts_in_file(path: Path) -> list[str]:
-    """Variable names bound to a bare ``int``/``float`` ``os.getenv`` cast at
-    module level in *path*.
+    """Variable names bound to a bare ``int``/``float`` ``os.getenv``/``os.environ.get``
+    cast at module level in *path*.
 
     Raises rather than returning ``[]`` on an unparseable file. Swallowing the
     error returned "no casts here" while the caller still counted the file as
@@ -165,7 +203,7 @@ def bare_casts_in_file(path: Path) -> list[str]:
     found = []
     for node in tree.body:
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
-            if _is_bare_getenv_cast(node.value):
+            if _is_bare_env_cast(node.value):
                 found.extend(_assigned_names(node))
     return found
 
@@ -229,14 +267,15 @@ def test_enumeration_is_not_vacuous(measurement: Measurement) -> None:
 
 
 def test_every_bare_cast_is_allowlisted(measurement: Measurement) -> None:
-    """The #15691 assertion: a new bare module-level env cast is a defect."""
+    """The #15691/#15710 assertion: a new bare module-level env cast is a defect,
+    in either the ``os.getenv(...)`` or ``os.environ.get(...)`` spelling."""
     unaccounted = sorted(measurement.keys - set(BARE_ENV_CASTS))
     assert not unaccounted, (
         "these module-level assignments are a bare int()/float() cast directly "
-        "wrapping os.getenv(...), which raises ValueError at IMPORT on a "
-        "malformed value -- convert to autobot_shared.env_utils's env_int / "
-        "env_float / env_int_clamped / env_float_clamped, or record the site "
-        f"(with an issue number) in env_var_bare_cast_allowlist.BARE_ENV_CASTS: {unaccounted}"
+        "wrapping os.getenv(...) or os.environ.get(...), which raises ValueError "
+        "at IMPORT on a malformed value -- convert to autobot_shared.env_utils's "
+        "env_int / env_float / env_int_clamped / env_float_clamped, or record "
+        f"the site (with an issue number) in env_var_bare_cast_allowlist.BARE_ENV_CASTS: {unaccounted}"
     )
 
 
@@ -272,33 +311,44 @@ CAST_CONTRASTS = (
     ('_X = int(os.getenv("VAR", "1"))', "int"),
     ('_X: int = int(os.getenv("VAR", "1"))', "int"),
     ('_X = float(os.getenv("VAR", "1.0"))', "float"),
-    # os.environ.get is a different, untracked population (#15710).
-    ('_X = int(os.environ.get("VAR", "1"))', None),
+    # os.environ.get is the same defect, the other spelling (#15710):
+    # os.getenv is implemented as os.environ.get(key, default) in CPython.
+    ('_X = int(os.environ.get("VAR", "1"))', "int"),
+    ('_X: int = int(os.environ.get("VAR", "1"))', "int"),
+    ('_X = float(os.environ.get("VAR", "1.0"))', "float"),
     # A floor does not make the cast safe: max() evaluates int() first, so this
     # dies at import on a malformed value exactly as the bare form does. #15691
     # converted eleven of these, so the classifier must see them or the guard
     # would protect the population it drained and not the sites it fixed.
     ('_X = max(1, int(os.getenv("VAR", "1")))', "int"),
     ('_X = min(60.0, float(os.getenv("VAR", "1.0")))', "float"),
+    ('_X = max(1, int(os.environ.get("VAR", "1")))', "int"),
     # The wrapper is only transparent when a cast is actually inside it.
     ('_X = max(1, int(some_other_call("VAR")))', None),
     ('_X = max(1, 2)', None),
     # A keyword argument is evaluated before the wrapper is called, so a cast
     # hidden there raises at import exactly as a positional one does.
     ('_X = max(0, key=int(os.getenv("VAR", "1")))', "int"),
+    ('_X = max(0, key=int(os.environ.get("VAR", "1")))', "int"),
     ('_X = max(0, key=len)', None),
     # A crash-safe reader is not this shape at all.
     ('_X = env_int("VAR", 1)', None),
-    # A cast of something other than a bare os.getenv call.
+    # A cast of something other than a bare os.getenv/os.environ.get call.
     ('_X = int(some_other_call("VAR"))', None),
     ('_X = int("1")', None),
+    # The subscript form raises KeyError immediately -- already loud, and not
+    # the ".get(...)" silent-default shape this guard tracks.
+    ('_X = int(os.environ["VAR"])', None),
+    # "environ" must resolve through "os" specifically, not any object that
+    # happens to expose a same-named attribute chain.
+    ('_X = int(other.environ.get("VAR", "1"))', None),
 )
 
 
 @pytest.mark.parametrize(("source", "expected"), CAST_CONTRASTS)
 def test_bare_cast_classifier_discriminates(source: str, expected: str | None) -> None:
     tree = ast.parse(source)
-    assert _is_bare_getenv_cast(tree.body[0].value) == expected, source
+    assert _is_bare_env_cast(tree.body[0].value) == expected, source
 
 
 def test_bare_cast_is_module_level_only(tmp_path: Path) -> None:
@@ -314,6 +364,15 @@ def test_bare_cast_is_module_level_only(tmp_path: Path) -> None:
 def test_bare_cast_at_module_level_is_found(tmp_path: Path) -> None:
     target = tmp_path / "sample.py"
     target.write_text('import os\n\n_TIMEOUT = int(os.getenv("VAR", "1"))\n', encoding="utf-8")
+    assert bare_casts_in_file(target) == ["_TIMEOUT"]
+
+
+def test_bare_cast_at_module_level_is_found_os_environ_get_spelling(tmp_path: Path) -> None:
+    """#15710: the file-level sweep, not just the classifier unit, catches this
+    spelling -- a new ``os.environ.get(...)`` violation must fail the same way
+    a new ``os.getenv(...)`` one does, end to end through ``bare_casts_in_file``."""
+    target = tmp_path / "sample.py"
+    target.write_text('import os\n\n_TIMEOUT = int(os.environ.get("VAR", "1"))\n', encoding="utf-8")
     assert bare_casts_in_file(target) == ["_TIMEOUT"]
 
 

@@ -29,8 +29,8 @@ The output is bounded to [0, 1).
 from __future__ import annotations
 
 import math
-import os
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -38,7 +38,7 @@ logger = get_logger(__name__)
 # Decay constant K: controls how steeply risk saturates toward 1.
 # A file with raw_risk == K gets runtime_risk ≈ 0.63.
 # Override via env var when tuning sensitivity.
-_RISK_K: float = float(os.environ.get("AUTOBOT_RISK_K", "5.0"))
+_RISK_K: float = env_float("AUTOBOT_RISK_K", 5.0)
 
 
 async def build_runtime_risk_map() -> dict[str, float]:

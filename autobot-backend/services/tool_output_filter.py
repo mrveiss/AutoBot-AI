@@ -25,6 +25,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import yaml
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -34,13 +35,12 @@ _DEFAULT_CONFIG = os.path.join(os.path.dirname(__file__), "..", "config", "tool_
 # AUTOBOT_TEE_DIR must be tested on the string, never on the Path.
 _TEE_DIR_ENV = os.environ.get("AUTOBOT_TEE_DIR", "").strip()
 _TEE_DIR = Path(_TEE_DIR_ENV) if _TEE_DIR_ENV else Path.home() / ".local" / "share" / "autobot" / "tee"
-_MAX_UNMATCHED_OUTPUT_CHARS = int(os.environ.get("AUTOBOT_MAX_UNMATCHED_OUTPUT_CHARS", "20000"))
-# #14142: nothing pruned this directory. Every oversized output accumulated
-# indefinitely, keyed by content hash. Until #14120 only shell stdout reached
-# it; that change carries web-tool content down the same path, and a crawl or
-# scrape result routinely exceeds the cap -- so third-party page content was
-# being persisted without bound and without expiry.
-_TEE_RETENTION_HOURS = int(os.environ.get("AUTOBOT_TEE_RETENTION_HOURS", "168"))
+_MAX_UNMATCHED_OUTPUT_CHARS = env_int("AUTOBOT_MAX_UNMATCHED_OUTPUT_CHARS", 20000)
+# #14142: nothing pruned this directory. Every oversized output accumulated indefinitely, keyed by content hash. Until
+# #14120 only shell stdout reached it; that change carries web-tool content down the same path, and a crawl or scrape
+# result routinely exceeds the cap -- so third-party page content was being persisted without bound and without
+# expiry.
+_TEE_RETENTION_HOURS = env_int("AUTOBOT_TEE_RETENTION_HOURS", 168)
 _TEE_MAX_TOTAL_BYTES = int(os.environ.get("AUTOBOT_TEE_MAX_TOTAL_MB", "256")) * 1024 * 1024
 _NO_OP_PATTERNS = re.compile(
     r"(Everything up-to-date|nothing to commit|Already up to date|" r"no changes added|working tree clean)",
