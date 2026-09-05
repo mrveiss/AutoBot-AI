@@ -35,8 +35,8 @@ from api.user_management.dependencies import (
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.agent_org_service import AgentOrgService
-from user_management.services import TenantContext
 from services.delegation_service import DelegationService
+from user_management.services import TenantContext
 
 logger = get_logger(__name__)
 # Every route here requires an authenticated caller (#15794). The router
