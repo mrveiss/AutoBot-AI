@@ -87,8 +87,10 @@ def registry(monkeypatch):  # noqa: ANN001, ANN201
 
 @pytest_asyncio.fixture
 async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
-    engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
-        "sqlite+aiosqlite:///:memory:"
+    engine = (
+        create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
+            "sqlite+aiosqlite:///:memory:"
+        )
     )
     tables = [
         Role.__table__,
@@ -132,12 +134,16 @@ async def _grant_admin(session_factory, company_id: uuid.UUID) -> None:  # noqa:
 async def _seed_role(session_factory, company_id: uuid.UUID, name: str) -> uuid.UUID:  # noqa: ANN001
     await _grant_admin(session_factory, company_id)
     async with session_factory() as session:
-        role = await RoleService().create(session, company_id=company_id, name=name, actor_user_id=_ADMIN_USER)
+        role = await RoleService().create(
+            session, company_id=company_id, name=name, actor_user_id=_ADMIN_USER
+        )
         await session.commit()
         return role.id
 
 
-async def _attach(session_factory, company_id: uuid.UUID, role_id: uuid.UUID, tool: str) -> None:  # noqa: ANN001
+async def _attach(
+    session_factory, company_id: uuid.UUID, role_id: uuid.UUID, tool: str
+) -> None:  # noqa: ANN001
     async with session_factory() as session:
         await RoleToolService().attach(
             session,
@@ -218,7 +224,9 @@ async def test_upsert_replaces_rather_than_duplicates(session_factory, registry)
 
     async with session_factory() as session:
         rows = await session.execute(
-            sa.select(sa.func.count()).select_from(LLCCompanyTool).where(LLCCompanyTool.company_id == company)
+            sa.select(sa.func.count())
+            .select_from(LLCCompanyTool)
+            .where(LLCCompanyTool.company_id == company)
         )
         assert rows.scalar_one() == 1
         entries = _by_name(await service.catalogue(session, company))
@@ -364,6 +372,77 @@ async def test_the_catalogue_does_not_leak_another_company(session_factory, regi
         entries = _by_name(await CompanyToolService().catalogue(session, mine))
         usage = await CompanyToolService().usage(session, mine, _TOOL)
 
-    assert entries[_TOOL].url is None, "another company's overlay leaked into this catalogue"
-    assert entries[_TOOL].role_count == 0, "another company's attachment was counted here"
+    assert entries[_TOOL].url is None, (
+        "another company's overlay leaked into this catalogue"
+    )
+    assert entries[_TOOL].role_count == 0, (
+        "another company's attachment was counted here"
+    )
     assert usage["role_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_concurrent_insert_is_adopted_not_a_500(session_factory, registry):  # noqa: ANN001
+    """Two writers race for the same (company, tool); the loser adopts the winner.
+
+    ``upsert`` reads before it writes, so another request can insert the row in
+    between. The unique index then rejects the second insert, and without the
+    savepoint that ``IntegrityError`` reaches the client as a 500 on a ``PUT``
+    — an operation a double-click or a retry genuinely issues twice.
+
+    The race is simulated deterministically rather than with real concurrency:
+    the row is created first, and ``get`` is stubbed to return None **once**, so
+    the service takes exactly the branch it would take having read before the
+    other writer committed. A timing-based test would pass or fail by luck.
+    """
+    company = uuid.uuid4()
+    await _grant_admin(session_factory, company)
+    service = CompanyToolService()
+
+    async with session_factory() as session:
+        await service.upsert(
+            session,
+            company_id=company,
+            tool_name=_TOOL,
+            url="https://winner.invalid",
+            logo_url=None,
+            actor_user_id=_ADMIN_USER,
+        )
+        await session.commit()
+
+    real_get = service.get
+    calls = {"n": 0}
+
+    async def get_blind_once(session, company_id, tool_name):  # noqa: ANN001, ANN202
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return None  # the row the other writer has already committed
+        return await real_get(session, company_id, tool_name)
+
+    async with session_factory() as session:
+        service.get = get_blind_once  # type: ignore[method-assign]
+        try:
+            result = await service.upsert(
+                session,
+                company_id=company,
+                tool_name=_TOOL,
+                url="https://loser.invalid",
+                logo_url=None,
+                actor_user_id=_ADMIN_USER,
+            )
+            await session.commit()
+        finally:
+            service.get = real_get  # type: ignore[method-assign]
+
+    assert result is not None, "the conflicting writer got no row back"
+
+    async with session_factory() as session:
+        rows = await session.execute(
+            sa.select(sa.func.count())
+            .select_from(LLCCompanyTool)
+            .where(LLCCompanyTool.company_id == company)
+        )
+        # One row, not two: the loser adopted rather than duplicating.
+        assert rows.scalar_one() == 1
+        entries = _by_name(await service.catalogue(session, company))
+    assert entries[_TOOL].url == "https://loser.invalid"

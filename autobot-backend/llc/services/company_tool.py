@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.activity import ActorType
@@ -80,7 +81,9 @@ class CompanyToolService(LLCServiceBase):
             after=after,
         )
 
-    async def get(self, session: AsyncSession, company_id: uuid.UUID, tool_name: str) -> Optional[LLCCompanyTool]:
+    async def get(
+        self, session: AsyncSession, company_id: uuid.UUID, tool_name: str
+    ) -> Optional[LLCCompanyTool]:
         """This company's overlay row for one tool, or None when none exists."""
         result = await session.execute(
             select(LLCCompanyTool).where(
@@ -90,11 +93,17 @@ class CompanyToolService(LLCServiceBase):
         )
         return result.scalar_one_or_none()
 
-    async def _overlays(self, session: AsyncSession, company_id: uuid.UUID) -> Dict[str, LLCCompanyTool]:
-        result = await session.execute(select(LLCCompanyTool).where(LLCCompanyTool.company_id == company_id))
+    async def _overlays(
+        self, session: AsyncSession, company_id: uuid.UUID
+    ) -> Dict[str, LLCCompanyTool]:
+        result = await session.execute(
+            select(LLCCompanyTool).where(LLCCompanyTool.company_id == company_id)
+        )
         return {row.tool_name: row for row in result.scalars()}
 
-    async def _role_counts(self, session: AsyncSession, company_id: uuid.UUID) -> Dict[str, int]:
+    async def _role_counts(
+        self, session: AsyncSession, company_id: uuid.UUID
+    ) -> Dict[str, int]:
         result = await session.execute(
             select(LLCRoleTool.tool_name, func.count(LLCRoleTool.role_id.distinct()))
             .where(LLCRoleTool.company_id == company_id)
@@ -103,7 +112,9 @@ class CompanyToolService(LLCServiceBase):
         return {name: count for name, count in result.all()}
 
     @staticmethod
-    def _entry(tool: RegisteredTool, overlay: Optional[LLCCompanyTool], role_count: int) -> CatalogueEntry:
+    def _entry(
+        tool: RegisteredTool, overlay: Optional[LLCCompanyTool], role_count: int
+    ) -> CatalogueEntry:
         return CatalogueEntry(
             name=tool.name,
             description=tool.description,
@@ -113,7 +124,9 @@ class CompanyToolService(LLCServiceBase):
             role_count=role_count,
         )
 
-    async def catalogue(self, session: AsyncSession, company_id: uuid.UUID) -> List[CatalogueEntry]:
+    async def catalogue(
+        self, session: AsyncSession, company_id: uuid.UUID
+    ) -> List[CatalogueEntry]:
         """Every registered tool, carrying this company's facts where recorded.
 
         Driven by the registry, not by the overlay table: a tool nobody has
@@ -122,9 +135,14 @@ class CompanyToolService(LLCServiceBase):
         tools = registered_tools()
         overlays = await self._overlays(session, company_id)
         counts = await self._role_counts(session, company_id)
-        return [self._entry(tools[name], overlays.get(name), counts.get(name, 0)) for name in sorted(tools)]
+        return [
+            self._entry(tools[name], overlays.get(name), counts.get(name, 0))
+            for name in sorted(tools)
+        ]
 
-    async def usage(self, session: AsyncSession, company_id: uuid.UUID, tool_name: str) -> Dict[str, List[str]]:
+    async def usage(
+        self, session: AsyncSession, company_id: uuid.UUID, tool_name: str
+    ) -> Dict[str, List[str]]:
         """Which roles carry this tool, and which workflows those roles run.
 
         Scoped by ``company_id`` on both queries — a dropped filter on either
@@ -161,6 +179,43 @@ class CompanyToolService(LLCServiceBase):
             "workflow_ids": sorted(row[0] for row in workflow_rows.all()),
         }
 
+    async def _insert_or_adopt(
+        self, session: AsyncSession, company_id: uuid.UUID, tool_name: str
+    ) -> tuple[Optional[LLCCompanyTool], bool]:
+        """Insert the overlay row, or adopt the one a concurrent writer inserted.
+
+        Returns ``(row, created)``. ``created`` is what actually happened, not an
+        inference from the row's contents: a losing writer that adopted a row
+        whose fields were still empty is indistinguishable from an inserting one
+        by looking at the row, and the activity log should not have to guess.
+
+        ``upsert`` reads before it writes, and between those two steps another
+        request for the same ``(company, tool)`` can insert the row. The unique
+        index then rejects this insert, and without this the ``IntegrityError``
+        surfaces as a 500 on what is a ``PUT`` — an idempotent operation that a
+        double-click or a client retry can genuinely issue twice.
+
+        The insert runs in a SAVEPOINT so a conflict rolls back only the failed
+        insert and leaves the surrounding transaction usable; rolling back the
+        whole session here would discard the caller's work as well. On conflict
+        the winner's row is re-read and returned, so both requests converge on
+        one row and last-write-wins on the fields.
+
+        A savepoint rather than dialect-specific ``ON CONFLICT``: the same code
+        then covers PostgreSQL in production and SQLite under test, and the
+        conflict branch is reachable by a test rather than skipped on the
+        dialect that runs in CI.
+        """
+        try:
+            async with session.begin_nested():
+                overlay = LLCCompanyTool(company_id=company_id, tool_name=tool_name)
+                session.add(overlay)
+                await session.flush()
+            return overlay, True
+        except IntegrityError:
+            # The other writer won. Its row is the one that exists, so use it.
+            return await self.get(session, company_id, tool_name), False
+
     async def upsert(
         self,
         session: AsyncSession,
@@ -179,10 +234,14 @@ class CompanyToolService(LLCServiceBase):
         cleaned = require_registered_tool(tool_name)
 
         overlay = await self.get(session, company_id, cleaned)
-        created = overlay is None
+        created = False
         if overlay is None:
-            overlay = LLCCompanyTool(company_id=company_id, tool_name=cleaned)
-            session.add(overlay)
+            overlay, created = await self._insert_or_adopt(session, company_id, cleaned)
+            if overlay is None:
+                # Neither our insert nor the conflict re-read produced a row.
+                # Refusing beats returning None to a caller typed to receive a
+                # row, which would surface as an AttributeError far from here.
+                raise ValueError(f"could not record company facts for tool {cleaned!r}")
 
         overlay.url = url
         overlay.logo_url = logo_url
