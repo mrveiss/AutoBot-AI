@@ -62,7 +62,7 @@
 
 - name: "Browser | Sync browser worker code from code_source"
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-browser-worker/"
+    src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-browser-worker/"
     dest: /opt/autobot/autobot-browser-worker/
     rsync_opts:
       - "--exclude=node_modules"

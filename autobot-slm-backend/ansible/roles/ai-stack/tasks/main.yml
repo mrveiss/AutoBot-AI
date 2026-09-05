@@ -169,9 +169,9 @@
 - name: Create filtered AI-stack requirements file (#14272)
   ansible.builtin.shell:
     cmd: >-
-      bash {{ code_source_dir | default('/opt/autobot/code_source') }}/scripts/build-filtered-requirements.sh
+      bash {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/scripts/build-filtered-requirements.sh
       {{ ai_install_dir }}/requirements-ai.txt
-      {{ code_source_dir | default('/opt/autobot/code_source') }}
+      {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}
       > {{ ai_install_dir }}/requirements-ai-filtered.txt
   become_user: "{{ ai_user }}"
   changed_when: true

@@ -1173,7 +1173,6 @@
 2|other|autobot-slm-backend/ansible/playbooks/rotate-ssh-keys.yml|/home/autobot
 2|other|autobot-slm-backend/ansible/playbooks/setup-rbac.yml|"/opt/autobot
 1|other|autobot-slm-backend/ansible/playbooks/setup-vm-names-and-lvm.yml|300
-1|other|autobot-slm-backend/ansible/playbooks/sync-code-source.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/playbooks/sync-user-backend.yml|"/opt/autobot
 1|other|autobot-slm-backend/ansible/playbooks/sync-user-backend.yml|"/opt/autobot/autobot-backend/{{ item }}
 1|ssot|autobot-slm-backend/ansible/playbooks/sync-user-backend.yml|:8001
@@ -1219,9 +1218,7 @@
 7|ssot|autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml|mistral:7b-instruct
 1|ssot|autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml|phi3:mini
 4|ssot|autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml|qwen3.5:9b
-2|other|autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml|120
-1|other|autobot-slm-backend/ansible/roles/autobot_shared/tasks/main.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/backend/defaults/main.yml|https://github.com/mrveiss/AutoBot-AI.git
 1|ssot|autobot-slm-backend/ansible/roles/backend/defaults/main.yml|:11434
 1|ssot|autobot-slm-backend/ansible/roles/backend/defaults/main.yml|qwen3.5:9b
@@ -1231,7 +1228,6 @@
 1|other|autobot-slm-backend/ansible/roles/backend/tasks/main.yml|https://downloads.claude.ai/claude-code/apt/stable
 1|other|autobot-slm-backend/ansible/roles/backend/tasks/main.yml|https://downloads.claude.ai/keys/claude-code.asc
 1|other|autobot-slm-backend/ansible/roles/browser/defaults/main.yml|30
-1|other|autobot-slm-backend/ansible/roles/browser/tasks/main.yml|'/opt/autobot/code_source
 3|other|autobot-slm-backend/ansible/roles/browser/tasks/main.yml|/home/autobot
 1|other|autobot-slm-backend/ansible/roles/browser/tasks/main.yml|300
 1|other|autobot-slm-backend/ansible/roles/browser/tasks/main.yml|chown autobot:autobot
@@ -1258,7 +1254,6 @@
 1|other|autobot-slm-backend/ansible/roles/docker/tasks/main.yml|https://download.docker.com/linux/centos/docker-ce.repo
 1|other|autobot-slm-backend/ansible/roles/docker/tasks/main.yml|https://download.docker.com/linux/{{
 1|other|autobot-slm-backend/ansible/roles/frontend/defaults/main.yml|https://github.com/mrveiss/AutoBot-AI.git
-3|other|autobot-slm-backend/ansible/roles/frontend/tasks/main.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/frontend/vars/main.yml|/home/autobot
 1|ssot|autobot-slm-backend/ansible/roles/llm/defaults/main.yml|gemma2:2b
 1|ssot|autobot-slm-backend/ansible/roles/llm/defaults/main.yml|gemma3:4b
@@ -1269,7 +1264,6 @@
 1|other|autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml|"/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/grafana.yml|https://apt.grafana.com
 2|other|autobot-slm-backend/ansible/roles/monitoring/tasks/grafana.yml|https://apt.grafana.com/gpg.key
-1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/health_check_cron.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/node_exporter.yml|https://github.com/prometheus/node_exporter/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/prometheus.yml|https://github.com/prometheus/prometheus/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/nodejs/tasks/main.yml|https://deb.nodesource.com/setup_{{
@@ -1288,7 +1282,6 @@
 1|other|autobot-slm-backend/ansible/roles/slm_agent/tasks/node_exporter.yml|https://github.com/prometheus/node_exporter/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/grafana.yml|https://apt.grafana.com
 1|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/grafana.yml|https://apt.grafana.com/gpg.key
-4|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml|'/opt/autobot/code_source
 1|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml|120
 2|other|autobot-slm-backend/ansible/roles/time_sync/tasks/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/time_sync/vars/main.yml|120

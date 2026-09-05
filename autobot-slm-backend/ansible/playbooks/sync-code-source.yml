@@ -28,7 +28,7 @@
   gather_facts: false
 
   vars:
-    _code_source_dest: "{{ code_source_dir | default('/opt/autobot/code_source') }}"
+    _code_source_dest: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
     _code_source_owner: "{{ code_source_owner | default('root') }}"
     _code_source_group: "{{ code_source_group | default('root') }}"
 
