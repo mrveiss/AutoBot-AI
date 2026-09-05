@@ -116,3 +116,41 @@ def test_state_map_is_bounded():
         flt.filter(_record(lineno=i))
 
     assert len(flt._state) <= 16
+
+
+def test_an_exempt_record_is_never_suppressed():
+    """Found in review of #15777: one audit call site, one template.
+
+    The delete guard's audit line names a different path and actor every time,
+    but the suppression key is the *template*, so all of them collapsed to one
+    key and the sixth delete in a window lost its audit entry. Keying on the
+    interpolated message instead was rejected -- a retry loop logging
+    ``"redis down: attempt %s"`` is precisely what this guard exists to
+    collapse -- so the exemption is explicit and per-record.
+    """
+    flt = LogFloodSuppressionFilter(threshold=1, window_seconds=3600)
+
+    processed = 0
+    emitted = 0
+    for index in range(1_000):
+        record = _record(msg="sandbox recursive delete: path=%s actor=%s", args=(f"/p/{index}", "agent"))
+        record.flood_exempt = True
+        processed += 1
+        if flt.filter(record):
+            emitted += 1
+
+    assert processed == 1_000
+    assert emitted == 1_000, "an audit record must never be dropped, however many arrive"
+
+
+def test_the_same_records_without_the_exemption_are_still_collapsed():
+    """The contrast: the exemption is doing the work, not the key changing."""
+    flt = LogFloodSuppressionFilter(threshold=1, window_seconds=3600)
+
+    emitted = sum(
+        1
+        for index in range(1_000)
+        if flt.filter(_record(msg="sandbox recursive delete: path=%s actor=%s", args=(f"/p/{index}", "agent")))
+    )
+
+    assert emitted == 1

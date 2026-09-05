@@ -17,6 +17,9 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
+import asyncio
+
+from api import sandbox_files
 from api.sandbox_files import (
     _assert_directory_deletable,
     _enclosing_work_tree,
@@ -173,3 +176,85 @@ class TestHermeticGitProbe:
         lines = await _uncommitted_entries(tmp_path, tmp_path)
 
         assert lines == [], f"probe answered about the wrong repository: {lines}"
+
+
+class TestTheTimeoutKillsWhatItBounds:
+    """`asyncio.wait_for` abandons the await, not the child (#15777 review).
+
+    Without an explicit kill, the timeout that exists to bound a hung
+    `git status` leaks one orphan per timeout -- on exactly the lock-contended
+    or network-mounted work tree that makes timeouts happen at all.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_hung_probe_is_killed_and_reaped(self, tmp_path, monkeypatch):
+        killed = {"kill": 0, "wait": 0}
+
+        class _HungProcess:
+            returncode = None
+
+            async def communicate(self):
+                await asyncio.sleep(3600)
+
+            def kill(self):
+                killed["kill"] += 1
+
+            async def wait(self):
+                killed["wait"] += 1
+
+        async def _spawn(*_args, **_kwargs):
+            return _HungProcess()
+
+        monkeypatch.setattr(sandbox_files.asyncio, "create_subprocess_exec", _spawn)
+        monkeypatch.setattr(sandbox_files, "_GIT_STATUS_TIMEOUT_SECONDS", 0.01)
+
+        result = await sandbox_files._uncommitted_entries(tmp_path, tmp_path)
+
+        assert result is None, "an unanswerable probe still reports 'cannot verify'"
+        assert killed["kill"] == 1, "the child was abandoned, not killed"
+        assert killed["wait"] == 1, "the killed child was never reaped"
+
+    @pytest.mark.asyncio
+    async def test_a_spawn_failure_is_cannot_verify_not_a_crash(self, tmp_path, monkeypatch):
+        """The other half of the branch that produces None (#15777 review minor)."""
+
+        async def _no_git(*_args, **_kwargs):
+            raise FileNotFoundError("git")
+
+        monkeypatch.setattr(sandbox_files.asyncio, "create_subprocess_exec", _no_git)
+
+        assert await sandbox_files._uncommitted_entries(tmp_path, tmp_path) is None
+
+    @pytest.mark.asyncio
+    async def test_an_already_exited_process_is_not_killed_again(self, tmp_path):
+        class _Exited:
+            returncode = 0
+
+            def kill(self):  # pragma: no cover - must not be reached
+                raise AssertionError("a process that already exited must not be killed")
+
+        await sandbox_files._terminate(_Exited())
+
+
+class TestTheAuditLineSurvivesTheFloodGuard:
+    @pytest.mark.asyncio
+    async def test_the_audit_call_is_flood_exempt(self, tmp_path, monkeypatch):
+        """The interaction the review found, pinned where it was introduced.
+
+        Without ``flood_exempt`` this call site collapses to one suppression key
+        for every delete, so a burst loses its audit trail from the sixth on.
+        """
+        recorded = {}
+
+        def _warning(*args, **kwargs):
+            recorded["extra"] = kwargs.get("extra")
+
+        monkeypatch.setattr(sandbox_files.logger, "warning", _warning)
+        monkeypatch.setattr(sandbox_files, "_validate_path", lambda path: tmp_path)
+        monkeypatch.setattr(sandbox_files, "_check_permission", lambda request, permission: {"username": "agent"})
+        monkeypatch.setattr(sandbox_files.shutil, "rmtree", lambda target: None)
+        (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+
+        await sandbox_files.delete_file.__wrapped__(request=None, path="work", recursive=True, force=True)
+
+        assert recorded["extra"] == {"flood_exempt": True}

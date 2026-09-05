@@ -16,7 +16,7 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 
-from autobot_shared.env_utils import env_float, env_int_clamped
+from autobot_shared.env_utils import env_flag, env_float, env_int_clamped
 from autobot_shared.stream_logging import build_stderr_handler, build_stdout_handler
 
 if TYPE_CHECKING:
@@ -34,7 +34,7 @@ _LOG_TYPES = ("backend", "frontend", "llm", "debug", "audit")
 # with it. Bound how much one repeating call site can emit per window.
 # ssot-config-exempt: pre-init logging -- this module must not import config
 # (see _get_config_manager), so the knobs are env-var-backed module constants.
-_FLOOD_ENABLED = os.getenv("AUTOBOT_LOG_FLOOD_ENABLED", "true").strip().lower() not in ("0", "false", "no", "off")
+_FLOOD_ENABLED = env_flag("AUTOBOT_LOG_FLOOD_ENABLED", default=True)
 _FLOOD_THRESHOLD = env_int_clamped("AUTOBOT_LOG_FLOOD_THRESHOLD", 5, min_v=1)
 _FLOOD_WINDOW_SECONDS = env_float("AUTOBOT_LOG_FLOOD_WINDOW_SECONDS", 60.0)
 _FLOOD_MAX_KEYS = env_int_clamped("AUTOBOT_LOG_FLOOD_MAX_KEYS", 2048, min_v=1)
@@ -46,6 +46,18 @@ class LogFloodSuppressionFilter(logging.Filter):
     Applied to WARNING and ERROR only: DEBUG/INFO are already rate-limited by
     the level itself, and CRITICAL is never suppressed -- losing the one line
     that explains an outage is worse than the disk cost of printing it.
+
+    A record carrying ``extra={"flood_exempt": True}`` is never suppressed
+    either. That escape hatch exists because of a defect found in review of
+    #15777: an audit line for a destructive operation is emitted from ONE call
+    site with ONE template, so every delete -- different path, different actor
+    -- collapsed to a single key and the sixth in a window was dropped. The
+    alternative fix, keying on the interpolated message, was rejected: a retry
+    loop logging ``"redis down: attempt %s"`` is the exact shape this guard
+    exists to collapse, and keying on the formatted string would mint a fresh
+    key per attempt and suppress nothing. The distinction that matters is not
+    how varied the text is, it is whether losing a line is acceptable -- and
+    for an audit record it never is.
 
     The suppression key is the message *template* plus the call site, never the
     formatted message, so ``logger.error("redis down: %s", attempt)`` collapses
@@ -84,6 +96,8 @@ class LogFloodSuppressionFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         if record.levelno >= logging.CRITICAL or record.levelno < logging.WARNING:
+            return True
+        if getattr(record, "flood_exempt", False):
             return True
 
         now = time.monotonic()

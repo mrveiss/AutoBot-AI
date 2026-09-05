@@ -11,6 +11,7 @@ GH#7409
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 import shutil
@@ -32,6 +33,7 @@ from api.schemas_code import (
 from auth_middleware import get_auth_middleware
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.security.path_validator import SandboxPathError, resolve_within_sandbox
 from constants.error_constants import ERR_DIRECTORY_NOT_FOUND, ERR_FILE_NOT_FOUND
 from utils.io_executor import run_in_file_executor
@@ -228,18 +230,31 @@ def _enclosing_work_tree(target: Path) -> Path | None:
 def _hermetic_git_env() -> dict[str, str]:
     """Environment for a git probe that must answer about `-C`, nothing else.
 
-    Every inherited ``GIT_*`` variable is dropped. ``GIT_DIR`` in particular
-    overrides ``-C`` completely, so a process started with one in its
-    environment -- anything spawned from a git hook, a CI step, or a shell
-    where someone exported it -- would get the status of a repository the
-    caller never named, and the guard would then permit or refuse a delete
+    Composes :func:`autobot_shared.paths.scrubbed_git_env` rather than
+    re-deriving a scrub beside it -- that duplication is what #15783 exists to
+    end, and a local copy would not inherit the variables that issue is adding
+    to ``AMBIENT_GIT_VARS``. Narrowed further to every ``GIT_`` name because
+    this probe is read-only and local: ``GIT_DIR`` overrides ``-C`` outright,
+    so an inherited environment would have the guard permit or refuse a delete
     based on an unrelated tree. ``LC_ALL=C`` keeps ``--porcelain`` parsing
     stable on a host with a translated git.
     """
-    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env = {key: value for key, value in scrubbed_git_env().items() if not key.startswith("GIT_")}
     env["LC_ALL"] = "C"
     env["GIT_OPTIONAL_LOCKS"] = "0"
     return env
+
+
+async def _terminate(proc: asyncio.subprocess.Process) -> None:
+    """Kill and reap a probe that outstayed its timeout."""
+    if proc.returncode is not None:
+        return
+    try:
+        proc.kill()
+    except (ProcessLookupError, OSError):
+        return
+    with contextlib.suppress(Exception):
+        await proc.wait()
 
 
 async def _uncommitted_entries(work_tree: Path, target: Path) -> list[str] | None:
@@ -257,8 +272,16 @@ async def _uncommitted_entries(work_tree: Path, target: Path) -> list[str] | Non
             stderr=asyncio.subprocess.DEVNULL,
             env=_hermetic_git_env(),
         )
+    except OSError:
+        return None
+    try:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=_GIT_STATUS_TIMEOUT_SECONDS)
     except (OSError, asyncio.TimeoutError):
+        # wait_for abandons the await, not the child. Without this, the timeout
+        # added to bound a hung `git status` leaks the process it was bounding
+        # -- one orphan per timeout, on exactly the lock-contended or
+        # network-mounted work tree that makes timeouts happen at all.
+        await _terminate(proc)
         return None
     if proc.returncode != 0:
         return None
@@ -321,6 +344,11 @@ async def delete_file(request: Request, path: str, recursive: bool = False, forc
         await run_in_file_executor(_entry_count, target_path),
         force,
         user.get("username") or user.get("user_id") or "unknown",
+        # An audit record for a destructive operation is never a candidate for
+        # rate limiting: this call site has one template, so the flood guard
+        # would otherwise collapse every delete into a single key and drop the
+        # sixth in a window (#15774 review).
+        extra={"flood_exempt": True},
     )
     await run_in_file_executor(shutil.rmtree, target_path)
     return {"message": f"Directory '{path}' deleted successfully"}
