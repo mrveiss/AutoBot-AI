@@ -177,7 +177,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/circuit_breaker.py": 689,
     "autobot-backend/code_intelligence/analytics_infrastructure.py": 808,
     "autobot-backend/code_intelligence/anti_pattern_detection/analyzer.py": 772,
-    "autobot-backend/code_intelligence/bug_predictor.py": 1502,
+    "autobot-backend/code_intelligence/bug_predictor.py": 1501,
     "autobot-backend/code_intelligence/bug_predictor_test.py": 759,
     "autobot-backend/code_intelligence/co_change_test.py": 736,
     "autobot-backend/code_intelligence/code_evolution_miner.py": 698,
@@ -200,7 +200,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/code_intelligence/pattern_analysis/refactoring_generator.py": 827,
     "autobot-backend/code_intelligence/performance_analysis/ast_visitor.py": 725,
     "autobot-backend/code_intelligence/performance_analyzer_test.py": 874,
-    "autobot-backend/code_intelligence/precommit_analyzer.py": 732,
+    "autobot-backend/code_intelligence/precommit_analyzer.py": 731,
     "autobot-backend/code_intelligence/precommit_analyzer_test.py": 631,
     "autobot-backend/code_intelligence/redis_optimizer.py": 1097,
     # Not legacy debt: created after this guard existed (#14413). Tracked as a

@@ -29,7 +29,6 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 
 import asyncio
 import re
-import subprocess  # nosec B404  # required for git operations
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone

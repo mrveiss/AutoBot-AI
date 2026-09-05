@@ -18,7 +18,6 @@ Parent Epic: #217 - Advanced Code Intelligence
 
 import concurrent.futures
 import re
-import subprocess  # nosec B404  # controlled git process execution
 import time
 from dataclasses import dataclass, field
 from enum import Enum
