@@ -172,8 +172,12 @@ _INTENTIONALLY_OPEN = {
 }
 
 # Recorded, not certified -- #15745's own ten. See the module docstring.
+# #15794 removed "agent_org" from this set as a consequence of gating it, not
+# as bookkeeping: the router now carries Depends(get_current_user), and its two
+# reports_to writes additionally carry require_reporting_line_write. Leaving the
+# entry would have recorded a violation that no longer exists, which is the
+# failure #15762 describes from the other side — a record outliving its fix.
 _TRACKED_BY_15745 = {
-    "agent_org": "api/agent_org.py",
     "redis": "api/redis.py",
     "developer": "api/developer.py",
     "wake_word": "api/wake_word.py",
