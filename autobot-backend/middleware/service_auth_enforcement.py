@@ -66,6 +66,14 @@ EXEMPT_PATHS: List[str] = [
     # NPU worker management (frontend-accessible via Settings panel)
     "/api/npu/workers",  # NPU worker CRUD operations
     "/api/npu/load-balancing",  # Load balancing configuration
+    # NPU pool status (#13365): admin-authenticated via the same
+    # check_admin_permission dependency as the two siblings above
+    # (api/npu_workers.py get_npu_status()/list_workers()/get_load_balancing_config()).
+    # Called browser-side from the Codebase Analytics debug panel
+    # (useAnalyticsDebug.ts). It was never exempt, so service-auth enforcement
+    # 401s that call in production; it belongs with its siblings, not with the
+    # worker-to-master reporting endpoints below.
+    "/api/npu/status",
     # User-facing file operations
     "/api/files",
     # LLM configuration and models
@@ -107,7 +115,6 @@ SERVICE_ONLY_PATHS: List[str] = [
     # NPU Worker internal endpoints
     "/api/npu/results",
     "/api/npu/heartbeat",
-    "/api/npu/status",
     "/api/npu/internal",
     # AI Stack internal endpoints
     "/api/ai-stack/results",
