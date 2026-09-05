@@ -16,10 +16,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from typing import Any, Dict
 
 # Fully-qualified (#14373) — see plugins/core-plugins/video-generation-plugin/main.py.
+from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
 
 from .providers import ProviderError, get_provider
@@ -27,8 +27,8 @@ from .providers import ProviderError, get_provider
 logger = logging.getLogger(__name__)
 
 # Poll cadence / ceiling are env-tunable (no hard-coded magic numbers).
-_POLL_INTERVAL_S = float(os.environ.get("VIDEO_GEN_POLL_INTERVAL_S", "5"))
-_POLL_MAX_ATTEMPTS = int(os.environ.get("VIDEO_GEN_POLL_MAX_ATTEMPTS", "120"))
+_POLL_INTERVAL_S = env_float("VIDEO_GEN_POLL_INTERVAL_S", 5.0)
+_POLL_MAX_ATTEMPTS = env_int("VIDEO_GEN_POLL_MAX_ATTEMPTS", 120)
 
 
 class GenerateVideoTool(BaseTool):

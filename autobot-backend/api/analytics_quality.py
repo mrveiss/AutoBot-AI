@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -39,6 +38,7 @@ from api.schemas_analytics import (
 from api.schemas_common import DataResponse
 from api.ws_security import enforce_ws_origin
 from auth_middleware import check_admin_permission
+from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
@@ -55,7 +55,7 @@ logger = get_logger(__name__)
 _HEALTH_HISTORY_KEY = "quality:health:history"
 
 # Maximum snapshots to retain (~2 years of daily metric computations).
-QUALITY_HISTORY_MAX_POINTS: int = int(os.environ.get("QUALITY_HISTORY_MAX_POINTS", "730"))
+QUALITY_HISTORY_MAX_POINTS: int = env_int("QUALITY_HISTORY_MAX_POINTS", 730)
 
 # Redis sorted-set key for remediation delta history (written by remediation_loop).
 _DELTA_HISTORY_KEY = "remediation:delta:history"

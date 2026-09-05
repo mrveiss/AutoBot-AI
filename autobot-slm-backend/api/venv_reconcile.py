@@ -58,13 +58,13 @@ import asyncio
 import configparser
 import json
 import logging
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 import venv_provenance as provenance
+from autobot_shared.env_utils import env_float
 from autobot_shared.time_utils import utc_timestamp
 
 # Plain stdlib logging, deliberately (mirrors code_sync.py itself, and the
@@ -78,9 +78,9 @@ logger = logging.getLogger(__name__)
 # Timeouts are env-backed module constants, never a hardcoded bare number
 # scattered through call sites — mirrors the existing pip-install timeout
 # pattern in code_sync.py.
-_PIP_INSTALL_TIMEOUT = float(os.environ.get("AUTOBOT_PIP_INSTALL_TIMEOUT", "300"))
-_VENV_INSPECT_TIMEOUT = float(os.environ.get("AUTOBOT_VENV_INSPECT_TIMEOUT", "60"))
-_PIP_UNINSTALL_TIMEOUT = float(os.environ.get("AUTOBOT_PIP_UNINSTALL_TIMEOUT", "120"))
+_PIP_INSTALL_TIMEOUT = env_float("AUTOBOT_PIP_INSTALL_TIMEOUT", 300.0)
+_VENV_INSPECT_TIMEOUT = env_float("AUTOBOT_VENV_INSPECT_TIMEOUT", 60.0)
+_PIP_UNINSTALL_TIMEOUT = env_float("AUTOBOT_PIP_UNINSTALL_TIMEOUT", 120.0)
 
 # Recorded next to the venv itself (never in the deployed component tree, so
 # it is never rsynced away by a resync) — the previous run's declared set.

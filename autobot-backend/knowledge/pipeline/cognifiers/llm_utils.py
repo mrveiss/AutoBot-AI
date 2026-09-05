@@ -11,9 +11,9 @@ call keyed by chunk index, with per-chunk fallback (generalizes #10647).
 """
 
 import json
-import os
 from typing import Any, Awaitable, Callable, Dict, List, TypeVar, get_args
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from knowledge.pipeline.models.entity import Entity
@@ -26,8 +26,8 @@ _R = TypeVar("_R")
 # than a single-chunk reply. Scale ``max_tokens`` with the batch size (capped) so
 # the batched output isn't truncated mid-response — truncation drops trailing
 # chunk indices, which per-chunk fallback then has to recover (#11012).
-_BATCH_MAX_TOKENS_PER_CHUNK = int(os.environ.get("AUTOBOT_COGNIFIER_BATCH_MAX_TOKENS_PER_CHUNK", "1024"))
-_BATCH_MAX_TOKENS_CAP = int(os.environ.get("AUTOBOT_COGNIFIER_BATCH_MAX_TOKENS_CAP", "8192"))
+_BATCH_MAX_TOKENS_PER_CHUNK = env_int("AUTOBOT_COGNIFIER_BATCH_MAX_TOKENS_PER_CHUNK", 1024)
+_BATCH_MAX_TOKENS_CAP = env_int("AUTOBOT_COGNIFIER_BATCH_MAX_TOKENS_CAP", 8192)
 
 
 def parse_llm_json_response(

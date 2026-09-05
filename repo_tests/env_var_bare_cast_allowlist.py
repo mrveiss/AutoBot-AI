@@ -3,15 +3,19 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """The RECORD of module-level env casts still left bare, kept apart from the
-check (#15691).
+check (#15691, #15710).
 
 ``env_var_bare_cast_test.py`` asks a fixed question: is every module-level
-``int(os.getenv(...))`` / ``float(os.getenv(...))`` in the tree either
-converted to a crash-safe reader from ``autobot_shared/env_utils.py``, or
-named here with the reason a bare cast is deliberately still there? A bare
-cast raises ``ValueError`` at IMPORT on a malformed value, which for a module
-a service imports at startup is not a bad setting -- it is a service that
-will not start (#15691).
+``int(...)``/``float(...)`` wrapping ``os.getenv(...)`` OR ``os.environ.get(...)``
+in the tree either converted to a crash-safe reader from
+``autobot_shared/env_utils.py``, or named here with the reason a bare cast is
+deliberately still there? A bare cast raises ``ValueError`` at IMPORT on a
+malformed value, which for a module a service imports at startup is not a bad
+setting -- it is a service that will not start (#15691). ``os.getenv`` is
+implemented as ``os.environ.get(key, default)`` in CPython, so the two
+spellings are the identical defect; #15691 measured and triaged the
+``os.getenv`` spelling, #15710 did the same for ``os.environ.get`` and
+converted every site it found -- nothing from that sweep is recorded below.
 
 They are separate files for the same reason ``npm_test_scripts_allowlist.py``
 is split from its check: the check is finished, and this record only grows
@@ -36,6 +40,14 @@ Editing rules:
 #: across 31 files, triaged startup-path modules first. 36 were converted to
 #: ``env_int``/``env_float``/``env_int_clamped``/``env_float_clamped``; the 7
 #: recorded here are what is left.
+#:
+#: #15710 re-ran the same AST pass for the ``os.environ.get(...)`` spelling
+#: (``os.getenv`` is implemented as ``os.environ.get(key, default)``, so it is
+#: the identical defect, just unmatched by #15691's narrower pattern): 58 more
+#: sites across 31 files. Every one of them was a module a running service
+#: imports at startup -- no operator-run-script or packaging-isolation reason
+#: like the ones below applied to any of them -- so all 58 were converted and
+#: none are recorded here. The count below is unchanged by that sweep.
 #:
 #: The guard also looks through a transparent wrapper -- ``max(1, int(os.getenv(
 #: ...)))`` raises at import exactly as the bare form does, since the floor
@@ -81,15 +93,20 @@ BARE_ENV_CASTS = {
     ),
 }
 
-#: DOWN-ONLY ceiling on sites still bare. Was 43 at the #15691 measurement
-#: (see BARE_ENV_CASTS' docstring); 36 were converted in that same PR,
-#: leaving 7. NEVER raise this to let a new bare cast through -- convert it
-#: to a crash-safe reader, or record it above with an issue number.
+#: DOWN-ONLY ceiling on sites still bare, combined across both spellings. Was
+#: 43 at the #15691 (``os.getenv``) measurement (see BARE_ENV_CASTS'
+#: docstring); 36 were converted in that same PR, leaving 7. #15710 added the
+#: ``os.environ.get`` spelling to this same ceiling and found 58 more sites,
+#: all converted -- none joined the 7. NEVER raise this to let a new bare
+#: cast through, in either spelling -- convert it to a crash-safe reader, or
+#: record it above with an issue number.
 MAX_BARE_ENV_CASTS = 7
 
-#: The #15691 measurement itself, kept so a future reader can tell a
-#: population that is draining (this number falling) from one that is
+#: The combined #15691 + #15710 measurement, kept so a future reader can tell
+#: a population that is draining (this number falling) from one that is
 #: regrowing (this number rising, which should never happen -- a new bare
 #: cast is caught by MAX_BARE_ENV_CASTS long before this constant would need
-#: to move).
-STARTING_POPULATION = 43
+#: to move). 43 os.getenv(...) sites (#15691) + 58 os.environ.get(...) sites
+#: (#15710) = 101; every one of the 58 was converted, so the ceiling itself
+#: never moved off the 7 left over from #15691.
+STARTING_POPULATION = 101
