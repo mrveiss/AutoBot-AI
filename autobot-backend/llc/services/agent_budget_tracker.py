@@ -96,13 +96,14 @@ class AgentBudgetTracker:
         # After DB write:
         await tracker.record_state(AgentBudgetState(
             agent_id=agent_id,
+            company_id=company_id,
             budget_spent=float(row.budget_spent),
             budget_limit=float(row.budget_limit),
             alert_threshold=float(row.alert_threshold),
         ))
 
         # Before an expensive DB read:
-        state = await tracker.get_state(agent_id)
+        state = await tracker.get_state(company_id, agent_id)
         if state and state.is_over_limit:
             raise BudgetExhausted(...)
     """
