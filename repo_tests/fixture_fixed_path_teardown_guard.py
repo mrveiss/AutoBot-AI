@@ -7,9 +7,12 @@
 Split out from the test module (the same shape as ``sys_modules_leak_guard.py``
 / ``sys_modules_leak_guard_test.py``) so the false-negative fixes landed for
 #15797 could grow the scanner without also tripping
-``check_python_file_size.py``'s ``MAX_LINES`` on the test module itself. The
-test module's own docstring carries the guard's rationale and history; this
-one documents only the AST shapes each helper recognizes.
+``check_python_file_size.py``'s ``MAX_LINES`` on the test module itself.
+``fixture_fixed_path_teardown_guard_test.py`` carries the guard's rationale
+and the live-tree assertions, and
+``fixture_fixed_path_teardown_guard_contrast_test.py`` carries the synthetic
+contrast pair for every defect closed; this one documents only the AST shapes
+each helper recognizes.
 """
 
 from __future__ import annotations
@@ -101,6 +104,13 @@ def _branch_removes(stmts: List[ast.stmt]) -> bool:
     return any(_stmt_guarantees_remove(stmt) for stmt in stmts)
 
 
+# A nested ``def``/``lambda`` is a scope of its own: its body neither runs nor
+# binds names where it is written. Every traversal that reasons about what the
+# fixture itself does skips these -- ``_walk_current_scope`` and
+# ``_collect_calls`` both (#15797 review).
+_NESTED_SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+
+
 def _walk_current_scope(node: ast.AST) -> Iterator[ast.AST]:
     """Like ``ast.walk``, but never descends into a nested function/lambda body.
 
@@ -113,7 +123,7 @@ def _walk_current_scope(node: ast.AST) -> Iterator[ast.AST]:
     """
     yield node
     for child in ast.iter_child_nodes(node):
-        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        if isinstance(child, _NESTED_SCOPE_NODES):
             continue
         yield from _walk_current_scope(child)
 
@@ -158,12 +168,24 @@ def _guarded_child_ids(node: ast.AST) -> Set[int]:
 
 
 def _collect_calls(node: ast.AST, guarded: bool = False) -> List[Tuple[ast.Call, bool]]:
-    """Every ``Call`` under *node*, tagged with whether an if/ternary gates it."""
+    """Every ``Call`` in *node*'s own scope, tagged with whether an if/ternary gates it.
+
+    Nested ``def``/``lambda`` bodies are skipped for the same reason
+    ``_walk_current_scope`` skips them: a call written inside one does not run
+    where it is written. Descending into them made a fixture whose teardown
+    only *defines* ``def cleanup(): shutil.rmtree(fixed)`` -- and never calls
+    it -- read as an unconditional removal, flagging a fixture that removes
+    nothing at all (#15797 review). ``guarded`` is per-branch, so a nested def
+    sitting inside an ``if`` was already excused by that path alone; one at the
+    fixture's own top level was not, which is the shape this closes.
+    """
     calls: List[Tuple[ast.Call, bool]] = []
     if isinstance(node, ast.Call):
         calls.append((node, guarded))
     guarded_ids = _guarded_child_ids(node)
     for child in ast.iter_child_nodes(node):
+        if isinstance(child, _NESTED_SCOPE_NODES):
+            continue
         calls.extend(_collect_calls(child, guarded or id(child) in guarded_ids))
     return calls
 
@@ -205,9 +227,16 @@ def _pair_target_value(target: ast.expr, value: ast.expr) -> List[Tuple[Set[str]
 
 
 def _assignment_pairs(func: ast.FunctionDef | ast.AsyncFunctionDef) -> List[Tuple[Set[str], ast.expr]]:
-    """(assigned names, right-hand-side expression) for every simple assignment in *func*."""
+    """(assigned names, right-hand-side expression) for every assignment in *func*'s own scope.
+
+    A nested helper's locals are not the fixture's: ``def leaf(): test_dir =
+    tmp_path / "leaf"`` binds a name that exists only inside ``leaf``, yet
+    ``ast.walk`` surfaced it as if the fixture had written it, marking an
+    outer, fixed ``test_dir`` derived and excusing a real violation
+    (#15797 review). ``_walk_current_scope`` keeps the pairs local to *func*.
+    """
     pairs: List[Tuple[Set[str], ast.expr]] = []
-    for node in ast.walk(func):
+    for node in _walk_current_scope(func):
         if isinstance(node, ast.Assign) and node.value is not None:
             for target in node.targets:
                 pairs.extend(_pair_target_value(target, node.value))
@@ -220,7 +249,19 @@ def _assignment_pairs(func: ast.FunctionDef | ast.AsyncFunctionDef) -> List[Tupl
 
 
 def _expr_is_derived(expr: ast.expr, derived: Set[str]) -> bool:
-    """True if any name *expr* reads is already known to trace back to a unique source."""
+    """True if any name *expr* reads is already known to trace back to a unique source.
+
+    ``ast.walk`` here is deliberate, not the leak fixed at the two call sites
+    above (#15797 review). A lambda inside a value expression is a *closure*
+    over the enclosing scope, so the names it reads really are this fixture's:
+    ``build = lambda name: tmp_path / name`` followed by ``test_dir =
+    build("leaf")`` derives genuinely, and refusing to look inside the lambda
+    would flag that correct fixture. The reverse shape -- a lambda whose body
+    reads a derived name while the lambda itself is used as something other
+    than a path -- would need that lambda's *name* to then appear in a path
+    expression: of the 1,212 fixtures scanned, 2 contain a lambda beside a
+    create/remove call at all, and neither has that shape.
+    """
     return any(isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id in derived for n in ast.walk(expr))
 
 

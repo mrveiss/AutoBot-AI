@@ -23,8 +23,12 @@ The AST scanner itself lives in ``fixture_fixed_path_teardown_guard.py``, a
 plain (non-``_test.py``) sibling module (the same split as
 ``sys_modules_leak_guard.py`` / ``sys_modules_leak_guard_test.py``), so the
 scanner's own growth does not also have to fit under this module's line
-budget. This module documents the guard's rationale and carries every
-assertion and contrast fixture.
+budget. This module documents the guard's rationale and carries the
+assertions that run it over the live tree; every synthetic contrast pair --
+and the write-up of the defect each one closes -- lives in
+``fixture_fixed_path_teardown_guard_contrast_test.py`` (the same split as
+``ansible_manifest_resolution_contrast_test.py``), so neither half has to
+fit both under ``check_python_file_size.py``'s MAX_LINES.
 
 THE DISCRIMINATOR IS CREATE-AND-REMOVE, NOT A BARE FIXED PATH
 -----------------------------------------------------------------
@@ -50,15 +54,16 @@ condition, or deriving the leaf from ``tmp_path``, is exactly what stops two
 shards from deleting each other's tree. ``_collect_calls`` tracks whether a
 call sits inside an ``ast.If``/ternary and only counts an *unguarded* removal
 call as the hazard, which is why ``tmp_root_exists`` is not flagged while the
-pre-#15772 ``temp_allowed_dir`` is (see the contrast pair below).
+pre-#15772 ``temp_allowed_dir`` is (see the contrast module's own pair). Both
+fixtures are pinned against the real source below, by name.
 
 WHY THE FIXTURE IS SYNTHETIC, NOT THE LIVE VIOLATION SET
 ---------------------------------------------------------
 The one known instance was fixed in #15772; the live population is zero
 (measured below). Seeding this guard's pass/fail from that population would
 make it vacuous today and break the moment a violation reappears -- the trap
-#15762 records. Every contrast pair is a literal fixture source this file
-writes itself.
+#15762 records. Every contrast pair is a literal fixture source the contrast
+module writes itself; nothing in the pass/fail path is seeded from the tree.
 
 REACH, NOT FINDINGS (the vacuity floor)
 ------------------------------------------
@@ -72,38 +77,16 @@ tracked ``.py`` file (fixtures live in plain test modules and in
 ``conftest.py``, so the scan is not limited to ``*_test.py`` filenames); the
 floor sits comfortably below that.
 
-THREE FALSE NEGATIVES CLOSED (#15797)
---------------------------------------
-``@repo_fixture`` (an aliased import) was invisible to the decorator check,
-``if a: rmtree(p) else: rmtree(p)`` counted as guarded because a bare ``if``
-does, and reading ``tmp_path`` anywhere in the body was treated as proof the
-created/removed path was unique even when it traced to something else
-entirely. ``_fixture_alias_names``, ``_if_exhaustively_removes``, and
-``_derived_names`` close each one respectively; each has its own contrast
-pair below and none may widen what ``tmp_root_exists`` or ``temp_forbidden_dir``
-already pass.
-
-TWO MORE GAPS CLOSED IN REVIEW (#15797 follow-up)
-----------------------------------------------------
-``_if_exhaustively_removes``'s exhaustiveness check used ``ast.walk``, which
-descends into a nested ``FunctionDef``/``Lambda`` body -- a branch that only
-*defines* ``def cleanup(): shutil.rmtree(p)``, without ever calling it, was
-misread as guaranteeing a remove, so an if/else where both branches merely
-define such a helper was misclassified as exhaustive removal and could flag a
-fixture that never removes anything (a FALSE POSITIVE). ``_walk_current_scope``
-closes it by refusing to descend into nested function/lambda bodies at all.
-
-Separately, ``_assignment_pairs`` credited *every* target of a tuple
-assignment with derivation the moment *any* value element read ``tmp_path``
-(``a, b = tmp_path, Path("/tmp/autobot/fixed")`` marked ``b`` derived too), and
-``_call_path_is_derived`` treated *every* argument and keyword of a call as a
-path candidate (an unrelated derived keyword could clear a fixed first
-argument). Both are FALSE NEGATIVES -- a fixed-path create/remove could evade
-the guard whenever an unrelated derived value sat nearby. ``_pair_target_value``
-pairs each target element with its matching value element instead, and
-``_call_path_is_derived`` now inspects only the receiver (for
-``Path.mkdir``/``unlink``/``rmdir``) or the first positional argument (for
-``shutil.rmtree``/``os.remove``/``os.makedirs``).
+DEFECTS CLOSED, AND THE PAIRS THAT PROVE THEY STAY CLOSED
+------------------------------------------------------------
+Six defects have been closed in this guard since #15785 -- an unseen decorator
+alias, an if/else that removed on every branch, a ``tmp_path`` read that never
+reached the path, a tuple assignment that leaked derivation across targets, a
+call keyword that laundered a fixed path argument, and two traversals that
+walked into nested ``def``/``lambda`` scopes. Each has a two-sided contrast
+pair, and all of them live in
+``fixture_fixed_path_teardown_guard_contrast_test.py`` with the write-up of
+the defect they close.
 """
 
 from __future__ import annotations
@@ -202,324 +185,3 @@ class TestRealFixtureRegressionPins:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         (func,) = (f for f in _iter_pytest_fixtures(tree) if f.name == fixture_name)
         assert _is_violation(func) is expected_violation
-
-
-_HAZARD_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_allowed_dir(tmp_path):
-    test_dir = Path("/tmp/autobot/test_security")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    shutil.rmtree(test_dir)
-"""
-
-_SAFE_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_allowed_dir(tmp_path):
-    test_dir = Path("/tmp/autobot") / f"test_security_{tmp_path.name}"
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    if test_dir.exists():
-        shutil.rmtree(test_dir)
-"""
-
-
-def _only_fixture(source: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
-    (func,) = _iter_pytest_fixtures(ast.parse(source))
-    return func
-
-
-class TestContrastPair:
-    """A guard that never fires passes its own suite -- this proves it can fire."""
-
-    def test_fixed_path_create_and_unconditional_remove_is_flagged(self):
-        assert _is_violation(_only_fixture(_HAZARD_SOURCE)) is True
-
-    def test_tmp_path_derived_leaf_is_not_flagged(self):
-        assert _is_violation(_only_fixture(_SAFE_SOURCE)) is False
-
-
-# ============================================================================
-# #15797 -- three false negatives closed above, each with its own contrast pair.
-# ============================================================================
-
-_ALIAS_HAZARD_SOURCE = """
-import shutil
-from pathlib import Path
-from pytest import fixture as repo_fixture
-
-@repo_fixture
-def temp_dir(tmp_path):
-    test_dir = Path("/tmp/autobot/alias_hazard")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    shutil.rmtree(test_dir)
-"""
-
-_ALIAS_SAFE_SOURCE = """
-import shutil
-from pytest import fixture as repo_fixture
-
-@repo_fixture(scope="session")
-def temp_dir(tmp_path):
-    test_dir = tmp_path / "alias_safe"
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    shutil.rmtree(test_dir)
-"""
-
-
-class TestAliasedFixtureDecoratorIsRecognized:
-    """Defect 1 (#15797): a bare-name import alias is not seen at all otherwise."""
-
-    def test_aliased_bare_decorator_is_recognized_and_flagged(self):
-        func = _only_fixture(_ALIAS_HAZARD_SOURCE)
-        assert func.name == "temp_dir"
-        assert _is_violation(func) is True
-
-    def test_aliased_call_form_decorator_is_recognized_and_not_flagged(self):
-        func = _only_fixture(_ALIAS_SAFE_SOURCE)
-        assert func.name == "temp_dir"
-        assert _is_violation(func) is False
-
-
-_EXHAUSTIVE_HAZARD_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path, use_alt_removal):
-    test_dir = Path("/tmp/autobot/exhaustive_hazard")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    if use_alt_removal:
-        shutil.rmtree(test_dir)
-    else:
-        shutil.rmtree(test_dir)
-"""
-
-_EXHAUSTIVE_SAFE_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(created_flag):
-    test_dir = Path("/tmp/autobot/exhaustive_safe")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    if created_flag:
-        shutil.rmtree(test_dir)
-"""
-
-
-class TestExhaustiveBranchRemovalIsUnconditional:
-    """Defect 2 (#15797): remove-on-every-branch must count as unconditional.
-
-    ``_EXHAUSTIVE_SAFE_SOURCE`` mirrors ``tmp_root_exists``'s own shape -- a
-    single ``if`` with no ``else`` -- so the fix must not start flagging it.
-    """
-
-    def test_removal_on_every_branch_of_if_else_is_flagged(self):
-        assert _is_violation(_only_fixture(_EXHAUSTIVE_HAZARD_SOURCE)) is True
-
-    def test_removal_on_a_single_unmatched_branch_stays_conditional(self):
-        assert _is_violation(_only_fixture(_EXHAUSTIVE_SAFE_SOURCE)) is False
-
-
-_TRACED_HAZARD_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path):
-    tmp_path.exists()
-    Path("/tmp/autobot/traced_hazard").mkdir(parents=True, exist_ok=True)
-    yield
-    shutil.rmtree("/tmp/autobot/traced_hazard")
-"""
-
-_TRACED_SAFE_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path):
-    tmp_path.exists()
-    test_dir = tmp_path / "traced_safe"
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    shutil.rmtree(test_dir)
-"""
-
-
-class TestTmpPathMustBeTracedIntoThePath:
-    """Defect 3 (#15797): reading ``tmp_path`` elsewhere must not launder a fixed path."""
-
-    def test_incidental_tmp_path_reference_does_not_clear_a_fixed_path(self):
-        assert _is_violation(_only_fixture(_TRACED_HAZARD_SOURCE)) is True
-
-    def test_tmp_path_actually_used_to_build_the_path_is_recognized(self):
-        assert _is_violation(_only_fixture(_TRACED_SAFE_SOURCE)) is False
-
-
-# ============================================================================
-# Review follow-up on #15797: two more gaps, each with its own contrast pair.
-# ============================================================================
-
-_NESTED_DEF_SAFE_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path, use_helper_a):
-    test_dir = Path("/tmp/autobot/nested_def_safe")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    if use_helper_a:
-        def cleanup():
-            shutil.rmtree(test_dir)
-    else:
-        def cleanup():
-            shutil.rmtree(test_dir)
-"""
-
-_NESTED_DEF_HAZARD_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path, use_helper_a):
-    test_dir = Path("/tmp/autobot/nested_def_hazard")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    if use_helper_a:
-        shutil.rmtree(test_dir)
-    else:
-        shutil.rmtree(test_dir)
-"""
-
-
-class TestNestedFunctionDefinitionDoesNotCountAsRemoval:
-    """Review finding 1: ``ast.walk`` used to enter nested function/lambda bodies.
-
-    ``_NESTED_DEF_SAFE_SOURCE``'s if/else has both branches merely *define* a
-    ``cleanup`` helper that is never called -- nothing is ever removed, so the
-    fixture must not be flagged, even though a naive scan of the branch bodies
-    would find an ``rmtree`` call inside each. ``_NESTED_DEF_HAZARD_SOURCE``
-    is the same shape with the nesting removed -- both branches call
-    ``shutil.rmtree`` directly -- to prove the fix does not just always return
-    False; a real unconditional removal in the same if/else shape still counts.
-    """
-
-    def test_branch_that_only_defines_a_cleanup_helper_is_not_removal(self):
-        assert _is_violation(_only_fixture(_NESTED_DEF_SAFE_SOURCE)) is False
-
-    def test_branch_that_directly_calls_remove_is_still_removal(self):
-        assert _is_violation(_only_fixture(_NESTED_DEF_HAZARD_SOURCE)) is True
-
-
-_TUPLE_ASSIGN_HAZARD_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path):
-    a, b = tmp_path, Path("/tmp/autobot/tuple_hazard")
-    b.mkdir(parents=True, exist_ok=True)
-    yield b
-    shutil.rmtree(b)
-"""
-
-_TUPLE_ASSIGN_SAFE_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path):
-    a, b = tmp_path, tmp_path / "tuple_safe"
-    b.mkdir(parents=True, exist_ok=True)
-    yield b
-    shutil.rmtree(b)
-"""
-
-
-class TestTupleAssignmentDoesNotLeakDerivationAcrossTargets:
-    """Review finding 2a: a tuple assignment must pair value elements with the
-    matching target, not credit every target because *any* element derives.
-
-    ``_TUPLE_ASSIGN_HAZARD_SOURCE`` pairs ``a`` with the genuinely-derived
-    ``tmp_path`` and ``b`` with an unrelated fixed path -- ``b`` must stay
-    fixed and the fixture must be flagged. ``_TUPLE_ASSIGN_SAFE_SOURCE`` pairs
-    ``b`` with a value that itself derives from ``tmp_path``, proving the
-    element-wise pairing still recognizes a correctly-paired derivation.
-    """
-
-    def test_unrelated_sibling_in_tuple_assignment_does_not_clear_a_fixed_path(self):
-        assert _is_violation(_only_fixture(_TUPLE_ASSIGN_HAZARD_SOURCE)) is True
-
-    def test_correctly_paired_tuple_element_is_still_recognized_as_derived(self):
-        assert _is_violation(_only_fixture(_TUPLE_ASSIGN_SAFE_SOURCE)) is False
-
-
-_CALL_ARG_HAZARD_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path):
-    some_derived_thing = tmp_path / "flag"
-    test_dir = Path("/tmp/autobot/call_arg_hazard")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    shutil.rmtree(test_dir, ignore_errors=some_derived_thing)
-"""
-
-_CALL_ARG_SAFE_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path):
-    some_derived_thing = tmp_path / "flag"
-    test_dir = tmp_path / "call_arg_safe"
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    shutil.rmtree(test_dir, ignore_errors=some_derived_thing)
-"""
-
-
-class TestCallArgumentDerivationIsScopedToThePathOperand:
-    """Review finding 2b: only the receiver or the known path argument of a
-    create/remove call is the path operand -- an unrelated derived keyword
-    must not launder a fixed first positional argument.
-
-    ``_CALL_ARG_HAZARD_SOURCE``'s ``ignore_errors`` keyword is derived from
-    ``tmp_path`` but the actual removed path is fixed -- it must stay flagged.
-    ``_CALL_ARG_SAFE_SOURCE`` has the same unrelated derived keyword sitting
-    beside a path that is itself genuinely derived, proving the scoped check
-    still recognizes derivation when it belongs to the real path argument.
-    """
-
-    def test_unrelated_derived_keyword_does_not_clear_the_fixed_path_argument(self):
-        assert _is_violation(_only_fixture(_CALL_ARG_HAZARD_SOURCE)) is True
-
-    def test_actual_path_argument_being_derived_is_still_recognized(self):
-        assert _is_violation(_only_fixture(_CALL_ARG_SAFE_SOURCE)) is False
