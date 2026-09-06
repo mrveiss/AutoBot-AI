@@ -375,3 +375,87 @@ class TestReachedHelperDerivesFromItsOwnScope:
 
     def test_helper_local_over_a_fixed_root_is_still_flagged(self):
         assert _is_violation(_only_fixture(_HELPER_LOCAL_FIXED_HAZARD_SOURCE)) is True
+
+
+_STAR_PARAM_SHADOW_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(request, tmp_path):
+    fixed_marker = Path("/tmp/autobot/star_param_marker")
+    fixed_marker.mkdir(parents=True, exist_ok=True)
+    leaf = tmp_path / "star_param_leaf"
+    def fin(*leaf):
+        shutil.rmtree(leaf[0])
+    request.addfinalizer(fin)
+    yield fixed_marker
+"""
+
+_STAR_PARAM_CLOSURE_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(request, tmp_path):
+    fixed_marker = Path("/tmp/autobot/star_param_marker")
+    fixed_marker.mkdir(parents=True, exist_ok=True)
+    leaf = tmp_path / "star_param_leaf"
+    def fin(*args):
+        shutil.rmtree(leaf)
+    request.addfinalizer(fin)
+    yield fixed_marker
+"""
+
+_STAR_PARAM_UNIQUE_NAME_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(request):
+    fixed_marker = Path("/tmp/autobot/star_param_marker")
+    fixed_marker.mkdir(parents=True, exist_ok=True)
+    def fin(*tmp_path):
+        shutil.rmtree(tmp_path[0])
+    request.addfinalizer(fin)
+    yield fixed_marker
+"""
+
+
+class TestStarParametersShadowInheritedDerivation:
+    """#15815 review: ``*args``/``**kwargs`` bind a name like any other parameter.
+
+    ``_scope_params`` collected only ``args``/``kwonlyargs``/``posonlyargs``,
+    and ``_scope_derived_names`` subtracts that set from the names a reached
+    helper inherits. A helper written ``def fin(*leaf)`` inside a fixture
+    whose own ``leaf`` is ``tmp_path``-derived therefore kept the enclosing
+    credit, and ``shutil.rmtree(leaf[0])`` -- a tuple element the caller
+    supplied, sharing nothing with the fixture's path but the spelling --
+    read as derived and excused itself. A FALSE NEGATIVE, and the docstring
+    already claimed the opposite.
+
+    ``_STAR_PARAM_CLOSURE_SAFE_SOURCE`` is the same helper with the star
+    parameter named ``args``: ``leaf`` is then a genuine closure over the
+    fixture's derived name and must still reach the nested scope, so the fix
+    cannot be "a star parameter stops inheritance". Every source here creates
+    the SAME fixed marker, so the create side is True in all three and the
+    removal verdict is the only thing these assertions can be reading.
+
+    ``_STAR_PARAM_UNIQUE_NAME_HAZARD_SOURCE`` pins the other half of the
+    split: shadowing reads every bound name, but seeding reads only
+    ``_named_params``, because pytest injects ``tmp_path`` by parameter name
+    and never through a star. Widening the seed set along with the shadow set
+    would have swapped this false negative for a new one.
+    """
+
+    def test_star_parameter_shadows_the_inherited_derived_name(self):
+        assert _is_violation(_only_fixture(_STAR_PARAM_SHADOW_HAZARD_SOURCE)) is True
+
+    def test_a_differently_named_star_parameter_keeps_the_closure_derived(self):
+        assert _is_violation(_only_fixture(_STAR_PARAM_CLOSURE_SAFE_SOURCE)) is False
+
+    def test_a_star_parameter_named_tmp_path_is_not_pytests_injection(self):
+        assert _is_violation(_only_fixture(_STAR_PARAM_UNIQUE_NAME_HAZARD_SOURCE)) is True

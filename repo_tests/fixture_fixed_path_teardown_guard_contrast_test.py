@@ -221,6 +221,122 @@ class TestExhaustiveBranchRemovalIsUnconditional:
         assert _is_violation(_only_fixture(_EXHAUSTIVE_SAFE_SOURCE)) is False
 
 
+_TERNARY_GATED_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(flag, drop):
+    test_dir = Path("/tmp/autobot/ternary_gated")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    if flag:
+        shutil.rmtree(test_dir) if drop else None
+    else:
+        shutil.rmtree(test_dir)
+"""
+
+_TERNARY_EXHAUSTIVE_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(use_root):
+    test_dir = Path("/tmp/autobot/ternary_exhaustive")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    shutil.rmtree(test_dir) if use_root else shutil.rmtree(test_dir / "leaf")
+"""
+
+
+class TestTernaryGatingIsDistinguishedFromExhaustion:
+    """#15815 review: a ternary-gated removal is not a guaranteed removal.
+
+    ``_stmt_guarantees_remove`` used to fall through to a plain scan of the
+    statement, discarding the guardedness the primitive already carried, so
+    ``shutil.rmtree(p) if drop else None`` satisfied ``_branch_removes``. In
+    ``_TERNARY_GATED_SAFE_SOURCE`` that made the whole if/else look exhaustive
+    -- ``_guarded_child_ids`` then returned nothing, every call in it read as
+    unconditional, and a fixture that removes on one path only was flagged.
+    That is the FALSE POSITIVE direction, the one that gets a guard switched
+    off, so it is the half that had to be fixed first.
+
+    Refusing every ternary would have closed it by opening the mirror, which
+    ``_TERNARY_EXHAUSTIVE_HAZARD_SOURCE`` pins: both arms remove, so a removal
+    happens on every path and the fixture is a real hazard.
+    ``_ifexp_exhaustively_removes`` asks the ternary the same question
+    ``_if_exhaustively_removes`` asks an ``if``, which is what separates the
+    two shapes. Both fixtures create the same fixed path, so the create side
+    is True either way and only the removal verdict moves these assertions.
+    """
+
+    def test_ternary_gated_removal_inside_a_branch_stays_conditional(self):
+        assert _is_violation(_only_fixture(_TERNARY_GATED_SAFE_SOURCE)) is False
+
+    def test_ternary_that_removes_on_both_arms_is_flagged(self):
+        assert _is_violation(_only_fixture(_TERNARY_EXHAUSTIVE_HAZARD_SOURCE)) is True
+
+
+_LOOP_BODY_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir():
+    test_dir = Path("/tmp/autobot/loop_body")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    for entry in test_dir.iterdir():
+        shutil.rmtree(entry)
+"""
+
+_FINALLY_TEARDOWN_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir():
+    test_dir = Path("/tmp/autobot/finally_teardown")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        yield test_dir
+    finally:
+        shutil.rmtree(test_dir)
+"""
+
+
+class TestLoopBodiesGateARemovalButFinallyDoesNot:
+    """#15815 review: the loop rule was stated in one place and not the other.
+
+    ``_stmt_guarantees_remove`` has always said a loop may run zero times, so
+    a remove inside one is not guaranteed; ``_guarded_child_ids`` never said
+    it, so the same call read as unguarded in the verdict that matters. The
+    live tree's ``tmp_root_exists`` survived only because its ``for entry in
+    ...: rmtree(entry) if entry.is_dir() else entry.unlink()`` was read as a
+    gated ternary -- and the moment the ternary was judged on its own merits
+    (both arms remove, so it is exhaustive) the loop had nothing left holding
+    it and a correct fixture was flagged. ``_LOOP_BODY_SAFE_SOURCE`` is that
+    shape reduced to the loop alone, so it pins the loop rule rather than the
+    ternary's accident.
+
+    ``_FINALLY_TEARDOWN_HAZARD_SOURCE`` is why ``try``/``with`` are NOT in
+    ``_LOOP_NODES``: a ``finally:`` removal runs on every path out of the
+    fixture and is the commonest teardown there is. Gating the loop must not
+    become gating every compound statement, or the guard stops reaching the
+    hazard it was written for.
+    """
+
+    def test_removal_only_inside_a_loop_body_is_not_unconditional(self):
+        assert _is_violation(_only_fixture(_LOOP_BODY_SAFE_SOURCE)) is False
+
+    def test_removal_in_a_finally_block_is_still_unconditional(self):
+        assert _is_violation(_only_fixture(_FINALLY_TEARDOWN_HAZARD_SOURCE)) is True
+
+
 _TRACED_HAZARD_SOURCE = """
 import shutil
 from pathlib import Path

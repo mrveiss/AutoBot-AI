@@ -88,15 +88,17 @@ floor sits comfortably below that.
 
 DEFECTS CLOSED, AND THE PAIRS THAT PROVE THEY STAY CLOSED
 ------------------------------------------------------------
-Eight defects have been closed in this guard since #15785 -- an unseen decorator
-alias, an if/else that removed on every branch, a ``tmp_path`` read that never
-reached the path, a tuple assignment that leaked derivation across targets, a
-call keyword that laundered a fixed path argument, two traversals that walked
-into nested ``def``/``lambda`` scopes, and a name credited as derived on one
-assignment while another gave it a fixed path, a registered finalizer whose
-removal sat in a scope the scanner declined to enter, and a dead binding
-counted against the name that overwrote it. Each has a two-sided contrast
-pair, and all of them live in
+Thirteen defects have been closed in this guard since #15785 -- an unseen
+decorator alias, an if/else that removed on every branch, a ``tmp_path`` read
+that never reached the path, a tuple assignment that leaked derivation across
+targets, a call keyword that laundered a fixed path argument, two traversals
+that walked into nested ``def``/``lambda`` scopes, a name credited as derived on
+one assignment while another gave it a fixed path, a registered finalizer whose
+removal sat in a scope the scanner declined to enter, a dead binding counted
+against the name that overwrote it, a ternary-gated removal read as guaranteed,
+a loop body that gated nothing while ``_stmt_guarantees_remove`` said it did,
+and a star parameter that failed to shadow an inherited derived name. Each has
+a two-sided contrast pair, and all of them live in
 ``fixture_fixed_path_teardown_guard_contrast_test.py``,
 ``fixture_fixed_path_teardown_guard_derivation_test.py`` or
 ``fixture_fixed_path_teardown_guard_reachability_test.py`` with the write-up

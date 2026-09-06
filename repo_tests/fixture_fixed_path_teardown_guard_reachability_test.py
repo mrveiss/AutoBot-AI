@@ -36,7 +36,11 @@ from __future__ import annotations
 
 import ast
 
-from repo_tests.fixture_fixed_path_teardown_guard import _is_violation, _iter_pytest_fixtures
+from repo_tests.fixture_fixed_path_teardown_guard import (
+    _is_violation,
+    _iter_pytest_fixtures,
+    _reached_scopes,
+)
 
 
 def _only_fixture(source: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
@@ -128,8 +132,10 @@ def temp_dir(request, register_cleanup):
 class TestReachedNestedHelperIsTheFixturesTeardown:
     """#15810: scoping call collection to the fixture's body hid a registered finalizer.
 
-    ``_DEFERRED_SAFE_SOURCE`` above is why call collection stopped descending
-    into nested bodies -- a helper nobody calls removes nothing. The cost was
+    ``_DEFERRED_SAFE_SOURCE`` in
+    ``fixture_fixed_path_teardown_guard_contrast_test.py`` is why call
+    collection stopped descending into nested bodies -- a helper nobody calls
+    removes nothing. The cost was
     the opposite error: ``def fin(): shutil.rmtree(fixed)`` followed by
     ``request.addfinalizer(fin)`` removes a fixed path on every path through
     the fixture, and went unflagged (a FALSE NEGATIVE). The discriminator is
@@ -170,3 +176,75 @@ class TestReachedNestedHelperIsTheFixturesTeardown:
 
     def test_a_finalizer_registered_only_on_one_branch_stays_conditional(self):
         assert _is_violation(_only_fixture(_CONDITIONAL_FINALIZER_SAFE_SOURCE)) is False
+
+
+_MUTUAL_RECURSION_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(request, register_cleanup):
+    fixed = Path("/tmp/autobot/mutual_recursion")
+    fixed.mkdir(parents=True, exist_ok=True)
+    def a():
+        b()
+    def b():
+        a()
+        shutil.rmtree(fixed)
+    if register_cleanup:
+        request.addfinalizer(a)
+    a()
+    yield fixed
+"""
+
+_MUTUAL_RECURSION_GUARDED_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(request, register_cleanup):
+    fixed = Path("/tmp/autobot/mutual_recursion")
+    fixed.mkdir(parents=True, exist_ok=True)
+    def a():
+        b()
+    def b():
+        a()
+        shutil.rmtree(fixed)
+    if register_cleanup:
+        request.addfinalizer(a)
+    yield fixed
+"""
+
+
+class TestMutuallyRecursiveHelpersTerminateAndKeepTheBetterReach:
+    """#15815 review: a helper pair reached guarded first, then unguarded.
+
+    ``_record_reached`` re-opens a scope only when the new visit is *better*
+    -- unguarded where the recorded one was guarded -- which is the single
+    thing keeping ``_reached_scopes`` from looping forever on ``a`` calling
+    ``b`` calling ``a``. The hazard source reaches the pair both ways in one
+    fixture: ``if register_cleanup: request.addfinalizer(a)`` records ``a``
+    guarded, and the bare ``a()`` below it then re-opens ``a`` and, through
+    it, ``b``. The walk must terminate, and all three scopes must end up
+    unguarded, or the ``shutil.rmtree(fixed)`` inside ``b`` stays excused.
+
+    The safe source is the same fixture with the unguarded ``a()`` deleted
+    and nothing else changed. Only the guarded registration remains, so the
+    removal ``b`` performs is no more unconditional than the reference that
+    reaches it -- the same rule ``_CONDITIONAL_FINALIZER_SAFE_SOURCE`` pins
+    for a single helper, held here across a cycle where each scope is visited
+    more than once.
+    """
+
+    def test_recursive_pair_reached_unguarded_is_flagged(self):
+        assert _is_violation(_only_fixture(_MUTUAL_RECURSION_HAZARD_SOURCE)) is True
+
+    def test_every_scope_in_the_cycle_is_recorded_once_and_unguarded(self):
+        scopes = _reached_scopes(_only_fixture(_MUTUAL_RECURSION_HAZARD_SOURCE))
+        assert [scope.name for scope, _guarded, _derived in scopes] == ["temp_dir", "a", "b"]
+        assert [guarded for _scope, guarded, _derived in scopes] == [False, False, False]
+
+    def test_the_same_cycle_reached_only_through_an_if_stays_conditional(self):
+        assert _is_violation(_only_fixture(_MUTUAL_RECURSION_GUARDED_SAFE_SOURCE)) is False

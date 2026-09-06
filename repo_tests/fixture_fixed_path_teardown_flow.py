@@ -22,9 +22,12 @@ about a scope, all from a single walking primitive:
 ``_walk_scope_guarded``
     THE primitive. Every node in one scope -- never descending into a nested
     ``def``/``lambda``, whose body does not run where it is written -- tagged
-    with whether an ``if``/ternary gates it. ``_walk_current_scope``,
+    with whether an ``if``, a ternary or a loop gates it. ``_walk_current_scope``,
     ``_collect_calls`` and ``_collect_loads`` are all filters over it, so the
     guard has one traversal to reason about rather than several that drifted.
+    What counts as a gate is decided once, in ``_guarded_child_ids``: an
+    if/else or ternary whose every branch removes is not one, a loop body
+    always is, and ``try``/``with`` never are (#15815 review).
 
 ``_nested_scopes_by_name`` + ``_collect_loads``
     REACHABILITY. A nested scope runs only if the enclosing scope names it,
@@ -58,6 +61,12 @@ _REMOVE_CALL_NAMES = frozenset({"rmtree", "unlink", "rmdir", "remove"})
 # binds names where it is written. The primitive below never descends into one;
 # ``_reached_scopes`` in the guard re-enters the ones the code actually names.
 _NESTED_SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+
+# A loop body runs once per item and an empty sequence runs it none, so a call
+# inside one is reached on a condition exactly as a call inside an ``if`` is.
+# ``try``/``with`` are deliberately absent: a ``finally:`` teardown runs on
+# every path, and gating it would excuse the commonest fixture cleanup there is.
+_LOOP_NODES = (ast.For, ast.AsyncFor, ast.While)
 
 #: A scope this model can analyse: a fixture, or a nested helper it reaches.
 Scope = ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda
@@ -132,6 +141,39 @@ def _if_exhaustively_removes(node: ast.If) -> bool:
     return _branch_removes(node.orelse)
 
 
+def _ifexp_exhaustively_removes(node: ast.IfExp) -> bool:
+    """True when a remove call is guaranteed on *both* arms of this ternary (#15815 review).
+
+    The ternary mirror of ``_if_exhaustively_removes``, and it has to be
+    asked separately because the two errors point in opposite directions.
+    ``shutil.rmtree(p) if drop else None`` removes on one arm only, so
+    counting it as guaranteed makes an enclosing ``if`` look exhaustive and
+    flags a fixture that removes only conditionally -- a FALSE POSITIVE, the
+    direction that gets a guard switched off. ``shutil.rmtree(a) if cond else
+    shutil.rmtree(b)`` removes either way, so treating *that* as gated
+    because it is lexically a ternary would lose a real hazard. Only "every
+    arm removes" is exhaustive; the recursion into each arm is
+    ``_node_guarantees_remove``, so a chained ternary answers correctly too.
+    """
+    return _node_guarantees_remove(node.body) and _node_guarantees_remove(node.orelse)
+
+
+def _node_guarantees_remove(node: ast.AST) -> bool:
+    """True if evaluating *node* always reaches a remove call, gating included.
+
+    The guardedness the primitive already carries is the whole point of
+    asking through it: a remove call an ``if``/ternary reaches on one branch
+    only is not guaranteed by the node that contains it. Discarding the flag
+    here -- a plain scan for any remove call in the subtree -- is what let a
+    ternary-gated ``shutil.rmtree(p) if drop else None`` satisfy
+    ``_branch_removes`` (#15815 review).
+    """
+    return any(
+        not guarded and isinstance(found, ast.Call) and _call_target_name(found) in _REMOVE_CALL_NAMES
+        for found, guarded in _walk_scope_guarded(node)
+    )
+
+
 def _branch_removes(stmts: List[ast.stmt]) -> bool:
     """True if a remove call is guaranteed to run somewhere in this statement list."""
     return any(_stmt_guarantees_remove(stmt) for stmt in stmts)
@@ -146,6 +188,10 @@ def _stmt_guarantees_remove(stmt: ast.stmt) -> bool:
     Nor does merely *defining* a nested function or lambda run its body: a
     function/lambda statement (or a value assigned one) is never itself a
     guaranteed remove, no matter what its uncalled body contains.
+
+    Everything else is an expression statement, and the gating inside it
+    counts: ``_node_guarantees_remove`` keeps the guardedness flag rather
+    than scanning the subtree for any remove call at all.
     """
     if isinstance(stmt, ast.If):
         return _if_exhaustively_removes(stmt)
@@ -153,26 +199,38 @@ def _stmt_guarantees_remove(stmt: ast.stmt) -> bool:
         return False
     if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
         return False
-    return any(
-        _call_target_name(call) in _REMOVE_CALL_NAMES
-        for call in _walk_current_scope(stmt)
-        if isinstance(call, ast.Call)
-    )
+    return _node_guarantees_remove(stmt)
 
 
 def _guarded_child_ids(node: ast.AST) -> Set[int]:
-    """Direct children an ``if``/ternary reaches on only one branch.
+    """Direct children an ``if``/ternary/loop reaches on only some executions.
 
-    An exhaustive if/else (every branch removes, see above) contributes no
-    guarded ids at all -- the removal it contains is unconditional overall,
-    even though it is lexically inside an ``if``.
+    An exhaustive if/else or ternary (every branch removes, see above)
+    contributes no guarded ids at all -- the removal it contains is
+    unconditional overall, even though it is lexically inside a conditional.
+    The two forms are asked the same question by the same rule, which is what
+    keeps ``rmtree(a) if cond else rmtree(b)`` counted while
+    ``rmtree(p) if drop else None`` stays gated (#15815 review).
+
+    A loop body is gated unconditionally, with no exhaustive case: however
+    the body is written, a sequence with no items runs it zero times. That is
+    the rule ``_stmt_guarantees_remove`` already states for loops, and stating
+    it in only one of the two places is what made ``tmp_root_exists``'s
+    ``for entry in ...: rmtree(entry) if entry.is_dir() else entry.unlink()``
+    pass for the wrong reason -- on the ternary being read as gated rather
+    than on the loop that may not run at all. The loop's ``iter`` stays
+    unguarded: it is evaluated once, before any decision about the body.
     """
     if isinstance(node, ast.If):
         if _if_exhaustively_removes(node):
             return set()
         return {id(child) for child in list(node.body) + list(node.orelse)}
     if isinstance(node, ast.IfExp):
+        if _ifexp_exhaustively_removes(node):
+            return set()
         return {id(node.body), id(node.orelse)}
+    if isinstance(node, _LOOP_NODES):
+        return {id(child) for child in list(node.body) + list(node.orelse)}
     return set()
 
 

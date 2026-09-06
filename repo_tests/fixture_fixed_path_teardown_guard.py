@@ -238,9 +238,30 @@ def _withdraw_partly_fixed(by_name: Dict[str, List[ast.expr]], derived: Set[str]
     return derived
 
 
-def _scope_params(scope: Scope) -> Set[str]:
+def _named_params(scope: Scope) -> Set[str]:
+    """Parameters pytest can inject a fixture into -- by name, never through a star.
+
+    ``*args``/``**kwargs`` are deliberately absent: pytest resolves a fixture
+    request from the signature's *named* parameters, so ``def fin(*tmp_path)``
+    binds a caller-supplied tuple, not a per-test-unique path, and must not be
+    seeded as one.
+    """
     args = scope.args
     return {param.arg for param in [*args.args, *args.kwonlyargs, *args.posonlyargs]}
+
+
+def _scope_params(scope: Scope) -> Set[str]:
+    """Every name *scope*'s signature binds, ``*args``/``**kwargs`` included (#15815 review).
+
+    This is the shadowing set, so it is the wider of the two: a star
+    parameter binds a value the caller supplies, and a helper written
+    ``def fin(*leaf)`` inside a fixture whose own ``leaf`` is ``tmp_path``-
+    derived shares nothing with it but the spelling. Omitting star parameters
+    left the enclosing credit standing and excused a removal this guard
+    cannot vouch for -- a FALSE NEGATIVE.
+    """
+    starred = {param.arg for param in (scope.args.vararg, scope.args.kwarg) if param is not None}
+    return _named_params(scope) | starred
 
 
 def _scope_derived_names(scope: Scope, inherited: Set[str]) -> Set[str]:
@@ -264,10 +285,12 @@ def _scope_derived_names(scope: Scope, inherited: Set[str]) -> Set[str]:
     helper the fixture reaches (#15810), minus anything the helper's own
     parameters shadow -- a parameter's value is unknown here, and treating it
     as still-derived would excuse a removal this guard cannot vouch for.
+    Shadowing and seeding read different halves of the signature on purpose:
+    every bound name shadows (``*args``/``**kwargs`` included), while only a
+    *named* parameter can be pytest's own injection (#15815 review).
     """
-    params = _scope_params(scope)
     by_name = _assignments_by_name(scope)
-    seeds = (inherited - params) | (params & _UNIQUE_SOURCE_PARAMS)
+    seeds = (inherited - _scope_params(scope)) | (_named_params(scope) & _UNIQUE_SOURCE_PARAMS)
     return _withdraw_partly_fixed(by_name, _reachably_derived(by_name, seeds))
 
 
