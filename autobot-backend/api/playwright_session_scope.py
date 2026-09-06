@@ -163,7 +163,6 @@ async def warn_if_unscoped(request: Request) -> None:
     # could no longer answer "who". user_agent stays an argument: it is
     # attacker-controlled and unbounded, so it must not enter the key space.
     logger.warning(
-        _message(_safe(request.url.path), _safe(client or "unknown"), refusal)
-        + " user_agent=%s",
+        _message(_safe(request.url.path), _safe(client or "unknown"), refusal) + " user_agent=%s",
         _safe(request.headers.get("user-agent") or "unknown"),
     )
