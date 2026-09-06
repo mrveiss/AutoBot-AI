@@ -201,7 +201,7 @@ If source is too large for single analysis, summarize sections and focus on what
   Phase 2 gate, so an unapproved or interrupted run still leaves the analysis
   behind. Chat reply is the file path plus a short summary, never the full
   analysis (#12955)
-- **Anonymize the source in everything on disk.** The name stays in the chat reply; `docs/research/<topic>.md`, its filename, and every issue, PR, branch, commit message and code comment use "the reference work" or a generic technique description. Only vendor-neutral standards bodies (RFC, IETF, W3C, ISO, OASIS) may be named — a vendor's own self-branded "standard" or "spec" may not
+- **Anonymize the source in everything on disk.** The name stays in the chat reply; `docs/research/<topic>.md`, its filename, and every issue, PR, branch, commit message and code comment use "the reference work" or a generic technique description. A vendor or source is named on disk **only when the user asks for it** — that ask is the whole exception, and it is not implied by the source being a published standard, a dependency, or well known. Absent an explicit ask, anonymize
 - Phase 2 MUST NOT start without explicit user approval after Phase 1
 - Always cite specific files, functions, or sections when making claims
 - When comparing to AutoBot, read actual code — don't assume based on file names
