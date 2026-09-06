@@ -12,7 +12,9 @@ standard is a contrast pair per defect closed. That module documents the
 guard's rationale; this one holds the synthetic fixtures for which calls and
 decorators the scanner sees at all, and
 ``fixture_fixed_path_teardown_guard_derivation_test.py`` holds those for how a
-name earns "derived" -- so no module has to fit all three under
+name earns "derived" and
+``fixture_fixed_path_teardown_guard_reachability_test.py`` those for which
+nested bodies are live code -- so no module has to fit all of it under
 ``check_python_file_size.py``'s MAX_LINES (the same split as
 ``ansible_manifest_resolution_contrast_test.py``).
 
@@ -74,6 +76,11 @@ scope. The ``_collect_calls`` half is pinned here; the ``_assignment_pairs``
 half, and why ``_expr_is_derived`` keeps ``ast.walk`` for closures, are pinned
 in ``fixture_fixed_path_teardown_guard_derivation_test.py`` with the rest of
 the derivation pairs.
+
+The opposite error -- a nested body the fixture DOES reach, whose removal was
+invisible once call collection stopped descending (#15810) -- is pinned in
+``fixture_fixed_path_teardown_guard_reachability_test.py``, the third module
+of this split, together with the pairs for what makes a nested body live code.
 """
 
 from __future__ import annotations

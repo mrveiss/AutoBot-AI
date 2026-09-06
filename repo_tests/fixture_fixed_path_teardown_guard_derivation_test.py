@@ -47,6 +47,19 @@ walks the fixture's own scope. ``_expr_is_derived`` keeps ``ast.walk``
 deliberately, because a lambda in a value expression closes over this
 fixture's names -- ``TestLambdaFactoryDerivationStillCounts`` is what stops
 that site being "fixed" the same way.
+
+A DEAD BINDING IS NOT AN ASSIGNMENT ANY PATH MAKES (#15811)
+--------------------------------------------------------------
+"Every assignment must derive" could not tell a dead assignment from a live
+conditional one, so ``test_dir = Path("/fixed")`` immediately overwritten by
+``test_dir = tmp_path / "leaf"`` was flagged although every path uses the
+derived value (a FALSE POSITIVE -- the direction that gets a guard switched
+off). ``_dead_bindings`` drops a binding overwritten by a later one in the same
+statement list with no read in between, which is why the conditional rebind
+above -- whose overwrite sits in a branch and kills nothing -- is untouched.
+And because a reached helper (#15810) now contributes calls, each scope earns
+"derived" from its own locals, pinned by
+``TestReachedHelperDerivesFromItsOwnScope``.
 """
 
 from __future__ import annotations
@@ -162,6 +175,7 @@ class TestLambdaFactoryDerivationStillCounts:
     def test_lambda_factory_over_a_fixed_root_is_still_flagged(self):
         assert _is_violation(_only_fixture(_LAMBDA_FACTORY_HAZARD_SOURCE)) is True
 
+
 _CONDITIONAL_REBIND_HAZARD_SOURCE = """
 import shutil
 from pathlib import Path
@@ -237,3 +251,127 @@ class TestEveryAssignmentToANameMustDerive:
 
     def test_a_chain_that_derives_on_every_assignment_is_not_flagged(self):
         assert _is_violation(_only_fixture(_DERIVED_CHAIN_SAFE_SOURCE)) is False
+
+
+_DEAD_FIXED_ASSIGNMENT_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    test_dir = Path("/tmp/autobot/dead_fixed_assignment")
+    test_dir = tmp_path / "live_leaf"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    shutil.rmtree(test_dir)
+"""
+
+_DEAD_DERIVED_ASSIGNMENT_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    test_dir = tmp_path / "dead_leaf"
+    test_dir = Path("/tmp/autobot/live_fixed")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    shutil.rmtree(test_dir)
+"""
+
+_READ_BEFORE_OVERWRITE_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    test_dir = Path("/tmp/autobot/read_before_overwrite")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    test_dir = tmp_path / "leaf"
+    yield test_dir
+    shutil.rmtree(test_dir)
+"""
+
+
+class TestDeadAssignmentsDoNotCountAgainstAName:
+    """#15811: "every assignment must derive" could not tell dead from conditional.
+
+    ``_DEAD_FIXED_ASSIGNMENT_SAFE_SOURCE`` reaches its create and its remove
+    with a ``tmp_path`` leaf on every path -- the fixed value is overwritten
+    before anything can read it -- yet the rule from #15809 withdrew
+    ``test_dir`` and flagged a correct fixture (a FALSE POSITIVE, the
+    direction that gets a guard switched off). ``_dead_bindings`` drops the
+    unobservable binding before the fixed point runs.
+
+    Dropping bindings makes flagging LESS likely, so the two hazard sources
+    carry the weight. The first is the same pair in the other order -- the
+    derived value is the dead one and the fixed value is what every path uses
+    -- so the rule cannot be "ignore the first assignment". The second keeps
+    both assignments but reads the fixed value in between (``mkdir`` on it),
+    which makes it live and observable; the ordering pin in
+    ``TestEveryAssignmentToANameMustDerive`` above covers the conditional
+    rebind, where the overwrite sits in a branch and kills nothing.
+    """
+
+    def test_dead_fixed_assignment_overwritten_by_a_derived_one_is_not_flagged(self):
+        assert _is_violation(_only_fixture(_DEAD_FIXED_ASSIGNMENT_SAFE_SOURCE)) is False
+
+    def test_dead_derived_assignment_overwritten_by_a_fixed_one_is_still_flagged(self):
+        assert _is_violation(_only_fixture(_DEAD_DERIVED_ASSIGNMENT_HAZARD_SOURCE)) is True
+
+    def test_a_binding_read_before_the_overwrite_is_not_dead(self):
+        assert _is_violation(_only_fixture(_READ_BEFORE_OVERWRITE_HAZARD_SOURCE)) is True
+
+
+_HELPER_LOCAL_DERIVED_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(request, tmp_path):
+    fixed_marker = Path("/tmp/autobot/helper_local_marker")
+    fixed_marker.mkdir(parents=True, exist_ok=True)
+    def fin():
+        leaf = tmp_path / "helper_local_leaf"
+        shutil.rmtree(leaf)
+    request.addfinalizer(fin)
+    yield fixed_marker
+"""
+
+_HELPER_LOCAL_FIXED_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(request, tmp_path):
+    fixed_marker = Path("/tmp/autobot/helper_local_marker")
+    fixed_marker.mkdir(parents=True, exist_ok=True)
+    def fin():
+        leaf = Path("/tmp/autobot/helper_local_fixed")
+        shutil.rmtree(leaf)
+    request.addfinalizer(fin)
+    yield fixed_marker
+"""
+
+
+class TestReachedHelperDerivesFromItsOwnScope:
+    """A reached helper's locals are judged in the helper, not in the fixture.
+
+    Folding a registered finalizer's calls into the fixture (#15810) is only
+    correct if the names in those calls are resolved where they are written:
+    ``fin``'s own ``leaf = tmp_path / "..."`` is per-test unique and must
+    excuse the removal, while the identical shape over a fixed root must not.
+    Judging both against the *fixture's* derived names would get one of them
+    wrong whichever way that set happened to fall.
+    """
+
+    def test_helper_local_derived_from_tmp_path_excuses_its_removal(self):
+        assert _is_violation(_only_fixture(_HELPER_LOCAL_DERIVED_SAFE_SOURCE)) is False
+
+    def test_helper_local_over_a_fixed_root_is_still_flagged(self):
+        assert _is_violation(_only_fixture(_HELPER_LOCAL_FIXED_HAZARD_SOURCE)) is True
