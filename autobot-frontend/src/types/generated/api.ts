@@ -87278,7 +87278,10 @@ export interface components {
             deltaY: number;
             /** Text */
             text?: string | null;
-            /** Session Id */
+            /**
+             * Session Id
+             * @description Isolated browser-context routing (#11539). Omitted, the caller joins the shared default context, which every other unscoped caller also uses.
+             */
             session_id?: string | null;
         } & {
             [key: string]: unknown;
@@ -87328,12 +87331,22 @@ export interface components {
              * @default networkidle
              */
             wait_until: string;
-            /** Session Id */
+            /**
+             * Session Id
+             * @description Isolated browser-context routing (#11539). Omitted, the caller joins the shared default context, which every other unscoped caller also uses.
+             */
             session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
-        /** PlaywrightScreenshotRequest */
+        /**
+         * PlaywrightScreenshotRequest
+         * @description Embedded-Playwright capture -- NOT the session-scoped browser worker.
+         *
+         *     `services/playwright_service.py` has no session concept at all (zero
+         *     references), so this route cannot route a capture into a browser context.
+         *     Use `/worker-screenshot` for that. See #15871.
+         */
         PlaywrightScreenshotRequest: {
             /** Url */
             url: string;
@@ -87347,7 +87360,10 @@ export interface components {
              * @default 5000
              */
             wait_timeout: number;
-            /** Session Id */
+            /**
+             * Session Id
+             * @description ACCEPTED AND IGNORED by /screenshot: the embedded browser is not session-partitioned (#15871). The capture happens in the shared embedded browser regardless. Use /worker-screenshot to capture inside a specific session's context.
+             */
             session_id?: string | null;
         } & {
             [key: string]: unknown;
@@ -87376,7 +87392,10 @@ export interface components {
          *     query param instead (no request body on GET).
          */
         PlaywrightSessionRequest: {
-            /** Session Id */
+            /**
+             * Session Id
+             * @description Isolated browser-context routing (#11539). Omitted, the caller joins the shared default context, which every other unscoped caller also uses.
+             */
             session_id?: string | null;
         } & {
             [key: string]: unknown;
