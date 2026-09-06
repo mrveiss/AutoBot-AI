@@ -17,6 +17,8 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
 from ..enums import MemoryCategory
+from autobot_shared.env_utils import env_int
+
 from ..models import MemoryEntry
 
 logger = get_logger(__name__)
@@ -34,6 +36,16 @@ LEGACY_UNSCOPED_OWNER = "__unscoped__"
 # the migration was written to avoid from the read path to the write path. It is
 # still an isolated silo, so it never surfaces in a user's results.
 SYSTEM_OWNER = "__system__"
+
+# #13719: how long parked rows survive before retention may take them. The
+# exemption above stops the first sweep after the upgrade from deleting every
+# pre-migration row; without a bound it also makes them immortal, and a bucket
+# that can only grow stale is unfinished work rather than a finished migration.
+#
+# Deliberately far longer than the ordinary window: an operator has to have had a
+# real chance to reassign what is attributable before anything expires, and the
+# reassignment tool is the intended first move (see reassign_unscoped_entries).
+PARKED_RETENTION_DAYS: int = env_int("AUTOBOT_MEMORY_PARKED_RETENTION_DAYS", default=365)
 
 
 def _require_user_id(user_id: str, *, for_write: bool = False) -> str:
@@ -311,24 +323,89 @@ class GeneralStorage:
             logger.error("Failed to delete entry for owner: %s", e)
             raise RuntimeError(f"Failed to delete entry for owner: {e}")
 
+    async def count_unscoped(self) -> Dict[str, Any]:
+        """Report the parked bucket: how many rows, and how old (#13719).
+
+        First acceptance criterion of the issue — an operator could not previously
+        see the volume at all, so "how much is parked" was unanswerable without a
+        manual query.
+        """
+        try:
+            async with self._get_connection() as conn:
+                cursor = await conn.execute(
+                    "SELECT COUNT(*), MIN(timestamp), MAX(timestamp) FROM memory_entries WHERE user_id = ?",
+                    (LEGACY_UNSCOPED_OWNER,),
+                )
+                row = await cursor.fetchone()
+        except Exception as exc:
+            logger.error("Failed to count parked memory entries: %s", exc)
+            return {"count": 0, "oldest": None, "newest": None, "error": str(exc)}
+
+        count = row[0] if row else 0
+        return {
+            "count": count,
+            "oldest": row[1] if row and count else None,
+            "newest": row[2] if row and count else None,
+            "retention_days": PARKED_RETENTION_DAYS,
+        }
+
+    async def reassign_unscoped_entries(self, new_owner_id: str, *, dry_run: bool = True) -> Dict[str, Any]:
+        """Attribute parked rows to *new_owner_id* (#13719).
+
+        Defaults to a dry run. An operator has to see what would move before
+        anything does — this rewrites ownership of data whose owner was never
+        established, and getting it wrong attributes one person's memory to
+        another.
+
+        Reassignment is intended to run **before** the bounded exemption expires
+        anything; the window exists to give it time, not to race it.
+        """
+        owner = _require_user_id(new_owner_id, for_write=True)
+        report = await self.count_unscoped()
+        if dry_run:
+            return {**report, "reassigned": 0, "dry_run": True, "new_owner_id": owner}
+
+        try:
+            async with self._get_connection() as conn:
+                cursor = await conn.execute(
+                    "UPDATE memory_entries SET user_id = ? WHERE user_id = ?",
+                    (owner, LEGACY_UNSCOPED_OWNER),
+                )
+                await conn.commit()
+                moved = cursor.rowcount
+        except Exception as exc:
+            logger.error("Failed to reassign parked memory entries: %s", exc)
+            return {**report, "reassigned": 0, "dry_run": False, "error": str(exc)}
+
+        logger.info("#13719: reassigned %d parked memory entries to %s", moved, owner)
+        return {**report, "reassigned": moved, "dry_run": False, "new_owner_id": owner}
+
     async def cleanup_old(self, retention_days: int) -> int:
         """Remove entries older than retention period, across all owners.
 
         Operator-scope by design: retention is a storage policy, not a tenant
         query, so this is the one method that spans owners deliberately.
 
-        #13688: rows parked under LEGACY_UNSCOPED_OWNER are exempt. They are by
-        definition older than any retention window, so without this the first
-        sweep after the upgrade would delete every pre-migration row — silent
-        data loss caused by the migration that was supposed to preserve them.
+        #13688: rows parked under LEGACY_UNSCOPED_OWNER are exempt from the
+        ordinary window. They are by definition older than any of it, so without
+        that exemption the first sweep after the upgrade would delete every
+        pre-migration row — silent data loss caused by the migration meant to
+        preserve them.
+
+        #13719: the exemption is now **bounded**, not permanent. Parked rows
+        expire under ``PARKED_RETENTION_DAYS`` — long enough that an operator can
+        reassign what is attributable first (``reassign_unscoped_entries``), but
+        finite, so the bucket drains instead of growing forever.
         """
         cutoff = datetime.now(tz=timezone.utc) - timedelta(days=retention_days)
 
         try:
             async with self._get_connection() as conn:
+                parked_cutoff = datetime.now(tz=timezone.utc) - timedelta(days=PARKED_RETENTION_DAYS)
                 cursor = await conn.execute(
-                    "DELETE FROM memory_entries WHERE timestamp < ? AND user_id != ?",
-                    (cutoff, LEGACY_UNSCOPED_OWNER),
+                    "DELETE FROM memory_entries WHERE "
+                    "(timestamp < ? AND user_id != ?) OR (timestamp < ? AND user_id = ?)",
+                    (cutoff, LEGACY_UNSCOPED_OWNER, parked_cutoff, LEGACY_UNSCOPED_OWNER),
                 )
                 await conn.commit()
 
