@@ -16,6 +16,7 @@ Re-exported from `schemas_code` so both importers -- `api/playwright.py` and
 
 from pydantic import BaseModel, Field
 
+
 class PlaywrightSearchRequest(BaseModel):
     query: str
     search_engine: str = "duckduckgo"
@@ -93,5 +94,3 @@ class PlaywrightSessionRequest(BaseModel):
             "shared default context, which every other unscoped caller also uses."
         ),
     )
-
-
