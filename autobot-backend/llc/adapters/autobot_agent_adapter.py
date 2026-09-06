@@ -393,11 +393,24 @@ class AutoBotAgentAdapter:
         if not agent_id:
             return
 
+        # A slug identifies a budget row only together with its company (#15812).
+        # Charging without one would either miss the row or, once slugs repeat
+        # across companies, charge somebody else's budget — so this refuses to
+        # guess and says so, rather than silently attributing the spend.
+        company_id: str = str(context.get("company_id") or "")
+        if not company_id:
+            logger.warning(
+                "run %s reported cost for agent %s with no company_id in context — " "not charging any budget (#15812)",
+                run_id,
+                agent_id,
+            )
+            return
+
         try:
             from llc.services.budget import BudgetService
 
             async with self._budget_session_factory() as session:
-                await BudgetService().ingest_cost_event(session, agent_id, tokens_in, tokens_out, model)
+                await BudgetService().ingest_cost_event(session, agent_id, company_id, tokens_in, tokens_out, model)
         except BudgetExhausted:
             raise  # Hard-stop from GH#8215: propagate so run is marked FAILED
         except Exception:
