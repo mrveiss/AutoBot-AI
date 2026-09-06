@@ -25,6 +25,7 @@ from llc.models.enums import LLCCompanyStatus
 from user_management.models.organization import Organization
 
 from .base import LLCServiceBase
+from .company_ceo import CompanyCEOService
 
 logger = get_logger(__name__)
 
@@ -89,6 +90,12 @@ class CompanyService(LLCServiceBase):
 
         if data.parent_org_id is not None:
             await self._assert_no_cycle(org.id, data.parent_org_id)
+
+        # #15770: a company with no CEO is a disconnected forest -- every member
+        # with no explicit reporting line has nothing to default to. Provision
+        # here rather than lazily on first read, so the hierarchy is whole from
+        # the moment the company exists.
+        await CompanyCEOService().provision_default(self.session, org.id)
 
         logger.info("LLC company created: %s (id=%s)", org.name, org.id)
         return org

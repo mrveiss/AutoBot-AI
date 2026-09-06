@@ -16,6 +16,7 @@ from .company import (
     CompanyTreeNode,
     CompanyUpdate,
 )
+from .company_ceo import LLCCompanyCEO
 from .company_tool import LLCCompanyTool
 from .contact import LLCContact
 from .enums import (
@@ -102,6 +103,7 @@ __all__ = [
     "LLCRoleAssignment",
     "LLCRoleCredential",
     "LLCRoleTool",
+    "LLCCompanyCEO",
     "LLCReportingLine",
     "LLCRoleRate",
     "LLCRoleWorkflow",
