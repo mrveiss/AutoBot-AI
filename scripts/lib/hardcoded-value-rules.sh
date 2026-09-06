@@ -213,6 +213,15 @@ _HV_EXCLUDE_RE+='|(test_[^/]*\.(py|ts)$|[^/]*_test\.(py|ts)$|[^/]*\.(test|spec)\
 # a widened filename pattern, so it cannot reach into production code that
 # happens to share a name -- repo_tests/ carries nothing else (#15187/#15195).
 _HV_EXCLUDE_RE+='|(^|/)repo_tests/'
+# Frozen defect fixtures: a file preserved byte-identical to the defective
+# version it reproduces, so a guard can be proved to fail on it (#15824). Its
+# literals ARE the defect under test -- editing them to satisfy this detector
+# would destroy the only thing the fixture is for, and the guard that depends
+# on it would silently start passing. Scoped to the directory shape
+# `tests/fixtures/defect_<issue>/`, so it cannot reach production code or even
+# an ordinary fixture: the path must name the issue it froze for, which makes
+# every exempted file traceable to the reason it exists.
+_HV_EXCLUDE_RE+='|(^|/)tests/fixtures/defect_[0-9]+/'
 _HV_EXCLUDE_RE+='|(ssot_config\.py|ssot-config\.ts|ssot_mappings\.py|registry_defaults\.py|threshold_constants\.py)'
 _HV_EXCLUDE_RE+='|(path_constants\.py|network_constants\.py|security_constants\.py|constants/network\.ts)'
 _HV_EXCLUDE_RE+='|(/constants/|config\.py$|config\.yaml$|\.env|\.example$|\.lock$)'
