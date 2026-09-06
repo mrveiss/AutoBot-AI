@@ -110,7 +110,7 @@ check "above the floor passes"        "pass" "$r"
 # aim every `git` call below at the caller's real repository and commit into it
 # (#15353). Every command also names its repo with `git -C`.
 # ---------------------------------------------------------------------------
-unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 TESTREPO=$(mktemp -d)
 trap 'rm -rf "$TESTREPO"' EXIT
 git -C "$TESTREPO" init -q -b base

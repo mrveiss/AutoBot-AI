@@ -83,3 +83,77 @@ def test_the_shell_and_python_scrub_lists_are_identical() -> None:
         "Add the missing name to BOTH; whichever side is short runs git with the "
         "ambient variable still set."
     )
+
+# --- the class, not the two lists ------------------------------------------
+#
+# The mirror above closes the divergence between `git-root.sh` and `paths.py`.
+# It does not close the reason the divergence happened: SEVEN shell sites
+# hand-maintain this list, and #15783 added two variables to the Python tuple
+# and to none of them. Five scrubbed four vars; one scrubbed five, and that odd
+# one out is the tell -- the change was propagated into shell and stopped one
+# variable in.
+#
+# `tools/lint/check_git_toplevel_env_scrubbed.py` was built to enforce exactly
+# this invariant and contains no reference to AMBIENT_GIT_VARS,
+# GIT_OBJECT_DIRECTORY or GIT_ALTERNATE_OBJECT_DIRECTORIES at all. Its allowlist
+# exempts sites on the written reasoning that the four-variable unset covers
+# "every git call the script makes" -- true when written, false since #15783.
+# The checker built to enforce the invariant is why nobody saw it break.
+#
+# So this discovers rather than enumerates: any shell file that unsets GIT_DIR
+# is *claiming to scrub*, and a partial claim is the dangerous one. Enumerating
+# the seven would leave the eighth unguarded, and a partial fix reads as a
+# disconfirmation of the whole hypothesis.
+
+_SHELL_GLOBS = ("scripts/**/*.sh", ".claude/hooks/*.sh", "autobot-infrastructure/**/*.sh")
+
+#: Seven sites exist today. A floor of 4 fails loudly if the globs stop matching,
+#: rather than reporting every site compliant having found none.
+_MIN_SCRUB_SITES = 4
+
+_UNSET = re.compile(r"^[ \t]*unset[ \t]+((?:GIT_[A-Z_]+[ \t]*)+)", re.M)
+
+
+def _scrub_sites():
+    """Yield `(path, set-of-vars)` for every shell `unset` naming GIT_DIR."""
+    # Only the literal `unset GIT_...` form. `git-root.sh` uses the array
+    # (`unset "${GIT_ROOT_AMBIENT_VARS[@]}"`) and is covered directly by the
+    # mirror test above, so it is not double-counted here -- six sites are
+    # discovered, seven exist. A NEW file copying the array form would be
+    # sourcing git-root.sh and inheriting the correct list; a new file copying
+    # the literal form is what this catches.
+    for pattern in _SHELL_GLOBS:
+        for path in sorted(_ROOT.glob(pattern)):
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for match in _UNSET.finditer(text):
+                names = set(match.group(1).split())
+                if "GIT_DIR" in names:
+                    yield path.relative_to(_ROOT).as_posix(), names
+
+
+def test_the_discovery_found_the_scrub_sites() -> None:
+    """Positive assertion first: a regex matching nothing exempts everything."""
+    sites = list(_scrub_sites())
+    assert len(sites) >= _MIN_SCRUB_SITES, (
+        f"found only {len(sites)} shell scrub site(s) (floor {_MIN_SCRUB_SITES}); "
+        "the discovery matched almost nothing, so the rule below would clear the tree "
+        "by never reading it"
+    )
+
+
+def test_every_shell_scrub_site_unsets_the_whole_list() -> None:
+    """A site that unsets GIT_DIR claims to scrub, so it must scrub all of them.
+
+    A partial unset is worse than none: it looks handled. #15783 added two vars
+    to the Python tuple and to no shell site, and the four-variable unsets went
+    on reading as complete for months.
+    """
+    required = _python_vars()
+    short = [(p, sorted(required - names)) for p, names in _scrub_sites() if required - names]
+    assert not short, (
+        "these shell sites unset GIT_DIR but not the whole ambient set, so git still "
+        "reads the caller's environment there (#15783, #15893):\n"
+        + "\n".join(f"  {p} is missing {missing}" for p, missing in short)
+    )
