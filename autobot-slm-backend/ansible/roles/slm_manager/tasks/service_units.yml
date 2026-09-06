@@ -151,5 +151,11 @@
 # path, which is the path the defect was reported on.
 - name: "SLM | Bind the local self-update admin socket (#15823)"
   ansible.builtin.include_tasks: bind_self_update_socket.yml
+  # #14693: every task in this file that writes systemd state escalates here
+  # rather than relying on the caller — which is what broke on the self-update
+  # path in the first place. The included block sets `become` too; this is not
+  # redundant, because the guard reads THIS file and a caller that did not
+  # escalate would otherwise reach an include that looks unprivileged.
+  become: true
   when: slm_self_update_socket_enabled | bool
   tags: ['slm', 'backend', 'systemd']
