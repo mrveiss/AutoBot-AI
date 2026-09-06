@@ -22,9 +22,8 @@ exists to prevent, one level up.
 from __future__ import annotations
 
 import importlib.util
-from pathlib import Path
-
 import json
+from pathlib import Path
 from typing import Any
 
 import jinja2
