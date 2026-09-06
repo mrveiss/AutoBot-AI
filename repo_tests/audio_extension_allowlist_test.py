@@ -39,7 +39,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 _CANONICAL = Path("autobot_shared/ssot_constants.py")
 
 
-def _literal_string_sets(source: str) -> list[set[str]]:
+def _literal_string_sets(source: str) -> list[set[str]] | None:
     """Every ``{...}`` set-of-string-literals in *source*.
 
     Parsed rather than pattern-matched. A regex over braces cannot tell a set
@@ -47,11 +47,17 @@ def _literal_string_sets(source: str) -> list[set[str]]:
     different extension sets nearby — the video pipeline's, the broad binary set
     in ``file_categorization.py``, and ``EXTENSION_TO_FORMAT``, which is a dict.
     A first attempt at this test flagged all of them.
+
+    Returns ``None`` when the source will not parse, so the caller can tell
+    "no offending literal here" from "this file was never read" (#15826 review).
+    Returning ``[]`` for both let an unparsed file satisfy the completion floor
+    while contributing nothing — a skip counted as coverage, which is the exact
+    defect this guard's floor exists to prevent.
     """
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return []
+        return None
     found = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Set) and node.elts:
@@ -138,6 +144,7 @@ def test_no_fourth_literal_copy_exists():
     canonical = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
     offenders = []
     read = []
+    unparsed = []
     for path in REACH.examined(REPO_ROOT):
         rel = path.relative_to(REPO_ROOT)
         if rel == _CANONICAL or rel.parts[0] == "repo_tests":
@@ -146,13 +153,23 @@ def test_no_fourth_literal_copy_exists():
             source = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
+        literals = _literal_string_sets(source)
+        if literals is None:
+            unparsed.append(str(rel))
+            continue
         read.append(rel)
-        if any(literal == canonical for literal in _literal_string_sets(source)):
+        if any(literal == canonical for literal in literals):
             offenders.append(str(rel))
 
     # Candidates are not coverage: the loop above skips anything it cannot read,
     # so without this the floor measured how many files were LISTED rather than
     # how many were actually inspected (#15826 review).
+    # Truncated deliberately: a failure that lists every path buries the count
+    # that identifies the cause. Ten names locate it; the number sizes it.
+    assert not unparsed, (
+        f"{len(unparsed)} tracked files could not be parsed, so this guard cannot speak for them "
+        f"and they are not coverage. First: {unparsed[:10]}"
+    )
     REACH.completed(read)
 
     assert not offenders, (
