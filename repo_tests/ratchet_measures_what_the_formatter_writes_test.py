@@ -85,13 +85,24 @@ def test_a_file_outside_the_formatter_scope_is_ruled_on_its_raw_size(tmp_path) -
 def test_an_in_scope_file_is_ruled_on_its_post_format_size(tmp_path) -> None:
     """The fix. A reflow with no semantic change must not move the verdict."""
     pytest.importorskip("black")
-    target = tmp_path / "autobot_shared" / "sample.py"
-    target.parent.mkdir(parents=True)
+    # Must be a GRANDFATHERED path: post-format measurement is scoped to
+    # KNOWN_LARGE, because only those files are judged by equality with a
+    # recorded ceiling. Formatting every in-scope file instead was measured at
+    # 262s over 5231 files -- correct and unusable.
+    hook = _hook()
+    rel = next(k for k in hook.KNOWN_LARGE if k.startswith(hook.FORMATTER_SCOPE))
+    target = tmp_path / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
     # Semantically one statement, written across four lines. black joins it:
     # the raw count and the formatted count differ with no change of meaning.
-    target.write_text("x = [\n    1,\n    2,\n]\n", encoding="utf-8")
+    #
+    # NO trailing comma after the last element. black's magic trailing comma
+    # treats one as an instruction to keep the collection exploded, so the
+    # first version of this fixture was reformatted to itself and the test
+    # failed reporting 4 == 4. The fixture, not the code, was wrong.
+    target.write_text("x = [\n    1,\n    2\n]\n", encoding="utf-8")
     raw = len(target.read_text(encoding="utf-8").splitlines())
-    ruled, note = _hook()._size_to_rule_on(tmp_path, "autobot_shared/sample.py", raw)
+    ruled, note = hook._size_to_rule_on(tmp_path, rel, raw)
     assert ruled < raw, (
         f"in-scope file ruled on {ruled} with a raw size of {raw}; the formatter would "
         "join these lines, so the ratchet is still judging a state the bot will overwrite"
@@ -122,8 +133,9 @@ def test_a_missing_formatter_does_not_silently_pass(tmp_path) -> None:
     the negative-assertion trap, one level down in the plumbing.
     """
     hook = _hook()
-    missing = tmp_path / "autobot_shared" / "absent.py"
+    rel = next(k for k in hook.KNOWN_LARGE if k.startswith(hook.FORMATTER_SCOPE))
+    missing = tmp_path / rel
     assert hook.formatted_line_count(missing) is None, "an unreadable file must measure as None"
-    ruled, note = hook._size_to_rule_on(tmp_path, "autobot_shared/absent.py", 900)
+    ruled, note = hook._size_to_rule_on(tmp_path, rel, 900)
     assert ruled == 900, "an unmeasurable in-scope file falls back to its raw size, still ruled on"
     assert note == ""

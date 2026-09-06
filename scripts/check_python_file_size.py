@@ -373,7 +373,16 @@ def _size_to_rule_on(root: pathlib.Path, rel: str, raw: int) -> tuple[int, str]:
     Outside the scope the raw count IS the truth -- nothing will reflow those
     files, so formatting them here would invent a change that never happens.
     """
-    if not normalise(rel).startswith(FORMATTER_SCOPE):
+    key = normalise(rel)
+    if not key.startswith(FORMATTER_SCOPE):
+        return raw, ""
+    # Only grandfathered files. Their verdict turns on EQUALITY with a recorded
+    # ceiling, which is what a reflow breaks; everything else is judged against
+    # MAX_LINES with hundreds of lines of slack. Formatting every in-scope file
+    # instead means running black over thousands on each audit -- measured at
+    # over two minutes for the 497 KNOWN_LARGE entries alone, so the whole-tree
+    # version is not a slower correct answer, it is an unusable one.
+    if key not in KNOWN_LARGE:
         return raw, ""
     formatted = formatted_line_count(root / rel)
     if formatted is None or formatted == raw:
