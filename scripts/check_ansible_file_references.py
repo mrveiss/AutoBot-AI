@@ -51,8 +51,12 @@ _FILE_KEYS = ("requirements", "src", "chdir", "creates")
 
 _EXCLUDE_DIRS = (".worktrees", ".git", "node_modules", "__pycache__")
 
+# The value is one unbroken token, except that a ``{{ name }}`` reference may
+# contain spaces inside its braces. A plain ``\S+`` stops at the first space and
+# so cannot match a templated value at all -- which would have made #15687's
+# whole point unreachable.
 _ASSIGNMENT = re.compile(
-    r"^\s*(?P<key>" + "|".join(_FILE_KEYS) + r")\s*:\s*(?P<value>\S+)\s*$",
+    r"^\s*(?P<key>" + "|".join(_FILE_KEYS) + r")\s*:\s*(?P<value>(?:\{\{[^{}]*\}\}|\S)+)\s*$",
 )
 
 _HOSTS = re.compile(r"^\s*hosts:\s*(?P<pattern>\S+)\s*$")
@@ -90,20 +94,95 @@ def _ansible_files(root: pathlib.Path) -> list[pathlib.Path]:
     return sorted(found)
 
 
+#: A ``vars:`` entry whose value is an absolute path, e.g.
+#: ``deployed_src_root: /opt/autobot/src``. Only these are substituted -- a map
+#: built from every ``key: value`` in the file would let an unrelated task key
+#: shadow a variable name.
+_VARS_BLOCK = re.compile(r"^(?P<indent>\s*)vars:\s*$")
+_VAR_DEFINITION = re.compile(r"^(?P<indent>\s+)(?P<name>\w+)\s*:\s*(?P<value>/\S+)\s*$")
+
+#: One ``{{ name }}`` reference, with or without inner spacing.
+_TEMPLATE_REF = re.compile(r"\{\{\s*(?P<name>\w+)\s*\}\}")
+
+
+def _var_definitions(text: str) -> dict[str, str]:
+    """Absolute-path variables declared in this file's ``vars:`` blocks.
+
+    Scoped to ``vars:`` deliberately. #15687 moves twenty literal deploy-root
+    references behind a variable, and without substitution every one of them
+    leaves this guard's population -- which is how #13744 would become
+    undetectable again. The guard has to learn the templated form *before* the
+    literals move, not after.
+    """
+    # YAML first: PyYAML resolves anchors (`&name` / `*name`) and merge keys
+    # (`<<:`) for us, which is how the deploy root can be stated once in a file
+    # of seven plays. A line scan cannot see through an alias -- it would read
+    # `vars: *deploy_paths` as defining nothing, and every reference behind it
+    # would silently leave this guard's population.
+    try:
+        document = yaml.safe_load(text)
+    except yaml.YAMLError:
+        document = None
+    if isinstance(document, list):
+        resolved: dict[str, str] = {}
+        for play in document:
+            if not isinstance(play, dict):
+                continue
+            play_vars = play.get("vars")
+            if not isinstance(play_vars, dict):
+                continue
+            for name, value in play_vars.items():
+                if isinstance(value, str) and value.startswith("/"):
+                    resolved[str(name)] = value
+        if resolved:
+            return resolved
+
+    definitions: dict[str, str] = {}
+    block_indent: int | None = None
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        opening = _VARS_BLOCK.match(line)
+        if opening:
+            block_indent = len(opening.group("indent"))
+            continue
+        if block_indent is None:
+            continue
+        definition = _VAR_DEFINITION.match(line)
+        if definition and len(definition.group("indent")) > block_indent:
+            definitions[definition.group("name")] = definition.group("value")
+            continue
+        # Any line at or left of the `vars:` indent ends the block.
+        if len(line) - len(line.lstrip()) <= block_indent:
+            block_indent = None
+    return definitions
+
+
+def _resolve(value: str, variables: dict[str, str]) -> str | None:
+    """Substitute ``{{ name }}`` from *variables*; None when it cannot be resolved."""
+    resolved = _TEMPLATE_REF.sub(lambda m: variables.get(m.group("name"), m.group(0)), value)
+    if "{{" in resolved or "$" in resolved:
+        return None
+    return resolved
+
+
 def _referenced_repo_paths(text: str) -> list[tuple[int, str, str]]:
     """Return ``(line_no, key, repo_relative_path)`` for deployed-src references."""
+    variables = _var_definitions(text)
     hits = []
     for line_no, line in enumerate(text.splitlines(), 1):
         match = _ASSIGNMENT.match(line)
         if not match:
             continue
         value = match.group("value").strip("\"'")
-        if not value.startswith(_DEPLOYED_SRC_PREFIX):
+        # Resolve templates against this file's vars before judging the prefix:
+        # a value is no less checkable for being spelled `{{ root }}/x` (#15687).
+        resolved = _resolve(value, variables)
+        if resolved is None:
             continue
-        # A templated segment cannot be resolved statically; skip rather than guess.
-        if "{{" in value or "$" in value:
+        if not resolved.startswith(_DEPLOYED_SRC_PREFIX):
             continue
-        hits.append((line_no, match.group("key"), value[len(_DEPLOYED_SRC_PREFIX) :]))
+        hits.append((line_no, match.group("key"), resolved[len(_DEPLOYED_SRC_PREFIX) :]))
     return hits
 
 

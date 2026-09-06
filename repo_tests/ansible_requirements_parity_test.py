@@ -473,3 +473,34 @@ def test_every_unanchored_floor_is_recorded_at_its_site() -> None:
         "`unanchored=` record in SITE_MANIFESTS no longer matches. The union used to hide "
         "these behind another component's text; record them or drop the floor (#15629):\n  " + "\n  ".join(wrong)
     )
+
+
+def test_the_npu_requirements_edge_survives_a_templated_deploy_root() -> None:
+    """#15687 moved the deployed source root behind ``{{ deployed_src_root }}``.
+
+    ``deploy-native-services.yml`` states that root once and every reference
+    reads it. The risk in doing so is that the NPU venv's requirements edge --
+    the one #13744 was filed against, where a nonexistent path made the native
+    deploy install nothing and report success -- stops resolving, and nothing
+    says so.
+
+    #15687 predicted this holds because ``_existing_suffix`` resolves the
+    templated form. Asserted here rather than assumed, which is what that issue
+    asked for.
+    """
+    installs = resolution._edges().installs
+
+    npu = [
+        (venv, requirements)
+        for _file, venv, requirements in installs
+        if "npu" in venv.lower() and requirements.endswith("autobot-npu-worker/requirements.txt")
+    ]
+
+    assert npu, (
+        "no NPU venv install resolves to autobot-npu-worker/requirements.txt; the "
+        "templated deploy root removed this edge from the walk (#15687, #13744)"
+    )
+    assert any("{{" in requirements for _venv, requirements in npu), (
+        "the templated form is not among the resolved edges, so this test would "
+        "pass on the pre-#15687 literals and prove nothing about the change"
+    )

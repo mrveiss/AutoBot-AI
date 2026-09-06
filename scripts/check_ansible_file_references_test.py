@@ -312,3 +312,82 @@ def test_the_workflow_installs_every_third_party_import_the_guard_needs():
 
     missing = {m for m in third_party if dist_for.get(m, m) not in declared}
     assert not missing, f"the workflow does not install: {sorted(missing)}"
+
+
+# --------------------------------------------- templated deploy root (#15687)
+
+
+_TEMPLATED_PLAYBOOK = """- name: Deploy
+  vars:
+    deployed_src_root: /opt/autobot/src
+  tasks:
+    - pip:
+        requirements: {{ deployed_src_root }}/autobot-npu-worker/requirements.txt
+"""
+
+
+def test_a_templated_deploy_root_still_resolves_to_a_repo_path():
+    """#15687 moves twenty literals behind a variable.
+
+    Without substitution every one of them leaves this guard's population, and
+    its only reach floor is `plays_read >= 1` -- so the loss would be silent and
+    #13744 would become undetectable again.
+    """
+    assert guard._referenced_repo_paths(_TEMPLATED_PLAYBOOK) == [
+        (6, "requirements", "autobot-npu-worker/requirements.txt")
+    ]
+
+
+def test_a_wrong_path_behind_a_template_is_still_caught():
+    """#13744 restated against the templated form.
+
+    The original defect was `requirements: /opt/autobot/src/docker/npu-worker/
+    requirements.txt` -- a path that never existed in the repo, so the native
+    NPU deploy installed nothing and reported success. Spelling the root as a
+    variable must not turn that into a skip.
+    """
+    wrong = _TEMPLATED_PLAYBOOK.replace("autobot-npu-worker/requirements.txt", "docker/npu-worker/requirements.txt")
+
+    found = guard._referenced_repo_paths(wrong)
+
+    assert found == [(6, "requirements", "docker/npu-worker/requirements.txt")], (
+        "the templated form resolved to nothing, so a nonexistent path behind a "
+        "variable would be skipped rather than reported"
+    )
+
+
+def test_an_unknown_variable_is_skipped_rather_than_guessed():
+    """The contrast case: resolution must not invent a value it does not have.
+
+    The unknown variable sits *inside* a deployed-src path on purpose. With it
+    at the front the value fails the prefix check regardless, so the test would
+    pass whether the substitution dropped the variable or kept it -- it could
+    not tell the two apart. Here, substituting an empty string yields
+    `/opt/autobot/src//requirements.txt` and reports a missing file that no one
+    wrote, while leaving the template unresolved correctly skips it.
+    """
+    text = (
+        "  tasks:\n"
+        "    - pip:\n"
+        "        requirements: /opt/autobot/src/{{ not_defined_anywhere }}/requirements.txt\n"
+    )
+
+    assert guard._referenced_repo_paths(text) == []
+
+
+def test_a_variable_outside_a_vars_block_does_not_define_anything():
+    """Only `vars:` entries are substituted.
+
+    A map built from every `key: value` in the file would let an unrelated task
+    key -- `dest:`, `chdir:` -- shadow a variable name and silently change what
+    a reference resolves to.
+    """
+    text = (
+        "  tasks:\n"
+        "    - copy:\n"
+        "        deployed_src_root: /opt/autobot/src\n"
+        "    - pip:\n"
+        "        requirements: {{ deployed_src_root }}/autobot-npu-worker/requirements.txt\n"
+    )
+
+    assert guard._referenced_repo_paths(text) == []

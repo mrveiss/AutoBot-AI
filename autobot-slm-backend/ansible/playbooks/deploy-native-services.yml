@@ -9,6 +9,15 @@
   become: true
   gather_facts: true
 
+  # #15687: the deployed source root was written as a literal at twenty sites
+  # across these plays. Ansible vars are per-play, so it is stated once here and
+  # aliased into every other play -- YAML resolves the anchor, and
+  # `scripts/check_ansible_file_references.py` resolves it too, so the twenty
+  # references stay inside that guard's population rather than silently leaving
+  # it (which is how #13744 would become undetectable again).
+  vars: &deploy_paths
+    deployed_src_root: /opt/autobot/src
+
   tasks:
     - name: Install common packages
       apt:
@@ -54,6 +63,7 @@
 - name: Deploy Redis Stack Natively
   hosts: database
   become: true
+  vars: *deploy_paths
 
   tasks:
     - name: Install Redis Stack from repository
@@ -182,6 +192,7 @@
 - name: Deploy Frontend Natively
   hosts: frontend
   become: true
+  vars: *deploy_paths
 
   tasks:
     - name: Install Node.js 20
@@ -205,24 +216,24 @@
     - name: Copy frontend source files from deployment directory
       copy:
         src: "{{ lookup('env', 'SOURCE_DIR') | default('/tmp/autobot-deployment') }}/autobot-vue/"
-        dest: /opt/autobot/src/autobot-vue/
+        dest: "{{ deployed_src_root }}/autobot-vue/"
 
     - name: Set ownership of source code
       file:
-        path: /opt/autobot/src
+        path: "{{ deployed_src_root }}"
         owner: autobot-service
         group: autobot-service
         recurse: true
 
     - name: Install frontend dependencies
       shell: |
-        cd /opt/autobot/src/autobot-vue
+        cd {{ deployed_src_root }}/autobot-vue
         npm install
       become_user: autobot-service
 
     - name: Build frontend for production
       shell: |
-        cd /opt/autobot/src/autobot-vue
+        cd {{ deployed_src_root }}/autobot-vue
         npm run build
       become_user: autobot-service
       environment:
@@ -241,7 +252,7 @@
               listen [::]:80 default_server;
 
               server_name autobot-frontend;
-              root /opt/autobot/src/autobot-vue/dist;
+              root {{ deployed_src_root }}/autobot-vue/dist;
               index index.html;
 
               # Frontend static files
@@ -318,6 +329,7 @@
   become: true
 
   vars:
+    <<: *deploy_paths
     # Matches roles/npu-worker's npu_install_dir (#13746) so the role-based and
     # playbook-based NPU paths build the same venv rather than two.
     npu_venv: /opt/autobot/autobot-npu-worker/venv
@@ -355,7 +367,7 @@
     - name: Copy AutoBot source code for NPU Worker
       synchronize:
         src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
-        dest: /opt/autobot/src/
+        dest: "{{ deployed_src_root }}/"
         delete: false
         recursive: true
         owner: false
@@ -364,7 +376,7 @@
 
     - name: Set ownership of source code for NPU Worker
       file:
-        path: /opt/autobot/src
+        path: "{{ deployed_src_root }}"
         owner: autobot-service
         group: autobot-service
         recurse: true
@@ -411,10 +423,10 @@
     # shape on both paths, so a reader of either sees the pins being applied.
     - name: Install NPU Worker dependencies from its manifest
       pip:
-        requirements: /opt/autobot/src/autobot-npu-worker/requirements.txt
+        requirements: "{{ deployed_src_root }}/autobot-npu-worker/requirements.txt"
         virtualenv: "{{ npu_venv }}"
         virtualenv_python: python3.14
-        extra_args: "--timeout 120 -c /opt/autobot/src/constraints/shared.txt"
+        extra_args: "--timeout 120 -c {{ deployed_src_root }}/constraints/shared.txt"
       become_user: autobot-service
       environment:
         PIP_DEFAULT_TIMEOUT: "120"
@@ -478,9 +490,9 @@
           Type=exec
           User=autobot-service
           Group=autobot-service
-          WorkingDirectory=/opt/autobot/src
+          WorkingDirectory={{ deployed_src_root }}
           Environment="PATH={{ npu_venv }}/bin:$PATH"
-          Environment="PYTHONPATH=/opt/autobot/src"
+          Environment="PYTHONPATH={{ deployed_src_root }}"
           Environment="OPENVINO_LOG_LEVEL=ERROR"
           Environment="NPU_LOG_LEVEL=INFO"
           ExecStart={{ npu_venv }}/bin/python -m src.npu_worker.main
@@ -519,6 +531,7 @@
 - name: Deploy AI Services Natively
   hosts: aiml
   become: true
+  vars: *deploy_paths
 
   tasks:
     - name: Install Python dependencies for AI services
@@ -538,7 +551,7 @@
     - name: Copy AutoBot source code
       synchronize:
         src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
-        dest: /opt/autobot/src/
+        dest: "{{ deployed_src_root }}/"
         delete: false
         recursive: true
         owner: false
@@ -547,7 +560,7 @@
 
     - name: Set ownership of source code
       file:
-        path: /opt/autobot/src
+        path: "{{ deployed_src_root }}"
         owner: autobot-service
         group: autobot-service
         recurse: true
@@ -653,7 +666,7 @@
           [Service]
           Type=simple
           User=autobot-service
-          WorkingDirectory=/opt/autobot/src
+          WorkingDirectory={{ deployed_src_root }}
           ExecStart=/opt/autobot/venv/bin/python -m docker.ai-stack.ai_server
           Environment="AI_SERVER_HOST=0.0.0.0"
           Environment="AI_SERVER_PORT=8080"
@@ -678,7 +691,7 @@
           [Service]
           Type=simple
           User=autobot-service
-          WorkingDirectory=/opt/autobot/src
+          WorkingDirectory={{ deployed_src_root }}
           ExecStart=/opt/autobot/venv/bin/python -m docker.npu-worker.npu_worker
           Environment="NPU_SERVER_HOST=0.0.0.0"
           Environment="NPU_SERVER_PORT=8081"
@@ -718,6 +731,7 @@
 - name: Deploy Browser Service Natively
   hosts: browser
   become: true
+  vars: *deploy_paths
 
   tasks:
     - name: Install desktop environment and browsers
@@ -743,7 +757,7 @@
     - name: Copy AutoBot source code
       synchronize:
         src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
-        dest: /opt/autobot/src/
+        dest: "{{ deployed_src_root }}/"
         delete: false
         recursive: true
         owner: false
@@ -752,7 +766,7 @@
 
     - name: Set ownership of source code
       file:
-        path: /opt/autobot/src
+        path: "{{ deployed_src_root }}"
         owner: autobot-service
         group: autobot-service
         recurse: true
@@ -767,7 +781,7 @@
           [Service]
           Type=simple
           User=autobot-service
-          WorkingDirectory=/opt/autobot/src
+          WorkingDirectory={{ deployed_src_root }}
           ExecStartPre=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 &
           ExecStart=/usr/bin/node playwright-server.js
           Environment="DISPLAY=:99"
@@ -822,6 +836,7 @@
 - name: Validate All Services
   hosts: all
   become: true
+  vars: *deploy_paths
 
   tasks:
     - name: Check systemd services status
