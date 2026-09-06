@@ -28,29 +28,63 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from tests.migrations.conftest import requires_postgres, run_alembic
 
-pytestmark = [pytest.mark.asyncio, requires_postgres]
+# `migration_gate` is set here, not inherited: `tests/migrations/conftest.py`
+# sets `pytestmark`, and pytest never reads that from a conftest (#15888).
+# Without it, `-m migration_gate` DESELECTS these -- they do not even skip,
+# so a green run says nothing about them.
+pytestmark = [pytest.mark.asyncio, pytest.mark.migration_gate, requires_postgres]
 
 _BEFORE = "20260827_087"
-_AFTER = "20260906_088"
+_BACKFILL = "20260906_088"
+_AFTER = "20260907_089"
 _TABLE = "llc_company_ceos"
 
 
-async def _seed_company(conn, *, llc_status: str | None) -> uuid.UUID:
-    """One `organizations` row, as it exists before the migration runs."""
+async def _seed_company(
+    conn,
+    *,
+    parent_org_id: uuid.UUID | None = None,
+    deleted: bool = False,
+    llc_status: str = "active",
+) -> uuid.UUID:
+    """One `organizations` row, as it exists before the migration runs.
+
+    Every NOT NULL column is supplied explicitly. Most carry a *client-side*
+    ``default=`` rather than a ``server_default=``, so ``op.create_table`` emits
+    no DDL DEFAULT and a raw INSERT that omits them raises NotNullViolation --
+    which fails in setup and makes every test in the file error for a reason
+    unrelated to what it asserts.
+    """
     org_id = uuid.uuid4()
     await conn.execute(
         text(
-            "INSERT INTO organizations (id, name, slug, settings, llc_status) "
-            "VALUES (:id, :name, :slug, '{}'::jsonb, :llc_status)"
+            "INSERT INTO organizations "
+            "(id, name, slug, settings, llc_status, parent_org_id, deleted_at, "
+            " issue_counter, budget_monthly_cents, spent_monthly_cents, "
+            " require_approval_for_hires, kb_inheritance_weight) "
+            "VALUES (:id, :name, :slug, '{}'::jsonb, :llc_status, :parent, "
+            "        NULL, 0, 0, 0, false, 0.6)"
         ),
         {
             "id": org_id,
             "name": f"company-{org_id.hex[:8]}",
             "slug": f"company-{org_id.hex[:8]}",
             "llc_status": llc_status,
+            "parent": parent_org_id,
         },
     )
+    if deleted:
+        await conn.execute(text("UPDATE organizations SET deleted_at = NOW() WHERE id = :id"), {"id": org_id})
     return org_id
+
+
+async def _ceo_of(conn, company_id: uuid.UUID):
+    return (
+        await conn.execute(
+            text("SELECT holder_type, holder_agent_id FROM llc_company_ceos WHERE company_id = :c"),
+            {"c": company_id},
+        )
+    ).one_or_none()
 
 
 async def test_a_company_created_before_this_change_acquires_an_agent_ceo(fresh_db_url):
@@ -103,20 +137,19 @@ async def test_a_company_created_before_this_change_acquires_an_agent_ceo(fresh_
         await engine.dispose()
 
 
-async def test_a_non_llc_organization_is_left_alone(fresh_db_url):
-    """The contrast case: the filter must exclude something.
+async def test_a_top_level_company_keeps_its_ceo(fresh_db_url):
+    """First, because everything else is satisfied by a repair that empties both tables.
 
-    Without this, a backfill that dropped `llc_status IS NOT NULL` and
-    provisioned a CEO for every organization in the table would satisfy the
-    test above perfectly.
+    A cleanup that deleted every row would pass all three exclusion assertions
+    below and destroy the feature. This is the assertion that makes them mean
+    something.
     """
     assert run_alembic(["upgrade", _BEFORE], fresh_db_url).returncode == 0
 
     engine = create_async_engine(fresh_db_url)
     try:
         async with engine.begin() as conn:
-            plain_org = await _seed_company(conn, llc_status=None)
-            llc_org = await _seed_company(conn, llc_status="active")
+            company = await _seed_company(conn)
     finally:
         await engine.dispose()
 
@@ -125,14 +158,151 @@ async def test_a_non_llc_organization_is_left_alone(fresh_db_url):
     engine = create_async_engine(fresh_db_url)
     try:
         async with engine.connect() as conn:
-            provisioned = set((await conn.execute(text(f"SELECT company_id FROM {_TABLE}"))).scalars().all())
+            row = await _ceo_of(conn, company)
     finally:
         await engine.dispose()
 
-    assert llc_org in provisioned
-    assert plain_org not in provisioned, (
-        "an organization with no llc_status was given a CEO; the backfill's " "scope filter is not doing anything"
+    assert row is not None, "a top-level, non-deleted company lost its CEO to the repair"
+    assert row.holder_type == "agent"
+
+
+async def test_a_sub_organization_does_not_get_a_ceo(fresh_db_url):
+    """`parent_org_id IS NULL` is half the discriminator (llc/services/company.py:144)."""
+    assert run_alembic(["upgrade", _BEFORE], fresh_db_url).returncode == 0
+
+    engine = create_async_engine(fresh_db_url)
+    try:
+        async with engine.begin() as conn:
+            parent = await _seed_company(conn)
+            child = await _seed_company(conn, parent_org_id=parent)
+    finally:
+        await engine.dispose()
+
+    assert run_alembic(["upgrade", _AFTER], fresh_db_url).returncode == 0
+
+    engine = create_async_engine(fresh_db_url)
+    try:
+        async with engine.connect() as conn:
+            assert await _ceo_of(conn, child) is None, "a sub-organization was left with a CEO"
+            assert await _ceo_of(conn, parent) is not None, "the parent lost its CEO"
+            dormant = (
+                await conn.execute(
+                    text("SELECT status, heartbeat_enabled FROM agent_org_nodes WHERE agent_id = :s"),
+                    {"s": f"ceo-{child}"},
+                )
+            ).one_or_none()
+    finally:
+        await engine.dispose()
+
+    assert dormant is not None, (
+        "the sub-organization's agent row was deleted; it is an entity other tables "
+        "resolve by id, so removing it converts a wrong row into a dangling one"
     )
+    assert dormant.heartbeat_enabled is False
+    assert dormant.status == "on_leave"
+
+
+async def test_a_soft_deleted_organization_does_not_get_a_ceo(fresh_db_url):
+    """`deleted_at IS NULL` is the other half."""
+    assert run_alembic(["upgrade", _BEFORE], fresh_db_url).returncode == 0
+
+    engine = create_async_engine(fresh_db_url)
+    try:
+        async with engine.begin() as conn:
+            gone = await _seed_company(conn, deleted=True)
+    finally:
+        await engine.dispose()
+
+    assert run_alembic(["upgrade", _AFTER], fresh_db_url).returncode == 0
+
+    engine = create_async_engine(fresh_db_url)
+    try:
+        async with engine.connect() as conn:
+            assert await _ceo_of(conn, gone) is None, "a soft-deleted organization was left asserting it has a CEO"
+    finally:
+        await engine.dispose()
+
+
+async def test_an_archived_company_keeps_its_ceo(fresh_db_url):
+    """Scope is structural and says nothing about `llc_status`.
+
+    The designation is a structural fact; liveness is controlled by status
+    elsewhere. Un-archiving into a silently headless company is the harder
+    failure to notice.
+    """
+    assert run_alembic(["upgrade", _BEFORE], fresh_db_url).returncode == 0
+
+    engine = create_async_engine(fresh_db_url)
+    try:
+        async with engine.begin() as conn:
+            archived = await _seed_company(conn, llc_status="archived")
+    finally:
+        await engine.dispose()
+
+    assert run_alembic(["upgrade", _AFTER], fresh_db_url).returncode == 0
+
+    engine = create_async_engine(fresh_db_url)
+    try:
+        async with engine.connect() as conn:
+            assert (
+                await _ceo_of(conn, archived) is not None
+            ), "an archived company lost its CEO; scope is structural, not lifecycle"
+    finally:
+        await engine.dispose()
+
+
+async def test_a_hand_edited_ceo_row_is_left_alone(fresh_db_url):
+    """The constraint that governs both statements, and the one most easily omitted.
+
+    An owner who has since chosen a human CEO for a sub-organization must not
+    lose that choice to a cleanup for a bug they never saw. Written as a test
+    rather than trusted to a WHERE clause -- an unconditional DELETE satisfies
+    every other assertion here.
+    """
+    assert run_alembic(["upgrade", _BEFORE], fresh_db_url).returncode == 0
+
+    engine = create_async_engine(fresh_db_url)
+    try:
+        async with engine.begin() as conn:
+            parent = await _seed_company(conn)
+            child = await _seed_company(conn, parent_org_id=parent)
+    finally:
+        await engine.dispose()
+
+    # Run only the backfill, then edit its row the way an owner would.
+    assert run_alembic(["upgrade", _BACKFILL], fresh_db_url).returncode == 0
+
+    chosen = uuid.uuid4()
+    engine = create_async_engine(fresh_db_url)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "UPDATE llc_company_ceos SET holder_type = 'user', holder_user_id = :u, "
+                    "holder_agent_id = NULL WHERE company_id = :c"
+                ),
+                {"u": chosen, "c": child},
+            )
+    finally:
+        await engine.dispose()
+
+    assert run_alembic(["upgrade", _AFTER], fresh_db_url).returncode == 0
+
+    engine = create_async_engine(fresh_db_url)
+    try:
+        async with engine.connect() as conn:
+            row = (
+                await conn.execute(
+                    text("SELECT holder_type, holder_user_id FROM llc_company_ceos WHERE company_id = :c"),
+                    {"c": child},
+                )
+            ).one_or_none()
+    finally:
+        await engine.dispose()
+
+    assert row is not None, "the repair deleted a CEO a human had chosen"
+    assert row.holder_type == "user"
+    assert row.holder_user_id == chosen
 
 
 async def test_running_the_migration_twice_provisions_one_ceo(fresh_db_url):
