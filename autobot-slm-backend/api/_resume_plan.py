@@ -21,17 +21,27 @@ resumed process knows about the run before it started comes from this row.
 from __future__ import annotations
 
 import json as _json
+import logging
 from typing import TYPE_CHECKING, List
 
 from sqlalchemy import select
 
-from autobot_shared.logging_manager import get_logger
 from models.database import Setting
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from api.code_sync import UpdateAllJob
 
-logger = get_logger(__name__)
+# Plain stdlib logging, deliberately -- NOT autobot_shared.logging_manager.
+# `code_sync.py:106` does the same and this module was extracted from it, so the
+# constraint came with the code even though the general rule says get_logger.
+#
+# `tests/api/test_collect_outdated_node_ids.py` imports code_sync at module scope
+# with the config stack replaced by MagicMock. get_logger() builds a
+# RotatingFileHandler, which compares maxBytes to an int -- against a MagicMock
+# that raises `TypeError: '>' not supported`. It fails at COLLECTION, so the whole
+# file errors out rather than one test failing. Same reason as
+# `autobot_shared/user_management/password_epoch.py`.
+logger = logging.getLogger(__name__)
 
 #: Settings key the plan is stored under.
 _UPDATE_ALL_RESUME_KEY = "slm_update_all_resume"
