@@ -199,6 +199,72 @@ def test_new_branch_and_restore_flags_survive_the_argument_scan() -> None:
     assert invocations(f"git {SWITCH} --create issue-9999")[0]["flags"] == "new"
 
 
+# ── git's option grammar, rather than a list of exact spellings ─────────────
+
+
+@pytest.mark.parametrize(
+    ("command", "flag"),
+    [
+        ("git reset --hard", "HARD_RESET_FLAG"),
+        ("git reset --har", "HARD_RESET_FLAG"),
+        ("git reset --ha", "HARD_RESET_FLAG"),
+        ("git clean --force", "FORCE_CLEAN_FLAG"),
+        ("git clean --for", "FORCE_CLEAN_FLAG"),
+        ("git clean --fo", "FORCE_CLEAN_FLAG"),
+        ("git clean -fd", "FORCE_CLEAN_FLAG"),
+    ],
+)
+def test_an_abbreviated_long_option_is_the_option_it_abbreviates(command: str, flag: str) -> None:
+    """git runs any unambiguous prefix of a long option, so the guard must too.
+
+    Matching only the spelled-out form left a one-keystroke way past every rule
+    that reads these flags: ``--har`` really does throw the working tree away.
+    """
+    assert [one["flags"] for one in invocations(command)] == [getattr(parser, flag)]
+
+
+@pytest.mark.parametrize("command", ["git reset --h", "git reset --soft HEAD~1", "git clean -n", "git clean --dry-run"])
+def test_a_flag_git_would_not_run_destructively_reports_nothing(command: str) -> None:
+    """The inverse, and the abbreviation's own limit.
+
+    ``--h`` is ambiguous with ``--help``, so git refuses it rather than reading
+    it as ``--hard``; reporting it would be a denial of a command that does not
+    exist. The ordinary safe flags of the same subcommands are untouched.
+    """
+    assert [one["flags"] for one in invocations(command)] == [""]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git restore --source=origin/release -- .",
+        "git restore --source origin/release -- .",
+        "git restore --sou=origin/release -- .",
+        "git restore -s origin/release -- .",
+        "git restore -sorigin/release -- .",
+        "git restore -Ws origin/release -- .",
+    ],
+)
+def test_every_spelling_that_names_a_source_is_an_overwrite(command: str) -> None:
+    """A named source is another commit's content, however the option is written.
+
+    ``-Ws <ref>`` bundles ``-W`` with ``-s``, which an exact match on ``-s``
+    misses; the invocation was then reported as a bounded restore from the
+    index and skipped the dirty-tree check entirely.
+    """
+    found = invocations(command)
+    assert [(one["flags"], one["arg"]) for one in found] == [(parser.OVERWRITE_FLAG, "origin/release")]
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["git restore file.py", "git restore -S file.py", "git restore --staged file.py", "git restore -p file.py"],
+)
+def test_a_restore_that_names_no_source_stays_bounded_by_the_index(command: str) -> None:
+    """The inverse: no source named is the safe operation, and stays allowed."""
+    assert [one["flags"] for one in invocations(command)] == [parser.INDEX_RESTORE_FLAG]
+
+
 # ── The wire format between the parser and the shell that reads it ──────────
 
 
@@ -216,17 +282,30 @@ def test_the_field_separator_is_not_ifs_whitespace() -> None:
     assert parser.FIELD_SEPARATOR not in string.whitespace
 
 
-def test_a_record_survives_the_shell_read_it_is_written_for() -> None:
-    """End to end through a real shell: the branch name must land in field 4.
+# Read exactly as ``block-dangerous-commands.sh`` reads it (its line 238): same
+# separator, same variable names, same field count. Reading fewer fields than
+# the hook does would let a record grow one without this test noticing -- the
+# last name would silently swallow the remainder, separator and all.
+_HOOK_READ = "IFS=$'\\x1f' read -r wt_dir wt_git_dir subcommand invocation_flags ref_arg"
+_HOOK_ECHO = 'printf \'%s\\n\' "$wt_dir" "$ref_arg"'
 
-    Asserting the constant is necessary but not sufficient — this runs the
+
+def test_a_record_survives_the_shell_read_it_is_written_for() -> None:
+    """End to end through a real shell: the branch name reaches the hook's REF_ARG.
+
+    Asserting the constant is necessary but not sufficient -- this runs the
     parser as the hook runs it and reads the record as the hook reads it.
+
+    The defect (#15296) was a leading EMPTY field being eaten, which shifts the
+    branch name out of the variable the hook reads it from and into the one it
+    reads a directory from. That is what is asserted: the first field is still
+    empty, the branch name is in ``ref_arg``, and nothing overflowed past it.
+    Which ordinal that is belongs to the hook and has already moved once --
+    #15835 inserted the subcommand -- so pinning the record's every field would
+    fail on a change that leaves the guarded property intact.
     """
     parser_path = project_root() / ".claude" / "hooks" / "git_invocation_parse.py"
-    script = (
-        f'python3 "$1" "git {CHECKOUT} some-branch" | '
-        '{ IFS=$\'\\x1f\' read -r a b c d; printf \'%s|%s|%s|%s\' "$a" "$b" "$c" "$d"; }'
-    )
+    script = f'python3 "$1" "git {CHECKOUT} some-branch" | {{ {_HOOK_READ}; {_HOOK_ECHO}; }}'
     result = subprocess.run(  # nosec B603 B607  # fixed argv; nothing here comes from input
         ["bash", "-c", script, "bash", str(parser_path)],
         capture_output=True,
@@ -235,4 +314,9 @@ def test_a_record_survives_the_shell_read_it_is_written_for() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout == "|||some-branch", result.stdout
+    fields = result.stdout.split("\n")
+    assert len(fields) >= 2, result.stdout
+    wt_dir, ref_arg = fields[0], fields[1]
+    assert wt_dir == "", f"a leading empty field was eaten: {result.stdout!r}"
+    assert ref_arg == "some-branch", f"the branch name did not reach REF_ARG: {result.stdout!r}"
+    assert parser.FIELD_SEPARATOR not in ref_arg, f"the record has more fields than the hook reads: {ref_arg!r}"
