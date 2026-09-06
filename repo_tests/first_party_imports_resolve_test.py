@@ -70,7 +70,11 @@ def _optional_import_nodes(tree: ast.AST) -> set[int]:
         # declaration that the import is optional — and in this repo it is the
         # single most common wrapper around a first-party import, including all
         # three call sites of the very function #14839 fixed
-        # (`agent_org_service.py:263`, `:331`, `portability.py:716`). Treating it
+        # (both sites in `agent_org_service.py`, and `llc/services/portability.py`
+        # -- not `llc/api/portability.py`, which is 123 lines and never held it).
+        # Symbols and files, not line numbers: the three this used to cite had
+        # drifted 37, 54 and 73 lines while the argument stayed correct (#15877).
+        # Treating it
         # as an exemption would have made this guard blind at exactly the places
         # its own docstring names. It caught the original bug only because that
         # import happened to sit in a function with no surrounding try.

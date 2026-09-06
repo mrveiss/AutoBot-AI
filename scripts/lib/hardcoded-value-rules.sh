@@ -14,9 +14,13 @@
 #      the only one scanning .sh/.yml/.yaml and autobot-infrastructure/, the
 #      only one with the account-identity rules, and the only one whose VM-IP
 #      pattern covered every octet.
-#   2. autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh (dormant)
-#      the only one with per-value SSOT SUGGESTIONS, the generic model-name
-#      regex, the hardcoded-URL rule, and six context skips nothing else had.
+#   2. autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
+#      RETIRED by #14371 -- the file no longer exists. Its contributions (the
+#      per-value SSOT SUGGESTIONS, the generic model-name regex, the
+#      hardcoded-URL rule, and six context skips nothing else had) were folded
+#      into this library, which is why they are listed here at all. Kept as
+#      provenance, marked dead: the entry read as a live second source for as
+#      long as the path was merely stale rather than labelled (#15877).
 #   3. .../hooks/pre-commit-hardcoded-values                 (the enforcing hook)
 #      the only one with magic numbers, roles, categories, DSNs, timeouts,
 #      AutoBot paths, the `.get("field", default)` call-argument shape, and the
