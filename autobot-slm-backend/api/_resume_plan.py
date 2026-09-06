@@ -14,7 +14,7 @@ resumed process knows about the run before it started comes from this row.
 """
 
 import json as _json
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, List
 
 from sqlalchemy import select
 
@@ -45,6 +45,7 @@ _RESUME_PLAN_LOG_LINES = 60
 #: made room in that file reintroduces the coupling it removed.
 _LOG_SHA_PREFIX = 12
 
+
 async def _persist_resume_plan(
     job: UpdateAllJob,
     remaining_node_ids: List[str],
@@ -68,9 +69,7 @@ async def _persist_resume_plan(
         # watching the GUI sees the log stop at "Firing Ansible self-update
         # (fire-and-forget)" and never learn the outcome -- the resumed job
         # backfills "completed before restart" placeholders over the real lines.
-        "stage_logs": {
-            stage.name: list(stage.log_lines or [])[-_RESUME_PLAN_LOG_LINES:] for stage in job.stages
-        },
+        "stage_logs": {stage.name: list(stage.log_lines or [])[-_RESUME_PLAN_LOG_LINES:] for stage in job.stages},
     }
     async with db_service.session() as db:
         result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))
@@ -100,5 +99,3 @@ async def _clear_resume_plan() -> None:
                 await db.commit()
     except Exception as exc:
         logger.warning("update-all: failed to clear resume plan: %s", exc)
-
-

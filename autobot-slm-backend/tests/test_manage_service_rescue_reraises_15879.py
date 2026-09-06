@@ -74,11 +74,7 @@ def _capture_task(rescue: list) -> dict:
     exemption migrates onto the `debug` or the `fail` task -- which would make
     the re-raise unable to fail. Review caught exactly that (#15879).
     """
-    matches = [
-        task
-        for task in rescue
-        if any("systemctl" in str(item) for item in (task.get("loop") or []))
-    ]
+    matches = [task for task in rescue if any("systemctl" in str(item) for item in (task.get("loop") or []))]
     assert len(matches) == 1, (
         f"expected exactly one task running the probes, found {len(matches)}. "
         "The assertions below identify the capture by what it runs, so it must be findable."
@@ -143,6 +139,6 @@ def test_the_probes_are_argv_so_a_service_name_cannot_inject_options() -> None:
     )
     for probe in capture.get("loop") or []:
         assert isinstance(probe, list), f"probe is not an argv list: {probe!r}"
-        assert sum("{{ service_name }}" in str(tok) for tok in probe) == 1, (
-            f"service_name appears in more than one argv element: {probe!r}"
-        )
+        assert (
+            sum("{{ service_name }}" in str(tok) for tok in probe) == 1
+        ), f"service_name appears in more than one argv element: {probe!r}"
