@@ -36,6 +36,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.agent_org_service import AgentOrgService
 from services.delegation_service import DelegationService
+from user_management.services import TenantContext
 
 logger = get_logger(__name__)
 # Every route here requires an authenticated caller (#15794). The router
@@ -208,7 +209,11 @@ async def get_direct_reports(
     # ``PUT /llc/reporting-lines/...`` protected one of two paths to the same
     # write and this was the easier one to reach. A permission whose bypass
     # ships beside it is not a permission.
-    dependencies=[Depends(require_reporting_line_write)],
+    # The gate is bound as a parameter rather than listed here, so its return
+    # value — the caller's resolved TenantContext — reaches the handler. It is
+    # still a declared dependency in the Dependant tree either way; what the
+    # parameter form adds is that the company used for scoping comes from the
+    # authenticated context and can never come from the request body.
 )
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -218,6 +223,20 @@ async def get_direct_reports(
 async def update_agent_org(
     agent_id: str,
     body: UpdateOrgRequest,
+    # Declared before the session so the authority check is resolved first.
+    #
+    # It does NOT mean no session is opened before the check: the gate resolves
+    # `get_tenant_context`, which itself depends on `get_db_session`, so an
+    # unauthorised caller still consumes a session on the way to its 403. An
+    # earlier version of this comment claimed otherwise — flagged in review on
+    # #15804 — and the claim was wrong in the direction that matters, since it
+    # described a property nobody had checked.
+    #
+    # Closing that properly means splitting the permission check from tenant
+    # resolution, which is the auth owner's surface (#15793) rather than this
+    # route's. Ordering here is still worth keeping: it is the half this file
+    # controls, and it costs nothing.
+    context: TenantContext = Depends(require_reporting_line_write),
     session: AsyncSession = Depends(get_db_session),
 ) -> AgentSummary:
     """
@@ -234,6 +253,8 @@ async def update_agent_org(
             org_role=body.org_role,
             title=body.title,
             capabilities=body.capabilities,
+            # From the authenticated context, never the body (#15794).
+            company_id=context.org_id,
         )
     except ValueError as exc:
         detail = str(exc)
@@ -257,7 +278,6 @@ async def update_agent_org(
     tags=["agent-org"],
     status_code=status.HTTP_200_OK,
     # #15794: same reasoning as the PATCH above — this upserts ``reports_to``.
-    dependencies=[Depends(require_reporting_line_write)],
 )
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -267,6 +287,20 @@ async def update_agent_org(
 async def upsert_agent_org(
     agent_id: str,
     body: UpsertOrgRequest,
+    # Declared before the session so the authority check is resolved first.
+    #
+    # It does NOT mean no session is opened before the check: the gate resolves
+    # `get_tenant_context`, which itself depends on `get_db_session`, so an
+    # unauthorised caller still consumes a session on the way to its 403. An
+    # earlier version of this comment claimed otherwise — flagged in review on
+    # #15804 — and the claim was wrong in the direction that matters, since it
+    # described a property nobody had checked.
+    #
+    # Closing that properly means splitting the permission check from tenant
+    # resolution, which is the auth owner's surface (#15793) rather than this
+    # route's. Ordering here is still worth keeping: it is the half this file
+    # controls, and it costs nothing.
+    context: TenantContext = Depends(require_reporting_line_write),
     session: AsyncSession = Depends(get_db_session),
 ) -> AgentSummary:
     """
@@ -275,14 +309,28 @@ async def upsert_agent_org(
     Creates the record if it does not exist.
     """
     svc = AgentOrgService(session)
-    node = await svc.upsert_node(
-        agent_id=agent_id,
-        name=body.name,
-        org_role=body.org_role,
-        reports_to=body.reports_to,
-        title=body.title,
-        capabilities=body.capabilities,
-    )
+    # #15794 (CWE-204): a tenant failure must answer 404, the same as the PATCH
+    # route, or the two outcomes are distinguishable by status alone. Without
+    # this the ValueError reaches the SERVER_ERROR decorator as a 500 while an
+    # agent that does not exist is created and returns 200 — so an authorised
+    # caller can tell "exists in a company you cannot see" from "does not
+    # exist", which is exactly what phrasing the message as "not found" was
+    # meant to prevent. Saying "not found" while the status says "server error"
+    # leaks the same fact through a different channel.
+    try:
+        node = await svc.upsert_node(
+            agent_id=agent_id,
+            name=body.name,
+            org_role=body.org_role,
+            reports_to=body.reports_to,
+            # From the authenticated context, never the body (#15794).
+            company_id=context.org_id,
+            title=body.title,
+            capabilities=body.capabilities,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
     return AgentSummary(
         agent_id=node.agent_id,
         name=node.name,
