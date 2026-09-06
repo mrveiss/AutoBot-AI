@@ -151,11 +151,14 @@
 # path, which is the path the defect was reported on.
 - name: "SLM | Bind the local self-update admin socket (#15823)"
   ansible.builtin.include_tasks: bind_self_update_socket.yml
-  # #14693: every task in this file that writes systemd state escalates here
-  # rather than relying on the caller — which is what broke on the self-update
-  # path in the first place. The included block sets `become` too; this is not
-  # redundant, because the guard reads THIS file and a caller that did not
-  # escalate would otherwise reach an include that looks unprivileged.
-  become: true
+  # NO `become` here. Ansible rejects it outright on a TaskInclude —
+  # "'become' is not a valid attribute for a TaskInclude" — which aborted the
+  # whole self-update play at parse time and broke code-sync on the live host.
+  #
+  # It was added for #14693, whose guard reads THIS file and wants every task
+  # that writes systemd state to escalate. That guard and Ansible disagree about
+  # includes, and Ansible wins: escalation belongs on the tasks, and
+  # `bind_self_update_socket.yml:32` already sets `become: true` on the block it
+  # includes, so the privileged work is still privileged.
   when: slm_self_update_socket_enabled | bool
   tags: ['slm', 'backend', 'systemd']
