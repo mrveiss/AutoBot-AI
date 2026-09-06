@@ -83,8 +83,12 @@ def _safe(value: str) -> str:
     return cleaned if len(cleaned) <= _FIELD_MAX else cleaned[:_FIELD_MAX] + "…"
 
 
-def _inspection_refusal(request: Request) -> str | None:
-    """Why this body must not be read, or None when reading it is bounded.
+def _inspection_refusal(request: Request) -> tuple[str, str] | None:
+    """`(category, detail)` when this body must not be read, else None.
+
+    Split in two on purpose. `category` is one of three fixed strings and is the
+    only half that may be embedded in the log template; `detail` carries the
+    caller's own numbers and must stay an argument. See `_message`.
 
     A missing or unparseable `Content-Length` counts as a refusal: the size is
     then unknown, and an unknown quantity is exactly what must not be pulled
@@ -92,13 +96,16 @@ def _inspection_refusal(request: Request) -> str | None:
     """
     declared = request.headers.get("content-length")
     if declared is None:
-        return "no content-length header"
+        return ("no-content-length", "no content-length header")
     try:
         size = int(declared)
     except ValueError:
-        return f"unparseable content-length {declared!r}"
+        return ("unparseable-content-length", f"unparseable content-length {declared!r}")
     if size > _INSPECT_MAX_BYTES:
-        return f"{size} bytes over the {_INSPECT_MAX_BYTES} byte inspection bound"
+        return (
+            "body-over-bound",
+            f"{size} bytes over the {_INSPECT_MAX_BYTES} byte inspection bound",
+        )
     return None
 
 
@@ -120,17 +127,35 @@ def _declared_session_id(body: bytes, query_param: str | None) -> str | None:
     return payload.get("session_id") if isinstance(payload, dict) else None
 
 
-def _message(path: str, caller: str, refusal: str | None) -> str:
-    """The warning text, which states only what was actually established."""
-    if refusal is None:
+def _message(caller: str, category: str | None) -> str:
+    """The log **template**: only bounded values may appear in it.
+
+    `LogFloodSuppressionFilter` keys on the uninterpolated template plus call
+    site (#15774), so anything embedded here enlarges the key space — and that
+    space is a bounded LRU (`_FLOOD_MAX_KEYS`). Embedding the concrete path was
+    the mistake this fixes: `dispatch` runs before routing and matches on
+    `startswith`, so `/api/playwright/<anything>` reaches here, and a caller
+    walking `/a1`, `/a2`, … would mint keys until it evicted the suppression
+    state of the genuinely unscoped caller this exists to surface. Same defect as
+    one shared budget for every caller, wearing the other face.
+
+    So the template embeds the prefix (one value) and the refusal *category*
+    (three), and the concrete path, the caller's declared size and the
+    user-agent are passed as arguments. `caller` stays embedded because a
+    per-caller budget is the entire feature; that is the one axis deliberately
+    accepted, and it is bounded by who can reach the port.
+    """
+    if category is None:
         return (
-            f"playwright {path} called without session_id from caller={caller} — this caller "
-            f"joins the SHARED default browser context and is NOT isolated (#15802)."
+            f"playwright call under {_PREFIX} without session_id from caller={caller} — this "
+            f"caller joins the SHARED default browser context and is NOT isolated (#15802). "
+            f"path=%s user_agent=%s"
         )
     return (
-        f"playwright {path} could not be confirmed as scoped from caller={caller} — body not "
-        f"inspected ({refusal}) and no session_id query parameter, so this caller MAY be "
-        f"joining the SHARED default browser context (#15802)."
+        f"playwright call under {_PREFIX} not confirmed as scoped from caller={caller} "
+        f"[{category}] — body not inspected and no session_id query parameter, so this caller "
+        f"MAY be joining the SHARED default browser context (#15802). path=%s detail=%s "
+        f"user_agent=%s"
     )
 
 
@@ -145,7 +170,7 @@ class PlaywrightSessionScopeMiddleware(BaseHTTPMiddleware):
 
 async def warn_if_unscoped(request: Request) -> None:
     """Log a Playwright call that did not establish a `session_id`."""
-    refusal: str | None = None
+    refusal: tuple[str, str] | None = None
     body = b""
     if request.method.upper() in _BODY_METHODS:
         refusal = _inspection_refusal(request)
@@ -162,7 +187,10 @@ async def warn_if_unscoped(request: Request) -> None:
     # budget and let a chatty client silence a second unscoped one — the log
     # could no longer answer "who". user_agent stays an argument: it is
     # attacker-controlled and unbounded, so it must not enter the key space.
-    logger.warning(
-        _message(_safe(request.url.path), _safe(client or "unknown"), refusal) + " user_agent=%s",
-        _safe(request.headers.get("user-agent") or "unknown"),
-    )
+    path = _safe(request.url.path)
+    agent = _safe(request.headers.get("user-agent") or "unknown")
+    if refusal is None:
+        logger.warning(_message(_safe(client or "unknown"), None), path, agent)
+        return
+    category, detail = refusal
+    logger.warning(_message(_safe(client or "unknown"), category), path, _safe(detail), agent)

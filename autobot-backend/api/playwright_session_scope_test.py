@@ -167,7 +167,7 @@ class TestABodyItRefusesToRead:
 
         assert len(_warnings(caplog)) == 1
         message = _warnings(caplog)[0]
-        assert "could not be confirmed as scoped" in message
+        assert "not confirmed as scoped" in message
         assert "over the 4 byte inspection bound" in message
         assert "is NOT isolated" not in message
 
@@ -183,7 +183,7 @@ class TestABodyItRefusesToRead:
             client.post("/api/playwright/navigate", json={"url": "http://x", "session_id": "s1"})
 
         assert len(_warnings(caplog)) == 1
-        assert "could not be confirmed as scoped" in _warnings(caplog)[0]
+        assert "not confirmed as scoped" in _warnings(caplog)[0]
 
     def test_a_query_param_id_survives_the_refusal(self, client, caplog, monkeypatch):
         monkeypatch.setattr(playwright_session_scope, "_INSPECT_MAX_BYTES", 4)
@@ -230,15 +230,15 @@ class TestTheLogCanStillAnswerWho:
     def test_distinct_callers_each_get_their_own_budget(self):
         flood = LogFloodSuppressionFilter(threshold=1, window_seconds=60.0)
 
-        first = flood.filter(self._record(_message("/api/playwright/navigate", "10.0.0.1", None)))
-        second = flood.filter(self._record(_message("/api/playwright/navigate", "10.0.0.2", None)))
+        first = flood.filter(self._record(_message("10.0.0.1", None)))
+        second = flood.filter(self._record(_message("10.0.0.2", None)))
 
         assert (first, second) == (True, True)
 
     def test_the_same_caller_is_still_suppressed(self):
         """The control: without this, the test above passes on a filter that never suppresses."""
         flood = LogFloodSuppressionFilter(threshold=1, window_seconds=60.0)
-        message = _message("/api/playwright/navigate", "10.0.0.1", None)
+        message = _message("10.0.0.1", None)
 
         emitted = [flood.filter(self._record(message)) for _ in range(3)]
 
@@ -306,3 +306,37 @@ class TestARequestCannotForgeALogLine:
 
         message = _warnings(caplog)[0]
         assert "…" in message, "an unbounded path would also unbound the flood key space"
+
+
+class TestTheKeySpaceIsNotWalkable:
+    """A caller must not be able to mint suppression keys at will.
+
+    `_FLOOD_MAX_KEYS` is a bounded LRU, so **eviction is the attack**, not
+    memory: `dispatch` runs before routing and matches on `startswith`, so
+    `/api/playwright/<anything>` reaches the warning. Embedding the concrete
+    path would let one caller walk `/a1`, `/a2`, … and evict the suppression
+    state of the genuinely unscoped caller this feature exists to surface —
+    the same defect as one shared budget for everybody, from the other side.
+    """
+
+    def test_the_concrete_path_is_an_argument_not_part_of_the_template(self, client, caplog):
+        with caplog.at_level(logging.WARNING):
+            client.post("/api/playwright/aaa", json={"url": "http://x"})
+            client.post("/api/playwright/bbb", json={"url": "http://x"})
+
+        templates = {r.msg for r in caplog.records if "(#15802)" in r.getMessage()}
+        rendered = [r.getMessage() for r in caplog.records if "(#15802)" in r.getMessage()]
+
+        assert len(templates) == 1, "the path leaked into the template and made the key walkable"
+        assert any("/api/playwright/aaa" in m for m in rendered), "the path must still reach the log"
+        assert any("/api/playwright/bbb" in m for m in rendered)
+
+    def test_a_declared_size_does_not_mint_a_key_either(self, client, caplog, monkeypatch):
+        monkeypatch.setattr(playwright_session_scope, "_INSPECT_MAX_BYTES", 4)
+
+        with caplog.at_level(logging.WARNING):
+            client.post("/api/playwright/navigate", json={"url": "http://x"})
+            client.post("/api/playwright/navigate", json={"url": "http://xxxxxxxxxxxxxxxxxxx"})
+
+        templates = {r.msg for r in caplog.records if "(#15802)" in r.getMessage()}
+        assert len(templates) == 1, "the declared content-length leaked into the template"
