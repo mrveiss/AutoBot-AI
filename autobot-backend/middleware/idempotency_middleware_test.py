@@ -28,7 +28,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from autobot_shared.idempotency import IN_FLIGHT, ReplayedResponse, complete, storage_key
-from middleware.idempotency_middleware import HEADER, MAX_KEY_LENGTH, IdempotencyMiddleware
+from middleware.idempotency_middleware import (
+    HEADER,
+    MAX_KEY_LENGTH,
+    STATUS_HEADER,
+    IdempotencyMiddleware,
+)
 
 
 @pytest.fixture
@@ -340,3 +345,57 @@ class TestTheReplayNamespaceIsPerCaller:
 
         assert "super-secret-token" not in actor
         assert "super-secret-token" not in storage_key(actor, "POST", "/create", "k")
+
+
+class TestAnUncredentialedRequestGetsNoReplay:
+    """#15814: the peer-address fallback bucketed all anonymous traffic together.
+
+    Behind a reverse proxy `request.client.host` is the proxy for every external
+    caller, and keys are client-chosen — so an anonymous caller sending
+    `Idempotency-Key: 1` would receive another anonymous caller's stored body
+    with no guessing at all. The layer now declines rather than narrowing the
+    collision, because "less likely" is the wrong shape for a disclosure.
+    """
+
+    def test_two_anonymous_callers_sharing_a_key_do_not_share_a_response(self, app_and_calls):
+        app, calls = app_and_calls[0], app_and_calls[1]
+        client = TestClient(app)
+
+        first = client.post("/create", headers={HEADER: "1"})
+        second = client.post("/create", headers={HEADER: "1"})
+
+        assert calls["create"] == 2, "an anonymous caller was served another anonymous caller's response"
+        assert first.json() != second.json()
+
+    def test_the_caller_is_told_the_guarantee_was_not_given(self, app_and_calls):
+        """Silently withholding what was asked for is the shape this repository
+        keeps finding: a check that reports success without doing the work."""
+        app = app_and_calls[0]
+
+        response = TestClient(app).post("/create", headers={HEADER: "1"})
+
+        assert response.headers.get(STATUS_HEADER) == "skipped-unauthenticated"
+        assert response.headers.get("Idempotent-Replay") is None
+
+    def test_a_credentialed_caller_is_unaffected(self, app_and_calls):
+        """The contrast: declining must apply only where there is no principal."""
+        app, calls = app_and_calls[0], app_and_calls[1]
+        client = TestClient(app)
+
+        client.post("/create", headers={HEADER: "1", "Authorization": "Bearer alice"})
+        second = client.post("/create", headers={HEADER: "1", "Authorization": "Bearer alice"})
+
+        assert calls["create"] == 1
+        assert second.headers.get(STATUS_HEADER) is None
+        assert second.headers.get("Idempotent-Replay") == "true"
+
+    def test_no_actor_is_derived_without_a_credential(self):
+        from starlette.datastructures import Headers
+
+        class _Req:
+            state = type("S", (), {})()
+            headers = Headers({})
+            cookies: dict = {}
+            client = type("C", (), {"host": "10.0.0.1"})()
+
+        assert IdempotencyMiddleware._actor(_Req()) is None

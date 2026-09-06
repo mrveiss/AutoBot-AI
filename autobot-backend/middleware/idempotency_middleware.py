@@ -42,6 +42,10 @@ logger = get_logger(__name__)
 
 HEADER = "Idempotency-Key"
 
+#: Told to the caller when the replay layer declined to act, so a client cannot
+#: believe it has a guarantee it was never given.
+STATUS_HEADER = "Idempotency-Status"
+
 #: Longest client key accepted. A key is an opaque token, not a payload; the
 #: digest would absorb any length, but accepting unbounded input from an
 #: unauthenticated header is not something to do without a reason.
@@ -68,7 +72,21 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             logger.warning("idempotency store unavailable; serving %s without replay protection", request.url.path)
             return await call_next(request)
 
-        key = storage_key(self._actor(request), request.method, request.url.path, client_key)
+        actor = self._actor(request)
+        if actor is None:
+            # No stable principal, so no replay can be made safe. Skipping is the
+            # honest outcome -- but silently withholding a guarantee the caller
+            # asked for is the "reports success without doing the work" shape, so
+            # the response says so and the log records it.
+            logger.warning(
+                "idempotency skipped on %s: the request presents no credential to namespace by",
+                request.url.path,
+            )
+            response = await call_next(request)
+            response.headers[STATUS_HEADER] = "skipped-unauthenticated"
+            return response
+
+        key = storage_key(actor, request.method, request.url.path, client_key)
         return await self._replay_or_run(request, call_next, redis, key)
 
     async def _replay_or_run(self, request: Request, call_next, redis, key: str) -> Response:
@@ -143,7 +161,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             logger.warning("idempotency release failed; the claim will lapse on its TTL: %s", exc)
 
     @staticmethod
-    def _actor(request: Request) -> str:
+    def _actor(request: Request) -> str | None:
         """A namespace for this caller's keys -- NOT an authorization decision.
 
         The first version read ``request.state.user``, which is wrong here and
@@ -181,10 +199,16 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         session = request.cookies.get("session") or request.cookies.get("access_token")
         if session:
             return "sess:" + hashlib.sha256(session.encode("utf-8")).hexdigest()[:32]
-        # No credential at all: fall back to the peer address. Two anonymous
-        # callers behind one proxy share a namespace, which is the weakest case
-        # and is why an unauthenticated endpoint should not rely on this.
-        return "peer:" + (request.client.host if request.client else "unknown")
+        # No credential at all -> no namespace. The earlier version fell back to
+        # `request.client.host`, described as "two anonymous callers behind one
+        # proxy". That was wrong about its own blast radius (#15814): behind a
+        # reverse proxy that address is the PROXY for every external caller, so
+        # the bucket is all unauthenticated traffic at once. Keys are
+        # client-chosen, so an anonymous caller sending `Idempotency-Key: 1`
+        # would be handed another anonymous caller's stored body -- no guessing
+        # required. Adding entropy would only make the collision less likely,
+        # and "less likely" is the wrong shape for a disclosure.
+        return None
 
     @staticmethod
     async def _redis():
