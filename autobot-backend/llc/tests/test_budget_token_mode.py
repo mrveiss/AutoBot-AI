@@ -195,7 +195,9 @@ async def test_dollar_mode_budget_enforcement(session: AsyncSession, budget_serv
         with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
             mock_redis.return_value = None
             # 1M in + 500k out = $0.80 + $2.00 = $2.80 → total $4.40 > $2.00 limit
-            await budget_service.ingest_cost_event(session, agent_id, company_id, 1_000_000, 500_000, "claude-haiku-4-5-20251001")
+            await budget_service.ingest_cost_event(
+                session, agent_id, company_id, 1_000_000, 500_000, "claude-haiku-4-5-20251001"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +233,9 @@ async def test_token_mode_shadow_cost_usd(session: AsyncSession, budget_service:
 
     with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock) as mock_redis:
         mock_redis.return_value = None
-        cost = await budget_service.ingest_cost_event(session, agent_id, company_id, 1000, 500, "claude-haiku-4-5-20251001")
+        cost = await budget_service.ingest_cost_event(
+            session, agent_id, company_id, 1000, 500, "claude-haiku-4-5-20251001"
+        )
 
     # USD shadow cost must be positive
     assert cost > Decimal("0"), "Shadow cost must be calculated and returned in token mode"
