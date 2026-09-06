@@ -149,7 +149,8 @@ def test_prose_beginning_a_line_is_not_a_trailer(line: str) -> None:
     parser, not a reimplementation of it.
     """
     body = f"fix: something\n\n{line}\n\nSigned-off-by: A <a@b.c>\n"
-    parsed = subprocess.run(  # nosec B603 B607 - fixed argv; input is a module constant
+    # Fixed argv; input is a module constant.
+    parsed = subprocess.run(  # nosec B603 B607
         ["git", "interpret-trailers", "--parse"],
         input=body,
         capture_output=True,
