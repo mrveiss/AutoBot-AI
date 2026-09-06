@@ -155,10 +155,11 @@
   # "'become' is not a valid attribute for a TaskInclude" — which aborted the
   # whole self-update play at parse time and broke code-sync on the live host.
   #
-  # It was added for #14693, whose guard reads THIS file and wants every task
-  # that writes systemd state to escalate. That guard and Ansible disagree about
-  # includes, and Ansible wins: escalation belongs on the tasks, and
-  # `bind_self_update_socket.yml:32` already sets `become: true` on the block it
-  # includes, so the privileged work is still privileged.
+  # It was added for #14693, whose guard demanded `become` on every task in this
+  # file -- includes among them, which Ansible forbids. Ansible wins:
+  # `tests/test_service_units_self_sufficient_14693.py` now exempts includes and
+  # reads the included FILE instead, so the requirement is enforced where it is
+  # legal rather than dropped. `bind_self_update_socket.yml:32` sets
+  # `become: true` on the block, so the privileged work is still privileged.
   when: slm_self_update_socket_enabled | bool
   tags: ['slm', 'backend', 'systemd']

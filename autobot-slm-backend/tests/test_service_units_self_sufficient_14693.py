@@ -15,6 +15,13 @@ wedged (#14683). It also meant the unit refresh that #14624/#14668 exist to
 perform had never once run on the self-update path.
 
 The playbook parses fine either way, so only a live run exposed it.
+
+#15823 then satisfied the escalation test below by putting `become: true` on an
+`include_tasks`. Ansible rejects that at parse time -- "'become' is not a valid
+attribute for a TaskInclude" -- which aborted the whole self-update play and
+broke code-sync on the live host. The guard had demanded something invalid, so
+the tests here now check both directions: every task that can escalate does, no
+include pretends to, and the files they include are read rather than trusted.
 """
 
 from __future__ import annotations
@@ -56,15 +63,131 @@ def _load(path: Path):
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
+
+_INCLUDE_KEYS = (
+    "ansible.builtin.include_tasks",
+    "include_tasks",
+    "ansible.builtin.import_tasks",
+    "import_tasks",
+)
+
+
+def _included_file(task):
+    """The task file this task includes, or None if it is not an include.
+
+    Ansible accepts both the bare-string form (`include_tasks: f.yml`) and the
+    mapping form (`include_tasks: {file: f.yml}`). A guard that reads only the
+    first treats the second as an ordinary task and demands `become` on it --
+    which Ansible rejects at parse time. Reading both is what keeps this guard
+    from asking for something invalid.
+    """
+    for key in _INCLUDE_KEYS:
+        value = task.get(key)
+        if not value:
+            continue
+        return value if isinstance(value, str) else value.get("file")
+    return None
+
+
+def _leaf_tasks(container, inherited=False):
+    """Yield `(name, escalated)` for every leaf task, honouring inheritance.
+
+    `become` on a block applies to every task inside it, so a child that does
+    not set it is still privileged. A guard that reads tasks in isolation
+    reports the children of an escalating block as violations, and gets
+    "fixed" by pasting `become` onto each one -- noise that buries the real
+    question. Only leaves are yielded: a block is not a thing that runs.
+    """
+    if isinstance(container, list):
+        for item in container:
+            yield from _leaf_tasks(item, inherited)
+        return
+    if not isinstance(container, dict):
+        return
+    escalated = inherited or container.get("become") is True
+    children = [container[key] for key in ("block", "rescue", "always") if container.get(key)]
+    if not children:
+        yield container.get("name", "<unnamed>"), escalated
+        return
+    for child in children:
+        yield from _leaf_tasks(child, escalated)
+
+
 def test_every_service_unit_task_escalates() -> None:
     """The regression: these tasks write systemd state and need root."""
     tasks = _load(_SERVICE_UNITS)
     assert tasks, "service_units.yml defines no tasks"
-    missing = [t.get("name", "<unnamed>") for t in tasks if t.get("become") is not True]
+    missing = [
+        t.get("name", "<unnamed>")
+        for t in tasks
+        if _included_file(t) is None and t.get("become") is not True
+    ]
     assert not missing, (
         "these tasks write systemd state but rely on the caller to escalate, "
         f"which is what broke on the self-update path: {missing}"
     )
+
+
+
+def test_no_service_unit_include_carries_become() -> None:
+    """`become` on a TaskInclude is a parse-time error, not a stricter setting.
+
+    Ansible rejects it outright -- "'become' is not a valid attribute for a
+    TaskInclude" -- and rejects it while *parsing*, so it aborts the entire play
+    before any task runs. #15823 added one here to satisfy the escalation test
+    above, and took the self-update path down on the live host: code-sync failed
+    at parse time and the operator saw a job that never progressed.
+
+    This is the direction the escalation test structurally cannot express. That
+    test asks "does every task escalate". This one asks "is escalation even
+    legal here", and for an include the answer is no. A guard that only ever
+    asks for *more* of a property cannot notice that the property is invalid.
+    """
+    offenders = [
+        task.get("name", "<unnamed>")
+        for task in _load(_SERVICE_UNITS)
+        if _included_file(task) is not None and "become" in task
+    ]
+    assert not offenders, (
+        "these tasks set `become` on an include, which Ansible rejects at parse "
+        f"time and which aborts the whole play: {offenders}. Escalation belongs "
+        "on the tasks inside the included file."
+    )
+
+
+def test_every_included_task_file_escalates_on_its_own() -> None:
+    """Exempting includes is only safe because this reads what they include.
+
+    Without this test the exemption in `test_every_service_unit_task_escalates`
+    *is* the bypass: move privileged work into a separate file, include it, and
+    nothing demands escalation anywhere -- the include is exempt for being an
+    include, and the included file is never read. That is the #14693 defect with
+    one more level of indirection, and it would pass every other test here.
+    """
+    includes = [
+        (task.get("name", "<unnamed>"), _included_file(task))
+        for task in _load(_SERVICE_UNITS)
+        if _included_file(task) is not None
+    ]
+    assert includes, (
+        "service_units.yml includes no task files, so this guard examined "
+        "nothing. It is not passing -- it is vacuous. Delete it or fix the sweep."
+    )
+
+    reached, unescalated = 0, []
+    for task_name, target in includes:
+        path = _SERVICE_UNITS.parent / target
+        assert path.is_file(), f"{task_name} includes {target}, which does not exist"
+        leaves = list(_leaf_tasks(_load(path)))
+        assert leaves, f"{target} defines no tasks, so {task_name} includes nothing"
+        reached += len(leaves)
+        unescalated += [f"{target}::{name}" for name, escalated in leaves if not escalated]
+
+    assert not unescalated, (
+        "these tasks run inside an included file without escalating, so the "
+        f"include is a hole in the #14693 guarantee: {unescalated}"
+    )
+    assert reached >= len(includes), f"walked {reached} tasks across {len(includes)} includes"
 
 
 def test_the_playbook_still_supplies_no_play_level_become() -> None:
