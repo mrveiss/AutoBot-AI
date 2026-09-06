@@ -52,16 +52,34 @@ def test_discovery_reaches_every_playwright_request_model() -> None:
     )
 
 
+#: The two things AC2 actually asks a description to say. Matching on content
+#: is legitimate here in a way it would not be for a diagnostic message: the
+#: text IS the deliverable. #15802 AC2 is a claim about what a caller can read,
+#: so a test that accepts any non-empty string tests that a description exists,
+#: not that it documents anything -- "Session identifier" would have passed.
+_OMISSION_TERMS = ("omitted", "shared default")
+
+
 def test_every_session_id_field_documents_what_omission_does() -> None:
-    """#15802 AC2: the behaviour is on the model, not left to be inferred."""
-    undocumented = [
-        name
-        for name, model in _models_taking_session_id()
-        if not (model.model_fields["session_id"].description or "").strip()
-    ]
-    assert not undocumented, (
+    """#15802 AC2: the behaviour is on the model, not left to be inferred.
+
+    `PlaywrightScreenshotRequest` is excluded because its honest description is
+    the opposite statement -- the field is ignored there, so "omitting it joins
+    the shared default" would be a lie. It is pinned by its own test below, and
+    excluding it here is safe only because that test exists.
+    """
+    missing = []
+    for name, model in _models_taking_session_id():
+        if name == "PlaywrightScreenshotRequest":
+            continue
+        description = (model.model_fields["session_id"].description or "").lower()
+        absent = [term for term in _OMISSION_TERMS if term not in description]
+        if absent:
+            missing.append(f"{name} (missing: {', '.join(absent)})")
+
+    assert not missing, (
         "these models accept session_id without saying what omitting it does, so "
-        f"the #15802 warning tells a caller nothing actionable: {undocumented}"
+        f"the #15802 warning tells a caller nothing actionable: {missing}"
     )
 
 
