@@ -15,15 +15,18 @@ For agents at or over 100%: calls BudgetService hard stop (idempotent).
 
 import json
 import logging
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
 from user_management.database import get_async_session_factory
 from user_management.models.organization import Organization
+
+from models.agent_org import AgentOrgNode
 
 from ..models.budget import LLCAgentBudget
 from ..services.budget import BudgetService
@@ -236,24 +239,42 @@ class BudgetWatchdog(PollLoopScheduler):
             logger.debug("_notify(%s) publish failed (swallowed)", event_type)
 
     async def _pause_agent(self, agent_id: str, company_id: str) -> None:
-        """Best-effort: mark agent inactive in agent_org_nodes.
+        """Best-effort: mark agent inactive in agent_org_nodes, within its company.
 
-        Scoped by company. The slug is unique per company on the budget side
+        Scoped by company: the slug is unique per company on the budget side
         (#15812), so an unscoped UPDATE would let one company's exhausted budget
-        pause another company's agent the moment two of them share a slug. The
-        cast keeps the comparison working on both backends: this column is UUID
-        while the budget row carries the company as text.
+        pause another company's agent the moment two of them share a slug.
+
+        Built through the ORM rather than raw SQL because the two sides are
+        different types — this column is ``UUID`` and the budget row carries the
+        company as text — and hand-writing the conversion gets it wrong. A
+        ``CAST(company_id AS TEXT)`` comparison renders as unhyphenated hex on
+        SQLite and never matches ``str(uuid)``, so the UPDATE silently pauses
+        nothing: the scoping fix would have been a scoping-shaped no-op.
+        SQLAlchemy binds a ``uuid.UUID`` correctly on both backends.
         """
+        try:
+            company_uuid = uuid.UUID(str(company_id))
+        except (TypeError, ValueError):
+            logger.warning(
+                "_pause_agent: agent %s has an unparseable company_id %r — not pausing, "
+                "because an unscoped pause could stop another company's agent (#15812)",
+                agent_id,
+                company_id,
+            )
+            return
+
         factory = get_async_session_factory()
         try:
             async with factory() as session:
                 await session.execute(
-                    text(
-                        "UPDATE agent_org_nodes SET status = 'inactive'"
-                        " WHERE agent_id = :agent_id AND status != 'inactive'"
-                        " AND CAST(company_id AS TEXT) = :company_id"
-                    ),
-                    {"agent_id": agent_id, "company_id": company_id},
+                    update(AgentOrgNode)
+                    .where(
+                        AgentOrgNode.agent_id == agent_id,
+                        AgentOrgNode.company_id == company_uuid,
+                        AgentOrgNode.status != "inactive",
+                    )
+                    .values(status="inactive")
                 )
                 await session.commit()
         except Exception:
