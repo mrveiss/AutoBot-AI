@@ -934,7 +934,7 @@ class TestIngestAdapterUsage:
 
         mock_ingest.assert_awaited_once()
         args = mock_ingest.await_args.args
-        assert args[1] == agent["agent_id"] and args[2] == 120 and args[3] == 40 and args[4] == "claude-x"
+        assert args[1:6] == (agent["agent_id"], str(agent["company_id"]), 120, 40, "claude-x")
 
     async def test_noop_when_usage_unknown(self):
         agent = _make_agent(adapter_type="claude_code")
