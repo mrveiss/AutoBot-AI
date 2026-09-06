@@ -25,8 +25,8 @@ import anyio
 import fakeredis.aioredis
 import pytest
 from fastapi import FastAPI
-from starlette.responses import Response
 from fastapi.testclient import TestClient
+from starlette.responses import Response
 
 from autobot_shared.idempotency import (
     IDEMPOTENCY_CLAIM_TTL_SECONDS,
