@@ -27,6 +27,14 @@ repos:
   # after any shebang / coding line), de-dupes the legacy "Copyright (c)"
   # line, and skips vendored/generated/.vue/workflow/infrastructure paths
   # (scope identical to the original sweep — see EXCLUDE_RE in the script).
+  #
+  # No --all here, on purpose (#15817). --all is the tree-wide mode and it
+  # carries SPDX_FLOOR, a reach floor bound to files examined; pre-commit
+  # passes only the staged files, so a floor on this path would fail every
+  # one-file commit. The tree-wide floored run belongs to CI — see the
+  # "Enforce SPDX/Apache-2.0 license header" step in enforce-precommit.yml.
+  # --fix is also exempt from the "examined nothing" error for the same
+  # reason: it is an action, not a verdict.
   - repo: local
     hooks:
       - id: insert-license
