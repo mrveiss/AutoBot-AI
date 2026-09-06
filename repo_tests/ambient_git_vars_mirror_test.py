@@ -32,10 +32,13 @@ _ROOT = Path(__file__).resolve().parents[1]
 _SHELL = _ROOT / "scripts" / "lib" / "git-root.sh"
 _PYTHON = _ROOT / "autobot_shared" / "paths.py"
 
-#: Every ambient var git reads is a `GIT_`-prefixed name; the floor stops an
-#: empty parse on either side from reading as agreement. Four was the shell
-#: list's size when it was already WRONG, so the floor is deliberately above it.
-_MIN_VARS = 5
+#: Pinned to the exact count, not to a value that merely beats zero. A floor
+#: below the population only catches TOTAL collapse -- and total collapse is not
+#: the failure that produced this file. #15783 propagated into shell and stopped
+#: one variable in: five sites at four vars, one at five. That is PARTIAL loss,
+#: and a loose floor is blind to exactly it. Removing a variable now costs one
+#: deliberate line in a diff, which is the correct price.
+_MIN_VARS = 6
 
 
 def _shell_vars() -> set[str]:
@@ -43,7 +46,13 @@ def _shell_vars() -> set[str]:
     text = _SHELL.read_text(encoding="utf-8")
     match = re.search(r"GIT_ROOT_AMBIENT_VARS=\((.*?)\)", text, re.S)
     assert match, f"{_SHELL.name}: GIT_ROOT_AMBIENT_VARS array not found — the parse read nothing"
-    return set(re.findall(r"GIT_[A-Z_]+", match.group(1)))
+    # Strip `#` comments inside the array before counting. Without this,
+    # `# GIT_OBJECT_DIRECTORY not needed here` satisfies the mirror while the
+    # variable goes unscrubbed -- the guard reading its own explanation as the
+    # mechanism. Same blindness as the inline-generics ratchet (#15771), which
+    # counts a type written in a comment; two guards, one root cause.
+    body = re.sub(r"#[^\n]*", "", match.group(1))
+    return set(re.findall(r"GIT_[A-Z_]+", body))
 
 
 def _python_vars() -> set[str]:
@@ -105,11 +114,20 @@ def test_the_shell_and_python_scrub_lists_are_identical() -> None:
 # the seven would leave the eighth unguarded, and a partial fix reads as a
 # disconfirmation of the whole hypothesis.
 
-_SHELL_GLOBS = ("scripts/**/*.sh", ".claude/hooks/*.sh", "autobot-infrastructure/**/*.sh")
+# Every `.sh` in the repo, not three named directories. Enumerating directories
+# is the same mistake as enumerating the seven sites: 40 shell files sit outside
+# those globs today and any of them can host the eighth. Widening finds no new
+# site right now, which is the point -- it costs nothing and removes the blind
+# spot before it matters.
+_SHELL_GLOBS = ("**/*.sh",)
+_SHELL_EXCLUDES = (".git/", "node_modules/", ".worktrees/")
 
-#: Seven sites exist today. A floor of 4 fails loudly if the globs stop matching,
-#: rather than reporting every site compliant having found none.
-_MIN_SCRUB_SITES = 4
+#: Pinned to the six this discovers (the seventh, `git-root.sh`, uses the array
+#: form and is covered by the mirror test above). The realistic drift here is a
+#: glob narrowed from `scripts/**/*.sh` to `scripts/lib/*.sh`, or a hook
+#: directory moving -- both leave 4 or 5 sites and would clear a loose floor
+#: while a third of the tree left discovery silently.
+_MIN_SCRUB_SITES = 6
 
 _UNSET = re.compile(r"^[ \t]*unset[ \t]+((?:GIT_[A-Z_]+[ \t]*)+)", re.M)
 
@@ -125,6 +143,11 @@ def _scrub_sites():
     for pattern in _SHELL_GLOBS:
         for path in sorted(_ROOT.glob(pattern)):
             if not path.is_file():
+                continue
+            # Relative, NOT absolute: this repo is checked out inside a
+            # `.worktrees/` directory, so matching the absolute path excluded
+            # every file in the tree and the discovery found nothing.
+            if any(part in path.relative_to(_ROOT).as_posix() for part in _SHELL_EXCLUDES):
                 continue
             text = path.read_text(encoding="utf-8", errors="replace")
             for match in _UNSET.finditer(text):

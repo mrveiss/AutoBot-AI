@@ -49,10 +49,13 @@ _WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
 #: A name that asserts a verdict about one named thing, rather than naming a scope.
 _ACCUSES = re.compile(r"^(Check|Validate|Verify|Assert)\s+\S")
 
-#: Below this the guard is not measuring the tree, it is measuring its own reach.
-#: Three such jobs exist today; a floor of 2 fails loudly if a rename or a path
-#: change empties the population, instead of reporting a clean tree it never read.
-_MIN_ACCUSING_JOBS = 2
+#: Pinned to the three that exist. A floor of 2 catches only the population
+#: vanishing entirely; it would sit silent while two of the three fell out of
+#: scope -- and partial loss is the failure mode this whole PR is about.
+_MIN_ACCUSING_JOBS = 3
+
+#: Same reasoning for the whole-tree parse: 105 jobs parse today.
+_MIN_JOBS = 105
 
 
 def _jobs():
@@ -85,7 +88,10 @@ def test_the_guard_reaches_the_jobs_it_claims_to_check() -> None:
     """
     assert _WORKFLOWS.is_dir(), f"{_WORKFLOWS} is not a directory — the sweep read nothing"
     total = sum(1 for _ in _jobs())
-    assert total > 50, f"only {total} jobs parsed; the workflow tree was not read"
+    assert total >= _MIN_JOBS, (
+        f"only {total} jobs parsed (floor {_MIN_JOBS}); the workflow tree was not fully read — "
+        "a narrowed glob or an unparseable file drops jobs silently"
+    )
     accusing = _accusing_jobs()
     assert len(accusing) >= _MIN_ACCUSING_JOBS, (
         f"only {len(accusing)} job(s) named 'Check/Validate/Verify <x>' were found "
