@@ -89,6 +89,28 @@ async def _seed_company(
     return org_id
 
 
+async def _ceo_agent_liveness(conn, company_id: uuid.UUID):
+    """The CEO's agent row, joined through the designation.
+
+    `_ceo_of` reads `llc_company_ceos` only, and the repair writes to **two**
+    tables. A mutation dropping the scope predicates from the UPDATE while
+    keeping them on the DELETE deactivates every CEO agent in the installation
+    and leaves every designation intact -- so the API reports each company's CEO
+    correctly while none of those agents does anything. An assertion that reads
+    only the designation is silent about that.
+    """
+    return (
+        await conn.execute(
+            text(
+                "SELECT a.status, a.heartbeat_enabled "
+                "FROM llc_company_ceos c JOIN agent_org_nodes a ON a.id = c.holder_agent_id "
+                "WHERE c.company_id = :c"
+            ),
+            {"c": company_id},
+        )
+    ).one_or_none()
+
+
 async def _ceo_of(conn, company_id: uuid.UUID):
     return (
         await conn.execute(
@@ -144,6 +166,13 @@ async def test_a_company_created_before_this_change_acquires_an_agent_ceo(fresh_
             ).one()
             assert agent.agent_id == f"ceo-{company_id}"
             assert agent.company_id == company_id
+            # Selecting agent_id and company_id says the row exists, not that it
+            # runs -- and the repair writes status and heartbeat_enabled in the
+            # same pass, on the other side of the same predicates.
+            liveness = await _ceo_agent_liveness(conn, company_id)
+            assert liveness is not None
+            assert liveness.status != "inactive", "the provisioned CEO agent was deactivated"
+            assert liveness.heartbeat_enabled is not False, "the provisioned CEO agent will never be scheduled"
     finally:
         await engine.dispose()
 
@@ -170,11 +199,21 @@ async def test_a_top_level_company_keeps_its_ceo(fresh_db_url):
     try:
         async with engine.connect() as conn:
             row = await _ceo_of(conn, company)
+            liveness = await _ceo_agent_liveness(conn, company)
     finally:
         await engine.dispose()
 
     assert row is not None, "a top-level, non-deleted company lost its CEO to the repair"
     assert row.holder_type == "agent"
+    # The designation surviving is half the claim. The repair writes to two
+    # tables, and a mutation scoped on only one leaves every company reporting a
+    # CEO that is dormant.
+    assert liveness is not None, "the CEO designation survived but its agent row did not"
+    assert liveness.status != "inactive", (
+        "the designation is intact and its agent is deactivated -- the company reports a CEO that "
+        "does nothing. Dropping the scope predicates from the UPDATE alone produces exactly this."
+    )
+    assert liveness.heartbeat_enabled is not False, "the surviving CEO agent will never be scheduled"
 
 
 async def test_a_sub_organization_does_not_get_a_ceo(fresh_db_url):
@@ -258,6 +297,10 @@ async def test_an_archived_company_keeps_its_ceo(fresh_db_url):
             assert (
                 await _ceo_of(conn, archived) is not None
             ), "an archived company lost its CEO; scope is structural, not lifecycle"
+            archived_liveness = await _ceo_agent_liveness(conn, archived)
+            assert archived_liveness is not None
+            assert archived_liveness.status != "inactive", "an archived company's CEO agent was deactivated"
+            assert archived_liveness.heartbeat_enabled is not False
     finally:
         await engine.dispose()
 
