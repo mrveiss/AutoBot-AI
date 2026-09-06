@@ -1,0 +1,62 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - Bind the local self-update admin socket (#15823)
+#
+# systemd refuses to start a socket whose ``Service=`` is already running:
+#
+#   autobot-slm-self-update.socket: Socket service autobot-slm-backend.service
+#   already active, refusing.
+#
+# So the bind has to happen in a window where the backend is down. That window
+# is created here rather than assumed, because both callers reach this with the
+# service up.
+#
+# ONE copy, included from ``service_units.yml``, which is what both entry points
+# actually run: the full role reaches it through ``main.yml``, and
+# ``playbooks/update-all-nodes.yml`` Play 1 reaches it directly with
+# ``tasks_from: service_units.yml`` and never runs ``main.yml`` at all. A second
+# copy in ``main.yml`` would leave the update path — the path #15823 is about —
+# without the fix. That was the state this file was extracted from.
+#
+# ``restarted`` rather than ``started``: a ``ListenStream=``/``SocketMode=``
+# change only takes effect on the next bind, and this is the only point where a
+# rebind is possible.
+#
+# The rescue is not padding. Without it a failed bind aborts the play between
+# the stop and the start, leaving the backend DOWN — worse than the refusal this
+# fixes, and on the update path. It restores the service first and only then
+# re-raises, so the deploy still fails loudly with the original cause but does
+# not fail with the service off.
+- name: "SLM | Bind the self-update socket in a window where the backend is down (#15823)"
+  when: slm_self_update_socket_enabled | bool
+  become: true
+  tags: ['slm', 'service', 'systemd']
+  block:
+    - name: "SLM | Stop backend so the self-update socket can bind first (#15823)"
+      ansible.builtin.systemd:
+        name: "{{ slm_backend_service }}"
+        state: stopped
+
+    - name: "SLM | Start the self-update socket before the backend (#15823)"
+      ansible.builtin.systemd:
+        name: "{{ slm_self_update_socket_service }}.socket"
+        state: restarted
+
+    - name: "SLM | Start backend so it inherits the bound socket (#15823)"
+      ansible.builtin.systemd:
+        name: "{{ slm_backend_service }}"
+        state: started
+  rescue:
+    - name: "SLM | Restore the backend after a failed socket bind (#15823)"
+      ansible.builtin.systemd:
+        name: "{{ slm_backend_service }}"
+        state: started
+      # The bind already failed; failing here too would replace the real cause
+      # with a second error and still leave the service down.
+      failed_when: false
+
+    - name: "SLM | Re-raise the socket bind failure (#15823)"
+      ansible.builtin.fail:
+        msg: >-
+          The self-update socket failed to bind and the backend has been
+          restarted. Original error: {{ ansible_failed_result.msg | default('see above') }}
