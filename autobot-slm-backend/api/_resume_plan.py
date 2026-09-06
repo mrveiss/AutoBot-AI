@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, List
 from sqlalchemy import select
 
 from autobot_shared.logging_manager import get_logger
-from models.settings import Setting
+from models.database import Setting
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from api.code_sync import UpdateAllJob
