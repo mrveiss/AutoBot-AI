@@ -58,6 +58,21 @@ Note also what `test_the_sweep_reached_the_tree` could NOT do about it: it
 counts *files reached*, which was 465 either way. A non-vacuity check built for
 the glob says nothing about the filter.
 
+## When this guard does not run
+
+It sweeps `.github/workflows/*.yml`, and the python-suite path filter does not
+cover that tree -- so a change confined to a workflow computes
+``python != 'true'``, the required-context shim reports the suite green, and
+this guard never runs on it. A line-number citation added to a workflow comment
+is caught only by a later PR that also touches a covered tree.
+
+That is a pre-existing, repo-wide trade (`python_filter_uncovered_reads.py`
+records five workflow files as accepted bypasses, because covering the tree
+wholesale would run twelve shards on almost every pull request), not something
+this guard introduces. It is stated here because the alternative is a guard that
+looks like it watches workflows and does not, which is the exact shape this file
+exists to catch. Tracked in #15900.
+
 ## What this guard cannot do
 
 It checks referent *shape*, never referent *truth*. The audit's most
