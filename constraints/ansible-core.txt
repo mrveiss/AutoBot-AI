@@ -1,0 +1,29 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# The ansible-core the fleet's control node runs (#15824).
+#
+# install.sh adds ppa:ansible/ansible and roles/slm_manager/tasks/main.yml adds
+# the same PPA, so every provisioning run on the fleet goes through the
+# ansible-core that PPA ships. Keep this equal to the control node's
+# `ansible --version`.
+#
+# Why this file exists rather than an apt package name in a workflow:
+# ansible-role-facts-test used to `apt-get install -y ansible-core` and then
+# invoke whatever `ansible-playbook` PATH resolved to. Those two are not the
+# same program. The runs carry no DEFAULT_GATHER_SUBSET deprecation warning even
+# though ansible.cfg sets `gather_subset = !hardware` -- ansible-core removed
+# that option in 2.18, and 2.16.3 (the version the step installed) still
+# deprecates it. So the guard was running >= 2.18 while claiming to test 2.16.3,
+# and neither is what the fleet runs.
+#
+# That gap is exactly what hid #15822: on 2.17.14 `set_fact` coerces a rendered
+# 'true'/'false' string straight back into a Python bool
+# (plugins/action/set_fact.py, `if not C.DEFAULT_JINJA2_NATIVE and isinstance(v,
+# string_types)`), which is what broke clean_wrong_node_dir.yml on every host.
+# The newer interpreter CI silently used does not, so the guard saw a decidable
+# token where the fleet saw a bool, and eleven days of dead provisioning passed.
+#
+# tests/check_ansible_core_pinned.py fails the suite when the interpreter CI
+# actually invokes disagrees with this file, so the pin cannot go stale unread.
+ansible-core==2.17.14
