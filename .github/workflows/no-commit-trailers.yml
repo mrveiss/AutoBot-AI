@@ -52,10 +52,31 @@ jobs:
           set -euo pipefail
           echo "Scanning commits ${BASE_SHA}..${HEAD_SHA}"
           # Agent/tooling trailers are never allowed, for any author (#13654).
-          # `Claude-Session:` carries a session URL into public history and is a
-          # trailer like any other. It is anchored because, unlike the promo line,
-          # the token is plausible in prose; the other two arms stay unanchored.
-          agent_re='Generated with \[?Claude|noreply@paperclip|^[[:space:]]*Claude-Session:'
+          #
+          # #15848: ALL THREE ARMS ARE NOW ANCHORED to a trailer position. The
+          # promo and paperclip arms were deliberately left unanchored, on the
+          # reasoning that their tokens are implausible in prose. That reasoning
+          # did not survive contact: a commit message DOCUMENTING this policy has
+          # to quote the strings it bans, and was rejected by the check it
+          # describes. Measured cost in one session: three separate writes about
+          # the hazard refused for naming it, one of them a commit explaining the
+          # fix.
+          #
+          # Anchoring loses nothing, because a trailer is a line-position
+          # construct by definition -- git's own interpret-trailers only reads the
+          # final block, and every tool that emits these writes them at line
+          # start. `^[[:space:]]*` keeps an indented trailer caught, which is the
+          # form the Claude-Session arm was already written for.
+          #
+          # This is the mention-versus-invocation class #15835 fixed in
+          # .claude/hooks/block-dangerous-commands.sh: a pattern matching raw text
+          # cannot tell a use from a mention, and the cost lands on whoever
+          # documents the rule.
+          # The paperclip arm needs a trailer KEY before it, not `.*`: a bare
+          # `.*noreply@paperclip` re-defeats the anchor it sits behind, matching
+          # the address anywhere on the line. A trailer is `Key: value`, so that
+          # is what is required.
+          agent_re='^[[:space:]]*(Generated with \[?Claude|[A-Za-z-]+:.*noreply@paperclip|Claude-Session:)'
           # A Co-authored-by trailer is allowed only when the identity it names is
           # the commit's OWN author, the repository owner, or a bot. That lets
           # dependabot's self-attribution on its security bumps through — which is
