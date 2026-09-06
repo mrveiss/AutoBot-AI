@@ -10,11 +10,18 @@ Split out from the test module (the same shape as ``sys_modules_leak_guard.py``
 ``check_python_file_size.py``'s ``MAX_LINES`` on the test module itself.
 ``fixture_fixed_path_teardown_guard_test.py`` carries the guard's rationale
 and the live-tree assertions, and
-``fixture_fixed_path_teardown_guard_contrast_test.py`` and
-``fixture_fixed_path_teardown_guard_derivation_test.py`` carry the synthetic
+``fixture_fixed_path_teardown_guard_contrast_test.py``,
+``fixture_fixed_path_teardown_guard_derivation_test.py`` and
+``fixture_fixed_path_teardown_guard_reachability_test.py`` carry the synthetic
 contrast pair for every defect closed -- which calls and decorators are seen at
-all, and how a name earns "derived", respectively; this one documents only the
-AST shapes each helper recognizes.
+all, how a name earns "derived", and which nested bodies are live code,
+respectively; this one documents only the AST shapes each helper recognizes.
+
+The control-flow half -- which nested bodies are reached, which bindings are
+dead, and the single scope-walking primitive all of that is built from -- lives
+in ``fixture_fixed_path_teardown_flow.py`` (#15810, #15811), so this module is
+left with what it alone knows: what a per-test-unique path is, which operand of
+a call carries it, and how a name earns "derived" from it.
 """
 
 from __future__ import annotations
@@ -24,6 +31,18 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Iterator, List, Set, Tuple
 
+from repo_tests.fixture_fixed_path_teardown_flow import (
+    _CREATE_CALL_NAMES,
+    _REMOVE_CALL_NAMES,
+    Scope,
+    _call_target_name,
+    _collect_calls,
+    _collect_loads,
+    _dead_bindings,
+    _nested_scopes_by_name,
+    _walk_current_scope,
+)
+
 from autobot_shared.paths import scrubbed_git_env
 
 _REPO = Path(__file__).resolve().parents[1]
@@ -32,9 +51,6 @@ _REPO = Path(__file__).resolve().parents[1]
 # of these to build its path cannot collide across concurrent tests, whatever
 # its teardown does.
 _UNIQUE_SOURCE_PARAMS = frozenset({"tmp_path", "tmp_path_factory", "tmpdir", "tmpdir_factory"})
-
-_CREATE_CALL_NAMES = frozenset({"mkdir", "makedirs"})
-_REMOVE_CALL_NAMES = frozenset({"rmtree", "unlink", "rmdir", "remove"})
 
 # The path operand of a create/remove call is either its receiver (a Path
 # method, called as ``some_path.mkdir(...)``) or its first positional
@@ -49,6 +65,10 @@ _SKIP_PARTS = {"node_modules", ".worktrees", "__pycache__", "venv", ".venv"}
 # Bound to REACH (fixtures actually examined), not to how many violations turn
 # up -- see the test module's docstring.
 _MIN_EXPECTED_FIXTURES_SCANNED = 1000
+
+#: One reached scope: its node, whether reaching it is gated by an if/ternary,
+#: and the names that hold a per-test-unique path once inside it.
+ReachedScope = Tuple[Scope, bool, Set[str]]
 
 
 def _fixture_alias_names(tree: ast.Module) -> Set[str]:
@@ -83,123 +103,6 @@ def _iter_pytest_fixtures(tree: ast.Module) -> Iterator[ast.FunctionDef | ast.As
                 yield node
 
 
-def _if_exhaustively_removes(node: ast.If) -> bool:
-    """True when a remove call is guaranteed on every branch of this if/elif/.../else (#15797).
-
-    ``if use_rmtree: rmtree(p) else: rmtree(p)`` removes either way -- treating
-    that as "guarded" because the call sits inside an ``if`` is the false
-    negative. An ``if`` with no ``else`` can never be exhaustive: skipping it
-    entirely is itself a path with no removal, which is exactly the shape
-    ``tmp_root_exists``'s ``if created: ...`` relies on to stay conditional.
-    """
-    if not node.orelse:
-        return False
-    if not _branch_removes(node.body):
-        return False
-    if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
-        return _if_exhaustively_removes(node.orelse[0])
-    return _branch_removes(node.orelse)
-
-
-def _branch_removes(stmts: List[ast.stmt]) -> bool:
-    """True if a remove call is guaranteed to run somewhere in this statement list."""
-    return any(_stmt_guarantees_remove(stmt) for stmt in stmts)
-
-
-# A nested ``def``/``lambda`` is a scope of its own: its body neither runs nor
-# binds names where it is written. Every traversal that reasons about what the
-# fixture itself does skips these -- ``_walk_current_scope`` and
-# ``_collect_calls`` both (#15797 review).
-_NESTED_SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
-
-
-def _walk_current_scope(node: ast.AST) -> Iterator[ast.AST]:
-    """Like ``ast.walk``, but never descends into a nested function/lambda body.
-
-    ``def cleanup(): shutil.rmtree(p)`` only *defines* ``cleanup`` -- the
-    ``rmtree`` call inside it never runs unless something later calls
-    ``cleanup()``. ``ast.walk`` does not know the difference and would
-    surface that call as if it executed at the enclosing statement's own
-    scope, which is the false positive a defining-but-never-calling branch
-    triggers (#15797 follow-up).
-    """
-    yield node
-    for child in ast.iter_child_nodes(node):
-        if isinstance(child, _NESTED_SCOPE_NODES):
-            continue
-        yield from _walk_current_scope(child)
-
-
-def _stmt_guarantees_remove(stmt: ast.stmt) -> bool:
-    """True if *stmt* itself, unconditionally, reaches a remove call.
-
-    A loop, ``try``, or ``with`` may run zero times or raise before the call,
-    so a remove call nested inside one is never guaranteed by this statement
-    alone -- it stays whatever the enclosing construct already tags it as.
-    Nor does merely *defining* a nested function or lambda run its body: a
-    function/lambda statement (or a value assigned one) is never itself a
-    guaranteed remove, no matter what its uncalled body contains.
-    """
-    if isinstance(stmt, ast.If):
-        return _if_exhaustively_removes(stmt)
-    if isinstance(stmt, (ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith)):
-        return False
-    if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-        return False
-    return any(
-        _call_target_name(call) in _REMOVE_CALL_NAMES
-        for call in _walk_current_scope(stmt)
-        if isinstance(call, ast.Call)
-    )
-
-
-def _guarded_child_ids(node: ast.AST) -> Set[int]:
-    """Direct children an ``if``/ternary reaches on only one branch.
-
-    An exhaustive if/else (every branch removes, see above) contributes no
-    guarded ids at all -- the removal it contains is unconditional overall,
-    even though it is lexically inside an ``if``.
-    """
-    if isinstance(node, ast.If):
-        if _if_exhaustively_removes(node):
-            return set()
-        return {id(child) for child in list(node.body) + list(node.orelse)}
-    if isinstance(node, ast.IfExp):
-        return {id(node.body), id(node.orelse)}
-    return set()
-
-
-def _collect_calls(node: ast.AST, guarded: bool = False) -> List[Tuple[ast.Call, bool]]:
-    """Every ``Call`` in *node*'s own scope, tagged with whether an if/ternary gates it.
-
-    Nested ``def``/``lambda`` bodies are skipped for the same reason
-    ``_walk_current_scope`` skips them: a call written inside one does not run
-    where it is written. Descending into them made a fixture whose teardown
-    only *defines* ``def cleanup(): shutil.rmtree(fixed)`` -- and never calls
-    it -- read as an unconditional removal, flagging a fixture that removes
-    nothing at all (#15797 review). ``guarded`` is per-branch, so a nested def
-    sitting inside an ``if`` was already excused by that path alone; one at the
-    fixture's own top level was not, which is the shape this closes.
-    """
-    calls: List[Tuple[ast.Call, bool]] = []
-    if isinstance(node, ast.Call):
-        calls.append((node, guarded))
-    guarded_ids = _guarded_child_ids(node)
-    for child in ast.iter_child_nodes(node):
-        if isinstance(child, _NESTED_SCOPE_NODES):
-            continue
-        calls.extend(_collect_calls(child, guarded or id(child) in guarded_ids))
-    return calls
-
-
-def _call_target_name(call: ast.Call) -> str | None:
-    if isinstance(call.func, ast.Attribute):
-        return call.func.attr
-    if isinstance(call.func, ast.Name):
-        return call.func.id
-    return None
-
-
 def _pair_target_value(target: ast.expr, value: ast.expr) -> List[Tuple[Set[str], ast.expr]]:
     """Element-wise (name, value) pairs for one assignment target (#15797 follow-up).
 
@@ -228,25 +131,30 @@ def _pair_target_value(target: ast.expr, value: ast.expr) -> List[Tuple[Set[str]
     return [({n.id for n in ast.walk(target) if isinstance(n, ast.Name)}, value)]
 
 
-def _assignment_pairs(func: ast.FunctionDef | ast.AsyncFunctionDef) -> List[Tuple[Set[str], ast.expr]]:
-    """(assigned names, right-hand-side expression) for every assignment in *func*'s own scope.
+def _assignment_pairs(scope: Scope) -> List[Tuple[Set[str], ast.expr, ast.AST]]:
+    """(assigned names, right-hand side, owning statement) for every assignment in *scope*'s own scope.
 
     A nested helper's locals are not the fixture's: ``def leaf(): test_dir =
     tmp_path / "leaf"`` binds a name that exists only inside ``leaf``, yet
     ``ast.walk`` surfaced it as if the fixture had written it, marking an
     outer, fixed ``test_dir`` derived and excusing a real violation
-    (#15797 review). ``_walk_current_scope`` keeps the pairs local to *func*.
+    (#15797 review). ``_walk_current_scope`` keeps the pairs local to *scope*.
+
+    The owning statement rides along so ``_assignments_by_name`` can drop the
+    ones ``_dead_bindings`` calls unobservable (#15811) -- by statement rather
+    than by value expression, because ``a = b = value`` shares one expression
+    between two names that die independently.
     """
-    pairs: List[Tuple[Set[str], ast.expr]] = []
-    for node in _walk_current_scope(func):
+    pairs: List[Tuple[Set[str], ast.expr, ast.AST]] = []
+    for node in _walk_current_scope(scope):
         if isinstance(node, ast.Assign) and node.value is not None:
             for target in node.targets:
-                pairs.extend(_pair_target_value(target, node.value))
+                pairs.extend((names, value, node) for names, value in _pair_target_value(target, node.value))
         elif isinstance(node, ast.AnnAssign) and node.value is not None:
             targets = {n.id for n in ast.walk(node.target) if isinstance(n, ast.Name)}
-            pairs.append((targets, node.value))
+            pairs.append((targets, node.value, node))
         elif isinstance(node, ast.NamedExpr):
-            pairs.append(({node.target.id}, node.value))
+            pairs.append(({node.target.id}, node.value, node))
     return pairs
 
 
@@ -261,24 +169,28 @@ def _expr_is_derived(expr: ast.expr, derived: Set[str]) -> bool:
     would flag that correct fixture. The reverse shape -- a lambda whose body
     reads a derived name while the lambda itself is used as something other
     than a path -- would need that lambda's *name* to then appear in a path
-    expression: of the 1,212 fixtures scanned, 2 contain a lambda beside a
+    expression: of the 1,216 fixtures scanned, 2 contain a lambda beside a
     create/remove call at all, and neither has that shape.
     """
     return any(isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id in derived for n in ast.walk(expr))
 
 
-def _assignments_by_name(func: ast.FunctionDef | ast.AsyncFunctionDef) -> Dict[str, List[ast.expr]]:
-    """Every value assigned to each name in *func*'s own scope, keyed by name.
+def _assignments_by_name(scope: Scope) -> Dict[str, List[ast.expr]]:
+    """Every *observable* value assigned to each name in *scope*'s own scope, keyed by name.
 
     ``_assignment_pairs`` yields one entry per assignment; deriving a name
     correctly needs all of that name's assignments together, because a name
     rebound in one branch is only reliably unique if *every* branch made it so
-    (#15797 third review).
+    (#15797 third review). A binding no path can observe -- overwritten by a
+    later one with nothing reading it in between -- is dropped here rather
+    than counted against the name, which is #15811's false positive.
     """
+    dead = _dead_bindings(scope)
     by_name: Dict[str, List[ast.expr]] = {}
-    for targets, value in _assignment_pairs(func):
+    for targets, value, stmt in _assignment_pairs(scope):
         for name in targets:
-            by_name.setdefault(name, []).append(value)
+            if (id(stmt), name) not in dead:
+                by_name.setdefault(name, []).append(value)
     return by_name
 
 
@@ -301,7 +213,7 @@ def _reachably_derived(by_name: Dict[str, List[ast.expr]], seeds: Set[str]) -> S
 
 
 def _withdraw_partly_fixed(by_name: Dict[str, List[ast.expr]], derived: Set[str]) -> Set[str]:
-    """Drop any name whose assignments are not *all* derived (#15797 third review).
+    """Drop any name whose observable assignments are not *all* derived (#15797 third review).
 
     Withdrawal rather than a stricter least fixed point, and the difference is
     a FALSE POSITIVE. Requiring all assignments while building the set up from
@@ -326,8 +238,34 @@ def _withdraw_partly_fixed(by_name: Dict[str, List[ast.expr]], derived: Set[str]
     return derived
 
 
-def _derived_names(func: ast.FunctionDef | ast.AsyncFunctionDef) -> Set[str]:
-    """Names that trace back to a tmp_path-family source on *every* assignment (#15797).
+def _named_params(scope: Scope) -> Set[str]:
+    """Parameters pytest can inject a fixture into -- by name, never through a star.
+
+    ``*args``/``**kwargs`` are deliberately absent: pytest resolves a fixture
+    request from the signature's *named* parameters, so ``def fin(*tmp_path)``
+    binds a caller-supplied tuple, not a per-test-unique path, and must not be
+    seeded as one.
+    """
+    args = scope.args
+    return {param.arg for param in [*args.args, *args.kwonlyargs, *args.posonlyargs]}
+
+
+def _scope_params(scope: Scope) -> Set[str]:
+    """Every name *scope*'s signature binds, ``*args``/``**kwargs`` included (#15815 review).
+
+    This is the shadowing set, so it is the wider of the two: a star
+    parameter binds a value the caller supplies, and a helper written
+    ``def fin(*leaf)`` inside a fixture whose own ``leaf`` is ``tmp_path``-
+    derived shares nothing with it but the spelling. Omitting star parameters
+    left the enclosing credit standing and excused a removal this guard
+    cannot vouch for -- a FALSE NEGATIVE.
+    """
+    starred = {param.arg for param in (scope.args.vararg, scope.args.kwarg) if param is not None}
+    return _named_params(scope) | starred
+
+
+def _scope_derived_names(scope: Scope, inherited: Set[str]) -> Set[str]:
+    """Names that trace back to a tmp_path-family source on *every* observable assignment (#15797).
 
     A unique-source parameter is not proof by itself -- #15772's own pre-fix
     fixture *took* ``tmp_path`` and ignored it. Only a name actually assigned
@@ -340,15 +278,70 @@ def _derived_names(func: ast.FunctionDef | ast.AsyncFunctionDef) -> Set[str]:
     ``test_dir``, so the false branch created and removed a fixed path with the
     violation suppressed -- the exact hazard, unflagged (#15797 third review).
     A name is credited only when every assignment to it in this scope is
-    derived, which needs no dominance analysis and keeps the legitimate
-    ``if/else`` where both branches assign a ``tmp_path``-derived value. The
-    known cost is a dead fixed assignment overwritten unconditionally by a
-    derived one, which is flagged; no fixture in the tree has that shape.
+    derived; the dead assignment that rule used to over-count is now dropped
+    by ``_dead_bindings`` before the fixed point runs (#15811).
+
+    *inherited* carries the enclosing scope's derived names into a nested
+    helper the fixture reaches (#15810), minus anything the helper's own
+    parameters shadow -- a parameter's value is unknown here, and treating it
+    as still-derived would excuse a removal this guard cannot vouch for.
+    Shadowing and seeding read different halves of the signature on purpose:
+    every bound name shadows (``*args``/``**kwargs`` included), while only a
+    *named* parameter can be pytest's own injection (#15815 review).
     """
-    params = [*func.args.args, *func.args.kwonlyargs, *func.args.posonlyargs]
-    by_name = _assignments_by_name(func)
-    seeds = {p.arg for p in params} & _UNIQUE_SOURCE_PARAMS
+    by_name = _assignments_by_name(scope)
+    seeds = (inherited - _scope_params(scope)) | (_named_params(scope) & _UNIQUE_SOURCE_PARAMS)
     return _withdraw_partly_fixed(by_name, _reachably_derived(by_name, seeds))
+
+
+def _derived_names(func: ast.FunctionDef | ast.AsyncFunctionDef) -> Set[str]:
+    """``_scope_derived_names`` for a fixture, which inherits nothing."""
+    return _scope_derived_names(func, set())
+
+
+def _record_reached(reached: Dict[int, ReachedScope], target: Scope, guarded: bool, inherited: Set[str]) -> bool:
+    """Record *target* unless an equal-or-better visit already exists; True if recorded.
+
+    "Better" is unguarded: a helper reached from two places is judged by the
+    reference that is not behind an ``if``, because that is the one that runs
+    on every path. Only that improvement re-opens a scope, so the walk
+    terminates even on mutually recursive helpers.
+    """
+    seen = reached.get(id(target))
+    if seen is not None and not (seen[1] and not guarded):
+        return False
+    reached[id(target)] = (target, guarded, _scope_derived_names(target, inherited))
+    return True
+
+
+def _reached_scopes(func: ast.FunctionDef | ast.AsyncFunctionDef) -> List[ReachedScope]:
+    """The fixture's own scope plus every nested scope its live code actually names (#15810).
+
+    ``def fin(): shutil.rmtree(fixed)`` beside ``request.addfinalizer(fin)``
+    removes a fixed path on every path through the fixture, but scoping call
+    collection to the fixture's own body (#15809, the fix for a never-called
+    helper counting as teardown) made that removal invisible. The discriminator
+    is the *reference*: a nested body whose name the enclosing scope reads is
+    live code and folds in; one that is only defined still does not.
+
+    Reference, not call, on purpose -- ``addfinalizer(fin)`` never calls
+    ``fin`` in the fixture's own text, and demanding ``fin()`` would miss the
+    whole idiom the issue is about. Reachability is transitive (a reached
+    helper naming another helper reaches it too) and inner definitions shadow
+    outer ones, which is why the frontier carries the definitions in scope.
+    """
+    root: ReachedScope = (func, False, _derived_names(func))
+    reached: Dict[int, ReachedScope] = {}
+    frontier: List[Tuple[ReachedScope, Dict[str, List[Tuple[Scope, Set[str]]]]]] = [(root, {})]
+    while frontier:
+        (scope, guarded, derived), outer = frontier.pop()
+        defs = dict(outer)
+        defs.update({name: [(t, derived) for t in ts] for name, ts in _nested_scopes_by_name(scope).items()})
+        for name, load_guarded in _collect_loads(scope):
+            for target, inherited in defs.get(name, ()):
+                if target is not scope and _record_reached(reached, target, guarded or load_guarded, inherited):
+                    frontier.append((reached[id(target)], defs))
+    return [root, *reached.values()]
 
 
 def _call_path_is_derived(call: ast.Call, derived: Set[str]) -> bool:
@@ -369,21 +362,37 @@ def _call_path_is_derived(call: ast.Call, derived: Set[str]) -> bool:
     return False
 
 
-def _creates_and_unconditionally_removes(func: ast.FunctionDef | ast.AsyncFunctionDef, derived: Set[str]) -> bool:
-    calls = _collect_calls(func)
+def _reached_calls(func: ast.FunctionDef | ast.AsyncFunctionDef) -> List[Tuple[ast.Call, bool, Set[str]]]:
+    """Every call the fixture reaches, with its guardedness and the derived names in force.
+
+    A call inside a reached helper is gated by whichever is gated: the
+    reference that reaches the helper, or an ``if`` inside the helper itself.
+    The derived set travels with the scope, so a helper whose own local is
+    ``tmp_path``-derived is judged against that local, not the fixture's name
+    of the same spelling.
+    """
+    return [
+        (call, scope_guarded or call_guarded, derived)
+        for scope, scope_guarded, derived in _reached_scopes(func)
+        for call, call_guarded in _collect_calls(scope)
+    ]
+
+
+def _creates_and_unconditionally_removes(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    calls = _reached_calls(func)
     creates = any(
         _call_target_name(call) in _CREATE_CALL_NAMES and not _call_path_is_derived(call, derived)
-        for call, _guarded in calls
+        for call, _guarded, derived in calls
     )
     removes = any(
         _call_target_name(call) in _REMOVE_CALL_NAMES and not guarded and not _call_path_is_derived(call, derived)
-        for call, guarded in calls
+        for call, guarded, derived in calls
     )
     return creates and removes
 
 
 def _is_violation(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    return _creates_and_unconditionally_removes(func, _derived_names(func))
+    return _creates_and_unconditionally_removes(func)
 
 
 def _tracked_python_files() -> List[Path]:
