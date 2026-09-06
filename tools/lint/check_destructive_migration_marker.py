@@ -37,6 +37,7 @@ that is not in the dated shape fails, with its own message.
 from __future__ import annotations
 
 import ast
+import functools
 import re
 import sys
 from pathlib import Path
@@ -56,6 +57,11 @@ PRE_CONVENTION = frozenset({"001", "002"})
 DATED_REVISION = re.compile(r"^\d{8}_\d{3}[a-z]?$")
 
 DESTRUCTIVE_OPS = ("drop_column", "drop_table", "drop_constraint")
+
+#: The same operations spelled as SQL. ``op.execute("ALTER TABLE t DROP COLUMN c")``
+#: contains none of DESTRUCTIVE_OPS, so a migration could drop a column through
+#: raw SQL and be waved through by a name-only scan (#15776 review).
+DESTRUCTIVE_SQL = re.compile(r"\bDROP\s+(COLUMN|TABLE|CONSTRAINT)\b", re.IGNORECASE)
 
 #: Where a model would still declare a column this migration drops. Scoped to
 #: the ORM rather than the whole tree deliberately: a bare grep for a column
@@ -122,7 +128,12 @@ def is_destructive(source: str) -> bool:
     upgrade = upgrade_body(source)
     if upgrade is None:
         return False
-    return any(op in ast.dump(upgrade) for op in DESTRUCTIVE_OPS)
+    if any(op in ast.dump(upgrade) for op in DESTRUCTIVE_OPS):
+        return True
+    return any(
+        isinstance(node, ast.Constant) and isinstance(node.value, str) and DESTRUCTIVE_SQL.search(node.value)
+        for node in ast.walk(upgrade)
+    )
 
 
 def dropped_columns(source: str) -> list[tuple[str, str]]:
@@ -148,8 +159,56 @@ def dropped_columns(source: str) -> list[tuple[str, str]]:
     return pairs
 
 
+#: Floor for the model scan. The cross-source check is only as good as the files
+#: it reads: with none, `models_still_declaring` finds no declarers and the
+#: data-loss check passes **having scanned nothing** -- the same shape as a
+#: violation-bound floor, one layer inside this guard (#15776 review).
+MIN_MODEL_FILES = 20
+
+
+class ModelScanUnreachable(RuntimeError):
+    """Raised when the model scan cannot see enough to answer."""
+
+
 def _model_files(repo_root: Path) -> list[Path]:
-    return [path for root in MODEL_ROOTS for path in (repo_root / root).rglob("*.py") if "_test" not in path.name]
+    """Every ORM module under :data:`MODEL_ROOTS`, or a raise.
+
+    A missing root is a configuration error, not an empty result: renaming a
+    package would otherwise turn the cross-source check off silently while it
+    kept reporting success.
+    """
+    missing = [root for root in MODEL_ROOTS if not (repo_root / root).is_dir()]
+    if missing:
+        raise ModelScanUnreachable(f"configured model root(s) missing: {', '.join(missing)}")
+    files = [path for root in MODEL_ROOTS for path in (repo_root / root).rglob("*.py") if "_test" not in path.name]
+    if len(files) < MIN_MODEL_FILES:
+        raise ModelScanUnreachable(f"model scan reached {len(files)} file(s); floor is {MIN_MODEL_FILES}")
+    return files
+
+
+@functools.lru_cache(maxsize=4)
+def _model_index(repo_root: Path) -> dict[tuple[str, str], tuple[str, ...]]:
+    """``(table, column) -> declaring models``, built once per repository.
+
+    Previously each dropped column re-read and re-parsed every model file, so a
+    full sweep cost migrations x columns x models parses. The mapping is
+    immutable for the run, so it is built once (#15776 review).
+    """
+    index: dict[tuple[str, str], list[str]] = {}
+    for path in _model_files(repo_root):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeDecodeError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            table = _tablename_of(node)
+            if table is None:
+                continue
+            for column in _declared_columns(node):
+                index.setdefault((table, column), []).append(f"{path.name}:{node.name}")
+    return {key: tuple(value) for key, value in index.items()}
 
 
 def models_still_declaring(repo_root: Path, table: str, column: str) -> list[str]:
@@ -165,53 +224,65 @@ def models_still_declaring(repo_root: Path, table: str, column: str) -> list[str
     is a fact about deployed code, and it is why the marker is a sentence a human
     writes rather than a checkbox.
     """
-    offenders: list[str] = []
-    for path in _model_files(repo_root):
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (OSError, SyntaxError, UnicodeDecodeError):
-            continue
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ClassDef):
-                continue
-            if not _declares_tablename(node, table):
-                continue
-            if _declares_column(node, column):
-                offenders.append(f"{path.name}:{node.name}")
-    return offenders
+    return list(_model_index(repo_root).get((table, column), ()))
 
 
-def _declares_tablename(class_node: ast.ClassDef, table: str) -> bool:
+def _assignment_targets(node: ast.stmt) -> list[ast.expr]:
+    if isinstance(node, ast.Assign):
+        return list(node.targets)
+    if isinstance(node, ast.AnnAssign):
+        return [node.target]
+    return []
+
+
+def _tablename_of(class_node: ast.ClassDef) -> str | None:
+    """The literal ``__tablename__`` this class declares, if any."""
     for node in class_node.body:
-        targets = (
-            node.targets if isinstance(node, ast.Assign) else ([node.target] if isinstance(node, ast.AnnAssign) else [])
-        )
-        for target in targets:
+        for target in _assignment_targets(node):
             if isinstance(target, ast.Name) and target.id == "__tablename__":
-                value = node.value
-                if isinstance(value, ast.Constant) and value.value == table:
-                    return True
-    return False
+                value = getattr(node, "value", None)
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    return value.value
+    return None
 
 
-def _declares_column(class_node: ast.ClassDef, column: str) -> bool:
+def _declared_columns(class_node: ast.ClassDef) -> set[str]:
+    """Column names this class declares, by attribute name and by explicit name.
+
+    ``mapped_column`` is included alongside ``Column`` because both are live in
+    this repository, and ``Column("explicit_name", ...)`` names the column
+    independently of the attribute it is bound to -- a class can therefore
+    declare a column under a name that never appears as an identifier.
+    """
+    columns: set[str] = set()
     for node in class_node.body:
-        targets = (
-            node.targets if isinstance(node, ast.Assign) else ([node.target] if isinstance(node, ast.AnnAssign) else [])
-        )
-        value = node.value
-        if value is None or not isinstance(value, ast.Call):
+        value = getattr(node, "value", None)
+        if not isinstance(value, ast.Call):
             continue
         callee = value.func.attr if isinstance(value.func, ast.Attribute) else getattr(value.func, "id", None)
         if callee not in ("Column", "mapped_column"):
             continue
-        for target in targets:
-            if isinstance(target, ast.Name) and target.id == column:
-                return True
-        # Column("explicit_name", ...) overrides the attribute name.
-        if value.args and isinstance(value.args[0], ast.Constant) and value.args[0].value == column:
-            return True
-    return False
+        for target in _assignment_targets(node):
+            if isinstance(target, ast.Name):
+                columns.add(target.id)
+        if value.args and isinstance(value.args[0], ast.Constant) and isinstance(value.args[0].value, str):
+            columns.add(value.args[0].value)
+    return columns
+
+
+def _marker_in_docstring(source: str) -> bool:
+    """The marker must be in the **module docstring**, where the policy puts it.
+
+    ``MARKER in source`` was satisfied by the words appearing in a code comment,
+    in a column name, or anywhere else in the file -- including in a migration
+    that merely mentions the convention (#15776 review). The statement is meant
+    to be the first thing a reader of the migration sees.
+    """
+    try:
+        docstring = ast.get_docstring(ast.parse(source))
+    except SyntaxError:
+        return False
+    return bool(docstring) and MARKER in docstring
 
 
 def check(path: Path, repo_root: Path | None = None) -> list[str]:
@@ -238,7 +309,7 @@ def check(path: Path, repo_root: Path | None = None) -> list[str]:
     if revision in PRE_CONVENTION or revision < FLOOR:
         return []
     findings: list[str] = []
-    if is_destructive(source) and MARKER not in source:
+    if is_destructive(source) and not _marker_in_docstring(source):
         findings.append(
             f"{path.name}: drops a column, table or constraint without a "
             f"`{MARKER}` statement saying what it touches and why nothing is lost."
@@ -248,6 +319,12 @@ def check(path: Path, repo_root: Path | None = None) -> list[str]:
     # running release still writes are different defects, and only the second one
     # loses data.
     if repo_root is not None:
+        try:
+            _model_index(repo_root)
+        except ModelScanUnreachable as exc:
+            # Loudly, and once: a cross-source check that scanned nothing
+            # reports the same clean line as a tree with nothing to report.
+            return findings + [f"{path.name}: cross-source column check cannot run -- {exc}"]
         for table, column in dropped_columns(source):
             declarers = models_still_declaring(repo_root, table, column)
             if declarers:

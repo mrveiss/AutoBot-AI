@@ -73,6 +73,22 @@ Table and column are tied together through the class rather than by both names a
 — a bare grep for a column called `name` or `status` matches everywhere, and a guard that cries wolf
 is a guard someone silences.
 
+**Two scope limits, stated because an unstated limit reads as coverage:**
+
+- **Literal pairs only.** `op.drop_column(table, column)` is read from the AST, so a call whose table
+  or column comes from a variable is invisible to *this* check. The marker still applies to it.
+- **`MODEL_ROOTS` only.** The scan covers the four ORM packages, not the whole tree. A model defined
+  outside them would not be found — which is why a missing or under-populated root is a **failure**
+  rather than an empty result: `MIN_MODEL_FILES` and an explicit existence check mean a renamed
+  package cannot turn the check off silently while it keeps reporting success.
+
+The marker itself is required in the **module docstring**, not merely somewhere in the file. `MARKER
+in source` was satisfied by the words appearing in a code comment or in a column name — the statement
+is meant to be the first thing a reader of the migration sees.
+
+A drop written as raw SQL (`op.execute("ALTER TABLE t DROP COLUMN c")`) counts as destructive too: it
+contains none of the `op.drop_*` names, so a name-only scan would wave it through.
+
 **Only `upgrade()` is inspected.** A `downgrade()` dropping a column is reversing an `upgrade()` that
 added one, and the model *should* still declare it. Scanning the whole module reported
 `20260824_084_device_capability_scoping.py` as a violation for exactly this — all three of its drops

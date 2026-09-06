@@ -207,7 +207,7 @@ class TestOnlyUpgradeCounts:
     """
 
     def test_a_drop_only_in_downgrade_needs_no_marker(self, tmp_path):
-        body = '''
+        body = """
 revision: str = "20260901_090"
 
 def upgrade():
@@ -215,12 +215,12 @@ def upgrade():
 
 def downgrade():
     op.drop_column("t", "c")
-'''
+"""
         assert guard.check(_migration(tmp_path, body)) == []
 
     def test_the_same_drop_in_upgrade_does_need_one(self, tmp_path):
         """The contrast: it is the function it sits in that decides."""
-        body = '''
+        body = """
 revision: str = "20260901_090"
 
 def upgrade():
@@ -228,7 +228,7 @@ def upgrade():
 
 def downgrade():
     op.add_column("t", sa.Column("c", sa.String()))
-'''
+"""
         findings = guard.check(_migration(tmp_path, body))
 
         assert len(findings) == 1
@@ -238,15 +238,27 @@ def downgrade():
 class TestTheCrossSourceColumnCheck:
     """The marker is a sentence a human writes; this is a fact about the code."""
 
-    def _model_tree(self, tmp_path, tablename: str, column: str) -> Path:
+    @pytest.fixture(autouse=True)
+    def _synthetic_model_tree(self, monkeypatch):
+        """The matcher is under test here, not the reach floor -- that has its
+        own test below. Narrowing the roots and the floor keeps this suite from
+        depending on the live model tree's size."""
+        monkeypatch.setattr(guard, "MODEL_ROOTS", ("autobot-backend/models",))
+        monkeypatch.setattr(guard, "MIN_MODEL_FILES", 1)
+        guard._model_index.cache_clear()
+        yield
+        guard._model_index.cache_clear()
+
+    def _model_tree(self, tmp_path, tablename: str, column: str, declaration: str | None = None) -> Path:
         root = tmp_path / "repo"
         models = root / "autobot-backend" / "models"
         models.mkdir(parents=True)
+        body = declaration or f"    {column} = Column(String())"
         (models / "thing.py").write_text(
             "from sqlalchemy import Column, String\n\n"
             "class Thing(Base):\n"
             f'    __tablename__ = "{tablename}"\n'
-            f"    {column} = Column(String())\n",
+            f"{body}\n",
             encoding="utf-8",
         )
         return root
@@ -294,14 +306,187 @@ def upgrade():
         """A missing sentence and a column the release still writes are
         different defects, and only the second one loses data."""
         repo_root = self._model_tree(tmp_path, "things", "still_used")
-        body = '''
+        body = """
 revision: str = "20260901_090"
 
 def upgrade():
     op.drop_column("things", "still_used")
-'''
+"""
         findings = guard.check(_migration(tmp_path, body), repo_root)
 
         assert len(findings) == 2
         assert any(guard.MARKER in f for f in findings)
         assert any("running release writes this column" in f for f in findings)
+
+
+class TestTheModelScanMustHaveReach:
+    """The cross-source check is only as good as the files it reads.
+
+    With none, `models_still_declaring` finds no declarers and the data-loss
+    check passes **having scanned nothing** -- a violation-bound floor one layer
+    inside the guard, and the same defect this whole issue is about.
+    """
+
+    def _migration_dropping(self, tmp_path) -> Path:
+        return _migration(
+            tmp_path,
+            '\n"""NO DATA LOSS."""\nrevision: str = "20260901_090"\n\ndef upgrade():\n    op.drop_column("t", "c")\n',
+        )
+
+    def test_a_missing_model_root_is_reported_not_silently_empty(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(guard, "MODEL_ROOTS", ("does/not/exist",))
+        guard._model_index.cache_clear()
+
+        findings = guard.check(self._migration_dropping(tmp_path), tmp_path)
+
+        assert len(findings) == 1
+        assert "cannot run" in findings[0] and "does/not/exist" in findings[0]
+        guard._model_index.cache_clear()
+
+    def test_a_root_that_exists_but_holds_too_few_files_is_reported(self, tmp_path, monkeypatch):
+        (tmp_path / "models").mkdir()
+        (tmp_path / "models" / "one.py").write_text("x = 1\n", encoding="utf-8")
+        monkeypatch.setattr(guard, "MODEL_ROOTS", ("models",))
+        monkeypatch.setattr(guard, "MIN_MODEL_FILES", 5)
+        guard._model_index.cache_clear()
+
+        findings = guard.check(self._migration_dropping(tmp_path), tmp_path)
+
+        assert len(findings) == 1
+        assert "floor is 5" in findings[0]
+        guard._model_index.cache_clear()
+
+    def test_the_live_model_tree_clears_the_floor(self):
+        """The floor means nothing if the real scan only just reaches it."""
+        repo_root = Path(__file__).resolve().parents[2]
+        guard._model_index.cache_clear()
+
+        assert len(guard._model_files(repo_root)) >= guard.MIN_MODEL_FILES
+        guard._model_index.cache_clear()
+
+
+class TestRawSQLCountsAsDestructive:
+    """`op.execute("ALTER TABLE t DROP COLUMN c")` contains none of the op names."""
+
+    def test_raw_sql_drop_in_upgrade_needs_a_marker(self, tmp_path):
+        body = """
+revision: str = "20260901_090"
+
+def upgrade():
+    op.execute("ALTER TABLE things DROP COLUMN legacy")
+"""
+        findings = guard.check(_migration(tmp_path, body))
+
+        assert len(findings) == 1
+        assert guard.MARKER in findings[0]
+
+    def test_raw_sql_that_drops_nothing_is_left_alone(self, tmp_path):
+        """The contrast: it is DROP that matters, not raw SQL."""
+        body = """
+revision: str = "20260901_090"
+
+def upgrade():
+    op.execute("UPDATE things SET status = 'x'")
+"""
+        assert guard.check(_migration(tmp_path, body)) == []
+
+    def test_raw_sql_drop_in_downgrade_is_left_alone(self, tmp_path):
+        body = """
+revision: str = "20260901_090"
+
+def upgrade():
+    op.execute("ALTER TABLE things ADD COLUMN c TEXT")
+
+def downgrade():
+    op.execute("ALTER TABLE things DROP COLUMN c")
+"""
+        assert guard.check(_migration(tmp_path, body)) == []
+
+
+class TestTheMarkerMustBeInTheDocstring:
+    def test_the_words_in_a_comment_do_not_satisfy_the_gate(self, tmp_path):
+        """`MARKER in source` was satisfied by a comment, a column name, or a
+        migration that merely mentions the convention."""
+        body = """
+revision: str = "20260901_090"
+
+def upgrade():
+    # NO DATA LOSS: asserting it in a comment is not stating it to the reader
+    op.drop_table("legacy")
+"""
+        findings = guard.check(_migration(tmp_path, body))
+
+        assert len(findings) == 1
+
+    def test_the_docstring_form_is_accepted(self, tmp_path):
+        body = '''
+"""Drop the legacy table. NO DATA LOSS: nothing has written it since 081."""
+revision: str = "20260901_090"
+
+def upgrade():
+    op.drop_table("legacy")
+'''
+        assert guard.check(_migration(tmp_path, body)) == []
+
+    def test_every_live_marked_migration_still_passes(self):
+        """The five that carry the marker put it where the policy says."""
+        repo_root = Path(__file__).resolve().parents[2]
+        versions = repo_root / "autobot-backend" / "migrations" / "versions"
+        marked = [p for p in versions.glob("*.py") if guard.MARKER in p.read_text(encoding="utf-8")]
+
+        assert marked, "precondition: some live migrations carry the marker"
+        assert all(guard._marker_in_docstring(p.read_text(encoding="utf-8")) for p in marked)
+
+
+class TestColumnDeclarationForms:
+    """`_declared_columns` has branches the single-fixture suite never reached."""
+
+    @pytest.fixture(autouse=True)
+    def _synthetic_roots(self, monkeypatch):
+        monkeypatch.setattr(guard, "MODEL_ROOTS", ("autobot-backend/models",))
+        monkeypatch.setattr(guard, "MIN_MODEL_FILES", 1)
+        guard._model_index.cache_clear()
+        yield
+        guard._model_index.cache_clear()
+
+    def _tree(self, tmp_path, declaration: str) -> Path:
+        root = tmp_path / "repo"
+        models = root / "autobot-backend" / "models"
+        models.mkdir(parents=True)
+        (models / "thing.py").write_text(
+            "from sqlalchemy.orm import mapped_column\n"
+            "from sqlalchemy import Column, String\n\n"
+            "class Thing(Base):\n"
+            '    __tablename__ = "things"\n'
+            f"{declaration}\n",
+            encoding="utf-8",
+        )
+        return root
+
+    _DROPS_TARGET = '''
+"""NO DATA LOSS."""
+revision: str = "20260901_090"
+
+def upgrade():
+    op.drop_column("things", "target")
+'''
+
+    @pytest.mark.parametrize(
+        ("label", "declaration"),
+        [
+            ("Column bound to the attribute name", "    target = Column(String())"),
+            ("mapped_column", "    target: Mapped[str] = mapped_column(String())"),
+            ('Column("explicit_name")', '    other = Column("target", String())'),
+        ],
+    )
+    def test_each_declaration_form_is_seen(self, tmp_path, label, declaration):
+        findings = guard.check(_migration(tmp_path, self._DROPS_TARGET), self._tree(tmp_path, declaration))
+
+        assert len(findings) == 1, label
+        assert "things.target" in findings[0]
+
+    def test_a_call_that_is_not_a_column_is_not_seen(self, tmp_path):
+        """The contrast: any Call would match a looser implementation."""
+        tree = self._tree(tmp_path, "    target = relationship('Other')")
+
+        assert guard.check(_migration(tmp_path, self._DROPS_TARGET), tree) == []
