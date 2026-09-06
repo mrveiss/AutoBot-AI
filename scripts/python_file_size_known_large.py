@@ -498,7 +498,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/services/test_role_registry.py": 846,
     "autobot-slm-backend/tests/services/test_self_update_systemd_detach_11492.py": 691,
     "autobot-slm-backend/tests/services/test_sso_service.py": 1258,
-    "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 1006,
+    "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 778,
     "autobot-slm-backend/user_management/services/user_service.py": 863,
     "autobot_shared/auth/permissions.py": 631,
