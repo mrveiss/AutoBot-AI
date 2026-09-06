@@ -82,17 +82,17 @@ application or agent workloads.
 - Differentiability is structural (generated adjoints), not bolted on via tracing.
 - First-class, well-reasoned interop with the ML ecosystem.
 - Exceptionally candid documentation of its own sharp edges.
-- Real maturity: prebuilt wheels, wide platform matrix, active the vendor maintenance.
+- Real maturity: prebuilt wheels, wide platform matrix, active upstream maintenance.
 
 ### Weaknesses / Limitations
 
 - **CUDA-or-nothing for acceleration.** No Metal, no ROCm, no Intel NPU/oneAPI path.
-  macOS and every non-the vendor machine fall back to CPU.
+  macOS and every non-NVIDIA machine fall back to CPU.
 - **The Python subset is narrow** and the divergences are silent (scope leakage, modulus
   semantics) — code that runs correctly in Python can compile and behave differently.
 - **Kernel cache is not multi-process safe**; forked children cannot reuse a parent CUDA
   context. Both are hostile to a worker-pool server architecture.
-- **Toolchain weight.** Building from source pulls the vendor libmathdx under a separate,
+- **Toolchain weight.** Building from source pulls a vendor math library under a separate,
   non-Apache licence.
 - Arrays capped at four dimensions, no complex numbers, no struct inheritance or generic
   members.
@@ -109,7 +109,7 @@ application or agent workloads.
 **Hidden (costs an adopter inherits):**
 - **A second language in your codebase.** Kernel scope is a typed, non-Python DSL wearing
   Python syntax. Every contributor must learn which constructs silently change meaning.
-- **the vendor lock-in.** Adopting the runtime for anything on the hot path means an the vendor GPU is a
+- **GPU-vendor lock-in.** Adopting the runtime for anything on the hot path means an NVIDIA GPU is a
   hard requirement, or you silently take the CPU fallback.
 - **Compile latency and cache operations.** First-launch compilation, a disk cache to
   invalidate and size, and a documented multi-process cache hazard — real ops load for any
@@ -119,13 +119,13 @@ application or agent workloads.
 - **Version coupling** to CUDA driver/toolkit across the deployment fleet.
 
 **Weighing:**
-For the vendor-GPU numerical workloads — physics, FEM, differentiable simulation — the visible
+For NVIDIA-GPU numerical workloads — physics, FEM, differentiable simulation — the visible
 wins are so large (orders of magnitude, not percentages) that the hidden costs are simply
 the price of entry, and the honest limitation docs make that price legible up front.
 
 For anything else, the hidden metrics veto it. A workload that is I/O-bound, orchestration-
 bound, or LLM-inference-bound gains nothing from kernel JIT while inheriting the full cost:
-a DSL, an the vendor dependency, a compile cache, and a debugging regression. The multi-process
+a DSL, a GPU-vendor dependency, a compile cache, and a debugging regression. The multi-process
 cache limitation specifically penalises exactly the forked-worker server topology that
 backend platforms use. The runtime is a correct choice for a narrow, well-marked domain and a poor
 one immediately outside it.
@@ -264,7 +264,7 @@ Prioritised by impact, audited only:
 **Bottom line:** the runtime contributes no code and no architecture to AutoBot. It contributes one
 concrete finding — the compiled-model cache that landed on the backend path and never reached
 the NPU worker path — and one confirmation, that AutoBot's generate-plus-gate and
-spawn-not-fork discipline are ahead of a well-regarded the vendor project on the same problems.
+spawn-not-fork discipline are ahead of a well-regarded external project on the same problems.
 
 ---
 
@@ -275,7 +275,7 @@ accelerator". That premise is wrong. AutoBot targets both, and the development h
 The vendor GPU.
 
 **Host evidence (this machine, 2026-08-28):**
-The vendor GPU query tool reports a laptop-class discrete GPU: 8 GiB VRAM, compute capability 8.9.
+`nvidia-smi` → `NVIDIA GeForce RTX 4070 Laptop GPU, driver 610.47, 8188 MiB, compute cap 8.9`.
 `nvcc` is not on PATH (driver present, toolkit absent — sufficient for prebuilt PTX wheels).
 
 **CUDA surface audited in-repo:** `requirements-gpu.txt` (vllm, torch 2.13.0, torchvision),
@@ -322,7 +322,7 @@ rather than permanent residence.
 **G3 (#15162) — CUDA torch is coupled to the vLLM flag, so a GPU host without vLLM gets CPU torch.**
 `autobot-slm-backend/ansible/roles/backend/tasks/main.yml:916-918` installs
 `requirements-gpu.txt` only `when: backend_vllm_enabled and backend_gpu_available`, and
-`defaults/main.yml:172` sets `backend_vllm_enabled: false`. On an the vendor host that does not
+`defaults/main.yml:172` sets `backend_vllm_enabled: false`. On an NVIDIA host that does not
 opt into in-process vLLM, `torch` stays the CPU build from `autobot-backend/requirements.txt:45`
 — and `semantic_chunker_gpu.py`, written specifically for this RTX 4070, runs its FP16/TF32
 path against a torch that has no CUDA. Two independent capabilities are gated behind one
