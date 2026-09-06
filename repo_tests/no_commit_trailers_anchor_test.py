@@ -25,7 +25,8 @@ Both directions, or neither means anything.
 from __future__ import annotations
 
 import re
-import subprocess  # nosec B404 - fixed argv, no user input
+# Fixed argv, no user input.
+import subprocess  # nosec B404
 from pathlib import Path
 
 import pytest
@@ -66,7 +67,8 @@ def _agent_re() -> str:
 def _matches(pattern: str, line: str) -> bool:
     """Ask grep, not Python: the workflow runs `grep -qE`, and the dialects differ."""
     return (
-        subprocess.run(  # nosec B603 B607 - fixed argv; inputs are module constants
+        # Fixed argv; inputs are module constants.
+        subprocess.run(  # nosec B603 B607
             ["grep", "-qE", pattern],
             input=line,
             text=True,
