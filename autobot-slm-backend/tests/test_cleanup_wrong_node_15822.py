@@ -22,18 +22,16 @@ exists to prevent, one level up.
 from __future__ import annotations
 
 import json
-
-import jinja2
 from typing import Any
 
+import jinja2
 import pytest
-
 from test_cleanup_never_destroys_data_14856 import (
     _WRONG_NODE,
-    _FactUndefined,
     _and,
     _ansible_bool,
     _apply_set_fact,
+    _FactUndefined,
     _load,
     _module,
     _primitive_when,
