@@ -8,9 +8,11 @@
 tree, which is green -- and a scanner that has only ever been shown a green
 tree has proved nothing: it could return an empty violation list
 unconditionally and every one of those assertions would still pass. The repo
-standard is a contrast pair per defect closed, and this module carries all of
-them. That module documents the guard's rationale; this one holds every
-synthetic fixture and its verdict, so neither has to fit both under
+standard is a contrast pair per defect closed. That module documents the
+guard's rationale; this one holds the synthetic fixtures for which calls and
+decorators the scanner sees at all, and
+``fixture_fixed_path_teardown_guard_derivation_test.py`` holds those for how a
+name earns "derived" -- so no module has to fit all three under
 ``check_python_file_size.py``'s MAX_LINES (the same split as
 ``ansible_manifest_resolution_contrast_test.py``).
 
@@ -68,9 +70,10 @@ already excused the same helper when it sat inside an ``if``, which is why the
 nested-def pair above passed while this shape did not). A nested helper's local
 ``test_dir = tmp_path / "leaf"`` marked an OUTER, fixed ``test_dir`` derived,
 excusing a real violation (a FALSE NEGATIVE). Both now walk the fixture's own
-scope; ``_expr_is_derived`` keeps ``ast.walk`` deliberately, because a lambda
-in a value expression closes over this fixture's names -- see
-``TestLambdaFactoryDerivationStillCounts``.
+scope. The ``_collect_calls`` half is pinned here; the ``_assignment_pairs``
+half, and why ``_expr_is_derived`` keeps ``ast.walk`` for closures, are pinned
+in ``fixture_fixed_path_teardown_guard_derivation_test.py`` with the rest of
+the derivation pairs.
 """
 
 from __future__ import annotations
@@ -448,105 +451,3 @@ class TestDeferredRemovalIsNotTheFixturesOwnTeardown:
 
     def test_the_same_removal_at_fixture_scope_is_still_counted(self):
         assert _is_violation(_only_fixture(_DEFERRED_HAZARD_SOURCE)) is True
-
-
-_NESTED_LOCAL_HAZARD_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path):
-    test_dir = Path("/tmp/autobot/nested_local_hazard")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    def leaf():
-        test_dir = tmp_path / "leaf"
-        return test_dir
-    yield test_dir
-    shutil.rmtree(test_dir)
-"""
-
-_NESTED_LOCAL_SAFE_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path):
-    test_dir = tmp_path / "nested_local_safe"
-    test_dir.mkdir(parents=True, exist_ok=True)
-    def leaf():
-        other = Path("/tmp/autobot/nested_local_leaf")
-        return other
-    yield test_dir
-    shutil.rmtree(test_dir)
-"""
-
-
-class TestNestedHelperLocalsDoNotDeriveOuterNames:
-    """Review finding 4: ``_assignment_pairs`` walked into nested scopes too.
-
-    A helper's ``test_dir = tmp_path / "leaf"`` binds a name that exists only
-    inside the helper, but it marked the fixture's OWN fixed ``test_dir``
-    derived -- the created-and-removed path was then excused (a FALSE
-    NEGATIVE). The safe source keeps a nested helper with a fixed local of its
-    own while the fixture's real path derives from ``tmp_path``, so scoping the
-    pairs cannot be achieved by simply ignoring derivation.
-    """
-
-    def test_nested_local_does_not_derive_the_outer_fixed_path(self):
-        assert _is_violation(_only_fixture(_NESTED_LOCAL_HAZARD_SOURCE)) is True
-
-    def test_outer_derivation_is_still_recognized_beside_a_nested_helper(self):
-        assert _is_violation(_only_fixture(_NESTED_LOCAL_SAFE_SOURCE)) is False
-
-
-_LAMBDA_FACTORY_SAFE_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path):
-    build = lambda name: tmp_path / name
-    test_dir = build("lambda_safe")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    shutil.rmtree(test_dir)
-"""
-
-_LAMBDA_FACTORY_HAZARD_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path):
-    build = lambda name: Path("/tmp/autobot/lambda_hazard") / name
-    test_dir = build("leaf")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    shutil.rmtree(test_dir)
-"""
-
-
-class TestLambdaFactoryDerivationStillCounts:
-    """Why ``_expr_is_derived`` keeps ``ast.walk`` while the two above dropped it.
-
-    A lambda in a value expression is a closure over the enclosing scope, so
-    the names it reads really are the fixture's: ``build = lambda name:
-    tmp_path / name`` derives ``build``, and through it ``test_dir``. Teaching
-    that site to ignore lambda bodies would stop seeing the derivation and
-    flag this correct fixture -- which is what this pair pins. (Merely
-    swapping in ``_walk_current_scope`` would not: that helper yields the node
-    it is handed and skips only nested *children*, and here the lambda is the
-    whole right-hand side.) The hazard source is the identical shape over a
-    fixed root and must still be flagged, so the site tracks where the path
-    came from rather than excusing anything a lambda touches.
-    """
-
-    def test_lambda_factory_over_tmp_path_is_recognized_as_derived(self):
-        assert _is_violation(_only_fixture(_LAMBDA_FACTORY_SAFE_SOURCE)) is False
-
-    def test_lambda_factory_over_a_fixed_root_is_still_flagged(self):
-        assert _is_violation(_only_fixture(_LAMBDA_FACTORY_HAZARD_SOURCE)) is True

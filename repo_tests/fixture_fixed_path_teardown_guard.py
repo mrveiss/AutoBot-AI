@@ -10,9 +10,11 @@ Split out from the test module (the same shape as ``sys_modules_leak_guard.py``
 ``check_python_file_size.py``'s ``MAX_LINES`` on the test module itself.
 ``fixture_fixed_path_teardown_guard_test.py`` carries the guard's rationale
 and the live-tree assertions, and
-``fixture_fixed_path_teardown_guard_contrast_test.py`` carries the synthetic
-contrast pair for every defect closed; this one documents only the AST shapes
-each helper recognizes.
+``fixture_fixed_path_teardown_guard_contrast_test.py`` and
+``fixture_fixed_path_teardown_guard_derivation_test.py`` carry the synthetic
+contrast pair for every defect closed -- which calls and decorators are seen at
+all, and how a name earns "derived", respectively; this one documents only the
+AST shapes each helper recognizes.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from __future__ import annotations
 import ast
 import subprocess
 from pathlib import Path
-from typing import Iterator, List, Set, Tuple
+from typing import Dict, Iterator, List, Set, Tuple
 
 from autobot_shared.paths import scrubbed_git_env
 
@@ -265,26 +267,88 @@ def _expr_is_derived(expr: ast.expr, derived: Set[str]) -> bool:
     return any(isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id in derived for n in ast.walk(expr))
 
 
+def _assignments_by_name(func: ast.FunctionDef | ast.AsyncFunctionDef) -> Dict[str, List[ast.expr]]:
+    """Every value assigned to each name in *func*'s own scope, keyed by name.
+
+    ``_assignment_pairs`` yields one entry per assignment; deriving a name
+    correctly needs all of that name's assignments together, because a name
+    rebound in one branch is only reliably unique if *every* branch made it so
+    (#15797 third review).
+    """
+    by_name: Dict[str, List[ast.expr]] = {}
+    for targets, value in _assignment_pairs(func):
+        for name in targets:
+            by_name.setdefault(name, []).append(value)
+    return by_name
+
+
+def _reachably_derived(by_name: Dict[str, List[ast.expr]], seeds: Set[str]) -> Set[str]:
+    """Least fixed point: names *some* assignment traces back to a unique source.
+
+    Optimistic on purpose -- it answers "could this name hold a unique path at
+    all", which is reachability from *seeds*. ``_withdraw_partly_fixed`` then
+    removes the ones where that is not true on every path.
+    """
+    derived = set(seeds)
+    changed = True
+    while changed:
+        changed = False
+        for name, values in by_name.items():
+            if name not in derived and any(_expr_is_derived(value, derived) for value in values):
+                derived.add(name)
+                changed = True
+    return derived
+
+
+def _withdraw_partly_fixed(by_name: Dict[str, List[ast.expr]], derived: Set[str]) -> Set[str]:
+    """Drop any name whose assignments are not *all* derived (#15797 third review).
+
+    Withdrawal rather than a stricter least fixed point, and the difference is
+    a FALSE POSITIVE. Requiring all assignments while building the set up from
+    the seeds can never credit a mutually recursive chain -- ``a = tmp_path /
+    "x"`` then ``b = a / "y"`` then ``a = b / "z"`` derives on every
+    assignment, yet neither name is creditable until the other already is, so
+    both stay out and a correct fixture gets flagged. Starting from
+    ``_reachably_derived`` and removing only what is contradicted credits that
+    chain (each assignment reads a name still in the set) while still dropping
+    the name whose other assignment reads nothing derived. The removals
+    cascade: a name losing its credit can leave a name derived only from it
+    unsupported, so this iterates to a fixed point too.
+    """
+    derived = set(derived)
+    changed = True
+    while changed:
+        changed = False
+        for name in sorted(derived):
+            if any(not _expr_is_derived(value, derived) for value in by_name.get(name, ())):
+                derived.discard(name)
+                changed = True
+    return derived
+
+
 def _derived_names(func: ast.FunctionDef | ast.AsyncFunctionDef) -> Set[str]:
-    """Names that trace back to a tmp_path-family source via simple assignment (#15797).
+    """Names that trace back to a tmp_path-family source on *every* assignment (#15797).
 
     A unique-source parameter is not proof by itself -- #15772's own pre-fix
     fixture *took* ``tmp_path`` and ignored it. Only a name actually assigned
     from one, transitively (``test_dir = tmp_path / "leaf"``), counts, and
     that fixed point is what ``_call_path_is_derived`` checks the create/remove
     calls against.
+
+    One derived assignment is not enough either: ``test_dir = Path("/fixed")``
+    followed by ``if unique: test_dir = tmp_path / "leaf"`` used to credit
+    ``test_dir``, so the false branch created and removed a fixed path with the
+    violation suppressed -- the exact hazard, unflagged (#15797 third review).
+    A name is credited only when every assignment to it in this scope is
+    derived, which needs no dominance analysis and keeps the legitimate
+    ``if/else`` where both branches assign a ``tmp_path``-derived value. The
+    known cost is a dead fixed assignment overwritten unconditionally by a
+    derived one, which is flagged; no fixture in the tree has that shape.
     """
     params = [*func.args.args, *func.args.kwonlyargs, *func.args.posonlyargs]
-    derived = {p.arg for p in params} & _UNIQUE_SOURCE_PARAMS
-    assignments = _assignment_pairs(func)
-    changed = True
-    while changed:
-        changed = False
-        for targets, value in assignments:
-            if _expr_is_derived(value, derived) and (targets - derived):
-                derived |= targets
-                changed = True
-    return derived
+    by_name = _assignments_by_name(func)
+    seeds = {p.arg for p in params} & _UNIQUE_SOURCE_PARAMS
+    return _withdraw_partly_fixed(by_name, _reachably_derived(by_name, seeds))
 
 
 def _call_path_is_derived(call: ast.Call, derived: Set[str]) -> bool:

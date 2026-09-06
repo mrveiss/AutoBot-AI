@@ -26,9 +26,12 @@ scanner's own growth does not also have to fit under this module's line
 budget. This module documents the guard's rationale and carries the
 assertions that run it over the live tree; every synthetic contrast pair --
 and the write-up of the defect each one closes -- lives in
-``fixture_fixed_path_teardown_guard_contrast_test.py`` (the same split as
-``ansible_manifest_resolution_contrast_test.py``), so neither half has to
-fit both under ``check_python_file_size.py``'s MAX_LINES.
+``fixture_fixed_path_teardown_guard_contrast_test.py`` (which calls and
+decorators are seen at all) and
+``fixture_fixed_path_teardown_guard_derivation_test.py`` (how a name earns
+"derived"), the same split as ``ansible_manifest_resolution_contrast_test.py``,
+so no module has to fit all of it under ``check_python_file_size.py``'s
+MAX_LINES.
 
 THE DISCRIMINATOR IS CREATE-AND-REMOVE, NOT A BARE FIXED PATH
 -----------------------------------------------------------------
@@ -82,10 +85,12 @@ DEFECTS CLOSED, AND THE PAIRS THAT PROVE THEY STAY CLOSED
 Six defects have been closed in this guard since #15785 -- an unseen decorator
 alias, an if/else that removed on every branch, a ``tmp_path`` read that never
 reached the path, a tuple assignment that leaked derivation across targets, a
-call keyword that laundered a fixed path argument, and two traversals that
-walked into nested ``def``/``lambda`` scopes. Each has a two-sided contrast
+call keyword that laundered a fixed path argument, two traversals that walked
+into nested ``def``/``lambda`` scopes, and a name credited as derived on one
+assignment while another gave it a fixed path. Each has a two-sided contrast
 pair, and all of them live in
-``fixture_fixed_path_teardown_guard_contrast_test.py`` with the write-up of
+``fixture_fixed_path_teardown_guard_contrast_test.py`` or
+``fixture_fixed_path_teardown_guard_derivation_test.py`` with the write-up of
 the defect they close.
 """
 
