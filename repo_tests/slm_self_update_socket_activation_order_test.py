@@ -45,6 +45,7 @@ import pytest
 _ROLE = Path(__file__).resolve().parents[1] / "autobot-slm-backend/ansible/roles/slm_manager"
 _MAIN = _ROLE / "tasks/main.yml"
 _BIND = _ROLE / "tasks/bind_self_update_socket.yml"
+_UPDATE_PLAY = _ROLE.parents[1] / "playbooks/update-all-nodes.yml"
 _UNITS = _ROLE / "tasks/service_units.yml"
 _HANDLERS = _ROLE / "handlers/main.yml"
 
@@ -181,15 +182,28 @@ def test_a_failed_bind_restores_the_backend_before_re_raising() -> None:
     )
 
     rescue = body[body.index("rescue:") :]
-    assert re.search(
-        r"state: started", rescue
-    ), "the rescue must start the backend — restoring the service is the whole point of it"
+    # The task must start the BACKEND, not merely something. Accepting any
+    # `state: started` lets a mutation that starts the socket instead pass while
+    # the backend stays stopped — the exact failure the rescue exists to
+    # prevent, and one that would look correct in the diff.
+    restore_task = next(
+        (
+            chunk
+            for chunk in re.split(r"(?=^\s*- name:)", rescue, flags=re.M)
+            if _BACKEND in chunk and "state: started" in chunk
+        ),
+        None,
+    )
+    assert restore_task is not None, (
+        "the rescue must start the backend service itself — a `state: started` on anything else "
+        "leaves the backend stopped, which is what the rescue is for"
+    )
     assert "ansible.builtin.fail" in rescue, (
         "the rescue must re-raise. Restoring the backend and continuing would report a successful "
         "deploy with the socket unbound, which is the failure this fix exists to prevent."
     )
 
-    restore = rescue.index("state: started")
+    restore = rescue.index(restore_task)
     reraise = rescue.index("ansible.builtin.fail")
     assert restore < reraise, "the backend must be restored BEFORE re-raising; failing first leaves the service down"
 
@@ -216,4 +230,31 @@ def test_both_entry_points_reach_the_bind() -> None:
     assert "state: stopped" not in main, (
         "main.yml carries its own stop/bind sequence again — a second copy that the update path "
         "does not run (#15823 review)"
+    )
+
+
+def test_each_entry_point_still_reaches_service_units() -> None:
+    """Both callers must still *include* the file the bind lives in.
+
+    Raised in review, and the gap was real: asserting that `service_units.yml`
+    includes the bind proves nothing about whether anything still runs
+    `service_units.yml`. Either entry point could stop reaching it while that
+    assertion stayed green — the bind would be present, correct, and dead.
+
+    * the full role reaches it through `main.yml`
+    * `playbooks/update-all-nodes.yml` Play 1 reaches it directly with
+      `tasks_from: service_units.yml`, and never runs `main.yml` — which is why
+      putting the bind in `main.yml` missed the update path in the first place
+    """
+    main = _directives(_MAIN.read_text(encoding="utf-8"))
+    assert "service_units.yml" in main, (
+        "main.yml no longer includes service_units.yml, so the full-provision path does not reach "
+        "the bind (#15823 review)"
+    )
+
+    assert _UPDATE_PLAY.is_file(), f"{_UPDATE_PLAY} is missing; the assertion below would pass having read nothing"
+    play = _directives(_UPDATE_PLAY.read_text(encoding="utf-8"))
+    assert re.search(r"tasks_from:\s*service_units\.yml", play), (
+        "playbooks/update-all-nodes.yml no longer runs service_units.yml, so the UPDATE path — the "
+        "one #15823 was reported on — does not reach the bind"
     )
