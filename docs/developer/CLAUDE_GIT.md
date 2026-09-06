@@ -43,6 +43,7 @@ git worktree unlock <path>     # restore the state you found
 
 **Worktree Creation:**
 ```bash
+git fetch origin Dev_new_gui   # #15884: branch from CURRENT base, never a stale ref
 git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/Dev_new_gui   # do NOT pipe this
 cd .worktrees/issue-XXXX && git branch --unset-upstream
 # Commit and push from here. Do NOT switch branches.

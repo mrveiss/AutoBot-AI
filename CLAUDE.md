@@ -35,6 +35,7 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 ## Never violate
 
 - **PRs target `Dev_new_gui`.** `main`/`master` are blocked by the pre-commit hook — use `issue-*` or `hotfix-*`.
+- **Never work from a stale base.** `git fetch origin` and branch from (or rebase onto) current `origin/Dev_new_gui` before the first edit, and again before judging whether work is done. A stale base duplicates work that already landed, and reviving a branch built on one can *regress* newer code — judge "is this done?" against base and the issue's acceptance criteria, never against an old branch.
 - **Commit format:** `<type>(scope): <description> (#issue-number)`. Never `--no-verify` — a PostToolUse hook auto-formats `.py`.
 - **Never hardcode.** Config via SSOT, TTLs via env-var-backed module constants, no IPs or ports in code.
 - **The codebase is the source of truth** — never edit `/opt/autobot/` or `/var/log/autobot/`.
