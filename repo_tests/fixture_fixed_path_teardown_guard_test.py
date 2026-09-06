@@ -34,8 +34,10 @@ and the write-up of the defect each one closes -- lives in
 ``fixture_fixed_path_teardown_guard_contrast_test.py`` (which calls and
 decorators are seen at all),
 ``fixture_fixed_path_teardown_guard_derivation_test.py`` (how a name earns
-"derived") and ``fixture_fixed_path_teardown_guard_reachability_test.py``
-(which nested bodies are live code), the same split as
+"derived"), ``fixture_fixed_path_teardown_guard_reachability_test.py``
+(which nested bodies are live code) and
+``fixture_fixed_path_teardown_guard_gating_test.py`` (which constructs gate a
+removal), the same split as
 ``ansible_manifest_resolution_contrast_test.py``, so no module has to fit all
 of it under ``check_python_file_size.py``'s MAX_LINES.
 
@@ -88,7 +90,7 @@ floor sits comfortably below that.
 
 DEFECTS CLOSED, AND THE PAIRS THAT PROVE THEY STAY CLOSED
 ------------------------------------------------------------
-Thirteen defects have been closed in this guard since #15785 -- an unseen
+Fourteen defects have been closed in this guard since #15785 -- an unseen
 decorator alias, an if/else that removed on every branch, a ``tmp_path`` read
 that never reached the path, a tuple assignment that leaked derivation across
 targets, a call keyword that laundered a fixed path argument, two traversals
@@ -97,12 +99,26 @@ one assignment while another gave it a fixed path, a registered finalizer whose
 removal sat in a scope the scanner declined to enter, a dead binding counted
 against the name that overwrote it, a ternary-gated removal read as guaranteed,
 a loop body that gated nothing while ``_stmt_guarantees_remove`` said it did,
-and a star parameter that failed to shadow an inherited derived name. Each has
-a two-sided contrast pair, and all of them live in
+a star parameter that failed to shadow an inherited derived name, and a gating
+rule that whitelisted the conditional constructs it knew instead of naming the
+unconditional ones, so five shapes -- a comprehension body, an ``except``
+handler, a ``try``/``else``, a ``match`` case and the right-hand operand of
+``or`` -- read as unconditional removals (#15820). Each has a two-sided
+contrast pair, and all of them live in
 ``fixture_fixed_path_teardown_guard_contrast_test.py``,
-``fixture_fixed_path_teardown_guard_derivation_test.py`` or
-``fixture_fixed_path_teardown_guard_reachability_test.py`` with the write-up
-of the defect they close.
+``fixture_fixed_path_teardown_guard_derivation_test.py``,
+``fixture_fixed_path_teardown_guard_reachability_test.py`` or
+``fixture_fixed_path_teardown_guard_gating_test.py`` with the write-up of the
+defect they close.
+
+The fourteenth is the one that changed the guard's posture rather than one of
+its answers. A whitelist of conditional constructs guesses "unconditional" when
+it meets syntax it does not know, which is the FALSE POSITIVE direction: the
+guard flags correct code, somebody switches it off, and every verdict it would
+have produced afterwards goes missing. Naming the always-running constructs
+instead makes the unknown case a false negative -- one missed violation, guard
+still trusted and still running -- and stops the defect arriving one construct
+per Python release.
 """
 
 from __future__ import annotations
