@@ -71,6 +71,7 @@ from llc.services.membership_service import (
     MemberNotFoundError,
     MembershipService,
 )
+from llc.services.org_chart_placement import apply_reporting_lines, assemble_forest
 from llc.services.portability import PortabilityService
 from user_management.database import get_async_session
 from user_management.models.organization import Organization
@@ -1235,38 +1236,15 @@ async def get_org_chart(
         for row in org_rows
     }
 
-    def _chain_resolves_to_root(agent_id: str) -> bool:
-        """True if following reports_to from ``agent_id`` ends at a node with no
-        (or missing/self) parent without revisiting a node — i.e. no cycle."""
-        seen: set[str] = set()
-        cur: Optional[OrgChartNode] = flat.get(agent_id)
-        while cur is not None and cur.parent_id:
-            if cur.id in seen:
-                return False  # cycle
-            seen.add(cur.id)
-            parent = flat.get(cur.parent_id)
-            if parent is None or parent.id == cur.id:
-                return True  # parent absent/self → effectively rooted
-            cur = parent
-        return True
+    # People are part of the hierarchy, not siblings of it (#15763). They were
+    # appended as roots because memberships carried no reporting edge, so a
+    # company with twenty people rendered twenty roots beside the agent tree.
+    for human in await _compose_human_nodes(session, company_id):
+        flat[human.id] = human
 
-    # Assemble the forest from reports_to edges. Attach a node to its parent
-    # only when its chain is acyclic; cycle members (and nodes whose parent is
-    # absent/self) become roots with no parent edge, so the output is always a
-    # true forest — every agent appears exactly once, never infinitely nested.
-    roots: List[OrgChartNode] = []
-    for node in flat.values():
-        parent = flat.get(node.parent_id) if node.parent_id else None
-        if parent is not None and parent.id != node.id and _chain_resolves_to_root(node.id):
-            parent.children.append(node)
-        else:
-            roots.append(node)
+    await apply_reporting_lines(session, company_id, flat)
 
-    # People join the forest as roots — memberships carry no ``reports_to`` edge,
-    # so they are siblings of the agent hierarchy rather than grafted onto it.
-    roots.extend(await _compose_human_nodes(session, company_id))
-
-    return OrgChartResponse(nodes=roots)
+    return OrgChartResponse(nodes=assemble_forest(flat))
 
 
 # ------------------------------------------------------------------
