@@ -117,6 +117,10 @@ def upgrade() -> None:
     # Deactivate first, then delete. The agent is identified *through* the CEO
     # row, so removing the claim first would leave nothing to join on and the
     # nodes would stay live.
+    # The interpolated fragments are module constants defined above, not caller
+    # input: a migration has no request context to take a value from. They are
+    # constants rather than inline text so the two statements cannot drift and
+    # repair different sets of rows.
     bind.execute(
         sa.text(f"""
             UPDATE agent_org_nodes AS a
@@ -125,7 +129,7 @@ def upgrade() -> None:
             JOIN organizations AS o ON o.id = c.company_id
             WHERE {_UNTOUCHED_BACKFILL_ROW}
               AND {_NOT_A_COMPANY}
-            """),
+            """),  # nosec B608  # interpolates module constants; a migration takes no user input
         {"dormant": _DORMANT_STATUS},
     )
 
@@ -135,7 +139,7 @@ def upgrade() -> None:
             WHERE o.id = c.company_id
               AND {_UNTOUCHED_BACKFILL_ROW}
               AND {_NOT_A_COMPANY}
-            """))
+            """))  # nosec B608  # same constants as above; see the note on the UPDATE
 
 
 def downgrade() -> None:

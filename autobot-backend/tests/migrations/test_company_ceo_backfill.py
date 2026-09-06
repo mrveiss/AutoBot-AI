@@ -49,21 +49,32 @@ async def _seed_company(
 ) -> uuid.UUID:
     """One `organizations` row, as it exists before the migration runs.
 
-    Every NOT NULL column is supplied explicitly. Most carry a *client-side*
-    ``default=`` rather than a ``server_default=``, so ``op.create_table`` emits
-    no DDL DEFAULT and a raw INSERT that omits them raises NotNullViolation --
-    which fails in setup and makes every test in the file error for a reason
+    Every NOT NULL column without a ``server_default`` is supplied explicitly.
+    Those carry a *client-side* ``default=``, so ``op.create_table`` emits no
+    DDL DEFAULT and a raw INSERT omitting them raises NotNullViolation -- which
+    fails in setup and makes every test in this file error for a reason
     unrelated to what it asserts.
+
+    The set was enumerated across every migration touching ``organizations``
+    rather than taken from the failure. Postgres reports only the first
+    violation, so the error names ``max_users`` and stops; ``is_active`` is the
+    next column and would have cost a second full CI cycle to discover. A
+    constraint error is a lower bound on what is wrong.
+
+    The four are ``name``, ``slug``, ``max_users`` and ``is_active``; every LLC
+    column added by ``20260523_023`` carries a ``server_default`` and so needs
+    no value here.
     """
     org_id = uuid.uuid4()
     await conn.execute(
         text(
             "INSERT INTO organizations "
             "(id, name, slug, settings, llc_status, parent_org_id, deleted_at, "
+            " max_users, is_active, "
             " issue_counter, budget_monthly_cents, spent_monthly_cents, "
             " require_approval_for_hires, kb_inheritance_weight) "
             "VALUES (:id, :name, :slug, '{}'::jsonb, :llc_status, :parent, "
-            "        NULL, 0, 0, 0, false, 0.6)"
+            "        NULL, -1, true, 0, 0, 0, false, 0.6)"
         ),
         {
             "id": org_id,
