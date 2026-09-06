@@ -13,6 +13,13 @@ The plan is what survives the restart the self-update performs. Everything the
 resumed process knows about the run before it started comes from this row.
 """
 
+# Required, not stylistic: `_persist_resume_plan` annotates `job: UpdateAllJob`,
+# and UpdateAllJob is imported only under TYPE_CHECKING to avoid an import cycle
+# back into code_sync. Without postponed annotations Python evaluates that
+# annotation at def time and the module raises NameError on import -- which
+# would take code_sync, and the whole SLM API, down with it (#15881 review).
+from __future__ import annotations
+
 import json as _json
 from typing import TYPE_CHECKING, List
 
