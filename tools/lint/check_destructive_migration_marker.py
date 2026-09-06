@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 r"""A destructive migration must say why it is safe (#15776).
 
 A migration that drops a column, table or constraint is the one change this
