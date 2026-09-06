@@ -60,11 +60,13 @@ the glob says nothing about the filter.
 
 ## When this guard does not run
 
-It sweeps `.github/workflows/*.yml`, and the python-suite path filter does not
-cover that tree -- so a change confined to a workflow computes
-``python != 'true'``, the required-context shim reports the suite green, and
-this guard never runs on it. A line-number citation added to a workflow comment
-is caught only by a later PR that also touches a covered tree.
+It sweeps two trees the python-suite path filter does not cover:
+`.github/workflows/*.yml` and `scripts/lib/*.sh`. A change confined to either
+computes ``python != 'true'``, the required-context shim reports the suite
+green, and this guard never runs on it. A line-number citation added to a
+workflow comment, or to a shell library, is caught only by a later PR that also
+touches a covered tree. (`**/*.py` covers every Python file, so the Python
+half of the sweep is fine -- it is the non-Python trees that fall out.)
 
 That is a pre-existing, repo-wide trade (`python_filter_uncovered_reads.py`
 records five workflow files as accepted bypasses, because covering the tree
