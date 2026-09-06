@@ -40,6 +40,23 @@
   hosts: localhost
   gather_facts: false
   any_errors_fatal: true
+  # #15822/#15824: the install root comes from the role's own defaults, which
+  # are the SSOT for it. This play includes a shared TASK file rather than the
+  # role, so role defaults are not loaded automatically and nothing else
+  # supplies slm_base_dir -- CI runs this with `-i 'localhost,'` and no
+  # inventory, so group_vars never loads either.
+  #
+  # Loading the defaults file directly is what keeps the value in one place.
+  # The alternatives both reintroduce the literal: passing `-e slm_base_dir=...`
+  # from the workflow moves the hardcoded path into the YAML that runs the play,
+  # and `| default('/opt/autobot')` puts it back in the play wearing a
+  # safer-looking shape.
+  #
+  # Same defect shape as #15824, one workflow over: a play invoked without the
+  # inventory that defines its variables.
+  vars_files:
+    - ../../roles/slm_manager/defaults/main.yml
+
   vars:
     # Decidably false — this directory does not belong on this host.
     role_effect_absent_active: false
