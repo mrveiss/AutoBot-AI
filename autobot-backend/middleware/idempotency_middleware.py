@@ -29,6 +29,8 @@ their creation.
 
 from __future__ import annotations
 
+import hashlib
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -142,11 +144,47 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _actor(request: Request) -> str:
-        """Who is asking -- so two callers cannot collide on the same key."""
-        user = getattr(request.state, "user", None) or {}
+        """A namespace for this caller's keys -- NOT an authorization decision.
+
+        The first version read ``request.state.user``, which is wrong here and
+        dangerously so: that attribute is populated by **route-level
+        dependencies**, inside the handler, so at middleware time it is unset for
+        every ordinary user request. Every caller therefore shared the
+        ``"anonymous"`` namespace, and a second user sending the same
+        ``Idempotency-Key`` to the same path would have been handed the first
+        user's stored response body -- a cross-user disclosure produced by a
+        replay layer, before any authentication had run.
+
+        So the namespace comes from the credential **presented on the request**,
+        which does exist at middleware time. It is hashed, so no token material
+        reaches Redis, and it is only a bucket: two different credentials can
+        never share a replay, and this makes no claim about whether either is
+        valid. Authentication still happens exactly where it did before.
+
+        ``request.state.user`` is still preferred when something upstream (the
+        service-auth middleware, which does run before this) has already set it:
+        a service identity is stable across token rotation in a way a token
+        digest is not.
+        """
+        user = getattr(request.state, "user", None)
         if isinstance(user, dict):
-            return str(user.get("user_id") or user.get("username") or "anonymous")
-        return str(getattr(user, "user_id", None) or "anonymous")
+            identity = user.get("user_id") or user.get("username")
+            if identity:
+                return f"user:{identity}"
+        elif user is not None and getattr(user, "user_id", None):
+            return f"user:{user.user_id}"
+
+        for header in ("authorization", "x-internal-api-key", "x-service-key"):
+            presented = request.headers.get(header)
+            if presented:
+                return "cred:" + hashlib.sha256(presented.encode("utf-8")).hexdigest()[:32]
+        session = request.cookies.get("session") or request.cookies.get("access_token")
+        if session:
+            return "sess:" + hashlib.sha256(session.encode("utf-8")).hexdigest()[:32]
+        # No credential at all: fall back to the peer address. Two anonymous
+        # callers behind one proxy share a namespace, which is the weakest case
+        # and is why an unauthenticated endpoint should not rely on this.
+        return "peer:" + (request.client.host if request.client else "unknown")
 
     @staticmethod
     async def _redis():

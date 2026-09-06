@@ -19,6 +19,8 @@ duplicate this middleware exists to prevent.
 
 from __future__ import annotations
 
+import hashlib
+
 import anyio
 import fakeredis.aioredis
 import pytest
@@ -65,8 +67,8 @@ class TestTheHandlerRunsOnce:
         app, calls, _redis_client = app_and_calls
         client = TestClient(app)
 
-        first = client.post("/create", headers={HEADER: "k1"})
-        second = client.post("/create", headers={HEADER: "k1"})
+        first = client.post("/create", headers={HEADER: "k1", "Authorization": _TOKEN})
+        second = client.post("/create", headers={HEADER: "k1", "Authorization": _TOKEN})
 
         assert calls["create"] == 1, "the handler ran twice — a second resource was created"
         assert first.status_code == second.status_code == 201
@@ -78,7 +80,7 @@ class TestTheHandlerRunsOnce:
         app, calls, _redis_client = app_and_calls
         client = TestClient(app)
 
-        client.post("/create", headers={HEADER: "k1"})
+        client.post("/create", headers={HEADER: "k1", "Authorization": _TOKEN})
         second = client.post("/create", headers={HEADER: "k2"})
 
         assert calls["create"] == 2
@@ -102,8 +104,8 @@ class TestFailuresAreRetryable:
         app, _calls, _redis_client = app_and_calls
         client = TestClient(app)
 
-        first = client.post("/rejects", headers={HEADER: "k1"})
-        second = client.post("/rejects", headers={HEADER: "k1"})
+        first = client.post("/rejects", headers={HEADER: "k1", "Authorization": _TOKEN})
+        second = client.post("/rejects", headers={HEADER: "k1", "Authorization": _TOKEN})
 
         assert first.status_code == second.status_code == 422
         assert second.headers.get("Idempotent-Replay") is None
@@ -146,7 +148,7 @@ class TestGuardrails:
             calls["n"] += 1
             return {"id": "x"}
 
-        response = TestClient(app).post("/create", headers={HEADER: "k1"})
+        response = TestClient(app).post("/create", headers={HEADER: "k1", "Authorization": _TOKEN})
 
         assert response.status_code == 201
         assert calls["n"] == 1
@@ -161,14 +163,14 @@ class TestConcurrentReplay:
         collapse into "unseen" and let through.
         """
         app, calls, redis = app_and_calls
-        key = storage_key("anonymous", "POST", "/create", "k1")
+        key = storage_key(_credential_actor(_TOKEN), "POST", "/create", "k1")
 
         async def _hold_the_claim():
             await redis.set(key, IN_FLIGHT)
 
         anyio.run(_hold_the_claim)
 
-        response = TestClient(app).post("/create", headers={HEADER: "k1"})
+        response = TestClient(app).post("/create", headers={HEADER: "k1", "Authorization": _TOKEN})
 
         assert response.status_code == 409
         assert "in flight" in response.json()["detail"].lower()
@@ -237,7 +239,7 @@ class TestAStoreFailureNeverChangesTheAnswer:
         acquisition guard alone never saw."""
         app, calls = _app_with_store(monkeypatch, failing="set")
 
-        response = TestClient(app).post("/create", headers={HEADER: "k1"})
+        response = TestClient(app).post("/create", headers={HEADER: "k1", "Authorization": _TOKEN})
 
         assert response.status_code == 201
         assert calls["create"] == 1, "a store failure refused a creation instead of serving it"
@@ -247,7 +249,7 @@ class TestAStoreFailureNeverChangesTheAnswer:
         succeeded provokes exactly the duplicate retry this prevents."""
         app, calls = _app_with_store(monkeypatch, failing="eval")
 
-        response = TestClient(app).post("/create", headers={HEADER: "k1"})
+        response = TestClient(app).post("/create", headers={HEADER: "k1", "Authorization": _TOKEN})
 
         assert response.status_code == 201, "a failed record turned a successful creation into an error"
         assert response.json() == {"id": "resource-1"}
@@ -258,7 +260,7 @@ class TestAStoreFailureNeverChangesTheAnswer:
         4xx the caller needs in order to correct their request."""
         app, _calls = _app_with_store(monkeypatch, failing="eval")
 
-        response = TestClient(app).post("/rejects", headers={HEADER: "k1"})
+        response = TestClient(app).post("/rejects", headers={HEADER: "k1", "Authorization": _TOKEN})
 
         assert response.status_code == 422
 
@@ -269,7 +271,7 @@ class TestAStoreFailureNeverChangesTheAnswer:
         app, _calls = _app_with_store(monkeypatch, failing="eval")
 
         with pytest.raises(RuntimeError, match="handler exploded"):
-            TestClient(app).post("/explodes", headers={HEADER: "k1"})
+            TestClient(app).post("/explodes", headers={HEADER: "k1", "Authorization": _TOKEN})
 
 
 class TestFencingReachesTheMiddleware:
@@ -277,15 +279,64 @@ class TestFencingReachesTheMiddleware:
         """End to end: the middleware must pass its own token to `complete`, not
         blindly overwrite. A successor's stored response has to survive."""
         app, calls, redis = app_and_calls
-        key = storage_key("anonymous", "POST", "/create", "k1")
+        key = storage_key(_credential_actor(_TOKEN), "POST", "/create", "k1")
         client = TestClient(app)
 
-        client.post("/create", headers={HEADER: "k1"})  # the successor's record
+        client.post("/create", headers={HEADER: "k1", "Authorization": _TOKEN})  # the successor's record
 
         async def _a_lapsed_predecessor_tries_to_publish():
             return await complete(redis, key, "a-token-from-a-lapsed-request", ReplayedResponse(201, '{"id": "stale"}'))
 
         assert anyio.run(_a_lapsed_predecessor_tries_to_publish) is False
-        replay = client.post("/create", headers={HEADER: "k1"})
+        replay = client.post("/create", headers={HEADER: "k1", "Authorization": _TOKEN})
         assert replay.json() == {"id": "resource-1"}
         assert calls["create"] == 1
+
+
+#: A credential the middleware can namespace by. Ordinary user requests are
+#: authenticated by route dependencies, so `request.state.user` is unset while
+#: middleware runs -- the namespace comes from what the request presents.
+_TOKEN = "Bearer test-caller"
+
+
+def _credential_actor(token: str) -> str:
+    """The namespace the middleware computes for an Authorization header."""
+    return "cred:" + hashlib.sha256(token.encode("utf-8")).hexdigest()[:32]
+
+
+class TestTheReplayNamespaceIsPerCaller:
+    """`request.state.user` is written by route-level dependencies, so at
+    middleware time it is unset for every ordinary request. Reading it put all
+    callers in one "anonymous" namespace: a second user sending the same key to
+    the same path received the first user's response body.
+    """
+
+    def test_two_credentials_do_not_share_a_replay(self, app_and_calls):
+        app, calls = app_and_calls[0], app_and_calls[1]
+        client = TestClient(app)
+
+        first = client.post("/create", headers={HEADER: "shared", "Authorization": "Bearer alice"})
+        second = client.post("/create", headers={HEADER: "shared", "Authorization": "Bearer bob"})
+
+        assert calls["create"] == 2, "the second caller was served the first caller's stored response"
+        assert first.json() != second.json()
+        assert second.headers.get("Idempotent-Replay") is None
+
+    def test_the_same_credential_still_replays(self, app_and_calls):
+        """The contrast: per-caller scoping must not disable the feature."""
+        app, calls = app_and_calls[0], app_and_calls[1]
+        client = TestClient(app)
+
+        first = client.post("/create", headers={HEADER: "k", "Authorization": "Bearer alice"})
+        second = client.post("/create", headers={HEADER: "k", "Authorization": "Bearer alice"})
+
+        assert calls["create"] == 1
+        assert first.json() == second.json()
+        assert second.headers.get("Idempotent-Replay") == "true"
+
+    def test_no_token_material_reaches_the_key(self):
+        """The namespace is a digest: a bearer token must not become a Redis key."""
+        actor = _credential_actor("Bearer super-secret-token")
+
+        assert "super-secret-token" not in actor
+        assert "super-secret-token" not in storage_key(actor, "POST", "/create", "k")
