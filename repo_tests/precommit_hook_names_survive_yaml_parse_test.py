@@ -185,11 +185,13 @@ def test_every_gated_hook_id_resolves_to_an_untruncated_name() -> None:
     the shape this whole cluster is about — a gate that matched nothing is a
     gate that reported nothing.
 
-    Today's single gated hook, ``ssot-config-lib-guard``, was never affected:
-    its ``#`` is preceded directly by ``(``, which is not a comment start. That
-    is luck, not design, and it is exactly the sort of thing that stops being
-    true when the second id is appended. Asserted here so the next append
-    cannot silently pick a truncated name.
+    Neither gated hook is affected today: ``ssot-config-lib-guard`` has its
+    ``#`` preceded directly by ``(``, which is not a comment start, and
+    ``no-root-clutter`` contains no ``#`` at all. That is luck, not design.
+    The append this docstring once warned about has already happened -- the
+    tuple went from one id to two -- so the guard is asserted here rather than
+    left to the next one. Read ``GATING_HOOK_IDS`` for the current set; do not
+    trust a count written in prose.
 
     ``GATING_HOOK_IDS`` is read out of the source with the AST rather than
     imported: importing the module for one tuple would install it in

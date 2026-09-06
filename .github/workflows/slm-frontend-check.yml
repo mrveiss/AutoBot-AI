@@ -5,8 +5,10 @@
 # TypeScript/build changes could merge undetected and cross-app migrations
 # (#10488 Workstream A) had no way to be verified. This adds that gate.
 #
-# Mirrors frontend-test.yml's "changes filter + self-skip" pattern so the check
-# always reports a conclusion (a path-filtered required check that never fires
+# Mirrors the "changes filter + self-skip" pattern so the check always reports
+# a conclusion. The two halves now live in different files: the changes filter
+# in frontend-test.yml, the self-skip job in frontend-required-context.yml
+# after the #13405 split (a path-filtered required check that never fires
 # would deadlock the PR on "Expected — Waiting for status").
 
 name: SLM Frontend Check

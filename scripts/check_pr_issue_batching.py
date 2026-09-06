@@ -28,7 +28,9 @@ import os
 import re
 import sys
 
-# Mirrors pr-issue-validation.yml:86 -- keep the two in step. One difference,
+# Mirrors the issue-linkage regex in pr-issue-validation.yml -- keep the two in
+# step. Deliberately no line number: the previous citation pinned one, the regex
+# moved, and the anchor rotted while the mechanism did not. One difference,
 # and it is the whole point of this gate: the sibling only needs to know whether
 # ANY issue is linked, so it stops at the first number. The repo writes batches
 # as `Closes #A, #B`, where only #A follows the keyword -- counting the sibling's
