@@ -4,7 +4,8 @@
 # Author: mrveiss
 """The man-page indexer is where the refresh task looks for it (#15853).
 
-`knowledge_tasks._run_indexing_subprocess` shelled out to
+`knowledge_tasks._run_indexing_subprocess` -- now
+`tasks.man_page_indexing.run_indexing_subprocess` -- shelled out to
 `"scripts/utilities/index_all_man_pages.py"` -- relative to the process working
 directory, and there is no `scripts/utilities/` at the repository root at all.
 The script is real; it lives under `autobot-infrastructure/shared/`. So the
@@ -26,7 +27,8 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-_TASKS = REPO_ROOT / "autobot-backend/tasks/knowledge_tasks.py"
+_MODULE = REPO_ROOT / "autobot-backend/tasks/man_page_indexing.py"
+_CALLER = REPO_ROOT / "autobot-backend/tasks/knowledge_tasks.py"
 
 
 def _module_source() -> str:
@@ -39,7 +41,7 @@ def _module_source() -> str:
     the check looks for. Same reason the #15724 publish-contract guard strips
     comments before matching.
     """
-    text = _TASKS.read_text(encoding="utf-8")
+    text = _MODULE.read_text(encoding="utf-8")
     return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
 
 
@@ -115,3 +117,18 @@ def test_the_subprocess_invokes_the_anchored_path():
     assert (
         "scripts/utilities/index_all_man_pages.py" not in source
     ), "the cwd-relative literal is still present in the module"
+
+
+def test_the_caller_delegates_rather_than_carrying_its_own_path():
+    """`knowledge_tasks` must not regrow its own copy of the invocation.
+
+    The helpers moved out because that module sits at its file-size ceiling and
+    a grandfathered file may not grow (#14236). A second copy of the path here
+    would be both the drift this guard exists to catch and a ceiling breach.
+    """
+    caller = "\n".join(
+        line for line in _CALLER.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
+    )
+
+    assert "from tasks.man_page_indexing import run_indexing_subprocess" in caller
+    assert "index_all_man_pages.py" not in caller, "knowledge_tasks names the indexer script again; it should delegate"
