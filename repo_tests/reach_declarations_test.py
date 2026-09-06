@@ -19,18 +19,24 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
+import subprocess
 from pathlib import Path
 
 import pytest
-from _pytest.outcomes import Failed
 
 from repo_tests._reach import REGISTRY, Reach, declare
 
 _REPO_TESTS = Path(__file__).resolve().parent
 
-#: Declarations expected to exist. Ratchets **up** only: adoption is the point,
-#: and a number that may fall would let a removed declaration read as progress.
+#: A **shrink-guard, not a reach floor.** At the current adoption count this
+#: cannot fail until someone *removes* a declaration — which is worth having,
+#: since every other guard will hang off this mechanism, but it measures no
+#: coverage and must not be read as if it did. Ratchets **up** only, and should
+#: be raised as adoption grows or it becomes the thing it was built to prevent.
 MIN_DECLARATIONS = 2
+
+#: The only failures that mean "the floor worked" rather than "the guard is broken".
+_EXPECTED_ON_EMPTY = (AssertionError, subprocess.CalledProcessError, FileNotFoundError)
 
 #: Guard modules that could not be imported, recorded rather than discarded.
 IMPORT_FAILURES: dict[str, str] = {}
@@ -76,18 +82,60 @@ def test_the_registry_was_actually_populated() -> None:
 def test_no_guard_can_succeed_against_an_empty_tree(reach: Reach, tmp_path: Path) -> None:
     """The mutation, applied mechanically: point discovery at nothing.
 
-    The property is **it must not return successfully**, not "it raises
-    AssertionError". A guard whose discovery hard-fails on an unusable root —
-    `env-var-bare-cast` runs `git ls-files` with `check=True` and raises
-    `CalledProcessError` — is equally loud, and demanding one exception type
-    would have failed a guard for being stricter than the floor. What must never
-    happen is a value coming back.
-    """
-    with pytest.raises(BaseException) as raised:  # noqa: B017 - any loud failure qualifies
-        result = reach.examined(tmp_path)
-        pytest.fail(f"{reach.name} returned {len(result)} items from an empty tree instead of failing")
+    The property is **it must not return successfully**, but "any exception
+    qualifies" is too weak: a `discover` broken by a typo raises too, and this
+    suite would then report a dead guard as adopted — the mechanism failing in
+    precisely the way it exists to detect.
 
-    assert not isinstance(raised.value, Failed), "the call returned rather than raising"
+    So the accepted failures are named. `AssertionError` is the floor doing its
+    job; `CalledProcessError` and `FileNotFoundError` are a guard whose discovery
+    cannot run against an unusable root (`env-var-bare-cast` shells out to
+    `git ls-files` with `check=True`), which is loud *and* distinguishable from a
+    defect. Anything else fails the test, which is how this test gets a second
+    way to fail rather than only "it did not raise".
+    """
+    try:
+        result = reach.examined(tmp_path)
+    except _EXPECTED_ON_EMPTY:
+        return
+    except BaseException as exc:  # noqa: BLE001 - the point is to name what it was
+        pytest.fail(
+            f"{reach.name} failed against an empty tree, but with "
+            f"{type(exc).__name__}: {exc!r}. That is a broken discovery, not a floor "
+            f"doing its job, and accepting it would let a typo read as adoption."
+        )
+
+    pytest.fail(f"{reach.name} returned {len(result)} items from an empty tree instead of failing")
+
+
+@pytest.mark.parametrize("reach", _declarations(), ids=lambda r: r.name)
+def test_discovery_honours_the_root_it_is_given(reach: Reach, tmp_path: Path) -> None:
+    """The unenforced contract behind every other test here.
+
+    Nothing in `declare(...)` makes `discover` use the root it is handed. A
+    `discover=lambda _root: _tracked_files()` closing over the repo returns its
+    full sweep against *any* directory, clears its floor unconditionally, and can
+    never fail — while passing the empty-tree test above for the wrong reason,
+    since it never looked at the empty tree at all.
+
+    Comparing the two results is enough to catch it: the live tree yields at
+    least `floor` items and the floor is non-zero, so a discovery that honours
+    its argument cannot return the same thing for both. A discovery that
+    *raises* on the empty root has also honoured it — it tried to read that
+    directory and could not — so those failures satisfy the contract too.
+    """
+    try:
+        from_empty = reach.discover(tmp_path)
+    except _EXPECTED_ON_EMPTY:
+        return  # it tried to use the root and could not, which is the contract met
+
+    from_repo = reach.discover(_REPO_TESTS.parent)
+
+    assert list(from_empty) != list(from_repo), (
+        f"{reach.name} returned identical results for an empty directory and the "
+        f"repository, so its discovery ignores the root it is given. A floor it "
+        f"clears unconditionally measures nothing."
+    )
 
 
 @pytest.mark.parametrize("reach", _declarations(), ids=lambda r: r.name)
