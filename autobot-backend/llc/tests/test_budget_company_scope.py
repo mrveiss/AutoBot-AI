@@ -198,9 +198,7 @@ class TestHardStopPausesTheRightNode:
             engine, expire_on_commit=False, class_=AsyncSession
         )
         async with factory() as s:
-            return (
-                await s.execute(select(AgentOrgNode.status).where(AgentOrgNode.agent_id == agent_id))
-            ).scalar_one()
+            return (await s.execute(select(AgentOrgNode.status).where(AgentOrgNode.agent_id == agent_id))).scalar_one()
 
     @pytest.mark.asyncio
     async def test_an_unscoped_node_is_still_paused(self, engine, session: AsyncSession) -> None:
@@ -231,6 +229,6 @@ class TestHardStopPausesTheRightNode:
 
         await self._pause(engine, "their-agent", a)
 
-        assert await self._status(engine, "their-agent") == "active", (
-            "company a's blown budget paused an agent belonging to company b"
-        )
+        assert (
+            await self._status(engine, "their-agent") == "active"
+        ), "company a's blown budget paused an agent belonging to company b"
