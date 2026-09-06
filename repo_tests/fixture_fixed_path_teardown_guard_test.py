@@ -19,6 +19,11 @@ In ``mcp_security_test.py`` that turned a dangling symlink chain into one that
 control failed" (#15785's own writeup). Fixed in #15772 by giving the leaf a
 per-test suffix from ``tmp_path.name``.
 
+The control-flow model the scanner is built on -- one scope-walking
+primitive, which nested bodies the fixture reaches, and which bindings no
+path can observe -- lives in ``fixture_fixed_path_teardown_flow.py``
+(#15810, #15811).
+
 The AST scanner itself lives in ``fixture_fixed_path_teardown_guard.py``, a
 plain (non-``_test.py``) sibling module (the same split as
 ``sys_modules_leak_guard.py`` / ``sys_modules_leak_guard_test.py``), so the
@@ -27,11 +32,12 @@ budget. This module documents the guard's rationale and carries the
 assertions that run it over the live tree; every synthetic contrast pair --
 and the write-up of the defect each one closes -- lives in
 ``fixture_fixed_path_teardown_guard_contrast_test.py`` (which calls and
-decorators are seen at all) and
+decorators are seen at all),
 ``fixture_fixed_path_teardown_guard_derivation_test.py`` (how a name earns
-"derived"), the same split as ``ansible_manifest_resolution_contrast_test.py``,
-so no module has to fit all of it under ``check_python_file_size.py``'s
-MAX_LINES.
+"derived") and ``fixture_fixed_path_teardown_guard_reachability_test.py``
+(which nested bodies are live code), the same split as
+``ansible_manifest_resolution_contrast_test.py``, so no module has to fit all
+of it under ``check_python_file_size.py``'s MAX_LINES.
 
 THE DISCRIMINATOR IS CREATE-AND-REMOVE, NOT A BARE FIXED PATH
 -----------------------------------------------------------------
@@ -75,23 +81,28 @@ no fixtures would print the identical clean line as one that examined every
 fixture in the tree. ``_MIN_EXPECTED_FIXTURES_SCANNED`` binds the floor to how
 many ``@pytest.fixture`` functions were actually found, not to what they did --
 same shape as ``core_router_auth_guard_test.py``'s
-``_MIN_EXPECTED_CORE_ROUTERS``. Measured at 1,212+ fixtures across every
+``_MIN_EXPECTED_CORE_ROUTERS``. Measured at 1,216+ fixtures across every
 tracked ``.py`` file (fixtures live in plain test modules and in
 ``conftest.py``, so the scan is not limited to ``*_test.py`` filenames); the
 floor sits comfortably below that.
 
 DEFECTS CLOSED, AND THE PAIRS THAT PROVE THEY STAY CLOSED
 ------------------------------------------------------------
-Six defects have been closed in this guard since #15785 -- an unseen decorator
-alias, an if/else that removed on every branch, a ``tmp_path`` read that never
-reached the path, a tuple assignment that leaked derivation across targets, a
-call keyword that laundered a fixed path argument, two traversals that walked
-into nested ``def``/``lambda`` scopes, and a name credited as derived on one
-assignment while another gave it a fixed path. Each has a two-sided contrast
-pair, and all of them live in
-``fixture_fixed_path_teardown_guard_contrast_test.py`` or
-``fixture_fixed_path_teardown_guard_derivation_test.py`` with the write-up of
-the defect they close.
+Thirteen defects have been closed in this guard since #15785 -- an unseen
+decorator alias, an if/else that removed on every branch, a ``tmp_path`` read
+that never reached the path, a tuple assignment that leaked derivation across
+targets, a call keyword that laundered a fixed path argument, two traversals
+that walked into nested ``def``/``lambda`` scopes, a name credited as derived on
+one assignment while another gave it a fixed path, a registered finalizer whose
+removal sat in a scope the scanner declined to enter, a dead binding counted
+against the name that overwrote it, a ternary-gated removal read as guaranteed,
+a loop body that gated nothing while ``_stmt_guarantees_remove`` said it did,
+and a star parameter that failed to shadow an inherited derived name. Each has
+a two-sided contrast pair, and all of them live in
+``fixture_fixed_path_teardown_guard_contrast_test.py``,
+``fixture_fixed_path_teardown_guard_derivation_test.py`` or
+``fixture_fixed_path_teardown_guard_reachability_test.py`` with the write-up
+of the defect they close.
 """
 
 from __future__ import annotations
