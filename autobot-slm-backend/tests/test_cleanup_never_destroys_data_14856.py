@@ -29,6 +29,7 @@ every scenario table below contains rows that must still delete.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -308,7 +309,18 @@ def _evaluate(conditions: str, scope: dict[str, Any]) -> bool:
 
 
 def _render_value(value: Any, scope: dict[str, Any]) -> Any:
-    """Render a `set_fact` value the way Ansible would, keeping non-templates as-is."""
+    """Render a `set_fact` value the way Ansible would, keeping non-templates as-is.
+
+    Recurses into mappings and sequences because `Task.post_validate` does: a
+    template nested inside a dict argument is rendered before the action plugin
+    ever sees it. Stopping at the top level would leave a nested token as its
+    literal `{{ ... }}` source and quietly turn every scenario below into a
+    comparison against a string that no host ever holds.
+    """
+    if isinstance(value, dict):
+        return {k: _render_value(v, scope) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_render_value(v, scope) for v in value]
     if not isinstance(value, str) or "{{" not in value:
         return value
     env = jinja2.Environment(undefined=jinja2.ChainableUndefined, autoescape=False)
@@ -327,13 +339,42 @@ def _render_value(value: Any, scope: dict[str, Any]) -> Any:
     return env.from_string(value).render(**scope)
 
 
+# #15822: `set_fact` does not store what the template produced. A TOP-LEVEL
+# argument whose rendered value is one of these four spellings is converted
+# back into a Python bool before it becomes a fact — ansible-core 2.17.14,
+# lib/ansible/plugins/action/set_fact.py:54:
+#
+#   if not C.DEFAULT_JINJA2_NATIVE and isinstance(v, string_types) \
+#      and v.lower() in ('true', 'false', 'yes', 'no'):
+#       v = boolean(v, strict=False)
+#
+# Measured on ansible-core 2.17.14 (the fleet version): a bare
+# `x: "{{ ... | string | lower }}"` rendering to "false" arrives as `False`,
+# while the same template one level down inside a mapping arrives as the
+# string "false". `isinstance(v, string_types)` is why — the coercion never
+# looks inside a dict or a list.
+#
+# Modelling this is the whole reason #15822 reached a user. Every behavioural
+# scenario in this file rendered the template and stored the string, so the
+# allowlist gate was fed a value production never produces, and 15 green rows
+# said the cleanup worked while it had not fired on any host since 2026-08-24.
+_SET_FACT_COERCED_SPELLINGS = ("true", "false", "yes", "no")
+
+
+def _set_fact_store(value: Any) -> Any:
+    """What Ansible actually puts in the fact cache for one set_fact argument."""
+    if isinstance(value, str) and value.lower() in _SET_FACT_COERCED_SPELLINGS:
+        return value.lower() in ("true", "yes")
+    return value
+
+
 def _apply_set_fact(task: dict, scope: dict[str, Any]) -> dict[str, Any]:
     """Run a real set_fact task against a scenario, so the gate reads what the
     playbook would actually have put in front of it."""
     spec = _module(task, "ansible.builtin.set_fact", "set_fact")
     assert spec, f"'{task.get('name')}' is not a set_fact task"
     for key, value in spec.items():
-        scope[key] = _render_value(value, scope)
+        scope[key] = _set_fact_store(_render_value(value, scope))
     return scope
 
 
@@ -896,6 +937,152 @@ def test_wrong_node_undefined_fact_would_hard_error_rather_than_delete() -> None
     except _FactUndefined:
         return  # a hard error is an acceptable non-destructive outcome
     assert removed is False, "an undefined role fact reached the delete branch — this is #14856 itself"
+
+
+# --------------------------------------------------------------------------
+# #15822: the token the gate reads must survive set_fact, whatever its spelling
+# --------------------------------------------------------------------------
+def _leaves(node: Any, path: tuple = ()):
+    """Every scalar in a set_fact argument tree, with the path that reaches it."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            yield from _leaves(value, path + (key,))
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            yield from _leaves(value, path + (index,))
+    else:
+        yield path, node
+
+
+def _token_path() -> tuple:
+    """Where the normalise step puts the role fact — found by content, not by name.
+
+    The gate could spell its token `_wrong_node_fact`, `_wrong_node.token` or
+    anything else; what identifies it is that it is the leaf built from
+    `lookup('vars', role_check_fact, ...)`. Locating it this way means these
+    tests keep testing the real thing after a rename, instead of silently
+    asserting about a variable that no longer exists.
+    """
+    spec = _module(_wrong_node_normalise(), "ansible.builtin.set_fact", "set_fact")
+    assert spec, "the normalise step is not a set_fact task"
+    found = [
+        path
+        for path, value in _leaves(spec)
+        if isinstance(value, str) and "lookup(" in value and "role_check_fact" in value
+    ]
+    assert len(found) == 1, f"expected exactly one leaf reading the role fact, found {found}"
+    return found[0]
+
+
+def _at(container: Any, path: tuple) -> Any:
+    for step in path:
+        container = container[step]
+    return container
+
+
+def _set_at(container: Any, path: tuple, value: Any) -> None:
+    for step in path[:-1]:
+        container = container[step]
+    container[path[-1]] = value
+
+
+# Every spelling set_fact converts, in the case shapes group_vars actually uses.
+_COERCED_FACTS = [
+    pytest.param(False, id="yaml_bool_false"),
+    pytest.param(True, id="yaml_bool_true"),
+    pytest.param("false", id="string_false"),
+    pytest.param("true", id="string_true"),
+    pytest.param("no", id="string_no"),
+    pytest.param("yes", id="string_yes"),
+    pytest.param("FALSE", id="string_uppercase_false"),
+    pytest.param("false\n", id="folded_scalar_false"),
+]
+
+
+@pytest.mark.parametrize("fact", _COERCED_FACTS)
+def test_wrong_node_token_is_not_flattened_into_a_bool_by_set_fact(fact: Any) -> None:
+    """#15822: the token the allowlists are compared against must stay a string.
+
+    `set_fact` converts a TOP-LEVEL string argument rendering to
+    'true'/'false'/'yes'/'no' straight back into a Python bool. A bool equals
+    none of the false-token spellings, so the wrong-node gate stops matching and
+    the cleanup goes silently dead — measured on the fleet as "not fired on any
+    host since 2026-08-24" — while `| length` on the same value raises
+    "object of type 'bool' has no len()" and aborts the run outright.
+
+    Asserted on the type of the stored value rather than on the shape of the
+    YAML, so any future arrangement that survives the coercion passes and any
+    that does not fails.
+    """
+    scope: dict[str, Any] = {"role_check_fact": "role_backend_active", "role_backend_active": fact}
+    _apply_set_fact(_wrong_node_normalise(), scope)
+    stored = _at(scope, _token_path())
+    assert isinstance(stored, str), (
+        f"role_backend_active={fact!r} reached the gate as {stored!r} "
+        f"({type(stored).__name__}). set_fact flattened the normalised token, so "
+        f"every allowlist comparison below it is a bool-against-string mismatch."
+    )
+
+
+def _wrong_node_message() -> str:
+    """The 'not decidable' message, which is the expression that actually raised."""
+    tasks = [t for t in _load(_WRONG_NODE) if isinstance(t, dict)]
+    debugs = [t for t in tasks if _module(t, "ansible.builtin.debug", "debug")]
+    assert debugs, "clean_wrong_node_dir.yml no longer reports an undecidable fact"
+    msg = _module(debugs[0], "ansible.builtin.debug", "debug").get("msg")
+    assert isinstance(msg, str) and msg, "the undecidable branch has no message to render"
+    return msg
+
+
+def _render_message(text: str, scope: dict[str, Any]) -> str:
+    env = jinja2.Environment(undefined=jinja2.ChainableUndefined, autoescape=False)
+    env.filters["bool"] = _ansible_bool
+    env.filters["to_json"] = json.dumps
+    return env.from_string(text).render(**scope)
+
+
+# (token the gate ends up holding, what the message must call it)
+_MESSAGE_TOKENS = [
+    pytest.param("", "undefined", id="empty_token_reads_as_undefined"),
+    pytest.param("off", '"off"', id="unlisted_token_is_quoted_verbatim"),
+    pytest.param("none", '"none"', id="rendered_none_is_quoted_verbatim"),
+    pytest.param(False, "false", id="bool_token_still_renders"),
+    pytest.param(True, "true", id="bool_true_token_still_renders"),
+    pytest.param(None, "null", id="null_token_still_renders"),
+]
+
+
+@pytest.mark.parametrize("token, expected", _MESSAGE_TOKENS)
+def test_wrong_node_undecidable_message_survives_a_non_string_token(token: Any, expected: str) -> None:
+    """#15822: the emptiness test in front of the message must answer for any type.
+
+    `| length == 0` reads as a definedness check and is not one — it raises on
+    everything without a `__len__`, which is how a message whose entire job is
+    to say "I could not decide, so I am leaving the directory alone" became the
+    thing that aborted the wizard at step 7 and `install.sh` at phase 4.
+
+    The bool rows are the regression: they are the exact values set_fact was
+    handing this expression on the fleet. They must render, and they must not be
+    mislabelled 'undefined' — an inactive role and an absent fact are different
+    diagnoses and the operator acts differently on each.
+    """
+    scope: dict[str, Any] = {"role_check_fact": "role_backend_active", "dir_name": "autobot-backend"}
+    _apply_set_fact(_wrong_node_normalise(), scope)
+    _set_at(scope, _token_path(), token)
+
+    try:
+        rendered = _render_message(_wrong_node_message(), scope)
+    except TypeError as exc:  # pragma: no cover - the failure this test exists for
+        raise AssertionError(
+            f"the undecidable message raised on a {type(token).__name__} token: {exc}. "
+            f"This is #15822 — the branch that reports 'leaving it in place' cannot "
+            f"itself be the branch that kills the run."
+        ) from exc
+
+    assert f"role_backend_active is {expected}" in rendered, (
+        f"token {token!r} was reported as {rendered.split(' on this host')[0]!r}, "
+        f"expected 'role_backend_active is {expected}'"
+    )
 
 
 # --------------------------------------------------------------------------
