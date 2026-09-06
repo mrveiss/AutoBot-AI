@@ -42,6 +42,7 @@ the only one that was actually established.
 from __future__ import annotations
 
 import json
+import re
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -63,6 +64,23 @@ _PREFIX = "/api/playwright/"
 #: not a body worth parsing, and reading it would add a second full copy of a
 #: buffer that is already unbounded downstream (#15857).
 _INSPECT_MAX_BYTES = env_int_clamped("PLAYWRIGHT_SCOPE_INSPECT_MAX_BYTES", 64 * 1024, min_v=0)
+
+
+#: Anything that could end a log line or forge a new one. Uvicorn percent-decodes
+#: the request target, so ``/api/playwright/x%0A2026-01-01 ERROR fake`` arrives as a
+#: real newline in ``request.url.path`` (CWE-117).
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+
+#: Cap on each embedded field. The path is attacker-chosen — this middleware runs
+#: before routing, so any suffix under the prefix reaches it — and both the log and
+#: the flood filter's key space are better off bounded.
+_FIELD_MAX = 200
+
+
+def _safe(value: str) -> str:
+    """A request-controlled value, made safe to embed in a log line."""
+    cleaned = _CONTROL.sub("\ufffd", value)
+    return cleaned if len(cleaned) <= _FIELD_MAX else cleaned[:_FIELD_MAX] + "…"
 
 
 def _inspection_refusal(request: Request) -> str | None:
@@ -145,6 +163,7 @@ async def warn_if_unscoped(request: Request) -> None:
     # could no longer answer "who". user_agent stays an argument: it is
     # attacker-controlled and unbounded, so it must not enter the key space.
     logger.warning(
-        _message(request.url.path, client or "unknown", refusal) + " user_agent=%s",
-        request.headers.get("user-agent") or "unknown",
+        _message(_safe(request.url.path), _safe(client or "unknown"), refusal)
+        + " user_agent=%s",
+        _safe(request.headers.get("user-agent") or "unknown"),
     )

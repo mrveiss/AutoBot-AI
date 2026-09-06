@@ -15,12 +15,16 @@ from __future__ import annotations
 import logging
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
 from api import playwright_session_scope
-from api.playwright_session_scope import PlaywrightSessionScopeMiddleware, _message
+from api.playwright_session_scope import (
+    PlaywrightSessionScopeMiddleware,
+    _message,
+    warn_if_unscoped,
+)
 from autobot_shared.logging_manager import LogFloodSuppressionFilter
 
 
@@ -47,6 +51,13 @@ def client() -> TestClient:
         return {"ok": True}
 
     return TestClient(app)
+
+
+def _body_receive(body: bytes):
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    return receive
 
 
 def _warnings(caplog) -> list[str]:
@@ -232,3 +243,66 @@ class TestTheLogCanStillAnswerWho:
         emitted = [flood.filter(self._record(message)) for _ in range(3)]
 
         assert emitted == [True, False, False]
+
+
+class TestARequestCannotForgeALogLine:
+    """The path is attacker-chosen and lands in the message (CWE-117).
+
+    Uvicorn percent-decodes the request target, so `%0a` arrives as a real
+    newline in `request.url.path`. Embedded raw, one request could append a
+    line of its own choosing to the log this feature exists to make readable.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_path_field_cannot_carry_a_line_break(self, caplog):
+        """Pins the upstream behaviour the path's safety actually rests on.
+
+        The review comment said uvicorn percent-decodes CR/LF into
+        `request.url.path`. Measured, that is not what reaches this code:
+        Starlette rebuilds `url` from the scope and **drops** the control
+        character outright, so `request.url.path` never contains one. A test
+        that sent `%0a` through TestClient passed with the sanitiser removed --
+        it was asserting nothing.
+
+        So this asserts the real invariant rather than a defused attack: given a
+        scope whose path holds a raw newline -- exactly what uvicorn would
+        produce -- neither the path nor the emitted line carries it. If a future
+        Starlette stops stripping, this fails and the sanitiser behind it is
+        what keeps the log intact.
+        """
+        raw = "/api/playwright/navigate\n2026-01-01 ERROR forged"
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": raw,
+            "headers": [(b"content-length", b"19"), (b"user-agent", b"ua")],
+            "query_string": b"",
+            "client": ("10.0.0.1", 1234),
+        }
+        request = Request(scope, receive=_body_receive(b'{"url": "http://x"}'))
+        assert "\n" not in request.url.path, "starlette no longer strips; the sanitiser now carries this"
+
+        with caplog.at_level(logging.WARNING):
+            await warn_if_unscoped(request)
+
+        message = _warnings(caplog)[0]
+        assert "\n" not in message and "\r" not in message
+        assert "forged" in message, "the attempt stays visible in one line, just inert"
+
+    def test_a_control_character_in_the_user_agent_is_defanged(self, client, caplog):
+        with caplog.at_level(logging.WARNING):
+            client.post(
+                "/api/playwright/navigate",
+                json={"url": "http://x"},
+                headers={"user-agent": "curl\r\nINJECTED"},
+            )
+
+        message = _warnings(caplog)[0]
+        assert "\r" not in message and "\n" not in message
+
+    def test_an_overlong_path_is_capped(self, client, caplog):
+        with caplog.at_level(logging.WARNING):
+            client.post("/api/playwright/" + "a" * 900, json={"url": "http://x"})
+
+        message = _warnings(caplog)[0]
+        assert "…" in message, "an unbounded path would also unbound the flood key space"
