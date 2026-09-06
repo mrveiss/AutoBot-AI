@@ -47,6 +47,7 @@ from ..models.membership import LLCCompanyMembership
 from ..models.reporting_line import LLCReportingLine
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .company_ceo import CompanyCEOService
 
 #: #15765 needs the subject's manager and that manager's manager. The bound is
 #: on the walk, not on the organisation: two hops from the subject, whichever
@@ -150,13 +151,18 @@ class ReportingLineService(LLCServiceBase):
         return [Holder(type=RoleHolderType.USER.value, id=row) for row in result.scalars()]
 
     async def _resolve_ceo(self, session: AsyncSession, company_id: uuid.UUID) -> Optional[Holder]:
-        """The company's CEO, or None while no company designates one.
+        """The company's CEO, or None when the company has none (#15770).
 
-        The seam for #15770. Returning None is the truthful answer today, not a
-        placeholder: nothing in the schema designates a CEO, so the middle step
-        of the default chain has no target and the walk reports ``NO_CEO``.
+        None is still a real answer and not a placeholder: a company whose CEO
+        agent was deleted resolves to None exactly like one that never had a
+        designation, and both make the walk report ``NO_CEO``. The chart draws
+        either way. Nothing is promoted to fill the gap -- see
+        :class:`~llc.services.company_ceo.CompanyCEOService`.
         """
-        return None
+        ceo = await CompanyCEOService().resolve(session, company_id)
+        if ceo is None:
+            return None
+        return Holder(type=ceo.type, id=ceo.id)
 
     async def chain_up(
         self,

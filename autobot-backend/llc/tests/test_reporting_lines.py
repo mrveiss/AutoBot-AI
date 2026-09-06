@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from llc.models.enums import MembershipRole, RoleHolderType
 from llc.models.membership import LLCCompanyMembership
+from llc.models.company_ceo import LLCCompanyCEO
 from llc.models.reporting_line import LLCReportingLine
 from llc.services.authz import NotAuthorisedError
 from llc.services.reporting_line import ChainEnd, Holder, ReportingLineService
@@ -59,6 +60,7 @@ async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     tables = [
         LLCCompanyMembership.__table__,
         LLCReportingLine.__table__,
+        LLCCompanyCEO.__table__,
         AgentOrgNode.__table__,
     ]
     for table in tables:
