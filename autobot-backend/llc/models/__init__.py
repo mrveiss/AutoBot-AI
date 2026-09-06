@@ -16,6 +16,7 @@ from .company import (
     CompanyTreeNode,
     CompanyUpdate,
 )
+from .company_ceo import LLCCompanyCEO
 from .company_tool import LLCCompanyTool
 from .contact import LLCContact
 from .enums import (
@@ -47,7 +48,6 @@ from .goal import GoalLevel, GoalStatus, LLCGoal
 from .heartbeat_run import LLCHeartbeatRun
 from .membership import LLCCompanyMembership
 from .replay_log import LLCRunReplayLog
-from .company_ceo import LLCCompanyCEO
 from .reporting_line import LLCReportingLine
 from .review_gate import LLCReviewGatePolicy
 from .role_assignment import LLCRoleAssignment

@@ -30,9 +30,9 @@ import pytest_asyncio
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from llc.models.company_ceo import LLCCompanyCEO
 from llc.models.enums import MembershipRole, RoleHolderType
 from llc.models.membership import LLCCompanyMembership
-from llc.models.company_ceo import LLCCompanyCEO
 from llc.models.reporting_line import LLCReportingLine
 from llc.services.authz import NotAuthorisedError
 from llc.services.reporting_line import ChainEnd, Holder, ReportingLineService
