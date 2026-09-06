@@ -1,0 +1,156 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Resume-plan persistence for the update-all orchestration (#15881).
+
+Split out of ``api/code_sync.py``, which sits at its #14236 ceiling: carrying
+the stage log across the SLM restart is added lines, and a grandfathered file
+may not grow. The ratchet'"'"'s answer to "I need room" is "make the file smaller",
+so the two writers move here.
+
+The plan is what survives the restart the self-update performs. Everything the
+resumed process knows about the run before it started comes from this row.
+"""
+
+# Required, not stylistic: `_persist_resume_plan` annotates `job: UpdateAllJob`,
+# and UpdateAllJob is imported only under TYPE_CHECKING to avoid an import cycle
+# back into code_sync. Without postponed annotations Python evaluates that
+# annotation at def time and the module raises NameError on import -- which
+# would take code_sync, and the whole SLM API, down with it (#15881 review).
+from __future__ import annotations
+
+import json as _json
+import logging
+from typing import TYPE_CHECKING, List
+
+from sqlalchemy import select
+
+from models.database import Setting
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from api.code_sync import UpdateAllJob
+
+# Plain stdlib logging, deliberately -- NOT autobot_shared.logging_manager.
+# `code_sync.py:106` does the same and this module was extracted from it, so the
+# constraint came with the code even though the general rule says get_logger.
+#
+# `tests/api/test_collect_outdated_node_ids.py` imports code_sync at module scope
+# with the config stack replaced by MagicMock. get_logger() builds a
+# RotatingFileHandler, which compares maxBytes to an int -- against a MagicMock
+# that raises `TypeError: '>' not supported`. It fails at COLLECTION, so the whole
+# file errors out rather than one test failing. Same reason as
+# `autobot_shared/user_management/password_epoch.py`.
+logger = logging.getLogger(__name__)
+
+#: Settings key the plan is stored under.
+_UPDATE_ALL_RESUME_KEY = "slm_update_all_resume"
+
+_RESUME_PLAN_VERSION = 2
+
+#: Plans written by an older SLM stay readable (#15881). Rejecting v1 would
+#: discard the in-flight plan belonging to the very update deploying this
+#: change -- the SLM would restart, find its own plan unreadable, and wedge.
+_SUPPORTED_RESUME_PLAN_VERSIONS = frozenset({1, 2})
+
+#: Per-stage log lines carried across the restart. It lives in a Settings row,
+#: so it is smaller than the 200 a stage holds in memory.
+_RESUME_PLAN_LOG_LINES = 60
+
+#: Commit prefix used in this module's log lines only. `code_sync._short_sha`
+#: is not imported: this module must not depend on it, or the extraction that
+#: made room in that file reintroduces the coupling it removed.
+_LOG_SHA_PREFIX = 12
+
+
+async def _persist_resume_plan(
+    job: UpdateAllJob,
+    remaining_node_ids: List[str],
+    target_commit: str,
+) -> None:
+    """Write resume plan to Settings so a fresh SLM process can continue fleet stage.
+
+    Includes target_commit (C1) and version sentinel (M2).
+    Always called even when remaining_node_ids is empty (C5).
+    """
+    from services.database import db_service
+
+    plan = {
+        "version": _RESUME_PLAN_VERSION,  # M2
+        "job_id": job.job_id,
+        "remaining_node_ids": remaining_node_ids,
+        "target_commit": target_commit,  # C1
+        "created_at": job.created_at,
+        # #15881: `_stage_log` writes to `stage.log_lines`, which lives in the
+        # process the self-update is about to restart. Without this the operator
+        # watching the GUI sees the log stop at "Firing Ansible self-update
+        # (fire-and-forget)" and never learn the outcome -- the resumed job
+        # backfills "completed before restart" placeholders over the real lines.
+        "stage_logs": {stage.name: list(stage.log_lines or [])[-_RESUME_PLAN_LOG_LINES:] for stage in job.stages},
+    }
+    async with db_service.session() as db:
+        result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))
+        setting = result.scalar_one_or_none()
+        if setting:
+            setting.value = _json.dumps(plan)
+        else:
+            db.add(Setting(key=_UPDATE_ALL_RESUME_KEY, value=_json.dumps(plan)))
+        await db.commit()
+    logger.info(
+        "update-all: persisted resume plan for %d fleet nodes (target=%s)",
+        len(remaining_node_ids),
+        (target_commit[:_LOG_SHA_PREFIX] if target_commit else None),
+    )
+
+
+async def _clear_resume_plan() -> None:
+    """Remove resume plan from Settings after fleet stage completes."""
+    from services.database import db_service
+
+    try:
+        async with db_service.session() as db:
+            result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))
+            setting = result.scalar_one_or_none()
+            if setting:
+                await db.delete(setting)
+                await db.commit()
+    except Exception as exc:
+        logger.warning("update-all: failed to clear resume plan: %s", exc)
+
+
+def restored_stage(stage_cls, name: str, status: str, message: str, stage_logs: dict):
+    """Rebuild one stage of a resumed job, carrying its pre-restart log lines.
+
+    The bug this exists for (#15881) is that a stage rebuilt with only
+    "completed before restart" says the stage ended and nothing about what it
+    did -- indistinguishable from a hang, which is what "the GUI log just
+    stops" is. So the lines come back, and the restart is *marked* rather than
+    hidden: without the marker a reader cannot tell which lines predate it.
+
+    A v1 plan carries no logs at all. That path must stay silent and usable --
+    rejecting it would discard the resume plan of the very update deploying
+    this change. So no lines means no marker, not an empty marker.
+    """
+    stage = stage_cls(name=name, status=status, message=message)
+    lines = list(stage_logs.get(name) or [])
+    if lines:
+        stage.log_lines = [*lines, f"-- SLM restarted here; {len(lines)} line(s) carried over --"]
+    return stage
+
+
+def plan_version_is_supported(plan: dict) -> bool:
+    """Whether a persisted plan is readable by the SLM running now (#15881).
+
+    Deliberately a membership test against the supported SET, never equality
+    with the current version. Equality is the exact edit this exists to stop --
+    it is what the code said before v1 support, so it is the likeliest thing
+    anyone puts back -- and it rejects the plan written by the update that is
+    deploying the change.
+
+    The rejection path calls `_clear_resume_plan()`, so a wrong answer here
+    does not merely skip the resume, it DELETES the plan. The wedge then
+    survives a restart, which is the one failure this whole mechanism exists
+    to prevent. That asymmetry is why the gate is a named function with its own
+    test rather than an inline comparison.
+    """
+    return plan.get("version") in _SUPPORTED_RESUME_PLAN_VERSIONS
