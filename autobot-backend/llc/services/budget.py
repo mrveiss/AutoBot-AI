@@ -71,9 +71,7 @@ class BudgetService(LLCServiceBase):
         Idempotent: if a row already exists, returns it with ``created=False``.
         Returns ``(row, created)`` where ``created`` is True only for new rows.
         """
-        existing = (
-            await session.execute(_for_agent(agent_id, company_id))
-        ).scalar_one_or_none()
+        existing = (await session.execute(_for_agent(agent_id, company_id))).scalar_one_or_none()
         if existing is not None:
             logger.debug("Budget row already exists for agent %s — skipping provision", agent_id)
             return existing, False
@@ -95,9 +93,7 @@ class BudgetService(LLCServiceBase):
                 await session.flush()
         except IntegrityError:
             # Concurrent provision won the race — re-select and return existing row.
-            existing = (
-                await session.execute(_for_agent(agent_id, company_id))
-            ).scalar_one_or_none()
+            existing = (await session.execute(_for_agent(agent_id, company_id))).scalar_one_or_none()
             logger.debug("Race on provision_budget for agent %s — returning existing row", agent_id)
             return existing, False
 
@@ -202,9 +198,7 @@ class BudgetService(LLCServiceBase):
 
         return cost
 
-    async def check_budget(
-        self, session: AsyncSession, agent_id: str, company_id: str
-    ) -> Tuple[Decimal, bool, bool]:
+    async def check_budget(self, session: AsyncSession, agent_id: str, company_id: str) -> Tuple[Decimal, bool, bool]:
         """Return (remaining, is_over_limit, alert_triggered) for an agent (GH#6630, GH#8997).
 
         remaining can be negative when spent exceeds limit.

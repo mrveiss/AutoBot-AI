@@ -400,8 +400,7 @@ class AutoBotAgentAdapter:
         company_id: str = str(context.get("company_id") or "")
         if not company_id:
             logger.warning(
-                "run %s reported cost for agent %s with no company_id in context — "
-                "not charging any budget (#15812)",
+                "run %s reported cost for agent %s with no company_id in context — " "not charging any budget (#15812)",
                 run_id,
                 agent_id,
             )
@@ -411,9 +410,7 @@ class AutoBotAgentAdapter:
             from llc.services.budget import BudgetService
 
             async with self._budget_session_factory() as session:
-                await BudgetService().ingest_cost_event(
-                    session, agent_id, company_id, tokens_in, tokens_out, model
-                )
+                await BudgetService().ingest_cost_event(session, agent_id, company_id, tokens_in, tokens_out, model)
         except BudgetExhausted:
             raise  # Hard-stop from GH#8215: propagate so run is marked FAILED
         except Exception:

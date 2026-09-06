@@ -86,9 +86,7 @@ class TestTheConstraint:
         """Against the previous global constraint this raises IntegrityError."""
         a, b = await _two_companies(session)
 
-        rows = (
-            await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == SLUG))
-        ).scalars().all()
+        rows = (await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == SLUG))).scalars().all()
 
         assert {r.company_id for r in rows} == {a, b}
 
@@ -131,9 +129,9 @@ class TestNoLookupCrossesTheBoundary:
 
         rows = {
             r.company_id: r
-            for r in (
-                await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == SLUG))
-            ).scalars().all()
+            for r in (await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == SLUG)))
+            .scalars()
+            .all()
         }
         # Asserted on tokens_spent, which the UPDATE always increments, rather than on
         # budget_spent, which stays 0 for a model missing from the pricing table

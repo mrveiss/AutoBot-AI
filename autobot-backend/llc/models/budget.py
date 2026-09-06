@@ -26,9 +26,7 @@ class LLCAgentBudget(Base):
     """
 
     __tablename__ = "llc_agent_budgets"
-    __table_args__ = (
-        UniqueConstraint("company_id", "agent_id", name="uq_llc_agent_budgets_company_id_agent_id"),
-    )
+    __table_args__ = (UniqueConstraint("company_id", "agent_id", name="uq_llc_agent_budgets_company_id_agent_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)

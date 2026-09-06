@@ -920,9 +920,7 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     key_record = None
     # company_id travels with the context because the adapter charges a budget on
     # the way back, and agent_id alone does not identify a budget row (#15812).
-    enriched = dict(
-        context, agent_id=agent_id, company_id=company_id, api_base=AGENT_API_BASE_URL
-    )
+    enriched = dict(context, agent_id=agent_id, company_id=company_id, api_base=AGENT_API_BASE_URL)
     if company_id:
         key_record, raw_key = await _issue_run_key(agent_id, company_id)
         if raw_key:

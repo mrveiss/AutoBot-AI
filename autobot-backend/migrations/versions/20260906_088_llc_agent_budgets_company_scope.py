@@ -65,9 +65,7 @@ def upgrade() -> None:
         return  # already scoped
 
     if bind.dialect.name == "sqlite":
-        with op.batch_alter_table(
-            "llc_agent_budgets", naming_convention=_SQLITE_CONVENTION
-        ) as batch_op:
+        with op.batch_alter_table("llc_agent_budgets", naming_convention=_SQLITE_CONVENTION) as batch_op:
             batch_op.drop_constraint(_SQLITE_LEGACY_NAME, type_="unique")
             batch_op.create_unique_constraint(_COMPOSITE, ["company_id", "agent_id"])
         return
@@ -88,9 +86,7 @@ def downgrade() -> None:
     bind = op.get_bind()
 
     if bind.dialect.name == "sqlite":
-        with op.batch_alter_table(
-            "llc_agent_budgets", naming_convention=_SQLITE_CONVENTION
-        ) as batch_op:
+        with op.batch_alter_table("llc_agent_budgets", naming_convention=_SQLITE_CONVENTION) as batch_op:
             batch_op.drop_constraint(_COMPOSITE, type_="unique")
             batch_op.create_unique_constraint(_SQLITE_LEGACY_NAME, ["agent_id"])
         return
