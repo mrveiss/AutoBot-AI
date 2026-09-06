@@ -30,12 +30,63 @@
           ╚════════════════════════════════════════════════════════════╝
       run_once: false
 
+    # #15879: systemd's failure message names its own evidence and withholds
+    # it -- "See `systemctl status` and `journalctl -xeu` for details" points at
+    # a journal on the MANAGED NODE, while the operator is reading the
+    # aggregated log on the controller. Four identical retries of a failed nginx
+    # start produced four identical uninformative lines, which is why it read as
+    # "stuck" rather than "failing for a reason". The rescue fetches the details
+    # from the node that failed and puts them in the same log as the failure.
     - name: Manage service state
-      ansible.builtin.service:
-        name: "{{ service_name }}"
-        state: "{{ service_action }}"
-        enabled: "{{ _service_enabled }}"
-      register: service_result
+      block:
+        - name: Manage service state
+          ansible.builtin.service:
+            name: "{{ service_name }}"
+            state: "{{ service_action }}"
+            enabled: "{{ _service_enabled }}"
+          register: service_result
+
+      rescue:
+        # `failed_when: false` belongs HERE and nowhere else in this block.
+        # `systemctl status` exits non-zero for a failed unit -- which is the
+        # case we are in -- so without it the capture would itself fail and we
+        # would lose the diagnosis we came for. It must never be applied to the
+        # service task above, which is the thing whose failure matters.
+        # argv, not cmd (#15879 review, CWE-88). `service_name` is caller-supplied
+        # and a `cmd:` string is split into arguments before execution -- under
+        # `become: true`. A multi-token name could inject options and redirect
+        # journalctl at another unit, whose output would then be written into the
+        # controller log. As argv it is one element and cannot become an option:
+        # `--` terminates systemctl's options, and `--unit=` binds the value to
+        # journalctl's unit selector rather than leaving it positional.
+        - name: "SVC | Capture why {{ service_name }} would not {{ service_action }} (#15879)"
+          ansible.builtin.command:
+            argv: "{{ _diag_argv }}"
+          loop:
+            - ["systemctl", "status", "--no-pager", "--lines=40", "--", "{{ service_name }}"]
+            - ["journalctl", "-xe", "--no-pager", "--lines=80", "--unit={{ service_name }}"]
+          loop_control:
+            loop_var: _diag_argv
+          register: _service_diagnostics
+          changed_when: false
+          failed_when: false
+
+        - name: "SVC | Report the cause in this log, not on the node (#15879)"
+          ansible.builtin.debug:
+            msg: >-
+              {{ (_service_diagnostics.results | default([]))
+                 | map(attribute='stdout_lines') | select() | list }}
+
+        # The rescue MUST re-raise. A rescue that captures and returns cleanly
+        # turns a failed service start into a green play -- strictly worse than
+        # the state this fixes, which at least failed loudly with a useless
+        # message. Pinned by
+        # tests/test_manage_service_rescue_reraises_15879.py.
+        - name: "SVC | Re-raise the original failure (#15879)"
+          ansible.builtin.fail:
+            msg: >-
+              {{ service_name }} could not be {{ service_action }} on
+              {{ inventory_hostname }}. Cause captured above.
 
     - name: Wait for service to stabilize
       ansible.builtin.pause:
