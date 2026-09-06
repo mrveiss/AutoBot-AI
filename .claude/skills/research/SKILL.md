@@ -97,10 +97,10 @@ Every source advertises its **visible metrics** — benchmarks, stars, features,
 Fetch and analyze the input. Produce this structure:
 
 ```
-## Source Analysis: <title/name>
+## Source Analysis: <anonymized descriptor — never the source name>
 
 ### What It Is
-One-paragraph summary — what this project/article is about, who made it, maturity level.
+One-paragraph summary — what the work does and its maturity. Describe the origin generically (a vendor, a research group); never name the project, product, author or repo.
 
 ### Architecture & Key Patterns
 - How it's structured (monolith, microservices, plugin-based, etc.)
@@ -201,6 +201,7 @@ If source is too large for single analysis, summarize sections and focus on what
   Phase 2 gate, so an unapproved or interrupted run still leaves the analysis
   behind. Chat reply is the file path plus a short summary, never the full
   analysis (#12955)
+- **Anonymize the source in everything on disk.** The name stays in the chat reply; `docs/research/<topic>.md`, its filename, and every issue, PR, branch, commit message and code comment use "the reference work" or a generic technique description. Only vendor-neutral standards bodies (RFC, IETF, W3C, ISO, OASIS) may be named — a vendor's own self-branded "standard" or "spec" may not
 - Phase 2 MUST NOT start without explicit user approval after Phase 1
 - Always cite specific files, functions, or sections when making claims
 - When comparing to AutoBot, read actual code — don't assume based on file names
