@@ -69,6 +69,30 @@ def _install_fake_db(monkeypatch, session):
     monkeypatch.setitem(sys.modules, "services.database", module)
 
 
+class _ExistingRow:
+    """A stand-in for the Settings row, so the writer takes its UPDATE path.
+
+    The create path calls `Setting(key=..., value=...)`. Several python-suite
+    shards import this module with the SLM config stack replaced by MagicMock,
+    which makes `Setting` a MagicMock too -- so `.value` came back a MagicMock
+    and `json.loads` raised. Reading a value off a class the harness may have
+    mocked tests the harness, not the writer. Updating a row we own reads back
+    exactly what the writer serialised, under either harness.
+    """
+
+    def __init__(self):
+        self.key = None
+        self.value = None
+
+
+def _stored_plan(session):
+    """The JSON the writer actually persisted, whichever path it took."""
+    if session.existing is not None and session.existing.value is not None:
+        return json.loads(session.existing.value)
+    assert session.added, "nothing was written to Settings at all"
+    return json.loads(session.added[0].value)
+
+
 def _stage(name, lines):
     return types.SimpleNamespace(name=name, log_lines=list(lines))
 
@@ -86,14 +110,13 @@ def resume_plan():
 @pytest.mark.asyncio
 async def test_the_persisted_row_actually_contains_the_stage_lines(monkeypatch, resume_plan):
     """The behavioural check: read the JSON the writer stored, not the source text."""
-    session = _FakeSession()
+    session = _FakeSession(existing=_ExistingRow())
     _install_fake_db(monkeypatch, session)
     job = _job([_stage("slm_self_update", ["Firing Ansible self-update", "queued"])])
 
     await resume_plan._persist_resume_plan(job, [], "abc123def456")
 
-    assert session.added, "nothing was written to Settings at all"
-    plan = json.loads(session.added[0].value)
+    plan = _stored_plan(session)
     assert plan["stage_logs"]["slm_self_update"] == [
         "Firing Ansible self-update",
         "queued",
@@ -103,14 +126,14 @@ async def test_the_persisted_row_actually_contains_the_stage_lines(monkeypatch, 
 @pytest.mark.asyncio
 async def test_the_persisted_slice_is_bounded(monkeypatch, resume_plan):
     """It lives in a Settings row, not a process, so it must not carry 200 lines."""
-    session = _FakeSession()
+    session = _FakeSession(existing=_ExistingRow())
     _install_fake_db(monkeypatch, session)
     cap = resume_plan._RESUME_PLAN_LOG_LINES
     job = _job([_stage("fleet_nodes", [f"line {i}" for i in range(cap + 25)])])
 
     await resume_plan._persist_resume_plan(job, [], "abc123def456")
 
-    stored = json.loads(session.added[0].value)["stage_logs"]["fleet_nodes"]
+    stored = _stored_plan(session)["stage_logs"]["fleet_nodes"]
     assert len(stored) == cap, f"stored {len(stored)} lines, expected the {cap} cap"
     assert stored[-1] == f"line {cap + 24}", "the cap kept the OLDEST lines; it must keep the newest"
 
