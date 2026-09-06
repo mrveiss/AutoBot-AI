@@ -761,11 +761,16 @@ register_local_node() {
     # Authenticate
     info "Authenticating with SLM API..."
     local token
+    # #15825: `|| true` is what makes the handler below reachable. Under
+    # `set -euo pipefail` a failed assignment aborts the script, so on any auth
+    # failure the installer died here and the two warn lines -- which read as
+    # careful handling -- could never run. `-f` is kept deliberately: on a 401
+    # we want no body to parse, not an error page fed to jq.
     token=$(curl -sfk --max-time 10 \
         -X POST "${api_url}/api/auth/login" \
         -H "Content-Type: application/json" \
         -d "{\"username\":\"admin\",\"password\":\"${ADMIN_PASSWORD}\"}" \
-        2>/dev/null | jq -r '.access_token // empty')
+        2>/dev/null | jq -r '.access_token // empty') || true
 
     if [[ -z "${token}" ]]; then
         warn "Could not authenticate with SLM API — skipping node registration"
@@ -777,7 +782,12 @@ register_local_node() {
     # Register this node with all single-host roles
     info "Registering local node (${local_ip})..."
     local http_code
-    http_code=$(curl -sfk --max-time 10 -o /dev/null -w "%{http_code}" \
+    # #15825: NO -f here. `-f` makes curl exit 22 on any HTTP >= 400, so the
+    # assignment failed under `set -e` and the `400)` arm below -- "already
+    # registered", an expected outcome on re-run -- was unreachable, as was the
+    # catch-all warn. Asking for %{http_code} and also asking curl to fail on
+    # the codes you are branching on are contradictory intents.
+    http_code=$(curl -sk --max-time 10 -o /dev/null -w "%{http_code}" \
         -X POST "${api_url}/api/nodes" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${token}" \
@@ -808,7 +818,8 @@ register_local_node() {
     # Auto-assign SLM Manager as code source (#2755)
     info "Assigning code source to SLM Manager..."
     local cs_code
-    cs_code=$(curl -sfk --max-time 10 -o /dev/null -w "%{http_code}" \
+    # #15825: same as above -- capturing the status code means not using -f.
+    cs_code=$(curl -sk --max-time 10 -o /dev/null -w "%{http_code}" \
         -X POST "${api_url}/api/code-source/assign" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${token}" \
