@@ -137,6 +137,22 @@ def configure_idempotency(app: FastAPI):
         logger.warning("Idempotency middleware not available: %s", e)
 
 
+def configure_playwright_session_scope(app: FastAPI):
+    """Warn when a Playwright call omits `session_id` (#15802).
+
+    Path-scoped and observational: it changes no response. A per-route call
+    would be a list that goes stale — the next Playwright route added would be
+    unscoped-by-default and silent again.
+    """
+    try:
+        from api.playwright_session_scope import PlaywrightSessionScopeMiddleware
+
+        app.add_middleware(PlaywrightSessionScopeMiddleware)
+        logger.info("Playwright session-scope warning enabled")
+    except ImportError as e:
+        logger.warning("Playwright session-scope middleware not available: %s", e)
+
+
 def configure_audit(app: FastAPI):
     """Configure audit logging middleware.
 
@@ -319,6 +335,7 @@ def configure_middleware(
     # asserted in `middleware_order_test.py` against the built stack rather than
     # against the order of the calls below.
     configure_idempotency(app)
+    configure_playwright_session_scope(app)
 
     # Configure Service Authentication (optional)
     if enable_service_auth:
@@ -352,6 +369,7 @@ __all__ = [
     "configure_gzip",
     "configure_service_auth",
     "configure_audit",
+    "configure_playwright_session_scope",
     "configure_idempotency",
     "configure_llm_awareness",
     "configure_validation",
