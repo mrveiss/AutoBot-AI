@@ -278,7 +278,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[{HOOK_ID}] --all sweeps the tree itself; do not also pass files.", file=sys.stderr)
         return EXIT_NO_VERDICT
 
-    targets, unreadable = _split_readable(_tree_wide_candidates() if tree_wide else _argv_candidates(files))
+    try:
+        candidates = _tree_wide_candidates() if tree_wide else _argv_candidates(files)
+    except Exception as exc:  # noqa: BLE001 - any enumeration failure means "no verdict"
+        # `tracked_paths` raises rather than returning [], so the failure arrives
+        # here instead of as a silent empty sweep. It must not escape: an
+        # unhandled exception exits 1, and 1 already means "headers are missing"
+        # -- a claim about the tree. Enumeration failing is the opposite claim,
+        # that the tree could not be read at all, which is what EXIT_NO_VERDICT
+        # is for. Letting the traceback through would collapse the two codes
+        # this check exists to keep apart.
+        print(f"[{HOOK_ID}] could not enumerate files to check: {exc}", file=sys.stderr)
+        return EXIT_NO_VERDICT
+
+    targets, unreadable = _split_readable(candidates)
     examined = len(targets)
     print(f"[{HOOK_ID}] examined={examined}", file=sys.stderr)
 

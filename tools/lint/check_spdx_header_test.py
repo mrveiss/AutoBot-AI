@@ -154,6 +154,32 @@ class TestTheReachFloor:
         assert guard.main(["--all", "README.md"]) == guard.EXIT_NO_VERDICT
 
 
+class TestAFailedEnumerationIsNotAVerdictAboutTheTree:
+    """#15819 review: enumeration failing must not read as "headers are missing"."""
+
+    def test_a_raising_enumeration_returns_no_verdict(self, monkeypatch):
+        """MUTATION TARGET. Drop the try/except in ``main`` and this returns 1.
+
+        ``tracked_paths`` raises rather than returning ``[]``, so the failure
+        arrives as an exception. An unhandled one exits **1**, and 1 already
+        means "headers are missing" -- a claim about the tree. Enumeration
+        failing is the opposite claim: the tree could not be read at all.
+        Collapsing them would undo the separation this check exists to make.
+        """
+
+        def _boom() -> list:
+            raise OSError("git ls-files unavailable")
+
+        monkeypatch.setattr(guard, "_tree_wide_candidates", _boom)
+        assert guard.main(["--all"]) == guard.EXIT_NO_VERDICT
+
+    def test_it_does_not_share_an_exit_code_with_a_missing_header(self, monkeypatch, sweep):
+        """The contrast half: a real missing header still exits 1, not 2."""
+        monkeypatch.setattr(guard, "SPDX_FLOOR", 1)
+        sweep({"bare.py": "x = 1\n"})
+        assert guard.main(["--all"]) == 1
+
+
 class TestTheHeaderCheckItselfIsUnchanged:
     """Every file that passed before #15817 still passes; the detection is correct."""
 
