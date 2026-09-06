@@ -1,0 +1,239 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Contrast pairs for how a name earns "derived" in the fixed-path teardown guard (#15797).
+
+Split out of ``fixture_fixed_path_teardown_guard_contrast_test.py`` when the
+conditional-rebinding pair below pushed that module past
+``check_python_file_size.py``'s MAX_LINES. The split is topical, not
+arithmetic: every pair here exercises ``_derived_names`` and the two helpers it
+composes, which decide whether the path a fixture creates and removes is
+per-test unique. The other module keeps the pairs about *which* calls and
+decorators the scanner sees at all.
+
+The same two rules apply as there. Nothing reads the repository -- every
+fixture is a literal source string this module writes itself, because seeding
+from the live population (zero violations since #15772) would make the
+assertions vacuous today and break the moment a violation reappeared (#15762).
+And every pair is two-sided: a fix that closes a false negative by flagging
+more is only correct if the fixture that must NOT be flagged still passes, so
+each hazard below is shadowed by the nearest correct fixture that must stay
+green.
+
+EVERY ASSIGNMENT MUST DERIVE, NOT JUST ONE (#15797 third review)
+------------------------------------------------------------------
+``_derived_names`` credited a name the moment *any* assignment to it read a
+unique source, so ``test_dir = Path("/fixed")`` followed by ``if unique:
+test_dir = tmp_path / "leaf"`` marked ``test_dir`` derived and suppressed the
+violation -- while the false branch created and removed the fixed path, which
+is the exact hazard the guard exists for (a FALSE NEGATIVE). A name now counts
+only when every assignment to it in the fixture's own scope derives.
+
+That rule is enforced by withdrawal rather than by a stricter build-up, and
+``TestEveryAssignmentToANameMustDerive`` pins why: a mutually recursive chain
+where every assignment genuinely derives can never be credited from the seeds
+outward, so building the set up under an all-assignments rule would flag a
+correct fixture (a FALSE POSITIVE). ``_reachably_derived`` answers the
+optimistic question and ``_withdraw_partly_fixed`` removes only what is
+contradicted.
+
+NESTED SCOPES AND CLOSURES (#15797 second review)
+----------------------------------------------------
+``_assignment_pairs`` descended into nested ``def``/``lambda`` bodies, so a
+helper's local ``test_dir = tmp_path / "leaf"`` marked an OUTER, fixed
+``test_dir`` derived and excused a real violation (a FALSE NEGATIVE). It now
+walks the fixture's own scope. ``_expr_is_derived`` keeps ``ast.walk``
+deliberately, because a lambda in a value expression closes over this
+fixture's names -- ``TestLambdaFactoryDerivationStillCounts`` is what stops
+that site being "fixed" the same way.
+"""
+
+from __future__ import annotations
+
+import ast
+
+from repo_tests.fixture_fixed_path_teardown_guard import _is_violation, _iter_pytest_fixtures
+
+
+def _only_fixture(source: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
+    (func,) = _iter_pytest_fixtures(ast.parse(source))
+    return func
+
+
+_NESTED_LOCAL_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    test_dir = Path("/tmp/autobot/nested_local_hazard")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    def leaf():
+        test_dir = tmp_path / "leaf"
+        return test_dir
+    yield test_dir
+    shutil.rmtree(test_dir)
+"""
+
+_NESTED_LOCAL_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    test_dir = tmp_path / "nested_local_safe"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    def leaf():
+        other = Path("/tmp/autobot/nested_local_leaf")
+        return other
+    yield test_dir
+    shutil.rmtree(test_dir)
+"""
+
+
+class TestNestedHelperLocalsDoNotDeriveOuterNames:
+    """Review finding 4: ``_assignment_pairs`` walked into nested scopes too.
+
+    A helper's ``test_dir = tmp_path / "leaf"`` binds a name that exists only
+    inside the helper, but it marked the fixture's OWN fixed ``test_dir``
+    derived -- the created-and-removed path was then excused (a FALSE
+    NEGATIVE). The safe source keeps a nested helper with a fixed local of its
+    own while the fixture's real path derives from ``tmp_path``, so scoping the
+    pairs cannot be achieved by simply ignoring derivation.
+    """
+
+    def test_nested_local_does_not_derive_the_outer_fixed_path(self):
+        assert _is_violation(_only_fixture(_NESTED_LOCAL_HAZARD_SOURCE)) is True
+
+    def test_outer_derivation_is_still_recognized_beside_a_nested_helper(self):
+        assert _is_violation(_only_fixture(_NESTED_LOCAL_SAFE_SOURCE)) is False
+
+
+_LAMBDA_FACTORY_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    build = lambda name: tmp_path / name
+    test_dir = build("lambda_safe")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    shutil.rmtree(test_dir)
+"""
+
+_LAMBDA_FACTORY_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    build = lambda name: Path("/tmp/autobot/lambda_hazard") / name
+    test_dir = build("leaf")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    shutil.rmtree(test_dir)
+"""
+
+
+class TestLambdaFactoryDerivationStillCounts:
+    """Why ``_expr_is_derived`` keeps ``ast.walk`` while the two above dropped it.
+
+    A lambda in a value expression is a closure over the enclosing scope, so
+    the names it reads really are the fixture's: ``build = lambda name:
+    tmp_path / name`` derives ``build``, and through it ``test_dir``. Teaching
+    that site to ignore lambda bodies would stop seeing the derivation and
+    flag this correct fixture -- which is what this pair pins. (Merely
+    swapping in ``_walk_current_scope`` would not: that helper yields the node
+    it is handed and skips only nested *children*, and here the lambda is the
+    whole right-hand side.) The hazard source is the identical shape over a
+    fixed root and must still be flagged, so the site tracks where the path
+    came from rather than excusing anything a lambda touches.
+    """
+
+    def test_lambda_factory_over_tmp_path_is_recognized_as_derived(self):
+        assert _is_violation(_only_fixture(_LAMBDA_FACTORY_SAFE_SOURCE)) is False
+
+    def test_lambda_factory_over_a_fixed_root_is_still_flagged(self):
+        assert _is_violation(_only_fixture(_LAMBDA_FACTORY_HAZARD_SOURCE)) is True
+
+_CONDITIONAL_REBIND_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path, use_unique):
+    test_dir = Path("/tmp/autobot/conditional_rebind_hazard")
+    if use_unique:
+        test_dir = tmp_path / "leaf"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    shutil.rmtree(test_dir)
+"""
+
+_CONDITIONAL_REBIND_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path, use_alt):
+    if use_alt:
+        test_dir = tmp_path / "conditional_rebind_alt"
+    else:
+        test_dir = tmp_path / "conditional_rebind_main"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    shutil.rmtree(test_dir)
+"""
+
+_DERIVED_CHAIN_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    test_dir = tmp_path / "chain_root"
+    leaf = test_dir / "leaf"
+    test_dir = leaf / "deeper"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    shutil.rmtree(test_dir)
+"""
+
+
+class TestEveryAssignmentToANameMustDerive:
+    """Review finding: one derived assignment used to credit the whole name.
+
+    The hazard fixture creates and removes a FIXED path whenever ``use_unique``
+    is false -- the guard's whole subject -- yet the ``tmp_path`` rebinding in
+    the true branch put ``test_dir`` in ``derived`` and suppressed it (a FALSE
+    NEGATIVE). Crediting only names whose every assignment derives closes it
+    without dominance analysis.
+
+    Tightening ``derived`` makes flagging MORE likely, so the two safe sources
+    carry the weight here. The first is the legitimate shape the rule must not
+    break: an ``if``/``else`` where both branches assign a ``tmp_path``-derived
+    value is still fully derived and must stay green. The second pins the
+    implementation choice -- ``test_dir`` and ``leaf`` each derive on every
+    assignment, but each is creditable only once the other already is, so an
+    all-assignments rule applied while building the set up from the seeds would
+    credit neither and flag this correct fixture. Withdrawal from
+    ``_reachably_derived`` credits it.
+    """
+
+    def test_conditional_rebinding_over_a_fixed_initial_value_is_flagged(self):
+        assert _is_violation(_only_fixture(_CONDITIONAL_REBIND_HAZARD_SOURCE)) is True
+
+    def test_if_else_with_every_branch_derived_is_not_flagged(self):
+        assert _is_violation(_only_fixture(_CONDITIONAL_REBIND_SAFE_SOURCE)) is False
+
+    def test_a_chain_that_derives_on_every_assignment_is_not_flagged(self):
+        assert _is_violation(_only_fixture(_DERIVED_CHAIN_SAFE_SOURCE)) is False
