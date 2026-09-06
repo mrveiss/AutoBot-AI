@@ -10,13 +10,16 @@ tree has proved nothing: it could return an empty violation list
 unconditionally and every one of those assertions would still pass. The repo
 standard is a contrast pair per defect closed. That module documents the
 guard's rationale; this one holds the synthetic fixtures for which calls and
-decorators the scanner sees at all, and
+decorators the scanner sees at all,
 ``fixture_fixed_path_teardown_guard_derivation_test.py`` holds those for how a
-name earns "derived" and
-``fixture_fixed_path_teardown_guard_reachability_test.py`` those for which
-nested bodies are live code -- so no module has to fit all of it under
-``check_python_file_size.py``'s MAX_LINES (the same split as
-``ansible_manifest_resolution_contrast_test.py``).
+name earns "derived", ``fixture_fixed_path_teardown_guard_reachability_test.py``
+those for which nested bodies are live code, and
+``fixture_fixed_path_teardown_guard_gating_test.py`` those for which constructs
+gate a removal and which run on every path -- so no module has to fit all of it
+under ``check_python_file_size.py``'s MAX_LINES (the same split as
+``ansible_manifest_resolution_contrast_test.py``). The gating module is the
+newest of the four: #15820 doubled that section when it inverted the rule's
+default, and the three pairs it already held moved across with it.
 
 Nothing here reads the repository. Every fixture below is a literal source
 string this module writes itself -- seeding the pairs from the live population
@@ -35,9 +38,9 @@ THREE FALSE NEGATIVES CLOSED (#15797)
 does, and reading ``tmp_path`` anywhere in the body was treated as proof the
 created/removed path was unique even when it traced to something else
 entirely. ``_fixture_alias_names``, ``_if_exhaustively_removes``, and
-``_derived_names`` close each one respectively; each has its own contrast
-pair below and none may widen what ``tmp_root_exists`` or ``temp_forbidden_dir``
-already pass.
+``_derived_names`` close each one respectively; each has its own contrast pair
+(the ``_if_exhaustively_removes`` one now in the gating module) and none may
+widen what ``tmp_root_exists`` or ``temp_forbidden_dir`` already pass.
 
 TWO MORE GAPS CLOSED IN REVIEW (#15797 follow-up)
 ----------------------------------------------------
@@ -174,167 +177,6 @@ class TestAliasedFixtureDecoratorIsRecognized:
         func = _only_fixture(_ALIAS_SAFE_SOURCE)
         assert func.name == "temp_dir"
         assert _is_violation(func) is False
-
-
-_EXHAUSTIVE_HAZARD_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(tmp_path, use_alt_removal):
-    test_dir = Path("/tmp/autobot/exhaustive_hazard")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    if use_alt_removal:
-        shutil.rmtree(test_dir)
-    else:
-        shutil.rmtree(test_dir)
-"""
-
-_EXHAUSTIVE_SAFE_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(created_flag):
-    test_dir = Path("/tmp/autobot/exhaustive_safe")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    if created_flag:
-        shutil.rmtree(test_dir)
-"""
-
-
-class TestExhaustiveBranchRemovalIsUnconditional:
-    """Defect 2 (#15797): remove-on-every-branch must count as unconditional.
-
-    ``_EXHAUSTIVE_SAFE_SOURCE`` mirrors ``tmp_root_exists``'s own shape -- a
-    single ``if`` with no ``else`` -- so the fix must not start flagging it.
-    """
-
-    def test_removal_on_every_branch_of_if_else_is_flagged(self):
-        assert _is_violation(_only_fixture(_EXHAUSTIVE_HAZARD_SOURCE)) is True
-
-    def test_removal_on_a_single_unmatched_branch_stays_conditional(self):
-        assert _is_violation(_only_fixture(_EXHAUSTIVE_SAFE_SOURCE)) is False
-
-
-_TERNARY_GATED_SAFE_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(flag, drop):
-    test_dir = Path("/tmp/autobot/ternary_gated")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    if flag:
-        shutil.rmtree(test_dir) if drop else None
-    else:
-        shutil.rmtree(test_dir)
-"""
-
-_TERNARY_EXHAUSTIVE_HAZARD_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir(use_root):
-    test_dir = Path("/tmp/autobot/ternary_exhaustive")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    shutil.rmtree(test_dir) if use_root else shutil.rmtree(test_dir / "leaf")
-"""
-
-
-class TestTernaryGatingIsDistinguishedFromExhaustion:
-    """#15815 review: a ternary-gated removal is not a guaranteed removal.
-
-    ``_stmt_guarantees_remove`` used to fall through to a plain scan of the
-    statement, discarding the guardedness the primitive already carried, so
-    ``shutil.rmtree(p) if drop else None`` satisfied ``_branch_removes``. In
-    ``_TERNARY_GATED_SAFE_SOURCE`` that made the whole if/else look exhaustive
-    -- ``_guarded_child_ids`` then returned nothing, every call in it read as
-    unconditional, and a fixture that removes on one path only was flagged.
-    That is the FALSE POSITIVE direction, the one that gets a guard switched
-    off, so it is the half that had to be fixed first.
-
-    Refusing every ternary would have closed it by opening the mirror, which
-    ``_TERNARY_EXHAUSTIVE_HAZARD_SOURCE`` pins: both arms remove, so a removal
-    happens on every path and the fixture is a real hazard.
-    ``_ifexp_exhaustively_removes`` asks the ternary the same question
-    ``_if_exhaustively_removes`` asks an ``if``, which is what separates the
-    two shapes. Both fixtures create the same fixed path, so the create side
-    is True either way and only the removal verdict moves these assertions.
-    """
-
-    def test_ternary_gated_removal_inside_a_branch_stays_conditional(self):
-        assert _is_violation(_only_fixture(_TERNARY_GATED_SAFE_SOURCE)) is False
-
-    def test_ternary_that_removes_on_both_arms_is_flagged(self):
-        assert _is_violation(_only_fixture(_TERNARY_EXHAUSTIVE_HAZARD_SOURCE)) is True
-
-
-_LOOP_BODY_SAFE_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir():
-    test_dir = Path("/tmp/autobot/loop_body")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    for entry in test_dir.iterdir():
-        shutil.rmtree(entry)
-"""
-
-_FINALLY_TEARDOWN_HAZARD_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_dir():
-    test_dir = Path("/tmp/autobot/finally_teardown")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        yield test_dir
-    finally:
-        shutil.rmtree(test_dir)
-"""
-
-
-class TestLoopBodiesGateARemovalButFinallyDoesNot:
-    """#15815 review: the loop rule was stated in one place and not the other.
-
-    ``_stmt_guarantees_remove`` has always said a loop may run zero times, so
-    a remove inside one is not guaranteed; ``_guarded_child_ids`` never said
-    it, so the same call read as unguarded in the verdict that matters. The
-    live tree's ``tmp_root_exists`` survived only because its ``for entry in
-    ...: rmtree(entry) if entry.is_dir() else entry.unlink()`` was read as a
-    gated ternary -- and the moment the ternary was judged on its own merits
-    (both arms remove, so it is exhaustive) the loop had nothing left holding
-    it and a correct fixture was flagged. ``_LOOP_BODY_SAFE_SOURCE`` is that
-    shape reduced to the loop alone, so it pins the loop rule rather than the
-    ternary's accident.
-
-    ``_FINALLY_TEARDOWN_HAZARD_SOURCE`` is why ``try``/``with`` are NOT in
-    ``_LOOP_NODES``: a ``finally:`` removal runs on every path out of the
-    fixture and is the commonest teardown there is. Gating the loop must not
-    become gating every compound statement, or the guard stops reaching the
-    hazard it was written for.
-    """
-
-    def test_removal_only_inside_a_loop_body_is_not_unconditional(self):
-        assert _is_violation(_only_fixture(_LOOP_BODY_SAFE_SOURCE)) is False
-
-    def test_removal_in_a_finally_block_is_still_unconditional(self):
-        assert _is_violation(_only_fixture(_FINALLY_TEARDOWN_HAZARD_SOURCE)) is True
 
 
 _TRACED_HAZARD_SOURCE = """

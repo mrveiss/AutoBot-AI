@@ -11,11 +11,13 @@ Split out from the test module (the same shape as ``sys_modules_leak_guard.py``
 ``fixture_fixed_path_teardown_guard_test.py`` carries the guard's rationale
 and the live-tree assertions, and
 ``fixture_fixed_path_teardown_guard_contrast_test.py``,
-``fixture_fixed_path_teardown_guard_derivation_test.py`` and
-``fixture_fixed_path_teardown_guard_reachability_test.py`` carry the synthetic
+``fixture_fixed_path_teardown_guard_derivation_test.py``,
+``fixture_fixed_path_teardown_guard_reachability_test.py`` and
+``fixture_fixed_path_teardown_guard_gating_test.py`` carry the synthetic
 contrast pair for every defect closed -- which calls and decorators are seen at
-all, how a name earns "derived", and which nested bodies are live code,
-respectively; this one documents only the AST shapes each helper recognizes.
+all, how a name earns "derived", which nested bodies are live code, and which
+constructs gate a removal, respectively; this one documents only the AST shapes
+each helper recognizes.
 
 The control-flow half -- which nested bodies are reached, which bindings are
 dead, and the single scope-walking primitive all of that is built from -- lives

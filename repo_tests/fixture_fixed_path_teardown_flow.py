@@ -22,12 +22,14 @@ about a scope, all from a single walking primitive:
 ``_walk_scope_guarded``
     THE primitive. Every node in one scope -- never descending into a nested
     ``def``/``lambda``, whose body does not run where it is written -- tagged
-    with whether an ``if``, a ternary or a loop gates it. ``_walk_current_scope``,
-    ``_collect_calls`` and ``_collect_loads`` are all filters over it, so the
-    guard has one traversal to reason about rather than several that drifted.
-    What counts as a gate is decided once, in ``_guarded_child_ids``: an
-    if/else or ternary whose every branch removes is not one, a loop body
-    always is, and ``try``/``with`` never are (#15815 review).
+    with whether anything gates it. ``_walk_current_scope``, ``_collect_calls``
+    and ``_collect_loads`` are all filters over it, so the guard has one
+    traversal to reason about rather than several that drifted. What counts as
+    a gate is decided once, in ``_always_running_child_ids``, and #15820
+    inverted its default: a child is unconditional only where the rule NAMES
+    the construct as running on every path -- a statement in the scope's own
+    statement list, a ``Try.finalbody``, a ``with`` body -- and everything
+    else, unrecognised and future syntax included, is gated.
 
 ``_nested_scopes_by_name`` + ``_collect_loads``
     REACHABILITY. A nested scope runs only if the enclosing scope names it,
@@ -62,11 +64,99 @@ _REMOVE_CALL_NAMES = frozenset({"rmtree", "unlink", "rmdir", "remove"})
 # ``_reached_scopes`` in the guard re-enters the ones the code actually names.
 _NESTED_SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 
-# A loop body runs once per item and an empty sequence runs it none, so a call
-# inside one is reached on a condition exactly as a call inside an ``if`` is.
-# ``try``/``with`` are deliberately absent: a ``finally:`` teardown runs on
-# every path, and gating it would excuse the commonest fixture cleanup there is.
-_LOOP_NODES = (ast.For, ast.AsyncFor, ast.While)
+# Node types that evaluate every operand they hold, on every path through
+# themselves: they introduce no branch of their own, so a call written inside
+# one runs exactly when the node does. Naming them is what keeps
+# ``shutil.rmtree(test_dir)`` -- an ``Expr`` holding a ``Call`` -- unconditional
+# under a rule whose default is "gated". A node type absent from here and from
+# ``_ALWAYS_RUNS_FIELDS`` gates every child, which is #15820's whole point.
+#
+# ``ast.Compare`` is absent on purpose rather than by oversight: ``a < b < c``
+# never evaluates ``c`` when the first comparison is false, so it branches.
+# ``ast.Assert`` likewise -- ``python -O`` strips the statement entirely.
+_UNBRANCHING_NODES = (
+    ast.FunctionDef,
+    ast.AsyncFunctionDef,
+    ast.Lambda,
+    ast.Module,
+    ast.Expr,
+    ast.Assign,
+    ast.AugAssign,
+    ast.AnnAssign,
+    ast.NamedExpr,
+    ast.Return,
+    ast.Delete,
+    ast.Raise,
+    ast.Await,
+    ast.Yield,
+    ast.YieldFrom,
+    ast.Call,
+    ast.keyword,
+    ast.arguments,
+    ast.arg,
+    ast.withitem,
+    ast.Attribute,
+    ast.Subscript,
+    ast.Slice,
+    ast.BinOp,
+    ast.UnaryOp,
+    ast.Tuple,
+    ast.List,
+    ast.Set,
+    ast.Dict,
+    ast.Starred,
+    ast.JoinedStr,
+    ast.FormattedValue,
+    ast.Name,
+    ast.Constant,
+)
+
+# A comprehension evaluates the OUTERMOST iterable once, eagerly, and nothing
+# else is guaranteed: ``[shutil.rmtree(e) for e in fixed.iterdir()]`` removes
+# zero times on an empty directory, and a second ``for`` clause is reached only
+# if the first yielded an item. So only ``generators[0]`` is always-running,
+# which is a position rather than a field and is handled in code below.
+_COMPREHENSION_NODES = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+
+# Branching node types -> the fields whose children still run on every path
+# through the node. Every other field of these nodes is gated, and so is every
+# field of every node type named in neither table.
+#
+#   ``If``/``IfExp``   the test is evaluated to choose a branch; no branch is.
+#   ``For``/``AsyncFor`` the iterable is evaluated once, before any decision
+#                      about the body; an empty one runs the body zero times,
+#                      and ``orelse`` is skipped by a ``break``.
+#   ``While``          the test runs; the body may never.
+#   ``Try``            only ``finalbody`` runs on every path out of the
+#                      statement. ``handlers`` need a raise, ``orelse`` needs
+#                      the absence of one, and ``body`` is the clause whose
+#                      whole purpose is that control may leave it early.
+#   ``With``           the body runs; a context manager that swallows an
+#                      exception does not stop it from being entered. This is
+#                      the commonest fixture teardown there is and must keep
+#                      flagging.
+#   ``Match``          the subject is evaluated; a case needs it to match, and
+#                      a ``match`` with no matching case runs nothing at all.
+#   ``comprehension``  the iterable of the generator clause the parent already
+#                      admitted; ``target`` and ``ifs`` are per-item.
+_ALWAYS_RUNS_FIELDS: Dict[type, Tuple[str, ...]] = {
+    ast.If: ("test",),
+    ast.IfExp: ("test",),
+    ast.For: ("iter",),
+    ast.AsyncFor: ("iter",),
+    ast.While: ("test",),
+    ast.Try: ("finalbody",),
+    ast.With: ("items", "body"),
+    ast.AsyncWith: ("items", "body"),
+    ast.comprehension: ("iter",),
+}
+
+# ``match`` is 3.10+ and ``except*`` 3.11+; both are named where they exist and
+# default to fully gated where they do not, which is the same answer.
+for _name, _fields in (("Match", ("subject",)), ("TryStar", ("finalbody",))):
+    _node_type = getattr(ast, _name, None)
+    if _node_type is not None:
+        _ALWAYS_RUNS_FIELDS[_node_type] = _fields
 
 #: A scope this model can analyse: a fixture, or a nested helper it reaches.
 Scope = ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda
@@ -92,11 +182,11 @@ def _walk_scope_guarded(node: ast.AST, guarded: bool = False) -> Iterator[Tuple[
     node inside an ``if`` carries the flag while its siblings do not.
     """
     yield node, guarded
-    guarded_ids = _guarded_child_ids(node)
+    always_runs = _always_running_child_ids(node)
     for child in ast.iter_child_nodes(node):
         if isinstance(child, _NESTED_SCOPE_NODES):
             continue
-        yield from _walk_scope_guarded(child, guarded or id(child) in guarded_ids)
+        yield from _walk_scope_guarded(child, guarded or id(child) not in always_runs)
 
 
 def _walk_current_scope(node: ast.AST) -> Iterator[ast.AST]:
@@ -182,55 +272,82 @@ def _branch_removes(stmts: List[ast.stmt]) -> bool:
 def _stmt_guarantees_remove(stmt: ast.stmt) -> bool:
     """True if *stmt* itself, unconditionally, reaches a remove call.
 
-    A loop, ``try``, or ``with`` may run zero times or raise before the call,
-    so a remove call nested inside one is never guaranteed by this statement
-    alone -- it stays whatever the enclosing construct already tags it as.
-    Nor does merely *defining* a nested function or lambda run its body: a
-    function/lambda statement (or a value assigned one) is never itself a
-    guaranteed remove, no matter what its uncalled body contains.
+    This used to carry its own list of statement types that may run zero times
+    -- loops, ``try``, ``with`` -- duplicating a rule ``_guarded_child_ids``
+    stated differently, and the two disagreeing about loops is #15815's defect.
+    There is one rule now: ``_node_guarantees_remove`` walks *stmt* with the
+    gating ``_always_running_child_ids`` decides, so a loop body, an ``except``
+    handler or a ``match`` case answers False here without this function
+    naming any of them, and a ``try``/``finally`` or a ``with`` inside a branch
+    answers True -- which the old list got wrong in the conservative direction.
 
-    Everything else is an expression statement, and the gating inside it
-    counts: ``_node_guarantees_remove`` keeps the guardedness flag rather
-    than scanning the subtree for any remove call at all.
+    Only the nested-scope case survives, and only because it cannot be asked of
+    the walk: a ``def``/``lambda`` CHILD is skipped by ``_walk_scope_guarded``,
+    but the same node handed in as the walk's root is not, and merely defining
+    a helper does not run the removal in its body.
     """
-    if isinstance(stmt, ast.If):
-        return _if_exhaustively_removes(stmt)
-    if isinstance(stmt, (ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith)):
-        return False
     if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
         return False
     return _node_guarantees_remove(stmt)
 
 
-def _guarded_child_ids(node: ast.AST) -> Set[int]:
-    """Direct children an ``if``/ternary/loop reaches on only some executions.
+def _all_child_ids(node: ast.AST) -> Set[int]:
+    """Every direct child of *node* -- the answer for a node that branches nowhere."""
+    return {id(child) for child in ast.iter_child_nodes(node)}
 
-    An exhaustive if/else or ternary (every branch removes, see above)
-    contributes no guarded ids at all -- the removal it contains is
-    unconditional overall, even though it is lexically inside a conditional.
-    The two forms are asked the same question by the same rule, which is what
-    keeps ``rmtree(a) if cond else rmtree(b)`` counted while
-    ``rmtree(p) if drop else None`` stays gated (#15815 review).
 
-    A loop body is gated unconditionally, with no exhaustive case: however
-    the body is written, a sequence with no items runs it zero times. That is
-    the rule ``_stmt_guarantees_remove`` already states for loops, and stating
-    it in only one of the two places is what made ``tmp_root_exists``'s
-    ``for entry in ...: rmtree(entry) if entry.is_dir() else entry.unlink()``
-    pass for the wrong reason -- on the ternary being read as gated rather
-    than on the loop that may not run at all. The loop's ``iter`` stays
-    unguarded: it is evaluated once, before any decision about the body.
+def _field_child_ids(node: ast.AST, fields: Tuple[str, ...]) -> Set[int]:
+    """The children *node* holds in *fields*, list-valued fields flattened."""
+    ids: Set[int] = set()
+    for field in fields:
+        value = getattr(node, field, None)
+        if isinstance(value, list):
+            ids |= {id(item) for item in value if isinstance(item, ast.AST)}
+        elif isinstance(value, ast.AST):
+            ids.add(id(value))
+    return ids
+
+
+def _always_running_child_ids(node: ast.AST) -> Set[int]:
+    """Direct children of *node* that run on EVERY path through it; everything else is gated.
+
+    #15820 inverted this. It used to be ``_guarded_child_ids``, a whitelist of
+    node types known to be *conditional* -- ``If``, ``IfExp``, then the loops
+    -- with everything unnamed assumed to run unconditionally. That default is
+    the wrong way round for this guard. Guessing "unconditional" when unsure
+    produces a FALSE POSITIVE, a fixture flagged for a removal it performs on
+    only some paths; a guard that flags correct code gets switched off, and
+    every later verdict it would have produced goes missing with it. Guessing
+    "gated" costs one missed violation and leaves the guard running. Measured
+    against the whitelist, five shapes were already wrong in that direction --
+    a comprehension body, an ``except`` handler, a ``try``/``else``, a ``match``
+    case and the right-hand operand of ``or`` -- and every future syntax would
+    have arrived the same way, one construct at a time.
+
+    So the rule is now a denylist of always-executes: a child is unconditional
+    only if this function names it, and an unrecognised node type -- including
+    one no Python release has shipped yet -- gates every child it holds.
+
+    The exhaustive cases are not exceptions to that. They are a second question
+    asked of a construct that is otherwise gated: an ``if``/``elif``/``else``
+    or a ternary whose EVERY branch removes performs the removal on every path,
+    lexically conditional or not, so it widens to all children. That is what
+    keeps ``rmtree(a) if cond else rmtree(b)`` counted while ``rmtree(p) if
+    drop else None`` stays gated (#15815 review).
     """
-    if isinstance(node, ast.If):
-        if _if_exhaustively_removes(node):
-            return set()
-        return {id(child) for child in list(node.body) + list(node.orelse)}
-    if isinstance(node, ast.IfExp):
-        if _ifexp_exhaustively_removes(node):
-            return set()
-        return {id(node.body), id(node.orelse)}
-    if isinstance(node, _LOOP_NODES):
-        return {id(child) for child in list(node.body) + list(node.orelse)}
+    if isinstance(node, ast.If) and _if_exhaustively_removes(node):
+        return _all_child_ids(node)
+    if isinstance(node, ast.IfExp) and _ifexp_exhaustively_removes(node):
+        return _all_child_ids(node)
+    if isinstance(node, _COMPREHENSION_NODES):
+        return {id(node.generators[0])} if node.generators else set()
+    if isinstance(node, ast.BoolOp):
+        return {id(node.values[0])} if node.values else set()
+    fields = _ALWAYS_RUNS_FIELDS.get(type(node))
+    if fields is not None:
+        return _field_child_ids(node, fields)
+    if isinstance(node, _UNBRANCHING_NODES):
+        return _all_child_ids(node)
     return set()
 
 
