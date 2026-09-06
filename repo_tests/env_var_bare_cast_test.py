@@ -63,6 +63,7 @@ from typing import NamedTuple
 import pytest
 
 from autobot_shared.paths import GitRepoRootUnavailable, git_repo_root, scrubbed_git_env
+from repo_tests._reach import declare
 from repo_tests.env_var_bare_cast_allowlist import BARE_ENV_CASTS, MAX_BARE_ENV_CASTS
 
 #: A path this scan never reaches: tests (whatever their naming convention),
@@ -243,6 +244,18 @@ def measurement() -> Measurement:
 #: Measured on Dev_new_gui: comfortably above 1000 tracked, non-test .py files.
 MIN_FILES_SCANNED = 500
 
+#: The same floor, declared so it can be **proved to fire** rather than trusted
+#: (#15826). This guard already had a floor and a vacuity test; what it did not
+#: have was anything driving its discovery against an empty tree. A census that
+#: grepped for `assert len(...) >= ...` also missed this floor entirely, which
+#: is why adoption is measured by declaration rather than by pattern.
+REACH = declare(
+    "env-var-bare-cast",
+    discover=tracked_python_files,
+    floor=MIN_FILES_SCANNED,
+    what="tracked python files",
+)
+
 
 def test_every_tracked_file_was_actually_parsed(measurement: Measurement) -> None:
     """A file the walk could not read is not a file with no casts.
@@ -325,12 +338,12 @@ CAST_CONTRASTS = (
     ('_X = max(1, int(os.environ.get("VAR", "1")))', "int"),
     # The wrapper is only transparent when a cast is actually inside it.
     ('_X = max(1, int(some_other_call("VAR")))', None),
-    ('_X = max(1, 2)', None),
+    ("_X = max(1, 2)", None),
     # A keyword argument is evaluated before the wrapper is called, so a cast
     # hidden there raises at import exactly as a positional one does.
     ('_X = max(0, key=int(os.getenv("VAR", "1")))', "int"),
     ('_X = max(0, key=int(os.environ.get("VAR", "1")))', "int"),
-    ('_X = max(0, key=len)', None),
+    ("_X = max(0, key=len)", None),
     # A crash-safe reader is not this shape at all.
     ('_X = env_int("VAR", 1)', None),
     # A cast of something other than a bare os.getenv/os.environ.get call.
