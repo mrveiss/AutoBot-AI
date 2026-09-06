@@ -63,7 +63,6 @@ def _load(path: Path):
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-
 _INCLUDE_KEYS = (
     "ansible.builtin.include_tasks",
     "include_tasks",
@@ -117,16 +116,11 @@ def test_every_service_unit_task_escalates() -> None:
     """The regression: these tasks write systemd state and need root."""
     tasks = _load(_SERVICE_UNITS)
     assert tasks, "service_units.yml defines no tasks"
-    missing = [
-        t.get("name", "<unnamed>")
-        for t in tasks
-        if _included_file(t) is None and t.get("become") is not True
-    ]
+    missing = [t.get("name", "<unnamed>") for t in tasks if _included_file(t) is None and t.get("become") is not True]
     assert not missing, (
         "these tasks write systemd state but rely on the caller to escalate, "
         f"which is what broke on the self-update path: {missing}"
     )
-
 
 
 def test_no_service_unit_include_carries_become() -> None:
