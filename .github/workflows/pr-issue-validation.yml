@@ -147,12 +147,29 @@ jobs:
           echo "status=failure" >> "$GITHUB_OUTPUT"
           exit 1
 
-      # #15492: the same-scope batching rule was documented in CLAUDE.md and
-      # checked by nothing, so it held only as often as it was remembered --
-      # and each miss costs a full CI suite. This is not a ban on single-issue
-      # PRs; it requires the author to say why one stands alone. The logic
-      # lives in a script with unit tests because it has more branches than a
-      # readable inline shell version can carry.
+  # #15887: this was a STEP inside the job above, so a batching failure reported
+  # under the name "Check PR links to its issue" -- a check that had passed, and
+  # said so in the same log. A name that accuses a specific, verifiable mechanism
+  # is worse than a vague one when it is wrong: the reader confirms that
+  # mechanism is fine and concludes the gate is broken. Three sessions debugged
+  # it separately before the cause was traced once.
+  #
+  # Splitting re-points nothing: neither this name nor the sibling's is a
+  # required context (those ten live on classic branch protection).
+  #
+  # #15492: the same-scope batching rule was documented in CLAUDE.md and
+  # checked by nothing, so it held only as often as it was remembered --
+  # and each miss costs a full CI suite. This is not a ban on single-issue
+  # PRs; it requires the author to say why one stands alone. The logic
+  # lives in a script with unit tests because it has more branches than a
+  # readable inline shell version can carry.
+  batching:
+    name: Check same-scope batching
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
       - name: Validate same-scope batching
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
