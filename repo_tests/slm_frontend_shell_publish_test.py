@@ -52,6 +52,8 @@ import re
 from pathlib import Path
 from typing import Iterator
 
+from repo_tests.slm_frontend_publish_contract import CLAUSES
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _SHARED_HELPER = (
@@ -260,7 +262,17 @@ def test_no_entry_point_builds_or_publishes_inline() -> None:
 
 def test_the_shared_helper_carries_every_part_of_the_fix() -> None:
     text = _SHARED_HELPER.read_text(encoding="utf-8")
-    assert "npm run build:slm" in text, f"{_SHARED_HELPER} does not build with build:slm"
+    # #15724: every clause the shared contract states for the shell
+    # implementation is checked from the contract, not restated here. Two guards
+    # each restating the same contract is how they drift apart while both stay
+    # green -- what nothing was checking was the agreement itself.
+    for clause in CLAUSES:
+        pattern = clause.patterns.get("shell")
+        assert pattern is not None, (
+            f"contract clause {clause.name!r} states no shell pattern, so the shell "
+            "implementation is exempt from it without anyone saying so"
+        )
+        assert re.search(pattern, text), f"{_SHARED_HELPER} does not satisfy {clause.name!r}\n{clause.why}"
     assert not _builds_slm_frontend_wrong(
         f"{_SLM_FRONTEND_MARKER}\n{text}"
     ), "the shared helper contains a plain `npm run build` invocation alongside build:slm"
