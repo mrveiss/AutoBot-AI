@@ -113,10 +113,14 @@ def _validate_agent_status(agent_cfg: Dict[str, Any]) -> None:
         )
 
 
-async def _validate_budget(session: AsyncSession, agent_id: str) -> None:
-    """Reject replay when the agent is over its budget limit (H2d)."""
+async def _validate_budget(session: AsyncSession, agent_id: str, company_id: str) -> None:
+    """Reject replay when the agent is over its budget limit (H2d).
+
+    Scoped by company: the caller has already been shown to own this agent, and
+    the slug alone does not identify a budget row (#15812).
+    """
     svc = _get_budget_svc()
-    _remaining, is_over, _alert = await svc.check_budget(session, agent_id)
+    _remaining, is_over, _alert = await svc.check_budget(session, agent_id, company_id)
     if is_over:
         raise HTTPException(
             status_code=402,
@@ -201,7 +205,7 @@ async def trigger_replay(
     await _validate_no_active_run(session, agent_id)
 
     # H2d: budget gate.
-    await _validate_budget(session, agent_id)
+    await _validate_budget(session, agent_id, str(ctx.org_id))
 
     # Load the replay log (validates company scope + existence).
     svc = _get_replay_svc()

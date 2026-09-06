@@ -258,7 +258,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/roles.py": 741,
     "autobot-backend/llc/api/sprints.py": 1223,
     "autobot-backend/llc/api/work_items.py": 1416,
-    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1078,
+    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1076,
     "autobot-backend/llc/services/portability.py": 936,
     "autobot-backend/llc/services/template.py": 643,
     "autobot-backend/llc/services/work_item_service.py": 1100,

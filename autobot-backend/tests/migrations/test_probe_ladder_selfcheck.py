@@ -126,6 +126,13 @@ def test_observability_coverage():
         # guard: upgrade() returns early when the index already exists, so the
         # adoption re-run this allowlist permits is a genuine no-op rather than
         # a "relation already exists" failure.
+        "20260906_089",  # llc_agent_budgets (company_id, agent_id) unique (#15812)
+        # — swaps one unique constraint for another and creates no table and no
+        # column, so extract_artifacts cannot observe it, for the same structural
+        # reason as 20260821_081 above. Extended consciously: upgrade() inspects
+        # for the composite constraint and returns early when it is already
+        # present, so the adoption re-run this permits is a genuine no-op and not
+        # a "constraint already exists" failure.
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "
