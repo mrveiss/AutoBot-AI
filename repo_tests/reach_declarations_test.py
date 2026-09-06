@@ -24,6 +24,7 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
 from repo_tests._reach import REGISTRY, Reach, declare
 
 _REPO_TESTS = Path(__file__).resolve().parent
@@ -34,9 +35,6 @@ _REPO_TESTS = Path(__file__).resolve().parent
 #: coverage and must not be read as if it did. Ratchets **up** only, and should
 #: be raised as adoption grows or it becomes the thing it was built to prevent.
 MIN_DECLARATIONS = 2
-
-#: The only failures that mean "the floor worked" rather than "the guard is broken".
-_EXPECTED_ON_EMPTY = (AssertionError, subprocess.CalledProcessError, FileNotFoundError)
 
 #: Guard modules that could not be imported, recorded rather than discarded.
 IMPORT_FAILURES: dict[str, str] = {}
@@ -78,38 +76,59 @@ def test_the_registry_was_actually_populated() -> None:
     )
 
 
+@pytest.fixture
+def empty_repo(tmp_path: Path) -> Path:
+    """An initialised git repository containing nothing.
+
+    A bare `tmp_path` is not this: a discovery that shells out to `git ls-files`
+    fails there with `CalledProcessError` *before* `Reach._require` runs, so the
+    test would accept "the sweep could not run" in place of "the floor rejected
+    an empty sweep" — proving the guard is loud without proving its floor binds.
+    An initialised repository lets the sweep succeed and return nothing, which is
+    the case the floor exists for.
+    """
+    subprocess.run(
+        ["git", "init", "--quiet", str(tmp_path)],
+        check=True,
+        capture_output=True,
+        env=scrubbed_git_env(),
+    )
+    return tmp_path
+
+
 @pytest.mark.parametrize("reach", _declarations(), ids=lambda r: r.name)
-def test_no_guard_can_succeed_against_an_empty_tree(reach: Reach, tmp_path: Path) -> None:
-    """The mutation, applied mechanically: point discovery at nothing.
+def test_no_guard_can_succeed_against_an_empty_tree(reach: Reach, empty_repo: Path) -> None:
+    """The mutation, applied mechanically: point discovery at an empty tree.
 
-    The property is **it must not return successfully**, but "any exception
-    qualifies" is too weak: a `discover` broken by a typo raises too, and this
-    suite would then report a dead guard as adopted — the mechanism failing in
-    precisely the way it exists to detect.
+    The required failure is **`AssertionError` specifically** — the floor
+    rejecting a sweep that found nothing. Two weaker rules were tried and both
+    let a dead guard read as adopted:
 
-    So the accepted failures are named. `AssertionError` is the floor doing its
-    job; `CalledProcessError` and `FileNotFoundError` are a guard whose discovery
-    cannot run against an unusable root (`env-var-bare-cast` shells out to
-    `git ls-files` with `check=True`), which is loud *and* distinguishable from a
-    defect. Anything else fails the test, which is how this test gets a second
-    way to fail rather than only "it did not raise".
+    * "any exception qualifies" accepts a `discover` broken by a typo;
+    * "process failures also qualify" accepts a sweep that never ran, because
+      `git ls-files` raises `CalledProcessError` on a directory that is not a
+      repository — loud, but silent about whether the floor binds.
+
+    The `empty_repo` fixture removes the second case at the source rather than
+    excusing it: the sweep runs, returns nothing, and the floor is what must
+    reject it. Any other exception is a broken guard and fails the test.
     """
     try:
-        result = reach.examined(tmp_path)
-    except _EXPECTED_ON_EMPTY:
+        result = reach.examined(empty_repo)
+    except AssertionError:
         return
     except BaseException as exc:  # noqa: BLE001 - the point is to name what it was
         pytest.fail(
-            f"{reach.name} failed against an empty tree, but with "
-            f"{type(exc).__name__}: {exc!r}. That is a broken discovery, not a floor "
-            f"doing its job, and accepting it would let a typo read as adoption."
+            f"{reach.name} failed against an empty repository, but with "
+            f"{type(exc).__name__}: {exc!r}. The floor was never reached, so this "
+            f"says the guard is loud and nothing about whether its floor binds."
         )
 
     pytest.fail(f"{reach.name} returned {len(result)} items from an empty tree instead of failing")
 
 
 @pytest.mark.parametrize("reach", _declarations(), ids=lambda r: r.name)
-def test_discovery_honours_the_root_it_is_given(reach: Reach, tmp_path: Path) -> None:
+def test_discovery_honours_the_root_it_is_given(reach: Reach, empty_repo: Path) -> None:
     """The unenforced contract behind every other test here.
 
     Nothing in `declare(...)` makes `discover` use the root it is handed. A
@@ -120,15 +139,12 @@ def test_discovery_honours_the_root_it_is_given(reach: Reach, tmp_path: Path) ->
 
     Comparing the two results is enough to catch it: the live tree yields at
     least `floor` items and the floor is non-zero, so a discovery that honours
-    its argument cannot return the same thing for both. A discovery that
-    *raises* on the empty root has also honoured it — it tried to read that
-    directory and could not — so those failures satisfy the contract too.
+    its argument cannot return the same thing for both. Run against a real
+    empty repository rather than a bare directory, so a git-backed sweep
+    produces an empty result to compare instead of an exception that ends the
+    test early and proves nothing about the comparison.
     """
-    try:
-        from_empty = reach.discover(tmp_path)
-    except _EXPECTED_ON_EMPTY:
-        return  # it tried to use the root and could not, which is the contract met
-
+    from_empty = reach.discover(empty_repo)
     from_repo = reach.discover(_REPO_TESTS.parent)
 
     assert list(from_empty) != list(from_repo), (
