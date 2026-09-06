@@ -111,6 +111,48 @@ def temp_dir(created_flag):
 """
 
 
+
+class TestATryBodyRunsButItsHandlersDoNot:
+    """#15821 review: a try body is a statement list, not a conditional branch."""
+
+    def test_removal_in_a_try_body_is_unconditional(self):
+        """MUTATION TARGET. Drop ``body`` from ``_ALWAYS_RUNS_FIELDS[ast.Try]``
+        and this returns False.
+
+        A try body BEGINS executing whenever the statement is reached, exactly
+        like the scope's own statement list. Within either, a later statement
+        runs only if the earlier ones did not raise, and this model tracks
+        exceptions in neither -- so gating a try body while a plain list is
+        unconditional would be an inconsistency rather than extra caution.
+        """
+        assert _flags_teardown(
+            "    try:\n"
+            "        shutil.rmtree(test_dir)\n"
+            "    except OSError:\n"
+            "        pass"
+        )
+
+    def test_removal_only_in_an_except_handler_is_not_unconditional(self):
+        """Contrast half. A handler needs the body to have raised first."""
+        assert not _flags_teardown(
+            "    try:\n"
+            "        pass\n"
+            "    except OSError:\n"
+            "        shutil.rmtree(test_dir)"
+        )
+
+    def test_removal_only_in_a_try_else_is_not_unconditional(self):
+        """Contrast half. An ``else`` needs the body NOT to have raised."""
+        assert not _flags_teardown(
+            "    try:\n"
+            "        pass\n"
+            "    except OSError:\n"
+            "        pass\n"
+            "    else:\n"
+            "        shutil.rmtree(test_dir)"
+        )
+
+
 class TestExhaustiveBranchRemovalIsUnconditional:
     """Defect 2 (#15797): remove-on-every-branch must count as unconditional.
 
@@ -319,7 +361,7 @@ class TestExceptHandlerIsGated:
     def test_the_same_removal_in_the_finally_clause_is_still_unconditional(self):
         assert _flags_teardown(_FINALLY_CLAUSE_TEARDOWN) is True
 
-    def test_only_the_finally_clause_of_a_try_is_named_as_always_running(self):
+    def test_only_the_body_and_finally_of_a_try_are_named_as_always_running(self):
         """Pins the clause list itself, because the pair above cannot.
 
         A handler body is gated twice over -- ``handlers`` is absent from the
@@ -327,12 +369,22 @@ class TestExceptHandlerIsGated:
         nowhere -- so reverting either one alone leaves the other holding and
         the pair above still passes. Only reverting both, which is exactly the
         pre-#15820 classification, moves it. That makes the pair evidence for
-        the shape but not for the rule, so the rule gets its own assertion:
-        every clause of a ``try`` other than ``finally`` is gated, at this one
-        point, whatever the clause bodies happen to contain.
+        the shape but not for the rule, so the rule gets its own assertion at
+        this one point, whatever the clause bodies happen to contain.
+
+        ``body`` joined ``finalbody`` in #15821 review: a try body begins
+        executing whenever the statement is reached, exactly like the scope's
+        own statement list, and gating it made
+        ``try: rmtree(p) / except OSError: pass`` a false negative. ``handlers``
+        and ``orelse`` stay gated -- each needs the body to have raised, or not
+        to have, before it runs at all.
         """
         node = ast.parse(_EVERY_TRY_CLAUSE).body[0]
-        assert _always_running_child_ids(node) == {id(stmt) for stmt in node.finalbody}
+        expected = {id(stmt) for stmt in list(node.body) + list(node.finalbody)}
+        assert _always_running_child_ids(node) == expected
+        gated = {id(stmt) for stmt in list(node.orelse)}
+        gated |= {id(h) for h in node.handlers}
+        assert not (_always_running_child_ids(node) & gated)
 
 
 _TRY_ELSE_TEARDOWN = """    try:

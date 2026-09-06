@@ -145,7 +145,16 @@ _ALWAYS_RUNS_FIELDS: Dict[type, Tuple[str, ...]] = {
     ast.For: ("iter",),
     ast.AsyncFor: ("iter",),
     ast.While: ("test",),
-    ast.Try: ("finalbody",),
+    # ``body`` as well as ``finalbody``: a try body BEGINS executing whenever the
+    # statement is reached, exactly like a scope's own statement list. Within
+    # either, a later statement runs only if the earlier ones did not raise --
+    # and this model does not track exceptions for plain statement lists, so
+    # treating a try body as gated while a plain list is not would be an
+    # inconsistency, not extra caution. It made
+    # ``try: rmtree(fixed) / except OSError: pass`` a false negative (#15821
+    # review). ``handlers`` and ``orelse`` stay gated: both need the body to
+    # have raised, or not to have, before they run at all.
+    ast.Try: ("body", "finalbody"),
     ast.With: ("items", "body"),
     ast.AsyncWith: ("items", "body"),
     ast.comprehension: ("iter",),
@@ -153,7 +162,7 @@ _ALWAYS_RUNS_FIELDS: Dict[type, Tuple[str, ...]] = {
 
 # ``match`` is 3.10+ and ``except*`` 3.11+; both are named where they exist and
 # default to fully gated where they do not, which is the same answer.
-for _name, _fields in (("Match", ("subject",)), ("TryStar", ("finalbody",))):
+for _name, _fields in (("Match", ("subject",)), ("TryStar", ("body", "finalbody"))):
     _node_type = getattr(ast, _name, None)
     if _node_type is not None:
         _ALWAYS_RUNS_FIELDS[_node_type] = _fields
