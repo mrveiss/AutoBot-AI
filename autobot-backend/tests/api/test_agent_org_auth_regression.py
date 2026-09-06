@@ -128,3 +128,121 @@ def test_reads_also_require_authentication() -> None:
 
     resp = client.get(f"/agents/{uuid.uuid4()}/reports")
     assert resp.status_code == status.HTTP_401_UNAUTHORIZED, resp.text
+
+
+@pytest.mark.parametrize(
+    ("method", "service_method"),
+    [("patch", "update_reporting_line"), ("put", "upsert_node")],
+)
+def test_the_route_passes_the_callers_company_to_the_service(
+    method: str, service_method: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An authorised write carries the caller's company through to the service.
+
+    The refusal tests above prove the gate refuses. They cannot prove the
+    *authorised* path is tenant-scoped: with ``company_id=context.org_id``
+    deleted from the route, every one of them still passes while the service
+    receives ``None`` and its scoping becomes unreachable from HTTP. Mutation
+    showed exactly that — a surviving mutant with a fully green suite.
+
+    So this asserts the wiring rather than the outcome: the value reaching the
+    service is the one from the authenticated context.
+    """
+    import api.agent_org as agent_org
+    from api.user_management.dependencies import (
+        get_current_user,
+        require_reporting_line_write,
+    )
+
+    company = uuid.uuid4()
+    seen: dict = {}
+
+    class _Svc:
+        def __init__(self, session):  # noqa: ANN001
+            pass
+
+        async def _record(self, **kwargs):  # noqa: ANN003
+            seen.update(kwargs)
+
+            class _Node:
+                agent_id = "a"
+                name = "n"
+                org_role = "worker"
+                title = None
+                reports_to = None
+                capabilities = None
+                company_id = company
+
+            return _Node()
+
+    setattr(_Svc, service_method, _Svc._record)
+    monkeypatch.setattr(agent_org, "AgentOrgService", _Svc)
+
+    class _Ctx:
+        org_id = company
+
+    app = FastAPI()
+    app.include_router(agent_org.router, prefix="/agents")
+    app.dependency_overrides[get_current_user] = lambda: {
+        "id": str(uuid.uuid4()),
+        "role": "admin",
+    }
+    app.dependency_overrides[require_reporting_line_write] = lambda: _Ctx()
+
+    async def _session():  # noqa: ANN202
+        return object()
+
+    app.dependency_overrides[agent_org.get_db_session] = _session
+    client = TestClient(app, raise_server_exceptions=False)
+
+    getattr(client, method)("/agents/some-agent/org", json={"reports_to": "a-manager", "name": "n"})
+
+    assert seen.get("company_id") == company, (
+        f"the service received company_id={seen.get('company_id')!r}; the route must pass the "
+        "caller's context, or tenant scoping is unreachable from HTTP"
+    )
+
+
+@pytest.mark.parametrize("failure", ["Agent not found in org hierarchy: 'x'", "Manager not in this company: 'y'"])
+def test_upsert_tenant_failures_answer_404_not_500(failure: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A cross-company upsert must be indistinguishable from a missing agent.
+
+    #15794 (CWE-204). `upsert_node` raises `ValueError` for a foreign agent, and
+    without a handler that reaches the route's `SERVER_ERROR` decorator as a
+    **500** — while an agent that genuinely does not exist is created and
+    returns 200. So an authorised caller could tell "exists in a company you
+    cannot see" from "does not exist" by status alone.
+
+    That is the same fact the message wording was chosen to hide. Phrasing the
+    detail as "not found" while the status says "server error" leaks it through
+    a different channel, which is why this asserts the **status** rather than
+    the message.
+    """
+    import api.agent_org as agent_org
+    from api.user_management.dependencies import get_current_user, require_reporting_line_write
+
+    class _Svc:
+        def __init__(self, session):  # noqa: ANN001
+            pass
+
+        async def upsert_node(self, **kwargs):  # noqa: ANN003
+            raise ValueError(failure)
+
+    monkeypatch.setattr(agent_org, "AgentOrgService", _Svc)
+
+    class _Ctx:
+        org_id = uuid.uuid4()
+
+    app = FastAPI()
+    app.include_router(agent_org.router, prefix="/agents")
+    app.dependency_overrides[get_current_user] = lambda: {"id": str(uuid.uuid4()), "role": "admin"}
+    app.dependency_overrides[require_reporting_line_write] = lambda: _Ctx()
+
+    async def _session():  # noqa: ANN202
+        return object()
+
+    app.dependency_overrides[agent_org.get_db_session] = _session
+    client = TestClient(app, raise_server_exceptions=False)
+
+    resp = client.put("/agents/some-agent/org", json={"name": "n", "reports_to": "m"})
+    assert resp.status_code == status.HTTP_404_NOT_FOUND, resp.text
