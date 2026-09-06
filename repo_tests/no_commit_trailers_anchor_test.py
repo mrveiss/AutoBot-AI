@@ -129,6 +129,39 @@ def test_every_arm_is_anchored() -> None:
     )
 
 
+def _final_block(body: str) -> str:
+    """Everything after the last blank line — what the workflow scans.
+
+    #15850 review: the workflow used `git interpret-trailers --parse`, which
+    returns only `Key: value` lines and therefore **dropped the promo footer**
+    entirely — it is a bare line, not a trailer. Fixing the prose false-positive
+    had opened a bypass: a contributor could add the banned footer and pass.
+
+    This mirrors the workflow's `awk 'BEGIN{RS=""} END{print}'` rather than
+    reimplementing trailer semantics, because a helper that parses differently
+    from the thing it verifies asserts about something nobody runs.
+    """
+    blocks = [b for b in body.split("\n\n") if b.strip()]
+    return blocks[-1] if blocks else ""
+
+
+#: A bare, unstructured footer. `interpret-trailers` does not return it, so a
+#: parse-based scan cannot see it at all (#15850 review, CWE-693).
+UNSTRUCTURED_FOOTER = "Generated with [Claude Code](https://claude.com/claude-code)"
+
+
+def test_the_unstructured_footer_is_still_detected() -> None:
+    """MUTATION TARGET. Scan parsed trailers instead of the raw block and this passes.
+
+    The promo line is not `Key: value`, so any parse-based approach drops it
+    and the check silently stops enforcing the rule it exists for.
+    """
+    body = f"fix: something\n\nA description.\n\n{UNSTRUCTURED_FOOTER}\n"
+    assert _matches(_agent_re(), _final_block(body)), (
+        "the unstructured Claude footer was not detected — a parse-based scan " "drops it and opens a bypass (#15850)"
+    )
+
+
 #: Prose that BEGINS a line with a banned string, above a real trailer block.
 #: `^`-anchoring alone rejects these; only scanning the parsed trailer block
 #: distinguishes them (#15850 review).
@@ -150,20 +183,14 @@ def test_prose_beginning_a_line_is_not_a_trailer(line: str) -> None:
     """
     body = f"fix: something\n\n{line}\n\nSigned-off-by: A <a@b.c>\n"
     # Fixed argv; input is a module constant.
-    parsed = subprocess.run(  # nosec B603 B607
-        ["git", "interpret-trailers", "--parse"],
-        input=body,
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout
+    parsed = _final_block(body)
     assert not _matches(_agent_re(), parsed), (
         f"prose beginning a line was read as a trailer: {line!r} -- "
         "the final-block parse is not being applied (#15850)"
     )
 
 
-def test_the_workflow_scans_the_parsed_trailer_block() -> None:
+def test_the_workflow_scans_the_raw_final_block() -> None:
     """Pins the rule itself, because the prose cases cannot.
 
     `LINE_START_PROSE` parses a body with `git interpret-trailers` and asserts
@@ -180,6 +207,8 @@ def test_the_workflow_scans_the_parsed_trailer_block() -> None:
         "the agent_re grep does not read ${trailers} -- it is scanning the whole "
         "commit body, so prose beginning a line is matched as a trailer (#15850)"
     )
-    assert re.search(
-        r"trailers=.*interpret-trailers\s+--parse", text
-    ), "${trailers} is not populated from `git interpret-trailers --parse`"
+    assert re.search(r"trailers=.*BEGIN\{RS=", text), (
+        "${trailers} is not the RAW final block. A parse-based extraction "
+        "(`interpret-trailers --parse`) returns only `Key: value` lines and drops "
+        "the unstructured footer entirely, which is a bypass, not a narrowing (#15850)."
+    )

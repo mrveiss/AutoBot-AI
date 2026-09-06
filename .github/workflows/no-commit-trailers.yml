@@ -121,7 +121,22 @@ jobs:
             # that block, so prose above it is structurally out of scope rather
             # than excluded by a pattern that has to guess. Falls back to the
             # whole body if the helper is unavailable, which fails closed.
-            trailers="$(printf '%s\n' "${body}" | git interpret-trailers --parse 2>/dev/null || printf '%s\n' "${body}")"
+            # #15850 review (CWE-693): `interpret-trailers --parse` returns only
+            # `Key: value` lines, so it DROPPED the promo footer — which is a bare
+            # line, not a trailer — and the check stopped detecting it entirely.
+            # Fixing the prose false-positive had opened a bypass.
+            #
+            # Scan the raw FINAL BLOCK instead: everything after the last blank
+            # line, exactly as written. That is where every tool writes its
+            # footer, structured or not, so the promo line is in scope again
+            # while prose earlier in the body is not.
+            #
+            # Residual, accepted deliberately: a commit whose LAST paragraph
+            # quotes a banned string is still rejected. Security wins that trade
+            # — the alternative is the bypass above — and the workaround is a
+            # trailing `Signed-off-by:` or a blank line, which is what such a
+            # commit has anyway.
+            trailers="$(printf '%s\n' "${body}" | awk 'BEGIN{RS=""} END{print}')"
             subject="$(git log -1 --format='%s' "${sha}")"
 
             if printf '%s\n' "${trailers}" | grep -iqE "${agent_re}"; then
