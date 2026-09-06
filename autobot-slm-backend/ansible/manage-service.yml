@@ -52,14 +52,21 @@
         # case we are in -- so without it the capture would itself fail and we
         # would lose the diagnosis we came for. It must never be applied to the
         # service task above, which is the thing whose failure matters.
+        # argv, not cmd (#15879 review, CWE-88). `service_name` is caller-supplied
+        # and a `cmd:` string is split into arguments before execution -- under
+        # `become: true`. A multi-token name could inject options and redirect
+        # journalctl at another unit, whose output would then be written into the
+        # controller log. As argv it is one element and cannot become an option:
+        # `--` terminates systemctl's options, and `--unit=` binds the value to
+        # journalctl's unit selector rather than leaving it positional.
         - name: "SVC | Capture why {{ service_name }} would not {{ service_action }} (#15879)"
           ansible.builtin.command:
-            cmd: "{{ _diag_cmd }}"
+            argv: "{{ _diag_argv }}"
           loop:
-            - "systemctl status {{ service_name }} --no-pager --lines=40"
-            - "journalctl -xeu {{ service_name }} --no-pager --lines=80"
+            - ["systemctl", "status", "--no-pager", "--lines=40", "--", "{{ service_name }}"]
+            - ["journalctl", "-xe", "--no-pager", "--lines=80", "--unit={{ service_name }}"]
           loop_control:
-            loop_var: _diag_cmd
+            loop_var: _diag_argv
           register: _service_diagnostics
           changed_when: false
           failed_when: false

@@ -66,12 +66,33 @@ def test_the_rescue_re_raises_so_a_failed_start_is_still_a_failed_play() -> None
     )
 
 
-def test_only_the_diagnostic_commands_are_exempt_from_failing() -> None:
-    """`failed_when: false` is required on the capture and forbidden on the service.
+def _capture_task(rescue: list) -> dict:
+    """The rescue task that runs the probes, identified by what it runs.
+
+    Bound to the task rather than to "some task in the rescue": a check that
+    only asks whether `failed_when: false` appears *somewhere* passes when the
+    exemption migrates onto the `debug` or the `fail` task -- which would make
+    the re-raise unable to fail. Review caught exactly that (#15879).
+    """
+    matches = [
+        task
+        for task in rescue
+        if any("systemctl" in str(item) for item in (task.get("loop") or []))
+    ]
+    assert len(matches) == 1, (
+        f"expected exactly one task running the probes, found {len(matches)}. "
+        "The assertions below identify the capture by what it runs, so it must be findable."
+    )
+    return matches[0]
+
+
+def test_the_exemption_sits_on_the_capture_task_and_nowhere_else() -> None:
+    """`failed_when: false` is required on the capture and forbidden everywhere else.
 
     `systemctl status` exits non-zero for a failed unit -- the case we are in --
-    so the capture needs the exemption or it loses the diagnosis. Applying the
-    same exemption to the service task would silence the thing being diagnosed.
+    so the capture needs the exemption or it loses the diagnosis. On the service
+    call it would silence the failure; on the `fail` task it would defeat the
+    re-raise, turning a failed start into a green play.
     """
     block = _service_block()
 
@@ -81,19 +102,47 @@ def test_only_the_diagnostic_commands_are_exempt_from_failing() -> None:
             "so it can no longer fail -- that silences the failure this exists to report"
         )
 
-    exempt = [t for t in block["rescue"] if t.get("failed_when") is False]
-    assert exempt, (
-        "no diagnostic task carries `failed_when: false`; `systemctl status` returns "
-        "non-zero for a failed unit, so the capture would abort before reporting"
+    capture = _capture_task(block["rescue"])
+    assert capture.get("failed_when") is False, (
+        "the capture task is not exempt; `systemctl status` returns non-zero for a "
+        "failed unit, so it would abort before reporting the diagnosis"
     )
+
+    for task in block["rescue"]:
+        if task is capture:
+            continue
+        assert task.get("failed_when") is not False, (
+            f"rescue task {task.get('name')!r} carries `failed_when: false`. On the "
+            "re-raise that converts a failed service start into a green play (#15879)."
+        )
 
 
 def test_the_capture_reads_the_node_journal_not_just_the_unit_state() -> None:
     """Both halves of the message systemd tells the reader to consult."""
-    rescue = _service_block()["rescue"]
-    commands = " ".join(str(item) for task in rescue for item in (task.get("loop") or []))
-    for probe in ("systemctl status", "journalctl"):
+    commands = " ".join(str(item) for item in (_capture_task(_service_block()["rescue"]).get("loop") or []))
+    for probe in ("systemctl", "journalctl"):
         assert probe in commands, (
             f"the rescue never runs {probe!r}. systemd's failure message names both, "
             "and fetching only one leaves the operator on the same hunt (#15879)."
+        )
+
+
+def test_the_probes_are_argv_so_a_service_name_cannot_inject_options() -> None:
+    """CWE-88: `service_name` is caller-supplied and runs here under `become`.
+
+    A `cmd:` string is split into arguments before execution, so a multi-token
+    name could add options -- redirecting journalctl at another unit whose
+    output then lands in the controller log. As argv the value stays one
+    element. Asserted on the structure, because a string that merely *looks*
+    safe today is one templating change from not being.
+    """
+    capture = _capture_task(_service_block()["rescue"])
+    assert "argv" in capture.get("ansible.builtin.command", capture.get("command", {})), (
+        "the diagnostic runs via `cmd:`, which splits a caller-supplied service_name "
+        "into arguments under become (#15879 review, CWE-88)"
+    )
+    for probe in capture.get("loop") or []:
+        assert isinstance(probe, list), f"probe is not an argv list: {probe!r}"
+        assert sum("{{ service_name }}" in str(tok) for tok in probe) == 1, (
+            f"service_name appears in more than one argv element: {probe!r}"
         )

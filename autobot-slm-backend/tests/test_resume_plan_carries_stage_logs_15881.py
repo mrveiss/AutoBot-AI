@@ -12,87 +12,119 @@ was then indistinguishable from a wedged one: on the day this was filed the play
 finished `ok=282 changed=57 failed=0` while the GUI log still ended at
 "Firing Ansible self-update (fire-and-forget)".
 
-Both directions are asserted. A restore path that silently no-ops looks exactly
-like the defect, so "logs are carried" and "a plan without logs still resumes"
-have to be separate tests -- the second is what a v1 plan written by an older
-SLM will hit.
+These tests exercise the real `_persist_resume_plan` against a fake session and
+read what it actually serialises. An earlier version asserted only that the
+source text contained `"stage_logs"` -- which passes whether or not the value
+reaches the Settings row, and is the same could-not-fail shape that had #15770
+reopened. Review caught it; the fix is to run the function.
 """
 
 from __future__ import annotations
 
-import re
+import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
 
-_CODE_SYNC = Path(__file__).resolve().parents[1] / "api" / "code_sync.py"
+_API = Path(__file__).resolve().parents[1] / "api"
 
 
-@pytest.fixture(scope="module")
-def source() -> str:
-    assert _CODE_SYNC.is_file(), f"file under test is missing: {_CODE_SYNC}"
-    return _CODE_SYNC.read_text(encoding="utf-8")
+class _FakeResult:
+    def __init__(self, existing):
+        self._existing = existing
+
+    def scalar_one_or_none(self):
+        return self._existing
 
 
-def test_the_plan_WRITES_stage_logs(source: str) -> None:
-    """The write side, asserted separately from the read side on purpose.
+class _FakeSession:
+    """Captures what the writer stores, so the assertion reads the real value."""
 
-    `"stage_logs"` appears twice -- once where the plan is built and once where
-    the resume reads it back. A single `in source` check is satisfied by either,
-    so deleting the write leaves the test green while every log line still dies
-    at the restart. Caught by mutation while writing this file; it is the same
-    conflation the rest of this work has been about.
-    """
-    assert re.search(r'"stage_logs"\s*:', source), (
-        "the resume plan no longer BUILDS stage_logs, so every log line dies with "
-        "the process the self-update restarts (#15881)"
-    )
+    def __init__(self, existing=None):
+        self.existing = existing
+        self.added = []
+        self.committed = False
 
+    async def execute(self, _stmt):
+        return _FakeResult(self.existing)
 
-def test_the_resume_READS_stage_logs(source: str) -> None:
-    """The read side. A plan that stores logs nothing restores is no better."""
-    assert re.search(r'\.get\(\s*"stage_logs"', source), (
-        "nothing reads stage_logs back out of the plan, so the resumed job still "
-        "shows placeholders over the real history (#15881)"
-    )
+    def add(self, obj):
+        self.added.append(obj)
 
+    async def commit(self):
+        self.committed = True
 
-def test_the_persisted_slice_is_bounded(source: str) -> None:
-    """It lives in a Settings row, not a process."""
-    match = re.search(r"_RESUME_PLAN_LOG_LINES\s*=\s*(\d+)", source)
-    assert match, "the persisted log slice is unbounded -- it is written to a Settings row"
-    assert 0 < int(match.group(1)) <= 200, (
-        f"_RESUME_PLAN_LOG_LINES is {match.group(1)}; a stage caps at 200 in memory and "
-        "the persisted slice must not exceed that"
-    )
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_exc):
+        return False
 
 
-def test_an_older_plan_is_still_accepted(source: str) -> None:
+def _install_fake_db(monkeypatch, session):
+    module = types.ModuleType("services.database")
+    module.db_service = types.SimpleNamespace(session=lambda: session)
+    monkeypatch.setitem(sys.modules, "services.database", module)
+
+
+def _stage(name, lines):
+    return types.SimpleNamespace(name=name, log_lines=list(lines))
+
+
+def _job(stages):
+    return types.SimpleNamespace(job_id="job-1", created_at="2026-09-06T00:00:00Z", stages=stages)
+
+
+@pytest.fixture
+def resume_plan():
+    sys.path.insert(0, str(_API.parent))
+    return pytest.importorskip("api._resume_plan")
+
+
+@pytest.mark.asyncio
+async def test_the_persisted_row_actually_contains_the_stage_lines(monkeypatch, resume_plan):
+    """The behavioural check: read the JSON the writer stored, not the source text."""
+    session = _FakeSession()
+    _install_fake_db(monkeypatch, session)
+    job = _job([_stage("slm_self_update", ["Firing Ansible self-update", "queued"])])
+
+    await resume_plan._persist_resume_plan(job, [], "abc123def456")
+
+    assert session.added, "nothing was written to Settings at all"
+    plan = json.loads(session.added[0].value)
+    assert plan["stage_logs"]["slm_self_update"] == [
+        "Firing Ansible self-update",
+        "queued",
+    ], f"the stored plan does not carry the stage's lines: {plan.get('stage_logs')!r}"
+
+
+@pytest.mark.asyncio
+async def test_the_persisted_slice_is_bounded(monkeypatch, resume_plan):
+    """It lives in a Settings row, not a process, so it must not carry 200 lines."""
+    session = _FakeSession()
+    _install_fake_db(monkeypatch, session)
+    cap = resume_plan._RESUME_PLAN_LOG_LINES
+    job = _job([_stage("fleet_nodes", [f"line {i}" for i in range(cap + 25)])])
+
+    await resume_plan._persist_resume_plan(job, [], "abc123def456")
+
+    stored = json.loads(session.added[0].value)["stage_logs"]["fleet_nodes"]
+    assert len(stored) == cap, f"stored {len(stored)} lines, expected the {cap} cap"
+    assert stored[-1] == f"line {cap + 24}", "the cap kept the OLDEST lines; it must keep the newest"
+
+
+def test_an_older_plan_version_is_still_accepted(resume_plan):
     """The compatibility that keeps this fix from being an outage.
 
-    A straight version bump rejects the plan written by the update that deploys
-    this change: the SLM restarts, finds its own plan unreadable, and wedges.
-    The validator must accept the previous version, which simply carries no logs.
+    A straight bump rejects the plan written by the update that deploys this
+    change: the SLM restarts, cannot read its own plan, and wedges. Asserted on
+    the value, not on the source text.
     """
-    assert "_SUPPORTED_RESUME_PLAN_VERSIONS" in source, (
-        "the plan validator compares against a single version. A bump then discards "
-        "the in-flight plan belonging to the update deploying it (#15881)."
-    )
-    match = re.search(r"_SUPPORTED_RESUME_PLAN_VERSIONS\s*=\s*frozenset\(\{([^}]*)\}\)", source)
-    assert match, "could not read the supported-version set"
-    versions = {int(v) for v in re.findall(r"\d+", match.group(1))}
-    assert len(versions) >= 2, (
-        f"only version(s) {sorted(versions)} accepted; the previous plan version must "
-        "remain readable or the deploying update wedges itself"
-    )
-    assert "not in _SUPPORTED_RESUME_PLAN_VERSIONS" in source, (
-        "the set is declared but the validator does not use it -- an unwired " "compatibility check is the same as none"
-    )
-
-
-def test_the_restart_is_marked_rather_than_hidden(source: str) -> None:
-    """A reader must be able to tell which lines predate the restart."""
-    assert "SLM restarted here" in source, (
-        "restored lines are spliced in with no boundary marker, so pre- and "
-        "post-restart output read as one continuous run (#15881)"
+    supported = resume_plan._SUPPORTED_RESUME_PLAN_VERSIONS
+    assert resume_plan._RESUME_PLAN_VERSION in supported
+    assert len(supported) >= 2, (
+        f"only {sorted(supported)} accepted; the previous plan version must stay readable "
+        "or the deploying update wedges itself"
     )

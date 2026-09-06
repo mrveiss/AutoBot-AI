@@ -4611,23 +4611,19 @@ async def sync_role(
 
 import json as _json  # noqa: E402
 
-_UPDATE_ALL_RESUME_KEY = "slm_update_all_resume"
 # #12450: requirements-ai.txt is the ai-stack component's dependency file (its
 # ansible role installs that name, not requirements.txt), so the deps_changed
 # signal must watch it too or an ai-stack dep bump is reported as code-only.
 _DEPS_FILES = ["requirements.txt", "requirements-ai.txt", "package-lock.json"]
-_RESUME_PLAN_VERSION = 2
 
 #: Plans written by an older SLM are still honoured (#15881). Rejecting a v1
 #: plan would discard the in-flight resume belonging to the very update that
 #: deploys this change -- the update would restart, find its own plan
 #: unreadable, and wedge. A v1 plan simply carries no `stage_logs`.
-_SUPPORTED_RESUME_PLAN_VERSIONS = frozenset({1, 2})
 
 #: Per-stage log lines carried across the restart. `_stage_log` already caps a
 #: stage at 200 in memory; this is the slice that survives, kept smaller because
 #: it lives in a Settings row rather than a process.
-_RESUME_PLAN_LOG_LINES = 60
 _RESUME_PLAN_TTL_SECONDS = 7200  # 2 hours (C2-b)
 
 # In-memory slot for the active orchestration job (at most one at a time).
@@ -4813,59 +4809,17 @@ def _stage_log(stage: UpdateAllStage, msg: str) -> None:
     logger.info("[update-all:%s] %s", stage.name, msg)
 
 
-async def _persist_resume_plan(
-    job: UpdateAllJob,
-    remaining_node_ids: List[str],
-    target_commit: str,
-) -> None:
-    """Write resume plan to Settings so a fresh SLM process can continue fleet stage.
-
-    Includes target_commit (C1) and version sentinel (M2).
-    Always called even when remaining_node_ids is empty (C5).
-    """
-    from services.database import db_service
-
-    plan = {
-        "version": _RESUME_PLAN_VERSION,  # M2
-        "job_id": job.job_id,
-        "remaining_node_ids": remaining_node_ids,
-        "target_commit": target_commit,  # C1
-        "created_at": job.created_at,
-        # #15881: `_stage_log` writes to `stage.log_lines`, which lives in the
-        # process the self-update is about to restart. Without this the operator
-        # watching the GUI sees the log stop at "Firing Ansible self-update
-        # (fire-and-forget)" and never learn the outcome -- the resumed job
-        # backfills "completed before restart" placeholders over the real lines.
-        "stage_logs": {stage.name: list(stage.log_lines or [])[-_RESUME_PLAN_LOG_LINES:] for stage in job.stages},
-    }
-    async with db_service.session() as db:
-        result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))
-        setting = result.scalar_one_or_none()
-        if setting:
-            setting.value = _json.dumps(plan)
-        else:
-            db.add(Setting(key=_UPDATE_ALL_RESUME_KEY, value=_json.dumps(plan)))
-        await db.commit()
-    logger.info(
-        "update-all: persisted resume plan for %d fleet nodes (target=%s)",
-        len(remaining_node_ids),
-        _short_sha(target_commit),
-    )
-
-
-async def _clear_resume_plan() -> None:
-    """Remove resume plan from Settings after fleet stage completes."""
-    from services.database import db_service
-
-    try:
-        async with db_service.session() as db:
-            result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))
-            setting = result.scalar_one_or_none()
-            if setting:
-                await db.delete(setting)
-                await db.commit()
-    except Exception as exc:
-        logger.warning("update-all: failed to clear resume plan: %s", exc)
+# #15881: `_persist_resume_plan` / `_clear_resume_plan` moved to
+# api/_resume_plan.py -- this file is at its #14236 ceiling, so the stage-log
+# carry-over had to make room rather than take it.
+from api._resume_plan import (  # noqa: E402,F401 - re-exported; module-level import sits with its siblings above
+    _RESUME_PLAN_LOG_LINES,
+    _RESUME_PLAN_VERSION,
+    _SUPPORTED_RESUME_PLAN_VERSIONS,
+    _UPDATE_ALL_RESUME_KEY,
+    _clear_resume_plan,
+    _persist_resume_plan,
+)
 
 
 async def _get_slm_deployed_commit() -> Optional[str]:
