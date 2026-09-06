@@ -12,7 +12,7 @@ has rather than how tangled the module is.
 
 The split follows the data: every spec already carries a ``component``, so the
 grouping is the one the registry itself declares. This module holds the
-``backend`` component, the largest group at 35 of 208 entries.
+``backend`` component, the largest group at 35 of 128 entries.
 
 Importing this module is what registers them, so ``env_registry`` imports it for
 its side effect. Nothing here is re-exported and nothing imports it directly.
@@ -525,13 +525,27 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_IDEMPOTENCY_TTL_SECONDS",
+        name="AUTOBOT_MIGRATION_BACKFILL_BATCH_SIZE",
         type=int,
-        default=86400,
+        default=1000,
         description=(
-            "How long a completed creation stays replayable for its Idempotency-Key. Long enough to "
-            "outlive any retry an agent or proxy makes, short enough that the keyspace stays bounded "
-            "(autobot_shared/idempotency.py, #15778)."
+            "Rows per statement when a migration backfills a column in chunks. An unbounded UPDATE "
+            "holds locks for its whole duration and can exceed the bind-parameter limit, stopping a "
+            "rolling update mid-flight (migrations/templates/chunked_backfill.py, #15776)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_IDEMPOTENCY_CLAIM_ATTEMPTS",
+        type=int,
+        default=3,
+        description=(
+            "How many times an idempotency claim re-runs its atomic SET NX after the record it lost "
+            "to turns out to have expired. Reporting 'unseen' at that point would let every loser of "
+            "the race create (autobot_shared/idempotency.py, #15778)."
         ),
         component="backend",
     )
@@ -553,13 +567,13 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_IDEMPOTENCY_CLAIM_ATTEMPTS",
+        name="AUTOBOT_IDEMPOTENCY_TTL_SECONDS",
         type=int,
-        default=3,
+        default=86400,
         description=(
-            "How many times an idempotency claim re-runs its atomic SET NX after the record it lost "
-            "to turns out to have expired. Reporting 'unseen' at that point would let every loser of "
-            "the race create (autobot_shared/idempotency.py, #15778)."
+            "How long a completed creation stays replayable for its Idempotency-Key. Long enough to "
+            "outlive any retry an agent or proxy makes, short enough that the keyspace stays bounded "
+            "(autobot_shared/idempotency.py, #15778)."
         ),
         component="backend",
     )

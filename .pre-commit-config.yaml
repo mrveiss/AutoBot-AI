@@ -284,6 +284,19 @@ repos:
       # inspected nothing, one of them over a deliberately planted violation.
       # #15245 extended the same scanner to shell (text-based, not AST) after
       # sixteen more sites turned up there.
+      # #15776: 80 of 90 migrations drop a column, table or constraint, and
+      # nothing read migrations/versions/ at all. The five most recent already
+      # carry a NO DATA LOSS statement voluntarily, so this enforces the
+      # convention on new work rather than retrofitting 75 historic files: the
+      # floor is a single revision, not an allowlist that can outlive its fix.
+      - id: destructive-migration-marker
+        name: "A destructive migration must say why no data is lost (#15776)"
+        entry: tools/lint/check_destructive_migration_marker.py
+        language: python
+        files: ^autobot-backend/migrations/versions/.*\.py$
+        stages: [pre-commit]
+        description: "drop_column/drop_table/drop_constraint at or above the convention floor needs a NO DATA LOSS statement naming what it touches and why nothing is lost"
+
       - id: git-toplevel-env-scrubbed
         name: "Asking git for the repo root must scrub GIT_DIR first (#15176, #15245)"
         entry: tools/lint/check_git_toplevel_env_scrubbed.py
