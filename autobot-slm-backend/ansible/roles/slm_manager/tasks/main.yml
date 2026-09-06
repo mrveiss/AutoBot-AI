@@ -1020,6 +1020,16 @@
   when: _slm_import_check.rc | default(0) != 0
   tags: ['slm', 'service']
 
+# #15823: the socket must be bound BEFORE the service it activates.
+#
+# systemd refuses ``start`` on a socket whose ``Service=`` is already running,
+# so this cannot simply be done earlier: it has to happen in the window where
+# the backend is down. Stopping first is what creates that window, and the
+# stop is not extra downtime -- the deploy restarts the backend here regardless.
+#
+# With the socket bound first, the backend inherits the fd through its
+# ``Sockets=`` line. Started after, the socket start is refused and the
+# self-update path has no listener even though the unit is enabled.
 - name: "SLM | Start backend service"
   ansible.builtin.systemd:
     name: "{{ slm_backend_service }}"
