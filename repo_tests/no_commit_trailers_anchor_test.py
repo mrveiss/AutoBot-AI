@@ -206,10 +206,14 @@ LINE_START_PROSE = [
 def test_prose_beginning_a_line_is_not_a_trailer(line: str) -> None:
     """A commit documenting this policy starts a line with what it quotes.
 
-    The workflow parses the message's final block with `git interpret-trailers`
-    before matching, so prose above that block is out of scope positionally
-    rather than by a pattern that has to guess. Asserted through the real
-    parser, not a reimplementation of it.
+    The workflow takes the message's RAW final block -- `awk 'BEGIN{RS=""}
+    END{print}'` -- before matching, so prose above that block is out of scope
+    positionally rather than by a pattern that has to guess. `_final_block`
+    below mirrors that awk exactly.
+
+    Not `git interpret-trailers --parse`, which this used to say: it returns
+    only `Key: value` lines and drops a bare unstructured footer entirely,
+    which is a bypass rather than a narrowing (#15850 review).
     """
     body = f"fix: something\n\n{line}\n\nSigned-off-by: A <a@b.c>\n"
     # Fixed argv; input is a module constant.
@@ -223,9 +227,9 @@ def test_prose_beginning_a_line_is_not_a_trailer(line: str) -> None:
 def test_the_workflow_scans_the_raw_final_block() -> None:
     """Pins the rule itself, because the prose cases cannot.
 
-    `LINE_START_PROSE` parses a body with `git interpret-trailers` and asserts
-    the pattern does not match it -- which stays true no matter what the
-    workflow feeds its grep. Reverting the workflow to scan `${body}` leaves
+    `LINE_START_PROSE` extracts a body's final block with `_final_block` and
+    asserts the pattern does not match it -- which stays true no matter what
+    the workflow feeds its grep. Reverting the workflow to scan `${body}` leaves
     every one of those tests green while restoring the exact defect they were
     written for. Mutation-verified: that revert passed 15/15 before this
     assertion existed.

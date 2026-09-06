@@ -295,7 +295,9 @@
     - autobot_shared
   tags: ['ai', 'deploy']
 
-# #12513: see roles/redis/tasks/chromadb.yml — same read, same reason. Whichever
+# #12513: see roles/redis/tasks/code_only.yml — same read, same reason. (#13535
+# moved that read out of roles/redis/tasks/chromadb.yml, which this used to
+# name and which now carries no auth tasks at all.) Whichever
 # of the two roles owns chroma on this topology must land the same credential the
 # backend sends, so both defer to the SLM-generated value.
 # #13460: these service files are defined once, in code_only.yml, so the
