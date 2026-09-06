@@ -2257,10 +2257,25 @@ class PlaywrightSearchRequest(BaseModel):
 
 
 class PlaywrightScreenshotRequest(BaseModel):
+    """Embedded-Playwright capture -- NOT the session-scoped browser worker.
+
+    `services/playwright_service.py` has no session concept at all (zero
+    references), so this route cannot route a capture into a browser context.
+    Use `/worker-screenshot` for that. See #15871.
+    """
+
     url: str
     full_page: bool = True
     wait_timeout: int = 5000
-    session_id: str | None = None
+    session_id: str | None = Field(
+        None,
+        description=(
+            "ACCEPTED AND IGNORED by /screenshot: the embedded browser is not "
+            "session-partitioned (#15871). The capture happens in the shared "
+            "embedded browser regardless. Use /worker-screenshot to capture "
+            "inside a specific session's context."
+        ),
+    )
 
 
 class PlaywrightNavigateRequest(BaseModel):
@@ -2275,7 +2290,13 @@ class PlaywrightNavigateRequest(BaseModel):
 
 class PlaywrightReloadRequest(BaseModel):
     wait_until: str = "networkidle"
-    session_id: str | None = None
+    session_id: str | None = Field(
+        None,
+        description=(
+            "Isolated browser-context routing (#11539). Omitted, the caller joins the "
+            "shared default context, which every other unscoped caller also uses."
+        ),
+    )
 
 
 class PlaywrightInteractRequest(BaseModel):
@@ -2285,7 +2306,13 @@ class PlaywrightInteractRequest(BaseModel):
     deltaX: float = 0
     deltaY: float = 0
     text: str | None = None
-    session_id: str | None = None
+    session_id: str | None = Field(
+        None,
+        description=(
+            "Isolated browser-context routing (#11539). Omitted, the caller joins the "
+            "shared default context, which every other unscoped caller also uses."
+        ),
+    )
 
 
 class PlaywrightSessionRequest(BaseModel):
@@ -2293,7 +2320,13 @@ class PlaywrightSessionRequest(BaseModel):
     /back, /forward, /worker-screenshot. GET /status takes the same id as a
     query param instead (no request body on GET)."""
 
-    session_id: str | None = None
+    session_id: str | None = Field(
+        None,
+        description=(
+            "Isolated browser-context routing (#11539). Omitted, the caller joins the "
+            "shared default context, which every other unscoped caller also uses."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
