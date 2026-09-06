@@ -522,3 +522,17 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MIGRATION_BACKFILL_BATCH_SIZE",
+        type=int,
+        default=1000,
+        description=(
+            "Rows per statement when a migration backfills a column in chunks. An unbounded UPDATE "
+            "holds locks for its whole duration and can exceed the bind-parameter limit, stopping a "
+            "rolling update mid-flight (migrations/templates/chunked_backfill.py, #15776)."
+        ),
+        component="backend",
+    )
+)
