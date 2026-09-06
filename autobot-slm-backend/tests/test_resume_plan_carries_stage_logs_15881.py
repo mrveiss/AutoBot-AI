@@ -143,7 +143,10 @@ class _Stage:
 def test_a_restored_stage_carries_its_pre_restart_lines(resume_plan):
     """The restore direction. Persisting the lines is worthless if nothing reads them."""
     stage = resume_plan.restored_stage(
-        _Stage, "github_fetch", "success", "completed before restart",
+        _Stage,
+        "github_fetch",
+        "success",
+        "completed before restart",
         {"github_fetch": ["Fetching latest commit ...", "Fetched remote commit abc123"]},
     )
     assert stage.log_lines[:2] == ["Fetching latest commit ...", "Fetched remote commit abc123"]
@@ -156,9 +159,7 @@ def test_the_restart_is_marked_and_marked_last(resume_plan):
     label the restored history as post-restart, which is the same lie the
     placeholder told.
     """
-    stage = resume_plan.restored_stage(
-        _Stage, "code_source_pull", "success", "done", {"code_source_pull": ["a", "b"]}
-    )
+    stage = resume_plan.restored_stage(_Stage, "code_source_pull", "success", "done", {"code_source_pull": ["a", "b"]})
     assert "restarted" in stage.log_lines[-1]
     assert stage.log_lines[:2] == ["a", "b"]
 
