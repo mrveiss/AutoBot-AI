@@ -157,14 +157,15 @@ worktree_is_dirty() {
 }
 
 # The recovery form, which must stay available: undoing an overwrite means
-# pulling the content back from where this very branch was pushed. A source
-# naming the target tree's OWN branch — bare, or through one of its remotes —
-# is that recovery. Any other ref is the operation the rule exists to stop.
+# pulling the content back from where this very branch was PUSHED, so only a
+# remote-qualified source is that recovery. The bare branch name is not: while
+# it is checked out it resolves to the same commit as HEAD, so a source naming
+# it is the very overwrite this rule exists to stop, wearing a second spelling
+# (PR #15849 review). The HEAD spelling was already refused; both are now.
 source_is_own_branch() {
   local dir="$1" gitdir="$2" source="$3" branch remote
   branch=$(git_scrubbed "$dir" "$gitdir" rev-parse --abbrev-ref HEAD)
   [ -n "$branch" ] && [ "$branch" != "HEAD" ] || return 1
-  [ "$source" = "$branch" ] && return 0
   remote="${source%%/*}"
   [ "$source" = "$remote/$branch" ] || return 1
   git_scrubbed "$dir" "$gitdir" remote | grep -qxF "$remote"
@@ -272,6 +273,20 @@ if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch -e restore -e reset -
         ;;
     esac
 
+    # A subcommand position the parser could not read as a literal --
+    # `SUB=switch; git $SUB main` and the like (#15303). Judged HERE, ahead of
+    # the isolation gate below, because an unreadable subcommand could be any
+    # of them: the destructive rules above apply in every tree, so gating this
+    # one on the main tree let `git -C <a linked worktree> $SUB --hard` through
+    # with nothing checked at all (PR #15849 review). Denied rather than
+    # skipped, on the same reasoning as an unresolved directory (UNKNOWN_DIR):
+    # an invocation this guard cannot classify is not "nothing to judge".
+    case ",$INVOCATION_FLAGS," in
+      *,ambiguous,*)
+        deny "Blocked: this git invocation's subcommand arrives through a variable or command substitution the guard cannot evaluate (#15303), e.g. \`SUB=switch; git \$SUB main\`. Rewrite the command with a literal subcommand so it can be judged, or use a worktree: git worktree add .worktrees/<name> <branch>"
+        ;;
+    esac
+
     # ── Worktree isolation ────────────────────────────────────────────────
     # Only a branch move can trample a parallel session's HEAD, and only on
     # the main working tree of this repository.
@@ -280,17 +295,6 @@ if printf '%s' "$COMMAND" | grep -qF -e checkout -e switch -e restore -e reset -
       *) continue ;;
     esac
     targets_this_main_tree "$WT_DIR" "$WT_GIT_DIR" || continue
-
-    # A subcommand position the parser could not read as a literal --
-    # `SUB=switch; git $SUB main` and the like (#15303). Denied rather than
-    # skipped: an invocation this guard cannot classify is treated the same
-    # way an unresolved directory already is (targets_this_main_tree above),
-    # not as "nothing to judge".
-    case ",$INVOCATION_FLAGS," in
-      *,ambiguous,*)
-        deny "Blocked: this git invocation's checkout/switch subcommand arrives through a variable or command substitution the guard cannot evaluate (#15303), e.g. \`SUB=switch; git \$SUB main\`. Rewrite the command with a literal 'checkout' or 'switch' so it can be judged, or use a worktree: git worktree add .worktrees/<name> <branch>"
-        ;;
-    esac
 
     # Forking a new branch, or restoring files, never moves HEAD onto a shared
     # branch. Allowed on the main tree, exactly as before.

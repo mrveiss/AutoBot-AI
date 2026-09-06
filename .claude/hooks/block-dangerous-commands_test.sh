@@ -84,9 +84,15 @@ for pair in "$DIRTY_BRANCH:$DIRTY_WT" "$CLEAN_BRANCH:$CLEAN_WT"; do
   }
 done
 printf 'in-flight work, never committed\n' >>"$DIRTY_WT/tracked.txt"
+# The sandbox's own main tree is a #15835 fixture too (its cases are below), so
+# give it deliberate dirt. It was dirty only as a side effect of the untracked
+# hook copy staged further down; if that copy were ever tracked or ignored, the
+# main-tree allow case would pass for the wrong reason (PR #15849 review).
+printf 'in-flight work on the main tree, never committed\n' >>"$THIS_REPO/tracked.txt"
 
 mkdir -p "$THIS_REPO/.claude/hooks"
 cp "$SOURCE_DIR/block-dangerous-commands.sh" "$SOURCE_DIR/git_invocation_parse.py" \
+  "$SOURCE_DIR/git_shell_tokenize.py" \
   "$THIS_REPO/.claude/hooks/" || { echo "FATAL: could not stage the hook"; exit 1; }
 HOOK="$THIS_REPO/.claude/hooks/block-dangerous-commands.sh"
 
@@ -124,6 +130,11 @@ preflight() {
   fi
   if [ -n "$(git -C "$CLEAN_WT" status --porcelain)" ]; then
     echo "FATAL: the clean worktree is dirty — every #15835 allow case would be vacuous"
+    exit 1
+  fi
+  echo "  main tree status:   [$(git -C "$THIS_REPO" status --porcelain | tr '\n' ' ')]"
+  if [ -z "$(git -C "$THIS_REPO" status --porcelain)" ]; then
+    echo "FATAL: the sandbox main tree is clean — its own #15835 cases would be vacuous"
     exit 1
   fi
 }
@@ -255,11 +266,17 @@ expect_block "variable subcommand on this repo's main tree"      "SUB=switch; gi
 expect_block "braced-variable subcommand"                        'git ${SUB} main'
 expect_block "command-substitution subcommand"                   'git $(echo switch) main'
 expect_block "backtick subcommand"                                'git `echo switch` main'
-# The gating this shape shares with every other invocation still applies: an
-# unreadable subcommand in an unrelated repo, or a linked worktree, is not
-# this guard's business.
-expect_allow "variable subcommand in an unrelated repo"          "git -C $OTHER_REPO switch \$SUB main"
-expect_allow "variable subcommand inside a linked worktree"      "git -C $LINKED_WORKTREE switch \$SUB main"
+# An unreadable subcommand is judged in EVERY tree, not just this main one:
+# it could be any subcommand, including the ones whose rules deliberately are
+# not tree-scoped, so gating it let `-C <a linked worktree>` through unchecked
+# (PR #15849 review). Both spellings of that escape are asserted. Each of these
+# two cases used to name a LITERAL subcommand with a variable ARGUMENT, so
+# neither reached the ambiguous path it was written for.
+expect_block "unreadable subcommand in an unrelated repo"        "git -C $OTHER_REPO \$SUB main"
+expect_block "unreadable subcommand in a linked worktree"        "git -C $LINKED_WORKTREE \$SUB --hard"
+# The inverse: a variable ARGUMENT behind a literal subcommand is unaffected by
+# that widening, and an unrelated repo is still none of the guard's business.
+expect_allow "literal subcommand, variable arg, unrelated repo"  "git -C $OTHER_REPO switch \$SUB main"
 # A variable used for an ordinary ARGUMENT, not the subcommand, is unaffected
 # by this change -- it was already denied via the branch-arg check (#15296).
 expect_block "variable branch arg (subcommand still literal)"    'git switch $BRANCH'
@@ -295,6 +312,14 @@ echo "--- Destructive git ---"
 expect_block "git reset --hard"                      "git reset --hard HEAD"
 expect_block "git clean -fd"                         "git clean -fd"
 expect_block "git commit --no-verify"                "git commit --no-verify -m 'test'"
+# git accepts any unambiguous prefix of a long option, so these run exactly as
+# their spelled-out forms do and have to be refused exactly as they are.
+expect_block "reset, long flag abbreviated"          "git reset --har"
+expect_block "clean, long flag abbreviated"          "git clean --for"
+# The inverse: the non-destructive flags of the same subcommands keep their
+# verdicts, so the widening above cannot be passing for the wrong reason.
+expect_allow "reset --soft is untouched"             "git reset --soft HEAD~1"
+expect_allow "clean -n is untouched"                 "git clean -n"
 
 # ── #15835: a path-scoped checkout or restore that names a SOURCE takes its
 # content from another commit, not from the index. The allow-list called both
@@ -319,6 +344,14 @@ expect_block "overwrite on this repository's own main tree"  "git -C $THIS_REPO 
 expect_allow "main tree restoring from its OWN upstream"     "git -C $THIS_REPO checkout $ORIGIN_REF -- ."
 # Another branch's upstream is somebody else's content, not this tree's recovery.
 expect_block "restore from ANOTHER branch's upstream"        "git -C $DIRTY_WT restore --source=origin/$CLEAN_BRANCH -- ."
+# The tree's own branch, unqualified, resolves to the commit HEAD is on while
+# it is checked out, so this is the HEAD case above wearing a second spelling —
+# not the recovery form, which comes from where the branch was PUSHED.
+expect_block "restore --source=<own branch>, bare"          "git -C $DIRTY_WT restore --source=$DIRTY_BRANCH -- ."
+# git reads an unambiguous prefix of a long option, and bundles short ones, so
+# every rule that reads these flags has to read them the same way.
+expect_block "restore -Ws <ref> (source inside a bundle)"   "git -C $DIRTY_WT restore -Ws $ORIGIN_REF -- ."
+expect_block "restore --sou=<ref> (abbreviated long form)"  "git -C $DIRTY_WT restore --sou=origin/$CLEAN_BRANCH -- ."
 
 echo ""
 echo "--- #15835: the bounded and the recoverable forms stay allowed ---"
@@ -333,7 +366,6 @@ expect_allow "restore --source against a CLEAN tree"         "git -C $CLEAN_WT r
 # The recovery form: undoing an overwrite means pulling this branch's own
 # content back. Refusing it would leave no way out of the very damage above.
 expect_allow "recovery: restore --source=origin/<own branch>" "git -C $DIRTY_WT restore --source=origin/$DIRTY_BRANCH -- ."
-expect_allow "recovery: restore --source=<own branch>"       "git -C $DIRTY_WT restore --source=$DIRTY_BRANCH -- ."
 expect_allow "recovery: checkout origin/<own branch> -- ."   "git -C $DIRTY_WT checkout origin/$DIRTY_BRANCH -- ."
 # Not a path op at all: -b forks a branch, and the ref is its start point.
 expect_allow "checkout -b <new> <ref> in a dirty tree"       "git -C $DIRTY_WT checkout -b issue-fresh $ORIGIN_REF"

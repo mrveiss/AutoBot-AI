@@ -80,6 +80,11 @@ from another commit when one is (``git checkout <ref> -- <path>``,
 ``git restore --source=<ref> -- <path>``: an overwrite that destroys
 uncommitted work). Only the second gets :data:`OVERWRITE_FLAG`.
 
+Options are read as git's own parse-options reads them rather than as exact
+strings: an unambiguous long-option prefix and a bundled short option name the
+same operation as their spelled-out forms, so matching only the full spelling
+left a way past every rule that reads these flags (see :func:`_abbreviates`).
+
 Output: one record per invocation on stdout --
 ``<directory>|<git-dir>|<subcommand>|<flags>|<arg>``, separated by 0x1f (see
 :data:`FIELD_SEPARATOR`) -- where *directory* is empty
@@ -90,32 +95,37 @@ for "the caller's own working directory" and ``?`` for "could not be resolved",
 meaningless -- the subcommand itself is what could not be read). *arg* is the
 overwrite source for ``overwrite``, and otherwise the first positional
 argument.
+
+The lexing -- words, quoting, ``$( )``, heredocs, the newline sentinel -- lives
+in the sibling ``git_shell_tokenize`` module, which knows nothing about git.
+Split there in #15835 for size, along the seam the file already had.
 """
 
 from __future__ import annotations
 
-import shlex
 import sys
+from pathlib import Path
 
-# Marks an unquoted newline, which separates commands exactly like ``;`` does.
-# shlex treats newlines as plain whitespace once ``whitespace_split`` is on, so
-# without this an invocation on the second line would look like an argument of
-# the command on the first.
-SENTINEL = "\x1eNL\x1e"
+# ``.claude`` is not an import package, so the sibling lexer is reached by
+# putting this file's own directory on the path. Running this file as a script
+# already puts it there; loading it by path -- which the tests do, and which is
+# the only way anything can import it -- does not.
+_HOOK_DIR = str(Path(__file__).resolve().parent)
+if _HOOK_DIR not in sys.path:
+    sys.path.insert(0, _HOOK_DIR)
+
+from git_shell_tokenize import is_redirect, is_separator, tokenize
 
 EXIT_UNPARSEABLE = 3
 
 #: Field separator for the records written to stdout. Deliberately NOT a tab:
 #: tab is IFS *whitespace*, so `read` in the calling shell collapses a run of
 #: them and drops every leading empty field. A record for a plain branch switch
-#: is three empty fields then the branch name, which arrived in the shell as the
-#: branch name in the FIRST variable -- the guard then looked for a directory
-#: named after the branch, found none, and allowed the switch (#15296). 0x1f is
-#: not IFS whitespace, so empty fields survive.
+#: opens with two empty fields, so with a tab the branch name arrived in the
+#: shell as the FIRST variable -- the guard then looked for a directory named
+#: after the branch, found none, and allowed the switch (#15296). 0x1f is not
+#: IFS whitespace, so empty fields survive.
 FIELD_SEPARATOR = "\x1f"
-
-#: Tokens made only of these characters end one command and start another.
-_SEPARATOR_CHARS = set(";&|")
 
 #: Shell words after which the next word is again a command name.
 _KEYWORDS = frozenset(
@@ -207,170 +217,6 @@ _UNRESOLVED_SUBCOMMAND_MARKERS = ("$", "`")
 AMBIGUOUS_SUBCOMMAND_FLAG = "ambiguous"
 
 
-def _is_redirect(token: str) -> bool:
-    """True for a redirection operator token (``>``, ``>>``, ``2>&1``'s ``>&``)."""
-    return bool(token) and (token[0] in "<>" or token in ("&>", "&>>"))
-
-
-def _is_separator(token: str) -> bool:
-    """True for ``;``, ``&&``, ``||``, ``|``, ``&`` and the newline sentinel."""
-    return token == SENTINEL or (bool(token) and set(token) <= _SEPARATOR_CHARS)
-
-
-def _read_word(src: str, index: int) -> tuple[str, int]:
-    """Read one (possibly quoted) shell word starting at *index*."""
-    letters: list[str] = []
-    quote: str | None = None
-    while index < len(src):
-        char = src[index]
-        if quote is not None:
-            if char == quote:
-                quote = None
-            else:
-                letters.append(char)
-            index += 1
-            continue
-        if char in "'\"":
-            quote = char
-            index += 1
-            continue
-        if char == "\\":
-            index += 1
-            if index < len(src):
-                letters.append(src[index])
-                index += 1
-            continue
-        if char.isspace() or char in ";|&()<>":
-            break
-        letters.append(char)
-        index += 1
-    return "".join(letters), index
-
-
-def _terminator_end(src: str, start: int, delimiter: str) -> int:
-    """Index just past the line that closes a heredoc opened with *delimiter*."""
-    cursor = start
-    while cursor <= len(src):
-        newline = src.find("\n", cursor)
-        line = src[cursor:] if newline == -1 else src[cursor:newline]
-        if line.strip() == delimiter:
-            return len(src) if newline == -1 else newline + 1
-        if newline == -1:
-            return len(src)
-        cursor = newline + 1
-    return len(src)
-
-
-class _Normalizer:
-    """Rewrite a shell command so shlex can tokenize it with commands intact."""
-
-    def __init__(self, src: str) -> None:
-        self.src = src
-        self.out: list[str] = []
-        self.pos = 0
-        self.quote: str | None = None
-        self.subst: list[str | None] = []
-
-    def run(self) -> str | None:
-        """Normalized command, or ``None`` when the source cannot be parsed."""
-        while self.pos < len(self.src):
-            if self.quote == "'":
-                self._single()
-            elif self.quote == '"':
-                self._double()
-            else:
-                self._plain()
-        if self.quote is not None or self.subst:
-            return None
-        return "".join(self.out)
-
-    def _emit(self, text: str, consumed: int) -> None:
-        self.out.append(text)
-        self.pos += consumed
-
-    def _single(self) -> None:
-        char = self.src[self.pos]
-        if char == "'":
-            self.quote = None
-        self._emit(char, 1)
-
-    def _double(self) -> None:
-        src, pos = self.src, self.pos
-        if src[pos] == "\\":
-            self._emit(src[pos : pos + 2], 2)
-            return
-        if src.startswith("$(", pos):
-            # Close the string, let the substitution run at a command position,
-            # and reopen the string when it ends. A substitution inside double
-            # quotes really does invoke commands; without this rewrite the whole
-            # string would be one opaque token and the invocation invisible.
-            self.subst.append('"')
-            self.quote = None
-            self._emit('" ' + SENTINEL + " $(", 2)
-            return
-        if src[pos] == '"':
-            self.quote = None
-        self._emit(src[pos], 1)
-
-    def _plain(self) -> None:
-        src, pos = self.src, self.pos
-        char = src[pos]
-        if char == "\\":
-            self._emit(src[pos : pos + 2], 2)
-        elif char == "\n":
-            self._emit(" " + SENTINEL + " ", 1)
-        elif char in "'\"":
-            self.quote = char
-            self._emit(char, 1)
-        elif src.startswith("$(", pos):
-            self.subst.append(None)
-            self._emit("$(", 2)
-        elif char == ")" and self.subst:
-            self._close_subst()
-        elif src.startswith("<<", pos) and not src.startswith("<<<", pos) and self._skip_heredoc():
-            return
-        else:
-            self._emit(char, 1)
-
-    def _close_subst(self) -> None:
-        if self.subst.pop() == '"':
-            self.quote = '"'
-            self._emit(") " + SENTINEL + ' "', 1)
-        else:
-            self._emit(")", 1)
-
-    def _skip_heredoc(self) -> bool:
-        """Drop the heredoc body opened here; keep the rest of the line."""
-        src = self.src
-        cursor = self.pos + 2
-        if cursor < len(src) and src[cursor] == "-":
-            cursor += 1
-        while cursor < len(src) and src[cursor] in " \t":
-            cursor += 1
-        delimiter, cursor = _read_word(src, cursor)
-        newline = src.find("\n", cursor)
-        if not delimiter or newline == -1:
-            return False
-        body_start = newline + 1
-        self.src = src[:body_start] + src[_terminator_end(src, body_start, delimiter) :]
-        self.out.append(" ")
-        self.pos = cursor
-        return True
-
-
-def tokenize(command: str) -> list[str] | None:
-    """Shell tokens for *command*, or ``None`` when it cannot be tokenized."""
-    normalized = _Normalizer(command).run()
-    if normalized is None:
-        return None
-    try:
-        lexer = shlex.shlex(normalized, posix=True, punctuation_chars=True)
-        lexer.whitespace_split = True
-        return list(lexer)
-    except ValueError:
-        return None
-
-
 def _join_dir(current: str, value: str) -> str:
     """Apply a directory change to the directory in effect so far."""
     if not value or any(marker in value for marker in ("$", "~", "*", "?")):
@@ -387,17 +233,17 @@ def _apply_cd(tokens: list[str], index: int, current: str) -> str:
     cursor = index + 1
     while cursor < len(tokens) and tokens[cursor].startswith("-") and tokens[cursor] != "-":
         cursor += 1
-    if cursor >= len(tokens) or _is_separator(tokens[cursor]) or _is_redirect(tokens[cursor]):
+    if cursor >= len(tokens) or is_separator(tokens[cursor]) or is_redirect(tokens[cursor]):
         return UNKNOWN_DIR  # bare `cd` goes to $HOME, which only the shell knows
     return _join_dir(current, tokens[cursor])
 
 
 def _skip_redirection(tokens: list[str], index: int) -> int | None:
     """Index past a redirection at *index*, or ``None`` if there is none."""
-    if _is_redirect(tokens[index]):
+    if is_redirect(tokens[index]):
         return index + 2
     following = index + 1
-    if tokens[index].isdigit() and following < len(tokens) and _is_redirect(tokens[following]):
+    if tokens[index].isdigit() and following < len(tokens) and is_redirect(tokens[following]):
         return index + 3
     return None
 
@@ -407,11 +253,40 @@ def _first_positional(args: list[str]) -> str:
     return next((arg for arg in args if not arg.startswith("-")), "")
 
 
+def _abbreviates(token: str, option: str) -> bool:
+    """True when *token* is a long option git itself would read as *option*.
+
+    git's parse-options accepts any unambiguous prefix of a long option, so
+    ``--har`` really does select ``--hard`` and ``--for`` really does select
+    ``--force``. Matching only the full spelling left a one-keystroke way past
+    every rule that reads these flags. ``--`` plus a single letter is excluded
+    because git rejects it itself, as ambiguous with ``--help``.
+    """
+    return len(token) > 3 and option.startswith(token)
+
+
 def _is_clean_force(arg: str) -> bool:
     """True for ``git clean``'s force flag, bundled (``-fd``) or spelled out."""
-    if arg == "--force":
+    if _abbreviates(arg, "--force"):
         return True
     return arg.startswith("-") and not arg.startswith("--") and "f" in arg
+
+
+def _bundled_source(token: str, args: list[str], position: int) -> str | None:
+    """The ref a single-dash bundle names as ``git restore``'s source, if any.
+
+    Short options bundle behind one dash, and ``-s`` is the only one of this
+    subcommand's that takes a value, so what follows the ``s`` inside the bundle
+    is that value -- or the next word, when the bundle ends there. ``-Ws <ref>``
+    names a source that an exact match on ``-s`` misses, which reported the
+    invocation as a bounded index restore and skipped the dirty-tree check.
+    """
+    if not token.startswith("-") or token.startswith("--") or "s" not in token:
+        return None
+    rest = token[token.index("s") + 1 :]
+    if rest:
+        return rest
+    return args[position + 1] if position + 1 < len(args) else ""
 
 
 def _restore_source(args: list[str]) -> str:
@@ -419,15 +294,17 @@ def _restore_source(args: list[str]) -> str:
 
     ``git restore <path>`` restores from the index and is bounded; every
     spelling that names a source -- ``--source=<ref>``, ``--source <ref>``,
-    ``-s <ref>``, ``-s<ref>`` -- overwrites the tree from another commit.
+    ``-s <ref>``, ``-s<ref>``, an unambiguous abbreviation of the long form, and
+    a bundle carrying ``s`` -- overwrites the tree from another commit.
     """
     for position, token in enumerate(args):
-        if token in _SOURCE_FLAGS:
+        if token in _SOURCE_FLAGS or _abbreviates(token, "--source"):
             return args[position + 1] if position + 1 < len(args) else ""
-        if token.startswith("--source="):
+        if "=" in token and _abbreviates(token.split("=", 1)[0], "--source"):
             return token.split("=", 1)[1]
-        if token.startswith("-s") and not token.startswith("--") and len(token) > 2:
-            return token[2:]
+        bundled = _bundled_source(token, args, position)
+        if bundled is not None:
+            return bundled
     return ""
 
 
@@ -453,7 +330,7 @@ def _collect_args(tokens: list[str], index: int) -> tuple[list[str], int]:
     cursor = index + 1
     while cursor < len(tokens):
         token = tokens[cursor]
-        if _is_separator(token) or token in _KEYWORDS:
+        if is_separator(token) or token in _KEYWORDS:
             break
         jumped = _skip_redirection(tokens, cursor)
         if jumped is not None:
@@ -467,7 +344,8 @@ def _collect_args(tokens: list[str], index: int) -> tuple[list[str], int]:
 def _classify(subcommand: str, args: list[str]) -> tuple[list[str], str]:
     """``(flags, arg)`` for *subcommand* -- what it does, and to which ref."""
     if subcommand == "reset":
-        return ([HARD_RESET_FLAG] if "--hard" in args else []), _first_positional(args)
+        wipes = any(_abbreviates(arg, "--hard") for arg in args)
+        return ([HARD_RESET_FLAG] if wipes else []), _first_positional(args)
     if subcommand == "clean":
         return ([FORCE_CLEAN_FLAG] if any(_is_clean_force(arg) for arg in args) else []), ""
     if subcommand in _BRANCH_SUBCOMMANDS and any(arg in _NEW_BRANCH for arg in args):
@@ -557,7 +435,7 @@ def scan(tokens: list[str]) -> list[dict[str, str]]:
         if jumped is not None:
             index = jumped
             continue
-        if _is_separator(token) or token in _KEYWORDS:
+        if is_separator(token) or token in _KEYWORDS:
             at_command = True
             index += 1
             continue
