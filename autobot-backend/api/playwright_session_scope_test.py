@@ -178,9 +178,7 @@ class TestABodyItRefusesToRead:
         monkeypatch.setattr(playwright_session_scope, "_INSPECT_MAX_BYTES", 4)
 
         with caplog.at_level(logging.WARNING):
-            client.post(
-                "/api/playwright/navigate?session_id=s1", json={"url": "http://x"}
-            )
+            client.post("/api/playwright/navigate?session_id=s1", json={"url": "http://x"})
 
         assert _warnings(caplog) == []
 
@@ -199,9 +197,7 @@ class TestABodyItRefusesToRead:
         """Declining to read must not disturb the stream the route reads."""
         monkeypatch.setattr(playwright_session_scope, "_INSPECT_MAX_BYTES", 4)
 
-        response = client.post(
-            "/api/playwright/navigate", json={"url": "http://x", "session_id": "s1"}
-        )
+        response = client.post("/api/playwright/navigate", json={"url": "http://x", "session_id": "s1"})
 
         assert response.json() == {"url": "http://x", "session_id": "s1"}
 
