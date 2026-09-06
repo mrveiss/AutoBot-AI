@@ -53,6 +53,17 @@ _SOCKET = "slm_self_update_socket_service"
 _BACKEND = "slm_backend_service"
 
 
+#: The include directive itself, not a mention of the filename. A task NAME or
+#: any other scalar can contain "service_units.yml" after the include is
+#: removed, which would keep the reachability check green over a path that no
+#: longer runs.
+_INCLUDE_SERVICE_UNITS = re.compile(r"include_tasks:\s*service_units\.yml")
+
+
+def _includes_service_units(text: str) -> bool:
+    return bool(_INCLUDE_SERVICE_UNITS.search(text))
+
+
 def _directives(block: str) -> str:
     """The block with comment lines removed.
 
@@ -247,7 +258,7 @@ def test_each_entry_point_still_reaches_service_units() -> None:
       putting the bind in `main.yml` missed the update path in the first place
     """
     main = _directives(_MAIN.read_text(encoding="utf-8"))
-    assert "service_units.yml" in main, (
+    assert _includes_service_units(main), (
         "main.yml no longer includes service_units.yml, so the full-provision path does not reach "
         "the bind (#15823 review)"
     )
@@ -258,3 +269,28 @@ def test_each_entry_point_still_reaches_service_units() -> None:
         "playbooks/update-all-nodes.yml no longer runs service_units.yml, so the UPDATE path — the "
         "one #15823 was reported on — does not reach the bind"
     )
+
+
+@pytest.mark.parametrize(
+    ("fixture", "should_trip"),
+    [
+        ("  ansible.builtin.include_tasks: service_units.yml\n", True),
+        ("  ansible.builtin.include_tasks:  service_units.yml\n", True),
+        ('- name: "SLM | Refresh units, see service_units.yml for detail"\n', False),
+        ("  # the bind moved out of service_units.yml\n", False),
+        ("  ansible.builtin.include_tasks: other.yml\n", False),
+    ],
+)
+def test_the_include_detector_distinguishes_a_directive_from_a_mention(fixture: str, should_trip: bool) -> None:
+    """Contrast pair for the reachability detector.
+
+    Raised in review: the check accepted **any** occurrence of the filename, so
+    a task name or a comment mentioning `service_units.yml` would keep it green
+    after the include itself was deleted — the full-provision path silently no
+    longer reaching the bind.
+
+    A detector with no negative case cannot be told apart from one that returns
+    True for everything, which is the same failure this whole file guards
+    against one level down.
+    """
+    assert _includes_service_units(fixture) is should_trip
