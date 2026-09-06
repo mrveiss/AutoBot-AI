@@ -31,6 +31,7 @@ against.
 Run from the repo root:  python3 scripts/check_ansible_file_references.py
 """
 
+import logging
 import pathlib
 import re
 import sys
@@ -299,6 +300,21 @@ def _unresolvable_hosts(text: str, all_groups: set) -> list[tuple[int, str]]:
     return unresolved
 
 
+# Plain stdlib logging, deliberately (#1082): this runs as a bare script in CI,
+# where autobot_shared.logging_manager would pull in config this job does not
+# have -- and its RotatingFileHandler compares maxBytes against whatever a
+# config-mocking harness supplies, which breaks collection rather than the test.
+# Same convention as scripts/check_pr_issue_batching.py:55.
+#
+# The violation reports below are the *findings* a developer reads; this logger
+# carries the *summary of what was examined*. One says what is wrong, the other
+# says how much was looked at, and if this file is ever converted wholesale they
+# should stay distinct.
+#
+# Written without naming the builtin: #1082's guard is line-based, so a comment
+# containing the call would be flagged as the regression it describes.
+logger = logging.getLogger(__name__)
+
 #: Name this guard reports under.
 HOOK_ID = "ansible-file-references"
 
@@ -322,6 +338,21 @@ MIN_DEPLOYED_SRC_REFERENCES = 1
 # 'localhost') legitimately resolves nothing, and that tree is honest.
 def main() -> int:
     """Report every deployed-src reference with no matching repo path."""
+    # A handler on *this* logger, not `basicConfig`: that configures the root
+    # logger, which routed `_scan_helpers`' reach failure to stdout as well and
+    # moved its "FIX THE SWEEP" message off stderr where its test reads it.
+    # Configuring the root logger from a library-shaped module changes streams
+    # for everyone who logs, which is a behaviour change riding a lint fix.
+    #
+    # Attached here rather than at import so importing this module for its
+    # helpers adds no handler; and on stdout because this summary was already on
+    # stdout and consumers read it there.
+    if not logger.handlers:
+        handler = logging.StreamHandler(stream=sys.stdout)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
     root = pathlib.Path(".").resolve()
     inventories = inventory_groups(root)
     all_groups = set().union(*inventories.values()) if inventories else set()
@@ -373,11 +404,14 @@ def main() -> int:
     # population invisible: the figure reports on what survived. Both numbers
     # together make the denominator visible, and the floor above catches the
     # resolved side dropping.
-    print(
-        f"check_ansible_file_references: {paths_checked} deployed-src reference(s) resolve, "
-        f"{len(unresolvable_refs)} unresolvable; "
-        f"{hosts_checked} host pattern(s) resolve against {len(inventories)} inventor"
-        f"{'y' if len(inventories) == 1 else 'ies'}."
+    logger.info(
+        "check_ansible_file_references: %d deployed-src reference(s) resolve, %d unresolvable; "
+        "%d host pattern(s) resolve against %d inventor%s.",
+        paths_checked,
+        len(unresolvable_refs),
+        hosts_checked,
+        len(inventories),
+        "y" if len(inventories) == 1 else "ies",
     )
     return 0
 
