@@ -830,7 +830,7 @@ export class KnowledgeController {
    - `get_compatible_os_list()` - Maps OS families (Kali → Debian, Ubuntu)
    - Tested and verified on Kali 2025.2
 
-2. **Enhanced Man Page Indexer** (`scripts/utilities/index_all_man_pages.py`):
+2. **Enhanced Man Page Indexer** (`autobot-infrastructure/shared/scripts/utilities/index_all_man_pages.py`):
    - Added OS/machine context to all man page metadata
    - Unique key generation for deduplication
    - Applicability lists (compatible OSes)
