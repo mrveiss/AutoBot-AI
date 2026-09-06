@@ -73,6 +73,8 @@ vi.mock('@/stores/provision', () => ({
   }),
 }))
 
+const provisionWizardFleet = vi.fn().mockResolvedValue(undefined)
+
 vi.mock('@/composables/useSlmApi', () => ({
   useSlmApi: () => ({
     getNodes: vi.fn().mockResolvedValue([]),
@@ -86,7 +88,7 @@ vi.mock('@/composables/useSlmApi', () => ({
     getWizardStatus: vi.fn().mockResolvedValue({ current_step: 'provision_fleet', completed_steps: [] }),
     completeWizardStep: vi.fn().mockResolvedValue(undefined),
     skipWizardSetup: vi.fn(),
-    provisionWizardFleet: vi.fn().mockResolvedValue(undefined),
+    provisionWizardFleet,
     validateWizardFleet: vi.fn().mockResolvedValue({}),
   }),
 }))
@@ -127,6 +129,18 @@ describe('SetupWizardView — a failed provision (#15825)', () => {
     const failure = wrapper.find('.provision-failure')
     expect(failure.exists()).toBe(true)
     expect(failure.findAll('button').length).toBeGreaterThan(0)
+  })
+
+  it('actually retries when the control is clicked', async () => {
+    // "There is a button" is satisfiable by a button wired to nothing. A
+    // removed or misdirected click handler passes the assertion above and
+    // leaves the user on the same dead end, one click further in.
+    const wrapper = await mountOnProvisionStep()
+    provisionWizardFleet.mockClear()
+
+    await wrapper.find('.provision-failure button').trigger('click')
+
+    expect(provisionWizardFleet).toHaveBeenCalled()
   })
 
   it('says that provisioning failed, rather than showing nothing', async () => {

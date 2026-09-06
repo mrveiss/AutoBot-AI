@@ -224,3 +224,63 @@ def test_status_capturing_curls_do_not_use_dash_f(flag_site: str) -> None:
         f"the {flag_site} curl uses -f while capturing %{{http_code}}: it will exit 22 on the very "
         "codes the case statement branches on, and the arms below become unreachable (#15825)"
     )
+
+
+# ---------------------------------------------------------------------------
+# Contrast pair for the static detector, and the transport-failure path
+# ---------------------------------------------------------------------------
+
+
+def _detect_dash_f(text: str, var: str) -> bool:
+    """The detector above, over arbitrary text. True when the prohibited form is present.
+
+    Extracted so it can be aimed at fixtures rather than only at the real file.
+    A detector only ever pointed at a source that currently passes is
+    indistinguishable from one that returns False for everything.
+    """
+    block = re.search(rf"^\s*{var}=\$\(curl -s(f?)k[^\n]*$", text, re.M)
+    if block is None:
+        raise AssertionError(f"no {var} assignment found")
+    return block.group(1) == "f"
+
+
+def test_the_detector_trips_on_the_prohibited_form() -> None:
+    """The fixture that SHOULD trip it."""
+    assert _detect_dash_f('    http_code=$(curl -sfk --max-time 10 -o /dev/null \\\n', "http_code") is True
+
+
+def test_the_detector_passes_the_safe_form() -> None:
+    """The fixture that should NOT trip it."""
+    assert _detect_dash_f('    http_code=$(curl -sk --max-time 10 -o /dev/null \\\n', "http_code") is False
+
+
+def test_the_detector_refuses_to_report_on_a_file_it_could_not_parse() -> None:
+    """Absence of the assignment is not absence of the defect.
+
+    Silently returning False for a file whose shape changed is how a detector
+    goes quiet without anyone noticing.
+    """
+    with pytest.raises(AssertionError):
+        _detect_dash_f("nothing that looks like an assignment\n", "http_code")
+
+
+@pytest.mark.parametrize("var", ["http_code", "cs_code"])
+def test_a_transport_failure_still_reaches_the_warning(var: str) -> None:
+    """A curl that fails before any HTTP response must not abort the installer.
+
+    Removing `-f` fixed the >=400 case; a DNS failure, refused connection or
+    timeout exits non-zero with no status code at all, which under
+    `set -euo pipefail` aborts the assignment exactly as `-f` did -- the same
+    dead end one layer down.
+    """
+    text = _INSTALL.read_text(encoding="utf-8")
+    assignment = re.search(rf"^\s*{var}=\$\(curl.*?\)\s*(\|\|\s*true)?$", text, re.M | re.S)
+    assert assignment, f"could not find the {var} assignment"
+    body = text[assignment.start() : assignment.end()]
+    assert "|| true" in body, (
+        f"the {var} assignment is unguarded: a transport failure exits non-zero with no HTTP "
+        "response and aborts the script before the warning below can run (#15825)"
+    )
+    assert f"${{{var}:-000}}" in text, (
+        f"{var} must default in the case statement, or a transport failure branches on an empty string"
+    )

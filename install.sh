@@ -787,6 +787,12 @@ register_local_node() {
     # registered", an expected outcome on re-run -- was unreachable, as was the
     # catch-all warn. Asking for %{http_code} and also asking curl to fail on
     # the codes you are branching on are contradictory intents.
+    # A transport failure (DNS, refused, timeout) exits non-zero with no HTTP
+    # response at all, and under `set -euo pipefail` that aborts the assignment
+    # just as `-f` did -- the same dead end one layer down. `|| true` keeps the
+    # script alive and `${var:-000}` gives the wildcard arm below something to
+    # report, so "could not reach the API" surfaces as a manual-action warning
+    # rather than a silent exit.
     http_code=$(curl -sk --max-time 10 -o /dev/null -w "%{http_code}" \
         -X POST "${api_url}/api/nodes" \
         -H "Content-Type: application/json" \
@@ -806,19 +812,20 @@ register_local_node() {
             \"auth_method\": \"key\",
             \"import_existing\": true,
             \"auto_enroll\": false
-        }" 2>/dev/null)
+        }" 2>/dev/null) || true
 
-    case "${http_code}" in
+    case "${http_code:-000}" in
         201) success "Local node registered (${hostname_val} / ${local_ip})" ;;
         400) success "Local node already registered" ;;
-        *)   warn "Node registration returned HTTP ${http_code} — register manually via SLM UI"
+        *)   warn "Node registration returned HTTP ${http_code:-000} — register manually via SLM UI"
              return ;;
     esac
 
     # Auto-assign SLM Manager as code source (#2755)
     info "Assigning code source to SLM Manager..."
     local cs_code
-    # #15825: same as above -- capturing the status code means not using -f.
+    # #15825: same as above -- capturing the status code means not using -f,
+    # and a transport failure must reach the wildcard arm rather than abort.
     cs_code=$(curl -sk --max-time 10 -o /dev/null -w "%{http_code}" \
         -X POST "${api_url}/api/code-source/assign" \
         -H "Content-Type: application/json" \
@@ -827,11 +834,11 @@ register_local_node() {
             \"node_id\": \"${SLM_NODE_ID}\",
             \"repo_path\": \"${CODE_SOURCE}\",
             \"branch\": \"${GIT_BRANCH}\"
-        }" 2>/dev/null)
+        }" 2>/dev/null) || true
 
-    case "${cs_code}" in
+    case "${cs_code:-000}" in
         200) success "Code source assigned: ${CODE_SOURCE} (branch: ${GIT_BRANCH})" ;;
-        *)   warn "Code source assignment returned HTTP ${cs_code} — assign manually via SLM UI > Code Sync" ;;
+        *)   warn "Code source assignment returned HTTP ${cs_code:-000} — assign manually via SLM UI > Code Sync" ;;
     esac
 }
 
