@@ -246,12 +246,12 @@ def _detect_dash_f(text: str, var: str) -> bool:
 
 def test_the_detector_trips_on_the_prohibited_form() -> None:
     """The fixture that SHOULD trip it."""
-    assert _detect_dash_f('    http_code=$(curl -sfk --max-time 10 -o /dev/null \\\n', "http_code") is True
+    assert _detect_dash_f("    http_code=$(curl -sfk --max-time 10 -o /dev/null \\\n", "http_code") is True
 
 
 def test_the_detector_passes_the_safe_form() -> None:
     """The fixture that should NOT trip it."""
-    assert _detect_dash_f('    http_code=$(curl -sk --max-time 10 -o /dev/null \\\n', "http_code") is False
+    assert _detect_dash_f("    http_code=$(curl -sk --max-time 10 -o /dev/null \\\n", "http_code") is False
 
 
 def test_the_detector_refuses_to_report_on_a_file_it_could_not_parse() -> None:
@@ -281,6 +281,59 @@ def test_a_transport_failure_still_reaches_the_warning(var: str) -> None:
         f"the {var} assignment is unguarded: a transport failure exits non-zero with no HTTP "
         "response and aborts the script before the warning below can run (#15825)"
     )
-    assert f"${{{var}:-000}}" in text, (
-        f"{var} must default in the case statement, or a transport failure branches on an empty string"
+    assert (
+        f"${{{var}:-000}}" in text
+    ), f"{var} must default in the case statement, or a transport failure branches on an empty string"
+
+
+def _curl_transport_failure_stub(fail_globs: tuple[str, ...]) -> str:
+    """A curl stub that fails the way a refused connection does.
+
+    Non-zero exit, no stdout, no HTTP status at all. This is a different failure
+    from `-f`: there is no status code to branch on, so `${var:-000}` is what
+    gives the wildcard arm something to report.
+
+    Every call that is not the one under test returns the status its own `case`
+    treats as success -- 201 for node registration, 200 for the code-source
+    assignment. Returning a blanket 200 makes node registration warn and
+    `return`, so the code-source assignment is never reached and its test
+    asserts against a function that stopped two steps earlier.
+    """
+    arms = "\n".join(f"  {glob}) exit 7 ;;" for glob in fail_globs)
+    return f"""#!/bin/sh
+case "$*" in
+{arms}
+esac
+case "$*" in
+  *auth/login*)          echo '{{"access_token":"t"}}' ;;
+  *api/nodes*)           printf '201' ;;
+  *code-source/assign*)  printf '200' ;;
+  *)                     printf '200' ;;
+esac
+exit 0
+"""
+
+
+@pytest.mark.parametrize(
+    "fail_glob,expected_warning",
+    [
+        ("*api/nodes*", "register manually via SLM UI"),
+        ("*code-source/assign*", "assign manually via SLM UI"),
+    ],
+)
+def test_a_transport_failure_warns_and_continues_at_runtime(fail_glob: str, expected_warning: str) -> None:
+    """Executed, not scanned.
+
+    The static checks above prove the guard is written; only running it proves
+    the warning is *reached*. That distinction is the whole point of this file:
+    the original handlers existed and could not run, so "the guard is present"
+    is exactly the assertion that passes while the defect is live.
+    """
+    result = _run(_curl_transport_failure_stub((fail_glob,)))
+
+    assert expected_warning in result.stdout, result.stdout
+    assert "FUNCTION_RETURNED" in result.stdout, (
+        "the installer aborted on a transport failure instead of warning and continuing:\n"
+        f"stdout={result.stdout}\nstderr={result.stderr}"
     )
+    assert result.returncode == 0
