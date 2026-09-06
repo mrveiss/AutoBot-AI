@@ -117,6 +117,26 @@ def configure_service_auth(app: FastAPI):
         logger.warning("⚠️ Service auth middleware not available: %s", e2)
 
 
+def configure_idempotency(app: FastAPI):
+    """Wire replay protection for creations carrying an Idempotency-Key (#15778).
+
+    Opt-in by header, so a request without one behaves exactly as before and
+    nothing needs migrating. Call order matters: `add_middleware` prepends, so
+    this must be registered BEFORE `configure_service_auth` and
+    `configure_audit` — both have to end up outside it. Auth first, or the
+    replay key falls back to the shared "anonymous" actor and a completed
+    replay returns before authentication runs; audit outside that, or a replay
+    short-circuits before its trail entry is written.
+    """
+    try:
+        from middleware.idempotency_middleware import IdempotencyMiddleware
+
+        app.add_middleware(IdempotencyMiddleware)
+        logger.info("Idempotency middleware enabled")
+    except ImportError as e:
+        logger.warning("Idempotency middleware not available: %s", e)
+
+
 def configure_audit(app: FastAPI):
     """Configure audit logging middleware.
 
@@ -279,6 +299,27 @@ def configure_middleware(
     if enable_validation:
         configure_validation(app)
 
+    # Idempotent creations (#15778) — registered BEFORE service auth and audit,
+    # deliberately. `add_middleware` prepends, so the last one registered is the
+    # outermost and runs FIRST; registering earlier is what pushes this layer
+    # inwards, and both wrappers are required.
+    #
+    # Service auth must wrap it: the replay key is namespaced by actor, so
+    # running ahead of authentication this layer would see no
+    # `request.state.user`, drop every caller into the shared "anonymous" scope,
+    # and hand one caller another caller's cached creation response — and a
+    # completed replay short-circuits, so it would return before authentication
+    # ran at all.
+    #
+    # Audit must wrap it too, or a replayed response would short-circuit before
+    # the audit entry is written and a retried creation would vanish from the
+    # trail.
+    #
+    # Effective runtime order is therefore audit → service auth → idempotency,
+    # asserted in `middleware_order_test.py` against the built stack rather than
+    # against the order of the calls below.
+    configure_idempotency(app)
+
     # Configure Service Authentication (optional)
     if enable_service_auth:
         configure_service_auth(app)
@@ -311,6 +352,7 @@ __all__ = [
     "configure_gzip",
     "configure_service_auth",
     "configure_audit",
+    "configure_idempotency",
     "configure_llm_awareness",
     "configure_validation",
     "configure_llc_agent_auth",

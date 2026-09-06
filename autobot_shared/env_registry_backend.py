@@ -536,3 +536,45 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_IDEMPOTENCY_CLAIM_ATTEMPTS",
+        type=int,
+        default=3,
+        description=(
+            "How many times an idempotency claim re-runs its atomic SET NX after the record it lost "
+            "to turns out to have expired. Reporting 'unseen' at that point would let every loser of "
+            "the race create (autobot_shared/idempotency.py, #15778)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_IDEMPOTENCY_CLAIM_TTL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "How long an in-flight idempotency claim is held before another caller may retry it. A "
+            "request that dies between claiming and completing would otherwise wedge the key for the "
+            "full replay TTL (autobot_shared/idempotency.py, #15778)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_IDEMPOTENCY_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "How long a completed creation stays replayable for its Idempotency-Key. Long enough to "
+            "outlive any retry an agent or proxy makes, short enough that the keyspace stays bounded "
+            "(autobot_shared/idempotency.py, #15778)."
+        ),
+        component="backend",
+    )
+)

@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 import unicodedata
 import urllib.parse
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Sequence
 
 from autobot_shared.paths import project_root
@@ -187,9 +187,45 @@ def validate_relative_path(
     if not user_segment or "\x00" in user_segment:
         raise ValueError("Invalid path segment: empty or contains null bytes")
 
+    # Reject the shapes that can escape BEFORE building the path expression
+    # (#15786). The containment check below is the real barrier and stays; this
+    # is defence in depth plus an honest answer to a specific criticism.
+    #
+    # `base / "/etc/passwd"` discards `base` entirely -- that is pathlib's
+    # documented behaviour for an absolute right-hand side, not a bug -- so an
+    # absolute segment never had anything to do with *this* base directory and
+    # saying "traversal detected" after the fact describes it less accurately
+    # than refusing it up front. `..` is the same: a caller that means a file
+    # under `base` never needs to walk out of it.
+    #
+    # It also moves the sanitisation to where a reader (and a static analyser)
+    # expects it: `py/path-injection` flags line ~198 because the check is a
+    # post-condition on the sink rather than a pre-condition on the input. The
+    # code was already safe; it now says so in the order the reader reads.
+    candidate = PurePosixPath(str(user_segment).replace("\\", "/"))
+    if candidate.is_absolute() or str(user_segment).startswith("/"):
+        # Keeps the "Path traversal detected" prefix the existing contract
+        # matches on (path_validator_test.py:293), with the detail made
+        # accurate: pathlib discards the base for an absolute right-hand side,
+        # so nothing traversed out -- the base was never involved.
+        raise ValueError("Path traversal detected: segment is absolute, so the base directory is discarded")
+    if ".." in candidate.parts:
+        raise ValueError("Path traversal detected: segment contains a parent reference")
+    # A drive qualifier is absolute to Windows and invisible to PurePosixPath:
+    # `PurePosixPath("C:/x").is_absolute()` is False, so the check above lets it
+    # through. On this platform `base / "C:/x"` merely creates an oddly named
+    # directory inside the base, but this validator lives in `autobot_shared` and
+    # its contract is "stays under base" without a platform qualifier -- on
+    # Windows the same join escapes outright. Drive-relative `C:x` is included:
+    # it is the same qualifier without a separator.
+    if PureWindowsPath(str(user_segment)).drive:
+        raise ValueError("Path traversal detected: segment carries a drive qualifier")
+
     base = Path(os.path.realpath(str(base_dir)))
     resolved = Path(os.path.realpath(str(base / user_segment)))
 
+    # Retained, not replaced: the checks above cannot see a SYMLINK inside the
+    # base that points out of it, which resolves only after `realpath`.
     try:
         resolved.relative_to(base)
     except ValueError:

@@ -14,8 +14,8 @@ trusted to be inside a root.
 
 **Canonical enforcement:** [`autobot_shared/security/path_validator.py`](../../autobot_shared/security/path_validator.py)
 — `validate_path` (:95) absolute paths · `validate_relative_path` (:156) a segment under a
-known base · `resolve_within_sandbox` (:252) the file-management sandbox ·
-`require_path_string` (:204) type gate before `Path()` / `os.makedirs`.
+known base · `resolve_within_sandbox` (:288) the file-management sandbox ·
+`require_path_string` (:240) type gate before `Path()` / `os.makedirs`.
 
 **Invariants**
 
@@ -26,8 +26,8 @@ known base · `resolve_within_sandbox` (:252) the file-management sandbox ·
   `str(project_root())` — over the default for a request-supplied path scoped to this project.
 - Decode before resolve: `_canonicalize` (:64) runs `_MAX_DECODE_ROUNDS` unquote passes plus
   NFKC. `realpath` decodes nothing, so a denylist on the raw string is always wrong.
-- The containment check is the **sole** authority — `resolved.relative_to(root_resolved)`,
-  both sides realpath'd. A new string-level `..` check added "as well" is a smell, not defence.
+- Containment is the **sole** authority — `relative_to`, both sides realpath'd. Pre-resolution
+  refusals (absolute, `..`, drive qualifier) are defence in depth only; replacing it is a smell (#15786).
 - The validated string is the string used. Validating `user_path` then opening something
   rebuilt from the original input is a finding.
 - `resolve_within_sandbox` forbids **any** `..`, `~`, leading `/`, or
