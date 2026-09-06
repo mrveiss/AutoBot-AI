@@ -61,6 +61,22 @@ async def _seed_owner(session_factory, company_id: uuid.UUID) -> uuid.UUID:  # n
     return user_id
 
 
+async def _seed_member(session_factory, company_id: uuid.UUID) -> uuid.UUID:  # noqa: ANN001
+    """A plain member of the company."""
+    user_id = uuid.uuid4()
+    async with session_factory() as session:
+        session.add(
+            LLCCompanyMembership(
+                id=uuid.uuid4(),
+                company_id=company_id,
+                user_id=user_id,
+                role=MembershipRole.MEMBER.value,
+            )
+        )
+        await session.commit()
+    return user_id
+
+
 async def _seed_agent(session_factory, company_id: uuid.UUID, slug: str) -> uuid.UUID:  # noqa: ANN001
     agent_id = uuid.uuid4()
     async with session_factory() as session:
@@ -261,7 +277,9 @@ async def test_the_chain_reaches_a_human_ceo_too(session_factory):  # noqa: ANN0
     """A person holding the position must resolve like an agent does."""
     company_id = await _seed_company_without_ceo(session_factory)
     owner = await _seed_owner(session_factory, company_id)
-    human_ceo = uuid.uuid4()
+    # A member, not a bare UUID: a human CEO must belong to the company, which
+    # is the boundary `_require_in_company` enforces.
+    human_ceo = await _seed_member(session_factory, company_id)
     subject = await _seed_agent(session_factory, company_id, "worker-c")
 
     async with session_factory() as session:
@@ -368,3 +386,92 @@ def test_the_backfill_slug_matches_the_service():
     source = _migration_source()
     assert "'ceo-' || o.id::text" in source
     assert default_ceo_slug(uuid.UUID(int=0)) == f"ceo-{uuid.UUID(int=0)}"
+
+
+# ---------------------------------------------------------------------------
+# Company boundary (CWE-639) -- review findings on #15856
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_agent_from_another_company_cannot_be_made_ceo(session_factory):  # noqa: ANN001
+    """`set_ceo` took any UUID the caller supplied.
+
+    Installing another tenant's agent at the top of this chart would let the
+    upward walk traverse into a company the caller has no access to.
+    """
+    company_id = await _seed_company_without_ceo(session_factory)
+    other_company = await _seed_company_without_ceo(session_factory)
+    foreign_agent = await _seed_agent(session_factory, other_company, "foreign-agent")
+
+    async with session_factory() as session:
+        with pytest.raises(ValueError):
+            await CompanyCEOService().set_ceo(session, company_id, RoleHolderType.AGENT.value, foreign_agent)
+
+
+@pytest.mark.asyncio
+async def test_a_person_from_another_company_cannot_be_made_ceo(session_factory):  # noqa: ANN001
+    """The same boundary on the user side, where membership is the test."""
+    company_id = await _seed_company_without_ceo(session_factory)
+    other_company = await _seed_company_without_ceo(session_factory)
+    outsider = await _seed_owner(session_factory, other_company)
+
+    async with session_factory() as session:
+        with pytest.raises(ValueError):
+            await CompanyCEOService().set_ceo(session, company_id, RoleHolderType.USER.value, outsider)
+
+
+@pytest.mark.asyncio
+async def test_resolution_drops_a_holder_that_left_the_company(session_factory):  # noqa: ANN001
+    """Read-side scope, not just write-side.
+
+    A row can predate the write-side check, so resolution must refuse it too --
+    otherwise the guard only protects rows written after this change.
+    """
+    company_id = await _seed_company_without_ceo(session_factory)
+    other_company = await _seed_company_without_ceo(session_factory)
+    foreign_agent = await _seed_agent(session_factory, other_company, "foreign-ceo")
+
+    # Written directly, bypassing the service, as a pre-existing row would be.
+    async with session_factory() as session:
+        session.add(
+            LLCCompanyCEO(
+                company_id=company_id,
+                holder_type=RoleHolderType.AGENT.value,
+                holder_agent_id=foreign_agent,
+            )
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        assert await CompanyCEOService().resolve(session, company_id) is None
+
+
+@pytest.mark.asyncio
+async def test_provisioning_refuses_a_slug_held_by_another_company(session_factory):  # noqa: ANN001
+    """Adoption is company-scoped.
+
+    `agent_org_nodes.agent_id` is globally unique (#15812), so this slug can
+    already exist under a different company. Adopting it would install a foreign
+    agent as CEO; raising is recoverable, a cross-tenant CEO is not.
+    """
+    company_id = await _seed_company_without_ceo(session_factory)
+    other_company = await _seed_company_without_ceo(session_factory)
+    await _seed_agent(session_factory, other_company, default_ceo_slug(company_id))
+
+    async with session_factory() as session:
+        # Matched on message: a bare `ValueError` is also raised by
+        # `_require_in_company`, so an unmatched assertion passes even when the
+        # slug-ownership guard is gone.
+        with pytest.raises(ValueError, match="already held by another company"):
+            await CompanyCEOService().provision_default(session, company_id)
+
+
+def test_the_backfill_join_is_scoped_to_the_company():
+    """Structural: the designation insert must match on company as well as slug.
+
+    Matching on slug alone, a slug owned by another company is skipped by the
+    first insert's guard and then adopted by the second.
+    """
+    source = _migration_source()
+    assert "JOIN agent_org_nodes a ON a.agent_id = 'ceo-' || o.id::text AND a.company_id = o.id" in source

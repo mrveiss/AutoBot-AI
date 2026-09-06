@@ -26,6 +26,15 @@ globally unique -- not unique per company (#15812) -- so a fixed slug like
 ``agent-ceo`` would collide on the second company and abort the whole backfill.
 ``ceo-<company uuid>`` is unique by construction.
 
+The designation join is scoped by ``a.company_id = o.id`` as well as by slug.
+Without it, a slug that already belonged to a *different* company would be
+skipped by the first insert (its ``NOT EXISTS`` guard sees the slug) and then
+adopted by the second, quietly installing another tenant's agent as this
+company's CEO. With the scope, such a company is simply left without a CEO --
+which is a defined, rendering state that the service reports as ``NO_CEO``, and
+a recoverable one. The migration does not raise: one company with a hand-made
+slug must not abort an upgrade for every other company on the instance.
+
 Postgres only, like #15763's backfill and for the same reason: the statements
 use ``gen_random_uuid()``, which SQLite does not have, and the SQLite path
 exists so unit tests can create the schema. There are no pre-existing companies
@@ -119,7 +128,7 @@ def _provision_missing_ceos(bind: sa.engine.Connection, inspector: sa.Inspector)
             INSERT INTO llc_company_ceos (id, company_id, holder_type, holder_agent_id)
             SELECT gen_random_uuid(), o.id, 'agent', a.id
             FROM organizations o
-            JOIN agent_org_nodes a ON a.agent_id = 'ceo-' || o.id::text
+            JOIN agent_org_nodes a ON a.agent_id = 'ceo-' || o.id::text AND a.company_id = o.id
             WHERE o.llc_status IS NOT NULL
               AND NOT EXISTS (SELECT 1 FROM llc_company_ceos c WHERE c.company_id = o.id)
             """))
