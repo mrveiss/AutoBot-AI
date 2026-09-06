@@ -57,7 +57,19 @@ def ansible_playbook_path() -> str:
 
 
 def default_repo_path() -> str:
-    """`DEFAULT_REPO_PATH`'s fallback, read from git_tracker rather than restated."""
+    """`DEFAULT_REPO_PATH`'s fallback, read from git_tracker rather than restated.
+
+    Deliberately does **not** strip comments, unlike the readers above, and is
+    safe only because the pattern is anchored `^DEFAULT_REPO_PATH` with no
+    leading `\s*`: a commented-out copy is indented behind `# `, so the anchor
+    excludes it.
+
+    That safety is a property of the regex, not of the input. Adding `\s*` to
+    tolerate an indented definition -- the natural future edit -- would silently
+    admit `# DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/old/path")`
+    and nothing here would fail. If this ever needs to match an indented
+    assignment, strip comments first.
+    """
     text = _GIT_TRACKER.read_text(encoding="utf-8")
     match = re.search(r'^DEFAULT_REPO_PATH\s*=\s*os\.environ\.get\(\s*"[^"]+"\s*,\s*"([^"]+)"', text, re.MULTILINE)
     assert match, "DEFAULT_REPO_PATH is no longer an os.environ.get with a literal default"
