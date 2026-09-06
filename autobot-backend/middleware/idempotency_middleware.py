@@ -110,14 +110,21 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     async def _run_and_record(self, request: Request, call_next, redis, key: str, token: str) -> Response:
         try:
             response = await call_next(request)
+            # Inside the try deliberately: draining `body_iterator` can raise on a
+            # client disconnect or an upstream stream error, and `_record` can
+            # raise on a Redis blip. Both happen AFTER the handler succeeded, and
+            # leaving the claim behind converts them into a blocked retry -- the
+            # caller then gets 409 for the whole claim TTL and can neither retry
+            # nor learn the outcome. Releasing risks a duplicate on retry, which
+            # is exactly the behaviour without this middleware; a wedged key is
+            # strictly worse than that baseline.
+            body = b"".join([section async for section in response.body_iterator])
+            await self._record(redis, key, token, response.status_code, body)
         except Exception:
             # The claim must not outlive a request that failed, or the retry the
             # caller has to make is impossible until the TTL expires.
             await self._release(redis, key, token)
             raise
-
-        body = b"".join([section async for section in response.body_iterator])
-        await self._record(redis, key, token, response.status_code, body)
         return Response(
             content=body,
             status_code=response.status_code,

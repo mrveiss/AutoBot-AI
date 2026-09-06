@@ -12,7 +12,7 @@ has rather than how tangled the module is.
 
 The split follows the data: every spec already carries a ``component``, so the
 grouping is the one the registry itself declares. This module holds the
-``backend`` component, the largest group at 35 of 128 entries.
+``backend`` component, the largest group at 35 of 208 entries.
 
 Importing this module is what registers them, so ``env_registry`` imports it for
 its side effect. Nothing here is re-exported and nothing imports it directly.

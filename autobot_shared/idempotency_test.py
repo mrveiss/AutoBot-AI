@@ -25,6 +25,8 @@ import fakeredis.aioredis
 import pytest
 
 from autobot_shared.idempotency import (
+    IDEMPOTENCY_CLAIM_TTL_SECONDS,
+    IDEMPOTENCY_TTL_SECONDS,
     IN_FLIGHT,
     ReplayedResponse,
     claim,
@@ -257,3 +259,31 @@ class TestFencing:
         second = await claim(redis, KEY)
 
         assert first.token != second.token
+
+
+class TestTheConfiguredTTLIsApplied:
+    """The TTL is the only thing bounding the keyspace, and nothing asserted it.
+
+    A replay that never expires is a slow leak; one that expires immediately is
+    a feature that silently stops working. Both look identical to a test that
+    checks the payload alone.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_completed_record_carries_the_replay_ttl(self, redis):
+        outcome = await claim(redis, "k")
+        await complete(redis, "k", str(outcome.token), ReplayedResponse(status_code=201, body="{}"))
+
+        ttl = await redis.ttl("k")
+
+        assert 0 < ttl <= IDEMPOTENCY_TTL_SECONDS
+        assert ttl > IDEMPOTENCY_CLAIM_TTL_SECONDS, "a completed record must outlive the in-flight claim"
+
+    @pytest.mark.asyncio
+    async def test_an_in_flight_claim_carries_the_shorter_claim_ttl(self, redis):
+        """The contrast: a claim that outlived its request would wedge the key."""
+        await claim(redis, "k")
+
+        ttl = await redis.ttl("k")
+
+        assert 0 < ttl <= IDEMPOTENCY_CLAIM_TTL_SECONDS

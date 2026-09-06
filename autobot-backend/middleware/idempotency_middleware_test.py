@@ -27,7 +27,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from autobot_shared.idempotency import IN_FLIGHT, ReplayedResponse, complete, storage_key
+from autobot_shared.idempotency import (
+    IDEMPOTENCY_CLAIM_TTL_SECONDS,
+    IN_FLIGHT,
+    ReplayedResponse,
+    complete,
+    storage_key,
+)
 from middleware.idempotency_middleware import (
     HEADER,
     MAX_KEY_LENGTH,
@@ -38,7 +44,11 @@ from middleware.idempotency_middleware import (
 
 @pytest.fixture
 def app_and_calls(monkeypatch):
-    redis = fakeredis.aioredis.FakeRedis()
+    # One shared server, but a client per event loop: the in-flight test seeds
+    # through `anyio.run` while TestClient drives its own portal loop, and a
+    # single asyncio-bound client reused across both is a latent flake.
+    server = fakeredis.FakeServer()
+    redis = fakeredis.aioredis.FakeRedis(server=server)
 
     async def _redis():
         return redis
@@ -64,7 +74,7 @@ def app_and_calls(monkeypatch):
     async def _explodes():
         raise RuntimeError("handler exploded")
 
-    return app, calls, redis
+    return app, calls, server
 
 
 class TestTheHandlerRunsOnce:
@@ -85,11 +95,15 @@ class TestTheHandlerRunsOnce:
         app, calls, _redis_client = app_and_calls
         client = TestClient(app)
 
+        # Both requests carry the SAME credential: with different credentials
+        # the second would bypass the layer for lack of a shared namespace, and
+        # the test would pass while asserting nothing about key separation.
         client.post("/create", headers={HEADER: "k1", "Authorization": _TOKEN})
-        second = client.post("/create", headers={HEADER: "k2"})
+        second = client.post("/create", headers={HEADER: "k2", "Authorization": _TOKEN})
 
         assert calls["create"] == 2
         assert second.json()["id"] == "resource-2"
+        assert second.headers.get("Idempotent-Replay") is None
 
     def test_no_header_means_no_change_in_behaviour(self, app_and_calls):
         """Opt-in: an unmigrated caller behaves exactly as before."""
@@ -167,11 +181,18 @@ class TestConcurrentReplay:
         looks like to the second caller — the state a two-state store would
         collapse into "unseen" and let through.
         """
-        app, calls, redis = app_and_calls
+        app, calls, server = app_and_calls
+        # A client bound to THIS test's loop, over the shared server: the
+        # fixture's client belongs to whichever loop created it.
+        redis = fakeredis.aioredis.FakeRedis(server=server)
         key = storage_key(_credential_actor(_TOKEN), "POST", "/create", "k1")
 
         async def _hold_the_claim():
-            await redis.set(key, IN_FLIGHT)
+            # The production shape: `claim()` stores `__in_flight__:<token>` with
+            # the claim TTL, not a bare marker. `_decode` routes both to the same
+            # 409 today, so a bare marker would pass while testing a shape the
+            # code never writes.
+            await redis.set(key, f"{IN_FLIGHT}:held-by-another-request", ex=IDEMPOTENCY_CLAIM_TTL_SECONDS)
 
         anyio.run(_hold_the_claim)
 
@@ -283,7 +304,10 @@ class TestFencingReachesTheMiddleware:
     def test_a_request_whose_claim_lapsed_does_not_overwrite_a_successors_record(self, app_and_calls):
         """End to end: the middleware must pass its own token to `complete`, not
         blindly overwrite. A successor's stored response has to survive."""
-        app, calls, redis = app_and_calls
+        app, calls, server = app_and_calls
+        # A client bound to THIS test's loop, over the shared server: the
+        # fixture's client belongs to whichever loop created it.
+        redis = fakeredis.aioredis.FakeRedis(server=server)
         key = storage_key(_credential_actor(_TOKEN), "POST", "/create", "k1")
         client = TestClient(app)
 
