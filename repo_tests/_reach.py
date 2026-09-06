@@ -37,6 +37,24 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
 
+
+class ReachFloorError(AssertionError):
+    """Raised only by :meth:`Reach._require` — the floor rejecting a sweep.
+
+    A distinct type because ``AssertionError`` alone cannot carry the claim.
+    ``examined()`` calls ``discover(root)`` before the floor runs, and the
+    guards this module exists to migrate "already express it as
+    ``assert len(found) >= _MIN_X``" — so a discovery callback wrapping an
+    existing assert-based guard raises ``AssertionError`` too. A meta-test
+    catching the bare type cannot tell *the floor rejected an empty sweep* from
+    *the discovery blew up before the floor ran*, which is the same conflation
+    the earlier fixes each closed one instance of.
+
+    Subclassing ``AssertionError`` keeps every existing guard's behaviour and
+    pytest's assertion reporting unchanged; only the meta-test narrows.
+    """
+
+
 #: Every declaration made by an imported guard module. Populated by ``declare``
 #: at import time so the meta-test can enumerate without importing by path.
 REGISTRY: dict[str, "Reach"] = {}
@@ -82,7 +100,7 @@ class Reach:
 
     def _require(self, count: int, verb: str, what: str) -> None:
         if count < self.floor:
-            raise AssertionError(
+            raise ReachFloorError(
                 f"[{self.name}] {verb} {count} {what}; floor is {self.floor}. "
                 f"Fix the sweep, not the tree — a clean result below this floor asserts nothing."
             )

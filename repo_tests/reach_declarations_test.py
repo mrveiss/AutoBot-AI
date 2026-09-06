@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 from autobot_shared.paths import scrubbed_git_env
-from repo_tests._reach import REGISTRY, Reach, declare
+from repo_tests._reach import REGISTRY, Reach, ReachFloorError, declare
 
 _REPO_TESTS = Path(__file__).resolve().parent
 
@@ -100,22 +100,28 @@ def empty_repo(tmp_path: Path) -> Path:
 def test_no_guard_can_succeed_against_an_empty_tree(reach: Reach, empty_repo: Path) -> None:
     """The mutation, applied mechanically: point discovery at an empty tree.
 
-    The required failure is **`AssertionError` specifically** — the floor
-    rejecting a sweep that found nothing. Two weaker rules were tried and both
+    The required failure is **`ReachFloorError` specifically** — the floor
+    rejecting a sweep that found nothing. Three weaker rules were tried and each
     let a dead guard read as adopted:
 
     * "any exception qualifies" accepts a `discover` broken by a typo;
     * "process failures also qualify" accepts a sweep that never ran, because
       `git ls-files` raises `CalledProcessError` on a directory that is not a
-      repository — loud, but silent about whether the floor binds.
+      repository — loud, but silent about whether the floor binds;
+    * "`AssertionError` qualifies" accepts a discovery that failed its own
+      assert before the floor ran — and since the guards this module migrates
+      "already express it as `assert len(found) >= _MIN_X`", that is the normal
+      case rather than an exotic one.
 
     The `empty_repo` fixture removes the second case at the source rather than
-    excusing it: the sweep runs, returns nothing, and the floor is what must
-    reject it. Any other exception is a broken guard and fails the test.
+    excusing it: the sweep runs and returns nothing. `ReachFloorError` removes
+    the third by giving the floor a type nothing else raises, so this catch is
+    satisfiable only by the floor. Any other exception is a broken guard and
+    fails the test.
     """
     try:
         result = reach.examined(empty_repo)
-    except AssertionError:
+    except ReachFloorError:
         return
     except BaseException as exc:  # noqa: BLE001 - the point is to name what it was
         pytest.fail(
