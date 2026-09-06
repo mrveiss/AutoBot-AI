@@ -75,8 +75,14 @@ _ORGS = "organizations"
 
 #: An agent that is not working. ``LLCAgentStatus`` has no "retired" or
 #: "inactive" member, and adding one to repair a backfill would be a vocabulary
-#: change riding a data fix. ``on_leave`` is the existing member meaning "not
-#: working"; if a dedicated state is wanted later, this is one predicate.
+#: change riding a data fix -- the kind of thing noticed six months later by
+#: someone who cannot tell which half of the commit they are reading.
+#:
+#: This is a deliberate approximation, not a fit. ``on_leave`` means
+#: *temporarily away*; these nodes mean *should never have existed*, and the
+#: schema cannot currently express the difference, so a later reader will
+#: reasonably conclude someone is coming back. Tracked as #15898. If a terminal
+#: state lands, this is one predicate.
 _DORMANT_STATUS = "on_leave"
 
 #: Rows the backfill created and nobody has touched since. Shared by both
