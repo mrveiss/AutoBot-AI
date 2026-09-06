@@ -20,6 +20,52 @@ from api.ide_integration import (
 )
 from models.completion_context import CompletionContext
 
+# ---------------------------------------------------------------------------
+# Deterministic clock for the ML latency gate (#15861)
+# ---------------------------------------------------------------------------
+#
+# `_gather_completions` keeps ML completions only when the call returned within
+# `_ML_LATENCY_BUDGET_MS` of wall clock. A test that asserts on the ML path
+# while letting the real clock run is asserting that this machine was fast
+# enough at that instant -- which is why `test_ml_completions` failed on a PR
+# whose diff touched neither this module nor anything it imports: `-n auto
+# --dist loadscope` put enough load on the worker to cross the threshold.
+#
+# So the clock is controlled rather than raced. `time.time` reads a value this
+# test moves, and the mocked prediction advances it by exactly the elapsed time
+# under test. Extra `time.time()` calls elsewhere in the path read the same
+# value and cannot perturb the measurement.
+
+_ML_LATENCY_BUDGET_MS = 50
+
+
+class _ControlledClock:
+    """A `time.time` replacement whose value only moves when a test moves it."""
+
+    def __init__(self) -> None:
+        self.now = 1_000_000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance_ms(self, milliseconds: float) -> None:
+        self.now += milliseconds / 1000.0
+
+
+def _ml_model_taking_ms(clock: _ControlledClock, elapsed_ms: float) -> MagicMock:
+    """A model whose prediction 'takes' `elapsed_ms` on the controlled clock."""
+    model = MagicMock()
+
+    def _predict(_features):
+        clock.advance_ms(elapsed_ms)
+        return [
+            {"text": "result = func()", "score": 0.95},
+            {"text": "data = load_data()", "score": 0.85},
+        ]
+
+    model.predict.side_effect = _predict
+    return model
+
 
 @pytest.fixture
 def engine():
@@ -112,21 +158,55 @@ async def test_ml_completions(
     mock_redis.get.return_value = None
     mock_analyzer.analyze.return_value = sample_context
 
-    mock_model = MagicMock()
-    mock_model.predict.return_value = [
-        {"text": "result = func()", "score": 0.95},
-        {"text": "data = load_data()", "score": 0.85},
-    ]
-    mock_trainer.load_model.return_value = mock_model
+    # #15861: inside the budget, on a clock this test controls. Previously this
+    # raced the real clock and failed whenever the worker was loaded enough to
+    # cross 50ms -- which reads exactly like a test-ordering bug and is not one.
+    clock = _ControlledClock()
+    mock_trainer.load_model.return_value = _ml_model_taking_ms(clock, _ML_LATENCY_BUDGET_MS - 10)
 
-    response = await engine.complete(sample_request)
+    with patch("time.time", clock):
+        response = await engine.complete(sample_request)
 
     # Should use ML if available and model returns results
-    # Check that we got completions from the ML model
     assert len(response.completions) >= 2
-    # Check for ML-generated completions in results
     completion_texts = [c.label for c in response.completions]
     assert any("result = func()" in text or "result" in text for text in completion_texts)
+    assert response.source == "ml"
+
+
+@pytest.mark.anyio
+@patch("api.ide_integration.HAS_ML", True)
+@patch("api.ide_integration._get_context_analyzer")
+@patch("api.ide_integration._get_redis_client")
+@patch("api.ide_integration._get_trainer")
+async def test_ml_completions_over_the_latency_budget_are_dropped(
+    mock_get_trainer, mock_get_redis, mock_get_analyzer, engine, sample_request, sample_context
+):
+    """The contrast case, and the behaviour that made #15861 look like pollution.
+
+    A prediction that took longer than the budget is discarded even though it
+    succeeded. Without this test the gate is untested in the direction it
+    actually fires, and `test_ml_completions` above would pass just as happily
+    against code with no gate at all.
+    """
+    mock_trainer = mock_get_trainer.return_value
+    mock_redis = mock_get_redis.return_value
+    mock_analyzer = mock_get_analyzer.return_value
+    mock_redis.get.return_value = None
+    mock_analyzer.analyze.return_value = sample_context
+
+    clock = _ControlledClock()
+    mock_trainer.load_model.return_value = _ml_model_taking_ms(clock, _ML_LATENCY_BUDGET_MS + 10)
+
+    with patch("time.time", clock):
+        response = await engine.complete(sample_request)
+
+    completion_texts = [c.label for c in response.completions]
+    assert not any("result = func()" in text for text in completion_texts), (
+        "an ML completion over the latency budget was kept; the gate at "
+        "ide_integration.py:705 is what this test exists to pin"
+    )
+    assert response.source == "patterns"
 
 
 @pytest.mark.anyio

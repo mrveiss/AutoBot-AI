@@ -49,11 +49,18 @@ def _app_with(overrides: dict) -> FastAPI:
     app.include_router(router, prefix="/agents")
 
     async def _no_session():  # noqa: ANN202
-        # The gate must refuse before any handler touches the database, so the
-        # session override is deliberately something that would fail loudly if
-        # a handler ever ran. A test that supplied a working session could not
+        # The gate must refuse before ANYTHING touches the database, so the
+        # session override is deliberately something that fails loudly the
+        # moment it is entered. A test that supplied a working session could not
         # tell "refused at the gate" from "ran and happened to return an error".
-        raise AssertionError("handler body ran — the gate did not refuse")
+        #
+        # #15805 widened what this catches. It used to fire only if a handler
+        # body ran, because every test here overrode the gate itself; the gate's
+        # own dependency chain reached `get_db_session` through
+        # `get_tenant_context` and no test exercised it. It now also fires when
+        # the real gate resolves a session on its way to a 403 — see
+        # `test_the_write_gate_refuses_before_a_session_is_acquired`.
+        raise AssertionError("a database session was acquired — the gate did not refuse first")
 
     app.dependency_overrides[get_db_session] = _no_session
     for dep, impl in overrides.items():
@@ -111,6 +118,34 @@ def test_reporting_line_writes_reject_a_caller_without_the_permission(
 
     resp = getattr(client, method)(f"/agents/{uuid.uuid4()}/org", json={"reports_to": str(uuid.uuid4())})
     assert resp.status_code == status.HTTP_403_FORBIDDEN, resp.text
+
+
+@pytest.mark.parametrize("method", ["patch", "put"])
+def test_the_write_gate_refuses_before_a_session_is_acquired(method: str) -> None:
+    """The real gate, unmocked, on the real route (#15805).
+
+    Every other permission test in this file overrides
+    ``require_reporting_line_write`` with a stub that raises, so none of them
+    exercises the gate's own dependency chain. This one leaves the gate intact
+    and lets ``_no_session`` be the assertion: entering ``get_db_session`` at any
+    point raises, which surfaces as a 500 rather than the 403 asserted here.
+
+    Before #15805 that is exactly what happened — the gate resolved
+    ``get_tenant_context``, which depends on ``get_db_session``, so an
+    unauthorised caller paid for a session on the way to being refused. The
+    detail string is asserted too: 403 alone would also be produced by the org
+    membership refusal raised from inside tenant resolution, which is the very
+    thing that must no longer be reached.
+    """
+    from api.user_management.dependencies import get_current_user
+
+    app = _app_with({get_current_user: lambda: {"id": str(uuid.uuid4()), "role": "user"}})
+    client = TestClient(app, raise_server_exceptions=False)
+
+    resp = getattr(client, method)(f"/agents/{uuid.uuid4()}/org", json={"reports_to": str(uuid.uuid4())})
+
+    assert resp.status_code == status.HTTP_403_FORBIDDEN, resp.text
+    assert resp.json()["detail"] == "admin.reporting_line.write permission required", resp.text
 
 
 def test_reads_also_require_authentication() -> None:
