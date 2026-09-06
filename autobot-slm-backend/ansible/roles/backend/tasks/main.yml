@@ -1142,7 +1142,8 @@
   # backend_install_dir which diverges when playbooks override
   # backend_code_dir (e.g. setup-user-backend.yml sets it to
   # backend_install_dir/autobot-backend).  The path expression here
-  # mirrors the one used in autobot-backend.service.j2 line 15.
+  # mirrors the `EnvironmentFile=` directive in autobot-backend.service.j2
+  # (named, not line-numbered -- it had moved from :15 to :62; #15877).
   - name: "Backend | Deploy .env to code dir (matches systemd EnvironmentFile) (#2824)"
     ansible.builtin.template:
       src: backend.env.j2

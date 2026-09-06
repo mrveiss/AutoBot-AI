@@ -19,7 +19,7 @@
 # fixing #15245, where an unscrubbed run of this exact file committed onto the
 # real checkout and left a stray user.email/core.bare in its shared config.
 # Scrub first, same list as .claude/hooks/block-dangerous-commands_test.sh.
-unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 
 set -uo pipefail

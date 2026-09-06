@@ -17,7 +17,7 @@
 # suite git-scope_test.sh did exactly this and left a stray commit and
 # config on the checkout's shared .git/config before this file was audited
 # too. Same scrub as .claude/hooks/block-dangerous-commands_test.sh.
-unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 
 set -uo pipefail

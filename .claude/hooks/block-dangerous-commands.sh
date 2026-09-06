@@ -135,7 +135,7 @@ git_scrubbed() {
   [ -n "$dir" ] && opts+=(-C "$dir")
   [ -n "$gitdir" ] && opts+=(--git-dir "$gitdir")
   (
-    unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
+    unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
     git "${opts[@]}" "$@" 2>/dev/null
   )
 }

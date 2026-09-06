@@ -100,10 +100,18 @@ jobs:
 
     - name: Run Phase Validation System
       env:
-        # autobot_shared/network_constants.py:34 bare-imports `from config.registry`
-        # which lives in autobot-backend; add it to PYTHONPATH so the script can
-        # import autobot_shared without ModuleNotFoundError. (#7496 — architectural
-        # smell tracked separately as a discovery issue.)
+        # STALE JUSTIFICATION, kept deliberately (#15877, #15894). This said
+        # `network_constants.py:34` bare-imports `from config.registry`, so
+        # autobot-backend had to be on the path or importing autobot_shared would
+        # raise ModuleNotFoundError. That is no longer true: the import is lazy,
+        # inside `_get_config_value`, AND wrapped in `except (ImportError,
+        # ModuleNotFoundError)` -- so it cannot raise, and the stated reason for
+        # this entry is void.
+        #
+        # The entry is NOT removed here, because "the stated reason is void" and
+        # "nothing needs it" are different claims and only the first is proven.
+        # Other imports in the phase-validation script may depend on it. #15894
+        # settles whether it can go. (#7496 -- the underlying architectural smell.)
         PYTHONPATH: .:autobot-backend
       run: |
         echo "Running AutoBot Phase Validation System..."

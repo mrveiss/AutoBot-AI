@@ -47,7 +47,9 @@ jobs:
         run: |
           # THERE IS NO PR QUEUE LIMIT. Issues are solved one by one without
           # capping open PRs; the real constraint is review capacity, and PRs
-          # merge as their CI finishes. See CLAUDE.md 'No PR queue limit'.
+          # merge as their CI finishes. CLAUDE.md states it under **Never violate**
+          # as "Dispatch gates on review capacity, not PR count" -- quoted by its
+          # wording, since the heading this used to cite never existed (#15877).
           #
           # This threshold is NOT that policy and must never be read as one. It
           # is a runaway detector: a number high enough that reaching it means
