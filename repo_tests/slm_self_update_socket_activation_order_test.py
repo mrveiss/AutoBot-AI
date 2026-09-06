@@ -44,6 +44,7 @@ import pytest
 
 _ROLE = Path(__file__).resolve().parents[1] / "autobot-slm-backend/ansible/roles/slm_manager"
 _MAIN = _ROLE / "tasks/main.yml"
+_BIND = _ROLE / "tasks/bind_self_update_socket.yml"
 _UNITS = _ROLE / "tasks/service_units.yml"
 _HANDLERS = _ROLE / "handlers/main.yml"
 
@@ -67,7 +68,10 @@ def _directives(block: str) -> str:
 
 def _offset_of(text: str, predicate) -> int | None:
     """Offset of the first task block whose body satisfies ``predicate``."""
-    marks = [m.start() for m in re.finditer(r"^- name:", text, re.M)] + [len(text)]
+    # Any indentation: the bind tasks live inside a ``block:``/``rescue:`` so
+    # they are nested, and an anchored ``^- name:`` would see only the outer
+    # block — collapsing every offset onto it and comparing a task to itself.
+    marks = [m.start() for m in re.finditer(r"^\s*- name:", text, re.M)] + [len(text)]
     for start, end in zip(marks, marks[1:]):
         if predicate(_directives(text[start:end])):
             return start
@@ -98,7 +102,7 @@ def test_the_socket_binds_between_stopping_and_starting_the_backend() -> None:
     it is refused again and the self-update path has no listener despite the
     unit being enabled.
     """
-    text = _MAIN.read_text(encoding="utf-8")
+    text = _BIND.read_text(encoding="utf-8")
 
     stop = _offset_of(text, lambda b: _BACKEND in b and "state: stopped" in b)
     socket = _offset_of(text, lambda b: _SOCKET in b and re.search(r"state: (started|restarted)", b))
@@ -134,7 +138,7 @@ def test_no_handler_restarts_the_socket_after_the_backend_is_up() -> None:
     )
 
 
-@pytest.mark.parametrize("path", [_MAIN, _UNITS, _HANDLERS])
+@pytest.mark.parametrize("path", [_MAIN, _UNITS, _HANDLERS, _BIND])
 def test_the_files_this_reads_still_exist(path: Path) -> None:
     """Reach floor.
 
@@ -144,3 +148,72 @@ def test_the_files_this_reads_still_exist(path: Path) -> None:
     green guard in the first place.
     """
     assert path.is_file(), f"{path} is missing; the assertions in this file would silently pass"
+
+
+def test_a_failed_bind_restores_the_backend_before_re_raising() -> None:
+    """The stop/bind window must not be able to leave the service down.
+
+    Raised in review, and it is a worse failure than the one this change fixes:
+    the backend is stopped so the socket can bind, so a bind failure between the
+    two aborts the play with the service **off** — on the update path, on a node
+    that has already taken new code.
+
+    So the bind lives in a ``block:`` whose ``rescue:`` starts the backend and
+    only then re-raises. Both halves matter and are asserted separately:
+
+    * without the restore, a failed bind leaves the service down;
+    * without the re-raise, the deploy reports success having not bound the
+      socket — the silent half, and the one that would look like a fix working.
+    """
+    text = _BIND.read_text(encoding="utf-8")
+
+    block = re.search(
+        r"- name: \"SLM \| Bind the self-update socket.*",
+        text,
+        re.S | re.M,
+    )
+    assert block, "the bind tasks must live in one block so a failure can be rescued"
+    body = _directives(block.group(0))
+
+    assert "rescue:" in body, (
+        "the bind block has no rescue: a failed bind aborts the play between the stop and the "
+        "start, leaving the backend down (#15823 review)"
+    )
+
+    rescue = body[body.index("rescue:") :]
+    assert re.search(
+        r"state: started", rescue
+    ), "the rescue must start the backend — restoring the service is the whole point of it"
+    assert "ansible.builtin.fail" in rescue, (
+        "the rescue must re-raise. Restoring the backend and continuing would report a successful "
+        "deploy with the socket unbound, which is the failure this fix exists to prevent."
+    )
+
+    restore = rescue.index("state: started")
+    reraise = rescue.index("ansible.builtin.fail")
+    assert restore < reraise, "the backend must be restored BEFORE re-raising; failing first leaves the service down"
+
+
+def test_both_entry_points_reach_the_bind() -> None:
+    """The update path must reach the fix, not only a full provision.
+
+    ``playbooks/update-all-nodes.yml`` Play 1 runs the role with
+    ``tasks_from: service_units.yml`` and **never runs main.yml**. Raised in
+    review: with the bind in ``main.yml`` the fix would miss the update path —
+    which is the path #15823 was reported on, and the only one where a node is
+    left carrying new code after the abort.
+
+    So the bind lives in ``service_units.yml``, which both entry points run, and
+    ``main.yml`` must not carry a second copy: two copies drift, and the copy
+    that drifts is the one nobody is running when it breaks.
+    """
+    units = _directives(_UNITS.read_text(encoding="utf-8"))
+    assert (
+        "bind_self_update_socket.yml" in units
+    ), "service_units.yml must include the bind; it is the only file both entry points run"
+
+    main = _directives(_MAIN.read_text(encoding="utf-8"))
+    assert "state: stopped" not in main, (
+        "main.yml carries its own stop/bind sequence again — a second copy that the update path "
+        "does not run (#15823 review)"
+    )

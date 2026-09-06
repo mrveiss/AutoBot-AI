@@ -143,3 +143,13 @@
     daemon_reload: true
   become: true
   tags: ['slm', 'backend', 'systemd']
+
+# #15823: bind the socket here rather than in main.yml, because this file is
+# what BOTH entry points run — the full role through main.yml, and
+# playbooks/update-all-nodes.yml Play 1 through `tasks_from: service_units.yml`,
+# which never runs main.yml. Placed in main.yml the fix would miss the update
+# path, which is the path the defect was reported on.
+- name: "SLM | Bind the local self-update admin socket (#15823)"
+  ansible.builtin.include_tasks: bind_self_update_socket.yml
+  when: slm_self_update_socket_enabled | bool
+  tags: ['slm', 'backend', 'systemd']

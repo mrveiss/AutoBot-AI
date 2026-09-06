@@ -1030,26 +1030,6 @@
 # With the socket bound first, the backend inherits the fd through its
 # ``Sockets=`` line. Started after, the socket start is refused and the
 # self-update path has no listener even though the unit is enabled.
-- name: "SLM | Stop backend so the self-update socket can bind first (#15823)"
-  ansible.builtin.systemd:
-    name: "{{ slm_backend_service }}"
-    state: stopped
-  become: true
-  when: slm_self_update_socket_enabled | bool
-  tags: ['slm', 'service']
-
-# ``restarted`` rather than ``started``: a ListenStream=/SocketMode= change only
-# takes effect on the next bind, and this is the only point in the deploy where
-# a rebind is possible. Unconditional because the backend is already stopped
-# here, so it costs nothing and removes the "did the handler fire?" question.
-- name: "SLM | Start the self-update socket before the backend (#15823)"
-  ansible.builtin.systemd:
-    name: "{{ slm_self_update_socket_service }}.socket"
-    state: restarted
-  become: true
-  when: slm_self_update_socket_enabled | bool
-  tags: ['slm', 'service']
-
 - name: "SLM | Start backend service"
   ansible.builtin.systemd:
     name: "{{ slm_backend_service }}"
