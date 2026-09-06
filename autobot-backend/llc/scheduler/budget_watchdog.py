@@ -23,10 +23,9 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session_factory
 from user_management.models.organization import Organization
-
-from models.agent_org import AgentOrgNode
 
 from ..models.budget import LLCAgentBudget
 from ..services.budget import BudgetService
