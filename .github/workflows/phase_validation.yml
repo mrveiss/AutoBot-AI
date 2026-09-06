@@ -101,7 +101,8 @@ jobs:
     - name: Run Phase Validation System
       env:
         # STALE JUSTIFICATION, kept deliberately (#15877, #15894). This said
-        # `network_constants.py:34` bare-imports `from config.registry`, so
+        # `network_constants.py` bare-imports `from config.registry` at module
+        # scope (the citation named line 34, which is blank), so
         # autobot-backend had to be on the path or importing autobot_shared would
         # raise ModuleNotFoundError. That is no longer true: the import is lazy,
         # inside `_get_config_value`, AND wrapped in `except (ImportError,

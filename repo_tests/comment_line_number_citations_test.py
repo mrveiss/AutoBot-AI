@@ -89,7 +89,14 @@ _SCOPES = (
 _CITE = re.compile(r"([A-Za-z0-9_./-]+\.(?:py|yml|yaml|sh|j2|ts|vue|md)):(\d+)")
 
 #: This file's own baseline literal is data, not commentary -- excluded by path
-#: so the guard does not count its own exemption list as 26 fresh violations.
+#: so the guard does not count its own exemption list as 25 fresh violations.
+#:
+#: A baseline entry is also a path LITERAL, which `python_filter_covers_its_guards_test.py`
+#: reads as "this guard consumes that tree" (#15713). Baselining a citation inside
+#: `.github/workflows/` therefore claimed an input the python-suite filter does not
+#: cover -- so a workflow-only change would take the required-context shim's green
+#: while this guard never ran. The citation was rewritten instead of exempted: an
+#: entry here buys silence, and the point of the rule is that the form goes away.
 _SELF = "repo_tests/comment_line_number_citations_test.py"
 
 #: `(citing file, cited target)` for every citation predating this rule. Keyed on
@@ -98,7 +105,6 @@ _SELF = "repo_tests/comment_line_number_citations_test.py"
 #: This list may shrink. It must never grow.
 _BASELINE = frozenset(
     {
-        (".github/workflows/phase_validation.yml", "network_constants.py:34"),
         ("autobot-slm-backend/ansible/roles/_shared/tasks/clean_wrong_node_dir.yml", "lib/ansible/plugins/action/set_fact.py:54"),
         ("autobot-slm-backend/ansible/roles/slm_manager/tasks/service_units.yml", "bind_self_update_socket.yml:32"),
         ("autobot-slm-backend/ansible/roles/slm_manager/tasks/service_units.yml", "main.yml:673"),
@@ -130,7 +136,7 @@ _BASELINE = frozenset(
 #: The "must never grow" above is a comment, and this file's whole thesis is
 #: that a comment cannot fail. So it is also an assertion. Raising this number
 #: is the deliberate act; doing it silently is what the rule prevents.
-_MAX_BASELINE = 26
+_MAX_BASELINE = 25
 
 #: Pinned to the current count. This population only grows with normal work, so
 #: the floor is tripped by deletion or by a narrowed glob -- both of which should
