@@ -15,13 +15,15 @@ For agents at or over 100%: calls BudgetService hard stop (idempotent).
 
 import json
 import logging
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session_factory
 from user_management.models.organization import Organization
 
@@ -99,7 +101,7 @@ class BudgetWatchdog(PollLoopScheduler):
         """Idempotent hard stop: pause the agent if not already paused (GH#8997)."""
         try:
             # BudgetService.check_budget returns (remaining, is_over, alert)
-            _, is_over, _ = await self._budget_svc.check_budget(session, row.agent_id)
+            _, is_over, _ = await self._budget_svc.check_budget(session, row.agent_id, row.company_id)
             if not is_over:
                 return  # race condition — already under limit, skip
             budget_mode = str(row.budget_mode)
@@ -134,7 +136,7 @@ class BudgetWatchdog(PollLoopScheduler):
                 },
             )
             # Mark agent as paused in agent_org_nodes (best-effort)
-            await self._pause_agent(row.agent_id)
+            await self._pause_agent(row.agent_id, row.company_id)
         except Exception:
             logger.exception("hard_stop_agent failed for %s (swallowed)", row.agent_id)
 
@@ -235,18 +237,62 @@ class BudgetWatchdog(PollLoopScheduler):
         except Exception:
             logger.debug("_notify(%s) publish failed (swallowed)", event_type)
 
-    async def _pause_agent(self, agent_id: str) -> None:
-        """Best-effort: mark agent inactive in agent_org_nodes."""
+    async def _pause_agent(self, agent_id: str, company_id: str) -> None:
+        """Best-effort: mark agent inactive in agent_org_nodes, within its company.
+
+        Scoped by company: the slug is unique per company on the budget side
+        (#15812), so an unscoped UPDATE would let one company's exhausted budget
+        pause another company's agent the moment two of them share a slug.
+
+        Built through the ORM rather than raw SQL because the two sides are
+        different types — this column is ``UUID`` and the budget row carries the
+        company as text — and hand-writing the conversion gets it wrong. A
+        ``CAST(company_id AS TEXT)`` comparison renders as unhyphenated hex on
+        SQLite and never matches ``str(uuid)``, so the UPDATE silently pauses
+        nothing: the scoping fix would have been a scoping-shaped no-op.
+        SQLAlchemy binds a ``uuid.UUID`` correctly on both backends.
+        """
+        try:
+            company_uuid = uuid.UUID(str(company_id))
+        except (TypeError, ValueError):
+            logger.warning(
+                "_pause_agent: agent %s has an unparseable company_id %r — not pausing, "
+                "because an unscoped pause could stop another company's agent (#15812)",
+                agent_id,
+                company_id,
+            )
+            return
+
         factory = get_async_session_factory()
         try:
             async with factory() as session:
-                await session.execute(
-                    text(
-                        "UPDATE agent_org_nodes SET status = 'inactive'"
-                        " WHERE agent_id = :agent_id AND status != 'inactive'"
-                    ),
-                    {"agent_id": agent_id},
+                result = await session.execute(
+                    update(AgentOrgNode)
+                    .where(
+                        AgentOrgNode.agent_id == agent_id,
+                        # NULL-company rows predate the #15858 backfill: 037 added
+                        # the column nullable on purpose ("operators must set it")
+                        # and nothing since backfills it. Excluding them would make
+                        # `NULL = :uuid` evaluate NULL, match no row, and silently
+                        # disable the budget hard stop for every agent an operator
+                        # has not yet scoped -- the agent would keep spending.
+                        # Over-pausing an unattributed row is the safer error, and
+                        # is what this code did before #15812. Drop the is_(None)
+                        # arm when #15858 makes the column NOT NULL.
+                        or_(AgentOrgNode.company_id == company_uuid, AgentOrgNode.company_id.is_(None)),
+                        AgentOrgNode.status != "inactive",
+                    )
+                    .values(status="inactive")
                 )
                 await session.commit()
+                if result.rowcount == 0:
+                    # A zero-row UPDATE raises nothing, so without this the hard
+                    # stop failing and the hard stop succeeding look identical.
+                    logger.warning(
+                        "_pause_agent: no org node matched agent %s in company %s — "
+                        "the budget hard stop paused nothing",
+                        agent_id,
+                        company_id,
+                    )
         except Exception:
             logger.debug("_pause_agent for %s failed (swallowed)", agent_id)
