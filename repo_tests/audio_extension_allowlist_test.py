@@ -29,6 +29,8 @@ import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 from autobot_shared.paths import scrubbed_git_env
+
+from repo_tests._reach import declare
 from autobot_shared.ssot_constants import SecurityConstants
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -37,7 +39,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 _CANONICAL = Path("autobot_shared/ssot_constants.py")
 
 
-def _literal_string_sets(source: str) -> list[set[str]]:
+def _literal_string_sets(source: str) -> list[set[str]] | None:
     """Every ``{...}`` set-of-string-literals in *source*.
 
     Parsed rather than pattern-matched. A regex over braces cannot tell a set
@@ -45,11 +47,17 @@ def _literal_string_sets(source: str) -> list[set[str]]:
     different extension sets nearby — the video pipeline's, the broad binary set
     in ``file_categorization.py``, and ``EXTENSION_TO_FORMAT``, which is a dict.
     A first attempt at this test flagged all of them.
+
+    Returns ``None`` when the source will not parse, so the caller can tell
+    "no offending literal here" from "this file was never read" (#15826 review).
+    Returning ``[]`` for both let an unparsed file satisfy the completion floor
+    while contributing nothing — a skip counted as coverage, which is the exact
+    defect this guard's floor exists to prevent.
     """
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return []
+        return None
     found = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Set) and node.elts:
@@ -59,11 +67,28 @@ def _literal_string_sets(source: str) -> list[set[str]]:
     return found
 
 
-def _tracked_python_files() -> list[Path]:
+def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
+    """Tracked ``.py`` files under *root*.
+
+    Takes a root so the declaration below can be driven against an empty
+    directory by ``reach_declarations_test``; without that, nothing can prove
+    the floor fires (#15826).
+    """
     result = subprocess.run(  # nosec B603 B607
-        ["git", "ls-files", "*.py"], cwd=REPO_ROOT, capture_output=True, text=True, check=False, env=scrubbed_git_env()
+        ["git", "ls-files", "*.py"], cwd=root, capture_output=True, text=True, check=False, env=scrubbed_git_env()
     )
-    return [REPO_ROOT / line for line in result.stdout.splitlines() if line]
+    return [root / line for line in result.stdout.splitlines() if line]
+
+
+#: This sweep read every tracked file and asserted "no offenders" with no floor
+#: at all: a `git ls-files` that returned nothing — wrong cwd, a broken env, a
+#: partial checkout — passed having examined zero files (#15826).
+REACH = declare(
+    "audio-extension-allowlist",
+    discover=_tracked_python_files,
+    floor=1000,
+    what="tracked python files",
+)
 
 
 def test_canonical_set_holds_the_expected_formats():
@@ -118,7 +143,9 @@ def test_no_fourth_literal_copy_exists():
     """
     canonical = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
     offenders = []
-    for path in _tracked_python_files():
+    read = []
+    unparsed = []
+    for path in REACH.examined(REPO_ROOT):
         rel = path.relative_to(REPO_ROOT)
         if rel == _CANONICAL or rel.parts[0] == "repo_tests":
             continue
@@ -126,8 +153,24 @@ def test_no_fourth_literal_copy_exists():
             source = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        if any(literal == canonical for literal in _literal_string_sets(source)):
+        literals = _literal_string_sets(source)
+        if literals is None:
+            unparsed.append(str(rel))
+            continue
+        read.append(rel)
+        if any(literal == canonical for literal in literals):
             offenders.append(str(rel))
+
+    # Candidates are not coverage: the loop above skips anything it cannot read,
+    # so without this the floor measured how many files were LISTED rather than
+    # how many were actually inspected (#15826 review).
+    # Truncated deliberately: a failure that lists every path buries the count
+    # that identifies the cause. Ten names locate it; the number sizes it.
+    assert not unparsed, (
+        f"{len(unparsed)} tracked files could not be parsed, so this guard cannot speak for them "
+        f"and they are not coverage. First: {unparsed[:10]}"
+    )
+    REACH.completed(read)
 
     assert not offenders, (
         "audio-extension allowlist written as a literal instead of imported from "
