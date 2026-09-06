@@ -82,13 +82,13 @@ class TestTheThreeStates:
     @pytest.mark.asyncio
     async def test_a_completed_key_replays_the_original_response(self, redis):
         held = await claim(redis, KEY)
-        await complete(redis, KEY, held.token, ReplayedResponse(status_code=201, body='{"id": "abc"}'))
+        await complete(redis, KEY, held.token, ReplayedResponse(status_code=201, body=b'{"id": "abc"}'))
 
         replayed = (await claim(redis, KEY)).replay
 
         assert replayed is not None
         assert replayed.status_code == 201
-        assert replayed.body == '{"id": "abc"}'
+        assert replayed.body == b'{"id": "abc"}'
 
     @pytest.mark.asyncio
     async def test_a_released_key_is_claimable_again(self, redis):
@@ -211,20 +211,20 @@ class TestFencing:
 
         async def _slow_request_finally_completes():
             await successor_done.wait()
-            return await complete(redis, KEY, slow.token, ReplayedResponse(201, '{"id": "slow"}'))
+            return await complete(redis, KEY, slow.token, ReplayedResponse(201, b'{"id": "slow"}'))
 
         async def _successor():
             await redis.delete(KEY)  # the slow request's claim lapsed
             held = await claim(redis, KEY)
             assert held.token, "the successor could not claim a key whose holder had lapsed"
-            assert await complete(redis, KEY, held.token, ReplayedResponse(201, '{"id": "successor"}'))
+            assert await complete(redis, KEY, held.token, ReplayedResponse(201, b'{"id": "successor"}'))
             successor_done.set()
 
         stored, _ = await asyncio.gather(_slow_request_finally_completes(), _successor())
 
         assert stored is False, "a lapsed request published its response over a successor's"
         replayed = (await claim(redis, KEY)).replay
-        assert replayed is not None and replayed.body == '{"id": "successor"}'
+        assert replayed is not None and replayed.body == b'{"id": "successor"}'
 
     @pytest.mark.asyncio
     async def test_a_lapsed_request_cannot_release_a_successors_claim(self, redis):
@@ -246,10 +246,10 @@ class TestFencing:
         that still holds the claim completes and releases as it always did."""
         held = await claim(redis, KEY)
 
-        assert await complete(redis, KEY, held.token, ReplayedResponse(201, '{"id": "ok"}')) is True
+        assert await complete(redis, KEY, held.token, ReplayedResponse(201, b'{"id": "ok"}')) is True
 
         again = await claim(redis, KEY)
-        assert again.replay is not None and again.replay.body == '{"id": "ok"}'
+        assert again.replay is not None and again.replay.body == b'{"id": "ok"}'
 
     @pytest.mark.asyncio
     async def test_two_sequential_claims_get_different_tokens(self, redis):
@@ -272,7 +272,7 @@ class TestTheConfiguredTTLIsApplied:
     @pytest.mark.asyncio
     async def test_a_completed_record_carries_the_replay_ttl(self, redis):
         outcome = await claim(redis, "k")
-        await complete(redis, "k", str(outcome.token), ReplayedResponse(status_code=201, body="{}"))
+        await complete(redis, "k", str(outcome.token), ReplayedResponse(status_code=201, body=b"{}"))
 
         ttl = await redis.ttl("k")
 
@@ -287,3 +287,30 @@ class TestTheConfiguredTTLIsApplied:
         ttl = await redis.ttl("k")
 
         assert 0 < ttl <= IDEMPOTENCY_CLAIM_TTL_SECONDS
+
+
+class TestTheClaimTTLIsTheConfiguredOne:
+    """A TTL was used is not the same claim as *the configured* TTL was used.
+
+    The existing assertion bounds the claim TTL by its own constant, which holds
+    for any value the code happens to pass — including a hard-coded one. Pinning
+    it to the configured number is the reach-floor argument applied to a
+    constant (#15778 review).
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_claim_carries_exactly_the_configured_ttl(self, redis, monkeypatch):
+        await claim(redis, "k")
+
+        ttl = await redis.ttl("k")
+
+        # fakeredis does not advance time between the two calls, so this is the
+        # exact value rather than a bound.
+        assert ttl == IDEMPOTENCY_CLAIM_TTL_SECONDS
+
+    @pytest.mark.asyncio
+    async def test_the_completed_record_carries_exactly_the_replay_ttl(self, redis):
+        held = await claim(redis, "k")
+        await complete(redis, "k", str(held.token), ReplayedResponse(status_code=201, body=b"{}"))
+
+        assert await redis.ttl("k") == IDEMPOTENCY_TTL_SECONDS

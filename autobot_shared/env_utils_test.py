@@ -1,11 +1,12 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
+import logging
 import os
 
 import pytest
 
-from autobot_shared.env_utils import env_flag, env_float, env_int, env_int_clamped, truthy
+from autobot_shared.env_utils import env_flag, env_float, env_float_clamped, env_int, env_int_clamped, truthy
 
 _VAR = "TEST_ENV_INT_CLAMPED_XYZ"
 _FLOAT_VAR = "TEST_ENV_FLOAT_XYZ"
@@ -191,3 +192,40 @@ def test_env_flag_default_when_absent(monkeypatch):
 def test_env_flag_reads_value(monkeypatch, raw, expected):
     monkeypatch.setenv("AUTOBOT_TEST_FLAG_XYZ", raw)
     assert env_flag("AUTOBOT_TEST_FLAG_XYZ") is expected
+
+
+class TestClampingIsAnnounced:
+    """A silent correction is indistinguishable from a value that was honoured.
+
+    A malformed value already warned; a well-formed but out-of-range one did
+    not, so a misconfigured `0` or `-1` was accepted in silence and whoever set
+    it never learned it had no effect (#15778 review).
+    """
+
+    def test_a_clamped_value_warns(self, monkeypatch, caplog):
+        monkeypatch.setenv("AUTOBOT_TEST_CLAMP_WARN", "0")
+
+        with caplog.at_level(logging.WARNING):
+            value = env_int_clamped("AUTOBOT_TEST_CLAMP_WARN", 10, min_v=1)
+
+        assert value == 1
+        assert any("outside" in record.message for record in caplog.records)
+
+    def test_a_value_inside_the_range_is_silent(self, monkeypatch, caplog):
+        """The contrast: warning on every read would train the reader to ignore it."""
+        monkeypatch.setenv("AUTOBOT_TEST_CLAMP_WARN", "5")
+
+        with caplog.at_level(logging.WARNING):
+            value = env_int_clamped("AUTOBOT_TEST_CLAMP_WARN", 10, min_v=1)
+
+        assert value == 5
+        assert not [r for r in caplog.records if "outside" in r.message]
+
+    def test_the_float_reader_announces_too(self, monkeypatch, caplog):
+        monkeypatch.setenv("AUTOBOT_TEST_CLAMP_WARN_F", "99.0")
+
+        with caplog.at_level(logging.WARNING):
+            value = env_float_clamped("AUTOBOT_TEST_CLAMP_WARN_F", 1.0, max_v=10.0)
+
+        assert value == 10.0
+        assert any("outside" in record.message for record in caplog.records)

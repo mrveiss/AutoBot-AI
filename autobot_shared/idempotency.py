@@ -51,6 +51,8 @@ token: being slow must not let a request corrupt a successor's state.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import secrets
@@ -105,10 +107,24 @@ return 0
 
 @dataclass(frozen=True)
 class ReplayedResponse:
-    """A completed response, stored verbatim for replay."""
+    """A completed response, stored verbatim for replay.
+
+    ``body`` is **bytes**, base64 in the record. It was a ``str`` and decoded as
+    UTF-8 on the way in, which made a successful non-UTF-8 response wedge its own
+    key: the decode raised after the handler had already committed, so the claim
+    was neither completed nor released and every retry got 409 until the TTL
+    (#15778 review). Bytes also make the replay byte-exact rather than
+    round-tripped.
+
+    ``media_type`` is carried because replaying every response as
+    ``application/json`` misdescribes a handler that returned anything else --
+    the replay must be indistinguishable from the original, or it is a different
+    answer wearing the same status code.
+    """
 
     status_code: int
-    body: str
+    body: bytes
+    media_type: str | None = None
     resource_id: str | None = None
 
 
@@ -171,7 +187,12 @@ async def complete(redis: Any, key: str, token: str, response: ReplayedResponse)
     successor's caller would be handed the wrong resource.
     """
     payload = json.dumps(
-        {"status_code": response.status_code, "body": response.body, "resource_id": response.resource_id}
+        {
+            "status_code": response.status_code,
+            "body_b64": base64.b64encode(response.body).decode("ascii"),
+            "media_type": response.media_type,
+            "resource_id": response.resource_id,
+        }
     )
     stored = await redis.eval(_COMPLETE_SCRIPT, 1, key, _marker(token), payload, str(IDEMPOTENCY_TTL_SECONDS))
     if not _truthy(stored):
@@ -208,10 +229,13 @@ def _decode(raw: Any) -> Claim:
         data = json.loads(text)
         return Claim(
             replay=ReplayedResponse(
-                status_code=int(data["status_code"]), body=data["body"], resource_id=data.get("resource_id")
+                status_code=int(data["status_code"]),
+                body=base64.b64decode(data["body_b64"]),
+                media_type=data.get("media_type"),
+                resource_id=data.get("resource_id"),
             )
         )
-    except (ValueError, KeyError, TypeError):
+    except (ValueError, KeyError, TypeError, binascii.Error):
         # A malformed record must not resurrect as a wrong replay; treat it as
         # in flight so the caller retries rather than receiving nonsense.
         logger.warning("discarding malformed idempotency record")

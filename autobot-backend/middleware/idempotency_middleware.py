@@ -102,8 +102,14 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             return Response(
                 content=outcome.replay.body,
                 status_code=outcome.replay.status_code,
-                media_type="application/json",
-                headers={"Idempotent-Replay": "true"},
+                # The original Content-Type, not a guess: replaying a text/plain
+                # or binary response as application/json misdescribes it, and a
+                # replay distinguishable from the original is a different answer
+                # wearing the same status code.
+                headers={
+                    "Idempotent-Replay": "true",
+                    **({"content-type": outcome.replay.media_type} if outcome.replay.media_type else {}),
+                },
             )
         return await self._run_and_record(request, call_next, redis, key, str(outcome.token))
 
@@ -119,7 +125,13 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             # is exactly the behaviour without this middleware; a wedged key is
             # strictly worse than that baseline.
             body = b"".join([section async for section in response.body_iterator])
-            await self._record(redis, key, token, response.status_code, body)
+            # `response.headers`, not `response.media_type`: under
+            # BaseHTTPMiddleware `call_next` returns a streaming wrapper whose
+            # `media_type` attribute is None, so recording it stored nothing and
+            # the replay came back with no Content-Type at all. Measured: the
+            # first response carried `text/plain; charset=utf-8` while its replay
+            # carried none.
+            await self._record(redis, key, token, response.status_code, body, response.headers.get("content-type"))
         except Exception:
             # The claim must not outlive a request that failed, or the retry the
             # caller has to make is impossible until the TTL expires.
@@ -142,7 +154,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             return None
 
     @staticmethod
-    async def _record(redis, key: str, token: str, status_code: int, body: bytes) -> None:
+    async def _record(redis, key: str, token: str, status_code: int, body: bytes, media_type: str | None) -> None:
         """Store a success, drop the claim otherwise -- never raising either way.
 
         The handler has already run. A store failure here changes nothing the
@@ -151,13 +163,29 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         """
         try:
             if 200 <= status_code < 300:
-                await complete(redis, key, token, ReplayedResponse(status_code=status_code, body=body.decode("utf-8")))
+                await complete(
+                    redis,
+                    key,
+                    token,
+                    ReplayedResponse(status_code=status_code, body=body, media_type=media_type),
+                )
             else:
                 # Only a success is worth replaying: a 4xx is the caller's to fix,
                 # and replaying it would deny them the corrected retry.
                 await release(redis, key, token)
         except Exception as exc:  # noqa: BLE001 - the response stands regardless
+            # Releasing rather than only logging is the point (#15778 review):
+            # a failure here leaves the claim held, so the caller's retry gets
+            # 409 until the TTL and can neither proceed nor learn the outcome.
+            # That is the third instance of one shape in this middleware -- an
+            # error AFTER the handler succeeded turned into a blocked retry -- so
+            # the guarantee is now "any failure in _record releases the claim",
+            # not "these particular failures do".
             logger.warning("idempotency record failed after the handler succeeded: %s", exc)
+            try:
+                await release(redis, key, token)
+            except Exception as release_exc:  # noqa: BLE001 - nothing left to try
+                logger.warning("idempotency claim could not be released either: %s", release_exc)
 
     @staticmethod
     async def _release(redis, key: str, token: str) -> None:

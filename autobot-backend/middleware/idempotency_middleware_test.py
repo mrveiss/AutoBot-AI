@@ -25,6 +25,7 @@ import anyio
 import fakeredis.aioredis
 import pytest
 from fastapi import FastAPI
+from starlette.responses import Response
 from fastapi.testclient import TestClient
 
 from autobot_shared.idempotency import (
@@ -314,7 +315,9 @@ class TestFencingReachesTheMiddleware:
         client.post("/create", headers={HEADER: "k1", "Authorization": _TOKEN})  # the successor's record
 
         async def _a_lapsed_predecessor_tries_to_publish():
-            return await complete(redis, key, "a-token-from-a-lapsed-request", ReplayedResponse(201, '{"id": "stale"}'))
+            return await complete(
+                redis, key, "a-token-from-a-lapsed-request", ReplayedResponse(201, b'{"id": "stale"}')
+            )
 
         assert anyio.run(_a_lapsed_predecessor_tries_to_publish) is False
         replay = client.post("/create", headers={HEADER: "k1", "Authorization": _TOKEN})
@@ -423,3 +426,62 @@ class TestAnUncredentialedRequestGetsNoReplay:
             client = type("C", (), {"host": "10.0.0.1"})()
 
         assert IdempotencyMiddleware._actor(_Req()) is None
+
+
+class TestAFailureAfterTheHandlerNeverBlocksTheRetry:
+    """Third instance of one shape in this middleware (#15778 review).
+
+    First `complete` raising against Redis, then the streaming path with
+    `_release` outside the `try`, now response encoding. Each converted an error
+    *after* the handler had already committed into a 409 for the whole claim TTL
+    — which is the duplicating-retry pressure idempotency exists to remove. The
+    guarantee is now "any failure in `_record` releases the claim", so a fourth
+    cause does not need a fourth fix.
+    """
+
+    def test_a_non_utf8_response_replays_byte_exact(self, app_and_calls):
+        """It used to raise inside `body.decode("utf-8")` and wedge the key."""
+        app, calls = app_and_calls[0], app_and_calls[1]
+
+        @app.post("/binary", status_code=201)
+        async def _binary():
+            return Response(content=b"\xff\xfe\x00binary", status_code=201, media_type="application/octet-stream")
+
+        client = TestClient(app)
+        first = client.post("/binary", headers={HEADER: "b1", "Authorization": _TOKEN})
+        second = client.post("/binary", headers={HEADER: "b1", "Authorization": _TOKEN})
+
+        assert first.content == second.content == b"\xff\xfe\x00binary"
+        assert second.headers.get("Idempotent-Replay") == "true"
+
+    def test_a_replay_keeps_the_original_media_type(self, app_and_calls):
+        """Replaying text/plain as application/json is a different answer."""
+        app = app_and_calls[0]
+
+        @app.post("/text", status_code=201)
+        async def _text():
+            return Response(content="plain words", status_code=201, media_type="text/plain")
+
+        client = TestClient(app)
+        client.post("/text", headers={HEADER: "t1", "Authorization": _TOKEN})
+        second = client.post("/text", headers={HEADER: "t1", "Authorization": _TOKEN})
+
+        assert second.headers["content-type"].startswith("text/plain")
+
+    def test_a_record_failure_leaves_the_key_retryable(self, app_and_calls, monkeypatch):
+        """The general guarantee, not the encoding case: whatever breaks in
+        `_record`, the caller must be able to retry rather than meet a 409."""
+        app, calls = app_and_calls[0], app_and_calls[1]
+
+        async def _explode(*_args, **_kwargs):
+            raise RuntimeError("store went away mid-record")
+
+        monkeypatch.setattr("middleware.idempotency_middleware.complete", _explode)
+        client = TestClient(app)
+
+        first = client.post("/create", headers={HEADER: "r1", "Authorization": _TOKEN})
+        second = client.post("/create", headers={HEADER: "r1", "Authorization": _TOKEN})
+
+        assert first.status_code == 201, "the handler's own success must still reach the caller"
+        assert second.status_code == 201, f"the retry was blocked: {second.status_code}"
+        assert calls["create"] == 2, "a retry after a failed record must be allowed to run"
