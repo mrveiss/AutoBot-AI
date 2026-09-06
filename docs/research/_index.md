@@ -25,6 +25,7 @@ Research reports covering hardware integration, system conflicts, and technology
 | [[desktop-worker-harness-approval-and-compaction]] | Desktop worker-agent harness comparison — our SSRF guard, command-risk and guard-profile work is ahead; gaps are a success-shaped compaction failure, an ungated outbound gateway seam, approvals unreachable when nobody is at the screen, and four unreconciled tool-classification planes (#14065–#14068) |
 | [[agent-harness-guard-and-context-audit]] | Agent harness comparison — our loop guards are stronger, but guard input is un-normalized, context windows are a static 4096 fallback, ingest has no bot-self filter, and `AgentLoop` has no production caller (#14027–#14031) |
 | [[model-hardware-standard]] | Anthropic Model Hardware Standard (MHS) — source analysis + AutoBot comparison; spec not public and metrics all self-reported, but three of its four transferable patterns land on AutoBot code already half-built: `MCPBridgeManifest.resource_limits` declared but unenforced, `ToolResult.error` a bare string while `classify_error` stays loop-internal, and the entire remote/Slack approval path has no production caller |
+| [[gpu-kernel-authoring-runtime]] | A GPU kernel-authoring runtime — source analysis + AutoBot comparison; Python functions JIT-compiled to native CPU code or GPU PTX, with the transferable pattern being the author-once/compile-per-target split rather than the numerical domain itself, which is physics and geometry rather than agent workloads |
 
 ## Related Sections
 

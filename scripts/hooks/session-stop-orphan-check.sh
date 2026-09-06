@@ -24,6 +24,9 @@ if [ -f "$(git rev-parse --git-dir 2>/dev/null)/index.lock" ]; then
   exit 0
 fi
 
+# How many modified paths make an all-uncommitted tree worth reporting.
+UNSAVED_WARN_FLOOR="${AUTOBOT_UNSAVED_WARN_FLOOR:-10}"
+
 BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 
 # The branch PRs target, which is not necessarily the remote default branch.
@@ -62,7 +65,22 @@ report_parked_branch() {
   case "$dirty" in ''|*[!0-9]*) dirty=0 ;; esac
   # Commits ahead is the parked-work signal. A merely dirty tree is normal
   # mid-task state and fires on every Stop, so it is an addendum, never a cause.
-  [ "$ahead" -gt 0 ] || return 0
+  #
+  # The exception is a dirty tree with NOTHING committed: then no part of this
+  # session's work exists in git, not even unreachably, and the only copy is the
+  # working tree itself. Three worktrees on this machine reached 26, 11 and 4 days
+  # in that state holding 44, 43 and 89 modified paths, and nothing told the
+  # sessions that ended in them. The size floor keeps the normal case — a few
+  # files edited early in a task — from firing on every Stop and draining the
+  # signal of meaning.
+  if [ "$ahead" -eq 0 ]; then
+    if [ "$dirty" -ge "$UNSAVED_WARN_FLOOR" ]; then
+      echo "UNSAVED WORK on $BRANCH: $dirty uncommitted path(s), nothing committed."
+      echo "  No part of this exists outside this working tree. Commit it, then push —"
+      echo "  the branch on origin is the record; the worktree is a disposable workspace."
+    fi
+    return 0
+  fi
 
   # One request, not two: this runs on every Stop of an active worktree session.
   # A non-zero exit means gh is offline, unauthenticated, or rate-limited — that
