@@ -54,44 +54,6 @@ router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = get_logger(__name__)
 
 
-#: Routes whose request model carries ``session_id``. Naming them here rather
-#: than inferring from the model keeps the warning's route label stable when a
-#: model is reused, and makes the covered set countable by the test (#15802).
-SESSION_AWARE_ROUTES = frozenset(
-    {"/navigate", "/reload", "/back", "/forward", "/worker-screenshot", "/interact", "/screenshot", "/search"}
-)
-
-
-def warn_if_unscoped(route: str, session_id: str | None, http_request: Request | None = None) -> bool:
-    """Log a caller that omitted ``session_id``, and report whether it did.
-
-    Isolation that is optional at the protocol level degrades silently: a client
-    written before #11539 keeps working, lands in the shared default context, and
-    neither end can tell. One such client shared the default context for roughly
-    six months and was found during unrelated host maintenance rather than by any
-    check (#15802).
-
-    This does not reject the request — that would break every existing caller,
-    which is a decision rather than a fix. It makes the population **visible**,
-    so "who is still unscoped" becomes a log query instead of an accident.
-
-    Returns ``True`` when a warning was emitted, so the behaviour is testable
-    without asserting on log plumbing.
-    """
-    if session_id:
-        return False
-    client = getattr(getattr(http_request, "client", None), "host", None) if http_request else None
-    agent = http_request.headers.get("user-agent") if http_request is not None else None
-    logger.warning(
-        "playwright %s called without session_id — this caller joins the SHARED default browser "
-        "context and is not isolated (#15802). caller=%s user_agent=%s",
-        route,
-        client or "unknown",
-        agent or "unknown",
-    )
-    return True
-
-
 # Browser VM connection
 BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
 
@@ -156,14 +118,13 @@ async def probe_playwright(
     operation="web_search",
     error_code_prefix="PLAYWRIGHT",
 )
-async def web_search(request: PlaywrightSearchRequest | None = None, http_request: Request = None):
+async def web_search(request: PlaywrightSearchRequest):
     """
     Perform web search using embedded Playwright
 
     This endpoint provides the same functionality as direct container access
     but integrated into the main API
     """
-    warn_if_unscoped("/search", getattr(request, "session_id", None), http_request)
     try:
         logger.info(f"Web search request: '{request.query}' via {request.search_engine}")
 
@@ -252,13 +213,12 @@ async def send_test_message(request: TestMessageRequest):
     operation="capture_screenshot",
     error_code_prefix="PLAYWRIGHT",
 )
-async def capture_screenshot(request: PlaywrightScreenshotRequest | None = None, http_request: Request = None):
+async def capture_screenshot(request: PlaywrightScreenshotRequest):
     """
     Capture screenshot of webpage using embedded Playwright
 
     Returns metadata about captured screenshot
     """
-    warn_if_unscoped("/screenshot", request.session_id, http_request)
     try:
         logger.info("Screenshot request for: %s", request.url)
 
@@ -341,13 +301,12 @@ async def quick_automation_test(background_tasks: BackgroundTasks):
     operation="navigate_to_url",
     error_code_prefix="PLAYWRIGHT",
 )
-async def navigate_to_url(request: PlaywrightNavigateRequest | None = None, http_request: Request = None):
+async def navigate_to_url(request: PlaywrightNavigateRequest):
     """
     Navigate to a URL using Playwright on Browser VM
 
     Forwards navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
     """
-    warn_if_unscoped("/navigate", request.session_id, http_request)
     try:
         logger.info("Navigate request: %s", request.url)
 
@@ -389,13 +348,12 @@ async def navigate_to_url(request: PlaywrightNavigateRequest | None = None, http
     operation="reload_page",
     error_code_prefix="PLAYWRIGHT",
 )
-async def reload_page(request: PlaywrightReloadRequest | None = None, http_request: Request = None):
+async def reload_page(request: PlaywrightReloadRequest):
     """
     Reload the current page using Playwright on Browser VM
 
     Forwards reload request to Browser VM (NetworkConstants.BROWSER_VM_IP)
     """
-    warn_if_unscoped("/reload", request.session_id, http_request)
     try:
         logger.info("Reload request")
 
@@ -434,7 +392,7 @@ async def reload_page(request: PlaywrightReloadRequest | None = None, http_reque
     operation="go_back",
     error_code_prefix="PLAYWRIGHT",
 )
-async def go_back(request: PlaywrightSessionRequest | None = None, http_request: Request = None):
+async def go_back(request: PlaywrightSessionRequest | None = None):
     """
     Navigate back in browser history using Playwright on Browser VM
 
@@ -442,7 +400,6 @@ async def go_back(request: PlaywrightSessionRequest | None = None, http_request:
     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
     Issue #11539: threads session_id so this routes to the caller's isolated context.
     """
-    warn_if_unscoped("/back", getattr(request, "session_id", None), http_request)
     try:
         logger.info("Back navigation request")
         session_id = (request.session_id if request else None) or DEFAULT_BROWSER_SESSION_ID
@@ -479,7 +436,7 @@ async def go_back(request: PlaywrightSessionRequest | None = None, http_request:
     operation="go_forward",
     error_code_prefix="PLAYWRIGHT",
 )
-async def go_forward(request: PlaywrightSessionRequest | None = None, http_request: Request = None):
+async def go_forward(request: PlaywrightSessionRequest | None = None):
     """
     Navigate forward in browser history using Playwright on Browser VM
 
@@ -487,7 +444,6 @@ async def go_forward(request: PlaywrightSessionRequest | None = None, http_reque
     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
     Issue #11539: threads session_id so this routes to the caller's isolated context.
     """
-    warn_if_unscoped("/forward", getattr(request, "session_id", None), http_request)
     try:
         logger.info("Forward navigation request")
         session_id = (request.session_id if request else None) or DEFAULT_BROWSER_SESSION_ID
@@ -568,7 +524,7 @@ async def get_worker_status(session_id: str | None = None):
     operation="take_worker_screenshot",
     error_code_prefix="PLAYWRIGHT",
 )
-async def take_worker_screenshot(request: PlaywrightSessionRequest | None = None, http_request: Request = None):
+async def take_worker_screenshot(request: PlaywrightSessionRequest | None = None):
     """
     Take screenshot of the persistent navigation page on Browser VM (#1130)
 
@@ -576,7 +532,6 @@ async def take_worker_screenshot(request: PlaywrightSessionRequest | None = None
     this returns a screenshot of the current state of the persistent navPage
     for this caller's session (#11539).
     """
-    warn_if_unscoped("/worker-screenshot", getattr(request, "session_id", None), http_request)
     try:
         session_id = (request.session_id if request else None) or DEFAULT_BROWSER_SESSION_ID
         http_client = get_http_client()
@@ -609,9 +564,8 @@ async def take_worker_screenshot(request: PlaywrightSessionRequest | None = None
     operation="interact_with_page",
     error_code_prefix="PLAYWRIGHT",
 )
-async def interact_with_page(request: PlaywrightInteractRequest | None = None, http_request: Request = None):
+async def interact_with_page(request: PlaywrightInteractRequest):
     """Proxy interactive browser actions to Browser VM (#1416)"""
-    warn_if_unscoped("/interact", request.session_id, http_request)
     allowed = {"click", "scroll", "type", "hover"}
     if request.action not in allowed:
         raise HTTPException(
