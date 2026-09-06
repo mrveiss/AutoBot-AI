@@ -281,9 +281,15 @@ def test_a_transport_failure_still_reaches_the_warning(var: str) -> None:
         f"the {var} assignment is unguarded: a transport failure exits non-zero with no HTTP "
         "response and aborts the script before the warning below can run (#15825)"
     )
-    assert (
-        f"${{{var}:-000}}" in text
-    ), f"{var} must default in the case statement, or a transport failure branches on an empty string"
+    # Anchored to the `case` selector line. A bare substring search over the file
+    # is satisfied by the `warn` messages below, which interpolate the same
+    # `${var:-000}`: reverting the selector alone left that search passing, so
+    # the assertion was satisfiable by text it was making no claim about.
+    selector = re.search(rf'^\s*case "\$\{{{var}:-000\}}" in\s*$', text, re.M)
+    assert selector, (
+        f"the {var} case statement does not default: a transport failure would branch on an "
+        "empty string rather than on a reportable status"
+    )
 
 
 def _curl_transport_failure_stub(fail_globs: tuple[str, ...]) -> str:
