@@ -13,6 +13,14 @@ from typing import Any, Dict, List
 from pydantic import BaseModel, Field, field_validator
 
 from api.schemas_common import SuccessMessageResponse
+from api.schemas_playwright import (  # noqa: F401 - re-exported for existing importers
+    PlaywrightInteractRequest,
+    PlaywrightNavigateRequest,
+    PlaywrightReloadRequest,
+    PlaywrightScreenshotRequest,
+    PlaywrightSearchRequest,
+    PlaywrightSessionRequest,
+)
 from autobot_shared.ssot_config import PROJECT_ROOT
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.threshold_constants import QueryDefaults
@@ -2246,87 +2254,10 @@ class CodeSearchRefactorSuggestionsResultResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# playwright request schemas (#6042)
+# playwright request schemas (#6042) -- moved to api/schemas_playwright.py
+# (#15802). Imported at the top of this file and re-exported, so
+# `from api.schemas_code import PlaywrightNavigateRequest` still resolves.
 # ---------------------------------------------------------------------------
-
-
-class PlaywrightSearchRequest(BaseModel):
-    query: str
-    search_engine: str = "duckduckgo"
-    max_results: int = 5
-
-
-class PlaywrightScreenshotRequest(BaseModel):
-    """Embedded-Playwright capture -- NOT the session-scoped browser worker.
-
-    `services/playwright_service.py` has no session concept at all (zero
-    references), so this route cannot route a capture into a browser context.
-    Use `/worker-screenshot` for that. See #15871.
-    """
-
-    url: str
-    full_page: bool = True
-    wait_timeout: int = 5000
-    session_id: str | None = Field(
-        None,
-        description=(
-            "ACCEPTED AND IGNORED by /screenshot: the embedded browser is not "
-            "session-partitioned (#15871). The capture happens in the shared "
-            "embedded browser regardless. Use /worker-screenshot to capture "
-            "inside a specific session's context."
-        ),
-    )
-
-
-class PlaywrightNavigateRequest(BaseModel):
-    url: str
-    wait_until: str = "networkidle"
-    timeout: int = 30000
-    session_id: str | None = Field(
-        None,
-        description="Session id for isolated browser-context routing (#11539); omitted uses shared default",
-    )
-
-
-class PlaywrightReloadRequest(BaseModel):
-    wait_until: str = "networkidle"
-    session_id: str | None = Field(
-        None,
-        description=(
-            "Isolated browser-context routing (#11539). Omitted, the caller joins the "
-            "shared default context, which every other unscoped caller also uses."
-        ),
-    )
-
-
-class PlaywrightInteractRequest(BaseModel):
-    action: str
-    x: float | None = None
-    y: float | None = None
-    deltaX: float = 0
-    deltaY: float = 0
-    text: str | None = None
-    session_id: str | None = Field(
-        None,
-        description=(
-            "Isolated browser-context routing (#11539). Omitted, the caller joins the "
-            "shared default context, which every other unscoped caller also uses."
-        ),
-    )
-
-
-class PlaywrightSessionRequest(BaseModel):
-    """Optional body for worker proxy calls with no other payload (#11539):
-    /back, /forward, /worker-screenshot. GET /status takes the same id as a
-    query param instead (no request body on GET)."""
-
-    session_id: str | None = Field(
-        None,
-        description=(
-            "Isolated browser-context routing (#11539). Omitted, the caller joins the "
-            "shared default context, which every other unscoped caller also uses."
-        ),
-    )
 
 
 # ---------------------------------------------------------------------------
