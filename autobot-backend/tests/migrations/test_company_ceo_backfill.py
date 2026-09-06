@@ -36,7 +36,7 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.migration_gate, requires_postgres
 
 _BEFORE = "20260827_087"
 _BACKFILL = "20260906_088"
-_AFTER = "20260907_089"
+_AFTER = "20260907_090"
 _TABLE = "llc_company_ceos"
 
 
