@@ -266,9 +266,22 @@ class ReportingLineService(LLCServiceBase):
     ) -> bool:
         """True when pointing ``subject`` at ``manager`` closes a loop.
 
-        Walks up from the proposed manager along **explicit** edges only, which
-        is what a cycle can be made of — the defaults cannot form one, because
-        owners terminate.
+        Walks up from the proposed manager along explicit edges **and the default
+        edge**, because since #15770 a cycle can be made of either.
+
+        This used to walk explicit edges only, justified by "the defaults cannot
+        form one, because owners terminate" — true while no company designated a
+        CEO, when the default chain ran straight from anyone to the owners and
+        an owner has no manager. Designating a CEO inserts a middle step, and a
+        middle step is all a loop needs:
+
+            CEO --explicit--> Y
+            Y   --default---> CEO      (Y has no explicit line)
+
+        An explicit-only walk cannot see that: from Y it finds no explicit
+        manager and stops. So the walk now follows the default edge too — anyone
+        without an explicit line resolves to the CEO, and the CEO's own default
+        is the owners, who still terminate.
 
         Deliberately unbounded, unlike :meth:`chain_up`. The read walk stops at
         two hops because that is all authority needs; a cycle can be closed
@@ -277,14 +290,21 @@ class ReportingLineService(LLCServiceBase):
         an unbounded walk safe here — including against a cycle that already
         exists in the data.
         """
+        ceo = await self._resolve_ceo(session, company_id)
         seen = {(manager.type, manager.id)}
         current: Optional[Holder] = manager
         while current is not None:
             if (current.type, current.id) == (subject.type, subject.id):
                 return True
-            current = await self.explicit_manager(session, company_id, current)
-            if current is None:
-                return False
+            nxt = await self.explicit_manager(session, company_id, current)
+            if nxt is None:
+                # No explicit line: the default edge points at the CEO. The
+                # CEO's own default is the owners, who terminate — so the walk
+                # ends there rather than resolving the CEO to itself forever.
+                if ceo is None or (current.type, current.id) == (ceo.type, ceo.id):
+                    return False
+                nxt = ceo
+            current = nxt
             key = (current.type, current.id)
             if key in seen:
                 # Pre-existing loop, unrelated to this edge. Report it as a

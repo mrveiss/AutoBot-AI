@@ -475,3 +475,75 @@ def test_the_backfill_join_is_scoped_to_the_company():
     """
     source = _migration_source()
     assert "JOIN agent_org_nodes a ON a.agent_id = 'ceo-' || o.id::text AND a.company_id = o.id" in source
+
+
+@pytest.mark.asyncio
+async def test_pointing_the_ceo_at_someone_who_defaults_back_is_refused(session_factory):  # noqa: ANN001
+    """The default chain can now close a loop, which it could not before.
+
+    `_would_cycle` walks explicit edges only, and its docstring justifies that
+    by saying the defaults cannot form a cycle "because owners terminate". That
+    was true while `_resolve_ceo` returned None: the default chain went straight
+    from anyone to the owners, and owners have no manager.
+
+    Designating a CEO inserts a middle step. Now:
+
+        CEO --explicit--> Y        (the edge under test)
+        Y   --default---> CEO      (Y has no explicit line, so Y reports to the CEO)
+
+    which is a loop, and an explicit-only walk cannot see it: walking up from Y
+    finds no explicit manager and stops.
+    """
+    company_id = await _seed_company_without_ceo(session_factory)
+    await _seed_owner(session_factory, company_id)
+    worker = await _seed_agent(session_factory, company_id, "worker-loop")
+
+    async with session_factory() as session:
+        ceo_row = await CompanyCEOService().provision_default(session, company_id)
+        ceo_agent = ceo_row.holder_agent_id
+        await session.commit()
+
+    service = ReportingLineService()
+    async with session_factory() as session:
+        with pytest.raises(ValueError):
+            await service.set_line(
+                session,
+                company_id=company_id,
+                subject=Holder(type=RoleHolderType.AGENT.value, id=ceo_agent),
+                manager=Holder(type=RoleHolderType.AGENT.value, id=worker),
+                actor_user_id=await _seed_owner(session_factory, company_id),
+            )
+
+
+@pytest.mark.asyncio
+async def test_an_ordinary_reporting_line_is_still_accepted(session_factory):  # noqa: ANN001
+    """The contrast case for the cycle walk, and it is not decoration.
+
+    Following the default edge means the walk now reaches the CEO on almost
+    every check. If it does not stop there, the CEO is seen twice and reported
+    as a loop -- so the guard that refuses cycles would refuse nearly every
+    legitimate edge instead. A suite that only tests refusal cannot tell the
+    two apart: both look like "raises ValueError".
+    """
+    company_id = await _seed_company_without_ceo(session_factory)
+    await _seed_owner(session_factory, company_id)
+    actor = await _seed_owner(session_factory, company_id)
+    manager = await _seed_agent(session_factory, company_id, "team-lead")
+    report = await _seed_agent(session_factory, company_id, "team-member")
+
+    async with session_factory() as session:
+        await CompanyCEOService().provision_default(session, company_id)
+        await session.commit()
+
+    async with session_factory() as session:
+        line = await ReportingLineService().set_line(
+            session,
+            company_id=company_id,
+            subject=Holder(type=RoleHolderType.AGENT.value, id=report),
+            manager=Holder(type=RoleHolderType.AGENT.value, id=manager),
+            actor_user_id=actor,
+        )
+        await session.commit()
+
+    assert line.subject_agent_id == report
+    assert line.manager_agent_id == manager
