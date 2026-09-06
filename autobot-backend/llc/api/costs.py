@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import String, and_, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
@@ -185,7 +185,13 @@ async def costs_by_agent_model(
 
     result = await session.execute(
         select(LLCAgentBudget, AgentOrgNode.name)
-        .outerjoin(AgentOrgNode, AgentOrgNode.agent_id == LLCAgentBudget.agent_id)
+        .outerjoin(
+            AgentOrgNode,
+            and_(
+                AgentOrgNode.agent_id == LLCAgentBudget.agent_id,
+                cast(AgentOrgNode.company_id, String) == LLCAgentBudget.company_id,
+            ),
+        )
         .where(LLCAgentBudget.company_id == effective_company_id)
         .order_by(LLCAgentBudget.agent_id)
     )

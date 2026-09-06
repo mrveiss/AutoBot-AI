@@ -43,6 +43,8 @@ class AgentBudgetState(BaseModel):
     """Serialisable snapshot of an agent's budget row (GH#6630, GH#8997)."""
 
     agent_id: str
+    #: Owning company. Part of the cache key: the slug alone is not unique (#15812).
+    company_id: str
     budget_mode: str  # "dollars" or "tokens"
 
     # Dollar-based fields
@@ -110,6 +112,17 @@ class AgentBudgetTracker:
             _NAMESPACE, AgentBudgetState, default_ttl_s=ttl_s
         )
 
+    @staticmethod
+    def _key(company_id: str, agent_id: str) -> str:
+        """Cache key. Scoped by company because the slug is not unique across them.
+
+        `agent_id` is a per-company slug (#15812), so keying on it alone lets one
+        company's budget state answer another company's read — the cache would
+        reintroduce, at runtime, exactly the cross-tenant confusion the composite
+        database constraint exists to prevent.
+        """
+        return f"{company_id}:{agent_id}"
+
     async def record_state(self, state: AgentBudgetState) -> None:
         """Push *state* into the cross-worker cache.
 
@@ -117,7 +130,7 @@ class AgentBudgetTracker:
         workers see the updated spend immediately.
         """
         try:
-            await self._bag.set(state.agent_id, state)
+            await self._bag.set(self._key(state.company_id, state.agent_id), state)
         except Exception:
             # Cache write is best-effort — never block the caller.
             logger.warning(
@@ -125,10 +138,10 @@ class AgentBudgetTracker:
                 state.agent_id,
             )
 
-    async def get_state(self, agent_id: str) -> AgentBudgetState | None:
+    async def get_state(self, company_id: str, agent_id: str) -> AgentBudgetState | None:
         """Return cached budget state for *agent_id*, or None on miss."""
         try:
-            return await self._bag.get(agent_id)
+            return await self._bag.get(self._key(company_id, agent_id))
         except Exception:
             logger.warning(
                 "AgentBudgetTracker.get_state failed for %s (swallowed)",
@@ -136,10 +149,10 @@ class AgentBudgetTracker:
             )
             return None
 
-    async def invalidate(self, agent_id: str) -> None:
+    async def invalidate(self, company_id: str, agent_id: str) -> None:
         """Remove the cached entry (e.g. after a budget reset)."""
         try:
-            await self._bag.delete(agent_id)
+            await self._bag.delete(self._key(company_id, agent_id))
         except Exception:
             logger.warning(
                 "AgentBudgetTracker.invalidate failed for %s (swallowed)",

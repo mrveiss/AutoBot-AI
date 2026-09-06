@@ -99,7 +99,7 @@ class BudgetWatchdog(PollLoopScheduler):
         """Idempotent hard stop: pause the agent if not already paused (GH#8997)."""
         try:
             # BudgetService.check_budget returns (remaining, is_over, alert)
-            _, is_over, _ = await self._budget_svc.check_budget(session, row.agent_id)
+            _, is_over, _ = await self._budget_svc.check_budget(session, row.agent_id, row.company_id)
             if not is_over:
                 return  # race condition — already under limit, skip
             budget_mode = str(row.budget_mode)

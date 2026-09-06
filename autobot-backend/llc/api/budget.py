@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, text, update
+from sqlalchemy import String, and_, cast, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, get_tenant_context, require_org_context
@@ -182,7 +182,7 @@ async def list_budgets(
     svc = BudgetService()
     out: List[Dict[str, Any]] = []
     for row in rows:
-        remaining, is_over, alert = await svc.check_budget(session, row.agent_id)
+        remaining, is_over, alert = await svc.check_budget(session, row.agent_id, row.company_id)
         out.append(
             {
                 "agent_id": row.agent_id,
@@ -231,7 +231,10 @@ async def ingest_cost(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),
 ) -> IngestResponse:
-    await load_authorized(
+    # The row the tenant check already loaded carries the company this slug belongs
+    # to; the result was previously discarded. Binding it avoids a second lookup and
+    # supplies the company the ingest now requires (#15812).
+    row = await load_authorized(
         session,
         LLCAgentBudget,
         agent_id,
@@ -241,7 +244,9 @@ async def ingest_cost(
     )
     svc = BudgetService()
     try:
-        cost = await svc.ingest_cost_event(session, agent_id, body.tokens_in, body.tokens_out, body.model)
+        cost = await svc.ingest_cost_event(
+            session, agent_id, row.company_id, body.tokens_in, body.tokens_out, body.model
+        )
     except BudgetExhausted as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=402, detail="Internal server error") from exc
@@ -302,13 +307,20 @@ async def update_limit(
     if not values:
         raise HTTPException(status_code=400, detail="No fields to update")
 
-    await session.execute(update(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id).values(**values))
+    await session.execute(
+        update(LLCAgentBudget)
+        .where(
+            LLCAgentBudget.agent_id == agent_id,
+            LLCAgentBudget.company_id == row.company_id,
+        )
+        .values(**values)
+    )
     await session.refresh(row)
 
     # Drop the tracker cache so readers (watchdog, check_budget) see the new
     # mode/limit immediately instead of the pre-PATCH state for up to its TTL,
     # and derive the response from the freshly refreshed row.
-    await BudgetService.invalidate_cache(agent_id)
+    await BudgetService.invalidate_cache(agent_id, row.company_id)
     remaining, is_over, alert = _derive_status(row)
     return _build_response(row, remaining, is_over, alert)
 
@@ -446,7 +458,13 @@ async def costs_by_agent_model(
     assert_company_access(ctx, company_id)
     result = await session.execute(
         select(LLCAgentBudget, AgentOrgNode.name, AgentOrgNode.model)
-        .outerjoin(AgentOrgNode, AgentOrgNode.agent_id == LLCAgentBudget.agent_id)
+        .outerjoin(
+            AgentOrgNode,
+            and_(
+                AgentOrgNode.agent_id == LLCAgentBudget.agent_id,
+                cast(AgentOrgNode.company_id, String) == LLCAgentBudget.company_id,
+            ),
+        )
         .where(LLCAgentBudget.company_id == company_id)
         .order_by(LLCAgentBudget.agent_id)
     )

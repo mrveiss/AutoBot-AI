@@ -918,7 +918,11 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     company_id = str(agent.get("company_id") or "")
 
     key_record = None
-    enriched = dict(context, agent_id=agent_id, api_base=AGENT_API_BASE_URL)
+    # company_id travels with the context because the adapter charges a budget on
+    # the way back, and agent_id alone does not identify a budget row (#15812).
+    enriched = dict(
+        context, agent_id=agent_id, company_id=company_id, api_base=AGENT_API_BASE_URL
+    )
     if company_id:
         key_record, raw_key = await _issue_run_key(agent_id, company_id)
         if raw_key:
@@ -992,6 +996,7 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
             await BudgetService().ingest_cost_event(
                 session,
                 agent_id,
+                str(agent.get("company_id") or ""),
                 int(result.tokens_in or 0),
                 int(result.tokens_out or 0),
                 model,

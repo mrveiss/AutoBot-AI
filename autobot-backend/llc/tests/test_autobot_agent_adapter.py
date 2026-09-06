@@ -507,16 +507,17 @@ async def test_cost_forwarded_to_budget_service():
             {"agent_class": _FAKE_AGENT_PATH},
             budget_session_factory=session_factory,
         )
-        run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz"})
+        run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz", "company_id": "company-1"})
         assert isinstance(run_id, str) and run_id
         await asyncio.sleep(0.05)
 
         MockBS.return_value.ingest_cost_event.assert_called_once()
         args = MockBS.return_value.ingest_cost_event.call_args.args
-        # positional: session, agent_id, tokens_in, tokens_out, model
+        # positional: session, agent_id, company_id, tokens_in, tokens_out, model
         assert args[1] == "agent-xyz"
-        assert args[2] == 10  # prompt_tokens from _FakeAgent metadata
-        assert args[3] == 5  # completion_tokens
+        assert args[2] == "company-1"  # the slug alone does not identify a budget (#15812)
+        assert args[3] == 10  # prompt_tokens from _FakeAgent metadata
+        assert args[4] == 5  # completion_tokens
 
 
 @pytest.mark.asyncio
@@ -538,7 +539,7 @@ async def test_budget_exhausted_propagates_to_failed_status():
             {"agent_class": _FAKE_AGENT_PATH},
             budget_session_factory=session_factory,
         )
-        run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz"})
+        run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz", "company_id": "company-1"})
         await asyncio.sleep(0.05)
 
         status = await adapter.status({}, run_id)
@@ -549,7 +550,7 @@ async def test_budget_exhausted_propagates_to_failed_status():
 @pytest.mark.asyncio
 async def test_cost_not_forwarded_when_no_factory():
     adapter = AutoBotAgentAdapter({"agent_class": _FAKE_AGENT_PATH})
-    run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz"})
+    run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz", "company_id": "company-1"})
     await asyncio.sleep(0.05)
     status = await adapter.status({}, run_id)
     assert status.status == LLCRunStatus.COMPLETED
@@ -663,3 +664,33 @@ async def test_integration_summarization_agent_reaches_completed():
             break
 
     assert st.status == LLCRunStatus.COMPLETED, f"Expected COMPLETED, got {st.status}: {st.error}"
+
+
+@pytest.mark.asyncio
+async def test_cost_is_not_charged_without_a_company():
+    """No company in context means no budget row can be named, so nothing is charged.
+
+    Guessing would mean charging whichever company happened to hold the slug, which
+    is precisely the confusion #15812 exists to remove. Refusing loudly is the only
+    honest option, and it is asserted here so a later "helpful" fallback cannot be
+    added silently.
+    """
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+
+    def session_factory():
+        return mock_session
+
+    with patch("llc.services.budget.BudgetService") as MockBS:
+        MockBS.return_value.ingest_cost_event = AsyncMock()
+
+        adapter = AutoBotAgentAdapter(
+            {"agent_class": _FAKE_AGENT_PATH},
+            budget_session_factory=session_factory,
+        )
+        run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz"})
+        assert isinstance(run_id, str) and run_id
+        await asyncio.sleep(0.05)
+
+        MockBS.return_value.ingest_cost_event.assert_not_called()
