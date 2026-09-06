@@ -106,3 +106,23 @@ async def _clear_resume_plan() -> None:
                 await db.commit()
     except Exception as exc:
         logger.warning("update-all: failed to clear resume plan: %s", exc)
+
+
+def restored_stage(stage_cls, name: str, status: str, message: str, stage_logs: dict):
+    """Rebuild one stage of a resumed job, carrying its pre-restart log lines.
+
+    The bug this exists for (#15881) is that a stage rebuilt with only
+    "completed before restart" says the stage ended and nothing about what it
+    did -- indistinguishable from a hang, which is what "the GUI log just
+    stops" is. So the lines come back, and the restart is *marked* rather than
+    hidden: without the marker a reader cannot tell which lines predate it.
+
+    A v1 plan carries no logs at all. That path must stay silent and usable --
+    rejecting it would discard the resume plan of the very update deploying
+    this change. So no lines means no marker, not an empty marker.
+    """
+    stage = stage_cls(name=name, status=status, message=message)
+    lines = list(stage_logs.get(name) or [])
+    if lines:
+        stage.log_lines = [*lines, f"-- SLM restarted here; {len(lines)} line(s) carried over --"]
+    return stage

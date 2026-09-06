@@ -447,7 +447,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py": 739,
     "autobot-slm-backend/api/code_source.py": 720,
-    "autobot-slm-backend/api/code_sync.py": 6096,  # #15728: local-admin socket self-update helper extracted
+    "autobot-slm-backend/api/code_sync.py": 6093,  # #15881: stage-log restore moved to _resume_plan.py
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,
     "autobot-slm-backend/api/monitoring.py": 1096,

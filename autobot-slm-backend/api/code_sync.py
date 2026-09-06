@@ -4819,6 +4819,7 @@ from api._resume_plan import (  # noqa: E402,F401 - re-exported; module-level im
     _UPDATE_ALL_RESUME_KEY,
     _clear_resume_plan,
     _persist_resume_plan,
+    restored_stage,
 )
 
 
@@ -5894,11 +5895,7 @@ async def resume_update_all_orchestration() -> None:
     stage_logs: Dict[str, List[str]] = plan.get("stage_logs") or {}
 
     def _restored(name: str, status: str, message: str) -> UpdateAllStage:
-        lines = list(stage_logs.get(name) or [])
-        stage = UpdateAllStage(name=name, status=status, message=message)
-        if lines:
-            stage.log_lines = [*lines, f"-- SLM restarted here; {len(lines)} line(s) carried over --"]
-        return stage
+        return restored_stage(UpdateAllStage, name, status, message, stage_logs)
 
     job = UpdateAllJob(
         job_id=job_id,

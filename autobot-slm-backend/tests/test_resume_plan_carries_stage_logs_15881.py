@@ -128,3 +128,49 @@ def test_an_older_plan_version_is_still_accepted(resume_plan):
         f"only {sorted(supported)} accepted; the previous plan version must stay readable "
         "or the deploying update wedges itself"
     )
+
+
+class _Stage:
+    """Mirrors `UpdateAllStage`'s shape: constructed empty, logs appended later."""
+
+    def __init__(self, name, status, message):
+        self.name = name
+        self.status = status
+        self.message = message
+        self.log_lines = []
+
+
+def test_a_restored_stage_carries_its_pre_restart_lines(resume_plan):
+    """The restore direction. Persisting the lines is worthless if nothing reads them."""
+    stage = resume_plan.restored_stage(
+        _Stage, "github_fetch", "success", "completed before restart",
+        {"github_fetch": ["Fetching latest commit ...", "Fetched remote commit abc123"]},
+    )
+    assert stage.log_lines[:2] == ["Fetching latest commit ...", "Fetched remote commit abc123"]
+
+
+def test_the_restart_is_marked_and_marked_last(resume_plan):
+    """AC2: a reader must be able to tell which lines predate the restart.
+
+    The marker has to sit *after* the carried lines -- ahead of them it would
+    label the restored history as post-restart, which is the same lie the
+    placeholder told.
+    """
+    stage = resume_plan.restored_stage(
+        _Stage, "code_source_pull", "success", "done", {"code_source_pull": ["a", "b"]}
+    )
+    assert "restarted" in stage.log_lines[-1]
+    assert stage.log_lines[:2] == ["a", "b"]
+
+
+def test_a_plan_without_logs_still_restores_a_usable_stage(resume_plan):
+    """The other direction, which the issue calls out by name.
+
+    A v1 plan carries no `stage_logs`. It must still resume -- rejecting it
+    would discard the resume plan of the very update deploying this change.
+    And it must not gain a bare marker: a lone "SLM restarted here" over an
+    empty log is the placeholder problem wearing a new label.
+    """
+    stage = resume_plan.restored_stage(_Stage, "slm_self_update", "running", "SLM restarting ...", {})
+    assert stage.log_lines == []
+    assert stage.message == "SLM restarting ..."
