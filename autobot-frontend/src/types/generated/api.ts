@@ -52213,6 +52213,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/reporting-lines/{company_id}/{subject_type}/{subject_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Chain
+         * @description Who this subject reports to, walking up to the bounded depth.
+         */
+        get: operations["get_chain_api_llc_reporting_lines__company_id___subject_type___subject_id__get"];
+        /** Set Reporting Line */
+        put: operations["set_reporting_line_api_llc_reporting_lines__company_id___subject_type___subject_id__put"];
+        post?: never;
+        /**
+         * Clear Reporting Line
+         * @description Clearing returns the subject to the default chain, it does not orphan them.
+         */
+        delete: operations["clear_reporting_line_api_llc_reporting_lines__company_id___subject_type___subject_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/reporting-lines/{company_id}/{subject_type}/{subject_id}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Direct Reports
+         * @description Who reports to this holder — derived from the stored edge, never stored.
+         */
+        get: operations["get_direct_reports_api_llc_reporting_lines__company_id___subject_type___subject_id__reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/decisions/search": {
         parameters: {
             query?: never;
@@ -61530,6 +61575,18 @@ export interface components {
         ChainOfCommandResponse: {
             /** Chain */
             chain: components["schemas"]["AgentSummary"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ChainResponse
+         * @description The upward walk from one subject, and why it stopped.
+         */
+        ChainResponse: {
+            /** Managers */
+            managers: components["schemas"]["HolderRef"][];
+            /** Ended */
+            ended: string;
         } & {
             [key: string]: unknown;
         };
@@ -76235,6 +76292,24 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * HolderRef
+         * @description One end of a reporting edge.
+         */
+        HolderRef: {
+            /**
+             * Type
+             * @description user or agent
+             */
+            type: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** HolderResponse */
         HolderResponse: {
             /**
@@ -89701,6 +89776,12 @@ export interface components {
          * @enum {string}
          */
         RepoType: "git" | "local" | "http" | "mcp";
+        /** ReportingLineWrite */
+        ReportingLineWrite: {
+            manager: components["schemas"]["HolderRef"];
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * RepositoryAnalysisRequest
          * @description Request model for repository-wide conflict analysis.
@@ -174490,6 +174571,138 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_chain_api_llc_reporting_lines__company_id___subject_type___subject_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                subject_type: string;
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChainResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_reporting_line_api_llc_reporting_lines__company_id___subject_type___subject_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                subject_type: string;
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportingLineWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_reporting_line_api_llc_reporting_lines__company_id___subject_type___subject_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                subject_type: string;
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_direct_reports_api_llc_reporting_lines__company_id___subject_type___subject_id__reports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                subject_type: string;
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolderRef"][];
                 };
             };
             /** @description Validation Error */

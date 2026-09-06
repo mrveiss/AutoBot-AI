@@ -47,6 +47,7 @@ from .goal import GoalLevel, GoalStatus, LLCGoal
 from .heartbeat_run import LLCHeartbeatRun
 from .membership import LLCCompanyMembership
 from .replay_log import LLCRunReplayLog
+from .reporting_line import LLCReportingLine
 from .review_gate import LLCReviewGatePolicy
 from .role_assignment import LLCRoleAssignment
 from .role_credential import LLCRoleCredential
@@ -101,6 +102,7 @@ __all__ = [
     "LLCRoleAssignment",
     "LLCRoleCredential",
     "LLCRoleTool",
+    "LLCReportingLine",
     "LLCRoleRate",
     "LLCRoleWorkflow",
     "LLCSprint",

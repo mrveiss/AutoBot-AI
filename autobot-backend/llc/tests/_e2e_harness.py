@@ -77,6 +77,7 @@ from llc.models.goal import LLCGoal  # noqa: E402
 from llc.models.heartbeat_run import LLCHeartbeatRun  # noqa: E402
 from llc.models.label import LLCLabel, LLCWorkItemLabel  # noqa: E402
 from llc.models.membership import LLCCompanyMembership  # noqa: E402
+from llc.models.reporting_line import LLCReportingLine  # noqa: E402
 from llc.models.review_gate import LLCReviewGatePolicy  # noqa: E402
 from llc.models.work_item import (  # noqa: E402
     LLCWorkItem,
@@ -108,6 +109,13 @@ _LOOP_MODELS = [
     LLCHeartbeatRun,
     LLCReviewGatePolicy,
     LLCCompanyMembership,
+    # #15763: the org chart reads reporting lines to place people and agents in
+    # one hierarchy, so every harness that builds a chart needs this table. It
+    # is listed here rather than tolerated as missing in the reader: a query
+    # that shrugs off an absent table would also shrug off a genuinely broken
+    # schema, and the chart would silently fall back to the old two-forest
+    # shape this replaced.
+    LLCReportingLine,
     LLCLabel,
     LLCWorkItemLabel,
     AgentOrgNode,
