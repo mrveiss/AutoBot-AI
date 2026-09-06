@@ -19,6 +19,20 @@ In ``mcp_security_test.py`` that turned a dangling symlink chain into one that
 control failed" (#15785's own writeup). Fixed in #15772 by giving the leaf a
 per-test suffix from ``tmp_path.name``.
 
+The AST scanner itself lives in ``fixture_fixed_path_teardown_guard.py``, a
+plain (non-``_test.py``) sibling module (the same split as
+``sys_modules_leak_guard.py`` / ``sys_modules_leak_guard_test.py``), so the
+scanner's own growth does not also have to fit under this module's line
+budget. This module documents the guard's rationale and carries the
+assertions that run it over the live tree; every synthetic contrast pair --
+and the write-up of the defect each one closes -- lives in
+``fixture_fixed_path_teardown_guard_contrast_test.py`` (which calls and
+decorators are seen at all) and
+``fixture_fixed_path_teardown_guard_derivation_test.py`` (how a name earns
+"derived"), the same split as ``ansible_manifest_resolution_contrast_test.py``,
+so no module has to fit all of it under ``check_python_file_size.py``'s
+MAX_LINES.
+
 THE DISCRIMINATOR IS CREATE-AND-REMOVE, NOT A BARE FIXED PATH
 -----------------------------------------------------------------
 ``api/codebase_analytics/endpoints/report_scoping_test.py:384``
@@ -43,15 +57,16 @@ condition, or deriving the leaf from ``tmp_path``, is exactly what stops two
 shards from deleting each other's tree. ``_collect_calls`` tracks whether a
 call sits inside an ``ast.If``/ternary and only counts an *unguarded* removal
 call as the hazard, which is why ``tmp_root_exists`` is not flagged while the
-pre-#15772 ``temp_allowed_dir`` is (see the contrast pair below).
+pre-#15772 ``temp_allowed_dir`` is (see the contrast module's own pair). Both
+fixtures are pinned against the real source below, by name.
 
 WHY THE FIXTURE IS SYNTHETIC, NOT THE LIVE VIOLATION SET
 ---------------------------------------------------------
 The one known instance was fixed in #15772; the live population is zero
 (measured below). Seeding this guard's pass/fail from that population would
 make it vacuous today and break the moment a violation reappears -- the trap
-#15762 records. The contrast pair is two literal fixture sources this file
-writes itself.
+#15762 records. Every contrast pair is a literal fixture source the contrast
+module writes itself; nothing in the pass/fail path is seeded from the tree.
 
 REACH, NOT FINDINGS (the vacuity floor)
 ------------------------------------------
@@ -60,143 +75,41 @@ no fixtures would print the identical clean line as one that examined every
 fixture in the tree. ``_MIN_EXPECTED_FIXTURES_SCANNED`` binds the floor to how
 many ``@pytest.fixture`` functions were actually found, not to what they did --
 same shape as ``core_router_auth_guard_test.py``'s
-``_MIN_EXPECTED_CORE_ROUTERS``. Measured at 1,209 fixtures across every
+``_MIN_EXPECTED_CORE_ROUTERS``. Measured at 1,212+ fixtures across every
 tracked ``.py`` file (fixtures live in plain test modules and in
 ``conftest.py``, so the scan is not limited to ``*_test.py`` filenames); the
 floor sits comfortably below that.
+
+DEFECTS CLOSED, AND THE PAIRS THAT PROVE THEY STAY CLOSED
+------------------------------------------------------------
+Six defects have been closed in this guard since #15785 -- an unseen decorator
+alias, an if/else that removed on every branch, a ``tmp_path`` read that never
+reached the path, a tuple assignment that leaked derivation across targets, a
+call keyword that laundered a fixed path argument, two traversals that walked
+into nested ``def``/``lambda`` scopes, and a name credited as derived on one
+assignment while another gave it a fixed path. Each has a two-sided contrast
+pair, and all of them live in
+``fixture_fixed_path_teardown_guard_contrast_test.py`` or
+``fixture_fixed_path_teardown_guard_derivation_test.py`` with the write-up of
+the defect they close.
 """
 
 from __future__ import annotations
 
 import ast
-import subprocess
-from pathlib import Path
-from typing import Iterator, List, Set, Tuple
 
 import pytest
-
-from autobot_shared.paths import scrubbed_git_env
-
-_REPO = Path(__file__).resolve().parents[1]
-
-# pytest's own per-test-unique path sources. A fixture that actually uses one
-# of these to build its path cannot collide across concurrent tests, whatever
-# its teardown does.
-_UNIQUE_SOURCE_PARAMS = frozenset({"tmp_path", "tmp_path_factory", "tmpdir", "tmpdir_factory"})
-
-_CREATE_CALL_NAMES = frozenset({"mkdir", "makedirs"})
-_REMOVE_CALL_NAMES = frozenset({"rmtree", "unlink", "rmdir", "remove"})
-
-_SKIP_PARTS = {"node_modules", ".worktrees", "__pycache__", "venv", ".venv"}
-
-# Bound to REACH (fixtures actually examined), not to how many violations turn
-# up -- see the module docstring.
-_MIN_EXPECTED_FIXTURES_SCANNED = 1000
-
-
-def _is_pytest_fixture_decorator(node: ast.expr) -> bool:
-    target = node.func if isinstance(node, ast.Call) else node
-    if isinstance(target, ast.Attribute):
-        return target.attr == "fixture"
-    return isinstance(target, ast.Name) and target.id == "fixture"
-
-
-def _iter_pytest_fixtures(tree: ast.Module) -> Iterator[ast.FunctionDef | ast.AsyncFunctionDef]:
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if any(_is_pytest_fixture_decorator(dec) for dec in node.decorator_list):
-                yield node
-
-
-def _guarded_child_ids(node: ast.AST) -> Set[int]:
-    """Direct children an ``if``/ternary reaches on only one branch."""
-    if isinstance(node, ast.If):
-        return {id(child) for child in list(node.body) + list(node.orelse)}
-    if isinstance(node, ast.IfExp):
-        return {id(node.body), id(node.orelse)}
-    return set()
-
-
-def _collect_calls(node: ast.AST, guarded: bool = False) -> List[Tuple[ast.Call, bool]]:
-    """Every ``Call`` under *node*, tagged with whether an if/ternary gates it."""
-    calls: List[Tuple[ast.Call, bool]] = []
-    if isinstance(node, ast.Call):
-        calls.append((node, guarded))
-    guarded_ids = _guarded_child_ids(node)
-    for child in ast.iter_child_nodes(node):
-        calls.extend(_collect_calls(child, guarded or id(child) in guarded_ids))
-    return calls
-
-
-def _call_target_name(call: ast.Call) -> str | None:
-    if isinstance(call.func, ast.Attribute):
-        return call.func.attr
-    if isinstance(call.func, ast.Name):
-        return call.func.id
-    return None
-
-
-def _uses_unique_source(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    """True if a tmp_path-family parameter is actually referenced, not merely accepted.
-
-    ``temp_allowed_dir(tmp_path)`` pre-#15772 took ``tmp_path`` and never used
-    it, so presence alone is not enough -- it must appear as a ``Load`` inside
-    the function body.
-    """
-    params = [*func.args.args, *func.args.kwonlyargs, *func.args.posonlyargs]
-    unique_params = {p.arg for p in params} & _UNIQUE_SOURCE_PARAMS
-    if not unique_params:
-        return False
-    used = {n.id for n in ast.walk(func) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
-    return bool(unique_params & used)
-
-
-def _creates_and_unconditionally_removes(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    calls = _collect_calls(func)
-    creates = any(_call_target_name(call) in _CREATE_CALL_NAMES for call, _guarded in calls)
-    removes = any(_call_target_name(call) in _REMOVE_CALL_NAMES and not guarded for call, guarded in calls)
-    return creates and removes
-
-
-def _is_violation(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    if _uses_unique_source(func):
-        return False
-    return _creates_and_unconditionally_removes(func)
-
-
-def _tracked_python_files() -> List[Path]:
-    listing = subprocess.run(
-        ["git", "ls-files", "-z"],
-        cwd=_REPO,
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    ).stdout
-    paths = (_REPO / rel for rel in listing.split("\0") if rel.endswith(".py"))
-    return [path for path in paths if not _SKIP_PARTS & set(path.relative_to(_REPO).parts)]
-
-
-def _scan_repo() -> Tuple[int, List[Tuple[Path, str, int]], List[Tuple[Path, str]]]:
-    """(fixtures examined, violations, unreadable) across every tracked ``.py`` file."""
-    examined = 0
-    violations: List[Tuple[Path, str, int]] = []
-    unreadable: List[Tuple[Path, str]] = []
-    for path in _tracked_python_files():
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (SyntaxError, UnicodeDecodeError, ValueError, OSError) as failure:
-            unreadable.append((path, f"{type(failure).__name__}: {failure}"))
-            continue
-        for func in _iter_pytest_fixtures(tree):
-            examined += 1
-            if _is_violation(func):
-                violations.append((path, func.name, func.lineno))
-    return examined, violations, unreadable
+from repo_tests.fixture_fixed_path_teardown_guard import (
+    _MIN_EXPECTED_FIXTURES_SCANNED,
+    _REPO,
+    _is_violation,
+    _iter_pytest_fixtures,
+    _scan_repo,
+)
 
 
 @pytest.fixture(scope="module")
-def scan_result() -> Tuple[int, List[Tuple[Path, str, int]], List[Tuple[Path, str]]]:
+def scan_result():
     return _scan_repo()
 
 
@@ -277,46 +190,3 @@ class TestRealFixtureRegressionPins:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         (func,) = (f for f in _iter_pytest_fixtures(tree) if f.name == fixture_name)
         assert _is_violation(func) is expected_violation
-
-
-_HAZARD_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_allowed_dir(tmp_path):
-    test_dir = Path("/tmp/autobot/test_security")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    shutil.rmtree(test_dir)
-"""
-
-_SAFE_SOURCE = """
-import shutil
-from pathlib import Path
-import pytest
-
-@pytest.fixture
-def temp_allowed_dir(tmp_path):
-    test_dir = Path("/tmp/autobot") / f"test_security_{tmp_path.name}"
-    test_dir.mkdir(parents=True, exist_ok=True)
-    yield test_dir
-    if test_dir.exists():
-        shutil.rmtree(test_dir)
-"""
-
-
-def _only_fixture(source: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
-    (func,) = _iter_pytest_fixtures(ast.parse(source))
-    return func
-
-
-class TestContrastPair:
-    """A guard that never fires passes its own suite -- this proves it can fire."""
-
-    def test_fixed_path_create_and_unconditional_remove_is_flagged(self):
-        assert _is_violation(_only_fixture(_HAZARD_SOURCE)) is True
-
-    def test_tmp_path_derived_leaf_is_not_flagged(self):
-        assert _is_violation(_only_fixture(_SAFE_SOURCE)) is False
