@@ -7,7 +7,7 @@
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, Float, Numeric, String, Uuid
+from sqlalchemy import BigInteger, Float, Numeric, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from llc.models.enums import BudgetMode
@@ -26,10 +26,17 @@ class LLCAgentBudget(Base):
     """
 
     __tablename__ = "llc_agent_budgets"
+    __table_args__ = (
+        UniqueConstraint("company_id", "agent_id", name="uq_llc_agent_budgets_company_id_agent_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
-    agent_id: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    #: Per-company slug. NOT globally unique (#15812): global uniqueness made
+    #: "is this slug taken?" answerable across the tenant boundary, and the slug
+    #: is a company-local name in the first place. Every lookup must therefore
+    #: carry company_id — see ``llc/services/budget.py::_for_agent``.
+    agent_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
 
     # Budget mode (GH#8997)
     budget_mode: Mapped[str] = mapped_column(String(32), nullable=False, default=BudgetMode.DOLLARS.value)
