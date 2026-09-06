@@ -40,23 +40,6 @@
   hosts: localhost
   gather_facts: false
   any_errors_fatal: true
-  # #15822/#15824: the install root comes from the role's own defaults, which
-  # are the SSOT for it. This play includes a shared TASK file rather than the
-  # role, so role defaults are not loaded automatically and nothing else
-  # supplies slm_base_dir -- CI runs this with `-i 'localhost,'` and no
-  # inventory, so group_vars never loads either.
-  #
-  # Loading the defaults file directly is what keeps the value in one place.
-  # The alternatives both reintroduce the literal: passing `-e slm_base_dir=...`
-  # from the workflow moves the hardcoded path into the YAML that runs the play,
-  # and `| default('/opt/autobot')` puts it back in the play wearing a
-  # safer-looking shape.
-  #
-  # Same defect shape as #15824, one workflow over: a play invoked without the
-  # inventory that defines its variables.
-  vars_files:
-    - ../../roles/slm_manager/defaults/main.yml
-
   vars:
     # Decidably false — this directory does not belong on this host.
     role_effect_absent_active: false
@@ -73,7 +56,18 @@
     # a safer-looking shape. Undefined must stop the play, which the assert in
     # the first task does, rather than quietly testing /opt/autobot on a host
     # that does not use it.
-    _base_dir: "{{ slm_base_dir }}"
+    # Resolved in a task below, not here: `vars_files` outranks inventory, so
+    # loading the role defaults at play level would make this play ignore a host
+    # that sets a different root — the mirror of the bug it was fixing.
+    # This literal mirrors clean_wrong_node_dir.yml:91, which builds its
+    # deletion target as the literal "/opt/autobot/{{ dir_name }}" rather than
+    # from slm_base_dir. The fixtures MUST be created where the cleanup will
+    # actually delete, so this value is not a configuration choice: it is a copy
+    # of the code under test, and the assert below fails if the two ever differ.
+    # That file's form is frozen as a fixture for #15831, so the coupling is
+    # asserted rather than removed. Retiring both literals belongs with that
+    # unfreeze.
+    _cleanup_root: "/opt/autobot"  # noqa: mirrors the cleanup's own literal; asserted below
     _fixture_removed: "_test_wrong_node_15822"
     _fixture_kept: "_test_right_node_15822"
     _fixture_undecidable: "_test_undecidable_15822"
@@ -89,14 +83,41 @@
     # the play rather than fall back to a literal. A fallback would let this
     # create fixtures under a root the deployment does not use, then assert
     # about them successfully — a green run proving nothing about the host.
-    - name: "Pre-flight: the install root must come from SSOT"
+    # #15822/#15824: inventory wins, and the fallback is the cleanup's own root.
+    #
+    # `vars_files` at play level would have outranked inventory — the mirror of
+    # the bug being fixed. `include_vars` into a namespace does not, but reading
+    # one key out of the role defaults forces Ansible to template the whole
+    # mapping, and half of it interpolates `slm_base_dir`, which is what we are
+    # trying to resolve.
+    #
+    # So the fallback is `_cleanup_root` directly. That is not a second
+    # hardcoded path: it is the SAME value the assert below requires this to
+    # equal, so a fallback that disagreed with the cleanup would fail there
+    # rather than run a test that proves nothing.
+    - name: "Pre-flight: resolve the install root"
+      ansible.builtin.set_fact:
+        _base_dir: "{{ slm_base_dir | default(_cleanup_root) }}"
+
+    # The fixtures must live where the cleanup will actually delete.
+    #
+    # roles/_shared/tasks/clean_wrong_node_dir.yml:91 builds its target as the
+    # LITERAL "/opt/autobot/{{ dir_name }}" rather than from slm_base_dir. So if
+    # this play creates fixtures under a different root, every assertion still
+    # passes — they are assertions about directories the play created itself —
+    # while the cleanup deletes somewhere else entirely and nothing is tested.
+    #
+    # That file's form is frozen as a fixture for #15831, so this asserts the
+    # coupling instead of changing it. A host that relocates the install would
+    # fail here loudly rather than run a test that proves nothing.
+    - name: "Pre-flight: the fixture root must equal the cleanup's deletion root"
       ansible.builtin.assert:
         that:
-          - slm_base_dir is defined
-          - slm_base_dir | length > 0
+          - _base_dir == _cleanup_root
         fail_msg: >-
-          slm_base_dir is not defined. This playbook asserts on real
-          directories under the install root and must not guess it.
+          Fixtures would be created under {{ _base_dir }} but
+          clean_wrong_node_dir.yml deletes under {{ _cleanup_root }}.
+          The assertions in this play would pass while testing nothing.
 
     - name: "Pre-flight: stat the fixture paths"
       ansible.builtin.stat:
