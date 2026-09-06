@@ -43,8 +43,11 @@ git worktree unlock <path>     # restore the state you found
 
 **Worktree Creation:**
 ```bash
-git fetch origin Dev_new_gui   # #15884: branch from CURRENT base, never a stale ref
-git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/Dev_new_gui   # do NOT pipe this
+# #15884: chained deliberately. As separate lines a FAILED fetch still lets the
+# worktree be created from the previous origin/Dev_new_gui — a stale base, which
+# is the exact thing this rule exists to prevent.
+git fetch origin Dev_new_gui && \
+  git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/Dev_new_gui   # do NOT pipe this
 cd .worktrees/issue-XXXX && git branch --unset-upstream
 # Commit and push from here. Do NOT switch branches.
 ```
