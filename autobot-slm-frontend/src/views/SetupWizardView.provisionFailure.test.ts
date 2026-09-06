@@ -28,7 +28,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { createPinia, setActivePinia } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import en from '@/locales/en.json'
 
 // Mirrors every member SetupWizardView actually reads off the store. A member
@@ -47,8 +47,12 @@ const provisionState = {
   completedPhases: ref<Set<string>>(new Set<string>()),
 }
 
+// `reactive` rather than a plain object: a Pinia store unwraps refs on property
+// access, so the component reads `provisionStore.stage` as a string. A plain
+// object hands back the Ref itself and `stage.replace` throws -- which is a
+// mock-shaped failure, not a finding about the component.
 vi.mock('@/stores/provision', () => ({
-  useProvisionStore: () => ({
+  useProvisionStore: () => reactive({
     status: provisionState.status,
     error: provisionState.error,
     logs: provisionState.logs,
