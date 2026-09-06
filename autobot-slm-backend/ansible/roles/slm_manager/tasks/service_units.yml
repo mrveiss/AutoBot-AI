@@ -64,15 +64,34 @@
   when: slm_self_update_socket_enabled | bool
   notify:
     - reload systemd
-    - restart slm self-update socket
+    # #15823: deliberately does NOT notify "restart slm self-update socket".
+    # Handlers flush after the backend has been started, and systemd refuses to
+    # restart a socket whose Service= is running — so that handler could only
+    # ever fire in the one state where it is guaranteed to fail. The ordered
+    # restart in main.yml applies template changes instead, inside the window
+    # where the backend is down.
     - restart slm backend
   tags: ['slm', 'backend', 'systemd']
 
-- name: "SLM | Enable local self-update admin socket unit (#15728)"
+# #15823: enabled, deliberately NOT started here.
+#
+# systemd refuses to start a socket whose ``Service=`` is already running --
+# "Socket service autobot-slm-backend.service already active, refusing" -- and
+# this file runs at main.yml:673, long before the backend is (re)started at
+# :1023. On any node that was already serving, the backend is still up from
+# before the deploy, so ``state: started`` here fails every time.
+#
+# It failed in the worst position: ``update-all-nodes.yml`` aborts AFTER the
+# code archives have landed, leaving a node carrying new code with the
+# activation half incomplete. That is why this is not merely noisy.
+#
+# Starting it belongs where the backend is stopped and started, so the socket
+# is bound first and the service inherits the fd through its ``Sockets=`` line.
+# See "Start the self-update socket before the backend" in main.yml.
+- name: "SLM | Enable local self-update admin socket unit (#15728, #15823)"
   ansible.builtin.systemd:
     name: "{{ slm_self_update_socket_service }}.socket"
     enabled: true
-    state: started
     daemon_reload: true
   become: true
   when: slm_self_update_socket_enabled | bool
