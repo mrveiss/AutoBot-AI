@@ -108,6 +108,24 @@ EXCLUDED_PREFIXES = (
 #: almost nothing and call that a clean run.
 MIN_TRACKED_PY_FILES = 3000
 
+#: Used only when `pyproject.toml` cannot be read or has no `line-length`.
+#: Matches the repository's current `[tool.black]` setting; it is a fallback
+#: for a broken read, never the source of truth.
+_BLACK_LINE_LENGTH_FALLBACK = 120
+
+#: Directories the auto-format job actually rewrites, mirrored from
+#: `.github/workflows/auto-fix-formatting.yml`. Kept in step by
+#: `repo_tests/ratchet_measures_what_the_formatter_writes_test.py` -- a hand-copied
+#: list with a comment claiming it mirrors something is the exact failure #15877
+#: catalogued, so it is asserted rather than asserted-about.
+#:
+#: The scopes differ and that is the whole point: the ratchet walks EVERY tracked
+#: `.py`, the formatter rewrites three directories. Measured on 497 grandfathered
+#: files -- the 493 whose raw and formatted sizes agree are all inside this scope;
+#: all 4 that differ are outside it. Measuring post-format size for a file the
+#: formatter never touches would invent a reflow that will never happen.
+FORMATTER_SCOPE = ("autobot-backend/", "autobot-slm-backend/", "autobot_shared/")
+
 
 def _load_known_large() -> dict[str, int]:
     """Load KNOWN_LARGE from its sibling data module, by path.
@@ -161,6 +179,69 @@ def count_lines(path: pathlib.Path) -> int | None:
             return sum(1 for _ in handle)
     except (OSError, UnicodeDecodeError):
         return None
+
+
+def formatted_line_count(path: pathlib.Path) -> int | None:
+    """Line count for *path* **as the auto-formatter would leave it** (#15868).
+
+    The ratchet and the auto-format job both write to the same number, and the
+    formatter writes last: it rewrites `.py` files after the author and pushes
+    the result to the branch. So a grandfathered file sitting exactly at its
+    ceiling is one reformat away from a red nobody introduced. Observed twice
+    in one day, in opposite directions — a file compacted to 1075 and ratcheted
+    to match, then reflowed by the bot back to 1081 and red against the ceiling
+    that had just been lowered for it.
+
+    Measuring the post-format size removes the disagreement at its source
+    rather than arbitrating it. Critically it keeps the ratchet **monotonic**:
+    the alternative — letting a ceiling rise when formatting caused the growth —
+    reopens exactly the licence #14236 exists to remove, because any growth can
+    be attributed to the formatter.
+
+    Returns ``None`` when black is unavailable or the source will not parse, so
+    the caller falls back to the raw count. A missing formatter must not turn
+    the audit into a pass: ``None`` here means "not measured", never "fine".
+    """
+    try:
+        import black  # noqa: PLC0415  # optional; the audit degrades to raw counts without it
+    except ImportError:
+        return None
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    try:
+        mode = black.Mode(line_length=_black_line_length())
+        return len(black.format_str(source, mode=mode).splitlines())
+    except Exception:  # noqa: BLE001  # black raises its own hierarchy; any failure means "not measured"
+        return None
+
+
+def _black_line_length() -> int:
+    """`line-length` from pyproject, so this cannot drift from what the bot runs.
+
+    Hard-coding 120 here would make the audit measure a formatting the
+    repository does not use the moment that setting changes -- the same class
+    of defect this function exists to fix, one level up.
+    """
+    pyproject = repo_root() / "pyproject.toml"
+    try:
+        text = pyproject.read_text(encoding="utf-8")
+    except OSError:
+        return _BLACK_LINE_LENGTH_FALLBACK
+    in_black = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("["):
+            in_black = stripped == "[tool.black]"
+            continue
+        if in_black and stripped.startswith("line-length"):
+            _, _, value = stripped.partition("=")
+            try:
+                return int(value.strip())
+            except ValueError:
+                return _BLACK_LINE_LENGTH_FALLBACK
+    return _BLACK_LINE_LENGTH_FALLBACK
 
 
 def tracked_python_files(root: pathlib.Path) -> list[str]:
@@ -267,10 +348,41 @@ def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> tuple[int, se
             continue
         reached += 1
         seen.add(normalise(rel))
-        message = verdict(rel, line_count)
+        ruled_on, note = _size_to_rule_on(root, rel, line_count)
+        message = verdict(rel, ruled_on)
         if message is not None:
-            problems.append(message)
+            problems.append(message + note)
     return reached, seen, problems
+
+
+def _size_to_rule_on(root: pathlib.Path, rel: str, raw: int) -> tuple[int, str]:
+    """The size to judge *rel* by, plus a note for the failure message (#15868).
+
+    Inside the formatter's scope the authoritative size is the **post-format**
+    one, because the auto-format job writes last: it rewrites `.py` after the
+    author and pushes the result to the branch. Judging the raw size there rules
+    on a file state that will not survive the next bot commit -- which is how a
+    file compacted to fit a ceiling, and ratcheted to match, came back reflowed
+    and red against the ceiling just lowered for it.
+
+    This must be applied to EVERY in-scope file, not only ones already failing.
+    The damage is done at the moment a ceiling is recorded from a raw count: the
+    number stored is one the formatter will not reproduce. Ruling only on already-
+    flagged files would leave that recording step measuring the wrong thing.
+
+    Outside the scope the raw count IS the truth -- nothing will reflow those
+    files, so formatting them here would invent a change that never happens.
+    """
+    if not normalise(rel).startswith(FORMATTER_SCOPE):
+        return raw, ""
+    formatted = formatted_line_count(root / rel)
+    if formatted is None or formatted == raw:
+        return raw, ""
+    return formatted, (
+        f" [ruled on the post-format size: {raw} raw -> {formatted} after black, "
+        "because the auto-format job rewrites this file after you and pushes the "
+        "result; record the formatted size or the bot will re-break it (#15868)]"
+    )
 
 
 def audit_ceilings() -> tuple[int, list[str]]:
