@@ -21,24 +21,50 @@ exists to prevent, one level up.
 
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+
 import json
 from typing import Any
 
 import jinja2
 import pytest
-from test_cleanup_never_destroys_data_14856 import (
-    _WRONG_NODE,
-    _and,
-    _ansible_bool,
-    _apply_set_fact,
-    _FactUndefined,
-    _load,
-    _module,
-    _primitive_when,
-    _stat,
-    _wrong_node_normalise,
-    _wrong_node_when,
+
+# Loaded by explicit path rather than imported by name (#15822).
+#
+# The obvious forms both fail under the sharded CI invocation, and both PASS
+# under a plain `pytest <file>` — which is the trap: the direct run puts this
+# file's own directory on sys.path, so it succeeds for a reason that has nothing
+# to do with whether CI will.
+#
+#   from test_cleanup_never_destroys_data_14856 import ...   # needs tests/ on sys.path
+#   from tests.test_cleanup_never_destroys_data_14856 import ...  # `tests` is not
+#                                                                 # uniquely importable
+#
+# Collection for a shard starts at the repo root, where neither holds, and an
+# uncollectable module aborts the whole shard rather than failing one test —
+# which is why two entire groups went red.
+#
+# A path-based load depends on nothing but this file's own location, so it
+# behaves identically under both invocations.
+_parent = importlib.util.spec_from_file_location(
+    "_cleanup_never_destroys_data_14856",
+    Path(__file__).with_name("test_cleanup_never_destroys_data_14856.py"),
 )
+_mod = importlib.util.module_from_spec(_parent)
+_parent.loader.exec_module(_mod)
+
+_WRONG_NODE = _mod._WRONG_NODE
+_FactUndefined = _mod._FactUndefined
+_and = _mod._and
+_ansible_bool = _mod._ansible_bool
+_apply_set_fact = _mod._apply_set_fact
+_load = _mod._load
+_module = _mod._module
+_primitive_when = _mod._primitive_when
+_stat = _mod._stat
+_wrong_node_normalise = _mod._wrong_node_normalise
+_wrong_node_when = _mod._wrong_node_when
 
 # (fact value, data/ present?, must the directory be removed?)
 #
