@@ -62,8 +62,10 @@ async def _assert_item_in_company(item_id: str, company_id: str) -> None:
 @router.get("/work-items/next")
 async def get_next_work_item(request: Request) -> Dict[str, Any]:
     agent_id, company_id = _agent_context(request)
-    # Phase 5: delegate to WorkItemService.checkout_next(agent_id, company_id)
-    return {"work_item": None, "message": "No items available (Phase 1 stub)"}
+    # #15859: honest already -- the message names the stub in a field the client
+    # reads. Left as a stub rather than wired, and tracked as #15905 so the
+    # intent lives in an issue instead of a comment nobody is accountable to.
+    return {"work_item": None, "message": "Not implemented (stub) — no checkout performed"}
 
 
 class StatusUpdate(BaseModel):
@@ -73,9 +75,42 @@ class StatusUpdate(BaseModel):
 
 @router.post("/work-items/{item_id}/status")
 async def update_work_item_status(item_id: uuid.UUID, body: StatusUpdate, request: Request) -> Dict[str, Any]:
-    agent_id, company_id = _agent_context(request)
-    # Phase 2+: delegate to WorkItemService.transition()
-    return {"updated": True, "item_id": str(item_id), "status": body.status}
+    """Transition a work item, enforcing the state machine (#15859).
+
+    This used to echo the requested status back with ``{"updated": True}``
+    without performing the transition, so a caller reading the response saw its
+    own input and concluded the write had happened.
+
+    The company check is not incidental: ``transition_status`` takes
+    ``company_id`` and this route is reached with an agent's context, so an
+    item belonging to another company must 404 rather than transition.
+    """
+    from autobot_shared.singleton_factory import lazy_singleton
+    from user_management.database import get_async_session_factory
+
+    from ..models.enums import WorkItemStatus
+    from ..services.work_item_service import WorkItemService
+
+    try:
+        new_status = WorkItemStatus(body.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Unknown work item status {body.status!r}") from exc
+
+    factory = get_async_session_factory()
+    async with factory() as session:
+        try:
+            item = await lazy_singleton(WorkItemService)().transition_status(
+                session,
+                work_item_id=str(item_id),
+                new_status=new_status,
+                company_id=str(company_id),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        await session.commit()
+        resulting = str(item.status)
+
+    return {"updated": True, "item_id": str(item_id), "status": resulting}
 
 
 class CostEvent(BaseModel):
@@ -87,9 +122,42 @@ class CostEvent(BaseModel):
 
 @router.post("/cost-events")
 async def ingest_cost_event(body: CostEvent, request: Request) -> Dict[str, Any]:
-    agent_id, company_id = _agent_context(request)
-    # Phase 1+: delegate to BudgetService.ingest_cost_event()
-    return {"recorded": True}
+    """Record an agent's token cost against its budget (#15859).
+
+    This used to return ``{"recorded": True}`` without calling anything. A
+    budget that is never charged is never exceeded, so the hard stop could not
+    fire -- and the response carried no marker, so a caller could not tell
+    "recorded" from "discarded".
+
+    ``BudgetExhausted`` is propagated as 402 rather than swallowed: the whole
+    point of ingesting the event is that exceeding the limit stops the agent.
+    ``UnpricedModel`` is 422 -- the event is well-formed but its cost cannot be
+    computed, and charging zero is what #15860 was.
+    """
+    from autobot_shared.singleton_factory import lazy_singleton
+    from user_management.database import get_async_session_factory
+
+    from ..exceptions import BudgetExhausted, UnpricedModel
+    from ..services.budget import BudgetService
+
+    factory = get_async_session_factory()
+    try:
+        async with factory() as session:
+            cost = await lazy_singleton(BudgetService)().ingest_cost_event(
+                session,
+                agent_id=agent_id,
+                company_id=company_id,
+                tokens_in=body.tokens_in,
+                tokens_out=body.tokens_out,
+                model=body.model,
+            )
+            await session.commit()
+    except BudgetExhausted as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
+    except UnpricedModel as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return {"recorded": True, "cost": str(cost)}
 
 
 class CommentBody(BaseModel):
@@ -100,8 +168,10 @@ class CommentBody(BaseModel):
 @router.post("/comments")
 async def post_comment(body: CommentBody, request: Request) -> Dict[str, Any]:
     agent_id, company_id = _agent_context(request)
-    # Phase 2+: full comment storage
-    return {"comment_id": None, "recorded": True}
+    # #15859: not implemented. `recorded: True` with no marker is what made the
+    # cost-event and status routes lie; this says so in a field the client reads
+    # rather than only in a comment the client cannot. Tracked as #15905.
+    return {"comment_id": None, "recorded": False, "message": "Not implemented (stub) — comment was not stored"}
 
 
 class WorkProduct(BaseModel):
@@ -161,8 +231,14 @@ class HeartbeatReport(BaseModel):
 @router.post("/heartbeat/report")
 async def report_heartbeat(body: HeartbeatReport, request: Request) -> Dict[str, Any]:
     agent_id, company_id = _agent_context(request)
-    # Phase 3+: full heartbeat recording
-    return {"recorded": True, "run_id": body.run_id}
+    # #15859: not implemented, and the echoed run_id made that hard to see --
+    # a caller reading its own input back concluded the write had happened.
+    # Tracked as #15905.
+    return {
+        "recorded": False,
+        "run_id": body.run_id,
+        "message": "Not implemented (stub) — heartbeat was not recorded",
+    }
 
 
 @router.post("/attachments", status_code=201)

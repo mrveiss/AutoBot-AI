@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.model_pricing import MODEL_PRICING_PER_1M_TOKENS
 from autobot_shared.redis_client import get_async_redis_client
 from llc.config import DEFAULT_BUDGET_LIMIT
-from llc.exceptions import BudgetExhausted
+from llc.exceptions import BudgetExhausted, UnpricedModel
 from llc.models.budget import LLCAgentBudget
 
 from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
@@ -120,18 +120,20 @@ class BudgetService(LLCServiceBase):
         Uses atomic UPDATE to avoid read-modify-write races across 4 uvicorn workers.
 
         Returns the dollar cost added this call (always calculated for analytics).
-        Raises BudgetExhausted if spending exceeds the active budget mode limit.
+        Raises BudgetExhausted if spending exceeds the active budget mode limit,
+        and UnpricedModel if the model has no entry in the pricing table.
         """
         pricing = MODEL_PRICING_PER_1M_TOKENS.get(model)
         if pricing is None:
-            logger.warning(
-                "Unknown model %r in ingest_cost_event for agent %s — treating cost as 0",
-                model,
-                agent_id,
-            )
-            cost = Decimal("0")
-        else:
-            cost = Decimal(str((tokens_in * pricing["input"] + tokens_out * pricing["output"]) / 1_000_000))
+            # #15860: this used to log and charge zero. A cost of 0 and a cost
+            # that could not be computed are the same number, and only one of
+            # them is a fact -- so an unpriced model made dollar budgets
+            # silently inapplicable rather than visibly broken.
+            #
+            # Refusing is safe because the table distinguishes free from
+            # unknown: every local model carries an explicit zero entry.
+            raise UnpricedModel(model=model, agent_id=agent_id)
+        cost = Decimal(str((tokens_in * pricing["input"] + tokens_out * pricing["output"]) / 1_000_000))
 
         total_tokens = tokens_in + tokens_out
 
