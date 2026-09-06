@@ -31,6 +31,7 @@ Pipeline: pre-flight → research → confirm → file → implement → evidenc
 
 ## Rules
 
+- **Anonymize every filed artifact.** The source name lives in the chat reply only — umbrella and child issues, PR bodies, branch names and any committed doc describe the technique generically ("the reference work"). Published standards may be named and cited
 - Never skip step 3 — filing issues and writing code require explicit user approval
 - Subagent completion claims count only after artifact verification (`git log`, `gh pr view`) — no commits/PR means not done
 - Checkpoint Phase 1/2 output and the evidence table to a file incrementally (scratchpad or umbrella issue comment) so an interruption never loses the audit

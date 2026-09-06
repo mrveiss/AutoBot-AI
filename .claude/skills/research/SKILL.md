@@ -88,6 +88,16 @@ Phase 1 (Source Analysis) and Phase 2 (AutoBot Comparison) keep their existing
 section structures below; the contract above governs the topic-search entry
 point specifically.
 
+## Anonymization Invariant (non-negotiable)
+
+The source's name stays in the chat reply and nowhere else. Anything committed or filed — repo
+docs, filenames, GitHub issues, PRs, branch names, commit messages, code comments — refers to it
+only as "the reference work" or by a generic technique description ("a residency-tiered runtime").
+Naming an external project, product, author or repo URL in a repo artifact is a defect, not a
+style choice: the repo does not advertise other products.
+
+Published standards and specifications are the exception — those may be named and cited normally.
+
 ## Visible vs Hidden Metrics
 
 Every source advertises its **visible metrics** — benchmarks, stars, features, speed/cost claims. The decisive factors are often **hidden metrics** — costs nobody advertises: maintenance burden, added complexity, coupling/lock-in, operational load, learning curve, failure modes. Like a job offer: the bigger salary (visible) can rationally lose to the job with less stress and more family time (hidden). Both phases below weigh the two explicitly — hidden metrics may outweigh and veto visible wins.
