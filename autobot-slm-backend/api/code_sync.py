@@ -4616,7 +4616,18 @@ _UPDATE_ALL_RESUME_KEY = "slm_update_all_resume"
 # ansible role installs that name, not requirements.txt), so the deps_changed
 # signal must watch it too or an ai-stack dep bump is reported as code-only.
 _DEPS_FILES = ["requirements.txt", "requirements-ai.txt", "package-lock.json"]
-_RESUME_PLAN_VERSION = 1
+_RESUME_PLAN_VERSION = 2
+
+#: Plans written by an older SLM are still honoured (#15881). Rejecting a v1
+#: plan would discard the in-flight resume belonging to the very update that
+#: deploys this change -- the update would restart, find its own plan
+#: unreadable, and wedge. A v1 plan simply carries no `stage_logs`.
+_SUPPORTED_RESUME_PLAN_VERSIONS = frozenset({1, 2})
+
+#: Per-stage log lines carried across the restart. `_stage_log` already caps a
+#: stage at 200 in memory; this is the slice that survives, kept smaller because
+#: it lives in a Settings row rather than a process.
+_RESUME_PLAN_LOG_LINES = 60
 _RESUME_PLAN_TTL_SECONDS = 7200  # 2 hours (C2-b)
 
 # In-memory slot for the active orchestration job (at most one at a time).
@@ -4820,6 +4831,14 @@ async def _persist_resume_plan(
         "remaining_node_ids": remaining_node_ids,
         "target_commit": target_commit,  # C1
         "created_at": job.created_at,
+        # #15881: `_stage_log` writes to `stage.log_lines`, which lives in the
+        # process the self-update is about to restart. Without this the operator
+        # watching the GUI sees the log stop at "Firing Ansible self-update
+        # (fire-and-forget)" and never learn the outcome -- the resumed job
+        # backfills "completed before restart" placeholders over the real lines.
+        "stage_logs": {
+            stage.name: list(stage.log_lines or [])[-_RESUME_PLAN_LOG_LINES:] for stage in job.stages
+        },
     }
     async with db_service.session() as db:
         result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))
@@ -5791,7 +5810,7 @@ async def _read_and_validate_resume_plan() -> Optional[Dict[str, Any]]:
         return None
 
     # M2: version check
-    if plan.get("version") != _RESUME_PLAN_VERSION:
+    if plan.get("version") not in _SUPPORTED_RESUME_PLAN_VERSIONS:
         logger.warning(
             "update-all resume: unknown plan version %s (expected %d) — discarding",
             plan.get("version"),
@@ -5915,14 +5934,28 @@ async def resume_update_all_orchestration() -> None:
         len(remaining),
     )
 
+    # #15881: restore the pre-restart log lines rather than papering over them.
+    # A stage rebuilt with only "completed before restart" tells the operator
+    # the stage ended and nothing about what it did -- which is indistinguishable
+    # from the update having hung, and is what "the GUI log just stops" is.
+    # A v1 plan carries no logs; those stages keep the placeholder.
+    stage_logs: Dict[str, List[str]] = plan.get("stage_logs") or {}
+
+    def _restored(name: str, status: str, message: str) -> UpdateAllStage:
+        lines = list(stage_logs.get(name) or [])
+        stage = UpdateAllStage(name=name, status=status, message=message)
+        if lines:
+            stage.log_lines = [*lines, f"-- SLM restarted here; {len(lines)} line(s) carried over --"]
+        return stage
+
     job = UpdateAllJob(
         job_id=job_id,
         status="running",
         created_at=plan_created_at_val,
         stages=[
-            UpdateAllStage(name="github_fetch", status=_StageStatus.SUCCESS, message="completed before restart"),
-            UpdateAllStage(name="code_source_pull", status=_StageStatus.SUCCESS, message="completed before restart"),
-            UpdateAllStage(name="slm_self_update", status=_StageStatus.RUNNING, message="SLM restarting ..."),
+            _restored("github_fetch", _StageStatus.SUCCESS, "completed before restart"),
+            _restored("code_source_pull", _StageStatus.SUCCESS, "completed before restart"),
+            _restored("slm_self_update", _StageStatus.RUNNING, "SLM restarting ..."),
             _make_stage("fleet_nodes"),
         ],
     )
