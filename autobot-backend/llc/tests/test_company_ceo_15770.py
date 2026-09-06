@@ -505,7 +505,10 @@ async def test_pointing_the_ceo_at_someone_who_defaults_back_is_refused(session_
 
     service = ReportingLineService()
     async with session_factory() as session:
-        with pytest.raises(ValueError):
+        # Matched on message: `set_line` raises a bare ValueError from the
+        # placeable check, the tenancy check and the cycle check alike, so an
+        # unmatched assertion cannot show which guard refused the edge.
+        with pytest.raises(ValueError, match="would create a cycle"):
             await service.set_line(
                 session,
                 company_id=company_id,
