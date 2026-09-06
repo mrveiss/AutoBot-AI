@@ -223,19 +223,19 @@ async def get_direct_reports(
 async def update_agent_org(
     agent_id: str,
     body: UpdateOrgRequest,
-    # Declared before the session so the authority check is resolved first.
+    # Declared before the session so the authority check is resolved first — and
+    # the gate no longer opens one of its own on the way to a refusal either.
+    # #15805 split the permission decision out of tenant resolution, so
+    # `require_reporting_line_write` reaches `get_db_session` only for a caller
+    # it has already admitted.
     #
-    # It does NOT mean no session is opened before the check: the gate resolves
-    # `get_tenant_context`, which itself depends on `get_db_session`, so an
-    # unauthorised caller still consumes a session on the way to its 403. An
-    # earlier version of this comment claimed otherwise — flagged in review on
-    # #15804 — and the claim was wrong in the direction that matters, since it
-    # described a property nobody had checked.
-    #
-    # Closing that properly means splitting the permission check from tenant
-    # resolution, which is the auth owner's surface (#15793) rather than this
-    # route's. Ordering here is still worth keeping: it is the half this file
-    # controls, and it costs nothing.
+    # An earlier version of this comment asserted that property before anything
+    # established it — flagged in review on #15804 — and it was wrong in the
+    # direction that matters. What makes it true now is
+    # `_tenant_context_for_reporting_line_write`, whose parameter order gates the
+    # context, and the session-counting tests in
+    # `api/user_management/dependencies_test.py` that measure the effect rather
+    # than the wiring.
     context: TenantContext = Depends(require_reporting_line_write),
     session: AsyncSession = Depends(get_db_session),
 ) -> AgentSummary:
@@ -287,19 +287,19 @@ async def update_agent_org(
 async def upsert_agent_org(
     agent_id: str,
     body: UpsertOrgRequest,
-    # Declared before the session so the authority check is resolved first.
+    # Declared before the session so the authority check is resolved first — and
+    # the gate no longer opens one of its own on the way to a refusal either.
+    # #15805 split the permission decision out of tenant resolution, so
+    # `require_reporting_line_write` reaches `get_db_session` only for a caller
+    # it has already admitted.
     #
-    # It does NOT mean no session is opened before the check: the gate resolves
-    # `get_tenant_context`, which itself depends on `get_db_session`, so an
-    # unauthorised caller still consumes a session on the way to its 403. An
-    # earlier version of this comment claimed otherwise — flagged in review on
-    # #15804 — and the claim was wrong in the direction that matters, since it
-    # described a property nobody had checked.
-    #
-    # Closing that properly means splitting the permission check from tenant
-    # resolution, which is the auth owner's surface (#15793) rather than this
-    # route's. Ordering here is still worth keeping: it is the half this file
-    # controls, and it costs nothing.
+    # An earlier version of this comment asserted that property before anything
+    # established it — flagged in review on #15804 — and it was wrong in the
+    # direction that matters. What makes it true now is
+    # `_tenant_context_for_reporting_line_write`, whose parameter order gates the
+    # context, and the session-counting tests in
+    # `api/user_management/dependencies_test.py` that measure the effect rather
+    # than the wiring.
     context: TenantContext = Depends(require_reporting_line_write),
     session: AsyncSession = Depends(get_db_session),
 ) -> AgentSummary:

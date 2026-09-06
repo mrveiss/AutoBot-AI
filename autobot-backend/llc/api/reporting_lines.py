@@ -34,9 +34,15 @@ was declared rather than called, the swap was one line at each decorator and
 ``test_the_write_gate_is_a_declared_dependency`` held across it.
 
 The permission is deliberately unable to see hierarchy data: its dependency
-takes only the tenant context and the current user — no subject id, no session
-— so a later edit cannot make it consult the very graph it guards without first
-changing a signature that fails loudly.
+takes only the tenant context and the current user — no subject id — so a later
+edit cannot make it consult the very graph it guards without first changing a
+signature that fails loudly.
+
+"No session" was claimed here too and was overstated (#15805): the dependency
+declares no session parameter, but ``context`` used to reach one transitively
+through ``get_tenant_context``. The permission is now decided from the JWT alone
+before that context resolves, so the refusal costs no session — but the property
+that closes the escalation is the absent subject id, not the absent session.
 """
 
 from __future__ import annotations

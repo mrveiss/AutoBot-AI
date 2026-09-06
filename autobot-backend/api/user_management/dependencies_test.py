@@ -14,9 +14,15 @@ manager, gain authority over them, restructure further (#15765's design note).
 import uuid
 
 import pytest
-from fastapi import HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.testclient import TestClient
 
-from api.user_management.dependencies import require_reporting_line_write
+from api.user_management.dependencies import (
+    get_current_user,
+    get_db_session,
+    require_platform_admin,
+    require_reporting_line_write,
+)
 from user_management.services import TenantContext
 
 
@@ -57,9 +63,14 @@ async def test_a_manager_with_no_explicit_grant_is_rejected():
     ``admin.reporting_line.write``. The permission must deny exactly as it would
     for anyone else with no grant, proving this is a positive rejection, not an
     accidental one: the dependency's own signature (``context``, ``current_user``)
-    carries no subject id and no DB session, so there is no reporting-line table
-    it could consult even if it wanted to -- the hierarchy is structurally
-    unreachable from here, not merely unconsulted by convention.
+    carries no subject id, so there is no reporting-line row it could key a lookup
+    on even if it wanted to -- the hierarchy is structurally unreachable from
+    here, not merely unconsulted by convention.
+
+    This docstring used to add "and no DB session" to that list, which #15805
+    corrected: ``context`` reached one transitively. Only the wording changed --
+    the assertions below are byte-identical to #15765's, because the escalation
+    guarantee they encode is exactly what must survive that correction.
     """
     manager_current_user = {
         "role": "user",
@@ -73,13 +84,24 @@ async def test_a_manager_with_no_explicit_grant_is_rejected():
     assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
 
 
-def test_the_dependency_has_no_pathway_to_reporting_line_data():
+def test_the_dependency_accepts_no_subject_id():
     """Structural proof backing the escalation test above.
 
-    No subject/target user id and no DB session are accepted, so there is
-    nothing in scope from which a reporting-line lookup could be performed --
-    the escalation this guards against is closed by construction, not by an
-    implementation choice that a later edit could quietly undo.
+    What a signature can prove is that **no subject/target user id** is in
+    scope: there is no id a reporting-line lookup could be keyed on, so the
+    escalation is closed by construction rather than by an implementation choice
+    a later edit could quietly undo.
+
+    What it cannot prove is that no DB session is reachable, and this test used
+    to claim it did (#15805). ``context`` reaches one transitively --
+    ``require_reporting_line_write`` -> ``_tenant_context_for_reporting_line_write``
+    -> ``get_tenant_context`` -> ``get_db_session`` -- so a parameter absent from
+    a signature is not absent from the dependency graph one hop down. Whether a
+    session is *acquired* before the refusal is a behavioural property, measured
+    by counting acquisitions in
+    ``test_an_unauthorised_reporting_line_caller_acquires_no_session`` below. It
+    cannot be read off this signature at all, which is why asserting the shape
+    here and the effect there are two different jobs.
     """
     import inspect
 
@@ -87,5 +109,102 @@ def test_the_dependency_has_no_pathway_to_reporting_line_data():
 
     assert params == {"context", "current_user"}, (
         f"require_reporting_line_write gained a parameter ({params}) that could carry a "
-        "subject id or a session -- re-check it cannot be used to derive the grant from hierarchy"
+        "subject id -- re-check it cannot be used to derive the grant from hierarchy"
     )
+
+
+# ---------------------------------------------------------------------------
+# #15805 -- the refusal must not cost a database session.
+#
+# Every assertion below is on an EFFECT: how many times the session dependency
+# was entered for one request, and what the caller actually received. Inspecting
+# the ``Dependant`` tree would prove the wiring and nothing about the behaviour,
+# and asserting a bare 403 would prove almost nothing either -- ``403`` is what
+# a missing org membership, a missing role and a missing grant all return, so
+# each refusal is pinned to its own detail string.
+# ---------------------------------------------------------------------------
+
+_UNUSABLE_SESSION = object()
+"""Stands in for the session. Nothing on these paths may touch it: the requests
+below carry no ``X-Organization-Id`` header and no ``company_id`` param, so
+``get_tenant_context`` never runs its membership query."""
+
+
+def _app_gated_by(gate, current_user: dict):
+    """Mount *gate* on one route and count session acquisitions for a request.
+
+    Returns ``(client, acquisitions)``. ``acquisitions`` grows by one every time
+    ``get_db_session`` is entered, which is precisely the cost #15805 is about.
+    """
+    acquisitions: list[str] = []
+
+    async def _counted_session():  # noqa: ANN202
+        acquisitions.append("acquired")
+        yield _UNUSABLE_SESSION
+
+    app = FastAPI()
+    app.dependency_overrides[get_db_session] = _counted_session
+    app.dependency_overrides[get_current_user] = lambda: current_user
+
+    @app.get("/gated")
+    async def _gated(context: TenantContext = Depends(gate)):  # noqa: ANN202
+        return {"user_id": str(context.user_id), "is_platform_admin": context.is_platform_admin}
+
+    return TestClient(app, raise_server_exceptions=False), acquisitions
+
+
+def test_an_unauthorised_reporting_line_caller_acquires_no_session():
+    """The defect #15805 records: a 403 that costs a connection from the pool."""
+    user_id = uuid.uuid4()
+    client, acquisitions = _app_gated_by(require_reporting_line_write, {"role": "user", "user_id": str(user_id)})
+
+    response = client.get("/gated")
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+    assert response.json()["detail"] == "admin.reporting_line.write permission required", response.text
+    assert acquisitions == [], f"the refusal acquired {len(acquisitions)} session(s); it must acquire none"
+
+
+def test_an_authorised_reporting_line_caller_still_gets_its_session_and_context():
+    """The other half of the pair: refusing early must not starve the happy path.
+
+    Without this, deleting tenant resolution outright would satisfy the test
+    above -- 'no session acquired' is trivially true for a dependency that
+    resolves nothing. The echoed ``user_id`` is what shows a real
+    ``TenantContext`` reached the route, not merely that a 200 was produced.
+    """
+    user_id = uuid.uuid4()
+    client, acquisitions = _app_gated_by(require_reporting_line_write, {"role": "admin", "user_id": str(user_id)})
+
+    response = client.get("/gated")
+
+    assert response.status_code == status.HTTP_200_OK, response.text
+    assert response.json()["user_id"] == str(user_id), response.text
+    assert acquisitions == ["acquired"], f"expected exactly one session acquisition, got {len(acquisitions)}"
+
+
+def test_an_unauthorised_platform_admin_caller_acquires_no_session():
+    """``require_platform_admin`` shares the shape (#15805 acceptance criterion 5).
+
+    ``TenantContext.is_platform_admin`` is derived from the JWT alone, so this
+    gate is decidable from claims for exactly the same reason.
+    """
+    user_id = uuid.uuid4()
+    client, acquisitions = _app_gated_by(require_platform_admin, {"role": "user", "user_id": str(user_id)})
+
+    response = client.get("/gated")
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+    assert response.json()["detail"] == "Platform admin privileges required", response.text
+    assert acquisitions == [], f"the refusal acquired {len(acquisitions)} session(s); it must acquire none"
+
+
+def test_an_authorised_platform_admin_still_gets_its_session_and_context():
+    user_id = uuid.uuid4()
+    client, acquisitions = _app_gated_by(require_platform_admin, {"role": "admin", "user_id": str(user_id)})
+
+    response = client.get("/gated")
+
+    assert response.status_code == status.HTTP_200_OK, response.text
+    assert response.json() == {"user_id": str(user_id), "is_platform_admin": True}, response.text
+    assert acquisitions == ["acquired"], f"expected exactly one session acquisition, got {len(acquisitions)}"
