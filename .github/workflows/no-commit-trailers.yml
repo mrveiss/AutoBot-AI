@@ -113,9 +113,18 @@ jobs:
               continue
             fi
             body="$(git log -1 --format='%B' "${sha}")"
+            # #15850 review: anchoring to `^` stops a MID-LINE mention being read
+            # as a trailer, but not one that BEGINS a line — and a commit body
+            # explaining this policy naturally starts a line with the string it
+            # quotes. Git's definition is positional: a trailer lives in the
+            # message's FINAL block. `interpret-trailers --parse` returns exactly
+            # that block, so prose above it is structurally out of scope rather
+            # than excluded by a pattern that has to guess. Falls back to the
+            # whole body if the helper is unavailable, which fails closed.
+            trailers="$(printf '%s\n' "${body}" | git interpret-trailers --parse 2>/dev/null || printf '%s\n' "${body}")"
             subject="$(git log -1 --format='%s' "${sha}")"
 
-            if printf '%s\n' "${body}" | grep -iqE "${agent_re}"; then
+            if printf '%s\n' "${trailers}" | grep -iqE "${agent_re}"; then
               bad+=("${sha} ${subject}")
               continue
             fi

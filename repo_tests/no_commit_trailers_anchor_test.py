@@ -127,3 +127,58 @@ def test_every_arm_is_anchored() -> None:
         f"these arms begin with `.*`, re-defeating the anchor: {offenders} -- "
         "a trailer is `Key: value`, so require the key before the token"
     )
+
+
+#: Prose that BEGINS a line with a banned string, above a real trailer block.
+#: `^`-anchoring alone rejects these; only scanning the parsed trailer block
+#: distinguishes them (#15850 review).
+LINE_START_PROSE = [
+    "Generated with [Claude Code] is the promo trailer this rule bans.",
+    "Claude-Session: lines leak a session URL, which is why they are refused.",
+    "Co-authored-by: noreply@paperclip is the address the rule matches.",
+]
+
+
+@pytest.mark.parametrize("line", LINE_START_PROSE)
+def test_prose_beginning_a_line_is_not_a_trailer(line: str) -> None:
+    """A commit documenting this policy starts a line with what it quotes.
+
+    The workflow parses the message's final block with `git interpret-trailers`
+    before matching, so prose above that block is out of scope positionally
+    rather than by a pattern that has to guess. Asserted through the real
+    parser, not a reimplementation of it.
+    """
+    body = f"fix: something\n\n{line}\n\nSigned-off-by: A <a@b.c>\n"
+    parsed = subprocess.run(  # nosec B603 B607 - fixed argv; input is a module constant
+        ["git", "interpret-trailers", "--parse"],
+        input=body,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    assert not _matches(_agent_re(), parsed), (
+        f"prose beginning a line was read as a trailer: {line!r} -- "
+        "the final-block parse is not being applied (#15850)"
+    )
+
+
+def test_the_workflow_scans_the_parsed_trailer_block() -> None:
+    """Pins the rule itself, because the prose cases cannot.
+
+    `LINE_START_PROSE` parses a body with `git interpret-trailers` and asserts
+    the pattern does not match it -- which stays true no matter what the
+    workflow feeds its grep. Reverting the workflow to scan `${body}` leaves
+    every one of those tests green while restoring the exact defect they were
+    written for. Mutation-verified: that revert passed 15/15 before this
+    assertion existed.
+
+    So the application is pinned here, at the one line where it is expressed.
+    """
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert re.search(r'\$\{trailers\}"\s*\|\s*grep\s+-iqE\s+"\$\{agent_re\}"', text), (
+        "the agent_re grep does not read ${trailers} -- it is scanning the whole "
+        "commit body, so prose beginning a line is matched as a trailer (#15850)"
+    )
+    assert re.search(
+        r"trailers=.*interpret-trailers\s+--parse", text
+    ), "${trailers} is not populated from `git interpret-trailers --parse`"
