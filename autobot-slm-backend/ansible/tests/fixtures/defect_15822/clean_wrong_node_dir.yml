@@ -1,0 +1,67 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - FROZEN DEFECT FIXTURE. Do not "fix" this file (#15824).
+#
+# This is roles/_shared/tasks/clean_wrong_node_dir.yml exactly as it stood at
+# commit 744df346aa -- the form that broke every provisioning run for eleven
+# days (#15822) while ansible-role-facts-test stayed green.
+#
+# It is here so the guard can be shown to fail on the defect it exists for.
+# tests/playbooks/test_guard_sees_defect_15822.yml runs this copy and MUST
+# abort with:
+#
+#     object of type 'bool' has no len()
+#
+# because `set_fact` coerces the rendered 'true' back into a Python bool
+# (plugins/action/set_fact.py: `if not C.DEFAULT_JINJA2_NATIVE and
+# isinstance(v, string_types) and v.lower() in ('true', 'false', 'yes', 'no')`)
+# and `| length` then raises on it. The guard used to run an ansible-core new
+# enough not to do that, which is why the abort never reached CI -- see
+# constraints/ansible-core.txt.
+#
+# Correcting this file would delete the only evidence that the guard can see
+# the defect class at all: the test asserts on THAT error text, so a "fixed"
+# fixture fails the suite rather than quietly passing it. The live task file is
+# roles/_shared/tasks/clean_wrong_node_dir.yml; fix bugs there.
+#
+# The delete branch's `include_tasks: ../../_shared/tasks/...` does not resolve
+# from this directory. It is unreachable by construction: the harness gates on a
+# decidably TRUE fact, so the abort happens two tasks earlier. If it were ever
+# reached, the missing include is itself a failure and the error-text assertion
+# rejects it as the wrong failure.
+---
+# Shared cleanup task: remove a directory iff a role-active fact is EXPLICITLY false.
+#
+# Contract:
+#   caller_role     (str)  Display label for task name, e.g. "Backend".
+#   dir_name        (str)  Path tail under /opt/autobot/, e.g. "autobot-slm-frontend".
+#   role_check_fact (str)  Name of the role_*_active fact from
+#                          inventory/group_vars/all.yml (#7050).
+
+- name: "{{ caller_role }} | Clean: normalise {{ role_check_fact }} to a decidable token (#14856)"
+  ansible.builtin.set_fact:
+    # `default=''` (not `false`): an undefined fact becomes an unrecognised
+    # token, and unrecognised is handled as "unknown" below — never as "false".
+    _wrong_node_fact: "{{ lookup('vars', role_check_fact, default='') | string | trim | lower }}"
+    _wrong_node_false_tokens: ['false', 'no', 'off', '0', 'n', 'f']
+    _wrong_node_true_tokens: ['true', 'yes', 'on', '1', 'y', 't']
+  tags: ['clean']
+
+- name: "{{ caller_role }} | Clean: {{ role_check_fact }} is not decidable — leaving {{ dir_name }} alone (#14856)"
+  ansible.builtin.debug:
+    msg: >-
+      {{ role_check_fact }} is {{ 'undefined' if _wrong_node_fact | length == 0 else _wrong_node_fact | to_json }}
+      on this host, which does not say whether {{ dir_name }} belongs here.
+      Leaving it in place. An undefined fact usually means the play was run
+      without the role-active facts — an inventory directory with group_vars, or
+      an explicit vars_files load (#14289).
+  when: _wrong_node_fact not in (_wrong_node_false_tokens + _wrong_node_true_tokens)
+  tags: ['clean']
+
+- name: "{{ caller_role }} | Clean: wrong-node {{ dir_name }} dir"
+  ansible.builtin.include_tasks: ../../_shared/tasks/remove_component_dir.yml
+  when: _wrong_node_fact in _wrong_node_false_tokens
+  vars:
+    remove_dir_path: "/opt/autobot/{{ dir_name }}"
+    remove_reason: "wrong node — {{ role_check_fact }} is false on this host"
+  tags: ['clean']
