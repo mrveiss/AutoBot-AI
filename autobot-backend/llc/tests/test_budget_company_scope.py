@@ -23,6 +23,7 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 from typing import AsyncIterator
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
@@ -32,8 +33,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from llc.models.budget import LLCAgentBudget
 from llc.models.enums import BudgetMode
+from llc.scheduler.budget_watchdog import BudgetWatchdog
 from llc.services.budget import BudgetService
 from llc.tests import _e2e_harness as harness
+from models.agent_org import AgentOrgNode
 
 SLUG = "shared-slug"
 
@@ -146,6 +149,88 @@ class TestNoLookupCrossesTheBoundary:
         session.add(_budget(SLUG, a))
         await session.commit()
 
-        _row, created = await BudgetService().provision_budget(session, SLUG, b)
+        row, created = await BudgetService().provision_budget(session, SLUG, b)
 
         assert created is True, "a slug held by another company blocked provisioning"
+        # `created` alone discriminates against the old global constraint but not
+        # against landing the row under the wrong company, which is the property
+        # this test is named for.
+        assert str(row.company_id) == b, "the provisioned row landed under the wrong company"
+
+
+class TestHardStopPausesTheRightNode:
+    """`_pause_agent` writes to `agent_org_nodes`, which #15812 does NOT scope.
+
+    That table keeps `agent_id` globally unique (`models/agent_org.py:29`) while
+    this change makes the budget slug unique only *per company*. So two
+    companies can hold budget slug ``s`` while exactly one org node answers to
+    it, and an unscoped pause would stop whichever company's agent happens to
+    own that node. The company predicate is the guard against that.
+
+    Its cost is the NULL case: `20260523_037` added `company_id` nullable on
+    purpose and nothing backfills it (#15858), so a strict `= :uuid` would match
+    no row, pause nothing, and let a blown budget keep spending — silently, since
+    a zero-row UPDATE raises nothing. These two tests pin both halves; a fix that
+    satisfies one and not the other is the failure mode being guarded.
+    """
+
+    @staticmethod
+    def _node(agent_id: str, company_id: str | None):
+        return AgentOrgNode(
+            id=uuid.uuid4(),
+            agent_id=agent_id,
+            name=agent_id,
+            org_role="worker",
+            status="active",
+            company_id=uuid.UUID(company_id) if company_id else None,
+        )
+
+    async def _pause(self, engine, agent_id: str, company_id: str) -> None:
+        factory = async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+            engine, expire_on_commit=False, class_=AsyncSession
+        )
+        with patch("llc.scheduler.budget_watchdog.get_async_session_factory", return_value=factory):
+            await BudgetWatchdog()._pause_agent(agent_id, company_id)
+
+    @staticmethod
+    async def _status(engine, agent_id: str) -> str:
+        factory = async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+            engine, expire_on_commit=False, class_=AsyncSession
+        )
+        async with factory() as s:
+            return (
+                await s.execute(select(AgentOrgNode.status).where(AgentOrgNode.agent_id == agent_id))
+            ).scalar_one()
+
+    @pytest.mark.asyncio
+    async def test_an_unscoped_node_is_still_paused(self, engine, session: AsyncSession) -> None:
+        """The regression #15858's absent backfill would otherwise cause."""
+        a = str(uuid.uuid4())
+        session.add(self._node("legacy-agent", None))
+        await session.commit()
+        # Closed before the pause: the engine is an in-memory SQLite on a
+        # StaticPool, so every session shares one connection and overlapping
+        # transactions on it would fail for reasons unrelated to the property
+        # under test.
+        await session.close()
+
+        await self._pause(engine, "legacy-agent", a)
+
+        assert await self._status(engine, "legacy-agent") == "inactive", (
+            "an org node with no company_id was not paused; the budget hard stop "
+            "is disabled for every agent the #15858 backfill has not reached"
+        )
+
+    @pytest.mark.asyncio
+    async def test_another_companys_node_is_left_running(self, engine, session: AsyncSession) -> None:
+        """The property the company predicate exists for."""
+        a, b = str(uuid.uuid4()), str(uuid.uuid4())
+        session.add(self._node("their-agent", b))
+        await session.commit()
+        await session.close()
+
+        await self._pause(engine, "their-agent", a)
+
+        assert await self._status(engine, "their-agent") == "active", (
+            "company a's blown budget paused an agent belonging to company b"
+        )

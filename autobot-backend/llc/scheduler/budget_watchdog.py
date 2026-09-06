@@ -266,15 +266,33 @@ class BudgetWatchdog(PollLoopScheduler):
         factory = get_async_session_factory()
         try:
             async with factory() as session:
-                await session.execute(
+                result = await session.execute(
                     update(AgentOrgNode)
                     .where(
                         AgentOrgNode.agent_id == agent_id,
-                        AgentOrgNode.company_id == company_uuid,
+                        # NULL-company rows predate the #15858 backfill: 037 added
+                        # the column nullable on purpose ("operators must set it")
+                        # and nothing since backfills it. Excluding them would make
+                        # `NULL = :uuid` evaluate NULL, match no row, and silently
+                        # disable the budget hard stop for every agent an operator
+                        # has not yet scoped -- the agent would keep spending.
+                        # Over-pausing an unattributed row is the safer error, and
+                        # is what this code did before #15812. Drop the is_(None)
+                        # arm when #15858 makes the column NOT NULL.
+                        or_(AgentOrgNode.company_id == company_uuid, AgentOrgNode.company_id.is_(None)),
                         AgentOrgNode.status != "inactive",
                     )
                     .values(status="inactive")
                 )
                 await session.commit()
+                if result.rowcount == 0:
+                    # A zero-row UPDATE raises nothing, so without this the hard
+                    # stop failing and the hard stop succeeding look identical.
+                    logger.warning(
+                        "_pause_agent: no org node matched agent %s in company %s — "
+                        "the budget hard stop paused nothing",
+                        agent_id,
+                        company_id,
+                    )
         except Exception:
             logger.debug("_pause_agent for %s failed (swallowed)", agent_id)
