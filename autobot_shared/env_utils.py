@@ -111,11 +111,27 @@ def env_int_clamped(
         except ValueError:
             logger.warning("Invalid %s=%r; using %d", name, raw, default)
             value = default
+    return _clamped(name, value, min_v, max_v)
+
+
+def _clamped(name: str, value, min_v, max_v):
+    """Clamp *value*, and say so when clamping changed it.
+
+    A malformed value already warns; a well-formed but out-of-range one did not,
+    so a misconfigured ``0`` or ``-1`` was accepted in silence and the operator
+    who set it never learned that it had no effect (#15778 review). The clamp
+    itself is the right behaviour -- refusing to boot over a bad tuning knob is
+    worse -- but a silent correction is indistinguishable from a value that was
+    honoured.
+    """
+    clamped = value
     if min_v is not None:
-        value = max(min_v, value)
+        clamped = max(min_v, clamped)
     if max_v is not None:
-        value = min(max_v, value)
-    return value
+        clamped = min(max_v, clamped)
+    if clamped != value:
+        logger.warning("%s=%r is outside [%s, %s]; using %r", name, value, min_v, max_v, clamped)
+    return clamped
 
 
 def env_float_clamped(
@@ -140,11 +156,7 @@ def env_float_clamped(
         except ValueError:
             logger.warning("Invalid %s=%r; using %s", name, raw, default)
             value = default
-    if min_v is not None:
-        value = max(min_v, value)
-    if max_v is not None:
-        value = min(max_v, value)
-    return value
+    return _clamped(name, value, min_v, max_v)
 
 
 # Canonical truthy set for boolean env flags. Single source of truth so guards
