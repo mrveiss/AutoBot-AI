@@ -47,6 +47,7 @@ from ..models.membership import LLCCompanyMembership
 from ..models.reporting_line import LLCReportingLine
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .company_ceo import CompanyCEOService
 
 #: #15765 needs the subject's manager and that manager's manager. The bound is
 #: on the walk, not on the organisation: two hops from the subject, whichever
@@ -150,13 +151,18 @@ class ReportingLineService(LLCServiceBase):
         return [Holder(type=RoleHolderType.USER.value, id=row) for row in result.scalars()]
 
     async def _resolve_ceo(self, session: AsyncSession, company_id: uuid.UUID) -> Optional[Holder]:
-        """The company's CEO, or None while no company designates one.
+        """The company's CEO, or None when the company has none (#15770).
 
-        The seam for #15770. Returning None is the truthful answer today, not a
-        placeholder: nothing in the schema designates a CEO, so the middle step
-        of the default chain has no target and the walk reports ``NO_CEO``.
+        None is still a real answer and not a placeholder: a company whose CEO
+        agent was deleted resolves to None exactly like one that never had a
+        designation, and both make the walk report ``NO_CEO``. The chart draws
+        either way. Nothing is promoted to fill the gap -- see
+        :class:`~llc.services.company_ceo.CompanyCEOService`.
         """
-        return None
+        ceo = await CompanyCEOService().resolve(session, company_id)
+        if ceo is None:
+            return None
+        return Holder(type=ceo.type, id=ceo.id)
 
     async def chain_up(
         self,
@@ -260,9 +266,22 @@ class ReportingLineService(LLCServiceBase):
     ) -> bool:
         """True when pointing ``subject`` at ``manager`` closes a loop.
 
-        Walks up from the proposed manager along **explicit** edges only, which
-        is what a cycle can be made of — the defaults cannot form one, because
-        owners terminate.
+        Walks up from the proposed manager along explicit edges **and the default
+        edge**, because since #15770 a cycle can be made of either.
+
+        This used to walk explicit edges only, justified by "the defaults cannot
+        form one, because owners terminate" — true while no company designated a
+        CEO, when the default chain ran straight from anyone to the owners and
+        an owner has no manager. Designating a CEO inserts a middle step, and a
+        middle step is all a loop needs:
+
+            CEO --explicit--> Y
+            Y   --default---> CEO      (Y has no explicit line)
+
+        An explicit-only walk cannot see that: from Y it finds no explicit
+        manager and stops. So the walk now follows the default edge too — anyone
+        without an explicit line resolves to the CEO, and the CEO's own default
+        is the owners, who still terminate.
 
         Deliberately unbounded, unlike :meth:`chain_up`. The read walk stops at
         two hops because that is all authority needs; a cycle can be closed
@@ -271,14 +290,21 @@ class ReportingLineService(LLCServiceBase):
         an unbounded walk safe here — including against a cycle that already
         exists in the data.
         """
+        ceo = await self._resolve_ceo(session, company_id)
         seen = {(manager.type, manager.id)}
         current: Optional[Holder] = manager
         while current is not None:
             if (current.type, current.id) == (subject.type, subject.id):
                 return True
-            current = await self.explicit_manager(session, company_id, current)
-            if current is None:
-                return False
+            nxt = await self.explicit_manager(session, company_id, current)
+            if nxt is None:
+                # No explicit line: the default edge points at the CEO. The
+                # CEO's own default is the owners, who terminate — so the walk
+                # ends there rather than resolving the CEO to itself forever.
+                if ceo is None or (current.type, current.id) == (ceo.type, ceo.id):
+                    return False
+                nxt = ceo
+            current = nxt
             key = (current.type, current.id)
             if key in seen:
                 # Pre-existing loop, unrelated to this edge. Report it as a
