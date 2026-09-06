@@ -52,7 +52,10 @@ jobs:
           set -euo pipefail
           echo "Scanning commits ${BASE_SHA}..${HEAD_SHA}"
           # Agent/tooling trailers are never allowed, for any author (#13654).
-          agent_re='Generated with \[?Claude|noreply@paperclip'
+          # `Claude-Session:` carries a session URL into public history and is a
+          # trailer like any other. It is anchored because, unlike the promo line,
+          # the token is plausible in prose; the other two arms stay unanchored.
+          agent_re='Generated with \[?Claude|noreply@paperclip|^[[:space:]]*Claude-Session:'
           # A Co-authored-by trailer is allowed only when the identity it names is
           # the commit's OWN author, the repository owner, or a bot. That lets
           # dependabot's self-attribution on its security bumps through — which is
