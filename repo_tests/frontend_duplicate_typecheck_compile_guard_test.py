@@ -252,7 +252,9 @@ TSC_STATUS=0
 """
 
 # Verbatim shape of frontend-test.yml's `type-check` step before #14481
-# (frontend-test.yml:132): `npm run type-check`, resolving through
+# (find it by that step name -- the line moved to :156-162 while this said
+# :132, which is now an unrelated `env:` block): `npm run type-check`,
+# resolving through
 # package.json to this — unchanged by the fix, since `type-check` was never
 # the redundant half.
 _PRE_FIX_TYPE_CHECK_RESOLVED = "vue-tsc --noEmit -p tsconfig.app.json"

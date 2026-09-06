@@ -33,7 +33,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKEND = REPO_ROOT / "autobot-backend"
 REGISTRY_DIR = BACKEND / "initialization" / "router_registry"
 
-# app_factory.py:77 mounts every registry router as f"/api{prefix}".
+# app_factory.py mounts every registry router as f"/api{prefix}" -- both
+# `include_router` calls do. (Was cited as `:77`, which is a docstring quote.)
 API_MOUNT = "/api"
 
 TEMPLATES = (

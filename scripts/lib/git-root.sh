@@ -25,10 +25,13 @@
 #     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh"
 #     REPO_ROOT="$(git_repo_root)" || { echo "not a git repo" >&2; exit 2; }
 
-# Mirrors `autobot_shared.paths.AMBIENT_GIT_VARS` -- keep the two lists in
-# sync; a variable added to one side and not the other reopens the hole on
-# whichever language was missed.
-GIT_ROOT_AMBIENT_VARS=(GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE)
+# Mirrors `autobot_shared.paths.AMBIENT_GIT_VARS`. The two lists HAD diverged --
+# GIT_OBJECT_DIRECTORY and GIT_ALTERNATE_OBJECT_DIRECTORIES were added on the
+# Python side only, which is precisely the hole this comment warned about and
+# could not prevent (#15877). `repo_tests/ambient_git_vars_mirror_test.py` now
+# compares them, so the claim is checked rather than asserted.
+GIT_ROOT_AMBIENT_VARS=(GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE \
+                       GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES)
 
 # Print the repository root containing DIR (default: the caller's CWD), with
 # GIT_ROOT_AMBIENT_VARS unset for the git call. Prints nothing and returns 1
