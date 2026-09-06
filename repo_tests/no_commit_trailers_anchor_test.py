@@ -25,6 +25,7 @@ Both directions, or neither means anything.
 from __future__ import annotations
 
 import re
+
 # Fixed argv, no user input.
 import subprocess  # nosec B404
 from pathlib import Path
