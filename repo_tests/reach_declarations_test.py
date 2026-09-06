@@ -32,6 +32,9 @@ _REPO_TESTS = Path(__file__).resolve().parent
 #: and a number that may fall would let a removed declaration read as progress.
 MIN_DECLARATIONS = 2
 
+#: Guard modules that could not be imported, recorded rather than discarded.
+IMPORT_FAILURES: dict[str, str] = {}
+
 
 def _import_every_guard() -> None:
     """Import every guard module so its `declare(...)` runs.
@@ -45,8 +48,8 @@ def _import_every_guard() -> None:
             continue
         try:
             importlib.import_module(f"repo_tests.{module.name}")
-        except Exception:  # noqa: BLE001 - collection errors belong to that module's own run
-            continue
+        except Exception as exc:  # noqa: BLE001 - recorded, never discarded
+            IMPORT_FAILURES[module.name] = f"{type(exc).__name__}: {exc}"
 
 
 _import_every_guard()
@@ -115,3 +118,17 @@ def test_a_floor_that_cannot_fail_is_rejected_by_this_suite() -> None:
         never_finds_anything.examined(_REPO_TESTS)
 
     REGISTRY.pop("self-check::always-empty", None)
+
+
+def test_no_guard_failed_to_import() -> None:
+    """A guard that cannot import is absent from the registry and invisible here.
+
+    The previous version discarded these, and its own docstring claimed the
+    opposite — so a guard could break, vanish from the sweep, and leave the
+    registry floor satisfied by the guards that still worked (#15826 review).
+    That is this file's failure mode reproduced inside this file.
+    """
+    assert not IMPORT_FAILURES, (
+        "these guard modules could not be imported, so their declarations (if any) are missing "
+        f"from the registry: {IMPORT_FAILURES}"
+    )

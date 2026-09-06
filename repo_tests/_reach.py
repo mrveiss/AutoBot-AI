@@ -57,14 +57,35 @@ class Reach:
     what: str
 
     def examined(self, root: Path) -> Sequence[object]:
-        """Discover under *root*, or fail loudly having found implausibly little."""
+        """Discover under *root*, or fail loudly having found implausibly little.
+
+        This bounds the sweep's **input**. It is not sufficient on its own: a
+        guard that lists 1,000 candidates and then silently skips 997 of them
+        clears this and still speaks for a tree it never read. Pair it with
+        :meth:`completed`.
+        """
         found = self.discover(root)
-        if len(found) < self.floor:
+        self._require(len(found), "reached", self.what)
+        return found
+
+    def completed(self, processed: Sequence[object] | int) -> None:
+        """Apply the same floor to what the guard actually **finished**.
+
+        Candidates are not coverage (#15826 review). Both guards converted in
+        this slice skip items on failure — an unreadable file, a source that
+        will not parse — after the input floor has already cleared, so without
+        this the floor measured how much work was *available* rather than how
+        much was done. A skip is not a clean file.
+        """
+        count = processed if isinstance(processed, int) else len(processed)
+        self._require(count, "completed", self.what)
+
+    def _require(self, count: int, verb: str, what: str) -> None:
+        if count < self.floor:
             raise AssertionError(
-                f"[{self.name}] reached {len(found)} {self.what}; floor is {self.floor}. "
+                f"[{self.name}] {verb} {count} {what}; floor is {self.floor}. "
                 f"Fix the sweep, not the tree — a clean result below this floor asserts nothing."
             )
-        return found
 
 
 def declare(name: str, *, discover: Callable[[Path], Sequence[object]], floor: int, what: str) -> Reach:

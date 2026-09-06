@@ -272,11 +272,13 @@ def test_every_tracked_file_was_actually_parsed(measurement: Measurement) -> Non
 
 
 def test_enumeration_is_not_vacuous(measurement: Measurement) -> None:
-    """The floor binds to the sweep's REACH, never to a count of findings."""
-    assert measurement.files_scanned >= MIN_FILES_SCANNED, (
-        f"only {measurement.files_scanned} tracked, non-test .py files reached; "
-        "tracked_python_files has stopped walking the tree"
-    )
+    """The floor binds to the sweep's REACH, never to a count of findings.
+
+    Routed through ``REACH.completed`` so the declared floor and the one this
+    test enforces are the same number applied to the same population — files
+    PARSED, not files listed (#15826 review).
+    """
+    REACH.completed(measurement.files_scanned)
 
 
 def test_every_bare_cast_is_allowlisted(measurement: Measurement) -> None:

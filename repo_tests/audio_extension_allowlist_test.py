@@ -137,6 +137,7 @@ def test_no_fourth_literal_copy_exists():
     """
     canonical = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
     offenders = []
+    read = []
     for path in REACH.examined(REPO_ROOT):
         rel = path.relative_to(REPO_ROOT)
         if rel == _CANONICAL or rel.parts[0] == "repo_tests":
@@ -145,8 +146,14 @@ def test_no_fourth_literal_copy_exists():
             source = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
+        read.append(rel)
         if any(literal == canonical for literal in _literal_string_sets(source)):
             offenders.append(str(rel))
+
+    # Candidates are not coverage: the loop above skips anything it cannot read,
+    # so without this the floor measured how many files were LISTED rather than
+    # how many were actually inspected (#15826 review).
+    REACH.completed(read)
 
     assert not offenders, (
         "audio-extension allowlist written as a literal instead of imported from "
