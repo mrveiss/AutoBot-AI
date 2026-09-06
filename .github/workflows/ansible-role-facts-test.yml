@@ -22,6 +22,8 @@ on:
   pull_request:
     paths:
       - 'autobot-slm-backend/ansible/ansible.cfg'
+      # #15824: the ansible-core the guard runs is part of the guard.
+      - 'constraints/ansible-core.txt'
       - 'autobot-slm-backend/ansible/inventory/group_vars/**'
       - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
       - 'autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml'
@@ -43,6 +45,8 @@ on:
       - main
     paths:
       - 'autobot-slm-backend/ansible/ansible.cfg'
+      # #15824: the ansible-core the guard runs is part of the guard.
+      - 'constraints/ansible-core.txt'
       - 'autobot-slm-backend/ansible/inventory/group_vars/**'
       - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
       - 'autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml'
@@ -84,10 +88,29 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Ansible (system Python is fine for this test)
+      # #15824: this step used to `apt-get install -y ansible-core` and then let
+      # every step below run whatever `ansible-playbook` PATH resolved to. Those
+      # were not the same program: the runs carry no DEFAULT_GATHER_SUBSET
+      # deprecation although ansible.cfg sets `gather_subset = !hardware`, and
+      # only ansible-core >= 2.18 is silent about that option -- so the job ran
+      # >= 2.18 having just installed 2.16.3, and neither is what the fleet runs.
+      # The newer interpreter does not apply the `set_fact` bool coercion the
+      # fleet's does, which is why #15822 aborted every provisioning run for
+      # eleven days without ever reddening this check.
+      - name: "Install the fleet's ansible-core (#15824)"
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y ansible-core
+          python3 -m venv "${RUNNER_TEMP}/ansible-venv"
+          "${RUNNER_TEMP}/ansible-venv/bin/python" -m pip install --quiet --upgrade pip
+          "${RUNNER_TEMP}/ansible-venv/bin/pip" install --quiet -r constraints/ansible-core.txt
+          echo "${RUNNER_TEMP}/ansible-venv/bin" >> "${GITHUB_PATH}"
+
+      # A pin nobody re-checks is a different kind of stale, and prepending a
+      # venv to PATH is not proof that nothing shadows it. This asserts the
+      # version of the ansible-playbook that PATH actually resolves to.
+      - name: "Assert CI runs the fleet's ansible-core (#15824)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          python3 tests/check_ansible_core_pinned.py
 
       # #14678: tests/inventory/group_vars/all.yml is GENERATED, not tracked.
       # It was a third tracked copy of the role-active facts kept byte-equal by
@@ -148,11 +171,55 @@ jobs:
 
       - name: "Run clean.yml include_tasks loops test (#7058)"
         working-directory: autobot-slm-backend/ansible
+        env:
+          CLEAN_LOOP_RECEIPT_DIR: ${{ runner.temp }}/clean-loop-reach
         # #7058: each role's clean.yml is now a thin include_tasks loop over
         # roles/_shared/tasks/clean_*_dir.yml. Test in --check mode to catch
         # typos in loop_var/vars wiring before they reach a real host.
+        #
+        # #15824: against tests/inventory/test_role_facts.yml, not `-i 'localhost,'`
+        # with hand-written `role_*_active: true` literals. A fixture that rebuilds
+        # its own inputs tests the fixture; the gate has to read the same
+        # inventory/group_vars/all.yml definitions a host reads.
         run: |
-          ansible-playbook --check --connection=local -i 'localhost,' tests/playbooks/test_clean_yml_loops.yml
+          mkdir -p "${CLEAN_LOOP_RECEIPT_DIR}"
+          ansible-playbook --check --connection=local \
+            -i tests/inventory/test_role_facts.yml \
+            tests/playbooks/test_clean_yml_loops.yml
+
+      # An unmatched host pattern exits 0 with a warning, so does an empty task
+      # list. The floor is bound to reach -- scenarios, hosts, role files, gate
+      # executed -- never to findings, so "found nothing" cannot satisfy it.
+      - name: "Assert the clean.yml loop guard reached its scenarios (#15824)"
+        working-directory: autobot-slm-backend/ansible
+        env:
+          CLEAN_LOOP_RECEIPT_DIR: ${{ runner.temp }}/clean-loop-reach
+        run: |
+          python3 tests/check_clean_loop_reach.py "${CLEAN_LOOP_RECEIPT_DIR}"
+
+      # #15824 AC: with the pre-#15827 clean_wrong_node_dir.yml in place this
+      # workflow must FAIL. tests/fixtures/defect_15822/ freezes that file, so
+      # the property is asserted on every run instead of only while the defect
+      # is live. The exit status is inverted and the error text is matched: a
+      # pass here means the guard reproduced #15822's abort, not merely that
+      # something went wrong.
+      - name: "Deliberate failure: the guard must fail on #15822's defect (#15824)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          log="${RUNNER_TEMP}/guard-self-test.log"
+          if ansible-playbook --check --connection=local \
+               -i tests/inventory/test_role_facts.yml \
+               tests/playbooks/test_guard_sees_defect_15822.yml > "${log}" 2>&1; then
+            echo "::error::The frozen #15822 defect no longer fails this suite - the guard is blind to the class of defect it exists for."
+            cat "${log}"
+            exit 1
+          fi
+          if ! grep -q "object of type 'bool' has no len()" "${log}"; then
+            echo "::error::The #15822 fixture failed, but for the wrong reason - the guard is not detecting the defect it claims to."
+            cat "${log}"
+            exit 1
+          fi
+          echo "OK: the pre-#15827 wrong-node task still aborts this suite."
 
       # #13747 AC4: "verified by deliberate failure: the guard rejects a venv
       # left at the old version." Runs for real (not --check) against a
@@ -169,6 +236,9 @@ jobs:
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_role_active_facts_no_group_vars.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_clean_yml_loops.yml'))"
+          python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_guard_sees_defect_15822.yml'))"
+          python3 -c "import yaml; yaml.safe_load(open('tests/tasks/write_clean_loop_receipt.yml'))"
+          python3 -c "import yaml; yaml.safe_load(open('tests/fixtures/defect_15822/clean_wrong_node_dir.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_ensure_venv_version.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/inventory/test_role_facts.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/inventory/group_vars/all.yml'))"
