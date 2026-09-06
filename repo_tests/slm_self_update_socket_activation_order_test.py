@@ -53,11 +53,21 @@ _SOCKET = "slm_self_update_socket_service"
 _BACKEND = "slm_backend_service"
 
 
-#: The include directive itself, not a mention of the filename. A task NAME or
-#: any other scalar can contain "service_units.yml" after the include is
-#: removed, which would keep the reachability check green over a path that no
-#: longer runs.
-_INCLUDE_SERVICE_UNITS = re.compile(r"include_tasks:\s*service_units\.yml")
+#: The include DIRECTIVE, anchored to its own line.
+#:
+#: Matching the bare substring is not enough, and neither was matching
+#: ``include_tasks: service_units.yml`` unanchored: a task *name* can contain
+#: that complete text, so the real include could be deleted and a name left
+#: behind, and the reachability check would still pass over a path that no
+#: longer runs. The first version of this detector had negative fixtures
+#: carrying only the filename, which is why they did not catch that.
+#:
+#: Anchoring to a line that *starts* with the module key is what separates a
+#: directive from a scalar mentioning one.
+_INCLUDE_SERVICE_UNITS = re.compile(
+    r"^[ \t-]*(?:ansible\.builtin\.)?include_tasks:[ \t]*service_units\.yml[ \t]*$",
+    re.M,
+)
 
 
 def _includes_service_units(text: str) -> bool:
@@ -274,8 +284,18 @@ def test_each_entry_point_still_reaches_service_units() -> None:
 @pytest.mark.parametrize(
     ("fixture", "should_trip"),
     [
+        # Real directives, in the forms this repo writes them.
         ("  ansible.builtin.include_tasks: service_units.yml\n", True),
         ("  ansible.builtin.include_tasks:  service_units.yml\n", True),
+        ("  include_tasks: service_units.yml\n", True),
+        ("- ansible.builtin.include_tasks: service_units.yml\n", True),
+        # Scalars carrying the COMPLETE directive text — the case the first
+        # version of this detector missed, because its negatives contained only
+        # the filename. The include can be deleted and one of these left behind.
+        ('  - name: "runs ansible.builtin.include_tasks: service_units.yml"\n', False),
+        ('  msg: "ansible.builtin.include_tasks: service_units.yml"\n', False),
+        ("  # ansible.builtin.include_tasks: service_units.yml\n", False),
+        # Mentions of the filename alone.
         ('- name: "SLM | Refresh units, see service_units.yml for detail"\n', False),
         ("  # the bind moved out of service_units.yml\n", False),
         ("  ansible.builtin.include_tasks: other.yml\n", False),
