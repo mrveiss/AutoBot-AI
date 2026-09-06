@@ -36304,6 +36304,9 @@ export interface paths {
         /**
          * Delete File
          * @description Delete a file or directory within the sandbox.
+         *
+         *     A non-empty directory needs `recursive`, and one holding uncommitted work
+         *     needs `force` on top of it -- see #15777.
          */
         delete: operations["delete_file_api_sandbox_files_delete_delete"];
         options?: never;
@@ -151077,6 +151080,8 @@ export interface operations {
         parameters: {
             query: {
                 path: string;
+                recursive?: boolean;
+                force?: boolean;
             };
             header?: never;
             path?: never;

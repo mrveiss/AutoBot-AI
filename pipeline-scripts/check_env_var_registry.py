@@ -28,6 +28,12 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from autobot_shared.env_registry import REGISTRY  # noqa: E402
 
+# tools/lint/ is not a package; make the shared sweep helpers importable rather
+# than growing a third copy of `git ls-files` + a reach floor (#15807).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools" / "lint"))
+
+from _scan_helpers import enforce_reach, tracked_paths  # noqa: E402
+
 DOCS_PATH = REPO_ROOT / "docs" / "developer" / "CLAUDE_RULES.md"
 
 BEGIN_MARKER = "<!-- BEGIN_AUTOGEN_ENV_DOCS -->"
@@ -274,13 +280,42 @@ def _stale_baseline_entries() -> list[str]:
     ]
 
 
+#: Floor for a full-repo sweep, bound to files **scanned** rather than
+#: violations found (#15807). Without it the sweep reproduces the very defect it
+#: was added to fix, through a different door: a glob that silently matches
+#: nothing prints the same clean line as a clean tree. ~5,300 tracked ``.py``
+#: files today, so this sits well below ordinary churn.
+MIN_SCANNED_PY_FILES = 4000
+
+HOOK_ID = "env-vars-documented"
+
+
+def _discover_python_files(repo_root: Path) -> list[str]:
+    """Every tracked ``.py`` file, for the no-argument sweep.
+
+    pre-commit passes staged files; CI passes nothing. Before #15807 the second
+    case inspected **nothing at all** and still exited 0, so "the registry is
+    clean" and "no files were handed to the checker" were the same result.
+    """
+    return tracked_paths(repo_root, "*.py")
+
+
 def main(argv: list[str]) -> int:
     registry_violations: list[str] = _stale_baseline_entries()
     docs_violations: list[str] = []
 
+    repo_root = Path(__file__).resolve().parents[1]
+    full_repo = not argv
+    if full_repo:
+        argv = _discover_python_files(repo_root)
+        if enforce_reach(len(argv), MIN_SCANNED_PY_FILES, hook=HOOK_ID, full_repo=True):
+            return 1
+
     # 1. Check every passed Python file for unregistered AUTOBOT_* vars.
     for arg in argv:
         path = Path(arg)
+        if full_repo:
+            path = repo_root / path
         if path.suffix != ".py":
             continue
         if _is_registry_file(path):
