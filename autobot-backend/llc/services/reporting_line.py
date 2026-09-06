@@ -23,11 +23,14 @@ an unbounded walk over a graph that can contain a cycle does not terminate, and
 a cycle is reachable here because a reporting line is a plain row that nothing
 stops from pointing back into its own chain.
 
-**The CEO step is a seam, not an omission.** No company designates a CEO yet
-(#15770), so `_resolve_ceo` returns None and the chain ends after the explicit
-edges with :class:`ChainEnd.NO_CEO`. That is the state every company is in
-today, and it is reported rather than hidden: a chart that silently stops at the
-last explicit edge looks identical to a correctly-rooted one.
+**The CEO step resolves.** `_resolve_ceo` delegates to
+:class:`CompanyCEOService`, which returns a holder whenever a designation row
+exists and its holder is still a company member; #15770 built the designation
+and gives every new company a default agent CEO. A company with no resolvable
+designation still ends the chain with :class:`ChainEnd.NO_CEO`, and that is
+reported rather than hidden: a chart that silently stops at the last explicit
+edge looks identical to a correctly-rooted one. (This paragraph previously said
+no company designates a CEO -- true before #15770 landed, false after.)
 """
 
 from __future__ import annotations

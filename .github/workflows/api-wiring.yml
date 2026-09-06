@@ -153,8 +153,8 @@ jobs:
   # Mutually exclusive with `api-wiring` above, and deliberately sharing its
   # check-context name so a PR always sees exactly one terminal "api-wiring"
   # conclusion — the real audit when wiring-relevant paths changed, an explicit
-  # green here when they did not (#12934). Mirrors `unit-tests-skip` in
-  # frontend-test.yml (#10527).
+  # green here when they did not (#12934). Mirrors `unit-tests-skip`, which the
+  # #13405 split moved into frontend-required-context.yml (#10527).
   api-wiring-skip:
     name: api-wiring
     needs: changes
