@@ -495,3 +495,29 @@ class TestRejectionBeforeThePathExpression:
 
         with pytest.raises(ValueError, match="escapes base directory"):
             validate_relative_path("link/secret.txt", base)
+
+
+class TestWindowsDriveQualifiedSegments:
+    """`PurePosixPath("C:/x").is_absolute()` is False, so the absolute check
+    alone lets a drive qualifier through (#15786 review).
+
+    On POSIX `base / "C:/x"` only makes an oddly named directory inside the
+    base, so containment still holds — but this validator lives in
+    `autobot_shared` and its contract is "stays under base" with no platform
+    qualifier. On Windows the same join escapes outright.
+    """
+
+    @pytest.mark.parametrize("segment", ["C:/escape.txt", "C:escape.txt", "C:\\escape.txt", "z:/other.txt"])
+    def test_a_drive_qualified_segment_is_refused(self, tmp_path, segment: str) -> None:
+        with pytest.raises(ValueError, match="drive qualifier"):
+            validate_relative_path(segment, tmp_path)
+
+    def test_a_colon_in_a_filename_is_not_a_drive(self, tmp_path) -> None:
+        """The contrast: rejecting every colon would be a different rule.
+
+        A colon is legal in a POSIX filename, and `PureWindowsPath` only reports
+        a drive for a single-letter qualifier at the start.
+        """
+        resolved = validate_relative_path("notes:2026-09-06.txt", tmp_path)
+
+        assert resolved.name == "notes:2026-09-06.txt"

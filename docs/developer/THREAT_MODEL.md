@@ -14,8 +14,8 @@ trusted to be inside a root.
 
 **Canonical enforcement:** [`autobot_shared/security/path_validator.py`](../../autobot_shared/security/path_validator.py)
 — `validate_path` (:95) absolute paths · `validate_relative_path` (:156) a segment under a
-known base · `resolve_within_sandbox` (:252) the file-management sandbox ·
-`require_path_string` (:204) type gate before `Path()` / `os.makedirs`.
+known base · `resolve_within_sandbox` (:288) the file-management sandbox ·
+`require_path_string` (:240) type gate before `Path()` / `os.makedirs`.
 
 **Invariants**
 

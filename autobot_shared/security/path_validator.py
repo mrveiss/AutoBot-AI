@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 import unicodedata
 import urllib.parse
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Sequence
 
 from autobot_shared.paths import project_root
@@ -211,6 +211,15 @@ def validate_relative_path(
         raise ValueError("Path traversal detected: segment is absolute, so the base directory is discarded")
     if ".." in candidate.parts:
         raise ValueError("Path traversal detected: segment contains a parent reference")
+    # A drive qualifier is absolute to Windows and invisible to PurePosixPath:
+    # `PurePosixPath("C:/x").is_absolute()` is False, so the check above lets it
+    # through. On this platform `base / "C:/x"` merely creates an oddly named
+    # directory inside the base, but this validator lives in `autobot_shared` and
+    # its contract is "stays under base" without a platform qualifier -- on
+    # Windows the same join escapes outright. Drive-relative `C:x` is included:
+    # it is the same qualifier without a separator.
+    if PureWindowsPath(str(user_segment)).drive:
+        raise ValueError("Path traversal detected: segment carries a drive qualifier")
 
     base = Path(os.path.realpath(str(base_dir)))
     resolved = Path(os.path.realpath(str(base / user_segment)))
