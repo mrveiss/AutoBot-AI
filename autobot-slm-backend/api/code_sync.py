@@ -4819,6 +4819,7 @@ from api._resume_plan import (  # noqa: E402,F401 - re-exported; module-level im
     _UPDATE_ALL_RESUME_KEY,
     _clear_resume_plan,
     _persist_resume_plan,
+    plan_version_is_supported,
     restored_stage,
 )
 
@@ -5763,7 +5764,7 @@ async def _read_and_validate_resume_plan() -> Optional[Dict[str, Any]]:
         return None
 
     # M2: version check
-    if plan.get("version") not in _SUPPORTED_RESUME_PLAN_VERSIONS:
+    if not plan_version_is_supported(plan):
         logger.warning(
             "update-all resume: unknown plan version %s (expected %d) — discarding",
             plan.get("version"),

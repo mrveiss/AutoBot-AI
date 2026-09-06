@@ -115,19 +115,28 @@ async def test_the_persisted_slice_is_bounded(monkeypatch, resume_plan):
     assert stored[-1] == f"line {cap + 24}", "the cap kept the OLDEST lines; it must keep the newest"
 
 
-def test_an_older_plan_version_is_still_accepted(resume_plan):
+def test_a_v1_plan_written_by_the_deploying_update_is_still_readable(resume_plan):
     """The compatibility that keeps this fix from being an outage.
 
-    A straight bump rejects the plan written by the update that deploys this
-    change: the SLM restarts, cannot read its own plan, and wedges. Asserted on
-    the value, not on the source text.
+    Review (#15880) caught the earlier version of this test asserting on
+    `_SUPPORTED_RESUME_PLAN_VERSIONS` itself -- which passes no matter what the
+    gate does with it. Changing the check back to `!= _RESUME_PLAN_VERSION` (what
+    the code said before v1 support, so the likeliest edit anyone makes) left the
+    old assertion green while v1 plans were discarded. It ran the gate's inputs
+    and never the gate.
+
+    It is worse than a silent skip: the rejection path calls
+    `_clear_resume_plan()`, so a v1 plan is DELETED rather than passed over, and
+    the wedge it causes cannot be cleared by restarting.
     """
-    supported = resume_plan._SUPPORTED_RESUME_PLAN_VERSIONS
-    assert resume_plan._RESUME_PLAN_VERSION in supported
-    assert len(supported) >= 2, (
-        f"only {sorted(supported)} accepted; the previous plan version must stay readable "
-        "or the deploying update wedges itself"
+    supported = resume_plan.plan_version_is_supported
+    assert supported({"version": 1}), (
+        "a v1 plan is rejected -- the update deploying this change writes v1 before "
+        "the restart and would discard its own resume plan, then clear it"
     )
+    assert supported({"version": resume_plan._RESUME_PLAN_VERSION})
+    assert not supported({"version": 99}), "an unknown future version must not be read"
+    assert not supported({}), "a plan with no version must not be read"
 
 
 class _Stage:

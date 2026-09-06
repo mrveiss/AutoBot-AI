@@ -126,3 +126,21 @@ def restored_stage(stage_cls, name: str, status: str, message: str, stage_logs: 
     if lines:
         stage.log_lines = [*lines, f"-- SLM restarted here; {len(lines)} line(s) carried over --"]
     return stage
+
+
+def plan_version_is_supported(plan: dict) -> bool:
+    """Whether a persisted plan is readable by the SLM running now (#15881).
+
+    Deliberately a membership test against the supported SET, never equality
+    with the current version. Equality is the exact edit this exists to stop --
+    it is what the code said before v1 support, so it is the likeliest thing
+    anyone puts back -- and it rejects the plan written by the update that is
+    deploying the change.
+
+    The rejection path calls `_clear_resume_plan()`, so a wrong answer here
+    does not merely skip the resume, it DELETES the plan. The wedge then
+    survives a restart, which is the one failure this whole mechanism exists
+    to prevent. That asymmetry is why the gate is a named function with its own
+    test rather than an inline comparison.
+    """
+    return plan.get("version") in _SUPPORTED_RESUME_PLAN_VERSIONS
