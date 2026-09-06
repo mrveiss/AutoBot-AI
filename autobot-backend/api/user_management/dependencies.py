@@ -27,6 +27,13 @@ from user_management.services import (
 
 logger = logging.getLogger(__name__)
 
+# Refusal details, shared by each gate and its claims-only pre-check below so the
+# two can never drift: #15805 requires the earlier refusal to be byte-identical to
+# the one it replaces, or "refused sooner" would read to a caller as "refused for a
+# different reason".
+_PLATFORM_ADMIN_DENIED = "Platform admin privileges required"
+_REPORTING_LINE_WRITE_DENIED = "admin.reporting_line.write permission required"
+
 
 async def get_db_session() -> AsyncSession:
     """
@@ -130,6 +137,30 @@ def _extract_request_org_id(request: Request) -> Optional[uuid.UUID]:
     return None
 
 
+def _is_platform_admin_claim(current_user: dict) -> bool:
+    """Platform-admin status exactly as the caller's JWT attests it (#15805).
+
+    ``TenantContext.is_platform_admin`` is derived from this and from nothing
+    in the database, which is what makes ``require_platform_admin`` decidable
+    before a session is acquired. Any future admin signal that needs a query
+    belongs in ``get_tenant_context``, not here -- adding one here silently
+    re-couples the pre-check to the pool.
+    """
+    if bool(current_user.get("is_platform_admin", False)):
+        return True
+    return is_admin_role(current_user.get("role"))
+
+
+def _holds_reporting_line_write(current_user: dict) -> bool:
+    """Whether the caller holds ``admin.reporting_line.write`` (#15765, #15805).
+
+    ``role_has_permission`` answers from ``ROLE_PERMISSIONS`` alone, so this is
+    a pure function of the JWT role claim -- no session, and no reporting-line
+    data, which is the escalation guarantee #15765 established.
+    """
+    return role_has_permission(current_user.get("role"), Permission.ADMIN_REPORTING_LINE_WRITE.value)
+
+
 async def _check_org_membership(
     session: AsyncSession,
     org_id: uuid.UUID,
@@ -186,10 +217,9 @@ async def get_tenant_context(
     if raw_user_id:
         user_id = _parse_uuid_safe(str(raw_user_id))
 
-    # Determine platform-admin status
-    is_platform_admin = bool(current_user.get("is_platform_admin", False))
-    if is_admin_role(current_user.get("role")):
-        is_platform_admin = True
+    # Determine platform-admin status. Shared with ``require_platform_admin_claim``
+    # so the pre-check and the context can never disagree about who is an admin.
+    is_platform_admin = _is_platform_admin_claim(current_user)
 
     # --- org_id resolution ---
 
@@ -274,6 +304,12 @@ async def require_org_context(
     ``_extract_request_org_id``) cannot resolve org context from the URL and
     the caller's JWT carries no ``org_id`` claim. See
     ``docs/llc/tenant-context.md`` for the full resolution contract.
+
+    Unlike ``require_platform_admin`` and ``require_reporting_line_write``, this
+    gate cannot be pre-checked from the JWT (#15805): its decision IS the
+    outcome of tenant resolution, so the session ``get_tenant_context`` may
+    acquire is work this refusal genuinely depends on rather than work spent
+    ahead of it.
     """
     if not context.org_id:
         raise HTTPException(
@@ -287,24 +323,93 @@ async def require_org_context(
     return context
 
 
-async def require_platform_admin(
+async def require_platform_admin_claim(
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Refuse a non-admin from the JWT alone, before any session is acquired (#15805).
+
+    Declared ahead of ``get_tenant_context`` in
+    ``_tenant_context_for_platform_admin`` so FastAPI never reaches the session
+    dependency for a caller this refuses.
+    """
+    if not _is_platform_admin_claim(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_PLATFORM_ADMIN_DENIED,
+        )
+    return current_user
+
+
+async def _tenant_context_for_platform_admin(
+    _granted: dict = Depends(require_platform_admin_claim),
     context: TenantContext = Depends(get_tenant_context),
+) -> TenantContext:
+    """Tenant context, resolved only once the platform-admin claim has passed.
+
+    The parameter ORDER is the mechanism, not decoration: FastAPI's
+    ``solve_dependencies`` walks ``dependant.dependencies`` in declaration order
+    and an ``HTTPException`` from one aborts the walk, so ``_granted`` failing
+    means ``get_tenant_context`` -- and therefore ``get_db_session`` -- is never
+    solved. Reordering these two parameters silently restores #15805; the
+    behavioural tests in ``dependencies_test.py`` count session acquisitions
+    rather than inspect this signature, so they catch that.
+    """
+    return context
+
+
+async def require_platform_admin(
+    context: TenantContext = Depends(_tenant_context_for_platform_admin),
 ) -> TenantContext:
     """
     Dependency that requires platform admin privileges.
 
     Raises HTTPException if user is not a platform admin.
+
+    The check below is retained rather than delegated to
+    ``require_platform_admin_claim``: ``api/user_management/password_change.py``
+    calls this function directly with a ``TenantContext`` it already holds, so
+    the context-based check is the one that gate depends on. Under FastAPI the
+    claim pre-check has already refused the same callers one hop earlier.
     """
     if not context.is_platform_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Platform admin privileges required",
+            detail=_PLATFORM_ADMIN_DENIED,
         )
     return context
 
 
-async def require_reporting_line_write(
+async def require_reporting_line_write_grant(
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Refuse a caller without the grant from the JWT alone (#15805).
+
+    The decision needs identity and nothing else -- see
+    ``_holds_reporting_line_write`` -- so it does not have to wait for tenant
+    resolution, which does need a session.
+    """
+    if not _holds_reporting_line_write(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_REPORTING_LINE_WRITE_DENIED,
+        )
+    return current_user
+
+
+async def _tenant_context_for_reporting_line_write(
+    _granted: dict = Depends(require_reporting_line_write_grant),
     context: TenantContext = Depends(get_tenant_context),
+) -> TenantContext:
+    """Tenant context, resolved only once the reporting-line grant has passed.
+
+    Same ordering contract as ``_tenant_context_for_platform_admin`` -- see its
+    docstring for why the parameter order is load-bearing.
+    """
+    return context
+
+
+async def require_reporting_line_write(
+    context: TenantContext = Depends(_tenant_context_for_reporting_line_write),
     current_user: dict = Depends(get_current_user),
 ) -> TenantContext:
     """
@@ -319,11 +424,17 @@ async def require_reporting_line_write(
     would otherwise let restructuring self-grant further authority.
 
     Raises HTTPException if the caller does not hold the permission.
+
+    The check is duplicated in ``require_reporting_line_write_grant``, which
+    ``context`` resolves through, so that the refusal happens before a session
+    is acquired (#15805). This one is not redundant: it is what answers a direct
+    call with a ``TenantContext`` and a ``current_user`` dict, which the unit
+    tests and any non-FastAPI caller make. Both read the same predicate.
     """
-    if not role_has_permission(current_user.get("role"), Permission.ADMIN_REPORTING_LINE_WRITE.value):
+    if not _holds_reporting_line_write(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="admin.reporting_line.write permission required",
+            detail=_REPORTING_LINE_WRITE_DENIED,
         )
     return context
 
