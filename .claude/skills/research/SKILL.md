@@ -201,7 +201,7 @@ If source is too large for single analysis, summarize sections and focus on what
   Phase 2 gate, so an unapproved or interrupted run still leaves the analysis
   behind. Chat reply is the file path plus a short summary, never the full
   analysis (#12955)
-- **Anonymize the source you are studying, not the stack you are standing on.** The researched project's name, its authors and its repo URL stay in the chat reply; `docs/research/<topic>.md`, its filename, and every issue, PR, branch and commit message describe it as "the reference work" or by a generic technique description. **Technology AutoBot depends on or uses may be named freely** — a dependency is reference material, not advertising a competitor. Anything else is named only when the user asks
+- **Never disclose that we studied a rival.** What is protected is the *fact that we looked at their problems and learned from them* — not the name in isolation. So any comparative or competitive analysis (their weaknesses, what we adopt, what we already do better) is anonymized on disk: name, authors and repo URL stay in the chat reply, while `docs/research/<topic>.md`, its filename, and every issue, PR, branch and commit message use "the reference work" or a generic technique description. **Technology AutoBot depends on or uses is named freely** — naming our own stack discloses nothing about who we studied. A source the user has asked to have cited is named too. When a name appears in a doc, ask what it reveals: our stack, or where we went looking
 - Phase 2 MUST NOT start without explicit user approval after Phase 1
 - Always cite specific files, functions, or sections when making claims
 - When comparing to AutoBot, read actual code — don't assume based on file names
