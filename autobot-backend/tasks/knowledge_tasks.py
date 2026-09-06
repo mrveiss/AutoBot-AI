@@ -19,10 +19,23 @@ import time
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import PATH
 from celery_app import celery_app
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
+
+#: The man-page indexer, anchored to the repository root (#15853).
+#:
+#: This was ``"scripts/utilities/index_all_man_pages.py"`` -- relative to the
+#: process working directory, which is not the repo root under Celery, systemd
+#: or a test runner, and there is no ``scripts/utilities/`` at the root anyway.
+#: So the refresh returned its ``failed`` dict on every run, reporting a
+#: knowledge-refresh error rather than a missing file. The script is real; only
+#: the path was not.
+MAN_PAGE_INDEXER = (
+    PATH.PROJECT_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "utilities" / "index_all_man_pages.py"
+)
 
 
 # Issue #5083: exclude patterns for cleanup_generated_files. Matches filenames
@@ -85,8 +98,20 @@ def _run_indexing_subprocess() -> dict:
     dict.  On non-zero exit returns a 'failed' dict; on success returns a
     'success' dict with commands_indexed and total_facts.
     """
+    if not MAN_PAGE_INDEXER.is_file():
+        # Name the path. The previous failure mode truncated the subprocess's
+        # stderr into a generic message, so "the indexer is not where we looked"
+        # was indistinguishable from "the indexer ran and failed".
+        message = f"man-page indexer not found at {MAN_PAGE_INDEXER}"
+        logger.error("System knowledge refresh cannot run: %s", message)
+        return {
+            "status": "failed",
+            "error": message,
+            "message": "Knowledge refresh failed",
+        }
+
     result = subprocess.run(  # nosec B603  # uses sys.executable with fixed internal script path
-        [sys.executable, "scripts/utilities/index_all_man_pages.py"],
+        [sys.executable, str(MAN_PAGE_INDEXER)],
         capture_output=True,
         text=True,
     )
