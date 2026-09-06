@@ -61,6 +61,30 @@ git -C "$THIS_REPO" worktree add -q --detach "$LINKED_WORKTREE" >/dev/null 2>&1 
   exit 1
 }
 
+# #15835's rule fires only where there is uncommitted work to lose, so the
+# suite must be able to name a dirty tree AND a clean one. The dirty tree gets
+# a real modification to a TRACKED file rather than untracked noise, and an
+# `origin` remote makes the recovery form (`--source=origin/<own branch>`)
+# expressible at all.
+DIRTY_BRANCH=issue-dirty
+CLEAN_BRANCH=issue-clean
+DIRTY_WT="$SANDBOX/dirty-worktree"
+CLEAN_WT="$SANDBOX/clean-worktree"
+ORIGIN_REF=origin/Dev_new_gui
+
+printf 'committed content\n' >"$THIS_REPO/tracked.txt"
+git -C "$THIS_REPO" add tracked.txt >/dev/null 2>&1
+git -C "$THIS_REPO" -c user.email=test@example.invalid -c user.name=test \
+  -c commit.gpgsign=false commit -q -m "add a tracked file" >/dev/null 2>&1
+git -C "$THIS_REPO" remote add origin "$OTHER_REPO" >/dev/null 2>&1
+for pair in "$DIRTY_BRANCH:$DIRTY_WT" "$CLEAN_BRANCH:$CLEAN_WT"; do
+  git -C "$THIS_REPO" worktree add -q -b "${pair%%:*}" "${pair#*:}" >/dev/null 2>&1 || {
+    echo "FATAL: could not add the ${pair%%:*} worktree"
+    exit 1
+  }
+done
+printf 'in-flight work, never committed\n' >>"$DIRTY_WT/tracked.txt"
+
 mkdir -p "$THIS_REPO/.claude/hooks"
 cp "$SOURCE_DIR/block-dangerous-commands.sh" "$SOURCE_DIR/git_invocation_parse.py" \
   "$THIS_REPO/.claude/hooks/" || { echo "FATAL: could not stage the hook"; exit 1; }
@@ -86,6 +110,20 @@ preflight() {
   fi
   if [ "$common" != "$gitdir" ]; then
     echo "FATAL: git does not see the sandbox as a main working tree — the suite cannot test the guard"
+    exit 1
+  fi
+  # Same class of silent failure for #15835: if the dirty tree were clean, every
+  # block case below would pass for the wrong reason, and if the clean tree were
+  # dirty every allow case would. Measure both before asserting anything.
+  echo "  dirty tree status:  [$(git -C "$DIRTY_WT" status --porcelain | tr '\n' ' ')]"
+  echo "  clean tree status:  [$(git -C "$CLEAN_WT" status --porcelain | tr '\n' ' ')]"
+  echo "  dirty tree branch:  $(git -C "$DIRTY_WT" rev-parse --abbrev-ref HEAD), remotes: $(git -C "$DIRTY_WT" remote | tr '\n' ' ')"
+  if [ -z "$(git -C "$DIRTY_WT" status --porcelain)" ]; then
+    echo "FATAL: the dirty worktree is clean — every #15835 block case would be vacuous"
+    exit 1
+  fi
+  if [ -n "$(git -C "$CLEAN_WT" status --porcelain)" ]; then
+    echo "FATAL: the clean worktree is dirty — every #15835 allow case would be vacuous"
     exit 1
   fi
 }
@@ -258,6 +296,70 @@ expect_block "git reset --hard"                      "git reset --hard HEAD"
 expect_block "git clean -fd"                         "git clean -fd"
 expect_block "git commit --no-verify"                "git commit --no-verify -m 'test'"
 
+# ── #15835: a path-scoped checkout or restore that names a SOURCE takes its
+# content from another commit, not from the index. The allow-list called both
+# "file restore" and permitted the second by design; `git checkout
+# origin/Dev_new_gui -- .` destroyed 147 lines of uncommitted work. Refused now
+# — but only where there is work to lose, because a guard that refuses harmless
+# commands is a guard people switch off.
+echo ""
+echo "--- #15835: ref-sourced path overwrite in a DIRTY tree is refused ---"
+expect_block "checkout <ref> -- . (the issue's own command)" "git -C $DIRTY_WT checkout $ORIGIN_REF -- ."
+expect_block "checkout <ref> <path>, no -- separator"        "git -C $DIRTY_WT checkout $ORIGIN_REF tracked.txt"
+expect_block "checkout HEAD -- <path>"                       "git -C $DIRTY_WT checkout HEAD -- tracked.txt"
+expect_block "restore --source=<ref> -- <path>"              "git -C $DIRTY_WT restore --source=$ORIGIN_REF -- ."
+expect_block "restore --source <ref> (separate word)"        "git -C $DIRTY_WT restore --source $ORIGIN_REF -- ."
+expect_block "restore -s <ref> <path>"                       "git -C $DIRTY_WT restore -s $ORIGIN_REF tracked.txt"
+expect_block "cd into the dirty tree, then overwrite"        "cd $DIRTY_WT && git checkout $ORIGIN_REF -- ."
+# The sandbox's main tree sits on Dev_new_gui, so $ORIGIN_REF is ITS own
+# upstream and therefore its recovery form — a foreign ref is what the rule
+# refuses there. Both directions asserted, since getting this backwards is how
+# the allow-list landed in the first place.
+expect_block "overwrite on this repository's own main tree"  "git -C $THIS_REPO checkout origin/$CLEAN_BRANCH -- ."
+expect_allow "main tree restoring from its OWN upstream"     "git -C $THIS_REPO checkout $ORIGIN_REF -- ."
+# Another branch's upstream is somebody else's content, not this tree's recovery.
+expect_block "restore from ANOTHER branch's upstream"        "git -C $DIRTY_WT restore --source=origin/$CLEAN_BRANCH -- ."
+
+echo ""
+echo "--- #15835: the bounded and the recoverable forms stay allowed ---"
+# Restores from the INDEX: bounded by what you staged, and explicitly safe.
+expect_allow "checkout -- <path> in a dirty tree"            "git -C $DIRTY_WT checkout -- tracked.txt"
+expect_allow "checkout . in a dirty tree"                    "git -C $DIRTY_WT checkout ."
+expect_allow "restore <path> in a dirty tree"                "git -C $DIRTY_WT restore tracked.txt"
+expect_allow "restore --staged <path> (no source named)"     "git -C $DIRTY_WT restore --staged tracked.txt"
+# A clean tree has nothing to lose, so the same command is not refused there.
+expect_allow "the same overwrite against a CLEAN tree"       "git -C $CLEAN_WT checkout $ORIGIN_REF -- ."
+expect_allow "restore --source against a CLEAN tree"         "git -C $CLEAN_WT restore --source=$ORIGIN_REF -- ."
+# The recovery form: undoing an overwrite means pulling this branch's own
+# content back. Refusing it would leave no way out of the very damage above.
+expect_allow "recovery: restore --source=origin/<own branch>" "git -C $DIRTY_WT restore --source=origin/$DIRTY_BRANCH -- ."
+expect_allow "recovery: restore --source=<own branch>"       "git -C $DIRTY_WT restore --source=$DIRTY_BRANCH -- ."
+expect_allow "recovery: checkout origin/<own branch> -- ."   "git -C $DIRTY_WT checkout origin/$DIRTY_BRANCH -- ."
+# Not a path op at all: -b forks a branch, and the ref is its start point.
+expect_allow "checkout -b <new> <ref> in a dirty tree"       "git -C $DIRTY_WT checkout -b issue-fresh $ORIGIN_REF"
+# A path-scoped checkout never moves HEAD, so the main/master branch-move rule
+# does not apply to it; the overwrite rule above is what judges it.
+expect_allow "checkout main -- <path> on a clean tree"       "git -C $CLEAN_WT checkout main -- tracked.txt"
+
+# ── #15835 defect 3: the destructive-git rules were greps over the raw command
+# text, so a heredoc WRITING a file about these patterns tripped them. Measured
+# three times in one session: a memory file, an issue body, and a commit message
+# that described the patterns while explaining the fix.
+echo ""
+echo "--- #15835 defect 3: a mention of a destructive pattern is not one ---"
+expect_allow "heredoc writing a file about a hard reset" "$(printf 'cat > notes.md <<%sEOF%s\nnever run git reset --hard in a shared worktree\nEOF\n' "'" "'")"
+expect_allow "issue body describing the clean rule"          'gh issue create --body "git clean -fd is refused, which is correct"'
+expect_allow "commit message describing the patterns"        "$(printf 'git commit -m "$(cat <<%sEOF%s\nfix(safety): a ref-sourced checkout (see #15835) overwrites the tree, and git reset --hard discards it\nEOF\n)"\n' "'" "'")"
+expect_allow "grep pattern for a hard reset"                 'git log --oneline | grep -c "git reset --hard"'
+expect_allow "issue body quoting the overwrite command"      'gh issue create --body "git checkout origin/Dev_new_gui -- . destroyed 147 lines"'
+# The inverse: real invocations beside prose are still refused.
+expect_block "a real hard reset after prose"                 'echo "documented above" && git reset --hard HEAD'
+expect_block "a real clean after prose"                      'echo "a mention" && git clean -fd'
+expect_block "hard reset inside a linked worktree"           "git -C $DIRTY_WT reset --hard HEAD"
+expect_block "reset onto a protected ref"                    "git reset $ORIGIN_REF"
+expect_allow "reset --soft HEAD~1 is not a branch move"      "git reset --soft HEAD~1"
+expect_allow "clean -n (dry run)"                            "git clean -n"
+
 echo ""
 echo "--- Database ---"
 expect_block "DROP TABLE"                            "psql -c 'DROP TABLE users;'"
@@ -282,7 +384,7 @@ expect_block "mkfs on partition"                     "mkfs.ext4 /dev/sdb1"
 # Reach floor: a suite that silently stopped executing cases — a mis-copied
 # hook, a sandbox that failed to build, an early `return` in a helper — would
 # otherwise finish with 0 failures and report clean. Assert the population.
-MIN_CASES=60
+MIN_CASES=100
 TOTAL=$((PASS + FAIL))
 
 echo ""

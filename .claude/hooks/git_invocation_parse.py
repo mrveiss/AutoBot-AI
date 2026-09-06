@@ -65,13 +65,31 @@ evaluating shell -- so it denies the whole shape rather than guessing what the
 value would have been (module scope note above, "Attempt limited expansion.
 Do not do this").
 
-Output: one tab-separated record per invocation on stdout --
-``<directory>|<git-dir>|<flags>|<branch-arg>``, separated by 0x1f (see
+``restore``, ``reset`` and ``clean`` joined the reported subcommands in
+#15835. Every destructive git rule in ``block-dangerous-commands.sh`` used to
+be a grep over the raw command text, so a heredoc *writing a file* about a
+hard reset was refused three times running -- once for a memory file, once for
+an issue body, once for a commit message that explained the fix. The machinery
+to tell an invocation from a mention already lived here; it simply was not
+applied to those rules.
+
+The same change lets the caller separate two operations that share a syntax. A
+path-scoped ``checkout``/``restore`` takes its content from the index when no
+source is named (``git checkout -- <path>``: bounded by what you staged) and
+from another commit when one is (``git checkout <ref> -- <path>``,
+``git restore --source=<ref> -- <path>``: an overwrite that destroys
+uncommitted work). Only the second gets :data:`OVERWRITE_FLAG`.
+
+Output: one record per invocation on stdout --
+``<directory>|<git-dir>|<subcommand>|<flags>|<arg>``, separated by 0x1f (see
 :data:`FIELD_SEPARATOR`) -- where *directory* is empty
 for "the caller's own working directory" and ``?`` for "could not be resolved",
-and *flags* is a comma-separated subset of ``new``/``restore``/``ambiguous``
-(the last means *branch-arg* is meaningless -- the subcommand itself, not the
-branch, is what could not be read).
+*subcommand* is the literal subcommand (empty when it could not be read), and
+*flags* is a comma-separated subset of ``new``/``restore``/``overwrite``/
+``hard``/``force``/``ambiguous`` (the last means the other fields are
+meaningless -- the subcommand itself is what could not be read). *arg* is the
+overwrite source for ``overwrite``, and otherwise the first positional
+argument.
 """
 
 from __future__ import annotations
@@ -143,7 +161,33 @@ _VALUE_GLOBALS = frozenset(
 _NEW_BRANCH = frozenset({"-b", "-B", "-c", "--create", "--orphan"})
 
 #: Subcommands this parser reports on.
-_SUBCOMMANDS = ("checkout", "switch")
+_SUBCOMMANDS = ("checkout", "switch", "restore", "reset", "clean")
+
+#: Subcommands that accept a pathspec, so naming a source ref makes the
+#: invocation an overwrite of the working tree rather than a branch move.
+_PATHSPEC_SUBCOMMANDS = frozenset({"checkout", "restore"})
+
+#: Subcommands whose argument may move HEAD onto a shared branch.
+_BRANCH_SUBCOMMANDS = frozenset({"checkout", "switch"})
+
+#: ``git restore``'s spellings for "take the content from this commit".
+_SOURCE_FLAGS = frozenset({"-s", "--source"})
+
+#: Flag: forks a new branch instead of moving onto an existing one.
+NEW_BRANCH_FLAG = "new"
+
+#: Flag: a path-scoped restore that takes its content from the index.
+INDEX_RESTORE_FLAG = "restore"
+
+#: Flag: a path-scoped checkout/restore that takes its content from another
+#: commit, overwriting whatever the working tree holds (#15835).
+OVERWRITE_FLAG = "overwrite"
+
+#: Flag: a reset that throws the working tree away.
+HARD_RESET_FLAG = "hard"
+
+#: Flag: ``git clean`` with its force flag, in any spelling.
+FORCE_CLEAN_FLAG = "force"
 
 #: A directory whose real value only the shell knows.
 UNKNOWN_DIR = "?"
@@ -358,8 +402,53 @@ def _skip_redirection(tokens: list[str], index: int) -> int | None:
     return None
 
 
-def _parse_subcommand(tokens: list[str], index: int, directory: str, git_dir: str) -> tuple[dict[str, str], int]:
-    """Describe the subcommand at *index*; return it and the index after it."""
+def _first_positional(args: list[str]) -> str:
+    """The first argument that is not an option -- a branch, ref or path."""
+    return next((arg for arg in args if not arg.startswith("-")), "")
+
+
+def _is_clean_force(arg: str) -> bool:
+    """True for ``git clean``'s force flag, bundled (``-fd``) or spelled out."""
+    if arg == "--force":
+        return True
+    return arg.startswith("-") and not arg.startswith("--") and "f" in arg
+
+
+def _restore_source(args: list[str]) -> str:
+    """The ref ``git restore`` was told to take content from, if any.
+
+    ``git restore <path>`` restores from the index and is bounded; every
+    spelling that names a source -- ``--source=<ref>``, ``--source <ref>``,
+    ``-s <ref>``, ``-s<ref>`` -- overwrites the tree from another commit.
+    """
+    for position, token in enumerate(args):
+        if token in _SOURCE_FLAGS:
+            return args[position + 1] if position + 1 < len(args) else ""
+        if token.startswith("--source="):
+            return token.split("=", 1)[1]
+        if token.startswith("-s") and not token.startswith("--") and len(token) > 2:
+            return token[2:]
+    return ""
+
+
+def _checkout_source(args: list[str]) -> str:
+    """The tree-ish a path-scoped ``git checkout`` overwrites the tree from.
+
+    ``git checkout -- <path>`` names no tree-ish and takes what you staged.
+    ``git checkout <ref> -- <path>`` and its ``--``-less form
+    ``git checkout <ref> <path>`` take another commit's content, which is a
+    different operation wearing the same syntax (#15835). Two positional
+    arguments can only be tree-ish plus pathspec: the one-argument form is the
+    branch move this parser has always reported.
+    """
+    if "--" in args:
+        return _first_positional(args[: args.index("--")])
+    positional = [arg for arg in args if not arg.startswith("-")]
+    return positional[0] if len(positional) > 1 else ""
+
+
+def _collect_args(tokens: list[str], index: int) -> tuple[list[str], int]:
+    """This invocation's own arguments, and the index after the last of them."""
     args: list[str] = []
     cursor = index + 1
     while cursor < len(tokens):
@@ -372,13 +461,38 @@ def _parse_subcommand(tokens: list[str], index: int, directory: str, git_dir: st
             continue
         args.append(token)
         cursor += 1
-    flags: list[str] = []
-    if tokens[index] == "checkout" and args[:1] == ["--"]:
-        flags.append("restore")
-    if any(arg in _NEW_BRANCH for arg in args):
-        flags.append("new")
-    branch = next((arg for arg in args if not arg.startswith("-")), "")
-    record = {"dir": directory, "git_dir": git_dir, "flags": ",".join(flags), "arg": branch}
+    return args, cursor
+
+
+def _classify(subcommand: str, args: list[str]) -> tuple[list[str], str]:
+    """``(flags, arg)`` for *subcommand* -- what it does, and to which ref."""
+    if subcommand == "reset":
+        return ([HARD_RESET_FLAG] if "--hard" in args else []), _first_positional(args)
+    if subcommand == "clean":
+        return ([FORCE_CLEAN_FLAG] if any(_is_clean_force(arg) for arg in args) else []), ""
+    if subcommand in _BRANCH_SUBCOMMANDS and any(arg in _NEW_BRANCH for arg in args):
+        return [NEW_BRANCH_FLAG], _first_positional(args)
+    if subcommand in _PATHSPEC_SUBCOMMANDS:
+        source = _restore_source(args) if subcommand == "restore" else _checkout_source(args)
+        if source:
+            return [OVERWRITE_FLAG], source
+        if subcommand == "restore" or args[:1] == ["--"]:
+            return [INDEX_RESTORE_FLAG], _first_positional(args)
+    return [], _first_positional(args)
+
+
+def _parse_subcommand(tokens: list[str], index: int, directory: str, git_dir: str) -> tuple[dict[str, str], int]:
+    """Describe the subcommand at *index*; return it and the index after it."""
+    subcommand = tokens[index]
+    args, cursor = _collect_args(tokens, index)
+    flags, arg = _classify(subcommand, args)
+    record = {
+        "dir": directory,
+        "git_dir": git_dir,
+        "sub": subcommand,
+        "flags": ",".join(flags),
+        "arg": arg,
+    }
     return record, cursor
 
 
@@ -391,7 +505,7 @@ def _ambiguous_record(directory: str, git_dir: str) -> dict[str, str]:
     shape it cannot rule out is the same choice already made for a directory
     only the shell could resolve -- see ``UNKNOWN_DIR`` above.
     """
-    return {"dir": directory, "git_dir": git_dir, "flags": AMBIGUOUS_SUBCOMMAND_FLAG, "arg": ""}
+    return {"dir": directory, "git_dir": git_dir, "sub": "", "flags": AMBIGUOUS_SUBCOMMAND_FLAG, "arg": ""}
 
 
 def _skip_global_flags(tokens: list[str], index: int, directory: str) -> tuple[int, str, str]:
@@ -474,6 +588,7 @@ def main(argv: list[str]) -> int:
         fields = (
             invocation["dir"],
             invocation["git_dir"],
+            invocation["sub"],
             invocation["flags"],
             invocation["arg"],
         )
