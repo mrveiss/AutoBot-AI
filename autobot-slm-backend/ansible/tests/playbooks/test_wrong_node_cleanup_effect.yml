@@ -15,10 +15,11 @@
 # playbook runs for real (NOT --check) against fixture directories it creates
 # itself, and asserts on the filesystem afterwards.
 #
-# Three cases, because one direction is not a test:
+# Four cases, because one direction is not a test:
 #   A  role fact decidably FALSE      -> the directory is REMOVED
 #   B  role fact decidably TRUE       -> the directory is KEPT
 #   C  role fact UNDEFINED            -> the directory is KEPT, decision reported
+#   D  the loop variable itself       -> the token survives set_fact coercion
 #
 # B and C are what stop a blanket "delete everything" from passing; A is what
 # stops a blanket "delete nothing" — the shape the fix has to restore — from
@@ -45,6 +46,17 @@
     # Decidably true — this directory does belong here.
     role_effect_present_active: true
     # role_effect_missing_active is deliberately never defined.
+    # SSOT: the install root is `slm_base_dir` (roles/slm_manager/defaults),
+    # never a literal. Hardcoding it would make this playbook silently test the
+    # wrong tree on any deployment that relocates the install — and every
+    # assertion would still pass, because they would be asserting about
+    # directories this play created itself under the wrong root.
+    #
+    # No `| default(...)` either: a fallback literal is the same hazard wearing
+    # a safer-looking shape. Undefined must stop the play, which the assert in
+    # the first task does, rather than quietly testing /opt/autobot on a host
+    # that does not use it.
+    _base_dir: "{{ slm_base_dir }}"
     _fixture_removed: "_test_wrong_node_15822"
     _fixture_kept: "_test_right_node_15822"
     _fixture_undecidable: "_test_undecidable_15822"
@@ -56,9 +68,22 @@
       - "{{ _fixture_loopvar }}"
 
   tasks:
+    # #15822: the install root comes from SSOT, and an undefined one must stop
+    # the play rather than fall back to a literal. A fallback would let this
+    # create fixtures under a root the deployment does not use, then assert
+    # about them successfully — a green run proving nothing about the host.
+    - name: "Pre-flight: the install root must come from SSOT"
+      ansible.builtin.assert:
+        that:
+          - slm_base_dir is defined
+          - slm_base_dir | length > 0
+        fail_msg: >-
+          slm_base_dir is not defined. This playbook asserts on real
+          directories under the install root and must not guess it.
+
     - name: "Pre-flight: stat the fixture paths"
       ansible.builtin.stat:
-        path: "/opt/autobot/{{ item }}"
+        path: "{{ _base_dir }}/{{ item }}"
       loop: "{{ _fixtures }}"
       register: _fixtures_before
       become: true
@@ -75,7 +100,7 @@
 
     - name: "Create the fixture directories"
       ansible.builtin.file:
-        path: "/opt/autobot/{{ item }}"
+        path: "{{ _base_dir }}/{{ item }}"
         state: directory
         mode: "0755"
       loop: "{{ _fixtures }}"
@@ -93,7 +118,7 @@
 
     - name: "Case A: stat the directory that should be gone"
       ansible.builtin.stat:
-        path: "/opt/autobot/{{ _fixture_removed }}"
+        path: "{{ _base_dir }}/{{ _fixture_removed }}"
       register: _after_removed
       become: true
 
@@ -133,7 +158,7 @@
 
     - name: "Case B: stat the directory that should still be there"
       ansible.builtin.stat:
-        path: "/opt/autobot/{{ _fixture_kept }}"
+        path: "{{ _base_dir }}/{{ _fixture_kept }}"
       register: _after_kept
       become: true
 
@@ -169,7 +194,7 @@
 
     - name: "Case C: stat the directory an undecidable fact must not touch"
       ansible.builtin.stat:
-        path: "/opt/autobot/{{ _fixture_undecidable }}"
+        path: "{{ _base_dir }}/{{ _fixture_undecidable }}"
       register: _after_undecidable
       become: true
 
@@ -219,7 +244,7 @@
 
     - name: "Case D: stat the directory that should be gone"
       ansible.builtin.stat:
-        path: "/opt/autobot/{{ _fixture_loopvar }}"
+        path: "{{ _base_dir }}/{{ _fixture_loopvar }}"
       register: _after_loopvar
       become: true
 
@@ -247,5 +272,5 @@
         loop_var: _teardown_dir
       vars:
         caller_role: "Effect test"
-        remove_dir_path: "/opt/autobot/{{ _teardown_dir }}"
+        remove_dir_path: "{{ _base_dir }}/{{ _teardown_dir }}"
         remove_reason: "test fixture teardown (#15822)"
