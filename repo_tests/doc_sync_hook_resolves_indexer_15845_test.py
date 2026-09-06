@@ -94,6 +94,17 @@ def test_entry_point_imports_without_a_backend_or_a_database():
     assert callable(module.main)
 
 
+def _index_drift(index_text: str, on_disk: set[str]) -> tuple[set[str], set[str]]:
+    """(present but unindexed, indexed but missing).
+
+    Extracted so the comparison can be aimed at fixtures. A detector only ever
+    run against a repository that currently passes is indistinguishable from one
+    that reports no drift for any input.
+    """
+    linked = set(re.findall(r"^\| \[\[([^\]|]+)\]\]", index_text, re.MULTILINE))
+    return on_disk - linked, linked - on_disk
+
+
 def test_every_research_document_is_reachable_from_its_index():
     """The visible symptom: documents present in the tree but in no index.
 
@@ -101,8 +112,30 @@ def test_every_research_document_is_reachable_from_its_index():
     by name would go quiet on the sixth.
     """
     index = (RESEARCH_DIR / "_index.md").read_text(encoding="utf-8")
-    linked = set(re.findall(r"^\| \[\[([^\]|]+)\]\]", index, re.MULTILINE))
     on_disk = {p.stem for p in RESEARCH_DIR.glob("*.md")} - {"_index"}
 
-    assert not (on_disk - linked), f"present but unindexed: {sorted(on_disk - linked)}"
-    assert not (linked - on_disk), f"indexed but missing from the tree: {sorted(linked - on_disk)}"
+    unindexed, stale = _index_drift(index, on_disk)
+    assert not unindexed, f"present but unindexed: {sorted(unindexed)}"
+    assert not stale, f"indexed but missing from the tree: {sorted(stale)}"
+
+
+_CLEAN_INDEX = "| [[alpha]] | A |\n| [[beta]] | B |\n"
+
+
+def test_the_drift_detector_reports_a_clean_index_as_clean():
+    """The fixture that should NOT trip it."""
+    assert _index_drift(_CLEAN_INDEX, {"alpha", "beta"}) == (set(), set())
+
+
+def test_the_drift_detector_reports_a_document_missing_from_the_index():
+    """The #15845 case itself: a file on disk that no index line links."""
+    unindexed, stale = _index_drift(_CLEAN_INDEX, {"alpha", "beta", "gamma"})
+    assert unindexed == {"gamma"}
+    assert stale == set()
+
+
+def test_the_drift_detector_reports_a_link_to_a_document_that_is_gone():
+    """The other direction, which a one-sided check would miss entirely."""
+    unindexed, stale = _index_drift(_CLEAN_INDEX, {"alpha"})
+    assert unindexed == set()
+    assert stale == {"beta"}
