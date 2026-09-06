@@ -26,6 +26,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 HOOK = REPO_ROOT / "autobot-infrastructure/shared/scripts/hooks/post-commit-doc-sync"
 RESEARCH_DIR = REPO_ROOT / "docs/research"
 
+#: Reach floor for the research sweep. Set below the count at the time of
+#: writing (17) so ordinary additions and removals do not trip it, but high
+#: enough that a sweep finding nothing -- a moved directory, a changed suffix --
+#: fails loudly instead of reporting a clean index it never looked at.
+_RESEARCH_FLOOR = 10
+
 
 def _hook_text() -> str:
     return HOOK.read_text(encoding="utf-8")
@@ -114,6 +120,14 @@ def test_every_research_document_is_reachable_from_its_index():
     index = (RESEARCH_DIR / "_index.md").read_text(encoding="utf-8")
     on_disk = {p.stem for p in RESEARCH_DIR.glob("*.md")} - {"_index"}
 
+    # Vacuity floor, bound to reach rather than to findings. Two empty sets
+    # compare equal and report no drift, so a moved directory or a changed
+    # filename convention would turn this into a test that passes having
+    # examined nothing -- the same silence it exists to detect.
+    assert len(on_disk) >= _RESEARCH_FLOOR, (
+        f"only {len(on_disk)} research documents discovered under {RESEARCH_DIR}; "
+        "the sweep is not reaching the tree, so its verdict means nothing"
+    )
     unindexed, stale = _index_drift(index, on_disk)
     assert not unindexed, f"present but unindexed: {sorted(unindexed)}"
     assert not stale, f"indexed but missing from the tree: {sorted(stale)}"
@@ -139,3 +153,16 @@ def test_the_drift_detector_reports_a_link_to_a_document_that_is_gone():
     unindexed, stale = _index_drift(_CLEAN_INDEX, {"alpha"})
     assert unindexed == set()
     assert stale == {"beta"}
+
+
+def test_the_reach_floor_is_below_what_the_tree_actually_holds():
+    """The floor must be satisfiable, or it is just a second way to fail.
+
+    A floor set at or above the current count turns every legitimate removal
+    into a red, and the usual repair is to lower the floor -- which is how a
+    reach check quietly becomes decorative.
+    """
+    on_disk = {p.stem for p in RESEARCH_DIR.glob("*.md")} - {"_index"}
+    assert _RESEARCH_FLOOR < len(
+        on_disk
+    ), f"floor {_RESEARCH_FLOOR} leaves no headroom above the {len(on_disk)} documents present"
