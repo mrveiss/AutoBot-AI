@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import String, and_, cast, select, text, update
+from sqlalchemy import and_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, get_tenant_context, require_org_context
@@ -123,6 +123,25 @@ def _build_response(row: LLCAgentBudget, remaining: Decimal, is_over: bool, aler
         is_over_limit=is_over,
         alert_triggered=alert,
     )
+
+
+def _company_uuid(company_id: str):
+    """The company as a bound UUID, for joining against a UUID column.
+
+    `agent_org_nodes.company_id` is UUID while the budget row carries the company
+    as text, and casting the UUID side to text does **not** bridge them: SQLite
+    renders it as unhyphenated hex, which never equals `str(uuid)`. The outer
+    join then matches nothing and every enriched name falls back to the slug --
+    the same defect that made the watchdog's scoped pause a no-op (#15812).
+    Binding a real `uuid.UUID` lets SQLAlchemy render it per dialect.
+
+    Returns None when the value is not a UUID, so the caller can omit the
+    predicate rather than join on something that cannot match.
+    """
+    try:
+        return uuid.UUID(str(company_id))
+    except (TypeError, ValueError):
+        return None
 
 
 @router.post("/{agent_id}", response_model=BudgetResponse, status_code=status.HTTP_201_CREATED)
@@ -462,7 +481,7 @@ async def costs_by_agent_model(
             AgentOrgNode,
             and_(
                 AgentOrgNode.agent_id == LLCAgentBudget.agent_id,
-                cast(AgentOrgNode.company_id, String) == LLCAgentBudget.company_id,
+                AgentOrgNode.company_id == _company_uuid(company_id),
             ),
         )
         .where(LLCAgentBudget.company_id == company_id)
