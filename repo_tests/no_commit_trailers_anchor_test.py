@@ -83,17 +83,47 @@ def _grep_flags() -> str:
 
 
 def _matches(pattern: str, line: str) -> bool:
-    """Ask grep, not Python: the dialects differ, and so do the flags."""
-    return (
-        # Fixed argv; inputs are module constants.
-        subprocess.run(  # nosec B603 B607
-            ["grep", _grep_flags(), pattern],
-            input=line,
-            text=True,
-            check=False,
-        ).returncode
-        == 0
+    """Ask grep, not Python: the dialects differ, and so do the flags.
+
+    grep exits 0 for a match, 1 for none, and **2 for an error** -- a malformed
+    pattern, an unsupported flag. Reporting `returncode == 0` folds 2 into "no
+    match", so every `assert not _matches(...)` below passes whether grep
+    applied the workflow's rule and disagreed, or never ran it at all.
+
+    That is not a theoretical input here: both the pattern and the flags are
+    read out of the workflow, so a workflow edit is exactly what produces a 2 --
+    the one event these tests exist to notice, and the one where folding it into
+    False makes them go quiet instead (#15850 review).
+    """
+    # Fixed argv; inputs are module constants.
+    result = subprocess.run(  # nosec B603 B607
+        ["grep", _grep_flags(), pattern],
+        input=line,
+        text=True,
+        check=False,
+        capture_output=True,
     )
+    if result.returncode not in (0, 1):
+        raise AssertionError(
+            f"grep exited {result.returncode} for pattern {pattern!r} with flags "
+            f"{_grep_flags()!r}: {result.stderr.strip()!r}. That is not 'no match' -- "
+            "the pattern taken from the workflow did not run, so a test asserting "
+            "no match would have passed without applying the rule."
+        )
+    return result.returncode == 0
+
+
+def test_matches_refuses_to_read_a_grep_failure_as_no_match() -> None:
+    """The acceptance test for that refusal, not just that something objected.
+
+    Every ALLOWED case asserts `not _matches(...)`, which grep can satisfy two
+    ways: exit 1, the thing under test, and exit 2, "I could not run that". The
+    `match=` here pins WHICH refusal fired -- a bare `pytest.raises` would be
+    satisfied by any AssertionError, including one from a genuinely broken
+    helper, which is the same conflation one level up.
+    """
+    with pytest.raises(AssertionError, match="did not run"):
+        _matches("^[unterminated", "anything")
 
 
 @pytest.mark.parametrize("line", REJECTED)
