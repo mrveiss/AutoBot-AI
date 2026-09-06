@@ -18,7 +18,6 @@ from api.schemas_playwright import (  # noqa: F401 - re-exported for existing im
     PlaywrightNavigateRequest,
     PlaywrightReloadRequest,
     PlaywrightScreenshotRequest,
-    PlaywrightSearchRequest,
     PlaywrightSessionRequest,
 )
 from autobot_shared.ssot_config import PROJECT_ROOT
@@ -2254,7 +2253,24 @@ class CodeSearchRefactorSuggestionsResultResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# playwright request schemas (#6042) -- moved to api/schemas_playwright.py
+# playwright request schemas (#6042)
+# ---------------------------------------------------------------------------
+# PlaywrightSearchRequest stays HERE deliberately. It declares no `session_id`,
+# so it is untouched by #15802 -- and its default result count carries a
+# hardcoded-value baseline entry keyed by THIS path. Moving it would strand
+# that entry and raise the same value as a fresh violation at the new path,
+# which the no-growth guard blocks. The models that had to move are the ones
+# the documentation change touches.
+
+
+class PlaywrightSearchRequest(BaseModel):
+    query: str
+    search_engine: str = "duckduckgo"
+    max_results: int = 5
+
+
+# ---------------------------------------------------------------------------
+# the remaining playwright request schemas moved to api/schemas_playwright.py
 # (#15802). Imported at the top of this file and re-exported, so
 # `from api.schemas_code import PlaywrightNavigateRequest` still resolves.
 # ---------------------------------------------------------------------------

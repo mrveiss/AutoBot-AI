@@ -17,12 +17,6 @@ Re-exported from `schemas_code` so both importers -- `api/playwright.py` and
 from pydantic import BaseModel, Field
 
 
-class PlaywrightSearchRequest(BaseModel):
-    query: str
-    search_engine: str = "duckduckgo"
-    max_results: int = 5
-
-
 class PlaywrightScreenshotRequest(BaseModel):
     """Embedded-Playwright capture -- NOT the session-scoped browser worker.
 
