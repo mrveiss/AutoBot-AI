@@ -507,16 +507,16 @@ async def test_cost_forwarded_to_budget_service():
             {"agent_class": _FAKE_AGENT_PATH},
             budget_session_factory=session_factory,
         )
-        run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz"})
+        run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz", "company_id": "company-1"})
         assert isinstance(run_id, str) and run_id
         await asyncio.sleep(0.05)
 
         MockBS.return_value.ingest_cost_event.assert_called_once()
         args = MockBS.return_value.ingest_cost_event.call_args.args
-        # positional: session, agent_id, tokens_in, tokens_out, model
-        assert args[1] == "agent-xyz"
-        assert args[2] == 10  # prompt_tokens from _FakeAgent metadata
-        assert args[3] == 5  # completion_tokens
+        # positional: session, agent_id, company_id, tokens_in, tokens_out, model
+        assert (args[1], args[2]) == ("agent-xyz", "company-1")  # slug alone names no budget (#15812)
+        assert args[3] == 10  # prompt_tokens from _FakeAgent metadata
+        assert args[4] == 5  # completion_tokens
 
 
 @pytest.mark.asyncio
@@ -538,7 +538,7 @@ async def test_budget_exhausted_propagates_to_failed_status():
             {"agent_class": _FAKE_AGENT_PATH},
             budget_session_factory=session_factory,
         )
-        run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz"})
+        run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz", "company_id": "company-1"})
         await asyncio.sleep(0.05)
 
         status = await adapter.status({}, run_id)
@@ -549,7 +549,7 @@ async def test_budget_exhausted_propagates_to_failed_status():
 @pytest.mark.asyncio
 async def test_cost_not_forwarded_when_no_factory():
     adapter = AutoBotAgentAdapter({"agent_class": _FAKE_AGENT_PATH})
-    run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz"})
+    run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz", "company_id": "company-1"})
     await asyncio.sleep(0.05)
     status = await adapter.status({}, run_id)
     assert status.status == LLCRunStatus.COMPLETED

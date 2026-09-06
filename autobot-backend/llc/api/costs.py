@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
@@ -157,6 +157,25 @@ class QuotaWindow(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _company_uuid(company_id: str):
+    """The company as a bound UUID, for joining against a UUID column.
+
+    `agent_org_nodes.company_id` is UUID while the budget row carries the company
+    as text, and casting the UUID side to text does **not** bridge them: SQLite
+    renders it as unhyphenated hex, which never equals `str(uuid)`. The outer
+    join then matches nothing and every enriched name falls back to the slug --
+    the same defect that made the watchdog's scoped pause a no-op (#15812).
+    Binding a real `uuid.UUID` lets SQLAlchemy render it per dialect.
+
+    Returns None when the value is not a UUID, so the caller can omit the
+    predicate rather than join on something that cannot match.
+    """
+    try:
+        return uuid.UUID(str(company_id))
+    except (TypeError, ValueError):
+        return None
+
+
 @router.get("/by-agent-model", response_model=List[AgentModelCost])
 async def costs_by_agent_model(
     company_id: Optional[str] = Query(None, description="Filter by company UUID"),
@@ -185,7 +204,13 @@ async def costs_by_agent_model(
 
     result = await session.execute(
         select(LLCAgentBudget, AgentOrgNode.name)
-        .outerjoin(AgentOrgNode, AgentOrgNode.agent_id == LLCAgentBudget.agent_id)
+        .outerjoin(
+            AgentOrgNode,
+            and_(
+                AgentOrgNode.agent_id == LLCAgentBudget.agent_id,
+                AgentOrgNode.company_id == _company_uuid(effective_company_id),
+            ),
+        )
         .where(LLCAgentBudget.company_id == effective_company_id)
         .order_by(LLCAgentBudget.agent_id)
     )
