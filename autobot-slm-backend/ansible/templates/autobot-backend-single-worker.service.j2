@@ -24,7 +24,7 @@ User=autobot
 Group=autobot
 WorkingDirectory={{ backend_workdir }}
 Environment="PATH={{ backend_venv }}/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="PYTHONPATH=/opt/autobot:/opt/autobot/autobot-user-backend"
+Environment="PYTHONPATH=/opt/autobot:/opt/autobot/autobot-backend"
 EnvironmentFile={{ backend_workdir }}/.env
 EnvironmentFile=-/etc/autobot/service-keys/main-backend.env
 

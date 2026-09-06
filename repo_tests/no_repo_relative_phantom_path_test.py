@@ -94,6 +94,36 @@ _SELF = Path(__file__).resolve()
 #: Below this, the sweep collapsed rather than the tree being clean.
 _MIN_SOURCE_FILES = 4000
 
+
+# ---------------------------------------------------------------------------
+# Deploy configs (#15604)
+# ---------------------------------------------------------------------------
+#
+# The sweep above collects only ``.py``/``.sh`` and only judges *repo-relative*
+# tokens, so eight Ansible files naming the retired directory as an ABSOLUTE
+# path were invisible twice over. They are not cosmetic: each is a recovery or
+# backup playbook that gates on a directory which does not exist on a deployed
+# node, so the tool an operator reaches for when something is already broken is
+# the thing that fails.
+#
+# Here the *absolute* form is the one that matters, which is the opposite of the
+# rule above -- a deploy config names host paths by definition.
+
+#: Files that name a retired directory **in order to remove it**. Excluded by
+#: path with the reason recorded, rather than by inferring intent from context:
+#: "mentions `state: absent` nearby" would silently stop protecting the moment
+#: a cleanup task was rewritten, and would let a genuine offender through if it
+#: happened to sit near one.
+_LEGACY_CLEANUP_ALLOWLIST: Tuple[str, ...] = (
+    "autobot-slm-backend/ansible/playbooks/cleanup-nodes.yml",
+    "autobot-slm-backend/ansible/roles/_shared/tasks/clean_legacy_dir.yml",
+    "autobot-slm-backend/ansible/roles/backend/tasks/clean.yml",
+    "autobot-slm-backend/ansible/roles/slm_manager/tasks/clean.yml",
+)
+
+#: Below this, the deploy sweep collapsed rather than the tree being clean.
+_MIN_DEPLOY_FILES = 200
+
 Offender = Tuple[str, int, str]
 
 
@@ -297,3 +327,101 @@ def test_the_absolute_versus_repo_relative_key(line: str, should_flag: bool) -> 
 def test_python_join_and_docstring_handling(source: str, should_flag: bool) -> None:
     """A bare name is a path only where it is joined onto one."""
     assert bool(_python_offenders("probe.py", source)) is should_flag
+
+
+# ---------------------------------------------------------------------------
+# Deploy configs: the same retired directory, named absolutely (#15604)
+# ---------------------------------------------------------------------------
+
+
+def _tracked_deploy_configs() -> List[str]:
+    """Repo-relative paths of every tracked Ansible YAML and Jinja template."""
+    completed = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=scrubbed_git_env(),
+    )
+    kept: List[str] = []
+    for name in completed.stdout.split("\0"):
+        if not name or name.startswith(".worktrees/"):
+            continue
+        if name.endswith((".yml", ".yaml", ".j2")):
+            kept.append(name)
+    return kept
+
+
+def deploy_config_offenders(path: str, text: str) -> List[Offender]:
+    """Lines in *path* naming a retired component directory.
+
+    Unlike the executable sweep, this does not care whether the reference is
+    absolute or repo-relative: a deploy config names host paths as a matter of
+    course, and both forms are equally broken when the directory is gone.
+    """
+    if path in _LEGACY_CLEANUP_ALLOWLIST:
+        return []
+    found: List[Offender] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        for retired in RETIRED_COMPONENT_DIRS:
+            if retired in line:
+                found.append((path, lineno, line.strip()))
+                break
+    return found
+
+
+_DEPLOY_CONFIGS = _tracked_deploy_configs()
+
+
+def test_the_deploy_sweep_reached_the_tree() -> None:
+    """Runs first: an empty file list would pass the assertion below vacuously."""
+    assert len(_DEPLOY_CONFIGS) >= _MIN_DEPLOY_FILES, (
+        f"only {len(_DEPLOY_CONFIGS)} tracked yml/yaml/j2 files found, floor is "
+        f"{_MIN_DEPLOY_FILES}. FIX THE SWEEP -- a guard that reads nothing "
+        "reports clean over anything."
+    )
+
+
+def test_no_deploy_config_references_a_retired_dir() -> None:
+    offenders: List[Offender] = []
+    for name in _DEPLOY_CONFIGS:
+        path = REPO_ROOT / name
+        if path.resolve() == _SELF:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        offenders.extend(deploy_config_offenders(name, text))
+
+    assert not offenders, (
+        "deploy configs reference a retired component directory:\n"
+        + "\n".join(f"  {p}:{n}  {line}" for p, n, line in offenders)
+        + "\n\nThese are recovery and backup playbooks. A path that does not exist "
+        "on a deployed node makes them fail at the moment they are needed (#15604)."
+    )
+
+
+@pytest.mark.parametrize(
+    "path,line,should_flag",
+    [
+        # The forms actually found in #15604.
+        ("ansible/x.yml", "    backend_code_dir: /opt/autobot/autobot-user-backend", True),
+        ("ansible/x.yml", '    backend_code_dir: "{{ root }}/autobot-user-backend"', True),
+        ("ansible/x.j2", 'Environment="PYTHONPATH=/opt:/opt/autobot/autobot-user-backend"', True),
+        ("ansible/x.yml", "        cd /opt/autobot/autobot-user-backend", True),
+        # The corrected form must not flag, or the guard fails the fix it demands.
+        ("ansible/x.yml", "    backend_code_dir: /opt/autobot/autobot-backend", False),
+        # A cleanup file naming it deliberately, in order to remove it.
+        (_LEGACY_CLEANUP_ALLOWLIST[0], "    - /opt/autobot/autobot-user-backend", False),
+    ],
+)
+def test_the_deploy_detector_contrast_pair(path: str, line: str, should_flag: bool) -> None:
+    """Both directions.
+
+    A detector only ever run against a tree that currently passes cannot be
+    distinguished from one that returns "clean" for every input -- and the
+    allowlist entry is the case where flagging would be actively wrong.
+    """
+    assert bool(deploy_config_offenders(path, line)) is should_flag
