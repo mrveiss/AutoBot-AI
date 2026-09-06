@@ -199,7 +199,7 @@ async def test_a_sub_organization_does_not_get_a_ceo(fresh_db_url):
         "resolve by id, so removing it converts a wrong row into a dangling one"
     )
     assert dormant.heartbeat_enabled is False
-    assert dormant.status == "on_leave"
+    assert dormant.status == "inactive"
 
 
 async def test_a_soft_deleted_organization_does_not_get_a_ceo(fresh_db_url):

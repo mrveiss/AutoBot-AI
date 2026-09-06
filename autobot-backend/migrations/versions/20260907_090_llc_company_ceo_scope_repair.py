@@ -73,17 +73,22 @@ _TABLE = "llc_company_ceos"
 _AGENTS = "agent_org_nodes"
 _ORGS = "organizations"
 
-#: An agent that is not working. ``LLCAgentStatus`` has no "retired" or
-#: "inactive" member, and adding one to repair a backfill would be a vocabulary
-#: change riding a data fix -- the kind of thing noticed six months later by
-#: someone who cannot tell which half of the commit they are reading.
+#: The terminal state two consumers already agree on.
 #:
-#: This is a deliberate approximation, not a fit. ``on_leave`` means
-#: *temporarily away*; these nodes mean *should never have existed*, and the
-#: schema cannot currently express the difference, so a later reader will
-#: reasonably conclude someone is coming back. Tracked as #15898. If a terminal
-#: state lands, this is one predicate.
-_DORMANT_STATUS = "on_leave"
+#: `llc/api/replay.py:109` rejects replay for `status in ("inactive",
+#: "terminated")`, and `llc/scheduler/budget_watchdog.py:283,285` filters
+#: `status != "inactive"` and writes `"inactive"` for a node that must stop.
+#: `inactive` therefore puts these rows inside a vocabulary both readers
+#: recognise, and costs no new agreement between them.
+#:
+#: `on_leave` was the earlier choice and was wrong on both counts: it means
+#: *temporarily away*, and it sits outside that terminal set -- a node left at
+#: `on_leave` stays replayable, and the watchdog would pause a node this
+#: migration had already retired, because `on_leave != "inactive"`.
+#:
+#: `terminated` is arguably more precise for "should never have existed", but
+#: `inactive` is what the watchdog already writes, so it introduces nothing.
+_DORMANT_STATUS = "inactive"
 
 #: Rows the backfill created and nobody has touched since. Shared by both
 #: statements so they cannot drift apart and repair different sets.
