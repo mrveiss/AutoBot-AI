@@ -76,7 +76,7 @@ jobs:
           # `.*noreply@paperclip` re-defeats the anchor it sits behind, matching
           # the address anywhere on the line. A trailer is `Key: value`, so that
           # is what is required.
-          agent_re='^[[:space:]]*(Generated with \[?Claude|[A-Za-z-]+:.*noreply@paperclip|Claude-Session:)'
+          agent_re='^[[:space:]]*(Generated with \[?Claude|[A-Za-z0-9_-]+:.*noreply@paperclip|Claude-Session:)'
           # A Co-authored-by trailer is allowed only when the identity it names is
           # the commit's OWN author, the repository owner, or a bot. That lets
           # dependabot's self-attribution on its security bumps through — which is

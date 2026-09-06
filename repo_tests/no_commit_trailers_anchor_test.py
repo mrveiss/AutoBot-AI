@@ -40,6 +40,8 @@ REJECTED = [
     "Co-authored-by: someone <noreply@paperclip.com>",
     "  Co-authored-by: someone <noreply@paperclip.com>",
     "Claude-Session: https://example.invalid/session",
+    "X-Co-Author2: someone <noreply@paperclip.com>",
+    "GENERATED WITH [CLAUDE CODE]",
 ]
 
 #: Prose that NAMES a banned trailer. Every one must pass -- documenting a rule
@@ -64,12 +66,27 @@ def _agent_re() -> str:
     return match.group(1)
 
 
+def _grep_flags() -> str:
+    """The flags the workflow actually greps with, read from the workflow.
+
+    Hardcoding ``-qE`` here ran the live pattern under conditions production
+    does not use: the workflow greps **case-insensitively** (``grep -iqE``). A
+    test that reads the pattern from the source of truth and then applies it
+    differently is asserting about something nobody runs -- the same defect
+    class this file exists to close, one level up.
+    """
+    text = WORKFLOW.read_text(encoding="utf-8")
+    match = re.search(r"grep\s+(-[a-zA-Z]+)\s+\"\$\{agent_re\}\"", text)
+    assert match, "could not find the workflow's grep invocation for agent_re"
+    return match.group(1)
+
+
 def _matches(pattern: str, line: str) -> bool:
-    """Ask grep, not Python: the workflow runs `grep -qE`, and the dialects differ."""
+    """Ask grep, not Python: the dialects differ, and so do the flags."""
     return (
         # Fixed argv; inputs are module constants.
         subprocess.run(  # nosec B603 B607
-            ["grep", "-qE", pattern],
+            ["grep", _grep_flags(), pattern],
             input=line,
             text=True,
             check=False,
