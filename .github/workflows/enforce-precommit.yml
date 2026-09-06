@@ -302,10 +302,22 @@ jobs:
           # BLOCKING: every first-party .py/.ts/.tsx/.js/.mjs/.sh/.css file must
           # carry the Apache-2.0 SPDX header. Scan mode (no --fix) fails CI when
           # a header-less file lands, so coverage from the #9826 relicense sweep
-          # can no longer drift. Run check_spdx_header.py over all tracked files;
-          # in_scope()/EXCLUDE_RE in the script skip vendored/generated/.vue/
-          # workflow/infrastructure paths (same scope as the original sweep).
-          git ls-files -z | xargs -0 python3 tools/lint/check_spdx_header.py
+          # can no longer drift. in_scope()/EXCLUDE_RE in the script skip
+          # vendored/generated/.vue/workflow/infrastructure paths (same scope as
+          # the original sweep).
+          #
+          # --all, not `git ls-files -z | xargs -0 ...` (#15817). The old
+          # pipeline put the gate's entire reach outside the thing being gated:
+          # a shallow checkout, a wrong CWD, or an xargs that split zero times
+          # produced a run over NO files that still exited 0, and would have
+          # kept exiting 0 while headers rotted out of the tree. --all makes the
+          # script enumerate the tree itself and hold the SPDX_FLOOR reach floor
+          # (bound to files EXAMINED, not violations found), and it prints
+          # examined=N so the reach is visible in the log rather than assumed.
+          # The pre-commit `insert-license` hook deliberately does NOT pass
+          # --all: it receives staged files, and a floor there would redden
+          # every one-file commit in the repository.
+          python3 tools/lint/check_spdx_header.py --all
 
       - name: Block newly tracked symlinks into or out of the working tree (#14137)
         env:
