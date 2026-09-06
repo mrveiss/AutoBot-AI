@@ -47,6 +47,19 @@ walks the fixture's own scope. ``_expr_is_derived`` keeps ``ast.walk``
 deliberately, because a lambda in a value expression closes over this
 fixture's names -- ``TestLambdaFactoryDerivationStillCounts`` is what stops
 that site being "fixed" the same way.
+
+A DEAD BINDING IS NOT AN ASSIGNMENT ANY PATH MAKES (#15811)
+--------------------------------------------------------------
+"Every assignment must derive" could not tell a dead assignment from a live
+conditional one, so ``test_dir = Path("/fixed")`` immediately overwritten by
+``test_dir = tmp_path / "leaf"`` was flagged although every path uses the
+derived value (a FALSE POSITIVE -- the direction that gets a guard switched
+off). ``_dead_bindings`` drops a binding overwritten by a later one in the same
+statement list with no read in between, which is why the conditional rebind
+above -- whose overwrite sits in a branch and kills nothing -- is untouched.
+And because a reached helper (#15810) now contributes calls, each scope earns
+"derived" from its own locals, pinned by
+``TestReachedHelperDerivesFromItsOwnScope``.
 """
 
 from __future__ import annotations
@@ -162,6 +175,7 @@ class TestLambdaFactoryDerivationStillCounts:
     def test_lambda_factory_over_a_fixed_root_is_still_flagged(self):
         assert _is_violation(_only_fixture(_LAMBDA_FACTORY_HAZARD_SOURCE)) is True
 
+
 _CONDITIONAL_REBIND_HAZARD_SOURCE = """
 import shutil
 from pathlib import Path
@@ -237,3 +251,211 @@ class TestEveryAssignmentToANameMustDerive:
 
     def test_a_chain_that_derives_on_every_assignment_is_not_flagged(self):
         assert _is_violation(_only_fixture(_DERIVED_CHAIN_SAFE_SOURCE)) is False
+
+
+_DEAD_FIXED_ASSIGNMENT_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    test_dir = Path("/tmp/autobot/dead_fixed_assignment")
+    test_dir = tmp_path / "live_leaf"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    shutil.rmtree(test_dir)
+"""
+
+_DEAD_DERIVED_ASSIGNMENT_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    test_dir = tmp_path / "dead_leaf"
+    test_dir = Path("/tmp/autobot/live_fixed")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    yield test_dir
+    shutil.rmtree(test_dir)
+"""
+
+_READ_BEFORE_OVERWRITE_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    test_dir = Path("/tmp/autobot/read_before_overwrite")
+    test_dir.mkdir(parents=True, exist_ok=True)
+    test_dir = tmp_path / "leaf"
+    yield test_dir
+    shutil.rmtree(test_dir)
+"""
+
+
+class TestDeadAssignmentsDoNotCountAgainstAName:
+    """#15811: "every assignment must derive" could not tell dead from conditional.
+
+    ``_DEAD_FIXED_ASSIGNMENT_SAFE_SOURCE`` reaches its create and its remove
+    with a ``tmp_path`` leaf on every path -- the fixed value is overwritten
+    before anything can read it -- yet the rule from #15809 withdrew
+    ``test_dir`` and flagged a correct fixture (a FALSE POSITIVE, the
+    direction that gets a guard switched off). ``_dead_bindings`` drops the
+    unobservable binding before the fixed point runs.
+
+    Dropping bindings makes flagging LESS likely, so the two hazard sources
+    carry the weight. The first is the same pair in the other order -- the
+    derived value is the dead one and the fixed value is what every path uses
+    -- so the rule cannot be "ignore the first assignment". The second keeps
+    both assignments but reads the fixed value in between (``mkdir`` on it),
+    which makes it live and observable; the ordering pin in
+    ``TestEveryAssignmentToANameMustDerive`` above covers the conditional
+    rebind, where the overwrite sits in a branch and kills nothing.
+    """
+
+    def test_dead_fixed_assignment_overwritten_by_a_derived_one_is_not_flagged(self):
+        assert _is_violation(_only_fixture(_DEAD_FIXED_ASSIGNMENT_SAFE_SOURCE)) is False
+
+    def test_dead_derived_assignment_overwritten_by_a_fixed_one_is_still_flagged(self):
+        assert _is_violation(_only_fixture(_DEAD_DERIVED_ASSIGNMENT_HAZARD_SOURCE)) is True
+
+    def test_a_binding_read_before_the_overwrite_is_not_dead(self):
+        assert _is_violation(_only_fixture(_READ_BEFORE_OVERWRITE_HAZARD_SOURCE)) is True
+
+
+_HELPER_LOCAL_DERIVED_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(request, tmp_path):
+    fixed_marker = Path("/tmp/autobot/helper_local_marker")
+    fixed_marker.mkdir(parents=True, exist_ok=True)
+    def fin():
+        leaf = tmp_path / "helper_local_leaf"
+        shutil.rmtree(leaf)
+    request.addfinalizer(fin)
+    yield fixed_marker
+"""
+
+_HELPER_LOCAL_FIXED_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(request, tmp_path):
+    fixed_marker = Path("/tmp/autobot/helper_local_marker")
+    fixed_marker.mkdir(parents=True, exist_ok=True)
+    def fin():
+        leaf = Path("/tmp/autobot/helper_local_fixed")
+        shutil.rmtree(leaf)
+    request.addfinalizer(fin)
+    yield fixed_marker
+"""
+
+
+class TestReachedHelperDerivesFromItsOwnScope:
+    """A reached helper's locals are judged in the helper, not in the fixture.
+
+    Folding a registered finalizer's calls into the fixture (#15810) is only
+    correct if the names in those calls are resolved where they are written:
+    ``fin``'s own ``leaf = tmp_path / "..."`` is per-test unique and must
+    excuse the removal, while the identical shape over a fixed root must not.
+    Judging both against the *fixture's* derived names would get one of them
+    wrong whichever way that set happened to fall.
+    """
+
+    def test_helper_local_derived_from_tmp_path_excuses_its_removal(self):
+        assert _is_violation(_only_fixture(_HELPER_LOCAL_DERIVED_SAFE_SOURCE)) is False
+
+    def test_helper_local_over_a_fixed_root_is_still_flagged(self):
+        assert _is_violation(_only_fixture(_HELPER_LOCAL_FIXED_HAZARD_SOURCE)) is True
+
+
+_STAR_PARAM_SHADOW_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(request, tmp_path):
+    fixed_marker = Path("/tmp/autobot/star_param_marker")
+    fixed_marker.mkdir(parents=True, exist_ok=True)
+    leaf = tmp_path / "star_param_leaf"
+    def fin(*leaf):
+        shutil.rmtree(leaf[0])
+    request.addfinalizer(fin)
+    yield fixed_marker
+"""
+
+_STAR_PARAM_CLOSURE_SAFE_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(request, tmp_path):
+    fixed_marker = Path("/tmp/autobot/star_param_marker")
+    fixed_marker.mkdir(parents=True, exist_ok=True)
+    leaf = tmp_path / "star_param_leaf"
+    def fin(*args):
+        shutil.rmtree(leaf)
+    request.addfinalizer(fin)
+    yield fixed_marker
+"""
+
+_STAR_PARAM_UNIQUE_NAME_HAZARD_SOURCE = """
+import shutil
+from pathlib import Path
+import pytest
+
+@pytest.fixture
+def temp_dir(request):
+    fixed_marker = Path("/tmp/autobot/star_param_marker")
+    fixed_marker.mkdir(parents=True, exist_ok=True)
+    def fin(*tmp_path):
+        shutil.rmtree(tmp_path[0])
+    request.addfinalizer(fin)
+    yield fixed_marker
+"""
+
+
+class TestStarParametersShadowInheritedDerivation:
+    """#15815 review: ``*args``/``**kwargs`` bind a name like any other parameter.
+
+    ``_scope_params`` collected only ``args``/``kwonlyargs``/``posonlyargs``,
+    and ``_scope_derived_names`` subtracts that set from the names a reached
+    helper inherits. A helper written ``def fin(*leaf)`` inside a fixture
+    whose own ``leaf`` is ``tmp_path``-derived therefore kept the enclosing
+    credit, and ``shutil.rmtree(leaf[0])`` -- a tuple element the caller
+    supplied, sharing nothing with the fixture's path but the spelling --
+    read as derived and excused itself. A FALSE NEGATIVE, and the docstring
+    already claimed the opposite.
+
+    ``_STAR_PARAM_CLOSURE_SAFE_SOURCE`` is the same helper with the star
+    parameter named ``args``: ``leaf`` is then a genuine closure over the
+    fixture's derived name and must still reach the nested scope, so the fix
+    cannot be "a star parameter stops inheritance". Every source here creates
+    the SAME fixed marker, so the create side is True in all three and the
+    removal verdict is the only thing these assertions can be reading.
+
+    ``_STAR_PARAM_UNIQUE_NAME_HAZARD_SOURCE`` pins the other half of the
+    split: shadowing reads every bound name, but seeding reads only
+    ``_named_params``, because pytest injects ``tmp_path`` by parameter name
+    and never through a star. Widening the seed set along with the shadow set
+    would have swapped this false negative for a new one.
+    """
+
+    def test_star_parameter_shadows_the_inherited_derived_name(self):
+        assert _is_violation(_only_fixture(_STAR_PARAM_SHADOW_HAZARD_SOURCE)) is True
+
+    def test_a_differently_named_star_parameter_keeps_the_closure_derived(self):
+        assert _is_violation(_only_fixture(_STAR_PARAM_CLOSURE_SAFE_SOURCE)) is False
+
+    def test_a_star_parameter_named_tmp_path_is_not_pytests_injection(self):
+        assert _is_violation(_only_fixture(_STAR_PARAM_UNIQUE_NAME_HAZARD_SOURCE)) is True
