@@ -46,6 +46,10 @@ async def test_cost_is_not_charged_without_a_company():
         )
         run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz"})
         assert isinstance(run_id, str) and run_id
-        await asyncio.sleep(0.05)
+
+        # Awaited, not slept on. `assert_not_called` is satisfied by a task that
+        # has not started yet, so a sleep would let this pass without the cost
+        # path ever running -- the assertion would be true and meaningless.
+        await asyncio.wait_for(adapter._tasks[run_id], timeout=5)
 
         MockBS.return_value.ingest_cost_event.assert_not_called()
