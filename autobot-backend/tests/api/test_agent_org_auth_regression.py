@@ -201,3 +201,48 @@ def test_the_route_passes_the_callers_company_to_the_service(
         f"the service received company_id={seen.get('company_id')!r}; the route must pass the "
         "caller's context, or tenant scoping is unreachable from HTTP"
     )
+
+
+@pytest.mark.parametrize("failure", ["Agent not found in org hierarchy: 'x'", "Manager not in this company: 'y'"])
+def test_upsert_tenant_failures_answer_404_not_500(failure: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A cross-company upsert must be indistinguishable from a missing agent.
+
+    #15794 (CWE-204). `upsert_node` raises `ValueError` for a foreign agent, and
+    without a handler that reaches the route's `SERVER_ERROR` decorator as a
+    **500** — while an agent that genuinely does not exist is created and
+    returns 200. So an authorised caller could tell "exists in a company you
+    cannot see" from "does not exist" by status alone.
+
+    That is the same fact the message wording was chosen to hide. Phrasing the
+    detail as "not found" while the status says "server error" leaks it through
+    a different channel, which is why this asserts the **status** rather than
+    the message.
+    """
+    import api.agent_org as agent_org
+    from api.user_management.dependencies import get_current_user, require_reporting_line_write
+
+    class _Svc:
+        def __init__(self, session):  # noqa: ANN001
+            pass
+
+        async def upsert_node(self, **kwargs):  # noqa: ANN003
+            raise ValueError(failure)
+
+    monkeypatch.setattr(agent_org, "AgentOrgService", _Svc)
+
+    class _Ctx:
+        org_id = uuid.uuid4()
+
+    app = FastAPI()
+    app.include_router(agent_org.router, prefix="/agents")
+    app.dependency_overrides[get_current_user] = lambda: {"id": str(uuid.uuid4()), "role": "admin"}
+    app.dependency_overrides[require_reporting_line_write] = lambda: _Ctx()
+
+    async def _session():  # noqa: ANN202
+        return object()
+
+    app.dependency_overrides[agent_org.get_db_session] = _session
+    client = TestClient(app, raise_server_exceptions=False)
+
+    resp = client.put("/agents/some-agent/org", json={"name": "n", "reports_to": "m"})
+    assert resp.status_code == status.HTTP_404_NOT_FOUND, resp.text

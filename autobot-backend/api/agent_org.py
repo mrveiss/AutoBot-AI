@@ -309,16 +309,28 @@ async def upsert_agent_org(
     Creates the record if it does not exist.
     """
     svc = AgentOrgService(session)
-    node = await svc.upsert_node(
-        agent_id=agent_id,
-        name=body.name,
-        org_role=body.org_role,
-        reports_to=body.reports_to,
-        # From the authenticated context, never the body (#15794).
-        company_id=context.org_id,
-        title=body.title,
-        capabilities=body.capabilities,
-    )
+    # #15794 (CWE-204): a tenant failure must answer 404, the same as the PATCH
+    # route, or the two outcomes are distinguishable by status alone. Without
+    # this the ValueError reaches the SERVER_ERROR decorator as a 500 while an
+    # agent that does not exist is created and returns 200 — so an authorised
+    # caller can tell "exists in a company you cannot see" from "does not
+    # exist", which is exactly what phrasing the message as "not found" was
+    # meant to prevent. Saying "not found" while the status says "server error"
+    # leaks the same fact through a different channel.
+    try:
+        node = await svc.upsert_node(
+            agent_id=agent_id,
+            name=body.name,
+            org_role=body.org_role,
+            reports_to=body.reports_to,
+            # From the authenticated context, never the body (#15794).
+            company_id=context.org_id,
+            title=body.title,
+            capabilities=body.capabilities,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
     return AgentSummary(
         agent_id=node.agent_id,
         name=node.name,
