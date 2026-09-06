@@ -550,3 +550,17 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_IDEMPOTENCY_CLAIM_ATTEMPTS",
+        type=int,
+        default=3,
+        description=(
+            "How many times an idempotency claim re-runs its atomic SET NX after the record it lost "
+            "to turns out to have expired. Reporting 'unseen' at that point would let every loser of "
+            "the race create (autobot_shared/idempotency.py, #15778)."
+        ),
+        component="backend",
+    )
+)
