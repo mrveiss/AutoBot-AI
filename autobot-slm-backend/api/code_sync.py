@@ -4836,9 +4836,7 @@ async def _persist_resume_plan(
         # watching the GUI sees the log stop at "Firing Ansible self-update
         # (fire-and-forget)" and never learn the outcome -- the resumed job
         # backfills "completed before restart" placeholders over the real lines.
-        "stage_logs": {
-            stage.name: list(stage.log_lines or [])[-_RESUME_PLAN_LOG_LINES:] for stage in job.stages
-        },
+        "stage_logs": {stage.name: list(stage.log_lines or [])[-_RESUME_PLAN_LOG_LINES:] for stage in job.stages},
     }
     async with db_service.session() as db:
         result = await db.execute(select(Setting).where(Setting.key == _UPDATE_ALL_RESUME_KEY))

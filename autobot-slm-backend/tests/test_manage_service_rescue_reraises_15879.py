@@ -91,11 +91,7 @@ def test_only_the_diagnostic_commands_are_exempt_from_failing() -> None:
 def test_the_capture_reads_the_node_journal_not_just_the_unit_state() -> None:
     """Both halves of the message systemd tells the reader to consult."""
     rescue = _service_block()["rescue"]
-    commands = " ".join(
-        str(item)
-        for task in rescue
-        for item in (task.get("loop") or [])
-    )
+    commands = " ".join(str(item) for task in rescue for item in (task.get("loop") or []))
     for probe in ("systemctl status", "journalctl"):
         assert probe in commands, (
             f"the rescue never runs {probe!r}. systemd's failure message names both, "

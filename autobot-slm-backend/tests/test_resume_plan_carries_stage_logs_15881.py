@@ -86,8 +86,7 @@ def test_an_older_plan_is_still_accepted(source: str) -> None:
         "remain readable or the deploying update wedges itself"
     )
     assert "not in _SUPPORTED_RESUME_PLAN_VERSIONS" in source, (
-        "the set is declared but the validator does not use it -- an unwired "
-        "compatibility check is the same as none"
+        "the set is declared but the validator does not use it -- an unwired " "compatibility check is the same as none"
     )
 
 
