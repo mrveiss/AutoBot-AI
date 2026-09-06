@@ -31,6 +31,7 @@ Pipeline: pre-flight → research → confirm → file → implement → evidenc
 
 ## Rules
 
+- **Anonymize every artifact this pipeline files**, per the anonymization rule in `research` — it governs the umbrella and child issues, PR titles and bodies, branch names and commit messages produced here, not just the research doc.
 - Never skip step 3 — filing issues and writing code require explicit user approval
 - Subagent completion claims count only after artifact verification (`git log`, `gh pr view`) — no commits/PR means not done
 - Checkpoint Phase 1/2 output and the evidence table to a file incrementally (scratchpad or umbrella issue comment) so an interruption never loses the audit
