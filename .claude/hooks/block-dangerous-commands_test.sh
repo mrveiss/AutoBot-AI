@@ -16,7 +16,7 @@
 # The sandbox below runs `git init`, `git commit` and `git worktree add`. An
 # inherited GIT_DIR/GIT_WORK_TREE would send every one of those writes to the
 # real repository instead of the temp tree (#15246), so scrub first.
-unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
