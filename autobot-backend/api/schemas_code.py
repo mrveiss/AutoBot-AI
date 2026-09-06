@@ -2260,7 +2260,12 @@ class PlaywrightScreenshotRequest(BaseModel):
     url: str
     full_page: bool = True
     wait_timeout: int = 5000
-    session_id: str | None = None
+    session_id: str | None = Field(
+        None,
+        description=(
+            "Session id for isolated browser-context routing (#11539). **Omitting it is not an error and not isolation**: the caller joins the shared default context alongside every other unscoped client, and the server logs a WARNING naming the caller so unscoped integrations are discoverable rather than found by accident (#15802)."
+        ),
+    )
 
 
 class PlaywrightNavigateRequest(BaseModel):
@@ -2269,13 +2274,20 @@ class PlaywrightNavigateRequest(BaseModel):
     timeout: int = 30000
     session_id: str | None = Field(
         None,
-        description="Session id for isolated browser-context routing (#11539); omitted uses shared default",
+        description=(
+            "Session id for isolated browser-context routing (#11539). **Omitting it is not an error and not isolation**: the caller joins the shared default context alongside every other unscoped client, and the server logs a WARNING naming the caller so unscoped integrations are discoverable rather than found by accident (#15802)."
+        ),
     )
 
 
 class PlaywrightReloadRequest(BaseModel):
     wait_until: str = "networkidle"
-    session_id: str | None = None
+    session_id: str | None = Field(
+        None,
+        description=(
+            "Session id for isolated browser-context routing (#11539). **Omitting it is not an error and not isolation**: the caller joins the shared default context alongside every other unscoped client, and the server logs a WARNING naming the caller so unscoped integrations are discoverable rather than found by accident (#15802)."
+        ),
+    )
 
 
 class PlaywrightInteractRequest(BaseModel):
@@ -2285,7 +2297,12 @@ class PlaywrightInteractRequest(BaseModel):
     deltaX: float = 0
     deltaY: float = 0
     text: str | None = None
-    session_id: str | None = None
+    session_id: str | None = Field(
+        None,
+        description=(
+            "Session id for isolated browser-context routing (#11539). **Omitting it is not an error and not isolation**: the caller joins the shared default context alongside every other unscoped client, and the server logs a WARNING naming the caller so unscoped integrations are discoverable rather than found by accident (#15802)."
+        ),
+    )
 
 
 class PlaywrightSessionRequest(BaseModel):
@@ -2293,7 +2310,12 @@ class PlaywrightSessionRequest(BaseModel):
     /back, /forward, /worker-screenshot. GET /status takes the same id as a
     query param instead (no request body on GET)."""
 
-    session_id: str | None = None
+    session_id: str | None = Field(
+        None,
+        description=(
+            "Session id for isolated browser-context routing (#11539). **Omitting it is not an error and not isolation**: the caller joins the shared default context alongside every other unscoped client, and the server logs a WARNING naming the caller so unscoped integrations are discoverable rather than found by accident (#15802)."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
