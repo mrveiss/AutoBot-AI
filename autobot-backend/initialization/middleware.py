@@ -117,6 +117,23 @@ def configure_service_auth(app: FastAPI):
         logger.warning("⚠️ Service auth middleware not available: %s", e2)
 
 
+def configure_idempotency(app: FastAPI):
+    """Wire replay protection for creations carrying an Idempotency-Key (#15778).
+
+    Opt-in by header, so a request without one behaves exactly as before and
+    nothing needs migrating. Call order matters: `add_middleware` prepends, so
+    this must be registered BEFORE `configure_audit` for audit to end up
+    outermost and see replayed requests.
+    """
+    try:
+        from middleware.idempotency_middleware import IdempotencyMiddleware
+
+        app.add_middleware(IdempotencyMiddleware)
+        logger.info("Idempotency middleware enabled")
+    except ImportError as e:
+        logger.warning("Idempotency middleware not available: %s", e)
+
+
 def configure_audit(app: FastAPI):
     """Configure audit logging middleware.
 
@@ -283,6 +300,15 @@ def configure_middleware(
     if enable_service_auth:
         configure_service_auth(app)
 
+    # Idempotent creations (#15778) — registered BEFORE audit deliberately.
+    # `add_middleware` prepends, so the last one registered is the outermost and
+    # runs first: audit must wrap idempotency, or a replayed response would
+    # short-circuit before the audit entry is written and a retried creation
+    # would vanish from the trail. It still sits after service auth, because the
+    # replay key is namespaced by actor and `request.state.user` has to be
+    # populated or every caller shares the "anonymous" scope.
+    configure_idempotency(app)
+
     # Configure Audit Logging (issue #3277) — must be after service auth so
     # user context (request.state.user) is already populated for audit entries.
     if enable_audit:
@@ -311,6 +337,7 @@ __all__ = [
     "configure_gzip",
     "configure_service_auth",
     "configure_audit",
+    "configure_idempotency",
     "configure_llm_awareness",
     "configure_validation",
     "configure_llc_agent_auth",
