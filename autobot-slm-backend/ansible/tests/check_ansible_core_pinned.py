@@ -42,7 +42,9 @@ def read_pin() -> str:
         if match:
             return match.group(1)
 
-    raise SystemExit(f"NO PIN IN {_PIN_FILE}\n" "  Expected a line of the form 'ansible-core==<version>'.")
+    raise SystemExit(
+        f"NO PIN IN {_PIN_FILE}\n  Expected a line of the form 'ansible-core==<version>'."
+    )
 
 
 def resolve_interpreter() -> Path:
@@ -50,7 +52,8 @@ def resolve_interpreter() -> Path:
     found = shutil.which("ansible-playbook")
     if not found:
         raise SystemExit(
-            "NO ansible-playbook ON PATH\n" "  The workflow installs the pin into a venv and prepends its bin/ to PATH."
+            "NO ansible-playbook ON PATH\n"
+            "  The workflow installs the pin into a venv and prepends its bin/ to PATH."
         )
     return Path(found).resolve()
 

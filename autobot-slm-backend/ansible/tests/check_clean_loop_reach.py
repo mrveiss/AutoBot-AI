@@ -62,7 +62,8 @@ def _scenario_problems(receipt: dict) -> list[str]:
         problems.append(f"{name}: ran zero role clean.yml files")
     if not _is_true(receipt.get("gate_fact_observed")):
         problems.append(
-            f"{name}: the shared wrong-node gate never ran -- " "clean_wrong_node_dir.yml set no fact on this host"
+            f"{name}: the shared wrong-node gate never ran -- "
+            f"clean_wrong_node_dir.yml set no fact on this host"
         )
     if not _is_true(receipt.get("inventory_sourced")):
         problems.append(
