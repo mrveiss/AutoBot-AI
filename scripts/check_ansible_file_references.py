@@ -166,10 +166,19 @@ def _resolve(value: str, variables: dict[str, str]) -> str | None:
     return resolved
 
 
-def _referenced_repo_paths(text: str) -> list[tuple[int, str, str]]:
-    """Return ``(line_no, key, repo_relative_path)`` for deployed-src references."""
+def _referenced_repo_paths(
+    text: str,
+) -> tuple[list[tuple[int, str, str]], list[tuple[int, str, str]]]:
+    """Return ``(resolved, unresolvable)`` deployed-src references.
+
+    ``resolved`` is ``(line_no, key, repo_relative_path)``. ``unresolvable`` is
+    every file-key assignment whose template could not be resolved -- returned
+    rather than skipped, because a reference silently leaving the population is
+    indistinguishable from one that was never there.
+    """
     variables = _var_definitions(text)
-    hits = []
+    hits: list[tuple[int, str, str]] = []
+    unresolvable: list[tuple[int, str, str]] = []
     for line_no, line in enumerate(text.splitlines(), 1):
         match = _ASSIGNMENT.match(line)
         if not match:
@@ -179,11 +188,20 @@ def _referenced_repo_paths(text: str) -> list[tuple[int, str, str]]:
         # a value is no less checkable for being spelled `{{ root }}/x` (#15687).
         resolved = _resolve(value, variables)
         if resolved is None:
+            # #15901 review: this used to `continue`, so a reference that stopped
+            # resolving LEFT the population instead of failing. The count then
+            # stayed constant across exactly the change that lost it -- the
+            # figure reported on what survived. Unresolvable values are returned
+            # so the caller can fail on them rather than quietly not counting
+            # them.
+            unresolvable.append((line_no, match.group("key"), value))
             continue
         if not resolved.startswith(_DEPLOYED_SRC_PREFIX):
+            # Genuinely out of scope: a path that is not under the deploy root
+            # is not a repo path and never was. Distinct from unresolvable.
             continue
         hits.append((line_no, match.group("key"), resolved[len(_DEPLOYED_SRC_PREFIX) :]))
-    return hits
+    return hits, unresolvable
 
 
 def _groups_in(node, acc: set) -> None:
@@ -284,6 +302,16 @@ def _unresolvable_hosts(text: str, all_groups: set) -> list[tuple[int, str]]:
 #: Name this guard reports under.
 HOOK_ID = "ansible-file-references"
 
+#: Floor for deployed-src references in THIS repository, asserted by
+#: `check_ansible_file_references_test.py` rather than by `main()`.
+#:
+#: It cannot live in `main()`: an arbitrary tree may legitimately contain no
+#: deployed-src reference at all, which `test_a_play_resolving_nothing_is_still_a_pass`
+#: exists to protect. The floor is a fact about this repository, so it is
+#: enforced where repository facts are -- and it catches the loss the
+#: `plays_read` floor cannot, a reference that stopped resolving (#15901).
+MIN_DEPLOYED_SRC_REFERENCES = 1
+
 
 # The vacuity floor below (#14896) counts plays READ, not references
 # resolved. A walk that read no play at all -- wrong CWD, a renamed
@@ -298,7 +326,7 @@ def main() -> int:
     inventories = inventory_groups(root)
     all_groups = set().union(*inventories.values()) if inventories else set()
 
-    path_violations, host_violations = [], []
+    path_violations, host_violations, unresolvable_refs = [], [], []
     paths_checked = hosts_checked = plays_read = 0
 
     for play in _ansible_files(root):
@@ -308,10 +336,13 @@ def main() -> int:
             continue
         plays_read += 1
         rel_play = play.relative_to(root)
-        for line_no, key, rel in _referenced_repo_paths(text):
+        resolved_refs, unresolved_here = _referenced_repo_paths(text)
+        for line_no, key, rel in resolved_refs:
             paths_checked += 1
             if not (root / rel).exists():
                 path_violations.append(f"{rel_play}:{line_no}: {key} -> {rel} does not exist in the repo")
+        for line_no, key, value in unresolved_here:
+            unresolvable_refs.append(f"{rel_play}:{line_no}: {key} -> {value}")
         hosts_checked += len(_host_patterns(text))
         for line_no, pattern in _unresolvable_hosts(text, all_groups):
             host_violations.append(f"{rel_play}:{line_no}: hosts: {pattern} — no inventory defines it")
@@ -335,8 +366,16 @@ def main() -> int:
     if enforce_reach(plays_read, 1, hook=HOOK_ID, full_repo=True):
         return 1
 
+    # #15901 review: report the unresolvable count too. Most are legitimately
+    # unresolvable -- `{{ item }}` in a loop, `{{ cert_file }}` supplied at run
+    # time, network subnets in group_vars -- so failing on them would be wrong.
+    # But printing only the resolved count makes a reference LEAVING the
+    # population invisible: the figure reports on what survived. Both numbers
+    # together make the denominator visible, and the floor above catches the
+    # resolved side dropping.
     print(
-        f"check_ansible_file_references: {paths_checked} deployed-src reference(s) resolve; "
+        f"check_ansible_file_references: {paths_checked} deployed-src reference(s) resolve, "
+        f"{len(unresolvable_refs)} unresolvable; "
         f"{hosts_checked} host pattern(s) resolve against {len(inventories)} inventor"
         f"{'y' if len(inventories) == 1 else 'ies'}."
     )
