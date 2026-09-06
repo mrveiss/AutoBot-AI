@@ -893,7 +893,8 @@ async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]
     # and triggers exponential-backoff recovery.  _run_adapter is already a
     # background task, so blocking here does not stall the poll loop.
     adapter = AutoBotAgentAdapter(agent_config=adapter_config)
-    await adapter.run_blocking(dict(context, agent_id=agent["agent_id"]))
+    scoped = dict(context, agent_id=agent["agent_id"], company_id=str(agent.get("company_id") or ""))
+    await adapter.run_blocking(scoped)
 
 
 async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], context: Dict[str, Any]) -> Optional[str]:
@@ -918,8 +919,6 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     company_id = str(agent.get("company_id") or "")
 
     key_record = None
-    # company_id travels with the context because the adapter charges a budget on
-    # the way back, and agent_id alone does not identify a budget row (#15812).
     enriched = dict(context, agent_id=agent_id, company_id=company_id, api_base=AGENT_API_BASE_URL)
     if company_id:
         key_record, raw_key = await _issue_run_key(agent_id, company_id)
@@ -991,13 +990,9 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
     try:
         factory = get_async_session_factory()
         async with factory() as session:
+            company = str(agent.get("company_id") or "")
             await BudgetService().ingest_cost_event(
-                session,
-                agent_id,
-                str(agent.get("company_id") or ""),
-                int(result.tokens_in or 0),
-                int(result.tokens_out or 0),
-                model,
+                session, agent_id, company, int(result.tokens_in or 0), int(result.tokens_out or 0), model
             )
             await session.commit()
     except BudgetExhausted:

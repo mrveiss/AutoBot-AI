@@ -134,7 +134,7 @@ class BudgetWatchdog(PollLoopScheduler):
                 },
             )
             # Mark agent as paused in agent_org_nodes (best-effort)
-            await self._pause_agent(row.agent_id)
+            await self._pause_agent(row.agent_id, row.company_id)
         except Exception:
             logger.exception("hard_stop_agent failed for %s (swallowed)", row.agent_id)
 
@@ -235,8 +235,15 @@ class BudgetWatchdog(PollLoopScheduler):
         except Exception:
             logger.debug("_notify(%s) publish failed (swallowed)", event_type)
 
-    async def _pause_agent(self, agent_id: str) -> None:
-        """Best-effort: mark agent inactive in agent_org_nodes."""
+    async def _pause_agent(self, agent_id: str, company_id: str) -> None:
+        """Best-effort: mark agent inactive in agent_org_nodes.
+
+        Scoped by company. The slug is unique per company on the budget side
+        (#15812), so an unscoped UPDATE would let one company's exhausted budget
+        pause another company's agent the moment two of them share a slug. The
+        cast keeps the comparison working on both backends: this column is UUID
+        while the budget row carries the company as text.
+        """
         factory = get_async_session_factory()
         try:
             async with factory() as session:
@@ -244,8 +251,9 @@ class BudgetWatchdog(PollLoopScheduler):
                     text(
                         "UPDATE agent_org_nodes SET status = 'inactive'"
                         " WHERE agent_id = :agent_id AND status != 'inactive'"
+                        " AND CAST(company_id AS TEXT) = :company_id"
                     ),
-                    {"agent_id": agent_id},
+                    {"agent_id": agent_id, "company_id": company_id},
                 )
                 await session.commit()
         except Exception:
