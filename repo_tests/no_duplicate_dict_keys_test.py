@@ -29,19 +29,32 @@ duplicate key, they are a duplicate value, which is a different question.
 from __future__ import annotations
 
 import ast
+import os
 import subprocess
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Set, Tuple
 
 from autobot_shared.paths import scrubbed_git_env
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-#: Below this the sweep collapsed rather than the tree being clean. Bound to
-#: dict literals *parsed*, never to duplicates found: a floor that tracked
-#: findings would relax itself as the tree improved, and this population should
-#: trend to zero (#15762).
-_MIN_DICTS_PARSED = 20_000
+#: Backstop only. Bound to dict literals *parsed*, never to duplicates found: a
+#: floor that tracked findings would relax itself as the tree improved, and this
+#: population should trend to zero (#15762).
+#:
+#: A global floor is a weak reach check here, because the population is not
+#: evenly spread: `autobot-backend` holds 82% of the literals, so at 20_000 the
+#: only sweep failure this caught was losing that one tree. Dropping
+#: `autobot_shared` -- where the pricing table that prompted #15908 lives --
+#: still cleared it by 16_000. The per-tree assertion below is the real reach
+#: check; this catches a partial collapse *within* a tree, which per-tree
+#: coverage cannot see.
+#:
+#: Not pinned to equality, unlike the #15896 floors. Those populations are
+#: stable, so equality costs nothing and detects drift in both directions. This
+#: one moves with almost every commit; pinning it would churn. The question that
+#: separates the two is whether normal work moves the number.
+_MIN_DICTS_PARSED = 36_000
 
 #: Files that repeat a key deliberately. Empty, and it should stay that way —
 #: an entry here is a dict whose earlier value is known-dead. Recorded by path
@@ -84,10 +97,48 @@ def duplicate_keys_in(source: str) -> List[Tuple[int, str]]:
     return found
 
 
-def _sweep() -> Tuple[List[Duplicate], int, int]:
-    """``(duplicates, files_parsed, dicts_parsed)``."""
+#: Never descended into when discovering trees: not source, or another
+#: checkout's copy of this one.
+_PRUNED = frozenset({".git", ".worktrees", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache", ".pytest_cache"})
+
+
+def _tree_of(name: str) -> str:
+    """The top-level directory a tracked path sits in, or ``<root>``."""
+    head, _, tail = name.partition("/")
+    return head if tail else "<root>"
+
+
+def _trees_holding_python() -> Set[str]:
+    """Top-level directories containing a ``.py`` file, read off the filesystem.
+
+    Deliberately *not* derived from :func:`_tracked_python_files`. A denominator
+    taken from the same source as the numerator cannot detect the numerator
+    going missing: the first version of this check counted trees from the swept
+    file list, so dropping a tree from that list dropped it from both sides and
+    the assertion passed. Same failure as a floor bound to findings instead of
+    to reach, one level up.
+    """
+    trees: Set[str] = set()
+    for entry in REPO_ROOT.iterdir():
+        if entry.name in _PRUNED:
+            continue
+        if entry.is_file():
+            if entry.suffix == ".py":
+                trees.add("<root>")
+            continue
+        for dirpath, dirnames, filenames in os.walk(entry):
+            dirnames[:] = [d for d in dirnames if d not in _PRUNED]
+            if any(f.endswith(".py") for f in filenames):
+                trees.add(entry.name)
+                break
+    return trees
+
+
+def _sweep() -> Tuple[List[Duplicate], int, int, Dict[str, int]]:
+    """``(duplicates, files_parsed, dicts_parsed, parsed_per_tree)``."""
     duplicates: List[Duplicate] = []
     files_parsed = dicts_parsed = 0
+    parsed_per_tree: Dict[str, int] = {}
     for name in _tracked_python_files():
         path = REPO_ROOT / name
         try:
@@ -95,15 +146,17 @@ def _sweep() -> Tuple[List[Duplicate], int, int]:
         except (SyntaxError, UnicodeDecodeError, OSError):
             continue
         files_parsed += 1
+        parsed_per_tree[_tree_of(name)] = parsed_per_tree.get(_tree_of(name), 0) + 1
         dicts_parsed += sum(1 for n in ast.walk(tree) if isinstance(n, ast.Dict))
         if name in _ALLOWED:
             continue
         for lineno, key in duplicate_keys_in(path.read_text(encoding="utf-8")):
             duplicates.append((name, lineno, key))
-    return duplicates, files_parsed, dicts_parsed
+    return duplicates, files_parsed, dicts_parsed, parsed_per_tree
 
 
-_DUPLICATES, _FILES_PARSED, _DICTS_PARSED = _sweep()
+_DUPLICATES, _FILES_PARSED, _DICTS_PARSED, _PARSED_PER_TREE = _sweep()
+_TREES_HOLDING_PYTHON = _trees_holding_python()
 
 
 def test_the_sweep_parsed_a_plausible_number_of_dicts() -> None:
@@ -117,6 +170,32 @@ def test_the_sweep_parsed_a_plausible_number_of_dicts() -> None:
         f"parsed only {_DICTS_PARSED} dict literal(s) across {_FILES_PARSED} file(s), "
         f"floor is {_MIN_DICTS_PARSED}. FIX THE SWEEP — a clean result below this "
         "floor asserts nothing."
+    )
+
+
+def test_every_tree_holding_python_was_actually_swept() -> None:
+    """The reach check the global floor cannot perform.
+
+    Discovery-based on purpose: a tree added tomorrow is covered without anyone
+    remembering to add a constant, and losing a tree fails regardless of how few
+    literals it held. The global floor only ever noticed the loss of
+    `autobot-backend`, which holds 82% of the literals; dropping every other
+    tree still cleared it.
+
+    The tree list is read off the filesystem rather than off the swept file
+    list, because the two must be able to disagree — see
+    :func:`_trees_holding_python`.
+
+    A tree whose every file fails to parse also lands here, and that is the
+    intended reading: unparsed is unswept, and a tree this guard cannot read is
+    a tree it is not guarding. A tree holding only untracked `.py` files lands
+    here too, which is the same statement — this guard sweeps tracked files.
+    """
+    unswept = sorted(tree for tree in _TREES_HOLDING_PYTHON if _PARSED_PER_TREE.get(tree, 0) == 0)
+    assert not unswept, (
+        f"tracked Python files exist under {unswept} but the sweep parsed none of them. "
+        f"Swept {_FILES_PARSED} file(s) across {len(_PARSED_PER_TREE)} tree(s). "
+        "FIX THE SWEEP — a clean result says nothing about an unswept tree."
     )
 
 
