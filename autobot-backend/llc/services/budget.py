@@ -21,8 +21,8 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.model_pricing import MODEL_PRICING_PER_1M_TOKENS
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.ssot_constants import MODEL_PRICING_PER_1M_TOKENS
 from llc.config import DEFAULT_BUDGET_LIMIT
 from llc.exceptions import BudgetExhausted
 from llc.models.budget import LLCAgentBudget

@@ -520,7 +520,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot_shared/security/ssrf_guard_test.py": 633,
     "autobot_shared/ssot_config.py": 3297,
     "autobot_shared/ssot_config_test.py": 782,
-    "autobot_shared/ssot_constants.py": 958,
+    "autobot_shared/ssot_constants.py": 915,
     "autobot_shared/user_management/team_service.py": 725,
     "pipeline-scripts/check-pre-commit-hook-pr_test.py": 747,
     "pipeline-scripts/ci_dispatch_watchdog.py": 1487,
