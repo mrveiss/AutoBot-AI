@@ -188,7 +188,7 @@ if git rev-parse --verify --quiet "$BASE" >/dev/null; then
     pass "no authorship trailers in $(git rev-list --count "$BASE..HEAD") commit(s)"
   fi
 else
-  note "$BASE not found -- skipping branch-commit checks (run git fetch)"
+  skip_check "branch-commit checks" "$BASE not found -- run git fetch"
 fi
 
 # ---------------------------------------------------------------- PR body
@@ -262,7 +262,7 @@ fi
 section "changed files"
 
 if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
-  note "$BASE not found -- skipping lint (run git fetch)"
+  skip_check "lint" "$BASE not found -- run git fetch"
 else
   mapfile -t CHANGED < <(git diff --name-only --diff-filter=ACMR "$BASE...HEAD"; git diff --name-only --diff-filter=ACMR HEAD)
   mapfile -t PY < <(printf '%s\n' "${CHANGED[@]}" | sort -u | grep -E '\.py$' | while read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done)
@@ -459,6 +459,12 @@ require_check() {
 # a check that silently does something weaker than CI is worse than no check,
 # because it is read as coverage.
 SKIPPED=0
+# Use `skip_check` when a gate COULD NOT RUN; a bare `note` when a gate had
+# NOTHING TO RUN. They look identical in output and mean opposite things:
+# "no changed Python files" is a complete answer, "$BASE not found" is the
+# absence of one. Counting the no-ops would make SKIPPED non-zero on a docs-only
+# change and train the reader to ignore the number, which is how a counter stops
+# being read at all.
 # Counts, because `note` does not touch FAILED and the verdict was FAILED-only:
 # with three gates skipped the script still printed "pre-flight clean -- safe to
 # commit and push". Honest per line, overstated in aggregate. This is the same
@@ -467,7 +473,7 @@ SKIPPED=0
 skip_check() { note "$1 -- $2"; SKIPPED=$((SKIPPED + 1)); }
 
 if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
-  note "$BASE not found -- skipping required checks (run git fetch)"
+  skip_check "required status checks" "$BASE not found -- run git fetch"
 else
   # verify-precommit-config: enforce-precommit.yml runs exactly these two, and
   # runs them UNCONDITIONALLY. It carries no `paths:` key (see its own comment at
