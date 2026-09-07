@@ -51727,7 +51727,18 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Update Work Item Status */
+        /**
+         * Update Work Item Status
+         * @description Transition a work item, enforcing the state machine (#15859).
+         *
+         *     This used to echo the requested status back with ``{"updated": True}``
+         *     without performing the transition, so a caller reading the response saw its
+         *     own input and concluded the write had happened.
+         *
+         *     The company check is not incidental: ``transition_status`` takes
+         *     ``company_id`` and this route is reached with an agent's context, so an
+         *     item belonging to another company must 404 rather than transition.
+         */
         post: operations["update_work_item_status_api_llc_agent_work_items__item_id__status_post"];
         delete?: never;
         options?: never;
@@ -51744,7 +51755,20 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ingest Cost Event */
+        /**
+         * Ingest Cost Event
+         * @description Record an agent's token cost against its budget (#15859).
+         *
+         *     This used to return ``{"recorded": True}`` without calling anything. A
+         *     budget that is never charged is never exceeded, so the hard stop could not
+         *     fire -- and the response carried no marker, so a caller could not tell
+         *     "recorded" from "discarded".
+         *
+         *     ``BudgetExhausted`` is propagated as 402 rather than swallowed: the whole
+         *     point of ingesting the event is that exceeding the limit stops the agent.
+         *     ``UnpricedModel`` is 422 -- the event is well-formed but its cost cannot be
+         *     computed, and charging zero is what #15860 was.
+         */
         post: operations["ingest_cost_event_api_llc_agent_cost_events_post"];
         delete?: never;
         options?: never;

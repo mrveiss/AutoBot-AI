@@ -51,7 +51,9 @@ from autobot_shared.ssot_constants import (
     ANTHROPIC_CLAUDE35_SONNET,
     ANTHROPIC_CLAUDE_HAIKU4_5,
     ANTHROPIC_CLAUDE_OPUS4,
+    ANTHROPIC_CLAUDE_OPUS4_6,
     ANTHROPIC_CLAUDE_SONNET4,
+    ANTHROPIC_CLAUDE_SONNET4_6,
     DEEPSEEK_R1_API,
     DEEPSEEK_V3,
     GOOGLE_GEMINI15_FLASH,
@@ -93,6 +95,14 @@ MODEL_PRICING_PER_1M_TOKENS: Dict[str, Dict[str, float]] = {
     ANTHROPIC_CLAUDE_OPUS4: {"input": 15.00, "output": 75.00},
     ANTHROPIC_CLAUDE_HAIKU4_5: {"input": 0.80, "output": 4.00},
     ANTHROPIC_CLAUDE_SONNET4: {"input": 3.00, "output": 15.00},
+    # #15860: the Anthropic provider default (see the default_model fallback in
+    # llm_shared/providers/anthropic.py) and the model LLC hires agents on
+    # (SONNET_MODEL in llc/api/agent_hires.py). Absent from this table, so every
+    # cost event for it resolved to zero and dollar budgets never accrued for the
+    # model almost everything runs on. Priced at the Sonnet 4 tier.
+    ANTHROPIC_CLAUDE_SONNET4_6: {"input": 3.00, "output": 15.00},
+    # The same omission, and the expensive half of it.
+    ANTHROPIC_CLAUDE_OPUS4_6: {"input": 15.00, "output": 75.00},
     ANTHROPIC_CLAUDE35_SONNET: {"input": 3.00, "output": 15.00},
     ANTHROPIC_CLAUDE35_HAIKU: {"input": 0.80, "output": 4.00},
     ANTHROPIC_CLAUDE3_OPUS_DATED: {"input": 15.00, "output": 75.00},

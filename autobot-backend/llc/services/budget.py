@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.model_pricing import MODEL_PRICING_PER_1M_TOKENS
 from autobot_shared.redis_client import get_async_redis_client
 from llc.config import DEFAULT_BUDGET_LIMIT
-from llc.exceptions import BudgetExhausted
+from llc.exceptions import BudgetExhausted, UnpricedModel
 from llc.models.budget import LLCAgentBudget
 
 from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
@@ -120,18 +120,20 @@ class BudgetService(LLCServiceBase):
         Uses atomic UPDATE to avoid read-modify-write races across 4 uvicorn workers.
 
         Returns the dollar cost added this call (always calculated for analytics).
-        Raises BudgetExhausted if spending exceeds the active budget mode limit.
+        Raises BudgetExhausted if spending exceeds the active budget mode limit,
+        and UnpricedModel if the model has no entry in the pricing table.
         """
         pricing = MODEL_PRICING_PER_1M_TOKENS.get(model)
         if pricing is None:
-            logger.warning(
-                "Unknown model %r in ingest_cost_event for agent %s — treating cost as 0",
-                model,
-                agent_id,
-            )
-            cost = Decimal("0")
-        else:
-            cost = Decimal(str((tokens_in * pricing["input"] + tokens_out * pricing["output"]) / 1_000_000))
+            # #15860: this used to log and charge zero. A cost of 0 and a cost
+            # that could not be computed are the same number, and only one of
+            # them is a fact -- so an unpriced model made dollar budgets
+            # silently inapplicable rather than visibly broken.
+            #
+            # Refusing is safe because the table distinguishes free from
+            # unknown: every local model carries an explicit zero entry.
+            raise UnpricedModel(model=model, agent_id=agent_id)
+        cost = Decimal(str((tokens_in * pricing["input"] + tokens_out * pricing["output"]) / 1_000_000))
 
         total_tokens = tokens_in + tokens_out
 
@@ -152,7 +154,28 @@ class BudgetService(LLCServiceBase):
             },
         )
 
-        result = await session.execute(_for_agent(agent_id, company_id))
+        # `populate_existing`: this read is what enforcement is decided on, so it
+        # must reflect the UPDATE just issued rather than the caller's session
+        # state. Without it SQLAlchemy's identity map returns the object the
+        # caller already loaded, carrying its pre-UPDATE `budget_spent` -- a
+        # plain SELECT does not overwrite already-loaded attributes.
+        #
+        # Not hypothetical, and not symmetrical between the two callers.
+        # `POST /agent/cost-events` opens its own session and never pre-loads the
+        # row, so its first read was fresh and the hard stop worked.
+        # `POST /budgets/{agent_id}/ingest` calls `load_authorized` first -- which
+        # puts the row in the identity map by design, that being the IDOR guard --
+        # and then hands the SAME session here. Enforcement compared the
+        # PRE-UPDATE spend against the limit, so `BudgetExhausted` could not fire
+        # on that route at all. The hard stop #15859 exists for was inoperative on
+        # one of its two callers, and nothing looked wrong: both routes returned a
+        # correct cost, and only the enforcement that follows was reading a stale
+        # number.
+        #
+        # Fixed in the service, not in the route: a service whose correctness
+        # depends on whether its caller happened to load a row first breaks again
+        # the next time someone adds a caller. There are four.
+        result = await session.execute(_for_agent(agent_id, company_id).execution_options(populate_existing=True))
         row = result.scalar_one_or_none()
 
         if row is None:
