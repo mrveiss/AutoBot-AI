@@ -163,3 +163,69 @@ async def test_ancestry_for_a_work_item_returns_own_goals(session):  # noqa: ANN
     chain = await GoalService().get_goal_ancestry_for_work_item(session, leaf.id, company_id=mine)
 
     assert [c["title"] for c in chain] == ["root", "leaf"], "root-first, inclusive of the goal itself"
+
+
+def _client(session: AsyncSession, org: str, *, is_admin: bool = False):
+    """The mounted goals router, with *org* as the caller's tenant."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from api.user_management.dependencies import get_current_user, require_org_context
+    from autobot_shared.user_management.base_service import TenantContext
+    from llc.api.goals import router
+    from user_management.database import get_async_session
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/llc")
+
+    async def _fake_session():
+        yield session
+
+    app.dependency_overrides[get_async_session] = _fake_session
+    app.dependency_overrides[get_current_user] = lambda: {"id": str(uuid.uuid4())}
+    app.dependency_overrides[require_org_context] = lambda: TenantContext(
+        org_id=uuid.UUID(org), user_id=uuid.uuid4(), is_platform_admin=is_admin
+    )
+    return TestClient(app)
+
+
+async def test_the_route_gives_a_platform_admin_the_cross_company_chain(session):  # noqa: ANN001
+    """Through the route, which is where the defect is.
+
+    `_get_authorized_goal:119` exempts platform admins (`and not
+    ctx.is_platform_admin`), so an admin legitimately reaches a goal whose
+    company is not `ctx.org_id`. The route passing `ctx.org_id` down then stopped
+    the walk at the first step and returned an empty chain — the truth is a
+    chain, and "no ancestors" is a different answer.
+
+    **The parameter's meaning inverted inside #15930's own fix.** Before the
+    derived default existed, *omitting* `company_id` was the bug: the walk ran
+    unscoped. After it exists, *supplying* it is. Deleting the argument is the
+    fix, and a reader following that line to #15930 would otherwise read it as
+    load-bearing tenant isolation.
+    """
+    admin_org, goal_company = str(uuid.uuid4()), str(uuid.uuid4())
+    root = await _goal(session, goal_company, "their root", level=GoalLevel.OBJECTIVE)
+    leaf = await _goal(session, goal_company, "their leaf", parent=root, level=GoalLevel.KEY_RESULT)
+
+    body = _client(session, admin_org, is_admin=True).get(f"/api/llc/goals/{leaf.id}/ancestors").json()
+
+    assert [g["title"] for g in body] == [
+        "their root"
+    ], "a platform admin authorised for this goal got no ancestry from the route"
+
+
+async def test_the_route_still_refuses_a_non_admin_from_another_org(session):  # noqa: ANN001
+    """The contrast, and the assurance that deleting the argument costs nothing.
+
+    A normal caller is 404'd by `_get_authorized_goal` before the walk runs, so
+    the derived scope never gets the chance to be more permissive than the
+    passed one. Only the admin case moves.
+    """
+    other_org, goal_company = str(uuid.uuid4()), str(uuid.uuid4())
+    root = await _goal(session, goal_company, "their root", level=GoalLevel.OBJECTIVE)
+    leaf = await _goal(session, goal_company, "their leaf", parent=root, level=GoalLevel.KEY_RESULT)
+
+    response = _client(session, other_org, is_admin=False).get(f"/api/llc/goals/{leaf.id}/ancestors")
+
+    assert response.status_code == 404, "a non-admin reached another org's goal"

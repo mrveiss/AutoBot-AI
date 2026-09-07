@@ -277,19 +277,24 @@ class GoalService(LLCServiceBase):
         the chain itself the leak, and such an edge was creatable until the
         guard added to :meth:`create` in the same change.
         """
-        # #15930: when the caller omits `company_id` the walk is scoped to the
-        # STARTING goal's own company rather than left unscoped. An optional
-        # tenant scope is off by default, so `goals.py`'s ancestors route --
-        # which authorises the leaf and then called this with no company -- got
-        # the unscoped walk the docstring above warns about, and every future
-        # caller would have too.
+        # #15930: when `company_id` is omitted the walk is scoped to the STARTING
+        # GOAL's own company -- not the caller's org, and the distinction is the
+        # whole point. An optional tenant scope is off by default, so the
+        # ancestors route, which authorises the leaf and then called this with no
+        # company, got the unscoped walk the docstring above warns about.
         #
-        # Deriving is safe and is not a weaker check: the leaf is the goal the
-        # caller was authorised for, so its company IS the caller's. The
-        # parameter remains, so a caller holding the tenant identity can still
-        # state it, and `get_goal_ancestry_for_work_item` still needs it for the
-        # separate ENTRY check -- deriving that one from the goal would make it
-        # a tautology.
+        # CALLERS SHOULD OMIT IT. `goals.py` passing `str(ctx.org_id)` was the
+        # first form of this fix and was wrong: `_get_authorized_goal` exempts
+        # platform admins, so an admin legitimately holds a goal whose company is
+        # not their org, and the passed scope stopped the walk at step one and
+        # returned an empty chain. The derived scope is right for both -- for a
+        # normal caller the goal's company IS `ctx.org_id`.
+        #
+        # The parameter's meaning inverted here: before this default existed,
+        # omitting it was the bug; after, supplying it is. It remains only for
+        # `get_goal_ancestry_for_work_item`, whose separate ENTRY check asks a
+        # different question -- "is this goal the caller's?" -- which deriving
+        # from the goal would turn into a tautology.
         ancestors: List[LLCGoal] = []
         current_id: Optional[uuid.UUID] = goal_id
         if company_id is None:

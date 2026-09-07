@@ -262,10 +262,11 @@ async def get_ancestors(
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[GoalResponse]:
     await _get_authorized_goal(session, goal_id, ctx)
-    # #15930: `company_id` is passed, not left to the default. Authorising the
-    # leaf is not enough -- a cross-company parent edge makes the chain itself
-    # the leak, which is what `get_ancestors`' docstring has said since #13704.
-    ancestors = await _svc().get_ancestors(session, goal_id, company_id=str(ctx.org_id))
+    # #15930: `company_id` is DELIBERATELY not passed. `get_ancestors` derives the
+    # scope from the starting goal, which is the goal just authorised -- so for a
+    # normal caller the two agree, and for a platform admin (exempted above) the
+    # derived one is right where `ctx.org_id` would empty the chain.
+    ancestors = await _svc().get_ancestors(session, goal_id)
     return [GoalResponse.model_validate(a) for a in ancestors]
 
 
