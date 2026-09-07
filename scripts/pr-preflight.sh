@@ -430,13 +430,29 @@ require_check() {
     fi
   fi
 
-  if "$@" >/tmp/preflight-$$.log 2>&1; then
+  # CWE-377: `>/tmp/preflight-$$.log` was a predictable name in a world-writable
+  # directory, created by a plain redirect. Anyone on the box could pre-create
+  # that path as a symlink and have the redirect follow it and truncate the
+  # target -- a write primitive against whoever runs the preflight, and the PID
+  # space is small enough to spray. `mktemp` is the actual remedy because it
+  # creates with O_EXCL and mode 600: the race is on *creation*, so an
+  # unpredictable name alone would not fix it. TMPDIR is honoured so a box that
+  # points it somewhere private is not overridden.
+  local log
+  log="$(mktemp "${TMPDIR:-/tmp}/preflight-XXXXXX")" || {
+    fail "$ctx -- could not create a log file"
+    return 1
+  }
+  # RETURN rather than a trailing `rm`: the old cleanup was skipped on any early
+  # exit from this function, which made the leak invisible on the happy path.
+  trap 'rm -f "$log"' RETURN
+
+  if "$@" >"$log" 2>&1; then
     pass "$ctx"
   else
     fail "$ctx -- reproduce with: $*"
-    head -12 /tmp/preflight-$$.log | sed 's/^/        /'
+    head -12 "$log" | sed 's/^/        /'
   fi
-  rm -f /tmp/preflight-$$.log
 }
 
 # Report a gate this box cannot run, naming the reason. Never approximated:
@@ -525,10 +541,21 @@ CQEOF
 
   # ---- gates that import the backend or run a suite: --full only ----------
   if [ "$FULL" = "1" ]; then
-    require_check "api-wiring" \
-      'autobot-backend/|autobot-frontend/src/' \
-      env PYTHONPATH="$REPO_ROOT:$REPO_ROOT/autobot-backend" AUTOBOT_SINGLE_USER=true \
-      "$PY" scripts/audit_api_wiring.py --dump-openapi /tmp/preflight-openapi-$$.json
+    # Same CWE-377 shape as require_check's log, one gate over: a predictable
+    # `$$` name in a world-writable directory, and never removed at all. Found by
+    # sweeping the file after fixing the reported site rather than by a second
+    # report -- the neighbour is never in the frame the report established.
+    openapi_dump="$(mktemp "${TMPDIR:-/tmp}/preflight-openapi-XXXXXX.json")" || {
+      fail "api-wiring -- could not create a temporary OpenAPI dump"
+      openapi_dump=""
+    }
+    if [ -n "$openapi_dump" ]; then
+      require_check "api-wiring" \
+        'autobot-backend/|autobot-frontend/src/' \
+        env PYTHONPATH="$REPO_ROOT:$REPO_ROOT/autobot-backend" AUTOBOT_SINGLE_USER=true \
+        "$PY" scripts/audit_api_wiring.py --dump-openapi "$openapi_dump"
+      rm -f "$openapi_dump"
+    fi
 
     require_check "startup-import-smoke" \
       'autobot-backend/' \
