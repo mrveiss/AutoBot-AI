@@ -156,7 +156,10 @@ class ArchitecturalPatternAnalyzer:
         """
         return {
             "total_components": len(components),
-            "architectural_issues": len(issues),
+            # #15908: was also "architectural_issues", shadowed by the list
+            # below. Last-wins meant this count never reached a caller, and
+            # analyze_architecture.py printed the list where it wanted a number.
+            "architectural_issues_count": len(issues),
             "design_patterns_found": len(detected_patterns),
             "architecture_score": metrics.architecture_score,
             "analysis_time_seconds": analysis_time,
@@ -217,7 +220,7 @@ async def main():
     # Print summary
     print("\n=== Architectural Pattern Analysis Results ===")  # noqa: print
     print(f"Total components: {results['total_components']}")  # noqa: print
-    print(f"Architectural issues: {results['architectural_issues']}")  # noqa: print
+    print(f"Architectural issues: {results['architectural_issues_count']}")  # noqa: print
     print(f"Design patterns found: {results['design_patterns_found']}")  # noqa: print
     print(f"Architecture score: {results['architecture_score']}/100")  # noqa: print
     print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
