@@ -80,9 +80,13 @@ class Waiter:
     priority: int
     joined_at: str
     expires_at: str
+    #: The same instant as ``expires_at``, as a POSIX timestamp. Carried
+    #: redundantly because the queue scripts compare and subtract expiries in
+    #: Lua, and parsing ISO-8601 there costs more than storing one float.
+    expires_epoch: float
 
-    def is_expired(self, now_iso: str) -> bool:
-        return self.expires_at <= now_iso
+    def is_expired(self, now_epoch: float) -> bool:
+        return self.expires_epoch <= now_epoch
 
 
 def arbitrate(first: Waiter, second: Waiter) -> Waiter:
@@ -103,6 +107,89 @@ def arbitrate(first: Waiter, second: Waiter) -> Waiter:
     if first.joined_at != second.joined_at:
         return first if first.joined_at < second.joined_at else second
     return first if first.agent_id <= second.agent_id else second
+
+
+# THE QUEUE OPERATIONS ARE LUA FOR THE REASON #15947's ACQUIRE IS.
+#
+# The first version of this module read the list into Python, decided, and wrote
+# back -- which cannot promise that two agents joining at once both get a
+# position, or that a rejoin does not race a prune. #15947's docstring makes
+# exactly that argument for the acquire path, and this module was written
+# against it by accident. Review caught it.
+#
+# Each script also recomputes the key's expiry from the *longest-lived* entry it
+# holds. Setting the key's TTL from whichever waiter happened to join last would
+# let a short-lived joiner evict waiters whose own expiry was hours away -- the
+# key holds the whole queue, so its lifetime belongs to the queue, not to the
+# most recent caller.
+_KEEP_AND_EXPIRE = """
+local function rewrite(key, kept, now)
+  redis.call('DEL', key)
+  if #kept == 0 then return end
+  redis.call('RPUSH', key, unpack(kept))
+  local furthest = 0
+  for i = 1, #kept do
+    local e = cjson.decode(kept[i])
+    if e.expires_epoch > furthest then furthest = e.expires_epoch end
+  end
+  local ttl = math.ceil(furthest - now)
+  if ttl < 1 then ttl = 1 end
+  redis.call('EXPIRE', key, ttl)
+end
+"""
+
+_JOIN_LUA = _KEEP_AND_EXPIRE + """
+local key, agent, task = KEYS[1], ARGV[1], ARGV[2]
+local now, payload = tonumber(ARGV[3]), ARGV[4]
+local kept, position, found = {}, 0, false
+for _, raw in ipairs(redis.call('LRANGE', key, 0, -1)) do
+  local e = cjson.decode(raw)
+  if e.expires_epoch > now then
+    if e.agent_id == agent and e.task_id == task then
+      found = true
+      kept[#kept + 1] = payload
+      position = #kept
+    else
+      kept[#kept + 1] = raw
+    end
+  end
+end
+if not found then
+  kept[#kept + 1] = payload
+  position = #kept
+end
+rewrite(key, kept, now)
+return position
+"""
+
+_LEAVE_LUA = _KEEP_AND_EXPIRE + """
+local key, agent, task = KEYS[1], ARGV[1], ARGV[2]
+local now = tonumber(ARGV[3])
+local kept, removed = {}, 0
+for _, raw in ipairs(redis.call('LRANGE', key, 0, -1)) do
+  local e = cjson.decode(raw)
+  if e.expires_epoch > now then
+    if e.agent_id == agent and e.task_id == task then
+      removed = 1
+    else
+      kept[#kept + 1] = raw
+    end
+  end
+end
+rewrite(key, kept, now)
+return removed
+"""
+
+_WAITERS_LUA = _KEEP_AND_EXPIRE + """
+local key, now = KEYS[1], tonumber(ARGV[1])
+local kept = {}
+for _, raw in ipairs(redis.call('LRANGE', key, 0, -1)) do
+  local e = cjson.decode(raw)
+  if e.expires_epoch > now then kept[#kept + 1] = raw end
+end
+rewrite(key, kept, now)
+return kept
+"""
 
 
 async def _redis() -> Any:
@@ -134,27 +221,20 @@ async def join(
 ) -> int:
     """Queue behind *scope*. Returns this waiter's 1-based position.
 
-    Re-joining as the same ``(agent_id, task_id)`` moves nobody: the existing
-    entry is refreshed in place, so a retry loop cannot push an agent to the
-    back of a queue it is already in.
+    One script prunes, finds-or-appends, and re-expires, so two agents joining
+    at once both get a position and neither races the prune.
+
+    Re-joining as the same ``(agent_id, task_id)`` moves nobody: the entry is
+    refreshed where it stands, so a retry loop cannot push an agent to the back
+    of a queue it is already in. A rejoin with a *shorter* ``ttl_s`` shortens
+    only that entry -- the key's own lifetime is recomputed from the
+    longest-lived waiter, never from the latest caller.
     """
     parsed = Scope.parse(scope)
     _require_holder(agent_id, task_id)
     ttl = WAIT_TTL_S if ttl_s is None else ttl_s
     joined = now_utc()
-    client = await _redis()
-    key = _key(parsed)
-
-    existing = await waiters(parsed)
-    for position, waiter in enumerate(existing, start=1):
-        if waiter.agent_id == agent_id and waiter.task_id == task_id:
-            refreshed = Waiter(
-                **{**asdict(waiter), "expires_at": (joined + timedelta(seconds=ttl)).isoformat()}
-            )
-            await client.lset(key, position - 1, json.dumps(asdict(refreshed)))
-            await client.expire(key, ttl)
-            return position
-
+    expires = joined + timedelta(seconds=ttl)
     entry = Waiter(
         scope=str(parsed),
         agent_id=agent_id,
@@ -163,11 +243,21 @@ async def join(
         intent=intent,
         priority=priority,
         joined_at=joined.isoformat(),
-        expires_at=(joined + timedelta(seconds=ttl)).isoformat(),
+        expires_at=expires.isoformat(),
+        expires_epoch=expires.timestamp(),
     )
-    await client.rpush(key, json.dumps(asdict(entry)))
-    await client.expire(key, ttl)
-    return len(existing) + 1
+    client = await _redis()
+    return int(
+        await client.eval(
+            _JOIN_LUA,
+            1,
+            _key(parsed),
+            agent_id,
+            task_id,
+            str(joined.timestamp()),
+            json.dumps(asdict(entry)),
+        )
+    )
 
 
 async def leave(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
@@ -179,13 +269,18 @@ async def leave(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
     parsed = Scope.parse(scope)
     _require_holder(agent_id, task_id)
     client = await _redis()
-    key = _key(parsed)
-    for raw in await client.lrange(key, 0, -1):
-        waiter = _decode(raw)
-        if waiter.agent_id == agent_id and waiter.task_id == task_id:
-            await client.lrem(key, 1, raw if isinstance(raw, str) else raw.decode())
-            return True
-    return False
+    return bool(
+        int(
+            await client.eval(
+                _LEAVE_LUA,
+                1,
+                _key(parsed),
+                agent_id,
+                task_id,
+                str(now_utc().timestamp()),
+            )
+        )
+    )
 
 
 async def waiters(scope: str | Scope) -> list[Waiter]:
@@ -193,20 +288,13 @@ async def waiters(scope: str | Scope) -> list[Waiter]:
 
     Pruning happens on read for the same reason it does in ``list_claims``:
     Redis expires the list as a whole, not its elements, so a queue that outlives
-    one of its members is tidied by whoever looks next.
+    one of its members is tidied by whoever looks next. The prune and the
+    rewrite are one script, so a concurrent join cannot be lost between them.
     """
     parsed = Scope.parse(scope)
     client = await _redis()
-    key = _key(parsed)
-    now_iso = now_utc().isoformat()
-    live: list[Waiter] = []
-    for raw in await client.lrange(key, 0, -1):
-        waiter = _decode(raw)
-        if waiter.is_expired(now_iso):
-            await client.lrem(key, 1, raw if isinstance(raw, str) else raw.decode())
-            continue
-        live.append(waiter)
-    return live
+    rows = await client.eval(_WAITERS_LUA, 1, _key(parsed), str(now_utc().timestamp()))
+    return [_decode(raw) for raw in rows]
 
 
 async def next_waiter(scope: str | Scope) -> Waiter | None:

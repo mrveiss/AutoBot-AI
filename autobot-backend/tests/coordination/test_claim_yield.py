@@ -149,3 +149,22 @@ async def test_inviting_on_an_empty_queue_publishes_nothing(env):
     manager, _ = env
     assert await invite_next_waiter("path:a/b") is None
     assert manager.published == []
+
+
+@pytest.mark.asyncio
+async def test_a_timeout_shorter_than_one_poll_is_still_honoured(env):
+    """The wait is bounded by a deadline, not by counting sleeps.
+
+    The earlier loop added `_POLL_S` per iteration and slept before re-checking,
+    so a timeout below one poll interval slept straight past it, and a slow read
+    overran by however long the read took. Both are bounded now.
+    """
+    import time
+
+    request = await request_yield(
+        "path:a/b", holder_task_id="h", requester_agent_id="a", requester_task_id="t", reason="r"
+    )
+    started = time.monotonic()
+    assert await await_decision(request, timeout_s=0.05) == HOLD
+    elapsed = time.monotonic() - started
+    assert elapsed < 1.0, f"waited {elapsed:.2f}s for a 0.05s budget"

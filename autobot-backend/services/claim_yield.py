@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -129,7 +130,7 @@ async def answer_yield(token: str, decision: str, *, ttl_s: int | None = None) -
     )
 
 
-async def await_decision(request: YieldRequest, *, timeout_s: int | None = None) -> str:
+async def await_decision(request: YieldRequest, *, timeout_s: float | None = None) -> str:
     """Wait for the holder's answer, resolving to :data:`HOLD` on silence.
 
     Returns :data:`YIELD` only on an explicit yes. A timeout, a crashed holder
@@ -138,19 +139,29 @@ async def await_decision(request: YieldRequest, *, timeout_s: int | None = None)
     """
     client = await _redis()
     key = _DECISION_KEY.format(token=request.token)
-    deadline = YIELD_TIMEOUT_S if timeout_s is None else timeout_s
-    waited = 0.0
-    while waited < deadline:
-        raw = await client.get(key)
+    budget = float(YIELD_TIMEOUT_S if timeout_s is None else timeout_s)
+    # A monotonic deadline, not an accumulator of sleeps. Counting `_POLL_S` per
+    # iteration assumes the read costs nothing, so a slow Redis overran the
+    # timeout by however long its reads took -- and a timeout shorter than one
+    # poll slept straight past it before checking at all. Both are bounded here:
+    # the read is capped at the time remaining, and so is the sleep.
+    deadline = time.monotonic() + budget
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            raw = await asyncio.wait_for(client.get(key), timeout=remaining)
+        except asyncio.TimeoutError:
+            break
         if raw is not None:
             return raw.decode() if isinstance(raw, bytes) else raw
-        await asyncio.sleep(_POLL_S)
-        waited += _POLL_S
+        await asyncio.sleep(min(_POLL_S, max(0.0, deadline - time.monotonic())))
     logger.info(
         "claim_yield: %s unanswered by task %s after %ss — treating as hold",
         request.scope,
         request.holder_task_id,
-        deadline,
+        budget,
     )
     return HOLD
 

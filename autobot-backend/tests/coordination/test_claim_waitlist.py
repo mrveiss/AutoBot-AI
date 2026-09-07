@@ -14,6 +14,8 @@ The queue needs Redis, and uses `fakeredis` for the reason #15947's suite does.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 import pytest_asyncio
 
@@ -62,6 +64,7 @@ def _waiter(agent="a1", *, priority=0, joined="2026-09-07T10:00:00+00:00") -> Wa
         priority=priority,
         joined_at=joined,
         expires_at="2099-01-01T00:00:00+00:00",
+        expires_epoch=4102444800.0,
     )
 
 
@@ -135,14 +138,70 @@ async def test_leave_removes_only_that_waiter(redis):
     assert await leave("path:a/b", agent_id="nobody", task_id="tx") is False
 
 
+async def _expire_entry(client, scope: str, agent_id: str) -> None:
+    """Age one waiter's entry out, leaving the rest of the queue alone.
+
+    Rewrites that entry's expiry into the past in place. The earlier version of
+    this test passed ``ttl_s=-1`` instead, which expired the **whole list key**
+    rather than one member — so it asserted per-entry pruning while actually
+    demonstrating that the queue had been deleted. It passed for the wrong
+    reason, which is the failure mode this suite keeps finding elsewhere.
+    """
+    kind, path = scope.split(":", 1)
+    key = f"work_claims:wait:{kind}:{path}"
+    rows = await client.lrange(key, 0, -1)
+    await client.delete(key)
+    for raw in rows:
+        entry = json.loads(raw)
+        if entry["agent_id"] == agent_id:
+            entry["expires_epoch"] = 0.0
+            entry["expires_at"] = "1970-01-01T00:00:00+00:00"
+        await client.rpush(key, json.dumps(entry))
+
+
 @pytest.mark.asyncio
 async def test_an_expired_waiter_is_skipped_not_stuck(redis):
     """A dead waiter at the head must not block the queue behind it."""
-    await join("path:a/b", agent_id="a1", task_id="t1", intent="dies", ttl_s=-1)
+    await join("path:a/b", agent_id="a1", task_id="t1", intent="dies")
     await join("path:a/b", agent_id="a2", task_id="t2", intent="lives")
+    await _expire_entry(redis, "path:a/b", "a1")
+
     head = await next_waiter("path:a/b")
     assert head is not None and head.agent_id == "a2"
     assert await depth("path:a/b") == 1
+
+
+@pytest.mark.asyncio
+async def test_a_short_lived_rejoin_does_not_evict_longer_lived_waiters(redis):
+    """The key holds the whole queue, so its lifetime belongs to the queue.
+
+    Setting the key's TTL from whichever waiter joined last let a short-lived
+    joiner take the entire queue with it — including waiters whose own expiry
+    was hours away.
+    """
+    await join("path:a/b", agent_id="a1", task_id="t1", intent="long", ttl_s=7200)
+    await join("path:a/b", agent_id="a2", task_id="t2", intent="short", ttl_s=30)
+    await join("path:a/b", agent_id="a2", task_id="t2", intent="short", ttl_s=30)
+
+    ttl = await redis.ttl("work_claims:wait:path:a/b")
+    assert ttl > 3600, f"key lifetime collapsed to the shortest waiter: {ttl}s"
+    assert {w.agent_id for w in await waiters("path:a/b")} == {"a1", "a2"}
+
+
+@pytest.mark.asyncio
+async def test_concurrent_joins_all_get_a_position(redis):
+    """Read-then-write lost joins under concurrency; the script must not."""
+    import asyncio
+
+    await asyncio.gather(
+        *(
+            join("path:a/b", agent_id=f"a{i}", task_id=f"t{i}", intent="racing")
+            for i in range(8)
+        )
+    )
+    queued = await waiters("path:a/b")
+    assert len({w.agent_id for w in queued}) == 8
+    assert sorted(w.agent_id for w in queued) == [f"a{i}" for i in range(8)]
 
 
 @pytest.mark.asyncio
