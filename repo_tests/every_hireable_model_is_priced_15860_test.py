@@ -27,6 +27,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _HIRES = REPO_ROOT / "autobot-backend/llc/api/agent_hires.py"
 _CONSTANTS = REPO_ROOT / "autobot_shared/ssot_constants.py"
+_PRICING = REPO_ROOT / "autobot_shared/model_pricing.py"
 
 
 def priced_models() -> set[str]:
@@ -46,8 +47,11 @@ def priced_models() -> set[str]:
         )
     )
 
-    start = source.index("MODEL_PRICING_PER_1M_TOKENS")
-    block = source[start : source.index("\n}", start)]
+    # The names still live in ssot_constants; the table moved to model_pricing
+    # (#15860's extraction). Reading both from one file finds no table at all.
+    table_source = _PRICING.read_text(encoding="utf-8")
+    start = table_source.index("MODEL_PRICING_PER_1M_TOKENS")
+    block = table_source[start : table_source.index("\n}", start)]
     keys = set(re.findall(r"^\s*(\w+):", block, re.M))
 
     resolved = {names[k] for k in keys if k in names}
