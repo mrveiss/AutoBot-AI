@@ -100,7 +100,7 @@ repos:
       # regression here lints fewer files and would make every lint job look greener.
       - id: flake8
         alias: flake8-undefined-names
-        name: flake8 F821 (whole repo) (#14405, #15914)
+        name: 'flake8 F821 (whole repo) (#14405, #15914)'
         args: [--isolated, --select=F821]
 
   # Remove unused imports and variables with autoflake

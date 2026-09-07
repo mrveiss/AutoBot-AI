@@ -78,7 +78,16 @@ import re
 import subprocess  # nosec B404  # fixed argv, no shell, paths come from the repo tree
 import sys
 
+# tools/lint/ is not a package; make the sibling helper importable however this
+# module is loaded (script, pre-commit entry, importlib from the test). Same
+# idiom as check_destructive_migration_marker.py -- `autobot_shared` is NOT
+# importable when this runs as a bare script from the repo root, which is how
+# the required check invokes it.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
 import yaml
+
+from _scan_helpers import tracked_paths  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a
 # lint job, and `autobot_shared.logging_manager` would drag config loading into
@@ -121,19 +130,19 @@ def discover_scripts(base: pathlib.Path | None = None) -> list[pathlib.Path]:
     file list derived from them could never show a tree falling out of coverage.
     A denominator drawn from the mechanism under test cannot show that mechanism
     going missing — ``git`` and the linter must be able to disagree (#15908).
+
+    Via ``_scan_helpers.tracked_paths``, which scrubs the git environment: an
+    inherited ``GIT_DIR`` outranks ``cwd=`` and would enumerate another
+    checkout's index without erroring (#14896) — for this sweep, auditing a
+    different repo's files and reporting clean about this one. It also raises
+    rather than returning ``[]``, so a broken enumeration cannot read as a clean
+    tree.
     """
     base = base or repo_root()
-    completed = subprocess.run(  # nosec B603  # fixed argv, no shell
-        ["git", "ls-files", "*.py"],
-        cwd=str(base),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
     return [
         base / name
-        for name in completed.stdout.split("\n")
-        if name and not name.startswith(".worktrees/") and "__pycache__" not in name
+        for name in tracked_paths(base, "*.py")
+        if not name.startswith(".worktrees/") and "__pycache__" not in name
     ]
 
 
