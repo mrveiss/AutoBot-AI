@@ -21,7 +21,7 @@
 # multimodal_processor/processors/voice.py guard-imports this alongside
 # transformers and raises from _validate_audio_models_available() when the flag
 # is false — Whisper/Wav2Vec2 transcription is off entirely without it.
-librosa>=0.11.0
+librosa>=1.0.0
 
 # Same guarded block in voice.py (Whisper + Wav2Vec2), and the vision processor
 # multimodal_processor/processors/vision.py raises on its own flag too. Kept in
