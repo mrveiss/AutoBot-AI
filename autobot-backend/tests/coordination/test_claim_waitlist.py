@@ -202,7 +202,5 @@ async def test_a_waiter_invited_while_a_shared_holder_remains_stays_queued(redis
     await release("path:a/b", agent_id="s2", task_id="t2")
     from autobot_shared.coordination.work_claims import Claim
 
-    assert isinstance(
-        await try_acquire("path:a/b", agent_id="w1", task_id="tw", intent="wants exclusive"), Claim
-    )
+    assert isinstance(await try_acquire("path:a/b", agent_id="w1", task_id="tw", intent="wants exclusive"), Claim)
     assert await leave("path:a/b", agent_id="w1", task_id="tw") is True

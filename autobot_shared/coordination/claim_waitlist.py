@@ -148,9 +148,7 @@ async def join(
     existing = await waiters(parsed)
     for position, waiter in enumerate(existing, start=1):
         if waiter.agent_id == agent_id and waiter.task_id == task_id:
-            refreshed = Waiter(
-                **{**asdict(waiter), "expires_at": (joined + timedelta(seconds=ttl)).isoformat()}
-            )
+            refreshed = Waiter(**{**asdict(waiter), "expires_at": (joined + timedelta(seconds=ttl)).isoformat()})
             await client.lset(key, position - 1, json.dumps(asdict(refreshed)))
             await client.expire(key, ttl)
             return position
