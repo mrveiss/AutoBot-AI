@@ -188,12 +188,29 @@ def test_reconcile_is_defined_exactly_once():
     # #15510: population floor, evaluated before the assertion below. Without
     # it a sweep that reached nothing finds no stray copies, which is exactly
     # what "the logic lives only in one file" looks like.
-    assert len(scanned) >= _MIN_YAML_FILES, (
-        f"the sweep reached only {len(scanned)} YAML files under {tree} "
+    # The floor counts files **read**, not files listed. `ls-files` enumerates
+    # index entries, so a listing of 459 is satisfied by a sweep that opens
+    # none of them -- *listed* and *read* are different sets, and only the
+    # second one can find a stray copy.
+    read = 0
+    copies = []
+    for path in scanned:
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except FileNotFoundError:
+            # An index entry whose working-tree file is absent (mid-rebase,
+            # or a deletion not yet committed). `errors="ignore"` covers a
+            # decode failure, never absence.
+            continue
+        read += 1
+        if _STRIP_FINGERPRINT in text:
+            copies.append(path)
+
+    assert read >= _MIN_YAML_FILES, (
+        f"the sweep read only {read} YAML files under {tree} "
         f"(floor {_MIN_YAML_FILES}). FIX THE SWEEP -- a sweep that reads nothing "
         "cannot find a duplicated credential-strip and passes for free."
     )
-    copies = [path for path in scanned if _STRIP_FINGERPRINT in path.read_text(encoding="utf-8", errors="ignore")]
     assert copies == [_RECONCILE], (
         "the credential-strip logic must live only in "
         f"{_RECONCILE.name}; also found in {[str(p) for p in copies if p != _RECONCILE]}"

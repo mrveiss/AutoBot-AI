@@ -102,11 +102,17 @@ def _composed_reads(source: str) -> set[str]:
             return None
         if not (isinstance(node.right, ast.Constant) and isinstance(node.right.value, str)):
             return None
-        left = node.left
-        if isinstance(left, ast.Name):
-            return [node.right.value]
-        inner = segments(left)
-        return None if inner is None else inner + [node.right.value]
+        inner = segments(node.left)
+        if inner is not None:
+            return inner + [node.right.value]
+        # `node.left` is the base of the chain. Do NOT key on its node type:
+        # `Name` alone missed 122 compositions across this population -- 47
+        # `Subscript` (`parents[1] / ...`), 44 `Attribute` (`.parent / ...`)
+        # and 31 `Call` (`project_root() / ...`). The `Call` form is the one
+        # #15925 is migrating every guard onto, so a `Name`-only key would
+        # lose coverage as that lands, and would report the loss as the
+        # uncovered count *falling* -- which reads as improvement.
+        return [node.right.value]
 
     # Only the outermost composition counts. `ast.walk` also visits the inner
     # `X / "docker"` of `X / "docker" / "with-secrets.sh"`, and recording that

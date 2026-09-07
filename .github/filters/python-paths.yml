@@ -91,3 +91,17 @@ python:
   # is exactly the change that skips the suite guarding it -- the guard would be
   # bypassable by touching the one file it exists to watch.
   - 'sync-frontend.sh'
+  # #15900: seven more of the same shape, found once the coverage detector
+  # stopped keying on how a guard binds its repo root. Each is read by a
+  # repo_tests guard; without an entry here, a change confined to one of them
+  # computes `python != 'true'`, the shim reports `python-suite` green, and the
+  # guard that reads it never runs. They were invisible to the detector because
+  # it only recognised `NAME / "a" / "b"`, and these guards compose from
+  # `parents[1]`, `.parent`, or `project_root()` instead.
+  - '.claude/hooks/scan-secrets.sh'
+  - '.github/scripts/issue-triage-labels.js'
+  - '.github/workflows/no-commit-trailers.yml'
+  - '.github/workflows/pr-issue-validation.yml'
+  - '.github/workflows/release.yml'
+  - 'autobot-frontend/package.json'
+  - 'install.sh'
