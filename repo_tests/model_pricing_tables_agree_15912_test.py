@@ -153,7 +153,8 @@ def discover_pricing_tables() -> Dict[str, Dict[str, Price]]:
             continue
         # `ast.walk`, not `tree.body`: a table assigned as a class attribute is
         # still a table, and this codebase does put pricing names at class level
-        # (`calculators.py:41`, `:154`). The docstring promises "any name in any
+        # (`calculators.py`'s `TokenTracker.DEFAULT_COSTS` and
+        # `CostCalculator.MODEL_PRICING`). The docstring promises "any name in any
         # file"; module-level-only delivered less than that. Zero such tables
         # today, so it costs nothing now — but a floor or a sweep that claims
         # more reach than it has is the defect this whole file is about.
@@ -303,7 +304,7 @@ def test_the_per_1k_view_is_the_canonical_table_divided_by_a_thousand() -> None:
 
 
 def test_the_per_1k_view_keeps_the_two_entries_that_are_not_models() -> None:
-    """`default` is the fallback `calculators.py:102` reads for an unknown model.
+    """`default` is the fallback `TokenTracker.track_usage` reads for an unknown model.
 
     Dropping it while deriving the rest would make every unknown model free, and
     no assertion above would notice — the derivation would be perfectly correct

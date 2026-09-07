@@ -194,8 +194,8 @@ MODEL_PRICING_PER_1K_TOKENS: Dict[str, Dict[str, float]] = {
 }
 
 #: Two entries that are not models and so cannot be derived from a table of
-#: models. `calculators.py:102` reads `"default"` as its fallback when a model is
-#: unknown, so dropping it would silently make every unknown model free.
+#: models. `TokenTracker.track_usage` reads `"default"` as its fallback when a
+#: model is unknown, so dropping it would silently make every unknown model free.
 MODEL_PRICING_PER_1K_TOKENS.update(
     {
         "ollama": {"prompt": 0.0, "completion": 0.0},
