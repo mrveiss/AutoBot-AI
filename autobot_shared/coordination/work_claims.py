@@ -278,6 +278,26 @@ return 1
 """
 
 
+def _require_holder(agent_id: str, task_id: str) -> None:
+    """Reject a holder identity that reentrancy could not safely compare.
+
+    Load-bearing, not belt-and-braces, and the reason is the storage layer.
+    Elsewhere in this codebase an unguarded coercion of a tenant id turned out
+    to be unfalsifiable because the column was ``UUID(as_uuid=True),
+    nullable=False`` -- the schema already refused what the code did not. Here
+    the opposite holds: a claim is JSON in Redis, with no column type and no
+    constraint anywhere behind it. Nothing else can catch a blank identity.
+
+    And a blank one is not merely untidy. Reentrancy compares ``(agent_id,
+    task_id)``, so two callers that both passed ``task_id=""`` would compare
+    equal, become one holder, and silently take over each other's claims
+    through the path that exists to stop an agent deadlocking against itself.
+    """
+    for label, value in (("agent_id", agent_id), ("task_id", task_id)):
+        if not isinstance(value, str) or not value.strip():
+            raise HolderError(f"{label} must be a non-empty string; got {value!r}")
+
+
 async def _redis() -> Any:
     """The async Redis client, or a stated failure -- never a silent no-op."""
     client = await get_async_redis_client(database="main")
