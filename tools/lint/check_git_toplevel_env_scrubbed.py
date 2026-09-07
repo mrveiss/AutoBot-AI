@@ -131,6 +131,7 @@ from __future__ import annotations
 
 import ast
 import sys
+import pathlib
 from pathlib import Path
 from typing import Iterable, List, Set, Tuple
 
@@ -138,7 +139,7 @@ from typing import Iterable, List, Set, Tuple
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import EXCLUDED_DIR_NAMES, enforce_reach, scan_python_files  # noqa: E402
+from _scan_helpers import EXCLUDED_DIR_NAMES, enforce_reach, scan_python_files, tracked_paths  # noqa: E402
 
 #: The canonical scrubbing helper, ``autobot_shared.paths.scrubbed_git_env``.
 SCRUB_HELPER = "scrubbed_git_env"
@@ -502,11 +503,22 @@ def iter_shell_files(args: List[str], repo_root: Path) -> Iterable[Path]:
             if candidate.is_file() and candidate.suffix == ".sh":
                 yield candidate
         return
-    for candidate in repo_root.rglob("*.sh"):
-        parts = candidate.relative_to(repo_root).parts
+    # Git-tracked, mirroring `iter_python_files` (#15926). This was `rglob`,
+    # and the asymmetry was the bug: `EXCLUDED_DIR_NAMES` names `.worktrees`
+    # but not `.claude`, and this repository keeps agent checkouts under
+    # `.claude/worktrees/`. A full-repo run therefore reported **7 findings,
+    # every one of them in another checkout and none in this tree** -- a
+    # pre-commit gate red for reasons outside the repository.
+    #
+    # Adding `.claude` to the prune set would have been the wrong fix: 68 files
+    # under `.claude/` are tracked here, 4 of them `.sh` files this guard exists
+    # to scan. Git's index cannot contain another checkout's files at all, so
+    # enumerating through it needs no name list to keep current.
+    for rel in tracked_paths(repo_root, "*.sh"):
+        parts = pathlib.PurePosixPath(rel).parts
         if any(part in EXCLUDED_DIR_NAMES for part in parts):
             continue
-        yield candidate
+        yield repo_root / rel
 
 
 def scan_shell(path: Path, repo_root: Path) -> List[Tuple[int, str]]:

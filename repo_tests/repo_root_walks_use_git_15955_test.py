@@ -51,7 +51,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 #: Names a walk is rooted at when it is rooted at the repository itself. A walk
 #: from a SUBDIRECTORY cannot reach the nested checkouts and is not in scope.
-_ROOT_NAMES = {"REPO_ROOT", "_REPO_ROOT", "ROOT", "_ROOT"}
+#: #15926: `repo_root` was missing, and it is the name #15925 made canonical --
+#: so this detector's blind spot GREW as that migration landed. It hid a real
+#: one: `check_git_toplevel_env_scrubbed.iter_shell_files` did
+#: `repo_root.rglob("*.sh")` and read 219 files from other checkouts. Keying on
+#: how a root is NAMED is the defect #15925 exists to remove, committed here by
+#: the guard against it; the name list is a stopgap until the population comes
+#: from `repo_root()` itself.
+_ROOT_NAMES = {"REPO_ROOT", "_REPO_ROOT", "ROOT", "_ROOT", "repo_root"}
 
 #: ``glob`` is here for the ``glob("**/…")`` form only -- the branch below
 #: requires a literal ``**`` pattern, so a single-level glob is still ignored.
@@ -412,10 +419,26 @@ def test_a_module_that_prunes_both_nested_roots_is_still_excused() -> None:
     Without this, "remove the exemption" is satisfied by excusing nothing, which
     would flag the nine guards that prune by name and were deliberately accepted.
     """
-    src = (
-        "_PRUNED = {'.worktrees', '.claude'}\n"
-        "def collect():\n"
-        "    return [p for p in REPO_ROOT.rglob('*.py')]\n"
-    )
+    src = "_PRUNED = {'.worktrees', '.claude'}\n" "def collect():\n" "    return [p for p in REPO_ROOT.rglob('*.py')]\n"
     assert root_walks_in(src), "fixture must contain a walk for this to mean anything"
     assert _safety_of(src)
+
+
+def test_the_detector_sees_the_canonical_lowercase_root_name() -> None:
+    """`repo_root` is what #15925 standardised, so it must be detected.
+
+    An uppercase-only name list got blinder as that migration landed: every
+    guard moving to `repo_root()` moved toward a spelling this detector did not
+    recognise.
+    """
+    assert root_walks_in('for p in repo_root.rglob("*.sh"):\n    pass\n') == [(1, "repo_root.rglob('*.sh')")]
+    assert root_walks_in("for e in repo_root.iterdir():\n    pass\n") == [(1, "repo_root.iterdir()")]
+
+
+def test_a_subdirectory_named_root_is_still_not_reported() -> None:
+    """Contrast: the loop variable of `os.walk` is conventionally `root`.
+
+    Without this, widening the name set is satisfied by flagging every
+    `for root, dirs, files in os.walk(subdir)` body in the tree.
+    """
+    assert root_walks_in("for root, dirs, files in os.walk(SUBDIR):\n    p = root\n") == []
