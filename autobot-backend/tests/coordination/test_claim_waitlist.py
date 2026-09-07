@@ -263,3 +263,16 @@ async def test_a_waiter_invited_while_a_shared_holder_remains_stays_queued(redis
 
     assert isinstance(await try_acquire("path:a/b", agent_id="w1", task_id="tw", intent="wants exclusive"), Claim)
     assert await leave("path:a/b", agent_id="w1", task_id="tw") is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad", [0, -1, -900])
+async def test_a_non_positive_ttl_is_refused(redis, bad):
+    """An entry born expired is a silent no-op, not a short wait.
+
+    The caller would believe it was queued, every prune would drop it, and it
+    would never be promoted — failure with no error anywhere, which is the
+    shape this whole module exists to remove.
+    """
+    with pytest.raises(ValueError):
+        await join("path:a/b", agent_id="a1", task_id="t1", intent="x", ttl_s=bad)

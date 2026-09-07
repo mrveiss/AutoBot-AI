@@ -164,7 +164,16 @@ async def test_a_timeout_shorter_than_one_poll_is_still_honoured(env):
     request = await request_yield(
         "path:a/b", holder_task_id="h", requester_agent_id="a", requester_task_id="t", reason="r"
     )
+    from services.claim_yield import _POLL_S
+
     started = time.monotonic()
     assert await await_decision(request, timeout_s=0.05) == HOLD
     elapsed = time.monotonic() - started
-    assert elapsed < 1.0, f"waited {elapsed:.2f}s for a 0.05s budget"
+
+    # The bound has to sit BELOW one poll interval or this test passes on the
+    # very code it exists to catch: the old loop slept `_POLL_S` before its
+    # first re-check, so a 1.0s bound was satisfied by the regression at ~0.25s.
+    assert elapsed < _POLL_S, (
+        f"waited {elapsed:.3f}s for a 0.05s budget; anything at or above "
+        f"_POLL_S ({_POLL_S}s) means the deadline is not bounding the sleep"
+    )

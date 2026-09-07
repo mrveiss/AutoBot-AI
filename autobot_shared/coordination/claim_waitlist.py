@@ -233,6 +233,11 @@ async def join(
     parsed = Scope.parse(scope)
     _require_holder(agent_id, task_id)
     ttl = WAIT_TTL_S if ttl_s is None else ttl_s
+    if ttl <= 0:
+        # An entry born expired is not a short wait, it is a silent no-op: the
+        # caller believes it is queued, every prune drops it, and it is never
+        # promoted. Refusing is the only outcome that tells the caller anything.
+        raise ValueError(f"ttl_s must be positive; got {ttl_s!r}")
     joined = now_utc()
     expires = joined + timedelta(seconds=ttl)
     entry = Waiter(
