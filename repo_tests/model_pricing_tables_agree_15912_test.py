@@ -151,7 +151,13 @@ def discover_pricing_tables() -> Dict[str, Dict[str, Price]]:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError, OSError):
             continue
-        for node in tree.body:
+        # `ast.walk`, not `tree.body`: a table assigned as a class attribute is
+        # still a table, and this codebase does put pricing names at class level
+        # (`calculators.py:41`, `:154`). The docstring promises "any name in any
+        # file"; module-level-only delivered less than that. Zero such tables
+        # today, so it costs nothing now — but a floor or a sweep that claims
+        # more reach than it has is the defect this whole file is about.
+        for node in ast.walk(tree):
             if not isinstance(node, (ast.Assign, ast.AnnAssign)):
                 continue
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
@@ -186,6 +192,42 @@ def _normalised_key(raw: str) -> str:
     return getattr(constants, raw, raw) if isinstance(getattr(constants, raw, None), str) else raw
 
 
+def alias_pairs() -> Dict[str, str]:
+    """``{alias_id: canonical_id}``, derived from the constant NAMES.
+
+    `ANTHROPIC_CLAUDE3_OPUS` / `ANTHROPIC_CLAUDE3_OPUS_DATED` and
+    `ANTHROPIC_CLAUDE_SONNET4_SHORT` / `ANTHROPIC_CLAUDE_SONNET4` are one model
+    each under two ids. The comparison above is keyed on the id *string*, so
+    those pairs are invisible to it and could drift apart without failing
+    anything.
+
+    **The first version of this PR mitigated that by keeping the aliases
+    adjacent in the table, and the comment saying so was wrong**: the aliases
+    ended up adjacent to each other and ~60 lines from the twins they would
+    drift from. Worse, proximity is precisely the mechanism #15912 was filed
+    about — "the drift is currently prevented by attention, and #15910 removes
+    the thing attention was relying on". A fix that reinstates attention as its
+    own safeguard has not fixed it.
+
+    Derived from the `_DATED` / `_SHORT` suffix convention rather than listed,
+    so a fifth alias added tomorrow is covered without anyone remembering. A
+    hand-written map would be an enumeration, which is the other half of the
+    same complaint.
+    """
+    import autobot_shared.ssot_constants as constants
+
+    names = {n for n in dir(constants) if isinstance(getattr(constants, n), str)}
+    pairs: Dict[str, str] = {}
+    for name in sorted(names):
+        for suffix in ("_DATED", "_SHORT"):
+            base = name[: -len(suffix)]
+            if name.endswith(suffix) and base in names:
+                alias, canonical = (name, base) if suffix == "_SHORT" else (base, name)
+                pairs[getattr(constants, alias)] = getattr(constants, canonical)
+    return pairs
+
+
+_ALIASES = alias_pairs()
 _TABLES = discover_pricing_tables()
 _BY_MODEL: Dict[str, Dict[str, Price]] = {}
 for _table, _prices in _TABLES.items():
@@ -292,3 +334,46 @@ def test_the_old_import_sites_still_resolve() -> None:
     module = importlib.import_module("constants.model_constants")
     for name in ("MODEL_COSTS_PER_1M_TOKENS", "MODEL_PRICING_PER_1K_TOKENS"):
         assert hasattr(module, name), f"constants.model_constants no longer re-exports {name} (#15911)"
+
+
+def test_the_alias_pairing_found_the_known_aliases() -> None:
+    """Reach floor for the pairing itself.
+
+    An empty map makes the assertion below pass over nothing — which is exactly
+    how the adjacency "mitigation" it replaces behaved.
+    """
+    assert len(_ALIASES) >= 4, (
+        f"derived only {len(_ALIASES)} alias pair(s) from the `_DATED`/`_SHORT` naming "
+        f"convention: {_ALIASES}. The convention changed, or the sweep broke."
+    )
+
+
+def test_an_alias_is_priced_the_same_as_the_model_it_aliases() -> None:
+    """Two ids for one model must not disagree.
+
+    Invisible to the table-vs-table comparison, which keys on the id string:
+    `claude-sonnet-4` and `claude-sonnet-4-20250514` are different strings and
+    would never be compared to each other, in any number of tables.
+    """
+    problems = []
+    for alias, canonical in sorted(_ALIASES.items()):
+        for table, prices in sorted(_TABLES.items()):
+            resolved = {_normalised_key(raw): price for raw, price in prices.items()}
+            if alias in resolved and canonical in resolved and resolved[alias] != resolved[canonical]:
+                problems.append(
+                    f"  {table}\n"
+                    f"      {resolved[alias][0]:>9} / {resolved[alias][1]:<9}  {alias}\n"
+                    f"      {resolved[canonical][0]:>9} / {resolved[canonical][1]:<9}  {canonical}"
+                )
+    assert not problems, (
+        "one model priced differently under two of its own ids:\n" + "\n".join(problems)
+    )
+
+
+def test_the_alias_check_would_catch_a_divergence() -> None:
+    """The fixture. The tree agrees today, so a check that compared nothing
+    would pass every assertion above — the population is four."""
+    assert _ALIASES, "no alias pairs derived; the check below proves nothing"
+    alias, canonical = next(iter(sorted(_ALIASES.items())))
+    resolved = {alias: (1.0, 2.0), canonical: (9.0, 2.0)}
+    assert resolved[alias] != resolved[canonical]

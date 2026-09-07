@@ -163,9 +163,16 @@ MODEL_PRICING_PER_1M_TOKENS: Dict[str, Dict[str, float]] = {
     # `claude-3-opus` for `claude-3-opus-20240229`, and so on. Both spellings are
     # in use by callers, and both must resolve, so both are keys.
     #
-    # An alias pair is the one drift the agreement guard cannot see: it compares
-    # model id strings, so these could diverge from their dated twins without
-    # failing anything. Keeping them adjacent is the whole mitigation.
+    # An alias pair is invisible to a table-vs-table comparison, which keys on
+    # the id string: `claude-sonnet-4` and `claude-sonnet-4-20250514` are
+    # different strings and would never be compared to each other.
+    #
+    # That is checked, not mitigated by layout. An earlier version of this
+    # comment claimed "keeping them adjacent is the whole mitigation" and was
+    # wrong twice: these sit ~60 lines from the twins they would drift from, and
+    # proximity is the mechanism #15912 exists because it failed. See
+    # `alias_pairs()` in the guard, which derives the pairing from the
+    # `_DATED`/`_SHORT` naming convention.
     ANTHROPIC_CLAUDE3_OPUS: {"input": 15.00, "output": 75.00},
     ANTHROPIC_CLAUDE3_SONNET: {"input": 3.00, "output": 15.00},
     ANTHROPIC_CLAUDE3_HAIKU: {"input": 0.25, "output": 1.25},
