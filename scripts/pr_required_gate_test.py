@@ -74,6 +74,11 @@ def test_an_empty_observation_blocks_rather_than_passing():
     """A conflicted or un-started PR produces NO contexts and reads `pending=0 fail=0`.
 
     This is the state that motivated the tool: a histogram calls it green.
+
+    It BLOCKS rather than pends because it is ambiguous between "has not started"
+    and "will never start" -- a conflicted branch produces zero contexts and waits
+    forever. Only looking tells them apart, so the verdict must send someone to
+    look. (An earlier revision made this PENDING and this test caught it.)
     """
     result = verdict(["code-quality", "api-wiring", "smoke-test"], {})
     assert result["verdict"] == "BLOCKED"
@@ -84,7 +89,30 @@ def test_an_empty_observation_blocks_rather_than_passing():
 def test_skipped_is_acceptable_but_pending_is_not():
     """`skipped` is a real conclusion from path-filtered shims; `pending` is not a verdict."""
     assert verdict(["a"], {"a": "skipped"})["verdict"] == "CONTEXTS-GREEN"
-    assert verdict(["a"], {"a": "pending"})["verdict"] == "BLOCKED"
+    assert verdict(["a"], {"a": "pending"})["verdict"] != "CONTEXTS-GREEN"
+
+
+def test_a_running_check_is_not_reported_as_a_failure():
+    """The defect this tool's FIRST version had, caught by running it (#15995).
+
+    `pending` in the `not_green` bucket merges "CI is still working" with "CI
+    disagreed with you" -- the same conflation the tool exists to prevent between
+    `never_reported` and `not_green`, one bucket over. A reader seeing
+    `not_green=6` on a PR whose checks are simply still running goes looking for
+    six broken things.
+    """
+    result = verdict(["a", "b"], {"a": "pending", "b": "in_progress"})
+    assert result["verdict"] == "PENDING"
+    assert result["not_green"] == []
+    assert [e["context"] for e in result["running"]] == ["a", "b"]
+
+
+def test_a_real_failure_still_blocks_even_while_others_run():
+    """Contrast: PENDING must not swallow a genuine failure that has already landed."""
+    result = verdict(["a", "b"], {"a": "pending", "b": "failure"})
+    assert result["verdict"] == "BLOCKED"
+    assert result["not_green"] == [{"context": "b", "state": "failure"}]
+    assert [e["context"] for e in result["running"]] == ["a"]
 
 
 def test_the_required_population_is_an_input_not_a_constant():

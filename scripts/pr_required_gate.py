@@ -45,6 +45,14 @@ from typing import Iterable
 #: real conclusion here: several contexts are published by path-filtered shims.
 _ACCEPTABLE = frozenset({"success", "skipped", "neutral"})
 
+#: Not a verdict -- the check is still running. Kept apart from `not_green` for the
+#: same reason `never_reported` is: **a PR that needs waiting and a PR that needs
+#: work are different problems**, and a reader who cannot tell them apart treats
+#: both as "come back later" or both as "something is broken". The first version of
+#: this tool put `pending` in `not_green`, committing the exact conflation it exists
+#: to prevent, and it was caught by running it rather than by reading it.
+_RUNNING = frozenset({"pending", "in_progress", "queued", "waiting", "requested"})
+
 
 def latest_per_name(runs: Iterable[dict]) -> dict[str, str]:
     """Conclusion of the most recently *started* run for each context name.
@@ -73,6 +81,7 @@ def verdict(required: Iterable[str], observed: dict[str, str]) -> dict:
     The two failure modes are kept apart deliberately -- see the module docstring.
     """
     never: list[str] = []
+    running: list[dict[str, str]] = []
     not_green: list[dict[str, str]] = []
     green: list[str] = []
     for context in sorted(required):
@@ -81,11 +90,28 @@ def verdict(required: Iterable[str], observed: dict[str, str]) -> dict:
             never.append(context)
         elif state in _ACCEPTABLE:
             green.append(context)
+        elif state in _RUNNING:
+            running.append({"context": context, "state": state})
         else:
             not_green.append({"context": context, "state": state})
+    if not never and not running and not not_green:
+        result = "CONTEXTS-GREEN"
+    elif not_green or never:
+        # `never` BLOCKS rather than pends, and the distinction is the whole point.
+        # A context that has not reported is ambiguous between "has not started
+        # yet" and "will never start" -- a branch conflicting with base produces
+        # ZERO required contexts and waits forever. Only looking distinguishes
+        # them, so the verdict must send someone to look.
+        result = "BLOCKED"
+    else:
+        # Every required context is running and none has disagreed: the answer is
+        # not yet knowable. Distinct from BLOCKED so a caller can tell "wait" from
+        # "act" without parsing lists.
+        result = "PENDING"
     return {
-        "verdict": "CONTEXTS-GREEN" if not never and not not_green else "BLOCKED",
+        "verdict": result,
         "never_reported": never,
+        "running": running,
         "not_green": not_green,
         "green": green,
     }
@@ -124,9 +150,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"#{args.pr} {fetched['head'][:10]}  {result['verdict']}")
         for context in result["never_reported"]:
             print(f"  never-reported  {context}")
+        for entry in result["running"]:
+            print(f"  running         {entry['context']} = {entry['state']}")
         for entry in result["not_green"]:
             print(f"  not-green       {entry['context']} = {entry['state']}")
-    return 0 if result["verdict"] == "CONTEXTS-GREEN" else 1
+    return 0 if result["verdict"] == "CONTEXTS-GREEN" else 1  # PENDING and BLOCKED both non-zero: neither is mergeable
 
 
 if __name__ == "__main__":
