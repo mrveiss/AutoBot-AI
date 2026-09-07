@@ -123,3 +123,27 @@ def test_the_required_population_is_an_input_not_a_constant():
     """
     assert verdict([], {"anything": "failure"})["verdict"] == "CONTEXTS-GREEN"
     assert verdict(["x"], {})["never_reported"] == ["x"]
+
+
+def test_a_failing_check_outside_the_required_list_is_surfaced():
+    """The defect that nearly landed #15972 with three failing test shards.
+
+    `python-suite` is not in branch protection's list, so GitHub merges past it --
+    but a failing test is a failing test. Answering only "are the required
+    contexts green" is a narrower question than "is this safe to merge", and a
+    verdict a reader treats as a merge decision must not hide the difference.
+    """
+    observed = {"code-quality": "success", "python-suite shard 8/12": "failure"}
+    result = verdict(["code-quality"], observed)
+    assert result["verdict"] == "GREEN-BUT-OTHERS-FAILING"
+    assert result["not_green"] == []
+    assert result["failing_unrequired"] == [
+        {"context": "python-suite shard 8/12", "state": "failure"}
+    ]
+
+
+def test_a_running_unrequired_check_is_not_reported_as_failing():
+    """Contrast: the surfacing must not fire on a check that is merely still going."""
+    result = verdict(["code-quality"], {"code-quality": "success", "extra": "pending"})
+    assert result["failing_unrequired"] == []
+    assert result["verdict"] == "CONTEXTS-GREEN"

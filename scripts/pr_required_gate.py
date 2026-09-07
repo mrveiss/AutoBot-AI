@@ -76,9 +76,15 @@ def latest_per_name(runs: Iterable[dict]) -> dict[str, str]:
 
 
 def verdict(required: Iterable[str], observed: dict[str, str]) -> dict:
-    """Split required contexts into never-reported, not-green, and green.
+    """Split required contexts into never-reported, running, not-green, and green.
 
-    The two failure modes are kept apart deliberately -- see the module docstring.
+    Also reports checks that are FAILING BUT NOT REQUIRED. GitHub will merge past
+    those, and this tool answering only "are the required contexts green" is a
+    narrower question than "is this safe to merge" -- a distinction that nearly
+    landed #15972 with three failing `python-suite` shards, because `python-suite`
+    is not in branch protection's list. A failing test is a failing test whether or
+    not a protection rule happens to name it, so it is surfaced rather than
+    silently excluded from a verdict a reader will treat as a merge decision.
     """
     never: list[str] = []
     running: list[dict[str, str]] = []
@@ -108,12 +114,28 @@ def verdict(required: Iterable[str], observed: dict[str, str]) -> dict:
         # not yet knowable. Distinct from BLOCKED so a caller can tell "wait" from
         # "act" without parsing lists.
         result = "PENDING"
+    required_set = set(required)
+    failing_unrequired = sorted(
+        (
+            {"context": name, "state": state}
+            for name, state in observed.items()
+            if name not in required_set
+            and state not in _ACCEPTABLE
+            and state not in _RUNNING
+        ),
+        key=lambda entry: entry["context"],
+    )
+    if failing_unrequired and result == "CONTEXTS-GREEN":
+        # Honest naming: the required contexts really are green. The caller is not
+        # clear to merge, and the verdict must not read as though they were.
+        result = "GREEN-BUT-OTHERS-FAILING"
     return {
         "verdict": result,
         "never_reported": never,
         "running": running,
         "not_green": not_green,
         "green": green,
+        "failing_unrequired": failing_unrequired,
     }
 
 
@@ -154,6 +176,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  running         {entry['context']} = {entry['state']}")
         for entry in result["not_green"]:
             print(f"  not-green       {entry['context']} = {entry['state']}")
+        for entry in result["failing_unrequired"]:
+            print(f"  FAILING (not required)  {entry['context']} = {entry['state']}")
     return 0 if result["verdict"] == "CONTEXTS-GREEN" else 1  # PENDING and BLOCKED both non-zero: neither is mergeable
 
 
