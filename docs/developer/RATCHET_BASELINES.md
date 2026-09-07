@@ -82,8 +82,15 @@ as case-sensitive and reported **2,426** against the correct 7,087. The `-i` is
 on the `grep` seventy lines below the assignment
 (`.github/workflows/no-commit-trailers.yml:165`), and the trailer's dominant
 spelling in history is `Co-Authored-By:` — 7,373 against 5,033 — so dropping the
-flag silently discards the majority case. The wrong number was reached twice, by
-two readers, from the same true regex.
+flag silently discards the majority case.
+
+**2,426 is not obviously wrong**, and neither were the 3,444 and 8,010 above.
+That is the whole difficulty: both re-derivations of this one gate produced
+large, plausible numbers from a correctly transcribed regex, and nothing in
+either result announced which predicate had actually been measured. The first
+author's script escaped only because Python makes the flag part of the compiled
+pattern, so the invocation could not be separated from it — the instrument
+prevented the mistake rather than the reader.
 
 ### 6. Give the re-derivation its own non-vacuity floor
 
