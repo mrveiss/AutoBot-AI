@@ -138,7 +138,8 @@ class TestingCoverageAnalyzer:
         results = {
             "total_functions": len(all_functions),
             "total_tests": len(test_functions),
-            "coverage_gaps": len(coverage_gaps),
+            # #15908: was also "coverage_gaps", shadowed by the list below.
+            "coverage_gaps_count": len(coverage_gaps),
             "test_coverage_percentage": metrics.test_coverage_percentage,
             "analysis_time_seconds": analysis_time,
             "functions": [self._serialize_function(f) for f in all_functions],
