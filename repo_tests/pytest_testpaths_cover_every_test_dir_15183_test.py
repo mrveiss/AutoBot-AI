@@ -23,28 +23,36 @@ that looks like when it is not.
 from __future__ import annotations
 
 import configparser
+import subprocess
 from pathlib import Path
 from typing import List, Set
 
 import pytest
+
+from autobot_shared.paths import scrubbed_git_env
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _SKIP_PARTS = {".git", "node_modules", "venv", ".venv", "__pycache__", ".worktrees"}
 
 
-def _inside_nested_checkout(path: Path) -> bool:
-    """Whether *path* lies inside another git worktree of this repository."""
-    for parent in path.parents:
-        # REPO_ROOT FIRST: when the checkout under test is ITSELF a worktree --
-        # which it is whenever this suite runs from `.worktrees/<name>/` -- the
-        # root's own `.git` is a file, and testing it would exclude every path in
-        # the tree. Only directories BELOW the root can be nested checkouts.
-        if parent == REPO_ROOT:
-            break
-        if (parent / ".git").is_file():
-            return True
-    return False
+def _tracked(root: Path, pattern: str) -> List[str]:
+    """Tracked paths under *root* matching *pattern*, from git (#15955).
+
+    ``git ls-files`` reads an index, so it cannot enter another checkout at all —
+    stronger than pruning, because there is no descent to prune.
+    """
+    completed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "ls-files", "-z", "--", pattern],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+        # An inherited GIT_DIR outranks `cwd=` and would enumerate another
+        # checkout's index while *root* names this one (#14896).
+        env=scrubbed_git_env(),
+    )
+    return [n for n in completed.stdout.split("\0") if n]
 
 
 def _pytest_inis() -> List[Path]:
@@ -56,11 +64,7 @@ def _pytest_inis() -> List[Path]:
     # this repository. Detected structurally as well: a nested checkout's `.git`
     # is a FILE, where the primary checkout's is a directory -- no list to keep
     # current.
-    return [
-        p
-        for p in REPO_ROOT.rglob("pytest.ini")
-        if not _SKIP_PARTS & set(p.relative_to(REPO_ROOT).parts) and not _inside_nested_checkout(p)
-    ]
+    return [REPO_ROOT / name for name in _tracked(REPO_ROOT, "pytest.ini")]
 
 
 def _declared_testpaths(ini: Path) -> List[str]:
@@ -83,12 +87,16 @@ _TEST_FILE_GLOBS = ("test_*.py", "*_test.py")
 
 def _dirs_holding_tests(root: Path) -> Set[Path]:
     """Directories under *root* holding at least one file pytest would collect."""
+    # #15955: `root.rglob(...)` with a post-hoc `_SKIP_PARTS` filter DESCENDED
+    # into `.claude/worktrees/`, adding another checkout's test directories.
+    # Filtering after the walk is not pruning -- the walk has already been there,
+    # which also costs the traversal and can die on an unreadable directory it
+    # meant to skip. This is `_pytest_inis`' sibling in the same file, and my
+    # first fix corrected only that one.
     found: Set[Path] = set()
     for pattern in _TEST_FILE_GLOBS:
-        for path in root.rglob(pattern):
-            if _SKIP_PARTS & set(path.relative_to(root).parts):
-                continue
-            found.add(path.parent)
+        for name in _tracked(root, pattern):
+            found.add((root / name).parent)
     return found
 
 

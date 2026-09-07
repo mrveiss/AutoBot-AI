@@ -100,9 +100,18 @@ def root_walks_in_node(tree) -> List[Tuple[int, str]]:
         if node.func.attr not in _WALK_ATTRS:
             continue
         base = node.func.value
-        # `REPO_ROOT.rglob(...)` — the receiver is the root itself, not a
-        # subdirectory expression like `REPO_ROOT / "ansible"`.
+        # Two shapes, and the detector missed the second until review caught it:
+        #
+        #   REPO_ROOT.rglob(...)   receiver IS the root
+        #   os.walk(REPO_ROOT)     receiver is `os`, the root is an ARGUMENT
+        #
+        # `walk` was in `_WALK_ATTRS` from the first draft, so this detector
+        # named a call shape it could not see -- the same defect it exists to
+        # find, in itself.
         if isinstance(base, ast.Name) and base.id in _ROOT_NAMES:
+            found.append((node.lineno, ast.unparse(node)[:90]))
+            continue
+        if node.func.attr == "walk" and any(isinstance(a, ast.Name) and a.id in _ROOT_NAMES for a in node.args):
             found.append((node.lineno, ast.unparse(node)[:90]))
     return found
 
@@ -273,3 +282,18 @@ def test_a_git_sourced_enumeration_is_not_reported() -> None:
     offenders = {name for name, _, _ in findings}
 
     assert "repo_tests/repo_root_walks_use_git_15955_test.py" not in offenders
+
+
+def test_the_detector_reports_os_walk_with_the_root_as_an_argument() -> None:
+    """The shape the first draft named in `_WALK_ATTRS` and could not see.
+
+    `os.walk(REPO_ROOT)` puts the root in an ARGUMENT, not in the receiver, so a
+    check keyed on the receiver misses it entirely — a detector blind to a call
+    shape it lists.
+    """
+    assert root_walks_in("for a, b, c in os.walk(REPO_ROOT):\n    pass\n") == [(1, "os.walk(REPO_ROOT)")]
+
+
+def test_the_detector_ignores_os_walk_of_a_subdirectory() -> None:
+    """The contrast: `os.walk(_ANSIBLE_ROOT)` cannot reach a nested checkout."""
+    assert root_walks_in("for a, b, c in os.walk(_ANSIBLE_ROOT):\n    pass\n") == []

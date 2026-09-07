@@ -183,23 +183,30 @@ def _ansible_yaml_files() -> list[Path]:
 
 
 def _nginx_files() -> list[Path]:
-    found: list[Path] = []
-    for pattern in ("*.conf", "*.conf.j2"):
-        found += [
-            path
-            for path in _REPO_ROOT.rglob(pattern)
-            # #15955: also excludes nested checkouts, detected structurally --
-            # a worktree's `.git` is a FILE, the primary checkout's a directory.
-            if path.is_file() and "node_modules" not in path.parts and ".git" not in path.parts
-            # Parents BELOW the root only: when this suite runs from a worktree
-            # the root's own `.git` is a file, and testing it excludes everything.
-            and not any(
-                (parent / ".git").is_file()
-                for parent in path.parents
-                if parent != _REPO_ROOT and _REPO_ROOT in parent.parents
-            )
-        ]
-    return sorted(set(found))
+    """Tracked nginx configs, from git (#15955).
+
+    Was `_REPO_ROOT.rglob(pattern)` with the nested-checkout test applied to the
+    RESULT. Filtering after the walk is not pruning: `rglob` had already
+    descended into `.claude/worktrees/`, so the traversal cost was paid and an
+    unreadable directory it meant to skip could still abort it.
+
+    ``git ls-files`` reads an index and never descends at all.
+    """
+    import subprocess  # noqa: PLC0415  # local: keeps the module import side-effect free
+
+    from autobot_shared.paths import scrubbed_git_env
+
+    completed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "ls-files", "-z", "--", "*.conf", "*.conf.j2"],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+        # An inherited GIT_DIR outranks `cwd=` and would enumerate another
+        # checkout's index while _REPO_ROOT names this one (#14896).
+        env=scrubbed_git_env(),
+    )
+    return sorted({_REPO_ROOT / name for name in completed.stdout.split("\0") if name})
 
 
 def _served_path_directives() -> dict[str, list[str]]:
