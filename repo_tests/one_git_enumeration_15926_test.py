@@ -80,6 +80,25 @@ def _direct_invocations() -> list[str]:
     return sorted(set(found))
 
 
+def _decoy_repository(tmp_path: Path) -> Path:
+    """A throwaway repository holding `decoy.py`, created with a SCRUBBED env.
+
+    The scrub matters here, not just in the assertion. An earlier version ran
+    `git init` and `git add` inheriting the ambient environment, so under the
+    `GIT_DIR` a git hook exports they operated on **the real repository** and
+    staged `decoy.py` into its index. The pre-push hook is exactly that
+    environment, which is where it happened. A fixture that demonstrates a
+    hazard must not be subject to it.
+    """
+    other = tmp_path / "other"
+    other.mkdir()
+    env = scrubbed_git_env()
+    subprocess.run(["git", "-C", str(other), "init", "-q"], check=True, env=env)  # nosec B603 B607
+    (other / "decoy.py").write_text("# not this repository\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(other), "add", "decoy.py"], check=True, env=env)  # nosec B603 B607
+    return other
+
+
 def test_the_direct_invocation_count_only_shrinks() -> None:
     """Equality, not a bound: headroom under a ceiling is where the next one hides."""
     parsed = len(tracked_paths(REPO_ROOT, "repo_tests/*.py"))
@@ -103,11 +122,7 @@ def test_the_helper_scrub_is_load_bearing(tmp_path: Path) -> None:
     `GIT_DIR` enumerates the other repository's index and exits 0 with plausible
     output. A hook run in a worktree is handed exactly that environment (#15176).
     """
-    other = tmp_path / "other"
-    other.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=other, check=True)  # nosec B603 B607
-    (other / "decoy.py").write_text("# not this repository\n", encoding="utf-8")
-    subprocess.run(["git", "add", "decoy.py"], cwd=other, check=True)  # nosec B603 B607
+    other = _decoy_repository(tmp_path)
 
     previous = os.environ.get("GIT_DIR")
     os.environ["GIT_DIR"] = str(other / ".git")
@@ -130,11 +145,7 @@ def test_the_scrub_is_what_makes_that_work(tmp_path: Path) -> None:
     mattered, and proves nothing about the scrub. This asserts the hazard is real
     before asserting the helper avoids it.
     """
-    other = tmp_path / "other"
-    other.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=other, check=True)  # nosec B603 B607
-    (other / "decoy.py").write_text("# not this repository\n", encoding="utf-8")
-    subprocess.run(["git", "add", "decoy.py"], cwd=other, check=True)  # nosec B603 B607
+    other = _decoy_repository(tmp_path)
 
     env = dict(os.environ)
     env["GIT_DIR"] = str(other / ".git")
