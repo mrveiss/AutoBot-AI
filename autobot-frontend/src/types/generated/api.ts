@@ -49898,6 +49898,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/ceo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Company Ceo
+         * @description The current designation, whether or not its holder still exists.
+         */
+        get: operations["get_company_ceo_api_llc_companies__company_id__ceo_get"];
+        /**
+         * Set Company Ceo
+         * @description Designate a user or an agent as CEO, replacing any existing designation.
+         *
+         *     PUT rather than POST: the position is single-valued and the write is
+         *     idempotent -- setting the same holder twice leaves one row, which is what
+         *     the unique constraint on `company_id` enforces anyway.
+         *
+         *     422 rather than 404 for a holder outside the company. The company is the
+         *     caller's own (`assert_company_access` has already run), so this is a
+         *     well-formed request naming a holder that cannot hold the position -- a
+         *     client-actionable condition, and one that says nothing about whether some
+         *     other company's holder exists.
+         */
+        put: operations["set_company_ceo_api_llc_companies__company_id__ceo_put"];
+        post?: never;
+        /**
+         * Clear Company Ceo
+         * @description Remove the designation. 404 when there was none.
+         *
+         *     Distinguished on purpose: `clear` returns whether it removed anything, and
+         *     collapsing that into an unconditional 204 would make "you cleared it" and
+         *     "there was nothing there" indistinguishable to a caller retrying a failed
+         *     request.
+         */
+        delete: operations["clear_company_ceo_api_llc_companies__company_id__ceo_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/contacts/directory": {
         parameters: {
             query?: never;
@@ -61079,6 +61122,45 @@ export interface components {
             tool_count: number;
             /** Resolution */
             resolution: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CEODesignationRead
+         * @description The designation as stored, plus whether it currently resolves.
+         *
+         *     `holder_exists` is not redundant with `holder_id`. A designation can name a
+         *     holder that has been deleted or has left the company, and the org chart
+         *     treats that exactly like no designation at all -- so a UI reading only
+         *     `holder_id` would show a CEO the chart does not render.
+         */
+        CEODesignationRead: {
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+            /** Holder Type */
+            holder_type?: string | null;
+            /** Holder Id */
+            holder_id?: string | null;
+            /** Holder Exists */
+            holder_exists: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** CEODesignationWrite */
+        CEODesignationWrite: {
+            /**
+             * Holder Type
+             * @description 'user' or 'agent'
+             */
+            holder_type: string;
+            /**
+             * Holder Id
+             * Format: uuid
+             */
+            holder_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -169557,6 +169639,101 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_company_ceo_api_llc_companies__company_id__ceo_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CEODesignationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_company_ceo_api_llc_companies__company_id__ceo_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CEODesignationWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CEODesignationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_company_ceo_api_llc_companies__company_id__ceo_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
