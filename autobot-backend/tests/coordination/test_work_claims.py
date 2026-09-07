@@ -124,6 +124,66 @@ async def test_mode_conflict_matrix(redis, first, second, compatible):
 
 
 @pytest.mark.asyncio
+async def test_two_shared_holders_coexist_independently(redis):
+    """Both survive, both are listed, and each releases only its own.
+
+    Asserting the second acquire's *return type* is not enough: with one claim
+    key per scope path the second SHARED acquire overwrote the first holder's
+    record entirely — same return type, first holder silently erased. The
+    coexistence claim is about what is stored, so it has to be read back.
+    """
+    assert isinstance(await _acquire("path:a/b", "agent-1", "t1", ClaimMode.SHARED), Claim)
+    assert isinstance(await _acquire("path:a/b", "agent-2", "t2", ClaimMode.SHARED), Claim)
+
+    holders = {(c.agent_id, c.task_id) for c in await list_claims("path")}
+    assert holders == {("agent-1", "t1"), ("agent-2", "t2")}
+
+    # Each holder owns its own record: one release leaves the other intact.
+    assert await release("path:a/b", agent_id="agent-1", task_id="t1") is True
+    remaining = await list_claims("path")
+    assert [(c.agent_id, c.task_id) for c in remaining] == [("agent-2", "t2")]
+
+    # And the surviving SHARED holder still blocks an EXCLUSIVE acquire.
+    assert isinstance(await _acquire("path:a/b", "agent-3", "t3", ClaimMode.EXCLUSIVE), ClaimConflict)
+
+
+@pytest.mark.asyncio
+async def test_renew_advances_the_advertised_expiry_not_only_the_ttl(redis):
+    """A TTL extended without `expires_at` advertises a time already past.
+
+    `list_claims` and every `ClaimConflict` read `expires_at`, so a refused
+    agent told the holder expired seconds ago retries immediately against a
+    claim that is still held — the opposite of what the refusal is for.
+    """
+    first = await _acquire("path:a/b", "agent-1", "t1", ttl_s=60)
+    assert isinstance(first, Claim)
+    assert await renew("path:a/b", agent_id="agent-1", task_id="t1", ttl_s=3600) is True
+
+    [held] = await list_claims("path")
+    assert held.expires_at > first.expires_at
+
+    conflict = await _acquire("path:a/b", "agent-2", "t2")
+    assert isinstance(conflict, ClaimConflict)
+    assert conflict.holder.expires_at == held.expires_at
+
+
+@pytest.mark.asyncio
+async def test_a_nested_work_claim_does_not_release_the_outer_scope(redis):
+    """Reentrancy makes the inner block succeed; its exit must not free the scope.
+
+    Otherwise the inner `finally` deletes the claim while the outer block is
+    still writing, and another agent acquires the scope mid-write — the exact
+    collision this module exists to prevent, produced by the module itself.
+    """
+    async with work_claim("path:a/b", agent_id="agent-1", task_id="t1", intent="outer"):
+        async with work_claim("path:a/b", agent_id="agent-1", task_id="t1", intent="inner"):
+            pass
+        # Inner block has exited; the outer block still holds the scope.
+        assert isinstance(await _acquire("path:a/b", "agent-2", "t2"), ClaimConflict)
+    assert isinstance(await _acquire("path:a/b", "agent-2", "t2"), Claim)
+
+
+@pytest.mark.asyncio
 async def test_conflict_names_the_holder_and_its_intent(redis):
     await try_acquire("path:a/b", agent_id="agent-1", task_id="t1", intent="refactor the loop")
     outcome = await try_acquire("path:a/b", agent_id="agent-2", task_id="t2", intent="rename")
@@ -197,7 +257,7 @@ async def test_concurrent_overlapping_acquires_yield_exactly_one_winner(redis):
 async def test_an_expired_claim_neither_lists_nor_blocks(redis):
     await _acquire("path:a/b", "agent-1", "t1", ttl_s=10)
     assert len(await list_claims("path")) == 1
-    await redis.delete("work_claims:c:path:a/b")  # what Redis TTL expiry leaves behind
+    await redis.delete("work_claims:c:path:a/b|agent-1|t1")  # what Redis TTL expiry leaves behind
     assert await list_claims("path") == []
     assert isinstance(await _acquire("path:a/b", "agent-2", "t2"), Claim)
 
@@ -223,7 +283,7 @@ async def test_renew_is_owner_checked_and_false_once_gone(redis):
 @pytest.mark.asyncio
 async def test_list_claims_prunes_the_index_it_reads(redis):
     await _acquire("path:a/b", "agent-1", "t1")
-    await redis.delete("work_claims:c:path:a/b")
+    await redis.delete("work_claims:c:path:a/b|agent-1|t1")
     await list_claims("path")
     assert await redis.smembers("work_claims:idx:path") == set()
 

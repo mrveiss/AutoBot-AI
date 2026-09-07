@@ -248,3 +248,22 @@ register_env_var(
         component="llm",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WORK_CLAIM_TTL_S",
+        type=int,
+        default=300,
+        description=(
+            "How long an agent's work claim survives without a renew (#15947). This is a "
+            "coordination policy, not a tuning knob: the value is how long a crashed agent's "
+            "scope stays blocked to every other agent, so the floor stops a claim expiring "
+            "mid-write and the ceiling bounds a stale hold at one hour. A running task renews "
+            "for its own lifetime, so raising this does not make long tasks safer -- it only "
+            "makes a dead holder's scope take longer to free."
+        ),
+        component="orchestration",
+        range=(10, 3600),
+    )
+)
+
