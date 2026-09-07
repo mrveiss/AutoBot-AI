@@ -20,11 +20,11 @@ guards (#14241).
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import yaml
+from repo_tests._paths import repo_root
 
-_CI = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
+_CI = repo_root() / ".github" / "workflows" / "ci.yml"
 
 
 def _document() -> dict:

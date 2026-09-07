@@ -10,12 +10,12 @@ the registration and the rendered text are both asserted here, not assumed.
 
 from __future__ import annotations
 
-import pathlib
 
 import pytest
 from repo_tests import dependency_floor_banner as banner
+from repo_tests._paths import repo_root
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 
 class _FakeReporter:

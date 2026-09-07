@@ -23,9 +23,10 @@ from __future__ import annotations
 
 import ast
 import re
-from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+_REPO_ROOT = repo_root()
 
 #: Files that read config through a manager exposing both accessors.
 _SCANNED = (

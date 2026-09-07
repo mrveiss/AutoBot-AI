@@ -93,7 +93,9 @@ import re
 import tokenize
 from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+_ROOT = repo_root()
 
 _SCOPES = (
     "repo_tests/**/*.py",

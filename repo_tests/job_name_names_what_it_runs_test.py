@@ -38,13 +38,13 @@ the guard, which is worse than not having it.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml")
 
-_WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+_WORKFLOWS = repo_root() / ".github" / "workflows"
 
 #: A name that asserts a verdict about one named thing, rather than naming a scope.
 _ACCUSES = re.compile(r"^(Check|Validate|Verify|Assert)\s+\S")

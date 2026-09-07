@@ -56,11 +56,12 @@ import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.status_enums import Severity
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 # The same two roots the dict-entry ratchet scans, so the three populations are
 # comparable and a literal cannot escape by moving between guards.

@@ -22,8 +22,9 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
 
 # `python3 -c '...'` / `python -c "..."` inline programs in workflow steps.

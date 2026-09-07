@@ -44,12 +44,13 @@ from __future__ import annotations
 
 import ast
 import subprocess
-from pathlib import Path
 from typing import Dict, List, Tuple
+
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 #: Per-token-count divisors, by the unit a table's name declares. A table whose
 #: name says neither is read as per-1M, which is the repository default.

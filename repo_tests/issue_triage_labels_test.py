@@ -18,13 +18,13 @@ backend Python issues that received ``frontend`` (for "interface"/"component"),
 from __future__ import annotations
 
 import json
-import pathlib
 import shutil
 import subprocess
 
 import pytest
+from repo_tests._paths import repo_root
 
-_MODULE = pathlib.Path(__file__).resolve().parents[1] / ".github" / "scripts" / "issue-triage-labels.js"
+_MODULE = repo_root() / ".github" / "scripts" / "issue-triage-labels.js"
 
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not available")
 

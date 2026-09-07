@@ -75,10 +75,11 @@ from pathlib import Path
 from typing import Dict, FrozenSet, List, Set
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.api_routing.mount_graph import MountGraph, RoutesRead, build_graph
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = repo_root()
 
 #: Never walked: build output, vendored trees, virtualenvs, data.
 _SKIP_ROOTS = frozenset({"__pycache__", "node_modules", ".venv", "venv", "data", "debug", "logs", "backups"})

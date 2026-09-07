@@ -24,12 +24,12 @@ can pass by classifying nothing is worse than none.
 """
 
 import importlib.util
-from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import pytest
+from repo_tests._paths import repo_root
 
-_SCRIPT = Path(__file__).resolve().parents[1] / "pipeline-scripts" / "ci_red_cause.py"
+_SCRIPT = repo_root() / "pipeline-scripts" / "ci_red_cause.py"
 
 SHA = "8d3fa7d22af3dba8728665f9ff73c1c38c8f5498"
 REPO = "mrveiss/AutoBot-AI"
