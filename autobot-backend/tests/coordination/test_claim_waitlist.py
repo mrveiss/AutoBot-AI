@@ -193,12 +193,7 @@ async def test_concurrent_joins_all_get_a_position(redis):
     """Read-then-write lost joins under concurrency; the script must not."""
     import asyncio
 
-    await asyncio.gather(
-        *(
-            join("path:a/b", agent_id=f"a{i}", task_id=f"t{i}", intent="racing")
-            for i in range(8)
-        )
-    )
+    await asyncio.gather(*(join("path:a/b", agent_id=f"a{i}", task_id=f"t{i}", intent="racing") for i in range(8)))
     queued = await waiters("path:a/b")
     assert len({w.agent_id for w in queued}) == 8
     assert sorted(w.agent_id for w in queued) == [f"a{i}" for i in range(8)]
