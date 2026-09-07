@@ -33,14 +33,33 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 _SKIP_PARTS = {".git", "node_modules", "venv", ".venv", "__pycache__", ".worktrees"}
 
 
+def _inside_nested_checkout(path: Path) -> bool:
+    """Whether *path* lies inside another git worktree of this repository."""
+    for parent in path.parents:
+        # REPO_ROOT FIRST: when the checkout under test is ITSELF a worktree --
+        # which it is whenever this suite runs from `.worktrees/<name>/` -- the
+        # root's own `.git` is a file, and testing it would exclude every path in
+        # the tree. Only directories BELOW the root can be nested checkouts.
+        if parent == REPO_ROOT:
+            break
+        if (parent / ".git").is_file():
+            return True
+    return False
+
+
 def _pytest_inis() -> List[Path]:
     # Filtered on the path RELATIVE to the repo root, not the absolute one: a
     # checkout inside `.worktrees/` would otherwise match its own skip entry and
     # this guard would find nothing while reporting success.
+    # #15955: `_SKIP_PARTS` named `.worktrees` and not `.claude/worktrees`, so
+    # this reached 9 `pytest.ini` files of which 6 belonged to other checkouts of
+    # this repository. Detected structurally as well: a nested checkout's `.git`
+    # is a FILE, where the primary checkout's is a directory -- no list to keep
+    # current.
     return [
         p
         for p in REPO_ROOT.rglob("pytest.ini")
-        if not _SKIP_PARTS & set(p.relative_to(REPO_ROOT).parts)
+        if not _SKIP_PARTS & set(p.relative_to(REPO_ROOT).parts) and not _inside_nested_checkout(p)
     ]
 
 
@@ -158,9 +177,7 @@ def test_every_declared_testpath_exists(ini: Path) -> None:
 def test_every_directory_holding_tests_is_selected(ini: Path) -> None:
     root = ini.parent
     declared = _declared_testpaths(ini)
-    uncovered = sorted(
-        str(d.relative_to(root)) for d in _dirs_holding_tests(root) if not _covered(root, declared, d)
-    )
+    uncovered = sorted(str(d.relative_to(root)) for d in _dirs_holding_tests(root) if not _covered(root, declared, d))
     if uncovered and str(ini.relative_to(REPO_ROOT)) in KNOWN_UNCOVERED:
         pytest.skip(KNOWN_UNCOVERED[str(ini.relative_to(REPO_ROOT))])
 

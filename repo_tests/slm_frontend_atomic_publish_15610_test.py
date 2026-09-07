@@ -188,7 +188,16 @@ def _nginx_files() -> list[Path]:
         found += [
             path
             for path in _REPO_ROOT.rglob(pattern)
+            # #15955: also excludes nested checkouts, detected structurally --
+            # a worktree's `.git` is a FILE, the primary checkout's a directory.
             if path.is_file() and "node_modules" not in path.parts and ".git" not in path.parts
+            # Parents BELOW the root only: when this suite runs from a worktree
+            # the root's own `.git` is a file, and testing it excludes everything.
+            and not any(
+                (parent / ".git").is_file()
+                for parent in path.parents
+                if parent != _REPO_ROOT and _REPO_ROOT in parent.parents
+            )
         ]
     return sorted(set(found))
 
