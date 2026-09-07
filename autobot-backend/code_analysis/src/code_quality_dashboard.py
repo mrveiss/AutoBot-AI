@@ -16,6 +16,7 @@ from typing import Any, Dict, List
 from api_consistency_analyzer import APIConsistencyAnalyzer
 from architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
 from code_analyzer import CodeAnalyzer
+
 # #15914: the class is `EnvironmentAnalyzer`. The old name has never existed
 # in `env_analyzer.py` on this branch, and this was the third independent reason
 # `CodeQualityDashboard` could not be imported.
