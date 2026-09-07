@@ -844,6 +844,7 @@ class WorkItemService(LLCServiceBase):
     ) -> LLCWorkItem:
         """Transition a work item to a new status, enforcing the state machine."""
         from .work_item_relations import WorkItemRelationService
+
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
