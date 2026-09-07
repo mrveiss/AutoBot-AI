@@ -23,7 +23,7 @@ bandit check and no type checker has anything to say about it. 32 sites
 accumulated across 25 files that way (#14517), on top of the one #14507 named.
 
 WHY A REQUIRED CHECK. The same directional argument as ``check_flake8_exclude_anchoring``
-(#14419), ``check_infra_scripts_undefined_names`` (#14405) and
+(#14419), ``check_undefined_names`` (#14405) and
 ``check_bandit_exclude_anchoring`` (#14489): every one of these sites fails
 *quietly*, so a job that stops looking at them goes greener, not redder.
 ``.github/workflows/code-quality.yml`` calls this module with ``--audit``, in the
@@ -64,7 +64,7 @@ from dataclasses import dataclass
 
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a
 # lint job, and `autobot_shared.logging_manager` would drag config loading into
-# that path. Same trade as `tools/lint/check_infra_scripts_undefined_names.py`.
+# that path. Same trade as `tools/lint/check_undefined_names.py`.
 logger = logging.getLogger(__name__)
 
 #: Repo-relative path of this checker, quoted in the messages that ask for an edit.

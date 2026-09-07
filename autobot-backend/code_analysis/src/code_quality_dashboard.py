@@ -16,7 +16,11 @@ from typing import Any, Dict, List
 from api_consistency_analyzer import APIConsistencyAnalyzer
 from architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
 from code_analyzer import CodeAnalyzer
-from env_analyzer import EnvironmentVariableAnalyzer
+
+# #15914: the class is `EnvironmentAnalyzer`. The old name has never existed
+# in `env_analyzer.py` on this branch, and this was the third independent reason
+# `CodeQualityDashboard` could not be imported.
+from env_analyzer import EnvironmentAnalyzer
 from performance_analyzer import PerformanceAnalyzer
 from security_analyzer import SecurityAnalyzer
 from testing_coverage_analyzer import TestingCoverageAnalyzer
@@ -76,11 +80,17 @@ class CodeQualityDashboard:
 
     def __init__(self, redis_client=None):
         self.redis_client = redis_client  # Lazy init if None (#2725)
-        self.config = config
+        # #15914: `self.config = config` stood here. The class carried
+        # `from src.config import config` when it was written; #926 (2026-02-18)
+        # dropped the import and left the assignment, so every
+        # CodeQualityDashboard() raised NameError from that day on.
+        # Removed rather than re-imported: nothing in the repo reads
+        # `.config` off this object, so restoring the import would
+        # reinstate dead weight. Same call as #6733 and #14634.
 
         # Initialize all analyzers
         self.code_analyzer = CodeAnalyzer(self.redis_client)
-        self.env_analyzer = EnvironmentVariableAnalyzer(self.redis_client)
+        self.env_analyzer = EnvironmentAnalyzer(self.redis_client)
         self.performance_analyzer = PerformanceAnalyzer(self.redis_client)
         self.security_analyzer = SecurityAnalyzer(self.redis_client)
         self.api_analyzer = APIConsistencyAnalyzer(self.redis_client)
