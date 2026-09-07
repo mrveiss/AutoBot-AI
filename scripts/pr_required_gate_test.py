@@ -151,10 +151,15 @@ def test_a_failing_check_outside_the_required_list_is_surfaced():
 
 
 def test_a_running_unrequired_check_is_not_reported_as_failing():
-    """Contrast: the surfacing must not fire on a check that is merely still going."""
+    """Contrast: still-going must not be reported as failed.
+
+    It does block the green verdict (see below) -- but it lands in
+    `running_unrequired`, never in `failing_unrequired`. Confusing the two would
+    send a reader hunting for a broken test that does not exist.
+    """
     result = verdict(["code-quality"], {"code-quality": "success", "extra": "pending"})
     assert result["failing_unrequired"] == []
-    assert result["verdict"] == "CONTEXTS-GREEN"
+    assert result["verdict"] == "GREEN-BUT-OTHERS-RUNNING"
 
 
 def test_a_running_unrequired_check_blocks_the_green_verdict():
