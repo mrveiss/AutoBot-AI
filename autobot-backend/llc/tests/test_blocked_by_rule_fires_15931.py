@@ -197,7 +197,7 @@ async def test_the_blocker_lookup_uses_the_items_company_not_the_callers(session
     seen: list = []
 
     class _Recording:
-        async def has_unresolved_blockers(self, _session, _wid, cid):
+        async def has_unresolved_blockers(self, _session, _wid, cid) -> bool:
             seen.append(cid)
             return False
 
