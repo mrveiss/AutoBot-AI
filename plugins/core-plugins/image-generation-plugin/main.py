@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
+from typing import Dict, Optional
 
 from plugin_sdk.base import BasePlugin, PluginManifest
 
@@ -37,7 +37,6 @@ class ImageGenerationPlugin(BasePlugin):
 
     def __init__(self, manifest: PluginManifest, config: Optional[Dict] = None) -> None:
         super().__init__(manifest, config)
-        cfg = config or {}
         self._registered: bool = False
 
     async def initialize(self) -> None:

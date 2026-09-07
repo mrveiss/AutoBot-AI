@@ -77,23 +77,31 @@ repos:
         # needed is the hook below, not a hole in this line.
         exclude: ^(tests/|autobot-infrastructure/|autobot-backend/code_analysis/)
 
-      # #14405 -- undefined names ARE production defects, wherever they live.
+      # #14405, #15914 -- undefined names ARE production defects, wherever they live.
       # `autobot-infrastructure/` sat behind the exclude above with nothing else
       # linting it (no CI flake8 invocation passes the tree either), and 12 operator
-      # scripts accumulated 103 undefined names -- live NameErrors, not style. This
-      # hook carves that one subtree back in for F821 alone, so the gate is clean
-      # today with no exemption list to grandfather the very defect it guards. The
-      # other codes there (E501, F841, F401, F541, E741) stay excluded as a separate
+      # scripts accumulated 103 undefined names -- live NameErrors, not style.
+      #
+      # #14405 carved back that ONE subtree, and #15914 is what that cost: five
+      # classes in `autobot-backend/code_analysis/` -- the second tree named in the
+      # exclude above -- each kept a `self.config = config` whose import had been
+      # dropped, so every construction raised NameError for six to nine months.
+      # `CodeQualityDashboard` and its three entry-point scripts were never runnable
+      # in this repo. A carve-back scoped to where the defect was found can only
+      # cover the instance already known about, so this hook now carries NO scope at
+      # all: every Python file pre-commit sees, F821 alone.
+      #
+      # The other codes (E501, F841, F401, F541, E741) stay excluded as a separate
       # cosmetic backlog. `--isolated` skips .flake8, whose `count`/`statistics`/
-      # `show-source` settings exist for the hook above's human output.
-      # tools/lint/check_infra_scripts_undefined_names.py --audit re-proves from the
-      # REQUIRED code-quality check that this hook still reaches the tree, because a
+      # `show-source` settings exist for the hook above's human output -- and whose
+      # own `exclude` list would otherwise re-apply the very holes this hook closes.
+      # tools/lint/check_undefined_names.py --audit re-proves from the REQUIRED
+      # code-quality check that this hook still reaches EVERY tracked file, because a
       # regression here lints fewer files and would make every lint job look greener.
       - id: flake8
-        alias: flake8-infra-scripts-undefined-names
-        name: flake8 F821 (autobot-infrastructure/shared/scripts) (#14405)
+        alias: flake8-undefined-names
+        name: flake8 F821 (whole repo) (#14405, #15914)
         args: [--isolated, --select=F821]
-        files: ^autobot-infrastructure/shared/scripts/.*\.py$
 
   # Remove unused imports and variables with autoflake
   - repo: https://github.com/PyCQA/autoflake
