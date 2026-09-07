@@ -14,12 +14,12 @@ import ast
 import asyncio
 import importlib.util
 import sys
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = repo_root()
 SCRIPT_PATH = REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "zero_downtime_deploy.py"
 
 

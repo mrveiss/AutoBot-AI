@@ -49,9 +49,11 @@ import ast
 from pathlib import Path
 from typing import Dict, Set, Tuple
 
+from repo_tests._paths import repo_root
+
 from autobot_shared.api_routing.router_prefixes import registry_entries, resolve_registry_targets
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = repo_root()
 _BACKEND = _REPO / "autobot-backend"
 _REGISTRY_FILE = _BACKEND / "api" / "registry.py"
 _MOUNT_DIR = _BACKEND / "initialization" / "router_registry"

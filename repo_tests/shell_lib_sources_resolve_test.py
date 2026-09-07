@@ -53,10 +53,11 @@ import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _INFRA = _REPO_ROOT / "autobot-infrastructure"
 _SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", "venv", ".venv"}
 

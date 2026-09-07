@@ -7,12 +7,12 @@ array (`List[X | None]` → `(X | null)[]`, not `X | null[]`) and render bare
 containers instead of `unknown`."""
 
 import importlib.util
-from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 import pytest
+from repo_tests._paths import repo_root
 
-_GEN = Path(__file__).resolve().parents[1] / "autobot-infrastructure" / "shared" / "scripts" / "gen_frontend_types.py"
+_GEN = repo_root() / "autobot-infrastructure" / "shared" / "scripts" / "gen_frontend_types.py"
 
 
 def _load():

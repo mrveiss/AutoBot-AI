@@ -33,10 +33,11 @@ from pathlib import Path
 from typing import List, Tuple
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 #: A path built under *this repo's* worktrees directory — the #15203 defect.
 #:

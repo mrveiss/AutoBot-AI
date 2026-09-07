@@ -55,12 +55,13 @@ from __future__ import annotations
 import ast
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from functools import lru_cache
-from pathlib import Path
 from typing import NamedTuple
+
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 
 class RootBudget(NamedTuple):

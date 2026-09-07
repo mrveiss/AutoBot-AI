@@ -49,7 +49,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+_REPO_ROOT = repo_root()
 
 #: Directories excluded from the sweep: not part of this checkout's own tree,
 #: or vendored. Matches slm_frontend_shell_publish_test.py's set.

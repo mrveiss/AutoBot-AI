@@ -22,9 +22,10 @@ them, not restated here, so a new default that nobody prices fails this.
 
 import ast
 import re
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+REPO_ROOT = repo_root()
 _HIRES = REPO_ROOT / "autobot-backend/llc/api/agent_hires.py"
 _CONSTANTS = REPO_ROOT / "autobot_shared/ssot_constants.py"
 _PRICING = REPO_ROOT / "autobot_shared/model_pricing.py"

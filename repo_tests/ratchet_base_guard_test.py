@@ -58,10 +58,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflow")
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ratchet-base-guard.yml"
 AUDIT_SCRIPT = "scripts/check_python_file_size.py"
 AUDIT_FLAG = "--audit-ceilings"
