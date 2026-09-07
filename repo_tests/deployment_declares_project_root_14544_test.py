@@ -59,13 +59,13 @@ round 2).
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import PROJECT_ROOT_ENV, ProjectRootUndeterminable, resolve_project_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 
 #: (file, must contain) -- every deployment source that has to declare
 #: AUTOBOT_PROJECT_ROOT for a process importing autobot_shared to start.

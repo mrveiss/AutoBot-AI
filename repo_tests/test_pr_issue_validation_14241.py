@@ -22,9 +22,10 @@ from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
 _WORKFLOW = (
-    Path(__file__).resolve().parents[1] / ".github" / "workflows" / "pr-issue-validation.yml"
+    repo_root() / ".github" / "workflows" / "pr-issue-validation.yml"
 )
 
 

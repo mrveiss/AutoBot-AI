@@ -35,8 +35,9 @@ from pathlib import Path
 from typing import Dict, List, Set
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 PLAYBOOK = REPO_ROOT / "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml"
 
 # `- { name: x, path: some/dir/ }` rows of the component-archive loop.

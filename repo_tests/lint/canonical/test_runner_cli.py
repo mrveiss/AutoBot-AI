@@ -7,8 +7,9 @@ import sys
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = repo_root()
 RUNNER = REPO_ROOT / "tools" / "lint" / "canonical_check.py"
 
 

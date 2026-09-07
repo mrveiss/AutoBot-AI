@@ -4,9 +4,10 @@
 
 import subprocess
 import sys
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+from repo_tests._paths import repo_root
+
+REPO_ROOT = repo_root()
 RUNNER = REPO_ROOT / "tools" / "lint" / "canonical_check_infra.py"
 FIXTURES = REPO_ROOT / "repo_tests" / "lint" / "canonical" / "fixtures" / "sh_echo_debug_smoke"
 

@@ -44,8 +44,9 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_INSTALL = Path(__file__).resolve().parents[1] / "install.sh"
+_INSTALL = repo_root() / "install.sh"
 
 
 def _function_source(name: str) -> str:
