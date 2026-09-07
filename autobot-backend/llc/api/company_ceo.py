@@ -66,6 +66,45 @@ class CEODesignationWrite(BaseModel):
     holder_id: uuid.UUID
 
 
+async def _explain_refusal(session: AsyncSession, body: "CEODesignationWrite", original: str) -> str:
+    """Say *why* a holder was refused, when the reason is a data gap rather than membership.
+
+    `_require_in_company` filters `AgentOrgNode.company_id == company_id`, and
+    that column is **nullable with nothing backfilling it** (#15858). For a node
+    whose company was never recorded the predicate does not match, so the refusal
+    reads *"is not part of company X"* — and sends the reader hunting a
+    membership problem that does not exist.
+
+    The behaviour is right either way; only the message was wrong.
+
+    WORTH KNOWING, because it is the second instance and they point opposite
+    ways: #15864 had the identical `NULL = :uuid` non-match on the same column,
+    and there it **permitted** — a budget hard-stop UPDATE matched nothing and
+    the agent kept spending. Here it **refuses**. Same SQL fact; the direction of
+    failure is decided entirely by whether the query gates an allow or a deny.
+    That is the thing to check whenever a company predicate meets a nullable
+    column.
+    """
+    if body.holder_type != RoleHolderType.AGENT.value:
+        return original
+
+    from sqlalchemy import select as _select
+
+    from models.agent_org import AgentOrgNode
+
+    node = (
+        await session.execute(_select(AgentOrgNode.company_id).where(AgentOrgNode.id == body.holder_id))
+    ).first()
+    if node is None:
+        return f"agent {body.holder_id} does not exist"
+    if node[0] is None:
+        return (
+            f"agent {body.holder_id} has no company recorded, so it cannot be "
+            "designated CEO of one. This is a data gap, not a membership refusal (#15858)."
+        )
+    return original
+
+
 @router.get("/{company_id}/ceo", response_model=CEODesignationRead)
 async def get_company_ceo(
     company_id: uuid.UUID,
@@ -117,7 +156,8 @@ async def set_company_ceo(
         row = await svc.set_ceo(session, company_id, body.holder_type, body.holder_id)
     except ValueError as exc:
         await session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        detail = await _explain_refusal(session, body, str(exc))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail) from exc
 
     holder_type, holder_id = row.holder_type, row.holder_id
     # Derived, not hardcoded `True`. `set_ceo` has just validated the holder via

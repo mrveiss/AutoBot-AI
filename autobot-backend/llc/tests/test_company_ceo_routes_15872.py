@@ -277,3 +277,50 @@ async def test_a_designation_whose_holder_is_gone_reports_it(session):  # noqa: 
     assert body["holder_id"] == str(agent), "the designation itself should still be reported"
     assert body["holder_exists"] is False, "a designation pointing at a deleted holder claimed a live CEO"
     assert await _designation(session, company) is not None, "reading must not delete the designation"
+
+
+async def test_a_null_company_node_is_refused_with_the_real_reason(session):  # noqa: ANN001
+    """A data gap must not be reported as a membership refusal.
+
+    `AgentOrgNode.company_id` is nullable with nothing backfilling it (#15858).
+    `_require_in_company` filters on it, so a node whose company was never
+    recorded does not match and the refusal read *"is not part of company X"* —
+    sending the reader after a membership problem that does not exist.
+
+    Same `NULL = :uuid` non-match as #15864 and the opposite consequence: there
+    it *permitted* (a hard-stop UPDATE matched nothing and the agent kept
+    spending), here it *refuses*. The direction is decided by whether the query
+    gates an allow or a deny.
+    """
+    from models.agent_org import AgentOrgNode
+
+    company = str(uuid.uuid4())
+    orphan = AgentOrgNode(id=uuid.uuid4(), agent_id="ceo-no-company", name="orphan", org_role="ic", company_id=None)
+    session.add(orphan)
+    await session.commit()
+
+    response = _client(session, company).put(
+        f"/api/llc/companies/{company}/ceo",
+        json={"holder_type": RoleHolderType.AGENT.value, "holder_id": str(orphan.id)},
+    )
+
+    assert response.status_code == 422
+    assert "no company recorded" in response.json()["detail"], response.text
+    assert await _designation(session, company) is None
+
+
+async def test_a_holder_that_does_not_exist_says_so(session):  # noqa: ANN001
+    """The contrast case for the explanation above.
+
+    Without it, an explainer returning the NULL-company message for every
+    refusal satisfies the assertion in that test.
+    """
+    company = str(uuid.uuid4())
+
+    response = _client(session, company).put(
+        f"/api/llc/companies/{company}/ceo",
+        json={"holder_type": RoleHolderType.AGENT.value, "holder_id": str(uuid.uuid4())},
+    )
+
+    assert response.status_code == 422
+    assert "does not exist" in response.json()["detail"], response.text
