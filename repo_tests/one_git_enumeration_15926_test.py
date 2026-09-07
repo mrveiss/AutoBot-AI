@@ -49,10 +49,17 @@ from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-#: Direct `git ls-files` invocations in `repo_tests/`, measured on the tree.
-#: THIS ONLY SHRINKS. Never raise it to make a new bypass pass — route the new
-#: guard through `tracked_paths` instead. #15926 tracks driving it to zero.
-MAX_DIRECT_INVOCATIONS = 40
+#: Direct `git ls-files` invocations in `repo_tests/`, measured on the tree:
+#: **40 awaiting migration, plus 1 deliberate** — the unscrubbed contrast
+#: fixture in this file, which must stay a raw call because its whole purpose is
+#: to show that an unscrubbed enumeration follows `GIT_DIR`.
+#:
+#: THIS ONLY SHRINKS. It moved 40 -> 41 once, when this module stopped exempting
+#: itself from its own census (#15990 review) — the population definition
+#: changed, not the tree, and #15897's rule applies: correcting a denominator is
+#: not licensing a bypass. Never raise it to make a new bypass pass; route the
+#: new guard through `tracked_paths` instead.
+MAX_DIRECT_INVOCATIONS = 41
 
 #: Floor on files EXAMINED, not on findings. A findings floor is satisfied by
 #: finding nothing, which is also what a collapsed sweep reports.
@@ -71,7 +78,20 @@ def invokes_ls_files(node: ast.Call) -> bool:
     if not any(k in ast.unparse(node.func) for k in ("run", "check_output", "Popen")):
         return False
     argv = list(node.args) + [k.value for k in node.keywords if k.arg == "args"]
-    return "ls-files" in " ".join(ast.unparse(a) for a in argv)
+    # STRUCTURE, not substring: `["printf", "ls-files"]` matched a substring test
+    # and is not git at all. The executable must be `git` and `ls-files` must be
+    # one of the argv elements, not a fragment of one (#15990 review).
+    for arg in argv:
+        if not isinstance(arg, (ast.List, ast.Tuple)):
+            continue
+        words = [e.value for e in arg.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+        if not words:
+            continue
+        if Path(words[0]).name != "git":
+            continue
+        if "ls-files" in words[1:]:
+            return True
+    return False
 
 
 def _direct_invocations() -> tuple[list[str], int]:
@@ -86,8 +106,11 @@ def _direct_invocations() -> tuple[list[str], int]:
     parsed = 0
     unreadable: list[str] = []
     for rel in tracked_paths(REPO_ROOT, "repo_tests/*.py"):
-        if Path(rel).name == Path(__file__).name:
-            continue  # this file names the verb in prose and in its own fixtures
+        # This module is NOT exempt (#15990 review). A guard that skips itself
+        # cannot see a bypass added to itself, and the exact baseline would still
+        # pass. Its own fixtures are `ast.parse("...")` string arguments and
+        # `git init`/`git add` calls, none of which the structural predicate
+        # matches — so including it costs nothing and closes the hole.
         try:
             tree = ast.parse((REPO_ROOT / rel).read_text(encoding="utf-8"))
         except (SyntaxError, OSError) as exc:
@@ -310,3 +333,29 @@ def test_every_argv_form_is_read_positional_and_keyword(source: str) -> None:
     """
     call = next(n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call))
     assert invokes_ls_files(call), f"missed: {source}"
+
+
+def test_a_non_git_command_carrying_the_word_is_not_reported() -> None:
+    """Contrast for the structural match: `printf ls-files` is not git (#15990).
+
+    A substring test over the argv reported this as a direct invocation. The
+    baseline would then move for a subprocess call that never touched git, and
+    the census would be measuring something other than what it names.
+    """
+    call = next(n for n in ast.walk(ast.parse('subprocess.run(["printf", "ls-files"])')) if isinstance(n, ast.Call))
+    assert not invokes_ls_files(call)
+
+
+def test_this_module_is_inside_its_own_census() -> None:
+    """A guard that exempts itself cannot see a bypass added to itself.
+
+    Asserted on the census OUTPUT, not on this file's text: an earlier version
+    grepped for the exemption line and matched its own assertion string.
+    """
+    direct, _ = _direct_invocations()
+    own = [d for d in direct if Path(__file__).name in d]
+    assert own, (
+        "this module does not appear in its own census, so a direct `git ls-files` "
+        "added here would not move the baseline. It holds exactly one deliberate "
+        "invocation — the unscrubbed contrast fixture — and that one must be visible."
+    )
