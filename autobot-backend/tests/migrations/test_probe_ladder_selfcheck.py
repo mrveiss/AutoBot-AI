@@ -133,6 +133,19 @@ def test_observability_coverage():
         # for the composite constraint and returns early when it is already
         # present, so the adoption re-run this permits is a genuine no-op and not
         # a "constraint already exists" failure.
+        "20260907_090",  # CEO scope repair (#15892) — data-only: one UPDATE and
+        # one DELETE, no DDL at all, so it leaves no schema fingerprint for
+        # extract_artifacts to observe. Joining the data-only category already
+        # held by 20260526_045, 20260815_075 and 20260623_062 rather than opening
+        # a new one; demanding a structural marker here would mean inventing DDL
+        # purely to be observable, which is worse than the exemption.
+        #
+        # Extended consciously, and idempotent by construction rather than by
+        # inspection: the DELETE removes exactly the llc_company_ceos rows the
+        # UPDATE joins through, so on any re-run the UPDATE's join matches
+        # nothing and the DELETE matches nothing. Both statements are also
+        # scoped to rows still in the shape the backfill created, so a row edited
+        # since is untouched on the first run and every later one.
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "
