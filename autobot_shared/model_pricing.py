@@ -16,9 +16,29 @@ model by omitting it would reintroduce #15860 silently.
 
 Imports flow one way: this module reads the model-name constants from
 ``ssot_constants`` and nothing there imports back. A re-export would have been
-convenient and circular -- the table is keyed on names defined there, so the
-two modules would import each other and fail on first import either way. The
-five importers were repointed instead.
+convenient and **circular** -- the table is keyed on names defined there, so the
+two modules would import each other and fail on first import either way. That is
+the durable reason for having none. (A re-export here would also be deleted by
+the auto-formatter, since it reads as an unused import -- #15911 -- but that is
+contingent on a bot's configuration, and the cycle is not.) The importers were
+repointed instead.
+
+**This is not the only model-price table, and this module's name should not be
+read as saying otherwise.** Two others remain in ``ssot_constants``:
+
+* ``MODEL_COSTS_PER_1M_TOKENS`` (13 entries) -- the same unit and the same
+  ``input``/``output`` schema as this table, overlapping it on **9 models**:
+  ``OPENAI_GPT4O``, ``OPENAI_GPT4O_MINI``, ``OPENAI_GPT4_TURBO``,
+  ``OPENAI_GPT35_TURBO``, ``GOOGLE_GEMINI15_PRO``, ``GOOGLE_GEMINI15_FLASH``,
+  ``LOCAL_LLAMA3``, ``LOCAL_MISTRAL``, ``LOCAL_CODELLAMA``. All nine agree
+  today -- checked by comparing values, not by eye -- and nothing enforces it.
+* ``MODEL_PRICING_PER_1K_TOKENS`` (10 entries) -- a different unit.
+
+Before this extraction the three sat in one file, so anyone editing a price saw
+all of them. They no longer do, and a module called ``model_pricing`` reads as
+*the* home for model pricing. Consolidation is #15912; until then, changing a
+price here means checking whether the model also appears in
+``MODEL_COSTS_PER_1M_TOKENS``.
 """
 
 from typing import Dict
