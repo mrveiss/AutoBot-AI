@@ -18,10 +18,6 @@ import json
 import time
 from typing import Any, Dict, List
 
-from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import TTL_1_HOUR
-
 # Issue #394: Import from architectural_analysis package.
 # #15914: bare, not relative. Every one of the 14 other sibling imports in
 # this package is bare and every consumer imports this module as a top-level
@@ -37,6 +33,10 @@ from architectural_analysis import (
     IssueDetector,
     PatternDetector,
 )
+
+from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TTL_1_HOUR
 
 logger = get_logger(__name__)
 
