@@ -37,7 +37,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from a2a.task_manager import get_task_manager
-
 from autobot_shared.coordination.claim_waitlist import Waiter, next_waiter
 from autobot_shared.coordination.work_claims import ClaimUnavailable, Scope
 from autobot_shared.env_utils import env_int_clamped
