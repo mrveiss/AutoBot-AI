@@ -277,8 +277,31 @@ class GoalService(LLCServiceBase):
         the chain itself the leak, and such an edge was creatable until the
         guard added to :meth:`create` in the same change.
         """
+        # #15930: when `company_id` is omitted the walk is scoped to the STARTING
+        # GOAL's own company -- not the caller's org, and the distinction is the
+        # whole point. An optional tenant scope is off by default, so the
+        # ancestors route, which authorises the leaf and then called this with no
+        # company, got the unscoped walk the docstring above warns about.
+        #
+        # CALLERS SHOULD OMIT IT. `goals.py` passing `str(ctx.org_id)` was the
+        # first form of this fix and was wrong: `_get_authorized_goal` exempts
+        # platform admins, so an admin legitimately holds a goal whose company is
+        # not their org, and the passed scope stopped the walk at step one and
+        # returned an empty chain. The derived scope is right for both -- for a
+        # normal caller the goal's company IS `ctx.org_id`.
+        #
+        # The parameter's meaning inverted here: before this default existed,
+        # omitting it was the bug; after, supplying it is. It remains only for
+        # `get_goal_ancestry_for_work_item`, whose separate ENTRY check asks a
+        # different question -- "is this goal the caller's?" -- which deriving
+        # from the goal would turn into a tautology.
         ancestors: List[LLCGoal] = []
         current_id: Optional[uuid.UUID] = goal_id
+        if company_id is None:
+            start = await self.get(session, goal_id)
+            if start is None:
+                return []
+            company_id = str(start.company_id)
         visited: set = set()
         while current_id is not None:
             if current_id in visited:

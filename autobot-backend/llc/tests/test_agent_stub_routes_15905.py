@@ -254,6 +254,11 @@ async def test_the_comment_route_stores_a_readable_comment(session):  # noqa: AN
 
     company = str(uuid.uuid4())
     item = await _seed_item(session, company)
+    # The node must exist or `agent_node_uuid` returns None and the authorship
+    # assertion below is vacuous — which is what this test did before #15920's
+    # review caught it. A test that never seeds the row cannot tell "author
+    # resolved" from "author silently dropped".
+    node_id = await _seed_agent_node(session, company, "agent-c")
 
     with patch("user_management.database.get_async_session_factory", new=_factory_yielding(session)):
         result = await agent_api.post_comment(
@@ -270,6 +275,9 @@ async def test_the_comment_route_stores_a_readable_comment(session):  # noqa: AN
     assert len(stored) == 1, "the route reported the comment recorded and nothing was stored"
     assert stored[0].body == "the agent said this"
     assert str(stored[0].id) == result["comment_id"]
+    assert (
+        stored[0].author_agent_id == node_id
+    ), "the comment was stored without its author; `agent_node_uuid` resolved to None"
 
 
 async def test_the_comment_route_refuses_another_companys_item(session):  # noqa: ANN001
@@ -516,3 +524,55 @@ async def test_a_malformed_work_item_id_is_422_on_both_routes(session):  # noqa:
             _request(agent, company),
         )
     assert via_heartbeat.value.status_code == 422
+
+
+async def test_the_next_route_looks_past_items_assigned_to_other_agents(session):  # noqa: ANN001
+    """#15920 review: the assignee filter must be IN the query, not after it.
+
+    `checkout_next` LIMITs to `CHECKOUT_CANDIDATES` and used to discard
+    other-agent items afterwards — so a backlog whose top `CHECKOUT_CANDIDATES`
+    items belong to someone else returned "no eligible work" while eligible
+    items sat directly below them. The bound silently meant "how many of the top
+    ten are mine" rather than "how many claims will I attempt".
+    """
+    from unittest.mock import patch
+
+    from llc.api import agent_api
+    from llc.services.work_item_queue import CHECKOUT_CANDIDATES
+
+    company = str(uuid.uuid4())
+    await _seed_agent_node(session, company, "agent-patient")
+    other = await _seed_agent_node(session, company, "agent-other")
+
+    # Fill every candidate slot with items assigned elsewhere, then one for us
+    # below them.
+    for n in range(CHECKOUT_CANDIDATES):
+        taken = await _seed_item(session, company, title=f"theirs-{n}", position=n)
+        taken.assignee_agent_id = other
+        await session.commit()
+    mine = await _seed_item(session, company, title="mine", position=CHECKOUT_CANDIDATES + 1)
+
+    with patch("user_management.database.get_async_session_factory", new=_factory_yielding(session)):
+        result = await agent_api.get_next_work_item(_request("agent-patient", company))
+
+    assert result["checked_out"] is True, "returned no work while an eligible item sat below the candidate window"
+    assert result["work_item"]["id"] == str(mine.id)
+
+
+async def test_the_next_route_still_takes_an_item_assigned_to_this_agent(session):  # noqa: ANN001
+    """The contrast: the SQL predicate must not exclude our OWN assignments."""
+    from unittest.mock import patch
+
+    from llc.api import agent_api
+
+    company = str(uuid.uuid4())
+    node_id = await _seed_agent_node(session, company, "agent-owner")
+    item = await _seed_item(session, company, title="already mine")
+    item.assignee_agent_id = node_id
+    await session.commit()
+
+    with patch("user_management.database.get_async_session_factory", new=_factory_yielding(session)):
+        result = await agent_api.get_next_work_item(_request("agent-owner", company))
+
+    assert result["checked_out"] is True
+    assert result["work_item"]["id"] == str(item.id)
