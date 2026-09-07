@@ -56,8 +56,10 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import pathlib
 import re
+import subprocess  # nosec B404  # fixed argv, no shell
 import sys
 
 # tools/lint/ is not a package; make the sibling helper importable however this
@@ -66,7 +68,7 @@ import sys
 # same trap as #15914.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from _scan_helpers import tracked_paths  # noqa: E402
+from _scan_helpers import scrubbed_git_env, tracked_paths  # noqa: E402
 
 # Plain stdlib logging (matching check_flake8_exclude_anchoring.py and
 # check_requirements_ci_drift.py): this runs inside `code-quality`, which
@@ -209,6 +211,46 @@ def ci_installed_packages(root: pathlib.Path | None = None) -> set[str]:
     return packages
 
 
+def _inside_work_tree(root: pathlib.Path) -> bool:
+    """Whether *root* sits inside a git work tree.
+
+    Asked of git rather than inferred from a `.git` entry: a worktree's `.git`
+    is a FILE holding a `gitdir:` pointer where a primary checkout's is a
+    directory, so a `.exists()` test is right for the wrong reason and an
+    `.is_dir()` test is simply wrong here (#15955).
+    """
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "rev-parse", "--is-inside-work-tree"],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        env=scrubbed_git_env(),
+    )
+    return result.returncode == 0 and result.stdout.strip() == "true"
+
+
+def _walked_test_files(root: pathlib.Path) -> list[str]:
+    """pytest.ini's collection patterns over a NON-git directory, repo-relative.
+
+    Only reached for a tree that is not a checkout. It still prunes the nested
+    -checkout names, so the fallback cannot become a way back into the defect
+    git was adopted to fix if it is ever reached somewhere unexpected.
+    """
+    pruned = {".worktrees", ".claude", ".git", "node_modules", "__pycache__"}
+    found: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in pruned]
+        for name in filenames:
+            if not name.endswith(".py"):
+                continue
+            rel = (pathlib.Path(dirpath) / name).relative_to(root).as_posix()
+            if name.startswith("test_") or name.endswith("_test.py") or "/tests/" in f"/{rel}":
+                found.append(rel)
+    return sorted(found)
+
+
 def _test_files(root: pathlib.Path) -> list[pathlib.Path]:
     """Tracked test files, matching pytest.ini's own collection patterns exactly.
 
@@ -235,7 +277,17 @@ def _test_files(root: pathlib.Path) -> list[pathlib.Path]:
     #
     # `git ls-files` reads an index and never descends, so there is nothing to
     # exclude and no list to keep current.
-    names = [n for n in tracked_paths(root, "*_test.py", "test_*.py", "*/tests/*") if n.endswith(".py")]
+    # ...but `audit_provisioning` is also pointed at synthetic trees built under
+    # `tmp_path`, which are not checkouts and have no index. Asking git there
+    # raises, so a directory that is not inside a work tree is walked instead.
+    # The nested-checkout hazard git was adopted for cannot exist in a tree the
+    # test just created, and the branch is chosen by asking git WHERE IT IS --
+    # never by catching the failure, which would also swallow a real git error
+    # in a real checkout and hand back a walk of 4,644 files as if it were fine.
+    if _inside_work_tree(root):
+        names = [n for n in tracked_paths(root, "*_test.py", "test_*.py", "*/tests/*") if n.endswith(".py")]
+    else:
+        names = _walked_test_files(root)
     excluded = {"node_modules", "__pycache__"}
     return [root / n for n in names if not excluded & set(pathlib.PurePosixPath(n).parts)]
 

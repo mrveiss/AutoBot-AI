@@ -195,19 +195,17 @@ def _detects_nested_checkout(tree) -> bool:
     return False
 
 
-def _enumerates_through_git(tree) -> bool:
-    """Whether *tree* actually invokes ``git ls-files`` — a call, not a mention."""
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and "ls-files" in ast.unparse(node) and "subprocess" in ast.unparse(node):
-            return True
-    return False
-
-
 def _is_safe(func, module) -> bool:
-    """Whether a file may walk the repo root. Three ways, in order of preference.
+    """Whether a file may walk the repo root. Two ways.
 
-    * enumerate through ``git ls-files`` — it reads an index, so it cannot enter
-      another checkout at all;
+    A third used to sit above these: "the function also calls ``git ls-files``".
+    It was wrong in a way that is easy to miss -- a git call proves the function
+    enumerates through git SOMEWHERE, not that THIS walk does. A function that
+    reads the index and then separately does ``REPO_ROOT.rglob(...)`` was exempted
+    whole, and the rglob still entered every nested checkout. Presence of the
+    right call is not absence of the wrong one. Removing it flagged nothing new,
+    so it was protecting no guard while covering that hole.
+
     * detect nested checkouts structurally (a worktree's ``.git`` is a FILE);
     * prune **both** nested roots by name, *in an actual collection literal*.
       Nine guards do this correctly and rewriting them would be churn for no
@@ -216,17 +214,13 @@ def _is_safe(func, module) -> bool:
     Naming one root is not safe: that was the state of two of the guards this
     issue fixes, and a third named neither.
     """
-    # CALLS are checked in the walking function; a `git ls-files` elsewhere in
-    # the file says nothing about this walk. LITERALS are checked against the
-    # module, because a prune set is a module-level constant by convention and
-    # requiring it inside the function would flag nine correct guards.
-    if _enumerates_through_git(func):
-        return True
+    # LITERALS are checked against the module, because a prune set is a
+    # module-level constant by convention and requiring it inside the function
+    # would flag nine correct guards.
     # Structural detection is checked against the MODULE, like the literals: a
     # guard may factor it into a helper (`_inside_nested_checkout(path)`), and
     # requiring the call inside the walking function flagged one that does
-    # exactly that. `git ls-files` stays per-function because it IS the
-    # enumeration -- one elsewhere in the file says nothing about this walk.
+    # exactly that.
     if _detects_nested_checkout(module):
         return True
     pruned = _pruned_names(module)
@@ -377,3 +371,51 @@ def test_the_detector_ignores_a_single_level_glob_by_keyword() -> None:
     flagging anchored single-level globs across the tree.
     """
     assert root_walks_in('for p in root.glob(pattern="*.py"):\n    pass\n') == []
+
+
+def _safety_of(source: str) -> bool:
+    """`_is_safe` for the first function in *source* — the layer the rule lives at.
+
+    `root_walks_in` finds walks; `_is_safe` decides which are excused. A contrast
+    written against the finder cannot see an exemption change at all: my first
+    attempt at the test below passed identically with and without the exemption
+    restored, because it never reached this function.
+    """
+    tree = ast.parse(source)
+    func = next(n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)))
+    return _is_safe(func, tree)
+
+
+def test_a_git_call_does_not_exempt_a_separate_walk_in_the_same_function() -> None:
+    """The contrast for the removed exemption (#15962 review).
+
+    Reading the index and walking the tree are different acts. A function may do
+    both, and the walk is exactly as dangerous as it would be alone. Keyed on
+    "does this function invoke git", the rglob below was excused.
+    """
+    src = (
+        "def collect():\n"
+        "    tracked = subprocess.run(['git', 'ls-files', '*.py'], cwd=REPO_ROOT)\n"
+        "    extra = list(REPO_ROOT.rglob('*.py'))\n"
+        "    return tracked, extra\n"
+    )
+    assert root_walks_in(src) == [(3, "REPO_ROOT.rglob('*.py')")]
+    assert not _safety_of(src), (
+        "a `git ls-files` call in the same function excused a separate rglob of the "
+        "repository root. Presence of the right call is not absence of the wrong one."
+    )
+
+
+def test_a_module_that_prunes_both_nested_roots_is_still_excused() -> None:
+    """The other half: removing the exemption must not start flagging correct guards.
+
+    Without this, "remove the exemption" is satisfied by excusing nothing, which
+    would flag the nine guards that prune by name and were deliberately accepted.
+    """
+    src = (
+        "_PRUNED = {'.worktrees', '.claude'}\n"
+        "def collect():\n"
+        "    return [p for p in REPO_ROOT.rglob('*.py')]\n"
+    )
+    assert root_walks_in(src), "fixture must contain a walk for this to mean anything"
+    assert _safety_of(src)
