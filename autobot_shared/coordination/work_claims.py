@@ -99,6 +99,19 @@ class ScopeError(ValueError):
     """A scope string that cannot be parsed, with the reason stated."""
 
 
+class HolderError(ValueError):
+    """An agent or task identity that reentrancy could not safely compare.
+
+    Validated here because **nothing else validates it**. `Scope.parse` rejects
+    seven malformed shapes, so *what* is claimed is checked to seven rules while
+    *who owns it* was any string at all -- and the storage layer cannot make up
+    the difference: a claim is JSON in Redis, with no column type and no
+    constraint to fall back on. Two callers passing ``task_id=""`` would compare
+    equal, become one holder, and silently take over each other's claims through
+    the reentrancy path that exists to stop an agent deadlocking against itself.
+    """
+
+
 class ClaimUnavailable(RuntimeError):
     """Redis is not reachable, so no claim can be made or trusted."""
 
@@ -259,6 +272,13 @@ return 1
 """
 
 
+def _require_holder(agent_id: str, task_id: str) -> None:
+    """Reject a holder identity that reentrancy could not safely compare."""
+    for label, value in (("agent_id", agent_id), ("task_id", task_id)):
+        if not isinstance(value, str) or not value.strip():
+            raise HolderError(f"{label} must be a non-empty string; got {value!r}")
+
+
 async def _redis() -> Any:
     """The async Redis client, or a stated failure -- never a silent no-op."""
     client = await get_async_redis_client(database="main")
@@ -305,6 +325,7 @@ async def try_acquire(
     primitive, not in the caller.
     """
     parsed = Scope.parse(scope)
+    _require_holder(agent_id, task_id)
     ttl = CLAIM_TTL_S if ttl_s is None else ttl_s
     claim = _build(parsed, agent_id, task_id, mode, intent, ttl)
     client = await _redis()
@@ -333,6 +354,7 @@ async def release(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
     logged: it means two agents disagree about who owns the work.
     """
     parsed = Scope.parse(scope)
+    _require_holder(agent_id, task_id)
     client = await _redis()
     result = int(
         await client.eval(
@@ -354,6 +376,7 @@ async def release(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
 async def renew(scope: str | Scope, *, agent_id: str, task_id: str, ttl_s: int | None = None) -> bool:
     """Extend a held claim's TTL. False when it has already expired or moved on."""
     parsed = Scope.parse(scope)
+    _require_holder(agent_id, task_id)
     client = await _redis()
     result = int(
         await client.eval(

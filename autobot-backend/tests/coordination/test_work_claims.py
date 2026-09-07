@@ -21,6 +21,7 @@ skipped test says nothing; a passing stub says something false.
 from __future__ import annotations
 
 import asyncio
+import itertools
 
 import pytest
 import pytest_asyncio
@@ -30,6 +31,7 @@ from autobot_shared.coordination.work_claims import (
     ClaimConflict,
     ClaimConflictError,
     ClaimMode,
+    HolderError,
     Scope,
     ScopeError,
     list_claims,
@@ -255,3 +257,74 @@ async def test_adhoc_callers_do_not_share_one_task_identity(redis):
         with pytest.raises(ClaimConflictError):
             async with work_claim("path:a/b", agent_id="agent-1", intent="second"):
                 pass
+
+
+# ---------------------------------------------------------------------------
+# The two rules must agree with each other, not each with its own constants
+# ---------------------------------------------------------------------------
+
+_ALPHABET = ("a", "b", "ab")  # 'ab' is what makes a string-prefix check wrong
+_KINDS = ("path", "kb")
+
+
+def _bounded_scopes() -> list[str]:
+    """Every scope over a deliberately tiny space: 2 kinds x 39 paths."""
+    paths = [
+        "/".join(combo)
+        for depth in (1, 2, 3)
+        for combo in itertools.product(_ALPHABET, repeat=depth)
+    ]
+    return [f"{kind}:{path}" for kind in _KINDS for path in paths]
+
+
+@pytest.mark.asyncio
+async def test_python_and_lua_overlap_rules_agree_over_a_bounded_space(redis):
+    """`Scope.overlaps` and the Lua state one rule twice — pin them to each other.
+
+    Both are currently tested against their own hand-written cases, which is
+    exactly what hides a divergence while each stays internally consistent
+    (#15906). Testing them against a shared case *list* would only move that
+    shared constant, so this is **exhaustive** over a bounded space instead:
+    every ordered pair of 78 scopes, 6084 comparisons, no case list to agree
+    with.
+
+    The Python rule short-circuits on ``self.kind != other.kind``; the Lua never
+    compares kinds at all, relying on each kind owning a separate index set and
+    key prefix. Two kinds are in the space so that structural claim is tested
+    rather than asserted.
+    """
+    scopes = _bounded_scopes()
+    disagreements = []
+    for left in scopes:
+        for right in scopes:
+            python_says = Scope.parse(left).overlaps(Scope.parse(right))
+            held = await _acquire(left, "agent-1", "t1")
+            assert isinstance(held, Claim)
+            outcome = await _acquire(right, "agent-2", "t2")
+            lua_says = isinstance(outcome, ClaimConflict)
+            if isinstance(outcome, Claim):
+                await release(right, agent_id="agent-2", task_id="t2")
+            await release(left, agent_id="agent-1", task_id="t1")
+            if python_says != lua_says:
+                disagreements.append((left, right, python_says, lua_says))
+    assert not disagreements, f"overlap rules disagree on {len(disagreements)} pairs: {disagreements[:5]}"
+
+
+# ---------------------------------------------------------------------------
+# Holder identity — validated because nothing else validates it
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("agent", "task"), [("", "t"), ("a", ""), ("   ", "t"), ("a", "  ")])
+async def test_empty_holder_identity_is_refused(redis, agent, task):
+    with pytest.raises(HolderError):
+        await try_acquire("path:a/b", agent_id=agent, task_id=task, intent="x")
+
+
+@pytest.mark.asyncio
+async def test_release_and_renew_also_refuse_an_empty_holder(redis):
+    """Otherwise the ownership check could be satisfied by a blank identity."""
+    for call in (release, renew):
+        with pytest.raises(HolderError):
+            await call("path:a/b", agent_id="", task_id="")

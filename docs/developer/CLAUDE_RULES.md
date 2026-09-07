@@ -646,6 +646,7 @@ To add a new variable:
 | `AUTOBOT_WORKSPACE_IDLE_SECONDS` | workspace | int | `14400` | Idle-expiry window, in seconds, after which an unused task workspace container is torn down (GH#10544). Raising it keeps an idle workspace around longer for reuse; lowering it reclaims idle workspace resources sooner (services/docker_task_workspace.py). |
 | `AUTOBOT_WORKSPACE_MAX_COUNT` | workspace | int | `20` | Maximum number of concurrent task workspace containers allowed (GH#10544). Raising it allows more concurrent workspaces at the cost of more host resource usage; lowering it caps concurrent workspace count more tightly (services/docker_task_workspace.py). |
 | `AUTOBOT_WORKSPACE_PIDS_LIMIT` | workspace | int | `512` | PID-count limit (Linux pids cgroup) applied to a task workspace container, capping process count so a fork-bomb inside it cannot exhaust host PIDs (GH#11059). Raising it allows more processes inside a workspace; lowering it hardens against a fork-bomb more tightly, at the risk of limiting legitimate parallelism (services/docker_task_workspace.py). |
+| `AUTOBOT_WORK_CLAIM_TTL_S` | orchestrator | int | `300` | How long an agent's work claim survives without a renew (#15947). This is a coordination policy, not a tuning knob: the value is how long a crashed agent's scope stays blocked to every other agent, so the floor stops a claim expiring mid-write and the ceiling bounds a stale hold at one hour. A running task renews for its own lifetime, so raising this does not make long tasks safer -- it only makes a dead holder's scope take longer to free. Range: 10–3600. |
 
-*209 variables registered as of last generation.*
+*210 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->
