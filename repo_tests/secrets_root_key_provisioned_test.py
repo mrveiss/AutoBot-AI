@@ -19,11 +19,11 @@ from __future__ import annotations
 
 import base64
 import re
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 ROOT_KEY = "AUTOBOT_SECRETS_ROOT_KEY"
 
 # Each surface, and the sibling signing secret that proves the surface really is

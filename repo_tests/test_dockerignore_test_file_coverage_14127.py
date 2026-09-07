@@ -41,9 +41,11 @@ import subprocess
 from functools import lru_cache
 from pathlib import Path
 
+from repo_tests._paths import repo_root
+
 from autobot_shared.paths import scrubbed_git_env
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _DOCKERIGNORE = _REPO_ROOT / ".dockerignore"
 
 # Directories with their own dependency/packaging story (frontend bundlers,

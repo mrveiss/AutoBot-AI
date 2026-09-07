@@ -42,9 +42,10 @@ ones inside it are permitted.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+REPO_ROOT = repo_root()
 SCRIPT_DIR = REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "setup" / "system"
 SCRIPT = SCRIPT_DIR / "setup_passwordless_sudo.sh"
 WRAPPER = SCRIPT_DIR / "autobot-cleanup-port"

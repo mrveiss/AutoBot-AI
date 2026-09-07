@@ -29,9 +29,10 @@ from __future__ import annotations
 import re
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 import sys
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+REPO_ROOT = repo_root()
 ROOT_CONFTEST = REPO_ROOT / "autobot-slm-backend/conftest.py"
 API_CONFTEST = REPO_ROOT / "autobot-slm-backend/tests/api/conftest.py"
 # The exact file `authz-and-selection` invokes, on its own.

@@ -16,14 +16,14 @@ range is an **error**, not a quiet success — that silence is why a release tha
 never happened looked like one that did.
 """
 
-import pathlib
 import subprocess
 
 import yaml
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-WORKFLOW = pathlib.Path(__file__).resolve().parents[1] / ".github" / "workflows" / "release.yml"
+WORKFLOW = repo_root() / ".github" / "workflows" / "release.yml"
 
 # The shell body of the range step, extracted so the logic is executed rather
 # than pattern-matched. Kept in sync by test_the_extracted_logic_matches_the_workflow.

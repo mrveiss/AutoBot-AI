@@ -21,8 +21,9 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = repo_root()
 HOOK = REPO_ROOT / "autobot-infrastructure/shared/scripts/hooks/post-commit-doc-sync"
 RESEARCH_DIR = REPO_ROOT / "docs/research"
 

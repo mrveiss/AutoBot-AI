@@ -41,8 +41,9 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_ROLE = Path(__file__).resolve().parents[1] / "autobot-slm-backend/ansible/roles/slm_manager"
+_ROLE = repo_root() / "autobot-slm-backend/ansible/roles/slm_manager"
 _MAIN = _ROLE / "tasks/main.yml"
 _BIND = _ROLE / "tasks/bind_self_update_socket.yml"
 _UPDATE_PLAY = _ROLE.parents[1] / "playbooks/update-all-nodes.yml"

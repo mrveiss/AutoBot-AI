@@ -70,10 +70,11 @@ from pathlib import Path
 from typing import NamedTuple
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 
 #: Excluded by path RELATIVE to the repository root, never absolute: a checkout
 #: that itself lives under a directory of one of these names would otherwise

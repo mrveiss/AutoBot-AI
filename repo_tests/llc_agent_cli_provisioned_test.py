@@ -28,14 +28,14 @@ binary is indistinguishable from a pass (#14550).
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from typing import Any
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml")
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 DOCKERFILE = REPO_ROOT / "docker/backend/Dockerfile"
 ANSIBLE_TASKS = REPO_ROOT / "autobot-slm-backend/ansible/roles/backend/tasks/main.yml"
 

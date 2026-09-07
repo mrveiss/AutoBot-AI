@@ -42,11 +42,11 @@ counting them would bury the real gap in noise.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = repo_root()
 _LOCALES = _REPO_ROOT / "autobot-frontend" / "src" / "i18n" / "locales"
 
 # Lower these as translations land. Never raise one to admit a new untranslated

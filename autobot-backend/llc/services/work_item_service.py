@@ -511,10 +511,10 @@ class WorkItemService(LLCServiceBase):
         item.checkout_run_id = run_id or str(uuid.uuid4())
         item.checkout_locked_at = datetime.now(timezone.utc)
         item.assignee_agent_id = uuid.UUID(agent_id)
+        # Single-assignee invariant (#10532): `update()` enforced it, `checkout` did not (#15964).
+        item.assignee_user_id = None
         item.assignee_type = AssigneeType.AGENT.value
-        # GH#9532 — persist intent for audit trail.  Clearing prior intent when
-        # work_intent is absent is deliberate: stale intent must not survive a
-        # new checkout.
+        # GH#9532 — persist intent for audit; clearing it when work_intent is absent is deliberate.
         item.checkout_intent = work_intent
         item.version += 1
         if item.status in (WorkItemStatus.BACKLOG, WorkItemStatus.READY):

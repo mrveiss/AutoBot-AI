@@ -26,11 +26,11 @@ can actually fire it for the SLM source tree.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import yaml
+from repo_tests._paths import repo_root
 
-_WORKFLOWS_DIR = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+_WORKFLOWS_DIR = repo_root() / ".github" / "workflows"
 _VERIFY = _WORKFLOWS_DIR / "verify-generated-types.yml"
 _AUTOFIX = _WORKFLOWS_DIR / "auto-fix-generated-types.yml"
 
