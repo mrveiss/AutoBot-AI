@@ -24,7 +24,6 @@ from fastapi import HTTPException, Request, status
 
 from autobot_shared.logging_manager import get_logger
 
-
 logger = get_logger(__name__)
 
 
