@@ -53,6 +53,9 @@ _DATABASES = _ROLE_TASKS / "databases.yml"
 
 #: The awk program that collapses duplicate keys. Distinctive enough that a
 #: copy anywhere else in the tree is a real duplication, not a coincidence.
+# #15510: floor for the repo-wide YAML sweep below (459 files at time of writing).
+_MIN_YAML_FILES = 200
+
 _STRIP_FINGERPRINT = 'sub(/=.*/, "", k); last[k] = NR'
 
 #: Name fragment of the task that owns the collapse; extracted and executed
@@ -166,10 +169,19 @@ def test_reconcile_is_defined_exactly_once():
     the #12959 failure mode.
     """
     tree = _ANSIBLE.parent.parent
+    scanned = [path for path in tree.rglob("*.yml") if "node_modules" not in path.relative_to(tree).parts]
+    # #15510: population floor, evaluated before the assertion below. Without
+    # it a sweep that reached nothing finds no stray copies, which is exactly
+    # what "the logic lives only in one file" looks like.
+    assert len(scanned) >= _MIN_YAML_FILES, (
+        f"the sweep reached only {len(scanned)} YAML files under {tree} "
+        f"(floor {_MIN_YAML_FILES}). FIX THE SWEEP -- a sweep that reads nothing "
+        "cannot find a duplicated credential-strip and passes for free."
+    )
     copies = [
         path
-        for path in tree.rglob("*.yml")
-        if "node_modules" not in path.parts and _STRIP_FINGERPRINT in path.read_text(encoding="utf-8", errors="ignore")
+        for path in scanned
+        if _STRIP_FINGERPRINT in path.read_text(encoding="utf-8", errors="ignore")
     ]
     assert copies == [_RECONCILE], (
         "the credential-strip logic must live only in "

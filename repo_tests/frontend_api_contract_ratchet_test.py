@@ -142,7 +142,7 @@ def _source_files(root: Path) -> list[Path]:
         for path in sorted(root.rglob("*"))
         if path.suffix in _SOURCE_SUFFIXES
         and path.is_file()
-        and "node_modules" not in path.parts
+        and "node_modules" not in path.relative_to(root).parts  # #15510
         and "generated" not in path.parts
         and not _is_test(path)
     ]

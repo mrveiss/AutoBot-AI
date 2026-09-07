@@ -202,7 +202,7 @@ def _source_files() -> list[Path]:
         for path in sorted(_FRONTEND_SRC.rglob("*"))
         if path.suffix in _SOURCE_SUFFIXES
         and path.is_file()
-        and "node_modules" not in path.parts
+        and "node_modules" not in path.relative_to(_FRONTEND_SRC).parts  # #15510
         and not _is_test(path)
     ]
 
