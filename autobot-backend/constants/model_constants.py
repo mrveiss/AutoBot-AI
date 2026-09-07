@@ -11,7 +11,6 @@ MIGRATION (Issue #GH7440):
     Import directly from autobot_shared.ssot_constants for new code.
 """
 
-from autobot_shared.model_pricing import MODEL_PRICING_PER_1M_TOKENS
 from autobot_shared.ssot_constants import (  # noqa: F401,F403
     ANTHROPIC_CLAUDE3_HAIKU,
     ANTHROPIC_CLAUDE3_HAIKU_DATED,
