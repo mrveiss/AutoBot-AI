@@ -14,9 +14,15 @@ Covers:
 import hashlib
 import hmac
 import time
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 from autobot_shared.http_client import sign_request
+
+if TYPE_CHECKING:  # #15914: the annotation below named a class nothing imported.
+    # Kept out of the runtime path deliberately -- the real import stays inside
+    # `_make_service_client`, where the test's sys.path setup has already run.
+    from utils.service_client import ServiceHTTPClient
 
 
 class TestSignRequestHelper:
