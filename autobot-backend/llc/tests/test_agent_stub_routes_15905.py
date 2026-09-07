@@ -462,10 +462,10 @@ async def test_a_non_uuid_company_in_the_agent_context_is_a_401_not_a_500(sessio
     """
     from fastapi import HTTPException
 
-    from llc.api import agent_api
+    from llc.api._common import agent_context
 
     with pytest.raises(HTTPException) as exc:
-        agent_api._agent_context(_request("agent-bad-co", "co-1"))
+        agent_context(_request("agent-bad-co", "co-1"))
 
     assert exc.value.status_code == 401
     assert "malformed company" in str(exc.value.detail)
@@ -474,10 +474,10 @@ async def test_a_non_uuid_company_in_the_agent_context_is_a_401_not_a_500(sessio
 async def test_a_well_formed_company_still_passes(session):  # noqa: ANN001
     """The contrast case. Without it, a `_agent_context` that rejected every
     company would satisfy the assertion above and break every other route."""
-    from llc.api import agent_api
+    from llc.api._common import agent_context
 
     company = str(uuid.uuid4())
-    agent_id, returned = agent_api._agent_context(_request("agent-ok", company))
+    agent_id, returned = agent_context(_request("agent-ok", company))
 
     assert (agent_id, returned) == ("agent-ok", company)
 

@@ -27,84 +27,11 @@ from pydantic import BaseModel
 
 from autobot_shared.logging_manager import get_logger
 
-from ._common import agent_node_uuid
+from ._common import agent_context, agent_node_uuid, assert_item_in_company
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/agent", tags=["llc-agent"])
-
-
-def _agent_context(request: Request) -> tuple[str, str]:
-    """Extract agent_id and company_id from middleware-injected state.
-
-    **`company_id` is validated as a UUID here, and that is not belt-and-braces
-    (#15905).** Five call sites in this file do `uuid.UUID(company_id)` against a
-    UUID column, and the value is not constrained to be one:
-    `LLCApiKey.company_id` is `mapped_column(String(255))`, this function checked
-    truthiness only, and the auth middleware's own test asserts
-    `req.state.company_id == "co-1"`. So a malformed company reached
-    `uuid.UUID()` and raised `ValueError` — a 500 for something that is not a
-    server fault.
-
-    That is the defect this PR fixes for `agent_id`, on the other element of the
-    same tuple. The comment on `get_next_work_item` names the class; this is the
-    other instance of it, two lines down, and I committed it while writing that
-    comment.
-
-    Validated **here** rather than at the five use sites because this is where
-    the value enters. A guard per site is a guard the sixth site will not have —
-    and two of the five (`:544`, `:570`) predate this PR, so per-site fixing
-    would have left them.
-
-    401 rather than 422: a well-formed request carrying an auth context the auth
-    layer built wrong is not the caller's error to correct. Every LLC table but
-    `llc_agent_api_keys` keys company on a UUID column, so a non-UUID company
-    could never match a row anyway — this reports that instead of failing later
-    and elsewhere.
-    """
-    agent_id = getattr(request.state, "agent_id", None)
-    company_id = getattr(request.state, "company_id", None)
-    if not agent_id or not company_id:
-        raise HTTPException(status_code=401, detail="Agent context not injected")
-    try:
-        uuid.UUID(str(company_id))
-    except ValueError as exc:
-        logger.warning("Agent context for %s carries a non-UUID company: %r", agent_id, company_id)
-        raise HTTPException(status_code=401, detail="Agent context carries a malformed company") from exc
-    return agent_id, company_id
-
-
-async def _assert_item_in_company(item_id: str, company_id: str) -> None:
-    """GH#12156: 404 unless the work item belongs to the caller's company.
-
-    KB collections are keyed by work_item_id alone, so tenant isolation must be
-    enforced at the handler by verifying ownership before any KB read.
-    """
-    from autobot_shared.singleton_factory import lazy_singleton
-    from user_management.database import get_async_session_factory
-
-    from ..services.work_item_service import WorkItemService
-
-    # `WorkItemService.get` does `uuid.UUID(str(work_item_id))` unguarded, and
-    # `item_id` is a client-supplied body field on both callers. Without this a
-    # malformed id is a `ValueError` -> 500, for a request the caller can fix.
-    #
-    # Third instance of the class this PR names in `get_next_work_item`'s
-    # comment, found by grepping the file for the class rather than by review:
-    # `run_id` had an explicit 422 two lines from `work_item_id` that had none.
-    # The guard went on the input that looked dangerous, not the one that was
-    # unchecked.
-    try:
-        uuid.UUID(str(item_id))
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=f"work_item_id {item_id!r} is not a UUID") from exc
-
-    factory = get_async_session_factory()
-    async with factory() as session:
-        svc = lazy_singleton(WorkItemService)()
-        item = await svc.get(session, item_id)
-    if item is None or str(item.company_id) != str(company_id):
-        raise HTTPException(status_code=404, detail="Work item not found")
 
 
 @router.get("/work-items/next")
@@ -127,7 +54,7 @@ async def get_next_work_item(request: Request) -> Dict[str, Any]:
     from ..services.work_item_queue import checkout_next
     from ..services.work_item_service import WorkItemService
 
-    agent_id, company_id = _agent_context(request)
+    agent_id, company_id = agent_context(request)
 
     # The slug is not the assignee key. `checkout` writes
     # `assignee_agent_id = uuid.UUID(agent_id)` against a UUID column, so
@@ -185,7 +112,7 @@ async def update_work_item_status(item_id: uuid.UUID, body: StatusUpdate, reques
     from ..models.enums import WorkItemStatus
     from ..services.work_item_service import WorkItemService
 
-    _, company_id = _agent_context(request)
+    _, company_id = agent_context(request)
     try:
         new_status = WorkItemStatus(body.status)
     except ValueError as exc:
@@ -235,7 +162,7 @@ async def ingest_cost_event(body: CostEvent, request: Request) -> Dict[str, Any]
     from ..exceptions import BudgetExhausted, UnpricedModel
     from ..services.budget import BudgetService
 
-    agent_id, company_id = _agent_context(request)
+    agent_id, company_id = agent_context(request)
     factory = get_async_session_factory()
     try:
         async with factory() as session:
@@ -266,7 +193,7 @@ async def post_comment(body: CommentBody, request: Request) -> Dict[str, Any]:
     """Store an agent's comment on a work item (#15905).
 
     The company check is not incidental. `add_comment` writes `company_id` from
-    its argument without reading the item, so without `_assert_item_in_company`
+    its argument without reading the item, so without `assert_item_in_company`
     an agent could comment on another company's work item and the comment would
     be stored under its OWN company — readable by neither side and attached to
     an item its company does not own.
@@ -276,8 +203,8 @@ async def post_comment(body: CommentBody, request: Request) -> Dict[str, Any]:
 
     from ..services.work_item_service import WorkItemService
 
-    agent_id, company_id = _agent_context(request)
-    await _assert_item_in_company(body.work_item_id, company_id)
+    agent_id, company_id = agent_context(request)
+    await assert_item_in_company(body.work_item_id, company_id)
     author_uuid = await agent_node_uuid(agent_id, company_id)
 
     factory = get_async_session_factory()
@@ -308,7 +235,7 @@ class WorkProduct(BaseModel):
 
 @router.post("/products")
 async def upload_work_product(body: WorkProduct, request: Request) -> Dict[str, Any]:
-    agent_id, company_id = _agent_context(request)
+    agent_id, company_id = agent_context(request)
     from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
@@ -375,7 +302,7 @@ async def report_heartbeat(body: HeartbeatReport, request: Request) -> Dict[str,
     from ..models.enums import LLCRunStatus
     from ..models.heartbeat_run import LLCHeartbeatRun
 
-    agent_id, company_id = _agent_context(request)
+    agent_id, company_id = agent_context(request)
 
     try:
         status = LLCRunStatus(body.status)
@@ -388,7 +315,7 @@ async def report_heartbeat(body: HeartbeatReport, request: Request) -> Dict[str,
         raise HTTPException(status_code=422, detail=f"run_id {body.run_id!r} is not a UUID") from exc
 
     if body.work_item_id is not None:
-        await _assert_item_in_company(body.work_item_id, company_id)
+        await assert_item_in_company(body.work_item_id, company_id)
 
     values: Dict[str, Any] = {
         "status": status.value,
@@ -429,7 +356,7 @@ async def agent_upload_attachment(
     request: Request = None,
 ) -> Dict[str, Any]:
     """Agent uploads a file attachment to a work item (GH#8253)."""
-    agent_id, company_id = _agent_context(request)
+    agent_id, company_id = agent_context(request)
     from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
@@ -463,8 +390,8 @@ async def agent_upload_attachment(
 @router.get("/context/{item_id}")
 async def get_item_context(item_id: uuid.UUID, request: Request) -> Dict[str, Any]:
     """Return agent context for a work item, including any human handoff KB notes (GH#8232)."""
-    _, company_id = _agent_context(request)  # GH#12148: authenticated agent context
-    await _assert_item_in_company(str(item_id), company_id)  # GH#12156: tenant scope
+    _, company_id = agent_context(request)  # GH#12148: authenticated agent context
+    await assert_item_in_company(str(item_id), company_id)  # GH#12156: tenant scope
     from ..kb.work_item_kb import WorkItemKB
 
     kb = WorkItemKB()
@@ -506,7 +433,7 @@ async def search_peer_agents(
     Returns:
         List of matching peer agents with capability metadata.
     """
-    agent_id, company_id = _agent_context(request)
+    agent_id, company_id = agent_context(request)
     try:
         from autobot_shared.logging_manager import get_logger
         from knowledge import get_knowledge_base
@@ -576,7 +503,7 @@ class AgentWikiEntryOut(BaseModel):
 @router.get("/wiki/entries")
 async def agent_list_wiki(namespace: Optional[str] = None, request: Request = None) -> Dict[str, Any]:
     """List this agent's own wiki entries."""
-    agent_id, company_id = _agent_context(request)
+    agent_id, company_id = agent_context(request)
     import uuid as _uuid
 
     from autobot_shared.singleton_factory import lazy_singleton
@@ -599,7 +526,7 @@ async def agent_list_wiki(namespace: Optional[str] = None, request: Request = No
 @router.post("/wiki/entries", status_code=201)
 async def agent_create_wiki_entry(body: AgentWikiEntryIn, request: Request = None) -> Dict[str, Any]:
     """Create a wiki entry scoped to this agent."""
-    agent_id, company_id = _agent_context(request)
+    agent_id, company_id = agent_context(request)
     import uuid as _uuid
 
     from autobot_shared.singleton_factory import lazy_singleton
