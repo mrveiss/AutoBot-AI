@@ -84,7 +84,7 @@ jobs:
 
       - name: Determine next version
         id: version
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5  # v4
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2  # v4
         with:
           config: cliff.toml
           args: --bumped-version ${{ steps.range.outputs.range }}
@@ -155,7 +155,7 @@ jobs:
       - name: Generate release notes (git-cliff)
         if: steps.check.outputs.release_needed == 'true'
         id: cliff_notes
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5  # v4
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2  # v4
         with:
           config: cliff.toml
           # Guard-fire pins an explicit <highest_tag>..HEAD range so notes match
@@ -177,7 +177,7 @@ jobs:
 
       - name: Update CHANGELOG.md (full history index)
         if: steps.check.outputs.release_needed == 'true'
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5  # v4
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2  # v4
         with:
           config: cliff.toml
           args: --verbose
@@ -215,7 +215,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.check.outputs.release_needed == 'true'
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228  # v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3
         with:
           tag_name: ${{ steps.check.outputs.version }}
           name: ${{ steps.check.outputs.version }}
