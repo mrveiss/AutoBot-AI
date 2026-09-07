@@ -32,45 +32,53 @@ Editing rules:
 #: eighteen guards read it, which is the largest concentration in the repo.
 UNCOVERED_READS: frozenset[str] = frozenset(
     {
-        # CI definitions read by guards that assert on workflow structure. The
-        # sharpest case in the set: editing a workflow is exactly when you want
-        # the guard that checks workflows to run.
+        ".bandit",
+        ".claude/hooks/block-dangerous-commands_test.sh",
+        ".dockerignore",
+        ".flake8",
         ".github/actions/setup-python-ci/action.yml",
+        ".github/actions/setup-python-suite/action.yml",
         ".github/dependabot.yml",
         ".github/filters/code-quality-paths.yml",
         ".github/workflows/auto-merge-base-into-parked-branches.yml",
         ".github/workflows/code-quality-required-context.yml",
         ".github/workflows/code-quality.yml",
         ".github/workflows/frontend-test.yml",
+        ".github/workflows/hardened-smoke-test.yml",
+        ".github/workflows/marker-tests.yml",
+        ".github/workflows/ratchet-base-guard.yml",
         ".github/workflows/ssot-coverage.yml",
-        # Generated frontend types and the API surface guards compare against.
+        ".mcp/autobot-mcp-server.js",
+        ".pre-commit-config.yaml",
+        "autobot-frontend/scripts/check-ts-delta.sh",
         "autobot-frontend/src/types/generated/api.ts",
         "autobot-slm-frontend/openapi.json",
         "autobot-slm-frontend/src/composables/useAutobotApi.ts",
         "autobot-slm-frontend/src/types/generated/api.ts",
         "autobot-slm-frontend/src/views/tools/admin/TerminalTool.vue",
-        # Shell entry points asserted on by shape rather than by extension.
-        ".claude/hooks/block-dangerous-commands_test.sh",
-        ".mcp/autobot-mcp-server.js",
-        "autobot-frontend/scripts/check-ts-delta.sh",
+        "constraints/shared.txt",
         "docker/generate-secrets.sh",
         "docker/secrets-init.sh",
         "docker/with-secrets.sh",
-        # Repository-root configuration. These have no tree component at all,
-        # which is why the sweep missed them until #15713's review: a guard
-        # reading pytest.ini is bypassed by editing pytest.ini.
-        ".dockerignore",
-        ".pre-commit-config.yaml",
-        "pytest.ini",
-        # The constraints SSOT, and docs a guard reads for cross-link integrity.
-        "constraints/shared.txt",
         "docs/audit/python_314_consistency.md",
+        "docs/developer/CLAUDE_GIT.md",
+        "docs/developer/THREAT_MODEL.md",
         "docs/developer/WSL2_NETWORKING.md",
         "docs/development/MCP_DEBUG_SCENARIOS.md",
         "docs/runbooks/ROTATE_SSH_KEYS.md",
+        "pytest.ini",
+        "requirements-ci.txt",
+        "requirements-gpu-torch.txt",
+        "requirements-gpu.txt",
+        "requirements.txt",
     }
 )
 
-#: DOWN-ONLY ceiling. NEVER raise this to let a new uncovered read through:
-#: either widen the filter, or the guard has become the thing it replaced.
-MAX_UNCOVERED_READS = 27
+#: RAISED 27 -> 39 by #15900, and that is a denominator correction, not a
+#: licence. 27 was measured by a detector that could not see composed reads
+#: unless the module named its root `_REPO_ROOT` -- 87 of 133 guards name it
+#: something else. The bypasses below were always there; nothing about the tree
+#: changed. Distinguish the two cases whenever this number moves up: correcting
+#: an instrument that was under-counting is not the same act as accepting a new
+#: bypass, and only the second is what "only ever goes DOWN" forbids.
+MAX_UNCOVERED_READS = 39

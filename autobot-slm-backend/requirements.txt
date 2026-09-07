@@ -20,7 +20,7 @@ asyncpg>=0.31.0  # Async PostgreSQL driver for SQLAlchemy
 psycopg2-binary>=2.9.12  # Sync PostgreSQL driver for migrations
 
 # Data validation
-pydantic[email]>=2.13.4
+pydantic[email]>=2.13.5
 pydantic-settings>=2.15.0
 typing_extensions>=4.16.0  # For Python 3.8 compatibility
 
@@ -60,7 +60,7 @@ paramiko>=5.0.0
 croniter>=6.2.4
 
 # SSO Integration (Issue #576 Phase 4)
-authlib>=1.7.2  # OAuth2/OIDC client
+authlib>=1.8.0  # OAuth2/OIDC client
 ldap3>=2.9.1  # LDAP/Active Directory
 pysaml2>=7.5.4  # SAML 2.0 Service Provider
 
