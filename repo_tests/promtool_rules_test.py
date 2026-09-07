@@ -33,11 +33,12 @@ import sys
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 # Lives in repo_tests/ rather than autobot-monitoring/ because only testpaths
 # directories are collected — a guard against unexecuted tests must not itself
 # be unexecuted (pytest.ini testpaths does not include autobot-monitoring).
-_MONITORING = Path(__file__).resolve().parents[1] / "autobot-monitoring"
+_MONITORING = repo_root() / "autobot-monitoring"
 
 # The glob the ansible monitoring role copies into Prometheus's rules/ directory
 # (roles/monitoring/tasks/prometheus.yml). Anything matching it must parse as a

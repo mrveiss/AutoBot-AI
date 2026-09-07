@@ -26,14 +26,14 @@ torch on every non-vLLM GPU host.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml")
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 ANSIBLE_TASKS = (
     REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "backend" / "tasks" / "main.yml"
 )

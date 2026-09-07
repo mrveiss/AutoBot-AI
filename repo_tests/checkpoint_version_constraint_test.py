@@ -31,11 +31,11 @@ from __future__ import annotations
 
 import ast
 import re
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_SOURCE = Path(__file__).resolve().parents[1] / "autobot-backend" / "training" / "completion_trainer.py"
+_SOURCE = repo_root() / "autobot-backend" / "training" / "completion_trainer.py"
 _MIN_ACCEPTED_SHAPES = 2
 
 

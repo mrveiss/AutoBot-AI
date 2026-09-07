@@ -77,9 +77,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Sequence, Set, Tuple
 
+from repo_tests._paths import repo_root
+
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 # Floors bind to the sweep's REACH, never to its findings: a findings floor
 # reports a clean tree the moment the walk breaks. Measured when this landed --

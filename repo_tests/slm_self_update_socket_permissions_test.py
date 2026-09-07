@@ -22,9 +22,10 @@ here and report the socket as safe.
 """
 
 import re
-from pathlib import Path
 
-_ROLE = Path(__file__).resolve().parents[1] / "autobot-slm-backend/ansible/roles/slm_manager"
+from repo_tests._paths import repo_root
+
+_ROLE = repo_root() / "autobot-slm-backend/ansible/roles/slm_manager"
 _DEFAULTS = _ROLE / "defaults/main.yml"
 _UNIT = _ROLE / "templates/autobot-slm-self-update.socket.j2"
 

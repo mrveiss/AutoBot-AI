@@ -41,8 +41,9 @@ import configparser
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _PYTEST_INI = _REPO_ROOT / "pytest.ini"
 
 # Directories pytest itself never descends into, plus the worktree pool: other

@@ -24,11 +24,11 @@ response.
 
 import importlib.util
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_SCRIPT = Path(__file__).resolve().parents[1] / "pipeline-scripts" / "ci_dispatch_watchdog.py"
+_SCRIPT = repo_root() / "pipeline-scripts" / "ci_dispatch_watchdog.py"
 
 NOW = datetime(2026, 8, 2, 12, 0, 0, tzinfo=timezone.utc)
 REPO = "mrveiss/AutoBot-AI"
@@ -1181,7 +1181,7 @@ def test_a_lone_run_is_never_cancelled(watchdog):
 
 HOSTED_PATH = ".github/workflows/ci.yml"
 SELF_HOSTED_PATH = ".github/workflows/frontend-test.yml"
-WORKFLOW_DIR = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+WORKFLOW_DIR = repo_root() / ".github" / "workflows"
 
 # Assembled from fragments so this fixture cannot be mistaken for a real
 # self-hosted declaration by a scanner reading the test file itself.
@@ -1308,7 +1308,7 @@ def test_the_real_workflow_tree_classifies_the_reported_workflows_correctly(watc
     paths = watchdog.self_hosted_workflow_paths(str(WORKFLOW_DIR))
 
     assert paths is not None
-    resolved = {Path(p).name for p in paths}
+    resolved = {p.rsplit("/", 1)[-1] for p in paths}  # POSIX workflow paths
     # #15395 retired every self-hosted pin, so the empty set is now the truthful
     # answer -- distinct from None, which still means "directory unreadable"
     # (pinned above, and the distinction that must never collapse). Kept as an

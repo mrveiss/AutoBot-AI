@@ -29,10 +29,11 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflow")
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "hardened-smoke-test.yml"
 STEP_NAME = "Dump diagnostics for unhealthy containers on failure"
 

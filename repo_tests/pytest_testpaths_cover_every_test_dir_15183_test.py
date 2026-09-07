@@ -27,8 +27,9 @@ from pathlib import Path
 from typing import List, Set
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 _SKIP_PARTS = {".git", "node_modules", "venv", ".venv", "__pycache__", ".worktrees"}
 

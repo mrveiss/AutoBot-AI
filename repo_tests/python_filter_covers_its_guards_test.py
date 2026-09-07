@@ -28,12 +28,12 @@ import re
 from pathlib import Path
 
 import pytest
-
+from repo_tests._paths import repo_root
 from repo_tests.python_filter_uncovered_reads import MAX_UNCOVERED_READS, UNCOVERED_READS
 
 yaml = pytest.importorskip("yaml")
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _FILTER = _REPO_ROOT / ".github" / "filters" / "python-paths.yml"
 _GUARD_DIR = _REPO_ROOT / "repo_tests"
 

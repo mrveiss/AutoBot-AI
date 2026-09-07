@@ -32,9 +32,11 @@ import re
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
+from repo_tests._paths import repo_root
+
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 # Same shapes #14988 measured. No word boundary before ``severity`` is
 # deliberate: it is the shape the issue specified and ground-truthed against.
