@@ -28,6 +28,26 @@ detector alone. That is why only one of them ever gets built:
 | **Staleness** | Does every baseline entry still match something? | Yes — hence `--audit-baseline`, and #15896's `test_the_baseline_still_describes_real_citations` |
 | **Blindness** | Does the detector's population equal the tree's? | **No, by definition** — a census performed by the instrument inherits the instrument's blind spot |
 
+## How to read the numbers on this page
+
+Every count below is labelled with its scope and predicate, because this page's
+own subject is numbers that do not carry the frame they depend on — and an
+earlier draft presented these without one.
+
+All figures are measured against **`origin/Dev_new_gui`** on the date of the
+commit that introduced them, over the **whole of git history on that branch**
+(12,786 commits) unless stated otherwise.
+
+| Cluster | Predicate | Population |
+|---|---|---|
+| 2,426 · 7,087 · 7,373 · 5,033 | `no-commit-trailers.yml:79-95`, applied as the workflow applies it — `grep -iE`, owner and bot identity exemptions | commits on `Dev_new_gui` |
+| 497 · 501 · 499 · 5,574 · 5,244 · 47 | `check_python_file_size.py`'s walk, `EXCLUDED_PREFIXES` applied, `MAX_LINES = 600` | tracked `.py` files |
+| 8 · 26 · 35 · 246 · 464 | #15896's citation filter versus its `tokenize.STRING` re-derivation | `repo_tests/*.py` |
+
+Two clusters are deliberately **not** comparable across rows: `8 vs 26` is one
+filter against another over the same files, while `497 vs 497` is a baseline
+against a tree. A number is only evidence alongside the question it answered.
+
 ## The rules
 
 ### 1. State the boundary where a reader meets the baseline
