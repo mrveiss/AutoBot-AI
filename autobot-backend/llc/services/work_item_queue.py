@@ -29,8 +29,8 @@ import uuid
 from typing import Any, List, Optional
 
 from sqlalchemy import and_, case, nulls_last, or_, select
-from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from ..models.enums import WorkItemPriority, WorkItemStatus
 from ..models.work_item import LLCWorkItem
