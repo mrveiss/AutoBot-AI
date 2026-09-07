@@ -49,7 +49,11 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # between them (several files call print() more than once) -- measured by
 # running this hook over tools/lint/ before the allowlist change, matching
 # the whole-repo delta: 499 - 55 = 444.
-_KNOWN_REPO_VIOLATIONS = 444
+# 443 since #15687 converted the sweep summary in
+# scripts/check_ansible_file_references.py from the builtin to a module logger.
+# Lowered in the same commit as the removal, per this test's own instruction:
+# a drop is either a fix recorded here, or the scan silently losing reach.
+_KNOWN_REPO_VIOLATIONS = 443
 
 
 def _test_git_env() -> dict[str, str]:

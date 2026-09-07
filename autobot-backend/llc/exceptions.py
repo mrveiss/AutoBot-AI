@@ -15,6 +15,30 @@ class BudgetExhausted(Exception):
         super().__init__(f"Agent {agent_id} budget exhausted: spent={spent:.6f} limit={limit:.6f}")
 
 
+class UnpricedModel(Exception):
+    """Raised when a cost event names a model with no entry in the pricing table.
+
+    An unpriced model used to resolve to a cost of zero, logged and returned as
+    a `Decimal("0")` the caller could not distinguish from a genuinely free
+    call. That made dollar budgets silently inapplicable to any model nobody
+    had priced -- including, for a time, the provider default (#15860).
+
+    Refusing is safe because the table already distinguishes free from unknown:
+    every local model carries an explicit ``{"input": 0, "output": 0}`` entry.
+    A model absent from the table is therefore not free, it is unpriced, and the
+    two are different facts.
+    """
+
+    def __init__(self, model: str, agent_id: str) -> None:
+        self.model = model
+        self.agent_id = agent_id
+        super().__init__(
+            f"Model {model!r} has no entry in MODEL_PRICING_PER_1M_TOKENS, so the cost of this "
+            f"event for agent {agent_id} cannot be computed. Add it to the table (a free model "
+            f"needs an explicit zero entry) rather than letting it accrue nothing."
+        )
+
+
 class ApiKeyNotFound(Exception):
     """Raised when an API key is not found or not owned by the requesting agent."""
 
