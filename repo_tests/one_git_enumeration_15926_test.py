@@ -43,11 +43,12 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 from tools.lint._scan_helpers import tracked_paths
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 #: Direct `git ls-files` invocations in `repo_tests/`, measured on the tree:
 #: **40 awaiting migration, plus 1 deliberate** — the unscrubbed contrast
