@@ -22,6 +22,7 @@ general property instead: every top-level tree a guard reads is covered.
 
 from __future__ import annotations
 
+import ast
 import fnmatch
 import re
 from pathlib import Path
@@ -54,17 +55,65 @@ _QUOTED_PATH = re.compile(r"""["']([a-z0-9_.-]+/[A-Za-z0-9_./*-]+)["']""")
 #: contains a slash -- so a detector keyed on the quoted form alone reports a
 #: tree as unread while a guard reads it every run, which is the reach failure
 #: this whole guard exists to prevent, committed by the guard itself.
-_COMPOSED_PATH = re.compile(r"""_REPO_ROOT\s*((?:/\s*["'][A-Za-z0-9_.*-]+["']\s*)+)""")
+#: #15900: this began keyed to the literal identifier `_REPO_ROOT` -- 87 of 133
+#: guards name their root something else. Binding per module fixed that and
+#: replaced a NAME key with a SHAPE key, recognising only
+#: `Path(__file__).resolve().parents[N]` while 19 modules write the identical
+#: `.parent.parent`. Anchoring on `__file__` fixed *that* and still missed 15
+#: modules whose root comes from a helper call (`project_root()`), where no
+#: `__file__` appears in the assignment at all.
+#:
+#: Three keys, three populations, each an enumeration of the spellings someone
+#: had thought of. So the detector no longer asks how a root is BOUND. It asks
+#: how one is USED: a composed path is `X / "literal"`, whatever produced `X`.
+#: Over-collecting candidates is safe -- a name that is not a root yields a path
+#: that does not exist, and `_record` already drops those.
 _SEGMENT = re.compile(r"""["']([A-Za-z0-9_.*-]+)["']""")
 
 #: Trees whose contents no guard reads directly, so the filter need not name
 #: them even when a path string mentions one.
-_NOT_A_READ = frozenset({"repo_tests", "pipeline-scripts", "scripts", "tools", "libs"})
+#: `.git` joined this when the detector started keying on composition rather
+#: than on how a root is bound: a guard composing `ROOT / ".git" / "config"` is
+#: reading git's own directory, not a repository source the filter should cover.
+_NOT_A_READ = frozenset({"repo_tests", "pipeline-scripts", "scripts", "tools", "libs", ".git"})
 
 #: Floor on the sweep's REACH. Bound to guards parsed, never to findings: a
 #: floor on findings passes when the walk reads nothing, and then fixing a real
 #: gap trips it. Both directions are wrong and one of them is silent.
 _MIN_GUARDS_READ = 60
+
+
+def _composed_reads(source: str) -> set[str]:
+    """Every `X / "a" / "b"` composition in *source*, as a slash-joined path.
+
+    Keyed on the composition, never on how `X` was produced. `X` may come from
+    `parents[N]`, `.parent.parent`, `project_root()`, a walrus or a class
+    attribute -- all of them compose the same way, and the next idiom nobody has
+    written yet composes that way too.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+
+    def segments(node):
+        """Right-to-left string segments of a `/` chain, or None if not one."""
+        if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Div):
+            return None
+        if not (isinstance(node.right, ast.Constant) and isinstance(node.right.value, str)):
+            return None
+        left = node.left
+        if isinstance(left, ast.Name):
+            return [node.right.value]
+        inner = segments(left)
+        return None if inner is None else inner + [node.right.value]
+
+    out: set[str] = set()
+    for node in ast.walk(tree):
+        parts = segments(node)
+        if parts and len(parts) >= 1:
+            out.add("/".join(parts))
+    return out
 
 
 def _filter_patterns() -> list[str]:
@@ -126,8 +175,8 @@ def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
         source = path.read_text(encoding="utf-8")
         parsed += 1
         composed = (
-            "/".join(_SEGMENT.findall(match.group(1)))
-            for match in _COMPOSED_PATH.finditer(source)
+            composed
+            for composed in _composed_reads(source)
         )
         for candidate in (m.group(1) for m in _QUOTED_PATH.finditer(source)):
             _record(candidate, path.name, patterns, reads)
@@ -223,16 +272,32 @@ def test_composed_paths_are_detected_not_only_quoted_ones(tmp_path: Path) -> Non
         'B = "docker/secrets-init.sh"\n',
         encoding="utf-8",
     )
-    composed = ["/".join(_SEGMENT.findall(m.group(1))) for m in _COMPOSED_PATH.finditer(guard.read_text(encoding="utf-8"))]
+    composed = sorted(_composed_reads(guard.read_text(encoding="utf-8")))
     quoted = [m.group(1) for m in _QUOTED_PATH.finditer(guard.read_text(encoding="utf-8"))]
 
     assert composed == ["docker/with-secrets.sh"], composed
     assert "docker/secrets-init.sh" in quoted
 
 
-def test_a_composed_path_with_no_repo_root_base_is_ignored() -> None:
-    """The contrast: only a `_REPO_ROOT`-anchored chain is a repository read."""
-    assert not _COMPOSED_PATH.findall('X = somewhere / "docker" / "with-secrets.sh"')
+def test_a_composition_off_an_unknown_base_is_collected_then_dropped() -> None:
+    """The contrast, restated for a detector keyed on composition (#15900).
+
+    The old version asserted that a chain off an unrecognised base is never
+    collected -- true of a detector keyed on how a root is *bound*, and the
+    reason it missed 87 of 133 guards. Keying on how a root is *used* collects
+    `somewhere / "docker" / ...` too, deliberately.
+
+    Over-collection is safe because it is filtered by the filesystem rather than
+    by a name: a candidate that is not a real path is dropped by `_record`. This
+    pins the two halves together, because collecting without the drop would
+    report phantom uncovered reads and make the pin meaningless.
+    """
+    collected = _composed_reads('X = somewhere / "docker" / "with-secrets.sh"')
+    assert "docker/with-secrets.sh" in collected, "composition off any base must be collected"
+
+    reads: dict[str, set[str]] = {}
+    _record("nonexistent-tree-xyz/made-up.sh", "fixture.py", reads, _filter_patterns())
+    assert not reads, "a candidate that is not a real path must be dropped, not reported"
 
 
 def test_a_repository_root_file_is_recorded_not_skipped() -> None:
