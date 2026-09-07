@@ -842,7 +842,15 @@ class WorkItemService(LLCServiceBase):
         company_id: Optional[str] = None,
         relation_svc: Optional[Any] = None,
     ) -> LLCWorkItem:
-        """Transition a work item to a new status, enforcing the state machine."""
+        """Transition a work item to a new status, enforcing the state machine.
+
+        ``company_id`` and ``relation_svc`` are both optional and neither is
+        required for the blocked-by rule to run (#15931): the company comes from
+        the loaded row and the relation service is constructed when not
+        supplied. ``relation_svc`` remains an injection point for tests;
+        ``company_id`` is accepted for callers that already hold it.
+        """
+        from .work_item_relations import WorkItemRelationService
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
@@ -858,15 +866,28 @@ class WorkItemService(LLCServiceBase):
                 f"Allowed: {[s.value for s in allowed]}"
             )
 
-        # GH#8252: block BLOCKED→IN_PROGRESS while unresolved blockers remain
-        if (
-            current == WorkItemStatus.BLOCKED
-            and new_status == WorkItemStatus.IN_PROGRESS
-            and relation_svc is not None
-            and company_id is not None
-        ):
+        # GH#8252: block BLOCKED→IN_PROGRESS while unresolved blockers remain.
+        #
+        # #15931: this rule had never fired. It was gated on `relation_svc is not
+        # None and company_id is not None`, and NOTHING outside its own two tests
+        # ever passed `relation_svc` -- so a blocked item moved to in_progress
+        # from the work-item API and from a board card drag, which are the two
+        # paths a person uses.
+        #
+        # Both gates are gone rather than threaded through the callers. An
+        # optional collaborator is off by default, so every call site written
+        # before it was added keeps the old behaviour with no diff showing it;
+        # threading it would work until the next caller. `company_id` was never
+        # needed either -- `item.company_id` is on the row already loaded, and
+        # the old `cid = company_id or str(item.company_id)` fallback proves the
+        # author knew, but the guard above it made that line unreachable.
+        #
+        # `relation_svc` stays injectable for tests, and now defaults to the real
+        # service instead of to nothing.
+        if current == WorkItemStatus.BLOCKED and new_status == WorkItemStatus.IN_PROGRESS:
+            svc = relation_svc if relation_svc is not None else WorkItemRelationService()
             cid = company_id or str(item.company_id)
-            if await relation_svc.has_unresolved_blockers(session, work_item_id, cid):
+            if await svc.has_unresolved_blockers(session, work_item_id, cid):
                 raise InvalidTransition("Cannot move to in_progress: item has unresolved blocked_by relations")
 
         item.status = new_status
