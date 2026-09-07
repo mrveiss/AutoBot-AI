@@ -26,9 +26,28 @@ deny() {
   exit 2
 }
 
+# `ask` and `deny` end in DIFFERENT exit codes, and that difference is the whole
+# mechanism (#15956).
+#
+# PreToolUse reads exit 2 as a blocking error and takes its reason from STDERR.
+# The JSON below goes to STDOUT, which is parsed only on exit 0. So `ask` with
+# `exit 2` discarded its own payload: every prompt this function exists to raise
+# became a hard denial, and -- nothing having been written to stderr -- the
+# operator saw "No stderr output" with no reason at all.
+#
+# It survived because a denial and a discarded ask produce an identical
+# observable. Nothing in the output distinguishes "refused on purpose" from
+# "meant to ask you and could not", so the hook looked like it was working.
+#
+# Both `ask` sites in this file guard the settings files, and they are its only
+# two against five `deny` sites -- so for the whole life of that bug, the only
+# path here capable of reaching a human never did.
+#
+# `deny` keeps `exit 2`: for a denial that is correct, and its reason is the one
+# the operator should see.
 ask() {
   echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"$1\"}}"
-  exit 2
+  exit 0
 }
 
 BASENAME=$(basename "$FILE_PATH")

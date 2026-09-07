@@ -126,8 +126,16 @@ fi
 
 if [ -n "$MATCHES" ]; then
   REASON="Possible secret detected in content:$MATCHES Review carefully before allowing."
+  # exit 0, not 2 (#15956). PreToolUse parses this decision from STDOUT only on
+  # exit 0; exit 2 is a blocking error whose reason it takes from STDERR. This
+  # was the only non-zero exit in the file, so the whole scanner was fail-hard
+  # rather than fail-ask: the reason above -- written to be read by a human who
+  # is being asked a question -- was discarded on every match, and the author of
+  # a flagged string saw an unexplained block. A false positive on a fixture, a
+  # docs example, or a near-miss on an exempted SSOT lookup therefore made the
+  # scanner look broken rather than cautious.
   echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"$REASON\"}}"
-  exit 2
+  exit 0
 fi
 
 exit 0
