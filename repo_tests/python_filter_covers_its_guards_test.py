@@ -108,10 +108,21 @@ def _composed_reads(source: str) -> set[str]:
         inner = segments(left)
         return None if inner is None else inner + [node.right.value]
 
+    # Only the outermost composition counts. `ast.walk` also visits the inner
+    # `X / "docker"` of `X / "docker" / "with-secrets.sh"`, and recording that
+    # prefix would let a guard that reads a single file claim coverage of the
+    # whole tree above it -- the coverage inflation this module exists to catch.
+    nested = {
+        node.left
+        for node in ast.walk(tree)
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
+    }
     out: set[str] = set()
     for node in ast.walk(tree):
+        if node in nested:
+            continue
         parts = segments(node)
-        if parts and len(parts) >= 1:
+        if parts:
             out.add("/".join(parts))
     return out
 
