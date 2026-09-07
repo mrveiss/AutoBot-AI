@@ -53,13 +53,19 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 #: from a SUBDIRECTORY cannot reach the nested checkouts and is not in scope.
 _ROOT_NAMES = {"REPO_ROOT", "_REPO_ROOT", "ROOT", "_ROOT"}
 
+#: ``glob`` is here for the ``glob("**/…")`` form only -- the branch below
+#: requires a literal ``**`` pattern, so a single-level glob is still ignored.
+#: It had to be added: an earlier `attr not in _WALK_ATTRS` filter dropped every
+#: `glob` call BEFORE the branch that handles it, so the detector named the
+#: shape and could not reach it. Second time in this file.
+#:
 #: Recursive enumerations only. A single-level ``glob("autobot-*/x")`` cannot
 #: descend into a nested checkout, and flagging it produced three false
 #: positives on guards that are correct -- `deployed_workspace_packages`,
 #: `ambient_git_vars_mirror` and `comment_line_number_citations` all glob an
 #: anchored pattern. A detector with false positives gets muted, so the
 #: narrowing is the point rather than a concession.
-_WALK_ATTRS = {"rglob", "iterdir", "walk"}
+_WALK_ATTRS = {"rglob", "iterdir", "walk", "glob"}
 
 #: Directories whose Python is not repository tooling.
 _SKIP_TREES = ("autobot-frontend/", "autobot-slm-frontend/", ".worktrees/", ".claude/")
@@ -108,11 +114,29 @@ def root_walks_in_node(tree) -> List[Tuple[int, str]]:
         # `walk` was in `_WALK_ATTRS` from the first draft, so this detector
         # named a call shape it could not see -- the same defect it exists to
         # find, in itself.
-        if isinstance(base, ast.Name) and base.id in _ROOT_NAMES:
+        # `glob` is deliberately excluded here: it is recursive only with a `**`
+        # pattern, handled below. Letting the receiver branch claim it flagged
+        # three guards that glob an ANCHORED pattern and cannot descend.
+        if node.func.attr != "glob" and isinstance(base, ast.Name) and base.id in _ROOT_NAMES:
             found.append((node.lineno, ast.unparse(node)[:90]))
             continue
-        if node.func.attr == "walk" and any(isinstance(a, ast.Name) and a.id in _ROOT_NAMES for a in node.args):
+        if node.func.attr == "walk" and any(
+            isinstance(a, ast.Name) and a.id in _ROOT_NAMES
+            # `os.walk(top=REPO_ROOT)`: `node.args` excludes keyword arguments,
+            # so the keyword form was invisible.
+            for a in list(node.args) + [k.value for k in node.keywords if k.arg in (None, "top")]
+        ):
             found.append((node.lineno, ast.unparse(node)[:90]))
+            continue
+        # `root.glob("**/…")` recurses without being `rglob`, and the receiver is
+        # often a PARAMETER named `root` defaulting to the repository root.
+        # `check_ci_system_package_provisioning._test_files` is exactly that and
+        # reached 4,644 test files of which 3,251 -- 70% -- were another
+        # checkout's. Only `**` patterns: a plain `glob("*.py")` sees one level.
+        if node.func.attr == "glob" and isinstance(base, ast.Name) and base.id in _ROOT_NAMES | {"root", "base"}:
+            first = node.args[0] if node.args else None
+            if isinstance(first, ast.Constant) and isinstance(first.value, str) and "**" in first.value:
+                found.append((node.lineno, ast.unparse(node)[:90]))
     return found
 
 
@@ -208,6 +232,7 @@ def _is_safe(func, module) -> bool:
 
 def _sweep() -> Tuple[List[Finding], int]:
     findings: List[Finding] = []
+    seen: set = set()
     parsed = 0
     for name in _tooling_files():
         try:
@@ -230,7 +255,11 @@ def _sweep() -> Tuple[List[Finding], int]:
             walks = root_walks_in_node(func)
             if not walks or _is_safe(func, tree):
                 continue
-            findings += [(name, line, expr) for line, expr in walks]
+            # De-duplicated: `ast.walk(Module)` already descends into every
+            # function, so each finding is seen once at module level and again
+            # in its own function.
+            findings += [(name, line, expr) for line, expr in walks if (name, line) not in seen]
+            seen |= {(name, line) for line, _ in walks}
     return findings, parsed
 
 
@@ -297,3 +326,29 @@ def test_the_detector_reports_os_walk_with_the_root_as_an_argument() -> None:
 def test_the_detector_ignores_os_walk_of_a_subdirectory() -> None:
     """The contrast: `os.walk(_ANSIBLE_ROOT)` cannot reach a nested checkout."""
     assert root_walks_in("for a, b, c in os.walk(_ANSIBLE_ROOT):\n    pass\n") == []
+
+
+def test_the_detector_reports_os_walk_with_a_top_keyword() -> None:
+    """`node.args` excludes keywords, so `os.walk(top=REPO_ROOT)` was invisible."""
+    assert root_walks_in("for a, b, c in os.walk(top=REPO_ROOT):\n    pass\n") == [(1, "os.walk(top=REPO_ROOT)")]
+
+
+def test_the_detector_reports_a_recursive_glob_on_a_root_parameter() -> None:
+    """`root.glob("**/x")` recurses without being `rglob`, and `root` is commonly
+    a parameter defaulting to the repository root."""
+    assert root_walks_in('for p in root.glob("**/*_test.py"):\n    pass\n') == [(1, "root.glob('**/*_test.py')")]
+
+
+def test_the_detector_ignores_a_single_level_glob() -> None:
+    """The contrast: `glob("*.py")` sees one level and cannot enter a checkout.
+
+    Without this, adding `glob` to `_WALK_ATTRS` would flag every anchored glob
+    in the tree -- which is what made me exclude `glob` entirely in an earlier
+    draft, and is why the `**` restriction is the point rather than a detail.
+    """
+    assert root_walks_in('for p in root.glob("*.py"):\n    pass\n') == []
+
+
+def test_the_detector_ignores_os_walk_of_a_subdirectory_keyword() -> None:
+    """The contrast for the keyword form."""
+    assert root_walks_in("for a, b, c in os.walk(top=_ANSIBLE_ROOT):\n    pass\n") == []

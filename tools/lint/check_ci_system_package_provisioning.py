@@ -60,6 +60,14 @@ import pathlib
 import re
 import sys
 
+# tools/lint/ is not a package; make the sibling helper importable however this
+# module is loaded. `autobot_shared` is NOT importable when this runs as a bare
+# script from the repo root, which is how the required check invokes it — the
+# same trap as #15914.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _scan_helpers import tracked_paths  # noqa: E402
+
 # Plain stdlib logging (matching check_flake8_exclude_anchoring.py and
 # check_requirements_ci_drift.py): this runs inside `code-quality`, which
 # installs linters only, never the application's own dependencies.
@@ -215,11 +223,21 @@ def _test_files(root: pathlib.Path) -> list[pathlib.Path]:
     absolute-path check would exclude every file it found (#14550 caught
     this against its own guard before it ever reached CI).
     """
-    candidates = set(root.glob("**/*_test.py"))
-    candidates.update(root.glob("**/test_*.py"))
-    candidates.update(p for p in root.glob("**/tests/**/*.py") if p.is_file())
+    # #15955: was `root.glob("**/...")` x3 with `excluded = {"node_modules",
+    # "__pycache__"}`. This repository keeps worktrees INSIDE the working copy,
+    # so that reached 4,644 test files of which 3,251 -- 70% -- belonged to
+    # other checkouts of itself at revisions nobody chose.
+    #
+    # The docstring above already discusses `.worktrees/`, which is what made it
+    # look considered: it explains why the filter is RELATIVE to `root`, a
+    # different concern entirely. Prose about a hazard is not a defence against
+    # it.
+    #
+    # `git ls-files` reads an index and never descends, so there is nothing to
+    # exclude and no list to keep current.
+    names = [n for n in tracked_paths(root, "*_test.py", "test_*.py", "*/tests/*") if n.endswith(".py")]
     excluded = {"node_modules", "__pycache__"}
-    return [p for p in candidates if not excluded & set(p.relative_to(root).parts)]
+    return [root / n for n in names if not excluded & set(pathlib.PurePosixPath(n).parts)]
 
 
 def _match_gated_binary(line: str) -> str | None:
