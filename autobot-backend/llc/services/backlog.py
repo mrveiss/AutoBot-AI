@@ -15,23 +15,21 @@ import logging
 import uuid
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from sqlalchemy import case, func, nulls_last, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
+from ..models.enums import WorkItemStatus, WorkItemType
 from ..models.work_item import LLCWorkItem
 from .base import LLCServiceBase
+from .work_item_queue import backlog_order
 
 logger = logging.getLogger(__name__)
 
-# Numeric rank for SQL ORDER BY — lower = higher priority
-_PRIORITY_RANK = case(
-    (LLCWorkItem.priority == WorkItemPriority.CRITICAL.value, 1),
-    (LLCWorkItem.priority == WorkItemPriority.HIGH.value, 2),
-    (LLCWorkItem.priority == WorkItemPriority.MEDIUM.value, 3),
-    (LLCWorkItem.priority == WorkItemPriority.LOW.value, 4),
-    else_=5,
-)
+# #15905: the rank and the ordering live in `work_item_queue` because
+# `checkout_next` needs the same ones. Two copies of this rule would drift the
+# first time a priority is added to the enum and ranked in only one of them —
+# and the symptom would be an agent working items in a different order from the
+# one an owner sees, with the reorder appearing to have done nothing.
 
 
 class BacklogService(LLCServiceBase):
@@ -72,11 +70,7 @@ class BacklogService(LLCServiceBase):
         # fall back to priority rank, then creation date.  This makes
         # bulk_reorder's writes immediately observable in list responses (H3).
         q = (
-            q.order_by(
-                nulls_last(LLCWorkItem.backlog_position.asc()),
-                _PRIORITY_RANK,
-                LLCWorkItem.created_at.asc(),
-            )
+            q.order_by(*backlog_order())
             .limit(limit)
             .offset(offset)
         )

@@ -19,12 +19,15 @@ Routes (all under /llc/agent):
 """
 
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from autobot_shared.logging_manager import get_logger
+
+from ._common import agent_node_uuid
 
 logger = get_logger(__name__)
 
@@ -61,11 +64,57 @@ async def _assert_item_in_company(item_id: str, company_id: str) -> None:
 
 @router.get("/work-items/next")
 async def get_next_work_item(request: Request) -> Dict[str, Any]:
+    """Claim the next work item for this agent, or report that there is none (#15905).
+
+    "Next" is not a new opinion: `checkout_next` reuses the ordering
+    `BacklogService.list` already applies, so the item handed to an agent is the
+    one a human sees at the top of the same backlog.
+
+    `{"work_item": None}` with `checked_out: False` is an ordinary answer, not a
+    failure — an agent asking for work when there is none is the common case.
+    The field is kept distinct from the #15859 stub marker so a caller can tell
+    "nothing to do" from "this route does nothing", which is exactly the
+    distinction the stub response existed to make.
+    """
+    from autobot_shared.singleton_factory import lazy_singleton
+    from user_management.database import get_async_session_factory
+
+    from ..services.work_item_queue import checkout_next
+    from ..services.work_item_service import WorkItemService
+
     agent_id, company_id = _agent_context(request)
-    # #15859: honest already -- the message names the stub in a field the client
-    # reads. Left as a stub rather than wired, and tracked as #15905 so the
-    # intent lives in an issue instead of a comment nobody is accountable to.
-    return {"work_item": None, "message": "Not implemented (stub) — no checkout performed"}
+
+    # The slug is not the assignee key. `checkout` writes
+    # `assignee_agent_id = uuid.UUID(agent_id)` against a UUID column, so
+    # handing it the middleware's slug raises ValueError -- a 500 for a
+    # condition that is not a server fault.
+    node_uuid = await agent_node_uuid(agent_id, company_id)
+    if node_uuid is None:
+        # Deliberately NOT "no eligible work". An agent whose org node is missing
+        # would otherwise be told there is nothing to do, forever, in the same
+        # words used when the backlog is simply empty.
+        raise HTTPException(status_code=404, detail=f"No agent node for {agent_id} in this company")
+
+    factory = get_async_session_factory()
+    async with factory() as session:
+        svc = lazy_singleton(WorkItemService)()
+        item = await checkout_next(session, svc, agent_id=str(node_uuid), company_id=company_id)
+        await session.commit()
+
+    if item is None:
+        return {"work_item": None, "checked_out": False, "message": "No eligible work item"}
+
+    return {
+        "work_item": {
+            "id": str(item.id),
+            "identifier": item.identifier,
+            "title": item.title,
+            "status": item.status,
+            "priority": item.priority,
+        },
+        "checked_out": True,
+        "run_id": item.checkout_run_id,
+    }
 
 
 class StatusUpdate(BaseModel):
@@ -169,11 +218,37 @@ class CommentBody(BaseModel):
 
 @router.post("/comments")
 async def post_comment(body: CommentBody, request: Request) -> Dict[str, Any]:
+    """Store an agent's comment on a work item (#15905).
+
+    The company check is not incidental. `add_comment` writes `company_id` from
+    its argument without reading the item, so without `_assert_item_in_company`
+    an agent could comment on another company's work item and the comment would
+    be stored under its OWN company — readable by neither side and attached to
+    an item its company does not own.
+    """
+    from autobot_shared.singleton_factory import lazy_singleton
+    from user_management.database import get_async_session_factory
+
+    from ..services.work_item_service import WorkItemService
+
     agent_id, company_id = _agent_context(request)
-    # #15859: not implemented. `recorded: True` with no marker is what made the
-    # cost-event and status routes lie; this says so in a field the client reads
-    # rather than only in a comment the client cannot. Tracked as #15905.
-    return {"comment_id": None, "recorded": False, "message": "Not implemented (stub) — comment was not stored"}
+    await _assert_item_in_company(body.work_item_id, company_id)
+    author_uuid = await agent_node_uuid(agent_id, company_id)
+
+    factory = get_async_session_factory()
+    async with factory() as session:
+        svc = lazy_singleton(WorkItemService)()
+        comment = await svc.add_comment(
+            session,
+            work_item_id=body.work_item_id,
+            company_id=company_id,
+            body=body.body,
+            author_agent_id=str(author_uuid) if author_uuid else None,
+        )
+        comment_id = str(comment.id)
+        await session.commit()
+
+    return {"comment_id": comment_id, "recorded": True}
 
 
 class WorkProduct(BaseModel):
@@ -232,15 +307,73 @@ class HeartbeatReport(BaseModel):
 
 @router.post("/heartbeat/report")
 async def report_heartbeat(body: HeartbeatReport, request: Request) -> Dict[str, Any]:
+    """Record an agent's completion of a heartbeat run (#15905).
+
+    Updates the existing `llc_heartbeat_runs` row rather than inserting one. The
+    scheduler creates the run when it dispatches (`_create_run`, status
+    `queued`); this route is the agent reporting how it ended. Inserting here
+    would produce two rows for one run and make every count of runs wrong.
+
+    A `run_id` that names no row is a 404, not a silent no-op. The stub echoed
+    the caller's own `run_id` back, so a client reading the response saw its
+    input and concluded the write had happened — the same defect #15859 fixed on
+    two other routes, and the reason `recorded` is now the result of an UPDATE's
+    rowcount rather than a constant.
+
+    Scoped by company as well as by id: `run_id` is a UUID, but an agent must
+    not be able to close out another company's run by guessing or replaying one.
+    """
+    from sqlalchemy import update
+    from user_management.database import get_async_session_factory
+
+    from ..models.enums import LLCRunStatus
+    from ..models.heartbeat_run import LLCHeartbeatRun
+
     agent_id, company_id = _agent_context(request)
-    # #15859: not implemented, and the echoed run_id made that hard to see --
-    # a caller reading its own input back concluded the write had happened.
-    # Tracked as #15905.
-    return {
-        "recorded": False,
-        "run_id": body.run_id,
-        "message": "Not implemented (stub) — heartbeat was not recorded",
+
+    try:
+        status = LLCRunStatus(body.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Unknown run status {body.status!r}") from exc
+
+    try:
+        run_uuid = uuid.UUID(body.run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"run_id {body.run_id!r} is not a UUID") from exc
+
+    if body.work_item_id is not None:
+        await _assert_item_in_company(body.work_item_id, company_id)
+
+    values: Dict[str, Any] = {
+        "status": status.value,
+        "finished_at": datetime.now(tz=timezone.utc),
     }
+    if body.work_item_id is not None:
+        values["work_item_id"] = uuid.UUID(body.work_item_id)
+
+    factory = get_async_session_factory()
+    async with factory() as session:
+        # Core `update`, not `text()`. The raw form needed `CAST(:id AS uuid)`,
+        # which is PostgreSQL-only -- correct in production and unrunnable
+        # against the SQLite the LLC tests use, so the route could not be tested
+        # at all. Core renders the UUID comparison per dialect.
+        result = await session.execute(
+            update(LLCHeartbeatRun)
+            .where(
+                LLCHeartbeatRun.id == run_uuid,
+                LLCHeartbeatRun.company_id == uuid.UUID(company_id),
+                LLCHeartbeatRun.agent_id == agent_id,
+            )
+            .values(**values)
+        )
+        if result.rowcount == 0:
+            # No row matched. Distinguishable from "recorded" on purpose: a run
+            # belonging to another company, another agent, or to nothing at all
+            # must not read as a successful report.
+            raise HTTPException(status_code=404, detail=f"Heartbeat run {body.run_id} not found for this agent")
+        await session.commit()
+
+    return {"recorded": True, "run_id": body.run_id, "status": status.value}
 
 
 @router.post("/attachments", status_code=201)
