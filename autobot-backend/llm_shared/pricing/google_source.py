@@ -16,7 +16,12 @@ from llm_shared.pricing.sources import BaselinePricingSource
 
 _PROVIDER = "google"
 
-# Hardcoded baseline — kept in sync with ssot_constants.MODEL_PRICING_PER_1M_TOKENS.
+# Hardcoded baseline. The canonical table is `autobot_shared.model_pricing.
+# MODEL_PRICING_PER_1M_TOKENS` (it moved out of `ssot_constants` in #15910, and
+# this pointer named the old home until #15912). Agreement is enforced by
+# `repo_tests/model_pricing_tables_agree_15912_test.py`, not by remembering:
+# this table's `deepseek-r1` had been charging API rates against the local
+# model's id, and `PER_1K` had two prices years out of date.
 # Keys use the same model IDs as GOOGLE_GEMINI* constants (GH#6480).
 _BASELINE: list[tuple[str, float, float]] = [
     # (model_id, input_per_1m, output_per_1m)

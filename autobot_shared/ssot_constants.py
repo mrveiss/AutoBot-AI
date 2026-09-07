@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, FrozenSet, List, Set
+from typing import FrozenSet, List, Set
 
 # ============================================================================
 # API CONSTANTS
@@ -281,34 +281,15 @@ class ModelConstants:
 # above, so importing it back would make the two modules circular. Import it
 # from `autobot_shared.model_pricing` directly.
 
-MODEL_PRICING_PER_1K_TOKENS: Dict[str, Dict[str, float]] = {
-    OPENAI_GPT4: {"prompt": 0.03, "completion": 0.06},
-    OPENAI_GPT4_TURBO: {"prompt": 0.01, "completion": 0.03},
-    OPENAI_GPT4O: {"prompt": 0.005, "completion": 0.015},
-    OPENAI_GPT35_TURBO: {"prompt": 0.0015, "completion": 0.002},
-    ANTHROPIC_CLAUDE3_OPUS: {"prompt": 0.015, "completion": 0.075},
-    ANTHROPIC_CLAUDE3_SONNET: {"prompt": 0.003, "completion": 0.015},
-    ANTHROPIC_CLAUDE3_HAIKU: {"prompt": 0.00025, "completion": 0.00125},
-    ANTHROPIC_CLAUDE_SONNET4_SHORT: {"prompt": 0.003, "completion": 0.015},
-    "ollama": {"prompt": 0.0, "completion": 0.0},
-    "default": {"prompt": 0.001, "completion": 0.002},
-}
-
-MODEL_COSTS_PER_1M_TOKENS: Dict[str, Dict[str, float]] = {
-    ANTHROPIC_CLAUDE3_OPUS: {"input": 15.00, "output": 75.00},
-    ANTHROPIC_CLAUDE3_SONNET: {"input": 3.00, "output": 15.00},
-    ANTHROPIC_CLAUDE3_HAIKU: {"input": 0.25, "output": 1.25},
-    ANTHROPIC_CLAUDE_SONNET4_SHORT: {"input": 3.00, "output": 15.00},
-    OPENAI_GPT4O: {"input": 2.50, "output": 10.00},
-    OPENAI_GPT4O_MINI: {"input": 0.15, "output": 0.60},
-    OPENAI_GPT4_TURBO: {"input": 10.00, "output": 30.00},
-    OPENAI_GPT35_TURBO: {"input": 0.50, "output": 1.50},
-    GOOGLE_GEMINI15_PRO: {"input": 1.25, "output": 5.00},
-    GOOGLE_GEMINI15_FLASH: {"input": 0.075, "output": 0.30},
-    LOCAL_LLAMA3: {"input": 0.0, "output": 0.0},
-    LOCAL_MISTRAL: {"input": 0.0, "output": 0.0},
-    LOCAL_CODELLAMA: {"input": 0.0, "output": 0.0},
-}
+# #15912: `MODEL_PRICING_PER_1K_TOKENS` and `MODEL_COSTS_PER_1M_TOKENS` were two
+# more literal price tables here. Both are now views over
+# `autobot_shared.model_pricing.MODEL_PRICING_PER_1M_TOKENS` and are imported from
+# that module. They are not re-exported here for the same circular-import reason
+# the note above gives for the canonical table.
+#
+# They were kept in step by hand and had stopped being: the per-1K table priced
+# `gpt-4o` at 5.00/15.00 and `gpt-3.5-turbo` at 1.50/2.00 per 1M, against
+# 2.50/10.00 and 0.50/1.50 in the two tables beside it.
 
 # Singleton instances (backward compat with constants.model_constants imports)
 model_constants = ModelConstants()
