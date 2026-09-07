@@ -207,6 +207,40 @@ while read -r referenced; do
     fi
 done < <(grep -oE '(pipeline-)?scripts/[a-z0-9_.-]+\.py' "${SCRIPT}" | sort -u)
 
+# `CQ_PATHS` is derived from `.github/filters/code-quality-paths.yml` at runtime
+# rather than copied, because a copy drifts silently: an entry added to the filter
+# but missing here narrows the preflight while CI keeps running the gate, so the
+# preflight reports "no matching paths changed" for a gate that will fail. This
+# asserts the derivation actually matches a representative path for every entry --
+# a hand-inlined version was wrong on its first attempt, from a truncated read.
+if python3 - <<'CQTEOF'
+import re, sys, yaml
+globs = yaml.safe_load(open(".github/filters/code-quality-paths.yml"))["backend"]
+arms = []
+for g in globs:
+    if g.startswith("**/"):
+        arms.append(re.escape(g[3:]).replace(r"\*", "[^/]*") + "$")
+    elif g.endswith("/**"):
+        arms.append("^" + re.escape(g[:-3]) + "/")
+    else:
+        arms.append("^" + re.escape(g).replace(r"\*", "[^/]*") + "$")
+rx = re.compile("|".join(arms))
+bad = []
+for g in globs:
+    sample = g.replace("**/", "deep/nested/").replace("/**", "/sample.txt").replace("*", "x")
+    if not rx.search(sample):
+        bad.append(f"{g!r} -> sample {sample!r} not matched")
+if bad:
+    print("\n".join("  FAIL: code-quality filter derivation misses " + b for b in bad))
+    sys.exit(1)
+print(f"  derivation covers all {len(globs)} code-quality filter entries")
+CQTEOF
+then
+    pass=$((pass + 1))
+else
+    fail=$((fail + 1))
+fi
+
 # ---------------------------------------------------------------- result
 
 echo ""

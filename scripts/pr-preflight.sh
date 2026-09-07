@@ -447,26 +447,72 @@ skip_check() { note "$1 -- $2"; }
 if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
   note "$BASE not found -- skipping required checks (run git fetch)"
 else
-  # verify-precommit-config: enforce-precommit.yml runs exactly these two.
+  # verify-precommit-config: enforce-precommit.yml runs exactly these two, and
+  # runs them UNCONDITIONALLY. It carries no `paths:` key (see its own comment at
+  # :22-27: "a required check that is path-filtered out never reports, wedging
+  # any PR that touches only non-matching files"). So these two take an EMPTY
+  # filter. A filter here would skip, for a .py-only PR, the one gate CI can
+  # never skip -- and would print "no matching paths changed (CI path-filters it
+  # too)", which is false of this workflow. Silent and passing is the worst
+  # direction for a preflight to be wrong in.
   require_check "verify-precommit-config (gating hooks)" \
-    '\.pre-commit-config\.yaml|\.github/workflows/enforce-precommit\.yml' \
+    '' \
     "$PY" pipeline-scripts/check_gating_precommit_hooks.py
 
   require_check "verify-precommit-config (hooks executed)" \
-    '\.pre-commit-config\.yaml' \
+    '' \
     "$PY" pipeline-scripts/check_precommit_hooks_executed.py
 
   # code-quality runs these repo-wide script gates alongside the lint above.
+  #
+  # All three share ONE filter, because CI gates the whole `code-quality` job on
+  # a single set: `.github/filters/code-quality-paths.yml`'s `backend`. Three
+  # hand-written per-check regexes were a second copy of that set, which the
+  # filter file itself forbids -- "SINGLE SOURCE OF TRUTH ... A second copy would
+  # drift, and the drift direction is silent". It had already drifted: none of
+  # the three matched `.flake8`, `.bandit`, `pyproject.toml`, `requirements*.txt`
+  # or `repo_tests/**`, so editing any of them ran code-quality in CI while the
+  # preflight reported "no matching paths changed" three times.
+  #
+  # This is a deliberate glob->regex translation of that `backend` list, one arm
+  # per entry and in the same order.  `pr-preflight_test.sh` asserts every entry
+  # in the filter file is represented here, so adding a glob there fails loudly
+  # instead of silently narrowing the preflight.
+  # Derived from the filter file AT RUNTIME -- there is no second copy to drift.
+  # The translation is explicit because dorny/paths-filter globs are anchored at
+  # the repo root:  `a/**` -> `^a/` (prefix),  a bare `a/b.c` -> `^a/b\.c$`
+  # (exact),  a leading `**/` -> unanchored suffix,  and `*` inside a segment
+  # -> `[^/]*` (never crossing `/`). Hand-inlining these 25 arms was tried first
+  # and was wrong on the first attempt -- the list was read truncated.
+  CQ_PATHS="$(_CQ_FILTER_FILE="${REPO_ROOT}/.github/filters/code-quality-paths.yml" "$PY" - <<'CQEOF'
+import os, re, yaml
+globs = yaml.safe_load(open(os.environ["_CQ_FILTER_FILE"]))["backend"]
+arms = []
+for g in globs:
+    if g.startswith("**/"):
+        arms.append(re.escape(g[3:]).replace(r"\*", "[^/]*") + "$")
+    elif g.endswith("/**"):
+        arms.append("^" + re.escape(g[:-3]) + "/")
+    else:
+        arms.append("^" + re.escape(g).replace(r"\*", "[^/]*") + "$")
+print("|".join(arms))
+CQEOF
+)"
+  if [ -z "${CQ_PATHS}" ]; then
+    echo "FATAL: could not derive the code-quality path set from .github/filters/code-quality-paths.yml" >&2
+    exit 1
+  fi
+
   require_check "code-quality (env var registry)" \
-    '\.py$|\.env|docs/.*env' \
+    "$CQ_PATHS" \
     "$PY" pipeline-scripts/check_env_var_registry.py
 
   require_check "code-quality (nosec format)" \
-    '\.py$' \
+    "$CQ_PATHS" \
     "$PY" scripts/check_nosec_format.py
 
   require_check "code-quality (doc references)" \
-    '\.md$|docs/' \
+    "$CQ_PATHS" \
     "$PY" pipeline-scripts/check-doc-references.py
 
   # Several workflows gate themselves on .github/filters/*.yml; this verifies
