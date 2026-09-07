@@ -26,6 +26,7 @@ from typing import AsyncIterator
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from llc.models.enums import RoleHolderType
@@ -241,3 +242,38 @@ async def test_a_holder_from_another_company_is_refused(session):  # noqa: ANN00
 
     assert response.status_code == 422, response.text
     assert await _designation(session, company) is None, "a holder from another company was installed"
+
+
+async def test_a_designation_whose_holder_is_gone_reports_it(session):  # noqa: ANN001
+    """The only case where `designation()` and `resolve()` disagree — and the
+    entire reason `holder_exists` is derived rather than hardcoded.
+
+    The other `holder_exists is False` test covers *no designation at all*,
+    which returns early and never reaches `resolve()`. So without this,
+    replacing `resolved is not None` with `True` passes the whole suite.
+
+    This is #15770's fifth criterion at the route layer: a designation whose
+    holder was deleted or has left the company must report that rather than
+    claim a CEO. It is covered at the service layer by
+    `test_a_deleted_ceo_agent_reports_absence_rather_than_crashing` and was not
+    covered here.
+    """
+    from models.agent_org import AgentOrgNode
+
+    company = str(uuid.uuid4())
+    agent = await _seed_agent(session, company, "ceo-vanishing")
+    client = _client(session, company)
+    client.put(
+        f"/api/llc/companies/{company}/ceo",
+        json={"holder_type": RoleHolderType.AGENT.value, "holder_id": str(agent)},
+    )
+
+    node = (await session.execute(select(AgentOrgNode).where(AgentOrgNode.id == agent))).scalar_one()
+    await session.delete(node)
+    await session.commit()
+
+    body = client.get(f"/api/llc/companies/{company}/ceo").json()
+
+    assert body["holder_id"] == str(agent), "the designation itself should still be reported"
+    assert body["holder_exists"] is False, "a designation pointing at a deleted holder claimed a live CEO"
+    assert await _designation(session, company) is not None, "reading must not delete the designation"

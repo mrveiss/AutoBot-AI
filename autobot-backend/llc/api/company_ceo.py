@@ -120,6 +120,12 @@ async def set_company_ceo(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     holder_type, holder_id = row.holder_type, row.holder_id
+    # Derived, not hardcoded `True`. `set_ceo` has just validated the holder via
+    # `_require_in_company`, so this will be True -- but a field that means
+    # "resolves now" in the GET response and "was valid at write time" here is a
+    # field a client cannot interpret without knowing which route produced it.
+    # One extra query buys one meaning.
+    resolved = await svc.resolve(session, company_id)
     await session.commit()
 
     logger.info("CEO designation set for company %s: %s", company_id, holder_type)
@@ -127,7 +133,7 @@ async def set_company_ceo(
         company_id=company_id,
         holder_type=holder_type,
         holder_id=holder_id,
-        holder_exists=True,
+        holder_exists=resolved is not None,
     )
 
 
