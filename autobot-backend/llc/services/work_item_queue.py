@@ -28,7 +28,8 @@ import logging
 import uuid
 from typing import Any, List, Optional
 
-from sqlalchemy import case, nulls_last, or_, select
+from sqlalchemy import and_, case, nulls_last, or_, select
+from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.enums import WorkItemPriority, WorkItemStatus
@@ -73,6 +74,30 @@ def backlog_order() -> List[Any]:
     return [nulls_last(LLCWorkItem.backlog_position.asc()), PRIORITY_RANK, LLCWorkItem.created_at.asc()]
 
 
+def claimable_by(agent_uuid: uuid.UUID) -> ColumnElement[bool]:
+    """Assignment predicate: unassigned, or already this agent's.
+
+    "Unassigned" requires BOTH assignee columns to be null. Testing only
+    `assignee_agent_id` let an agent claim an item assigned to a USER
+    (CWE-863) — and `checkout` writes `assignee_type = agent` for whatever it
+    claims, so the row came out naming an agent and a user at once, with the
+    type agreeing with only one of them. `checkout` now also clears
+    `assignee_user_id`, which keeps a row consistent; this predicate is what
+    stops the claim happening at all.
+
+    Split out of the `checkout_next` SELECT so the rule can be compiled and
+    asserted on directly — the behavioural path needs Postgres and skips
+    without it, and a security regression test that skips is not a test.
+    """
+    return or_(
+        and_(
+            LLCWorkItem.assignee_agent_id.is_(None),
+            LLCWorkItem.assignee_user_id.is_(None),
+        ),
+        LLCWorkItem.assignee_agent_id == agent_uuid,
+    )
+
+
 async def checkout_next(
     session: AsyncSession,
     service: Any,
@@ -113,10 +138,7 @@ async def checkout_next(
             # other agents returned "no work" while eligible items sat below
             # them, and the bound silently became "how many of the top ten are
             # mine" rather than "how many claims will I attempt".
-            or_(
-                LLCWorkItem.assignee_agent_id.is_(None),
-                LLCWorkItem.assignee_agent_id == uuid.UUID(agent_id),
-            ),
+            claimable_by(uuid.UUID(agent_id)),
         )
         .order_by(*backlog_order())
         .limit(CHECKOUT_CANDIDATES)
