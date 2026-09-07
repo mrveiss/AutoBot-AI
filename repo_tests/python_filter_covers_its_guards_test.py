@@ -118,11 +118,7 @@ def _composed_reads(source: str) -> set[str]:
     # `X / "docker"` of `X / "docker" / "with-secrets.sh"`, and recording that
     # prefix would let a guard that reads a single file claim coverage of the
     # whole tree above it -- the coverage inflation this module exists to catch.
-    nested = {
-        node.left
-        for node in ast.walk(tree)
-        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
-    }
+    nested = {node.left for node in ast.walk(tree) if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)}
     out: set[str] = set()
     for node in ast.walk(tree):
         if node in nested:
@@ -173,7 +169,12 @@ def _record(candidate: str, guard: str, patterns: list[str], reads: dict[str, se
     if "/" in candidate and not (_REPO_ROOT / tree).is_dir():
         return
     if not (_REPO_ROOT / candidate).is_file():
-        return  # a prefix or a glob, not a file this guard reads
+        # A prefix or a glob, not a concrete file. This is the boundary of what a
+        # green here means, and it is deliberate: expanding globs would turn 27
+        # uncovered entries into ~86 and force a cap raise or a twelve-shard
+        # filter widening. `glob_declared_reads_15900_test.py` records the
+        # declarations instead, at no CI cost (#15900).
+        return
     if _is_covered(candidate, patterns):
         return
     reads.setdefault(candidate, set()).add(guard)
@@ -191,10 +192,7 @@ def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
             continue
         source = path.read_text(encoding="utf-8")
         parsed += 1
-        composed = (
-            composed
-            for composed in _composed_reads(source)
-        )
+        composed = (composed for composed in _composed_reads(source))
         for candidate in (m.group(1) for m in _QUOTED_PATH.finditer(source)):
             _record(candidate, path.name, patterns, reads)
         for candidate in composed:
@@ -212,20 +210,29 @@ def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
 def test_the_sweep_reaches_the_guards_it_claims_to() -> None:
     """Reach before findings -- an empty walk must fail, not pass silently."""
     _, parsed = _uncovered_reads(_filter_patterns())
-    assert parsed >= _MIN_GUARDS_READ, (
-        f"the walk parsed only {parsed} guards (floor {_MIN_GUARDS_READ}) — it has stopped reading"
-    )
+    assert (
+        parsed >= _MIN_GUARDS_READ
+    ), f"the walk parsed only {parsed} guards (floor {_MIN_GUARDS_READ}) — it has stopped reading"
 
 
 def test_python_filter_covers_every_tree_a_guard_reads() -> None:
-    """The property the three prior one-off fixes each approximated."""
+    """The property the three prior one-off fixes each approximated.
+
+    **Scope, stated because a checker whose name over-claims is the defect it
+    exists to prevent:** this verifies reads declared as CONCRETE LITERALS. A
+    guard globbing `".github/workflows/*.yml"` contributes nothing here — its
+    dependency is real and its detection is not. Those are recorded by
+    `glob_declared_reads_15900_test.py`, which is where a reader should look
+    before concluding a tree has no guard depending on it (#15900).
+    """
     uncovered, _ = _uncovered_reads(_filter_patterns())
     new = {path: guards for path, guards in uncovered.items() if path not in UNCOVERED_READS}
 
     assert not new, (
-        "these trees are read by repo_tests guards but the python-suite filter does not "
-        "cover them, so a change confined to one takes the required-context shim's green "
-        "while the guard never runs:\n  "
+        "these trees are read by repo_tests guards BY CONCRETE LITERAL but the python-suite "
+        "filter does not cover them, so a change confined to one takes the required-context "
+        "shim's green while the guard never runs. Glob-declared reads are outside this "
+        "check — see glob_declared_reads_15900_test.py (#15900):\n  "
         + "\n  ".join(f"{path} — read by {sorted(guards)[0]}" for path, guards in sorted(new.items()))
     )
 
@@ -285,8 +292,7 @@ def test_composed_paths_are_detected_not_only_quoted_ones(tmp_path: Path) -> Non
     """
     guard = tmp_path / "sample_test.py"
     guard.write_text(
-        'A = _REPO_ROOT / "docker" / "with-secrets.sh"\n'
-        'B = "docker/secrets-init.sh"\n',
+        'A = _REPO_ROOT / "docker" / "with-secrets.sh"\n' 'B = "docker/secrets-init.sh"\n',
         encoding="utf-8",
     )
     composed = sorted(_composed_reads(guard.read_text(encoding="utf-8")))
