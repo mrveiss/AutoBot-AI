@@ -154,7 +154,28 @@ class BudgetService(LLCServiceBase):
             },
         )
 
-        result = await session.execute(_for_agent(agent_id, company_id))
+        # `populate_existing`: this read is what enforcement is decided on, so it
+        # must reflect the UPDATE just issued rather than the caller's session
+        # state. Without it SQLAlchemy's identity map returns the object the
+        # caller already loaded, carrying its pre-UPDATE `budget_spent` -- a
+        # plain SELECT does not overwrite already-loaded attributes.
+        #
+        # Not hypothetical, and not symmetrical between the two callers.
+        # `POST /agent/cost-events` opens its own session and never pre-loads the
+        # row, so its first read was fresh and the hard stop worked.
+        # `POST /budgets/{agent_id}/ingest` calls `load_authorized` first -- which
+        # puts the row in the identity map by design, that being the IDOR guard --
+        # and then hands the SAME session here. Enforcement compared the
+        # PRE-UPDATE spend against the limit, so `BudgetExhausted` could not fire
+        # on that route at all. The hard stop #15859 exists for was inoperative on
+        # one of its two callers, and nothing looked wrong: both routes returned a
+        # correct cost, and only the enforcement that follows was reading a stale
+        # number.
+        #
+        # Fixed in the service, not in the route: a service whose correctness
+        # depends on whether its caller happened to load a row first breaks again
+        # the next time someone adds a caller. There are four.
+        result = await session.execute(_for_agent(agent_id, company_id).execution_options(populate_existing=True))
         row = result.scalar_one_or_none()
 
         if row is None:

@@ -273,3 +273,134 @@ async def test_the_cost_event_route_requires_agent_context(session):  # noqa: AN
             await agent_api.ingest_cost_event(agent_api.CostEvent(model=DEFAULT_MODEL, tokens_in=1, tokens_out=1), req)
 
     assert exc.value.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# The SECOND route onto the same service call (#15860).
+#
+# Everything above exercises `POST /agent/cost-events` in `agent_api`.
+# `POST /budgets/{agent_id}/ingest` in `llc/api/budget.py` calls the same
+# `ingest_cost_event`, and when #15860 gave that service a second failure mode
+# only the first route learned about it -- so one condition returned 422 from
+# one route and 500 from the other, from the day the condition was introduced.
+#
+# A service test cannot see that. It is a property of the handler, and there
+# were four callers of this service, so "the caller I edited is correct" was
+# never the same claim as "the callers agree".
+# ---------------------------------------------------------------------------
+
+
+def _ctx(company_id: str):
+    """A tenant context owning *company_id*, which is what `load_authorized` checks."""
+    from user_management.services import TenantContext
+
+    return TenantContext(org_id=uuid.UUID(company_id), user_id=uuid.uuid4(), is_platform_admin=False)
+
+
+async def test_the_ingest_route_refuses_an_unpriced_model_with_422(session):  # noqa: ANN001
+    """422, not 500 — the same verdict the sibling route gives for the same cause.
+
+    Before #15860's handler was added here, `UnpricedModel` escaped the `except
+    BudgetExhausted` and FastAPI turned it into a 500: a client-actionable
+    condition reported as a server fault, on the route nobody would think to
+    check after editing the other one.
+    """
+    from fastapi import HTTPException
+
+    from llc.api import budget as budget_api
+
+    agent, company = "agent-ingest-unpriced", str(uuid.uuid4())
+    await _seed_budget(session, agent, company)
+
+    with pytest.raises(HTTPException) as exc:
+        await budget_api.ingest_cost(
+            agent_id=agent,
+            body=budget_api.IngestRequest(tokens_in=10, tokens_out=10, model="a-model-nobody-priced"),
+            session=session,
+            _current_user={},
+            ctx=_ctx(company),
+        )
+
+    assert exc.value.status_code == 422, f"unpriced model produced {exc.value.status_code}, not 422"
+    assert await _spent(session, agent, company) == Decimal("0")
+
+
+async def test_the_two_routes_agree_on_an_unpriced_model(session):  # noqa: ANN001
+    """The contrast the single-route tests cannot draw.
+
+    Both call one service function. Asserting each against a literal 422
+    separately would still pass if one route were changed and the other left
+    behind -- which is exactly what happened. This compares them.
+    """
+    from unittest.mock import patch
+
+    from fastapi import HTTPException
+
+    from llc.api import agent_api
+    from llc.api import budget as budget_api
+
+    company = str(uuid.uuid4())
+    await _seed_budget(session, "agent-cmp-a", company)
+    await _seed_budget(session, "agent-cmp-b", company)
+
+    with patch("user_management.database.get_async_session_factory", new=_factory_yielding(session)):
+        with pytest.raises(HTTPException) as via_agent_api:
+            await agent_api.ingest_cost_event(
+                agent_api.CostEvent(model="a-model-nobody-priced", tokens_in=10, tokens_out=10),
+                _request("agent-cmp-a", company),
+            )
+
+    with pytest.raises(HTTPException) as via_budget_api:
+        await budget_api.ingest_cost(
+            agent_id="agent-cmp-b",
+            body=budget_api.IngestRequest(tokens_in=10, tokens_out=10, model="a-model-nobody-priced"),
+            session=session,
+            _current_user={},
+            ctx=_ctx(company),
+        )
+
+    assert via_agent_api.value.status_code == via_budget_api.value.status_code, (
+        f"the two routes onto ingest_cost_event disagree: agent_api gave "
+        f"{via_agent_api.value.status_code}, budget_api gave {via_budget_api.value.status_code}"
+    )
+
+
+async def test_the_ingest_route_does_not_call_an_exhausted_budget_a_server_fault(session):  # noqa: ANN001
+    """402 is right; `detail="Internal server error"` never was.
+
+    Pre-existing and unrelated to #15860, fixed while in the handler: the
+    caller is told the request failed on the server when in fact they have
+    spent their budget, which is the one thing they can act on.
+    """
+    from fastapi import HTTPException
+
+    from llc.api import budget as budget_api
+
+    agent, company = "agent-ingest-exhausted", str(uuid.uuid4())
+    await _seed_budget(session, agent, company)
+
+    # Spend $99 of the $100 limit through the service, so the budget is live and
+    # nearly gone; the handler call below is what tips it over. Two ways to get
+    # this wrong, both of which assert nothing about the handler: spend the whole
+    # limit in setup and the raise comes from setup, or spend too little in the
+    # handler call and nothing raises at all. The service enforces AFTER the
+    # write, on the accumulated total, so the handler event must be large enough
+    # to cross on its own.
+    await BudgetService().ingest_cost_event(session, agent, company, 33_000_000, 0, DEFAULT_MODEL)
+    assert await _spent(session, agent, company) > Decimal("0"), "the setup spend did not land"
+
+    with pytest.raises(HTTPException) as exc:
+        await budget_api.ingest_cost(
+            agent_id=agent,
+            body=budget_api.IngestRequest(tokens_in=1_000_000, tokens_out=0, model=DEFAULT_MODEL),
+            session=session,
+            _current_user={},
+            ctx=_ctx(company),
+        )
+
+    assert exc.value.status_code == 402
+    assert "Internal server error" not in str(exc.value.detail), (
+        "an exhausted budget is reported to the caller as a server fault, which is "
+        "the one reading that tells them not to look at their own spend"
+    )
+    assert agent in str(exc.value.detail), "the detail does not name what was exhausted"
