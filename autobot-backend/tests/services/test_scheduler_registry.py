@@ -86,17 +86,28 @@ def _discover_scheduler_files() -> list[str]:
     support modules in ``_NOT_SCHEDULER_IMPLEMENTATIONS`` — only actual scheduler
     implementations.
     """
-    return [
-        rel
-        for p in _BACKEND_ROOT.rglob("*scheduler*.py")
-        if "__pycache__" not in str(p)
-        and not p.name.startswith("test_")
-        and not p.name.endswith("_test.py")
-        and "autobot-backend/api/" not in str(p).replace("\\", "/")
-        and "/migrations/" not in str(p).replace("\\", "/")
-        and p.resolve() != _REGISTRY_PATH.resolve()
-        and (rel := str(p.relative_to(_BACKEND_ROOT)).replace("\\", "/")) not in _NOT_SCHEDULER_IMPLEMENTATIONS
-    ]
+    # #15510: every exclusion is tested against the path **relative to the scan
+    # root**. Against the absolute path, `__pycache__`/`api/`/`migrations`
+    # matched when the checkout itself sat under such a directory, and the
+    # substring forms matched any ancestor as well as any component.
+    found: list[str] = []
+    for p in _BACKEND_ROOT.rglob("*scheduler*.py"):
+        relative = p.relative_to(_BACKEND_ROOT)
+        rel = relative.as_posix()
+        if "__pycache__" in relative.parts:
+            continue
+        if p.name.startswith("test_") or p.name.endswith("_test.py"):
+            continue
+        if relative.parts[:1] == ("api",):
+            continue
+        if "migrations" in relative.parts:
+            continue
+        if p.resolve() == _REGISTRY_PATH.resolve():
+            continue
+        if rel in _NOT_SCHEDULER_IMPLEMENTATIONS:
+            continue
+        found.append(rel)
+    return found
 
 
 # ---------------------------------------------------------------------------
@@ -132,12 +143,32 @@ def test_registry_runtimes_are_valid() -> None:
 # ---------------------------------------------------------------------------
 
 
+# #15510: floor for the discovery sweep (31 candidates at time of writing).
+_MIN_SCHEDULER_CANDIDATES = 10
+
+
+def _assert_discovery_population() -> None:
+    """Raise unless the discovery sweep reached the backend tree it claims."""
+    found = len(list(_BACKEND_ROOT.rglob("*scheduler*.py")))
+    assert found >= _MIN_SCHEDULER_CANDIDATES, (
+        f"the scheduler sweep reached only {found} candidate files under "
+        f"{_BACKEND_ROOT} (floor {_MIN_SCHEDULER_CANDIDATES}). FIX THE SWEEP -- "
+        "a sweep that finds nothing reports every scheduler as registered."
+    )
+
+
+def test_the_discovery_sweep_reached_the_backend_tree() -> None:
+    """Population floor, evaluated before the registration assertion below."""
+    _assert_discovery_population()
+
+
 def test_all_scheduler_files_registered() -> None:
     """Every *scheduler*.py on disk must appear in REGISTRY.owner_file.
 
     If this test fails, add the new scheduler file to
     autobot-backend/services/scheduler_registry.py before merging.
     """
+    _assert_discovery_population()
     registered_owner_files = {job.owner_file for job in REGISTRY}
     discovered = _discover_scheduler_files()
 
