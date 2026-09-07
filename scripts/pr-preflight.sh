@@ -458,7 +458,13 @@ require_check() {
 # Report a gate this box cannot run, naming the reason. Never approximated:
 # a check that silently does something weaker than CI is worse than no check,
 # because it is read as coverage.
-skip_check() { note "$1 -- $2"; }
+SKIPPED=0
+# Counts, because `note` does not touch FAILED and the verdict was FAILED-only:
+# with three gates skipped the script still printed "pre-flight clean -- safe to
+# commit and push". Honest per line, overstated in aggregate. This is the same
+# defect the `migration-matrix` comment below names -- I fixed it at the one site
+# that prompted it and left the helper every other skip goes through.
+skip_check() { note "$1 -- $2"; SKIPPED=$((SKIPPED + 1)); }
 
 if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
   note "$BASE not found -- skipping required checks (run git fetch)"
@@ -502,7 +508,12 @@ globs = yaml.safe_load(open(os.environ["_CQ_FILTER_FILE"]))["backend"]
 arms = []
 for g in globs:
     if g.startswith("**/"):
-        arms.append(re.escape(g[3:]).replace(r"\*", "[^/]*") + "$")
+        # `(^|/)` is the boundary picomatch gives `**/`: it matches whole path
+        # segments, so `**/requirements*.txt` must NOT match `dev-requirements.txt`.
+        # Without it the arm matches mid-basename and the derived filter is wider
+        # than the filter file it claims to mirror -- over-running rather than
+        # under-running, but still not the same predicate.
+        arms.append("(^|/)" + re.escape(g[3:]).replace(r"\*", "[^/]*") + "$")
     elif g.endswith("/**"):
         arms.append("^" + re.escape(g[:-3]) + "/")
     else:
@@ -606,7 +617,11 @@ fi
 # ---------------------------------------------------------------- result
 printf '\n'
 if [ "$FAILED" -eq 0 ]; then
-  printf 'pre-flight clean -- safe to commit and push\n'
+  if [ "$SKIPPED" -gt 0 ]; then
+    printf 'pre-flight: no failures, but %d gate(s) were NOT run (listed above)\n' "$SKIPPED"
+  else
+    printf 'pre-flight clean -- safe to commit and push\n'
+  fi
   exit 0
 fi
 printf '%d pre-flight failure(s) -- fix before pushing\n' "$FAILED"
