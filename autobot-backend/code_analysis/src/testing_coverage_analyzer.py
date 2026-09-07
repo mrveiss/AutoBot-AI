@@ -88,7 +88,13 @@ class TestingCoverageAnalyzer:
 
     def __init__(self, redis_client=None):
         self.redis_client = redis_client  # Lazy init if None (#2984)
-        self.config = config
+        # #15914: `self.config = config` stood here. The class carried
+        # `from src.config import config` when it was written; #926 (2026-02-18)
+        # dropped the import and left the assignment, so every
+        # TestingCoverageAnalyzer() raised NameError from that day on.
+        # Removed rather than re-imported: nothing in the repo reads
+        # `.config` off this object, so restoring the import would
+        # reinstate dead weight. Same call as #6733 and #14634.
 
         # Caching keys
         self.COVERAGE_KEY = "testing_analysis:coverage"

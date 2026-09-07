@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""#14405 — no script under ``autobot-infrastructure/shared/scripts/`` may reference a name it never binds.
+"""#14405, #15914 — no tracked Python file may reference a name it never binds.
 
 An undefined name is a live ``NameError`` waiting on the code path that reaches
 it, not a style preference. Twelve operator scripts in this tree carried 103 of
@@ -13,19 +13,38 @@ substituted into an f-string, and a function-length pass that sliced one
 coroutine into eight argument-less helpers, each reading locals the others had
 carried away.
 
-WHY NOTHING CAUGHT THEM. Two independent exclusions cover this tree and neither
+#15914 WIDENED THIS FROM ONE TREE TO THE REPO, because scoping the guard to the
+tree where the defect was found reproduces the thing that hid it. The 2026-02
+version covered ``autobot-infrastructure/shared/scripts/`` and nothing else, so
+five classes in ``autobot-backend/code_analysis/`` — the second tree named in
+the same exclusion this guard exists to work around — kept a ``self.config =
+config`` whose import had been dropped, and raised ``NameError`` on every
+construction for six to nine months. ``CodeQualityDashboard`` and its three
+entry-point scripts were never runnable in this repo. A guard bounded by the
+exclusion that caused the defect can only ever find the instance you already
+knew about.
+
+The sweep is now every tracked ``*.py`` and there is no tree list to keep
+current: a directory added tomorrow is covered without anyone remembering.
+
+WHY NOTHING CAUGHT THEM. Three independent exclusions cover these trees and none
 was the #14419 depth bug:
 
 * ``.pre-commit-config.yaml``'s flake8 hook carries
   ``exclude: ^(tests/|autobot-infrastructure/|autobot-backend/code_analysis/)``.
-  It is correctly anchored and excludes ``autobot-infrastructure/`` on purpose,
-  so the hook reports ``(no files to check) Skipped`` — exit 0 — for a file full
-  of undefined names.
-* No CI flake8 invocation passes this tree as an argument. ``.flake8``'s own
-  ``exclude`` is beside the point here: flake8 only applies it while recursing,
-  so an explicitly-named file under an excluded tree IS linted. Narrowing the
-  pre-commit regex is therefore what turns the check on, and this module is what
-  the narrowed scope runs.
+  It is correctly anchored and excludes those three trees on purpose, so the
+  hook reports ``(no files to check) Skipped`` — exit 0 — for a file full of
+  undefined names.
+* ``.flake8``'s own ``exclude`` names ``autobot-backend/code_analysis/`` and the
+  test trees as well.
+* The one CI flake8 invocation (``security.yml``) runs with ``|| true`` and
+  writes a report. It cannot fail a build, and 8 undefined names sit under
+  23,758 ``E501``\ s in it — present, counted, and invisible.
+
+``.flake8``'s ``exclude`` is beside the point for this module: flake8 only
+applies it while recursing, so an explicitly-named file under an excluded tree
+IS linted. Naming the files is what turns the check on, and this module is what
+names them.
 
 WHY A REQUIRED CHECK AND NOT ONLY A HOOK OR A TEST. A pre-commit hook sees
 staged files only, so it can never prove the whole tree is clean, and the pytest
@@ -38,13 +57,16 @@ module with ``--audit``, the same shape as ``check_flake8_exclude_anchoring.py
 
 THERE IS NO EXEMPTION LIST, DELIBERATELY. Grandfathering an undefined name would
 make the defect this guard exists for permanently exempt while looking covered
-(#14405). Other flake8 codes in this tree (E501, F841, F401, F541, E741) are a
-separate, cosmetic backlog and stay out of scope — this selects F821 only, so
-the gate is F821-clean today with nothing to ratchet.
+(#14405). The other flake8 codes (E501, F841, F401, F541, E741) are a separate,
+cosmetic backlog and stay out of scope — this selects F821 only, so the gate is
+F821-clean repo-wide today with nothing to ratchet.
 
 The audit reports how many files it reached and fails below a floor, because a
 sweep handed an empty file list reports a comfortable zero that is
-indistinguishable from success.
+indistinguishable from success. The floor is bound to files *examined*, never to
+findings, and the file list comes from ``git ls-files`` rather than from the
+lint configuration — a denominator drawn from the mechanism under test cannot
+show that mechanism going missing (#15908).
 """
 
 from __future__ import annotations
@@ -56,7 +78,16 @@ import re
 import subprocess  # nosec B404  # fixed argv, no shell, paths come from the repo tree
 import sys
 
+# tools/lint/ is not a package; make the sibling helper importable however this
+# module is loaded (script, pre-commit entry, importlib from the test). Same
+# idiom as check_destructive_migration_marker.py -- `autobot_shared` is NOT
+# importable when this runs as a bare script from the repo root, which is how
+# the required check invokes it.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
 import yaml
+
+from _scan_helpers import tracked_paths  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a
 # lint job, and `autobot_shared.logging_manager` would drag config loading into
@@ -65,28 +96,25 @@ import yaml
 logger = logging.getLogger(__name__)
 
 #: Repo-relative path of this checker, quoted in the messages that ask for an edit.
-SELF_REL = "tools/lint/check_infra_scripts_undefined_names.py"
-
-#: The tree this guard covers, repo-relative.
-SCRIPTS_DIR_REL = "autobot-infrastructure/shared/scripts"
+SELF_REL = "tools/lint/check_undefined_names.py"
 
 #: pyflakes code for "undefined name". Only this one: see the module docstring.
 SELECTED_CODE = "F821"
 
-#: Floor for the audit's own discovery. The tree held 222 scripts when this
-#: landed; a sweep that suddenly reaches a handful has broken, and a clean
-#: result from it asserts nothing.
-DISCOVERY_FLOOR = 100
+#: Floor for the audit's own discovery. The repo held 5,567 tracked ``*.py``
+#: files when #15914 widened this sweep from one tree to all of them; a run that
+#: suddenly reaches a few hundred has broken, and a clean result from it asserts
+#: nothing. Bound to files examined, never to findings — a floor that tracked
+#: findings would relax itself as the tree improved.
+DISCOVERY_FLOOR = 5_000
 
 #: pre-commit config, whose flake8 hooks decide what a commit is allowed to
-#: contain. The audit re-proves that one of them still reaches this tree.
+#: contain. The audit re-proves that they still reach every tracked file.
 PRE_COMMIT_CONFIG_REL = ".pre-commit-config.yaml"
 
-#: A real file in the guarded tree, used to replay pre-commit's own file
-#: selection. Asserting on the regex text would pass a rewritten-but-equivalent
-#: regex and fail a stricter one; replaying the selection asks the question that
-#: actually matters — would this hook be handed a script from this tree?
-PROBE_REL = f"{SCRIPTS_DIR_REL}/diagnose_backend.py"
+#: Cap on how many uncovered paths a gate failure lists before it summarises, so
+#: a hook that stops reaching thousands of files does not bury its own message.
+_MAX_LISTED = 15
 
 
 def repo_root() -> pathlib.Path:
@@ -94,13 +122,28 @@ def repo_root() -> pathlib.Path:
     return pathlib.Path(__file__).resolve().parents[2]
 
 
-def scripts_dir(base: pathlib.Path | None = None) -> pathlib.Path:
-    return (base or repo_root()) / SCRIPTS_DIR_REL
-
-
 def discover_scripts(base: pathlib.Path | None = None) -> list[pathlib.Path]:
-    """Every ``*.py`` under the guarded tree, ``__pycache__`` aside."""
-    return sorted(p for p in scripts_dir(base).rglob("*.py") if "__pycache__" not in p.parts)
+    """Every tracked ``*.py`` in the repo, other checkouts' worktrees aside.
+
+    Read from ``git ls-files`` rather than from the lint configuration on
+    purpose: those exclusions are what this guard exists to work around, so a
+    file list derived from them could never show a tree falling out of coverage.
+    A denominator drawn from the mechanism under test cannot show that mechanism
+    going missing — ``git`` and the linter must be able to disagree (#15908).
+
+    Via ``_scan_helpers.tracked_paths``, which scrubs the git environment: an
+    inherited ``GIT_DIR`` outranks ``cwd=`` and would enumerate another
+    checkout's index without erroring (#14896) — for this sweep, auditing a
+    different repo's files and reporting clean about this one. It also raises
+    rather than returning ``[]``, so a broken enumeration cannot read as a clean
+    tree.
+    """
+    base = base or repo_root()
+    return [
+        base / name
+        for name in tracked_paths(base, "*.py")
+        if not name.startswith(".worktrees/") and "__pycache__" not in name
+    ]
 
 
 def undefined_name_findings(paths: list[pathlib.Path], base: pathlib.Path | None = None) -> list[str]:
@@ -152,13 +195,20 @@ def _hook_enforces_undefined_names(hook: dict) -> bool:
 
 
 def commit_gate_problems(base: pathlib.Path | None = None) -> list[str]:
-    """Re-prove that some pre-commit flake8 hook still lints this tree for F821.
+    """Re-prove that some pre-commit flake8 hook lints EVERY tracked file for F821.
 
-    Fixing the 12 files by hand while the tree stayed excluded would have left
-    nothing stopping a 13th (#14405). That protection lives in a regex in another
-    file, so it can be widened back in one line, by someone with no reason to
-    connect the edit to this tree — which is precisely the regression this
-    function exists to fail on.
+    Fixing the files by hand while the trees stayed excluded would have left
+    nothing stopping the next one (#14405) — and that is not hypothetical: the
+    2026-02 version of this guard proved coverage of one tree with a single
+    probe path, and five classes in a *different* excluded tree stayed dead for
+    months (#15914). One probe answers "is this tree covered", never "is
+    anything uncovered".
+
+    So the question is asked of every discovered path. Replaying pre-commit's
+    own include/exclude selection, rather than asserting on the regex text: the
+    text test passes a rewritten-but-equivalent regex and fails a stricter one,
+    while the replay asks what actually matters — would any enforcing hook be
+    handed this file?
     """
     base = base or repo_root()
     config_path = base / PRE_COMMIT_CONFIG_REL
@@ -170,19 +220,28 @@ def commit_gate_problems(base: pathlib.Path | None = None) -> list[str]:
     if not hooks:
         return [f"{PRE_COMMIT_CONFIG_REL} declares no flake8 hook at all — nothing lints Python on commit."]
 
-    reaching = [hook for hook in hooks if _hook_receives(hook, PROBE_REL)]
-    if not reaching:
+    enforcing = [hook for hook in hooks if _hook_enforces_undefined_names(hook)]
+    if not enforcing:
         return [
-            f"no flake8 hook in {PRE_COMMIT_CONFIG_REL} is handed {PROBE_REL}: every one of "
-            f"{len(hooks)} either does not match it or excludes it. The tree is back to "
-            f"unlinted, which is the state that let 103 undefined names accumulate (#14405). "
-            f"Restore a hook scoped to {SCRIPTS_DIR_REL} with --select={SELECTED_CODE}."
+            f"all {len(hooks)} flake8 hook(s) in {PRE_COMMIT_CONFIG_REL} select {SELECTED_CODE} "
+            "away, so an undefined name commits cleanly (#14405)."
         ]
 
-    if not any(_hook_enforces_undefined_names(hook) for hook in reaching):
+    uncovered = [
+        str(path.relative_to(base))
+        for path in discover_scripts(base)
+        if not any(_hook_receives(hook, str(path.relative_to(base))) for hook in enforcing)
+    ]
+    if uncovered:
+        listed = "\n".join(f"  {name}" for name in uncovered[:_MAX_LISTED])
+        more = f"\n  ... and {len(uncovered) - _MAX_LISTED} more" if len(uncovered) > _MAX_LISTED else ""
         return [
-            f"{len(reaching)} flake8 hook(s) in {PRE_COMMIT_CONFIG_REL} reach {PROBE_REL}, but each "
-            f"selects {SELECTED_CODE} away, so an undefined name still commits cleanly (#14405)."
+            f"{len(uncovered)} tracked Python file(s) are reached by no flake8 hook that "
+            f"enforces {SELECTED_CODE}:\n{listed}{more}\n\n"
+            f"An undefined name in any of them commits cleanly. That is the state that let "
+            f"103 undefined names accumulate in one tree (#14405) and five dead constructors "
+            f"in another (#15914). Widen a hook's `files:` or narrow its `exclude:` in "
+            f"{PRE_COMMIT_CONFIG_REL} — do not narrow this sweep to match."
         ]
 
     return []
@@ -193,14 +252,10 @@ def audit(base: pathlib.Path | None = None) -> tuple[int, list[str]]:
     base = base or repo_root()
     problems: list[str] = []
 
-    directory = scripts_dir(base)
-    if not directory.is_dir():
-        return 0, [f"{SCRIPTS_DIR_REL} does not exist — the tree moved, so {SELF_REL} now guards nothing."]
-
     scripts = discover_scripts(base)
     if len(scripts) < DISCOVERY_FLOOR:
         problems.append(
-            f"discovery returned only {len(scripts)} script(s) under {SCRIPTS_DIR_REL} "
+            f"discovery returned only {len(scripts)} tracked Python file(s) "
             f"(floor {DISCOVERY_FLOOR}) — the sweep broke, so a clean result below "
             "would assert nothing."
         )
@@ -211,37 +266,28 @@ def audit(base: pathlib.Path | None = None) -> tuple[int, list[str]]:
     if findings:
         problems.append(
             "undefined names (a NameError waiting on the code path that reaches "
-            "them) under "
-            + SCRIPTS_DIR_REL
-            + ":\n"
+            "them):\n"
             + "\n".join(findings)
-            + f"\n\nImport or define each name. {SELF_REL} carries no exemption list "
-            "on purpose (#14405): grandfathering an undefined name would make the "
-            "defect this guard exists for permanently exempt while looking covered."
+            + f"\n\nImport or define each name — or delete the reference if, as in "
+            "#15914, the assignment has been dead since its import was dropped. "
+            f"{SELF_REL} carries no exemption list on purpose (#14405): "
+            "grandfathering an undefined name would make the defect this guard "
+            "exists for permanently exempt while looking covered."
         )
 
     return len(scripts), problems
 
 
 def check_files(paths: list[str], base: pathlib.Path | None = None) -> tuple[int, list[str]]:
-    """Check the subset of *paths* that lie in the guarded tree (pre-commit's entry).
+    """Check the given *paths* (pre-commit's entry).
 
     Returns (files reached, problems). An empty selection is a legitimate zero
     here — pre-commit's ``files:`` regex has already narrowed the list — which is
-    exactly why :func:`audit` and not this function is what the required check runs.
+    exactly why :func:`audit` and not this function is what the required check
+    runs. A hook sees staged files only and can never prove the repo is clean.
     """
     base = base or repo_root()
-    directory = scripts_dir(base)
-    selected = []
-    for raw in paths:
-        candidate = pathlib.Path(raw)
-        resolved = candidate if candidate.is_absolute() else (base / candidate)
-        try:
-            resolved.resolve().relative_to(directory.resolve())
-        except ValueError:
-            continue
-        selected.append(resolved)
-
+    selected = [pathlib.Path(raw) if pathlib.Path(raw).is_absolute() else base / raw for raw in paths]
     findings = undefined_name_findings(selected, base)
     problems = []
     if findings:
@@ -272,25 +318,25 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--audit",
         action="store_true",
-        help=f"sweep every script under {SCRIPTS_DIR_REL}, not only the paths given",
+        help="sweep every tracked Python file, not only the paths given",
     )
     parser.add_argument("paths", nargs="*", help="files to check (pre-commit passes these)")
     args = parser.parse_args(argv)
 
     if args.audit:
         reached, problems = audit()
-        scope = f"{reached} scripts under {SCRIPTS_DIR_REL}"
+        scope = f"{reached} tracked Python file(s)"
     elif args.paths:
         reached, problems = check_files(args.paths)
-        scope = f"{reached} staged scripts under {SCRIPTS_DIR_REL}"
+        scope = f"{reached} staged file(s)"
     else:
         parser.error("nothing to do — pass --audit or one or more paths")
 
     if problems:
         logger.error("%s", "\n\n".join(problems))
-        logger.error("\nundefined-name audit FAILED over %s (#14405).", scope)
+        logger.error("\nundefined-name audit FAILED over %s (#14405, #15914).", scope)
         return 1
-    logger.info("undefined-name audit clean over %s (#14405).", scope)
+    logger.info("undefined-name audit clean over %s (#14405, #15914).", scope)
     return 0
 
 
