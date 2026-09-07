@@ -51751,7 +51751,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Next Work Item */
+        /**
+         * Get Next Work Item
+         * @description Claim the next work item for this agent, or report that there is none (#15905).
+         *
+         *     "Next" is not a new opinion: `checkout_next` reuses the ordering
+         *     `BacklogService.list` already applies, so the item handed to an agent is the
+         *     one a human sees at the top of the same backlog.
+         *
+         *     `{"work_item": None}` with `checked_out: False` is an ordinary answer, not a
+         *     failure — an agent asking for work when there is none is the common case.
+         *     The field is kept distinct from the #15859 stub marker so a caller can tell
+         *     "nothing to do" from "this route does nothing", which is exactly the
+         *     distinction the stub response existed to make.
+         */
         get: operations["get_next_work_item_api_llc_agent_work_items_next_get"];
         put?: never;
         post?: never;
@@ -51828,7 +51841,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Post Comment */
+        /**
+         * Post Comment
+         * @description Store an agent's comment on a work item (#15905).
+         *
+         *     The company check is not incidental. `add_comment` writes `company_id` from
+         *     its argument without reading the item, so without `assert_item_in_company`
+         *     an agent could comment on another company's work item and the comment would
+         *     be stored under its OWN company — readable by neither side and attached to
+         *     an item its company does not own.
+         */
         post: operations["post_comment_api_llc_agent_comments_post"];
         delete?: never;
         options?: never;
@@ -51862,7 +51884,24 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Report Heartbeat */
+        /**
+         * Report Heartbeat
+         * @description Record an agent's completion of a heartbeat run (#15905).
+         *
+         *     Updates the existing `llc_heartbeat_runs` row rather than inserting one. The
+         *     scheduler creates the run when it dispatches (`_create_run`, status
+         *     `queued`); this route is the agent reporting how it ended. Inserting here
+         *     would produce two rows for one run and make every count of runs wrong.
+         *
+         *     A `run_id` that names no row is a 404, not a silent no-op. The stub echoed
+         *     the caller's own `run_id` back, so a client reading the response saw its
+         *     input and concluded the write had happened — the same defect #15859 fixed on
+         *     two other routes, and the reason `recorded` is now the result of an UPDATE's
+         *     rowcount rather than a constant.
+         *
+         *     Scoped by company as well as by id: `run_id` is a UUID, but an agent must
+         *     not be able to close out another company's run by guessing or replaying one.
+         */
         post: operations["report_heartbeat_api_llc_agent_heartbeat_report_post"];
         delete?: never;
         options?: never;
