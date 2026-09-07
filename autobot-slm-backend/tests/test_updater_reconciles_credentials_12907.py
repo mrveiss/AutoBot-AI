@@ -43,6 +43,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
+
 yaml = pytest.importorskip("yaml")
 
 _ANSIBLE = Path(__file__).resolve().parents[1] / "ansible"
@@ -169,7 +171,20 @@ def test_reconcile_is_defined_exactly_once():
     the #12959 failure mode.
     """
     tree = _ANSIBLE.parent.parent
-    scanned = [path for path in tree.rglob("*.yml") if "node_modules" not in path.relative_to(tree).parts]
+    # #15955: enumerate with `git ls-files`, never `rglob`. Walking from the repo
+    # root descends into nested worktrees -- 852 of the 1,313 YAML files reachable
+    # that way (64%) belong to another checkout of this repo at a revision nobody
+    # chose. `ls-files` reads this checkout's index and cannot see them, and the
+    # env scrub stops an inherited GIT_DIR redirecting it to another one (#14896).
+    listed = subprocess.run(
+        ["git", "ls-files", "-z", "--", "*.yml"],
+        cwd=tree,
+        env=scrubbed_git_env(),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    scanned = [tree / rel for rel in listed.split("\0") if rel and "node_modules" not in Path(rel).parts]
     # #15510: population floor, evaluated before the assertion below. Without
     # it a sweep that reached nothing finds no stray copies, which is exactly
     # what "the logic lives only in one file" looks like.
