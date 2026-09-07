@@ -285,3 +285,28 @@ def test_the_floor_counts_parses_not_enumerated_paths() -> None:
     assert parsed <= enumerated, "more parses than files enumerated is impossible"
     assert parsed >= _MIN_FILES_PARSED
     assert isinstance(direct, list)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'subprocess.run(["git", "ls-files"])',
+        "subprocess.run(args=['git', 'ls-files'])",
+        "subprocess.Popen(['git', 'ls-files'])",
+        "subprocess.Popen(args=['git', 'ls-files'])",
+        "subprocess.check_output(['git', 'ls-files'])",
+        "subprocess.check_output(args=['git', 'ls-files'])",
+    ],
+    ids=["run", "run-kw", "popen", "popen-kw", "check_output", "check_output-kw"],
+)
+def test_every_argv_form_is_read_positional_and_keyword(source: str) -> None:
+    """All three subprocess entry points, both spellings — pinned ahead of a report.
+
+    Three keyword blind spots surfaced in one day (`os.walk(top=)`,
+    `Path.glob(pattern=)`, `subprocess.run(args=)`), each patched at the shape
+    the review named. `run`, `Popen` and `check_output` all call their first
+    parameter `args`, so one predicate covers six spellings — and this asserts
+    that rather than waiting for a fourth review to name `Popen(args=)`.
+    """
+    call = next(n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call))
+    assert invokes_ls_files(call), f"missed: {source}"
