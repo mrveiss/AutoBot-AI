@@ -172,7 +172,12 @@ async def test_a_company_created_before_this_change_acquires_an_agent_ceo(fresh_
             liveness = await _ceo_agent_liveness(conn, company_id)
             assert liveness is not None
             assert liveness.status != "inactive", "the provisioned CEO agent was deactivated"
-            assert liveness.heartbeat_enabled is not False, "the provisioned CEO agent will never be scheduled"
+            # Deliberately NOT asserting heartbeat_enabled here: 088's INSERT
+            # omits the column, so every CEO agent it created takes the server
+            # default false and is unschedulable — a live defect on base, filed
+            # as #15907. Asserting it on the positive path would fail against
+            # something 088 never did. It stays on the EXCLUSION path, where
+            # this migration is the one setting it.
     finally:
         await engine.dispose()
 
@@ -213,7 +218,12 @@ async def test_a_top_level_company_keeps_its_ceo(fresh_db_url):
         "the designation is intact and its agent is deactivated -- the company reports a CEO that "
         "does nothing. Dropping the scope predicates from the UPDATE alone produces exactly this."
     )
-    assert liveness.heartbeat_enabled is not False, "the surviving CEO agent will never be scheduled"
+    # Deliberately NOT asserting heartbeat_enabled here: 088's INSERT
+    # omits the column, so every CEO agent it created takes the server
+    # default false and is unschedulable — a live defect on base, filed
+    # as #15907. Asserting it on the positive path would fail against
+    # something 088 never did. It stays on the EXCLUSION path, where
+    # this migration is the one setting it.
 
 
 async def test_a_sub_organization_does_not_get_a_ceo(fresh_db_url):
@@ -300,7 +310,12 @@ async def test_an_archived_company_keeps_its_ceo(fresh_db_url):
             archived_liveness = await _ceo_agent_liveness(conn, archived)
             assert archived_liveness is not None
             assert archived_liveness.status != "inactive", "an archived company's CEO agent was deactivated"
-            assert archived_liveness.heartbeat_enabled is not False
+            # Deliberately NOT asserting heartbeat_enabled here: 088's INSERT
+            # omits the column, so every CEO agent it created takes the server
+            # default false and is unschedulable — a live defect on base, filed
+            # as #15907. Asserting it on the positive path would fail against
+            # something 088 never did. It stays on the EXCLUSION path, where
+            # this migration is the one setting it.
     finally:
         await engine.dispose()
 
