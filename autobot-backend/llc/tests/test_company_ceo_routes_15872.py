@@ -167,7 +167,7 @@ async def test_clearing_removes_the_row(session):  # noqa: ANN001
 
 
 async def test_clearing_nothing_is_a_404(session):  # noqa: ANN001
-    """"I removed it" and "there was nothing there" must not read alike to a
+    """ "I removed it" and "there was nothing there" must not read alike to a
     client retrying a failed request."""
     company = str(uuid.uuid4())
 
