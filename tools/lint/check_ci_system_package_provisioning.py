@@ -228,7 +228,16 @@ def _inside_work_tree(root: pathlib.Path) -> bool:
         check=False,
         env=scrubbed_git_env(),
     )
-    return result.returncode == 0 and result.stdout.strip() == "true"
+    if result.returncode == 0:
+        return result.stdout.strip() == "true"
+    # Only a CONFIRMED non-checkout may fall back to walking. Treating every git
+    # failure as "not a repository" meant a transient or operational failure --
+    # git missing, a permissions error, a corrupt index -- silently turned a real
+    # checkout into an `os.walk`, which is the nested-checkout defect this whole
+    # change removes, reached through its own remedy (#15962 review).
+    if "not a git repository" in result.stderr:
+        return False
+    raise RuntimeError(f"git rev-parse --is-inside-work-tree failed in {root}: {result.stderr.strip()}")
 
 
 def _walked_test_files(root: pathlib.Path) -> list[str]:

@@ -16,6 +16,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -423,3 +424,26 @@ def test_a_real_checkout_excludes_an_untracked_test_file():
         )
     finally:
         stray.unlink()
+
+
+def test_a_non_checkout_falls_back_to_the_walk(tmp_path):
+    """A directory that is genuinely not a repository is walked, not refused."""
+    assert checker._inside_work_tree(tmp_path) is False
+
+
+def test_an_operational_git_failure_raises_instead_of_walking(monkeypatch, tmp_path):
+    """A git failure that is NOT "no repository here" must not become a walk.
+
+    Returning `False` for every non-zero exit meant a transient failure in a real
+    checkout silently produced an `os.walk` of the repository root — the
+    nested-checkout defect this change exists to remove, reached through its own
+    remedy. The distinguishing signal is git's own message.
+    """
+    import subprocess as sp
+
+    def _broken(*args, **kwargs):
+        return sp.CompletedProcess(args=[], returncode=128, stdout="", stderr="fatal: index file corrupt")
+
+    monkeypatch.setattr(checker.subprocess, "run", _broken)
+    with pytest.raises(RuntimeError, match="is-inside-work-tree"):
+        checker._inside_work_tree(tmp_path)
