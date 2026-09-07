@@ -139,3 +139,75 @@ def test_no_analyzer_still_exposes_the_removed_attribute() -> None:
             f"{class_name} sets `.config` again. Nothing reads it; #15914 removed "
             "the assignment rather than importing a symbol to satisfy it."
         )
+
+
+def _intra_package_import_problems() -> tuple[list[str], int]:
+    """``(problems, modules_examined)`` for every sibling import in this directory.
+
+    Returns the count so a caller can floor it. A sweep that examined nothing
+    reports no problems, and the two readings are indistinguishable from the
+    result alone.
+    """
+    import ast
+
+    examined = 0
+    broken: list[str] = []
+    siblings = {path.stem: path for path in _SRC.glob("*.py")}
+    for path in sorted(siblings.values()):
+        examined += 1
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.ImportFrom) or not node.module:
+                continue
+            # Siblings in THIS directory only: a same-named file inside a
+            # subpackage is not on `sys.path` and does not shadow the stdlib,
+            # which is why `architectural_analysis/types.py` is not a finding.
+            target = siblings.get(node.module.lstrip(".").split(".")[0])
+            if target is None:
+                continue
+            defined: set[str] = set()
+            for decl in ast.walk(ast.parse(target.read_text(encoding="utf-8"))):
+                if isinstance(decl, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                    defined.add(decl.name)
+                elif isinstance(decl, ast.Assign):
+                    defined |= {t.id for t in decl.targets if isinstance(t, ast.Name)}
+                elif isinstance(decl, (ast.Import, ast.ImportFrom)):
+                    defined |= {a.asname or a.name.split(".")[0] for a in decl.names}
+            broken += [
+                f"{path.name}: `from {node.module} import {alias.name}` — {target.name} defines no such name"
+                for alias in node.names
+                if alias.name != "*" and alias.name not in defined
+            ]
+    return broken, examined
+
+
+def test_the_import_sweep_examined_the_package() -> None:
+    """Runs first: the assertion below passes vacuously over an empty file list.
+
+    Floored on modules the sweep ACTUALLY read, not on modules present — an
+    earlier version counted `_SRC.glob("*.py")` a second time, which is a
+    different number that stays healthy while the sweep collapses. Mutating the
+    sweep's own glob to match nothing left that version green.
+    """
+    _, examined = _intra_package_import_problems()
+    assert examined >= 15, f"the sweep read {examined} module(s); a clean result below asserts nothing"
+
+
+def test_every_intra_package_import_names_something_that_exists() -> None:
+    """The static half, which never skips — and it is here because a skip hid a defect.
+
+    The construction tests above skip without `sklearn`, so locally they said
+    nothing about `CodeQualityDashboard`. CI has the package, ran them, and found
+    a THIRD independent reason the dashboard could not be imported:
+    `from env_analyzer import EnvironmentVariableAnalyzer`, a class that does not
+    exist — it is `EnvironmentAnalyzer`, and has been since 2025-09-18.
+
+    That is what a skip costs. It is not a neutral outcome dressed as one: a
+    green local run reported nothing wrong about a module it never touched.
+
+    This check reads the AST and imports nothing, so no absent dependency can
+    silence it. It is strictly weaker than constructing — it cannot see a runtime
+    failure — and strictly more reliable, because it runs everywhere. The two are
+    not ranked; they cover different ground, and this file needs both.
+    """
+    broken, _ = _intra_package_import_problems()
+    assert not broken, "\n  ".join(["intra-package imports naming something that does not exist:"] + broken)

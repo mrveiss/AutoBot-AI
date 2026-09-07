@@ -16,7 +16,10 @@ from typing import Any, Dict, List
 from api_consistency_analyzer import APIConsistencyAnalyzer
 from architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
 from code_analyzer import CodeAnalyzer
-from env_analyzer import EnvironmentVariableAnalyzer
+# #15914: the class is `EnvironmentAnalyzer`. The old name has never existed
+# in `env_analyzer.py` on this branch, and this was the third independent reason
+# `CodeQualityDashboard` could not be imported.
+from env_analyzer import EnvironmentAnalyzer
 from performance_analyzer import PerformanceAnalyzer
 from security_analyzer import SecurityAnalyzer
 from testing_coverage_analyzer import TestingCoverageAnalyzer
@@ -86,7 +89,7 @@ class CodeQualityDashboard:
 
         # Initialize all analyzers
         self.code_analyzer = CodeAnalyzer(self.redis_client)
-        self.env_analyzer = EnvironmentVariableAnalyzer(self.redis_client)
+        self.env_analyzer = EnvironmentAnalyzer(self.redis_client)
         self.performance_analyzer = PerformanceAnalyzer(self.redis_client)
         self.security_analyzer = SecurityAnalyzer(self.redis_client)
         self.api_analyzer = APIConsistencyAnalyzer(self.redis_client)
