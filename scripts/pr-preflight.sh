@@ -474,10 +474,6 @@ else
   # or `repo_tests/**`, so editing any of them ran code-quality in CI while the
   # preflight reported "no matching paths changed" three times.
   #
-  # This is a deliberate glob->regex translation of that `backend` list, one arm
-  # per entry and in the same order.  `pr-preflight_test.sh` asserts every entry
-  # in the filter file is represented here, so adding a glob there fails loudly
-  # instead of silently narrowing the preflight.
   # Derived from the filter file AT RUNTIME -- there is no second copy to drift.
   # The translation is explicit because dorny/paths-filter globs are anchored at
   # the repo root:  `a/**` -> `^a/` (prefix),  a bare `a/b.c` -> `^a/b\.c$`
@@ -498,10 +494,14 @@ for g in globs:
 print("|".join(arms))
 CQEOF
 )"
+  # Fail THIS check, never the script. PyYAML is not declared in requirements
+  # and the script deliberately supports a box that has not built the venv, so a
+  # missing import must not take the changed-file scan, the content checks and
+  # the summary down with it -- that would trade a narrow gap for a total one.
   if [ -z "${CQ_PATHS}" ]; then
-    echo "FATAL: could not derive the code-quality path set from .github/filters/code-quality-paths.yml" >&2
-    exit 1
-  fi
+    skip_check "code-quality (all three script gates)" \
+      "cannot derive the path set from .github/filters/code-quality-paths.yml (PyYAML missing?) -- these three were NOT checked"
+  else
 
   require_check "code-quality (env var registry)" \
     "$CQ_PATHS" \
@@ -514,6 +514,7 @@ CQEOF
   require_check "code-quality (doc references)" \
     "$CQ_PATHS" \
     "$PY" pipeline-scripts/check-doc-references.py
+  fi
 
   # Several workflows gate themselves on .github/filters/*.yml; this verifies
   # the filters still name paths that exist, which is how a required context
@@ -551,7 +552,18 @@ CQEOF
 
   # ---- gates this box cannot reproduce -----------------------------------
   if [ -n "${AUTOBOT_MIGRATION_TEST_ADMIN_URL:-}" ]; then
-    note "migration-matrix -- AUTOBOT_MIGRATION_TEST_ADMIN_URL is set; run the suite in autobot-backend/tests/migrations/"
+    # A bare `note` does not touch FAILED, so the preflight could exit 0 with
+    # this gate unchecked -- "configured" read as "verified". Run it under
+    # --full (it is a suite, minutes not seconds); otherwise say plainly that
+    # it was not run, rather than that it was available.
+    if [ "$FULL" = "1" ]; then
+      require_check "migration-matrix" \
+        'autobot-backend/(models|migrations)/|alembic' \
+        "$PY" -m pytest autobot-backend/tests/migrations/ -q
+    else
+      skip_check "migration-matrix" \
+        "configured but NOT run -- it is a suite; re-run with --full, or: pytest autobot-backend/tests/migrations/"
+    fi
   else
     skip_check "migration-matrix" "needs a live PostgreSQL (set AUTOBOT_MIGRATION_TEST_ADMIN_URL)"
   fi
