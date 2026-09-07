@@ -135,8 +135,10 @@ answer you already have, which the detector must find.
     assert found_control, "detector does not find the known instance — result below is meaningless"
 
 This is not a floor on the count. A floor on the count is a claim about the
-*result*, so it breaks the moment a population is legitimately empty — which is
-every ratchet on the day it is introduced. A known positive is a claim about the
+*result*, so it breaks the moment a population is legitimately empty. Not every
+ratchet starts empty — the file-size baseline on this page was introduced with
+**497** entries — but one that does is exactly the case a count floor rejects,
+and it rejects it for having nothing wrong with it. A known positive is a claim about the
 *instrument*, so it holds at any population size including zero, and it is the
 only one of the two that distinguishes **"nothing is wrong"** from **"nothing
 was measured"**.
@@ -162,8 +164,10 @@ check to the measurement" from a diagnosis into something you can actually do.
 survived, the detector was correct, and the probe was the broken thing. Re-run
 against the whole block it failed 1 of 12.
 
-A known positive proves the detector **can** fire. Verifying the mutation proves
-the probe **did** what it claimed. Both exist because an instrument's output
+A known positive proves the detector **can** fire. It does **not** prove that a
+given probe did what it claimed — those are separate facts and only the pair
+covers both directions. Verifying the mutation proves the probe **did** what it
+claimed. Both exist because an instrument's output
 cannot distinguish *"the subject is broken"* from *"I measured wrong"* — and a
 surviving mutant is the more dangerous of the two, because it presents as a
 finding rather than as a silence.
