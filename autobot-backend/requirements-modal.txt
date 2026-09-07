@@ -13,4 +13,4 @@
 #
 # To enable:
 #   pip install -r requirements-modal.txt
-modal>=1.0.0
+modal>=1.5.5

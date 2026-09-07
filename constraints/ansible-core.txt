@@ -26,4 +26,4 @@
 #
 # tests/check_ansible_core_pinned.py fails the suite when the interpreter CI
 # actually invokes disagrees with this file, so the pin cannot go stale unread.
-ansible-core==2.17.14
+ansible-core==2.21.3
