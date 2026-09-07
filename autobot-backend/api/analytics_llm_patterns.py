@@ -77,11 +77,8 @@ SIMPLE_PROMPT_CATEGORIES = {
 }
 
 
-# Model costs per 1M tokens (USD) — single source of truth in
-# autobot_shared.model_pricing.MODEL_PRICING_PER_1M_TOKENS (#3528, #15912).
-from autobot_shared.model_pricing import MODEL_COSTS_PER_1M_TOKENS  # noqa: E402
-
-MODEL_COSTS = MODEL_COSTS_PER_1M_TOKENS
+# Model costs per 1M tokens (USD) — SSOT is autobot_shared.model_pricing (#3528, #15912).
+from autobot_shared.model_pricing import MODEL_COSTS_PER_1M_TOKENS as MODEL_COSTS  # noqa: E402,F401
 
 # Pattern detection rules for prompt categorization
 PROMPT_PATTERNS = {
