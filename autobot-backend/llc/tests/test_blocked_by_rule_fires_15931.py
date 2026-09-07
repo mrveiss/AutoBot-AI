@@ -154,3 +154,59 @@ async def test_another_companys_blocker_does_not_refuse(session):  # noqa: ANN00
     item = await WorkItemService().transition_status(session, str(blocked.id), WorkItemStatus.IN_PROGRESS)
 
     assert item.status == WorkItemStatus.IN_PROGRESS, "another company's relation refused this company's transition"
+
+
+async def test_a_cross_company_transition_is_refused(session):  # noqa: ANN001
+    """#15952: the row loaded by id alone, so `company_id` gated the blocker
+    lookup and nothing else.
+
+    `agent_api`'s docstring promises a 404 for another company's item and
+    `work_items.py` guards itself, but the service enforced nothing — so the
+    agent route, which passes `company_id`, transitioned other companies' items.
+    """
+    mine, theirs = str(uuid.uuid4()), str(uuid.uuid4())
+    theirs_item = await _item(session, theirs, status=WorkItemStatus.READY, title="not mine")
+
+    with pytest.raises(ValueError, match="not found"):
+        await WorkItemService().transition_status(
+            session, str(theirs_item.id), WorkItemStatus.IN_PROGRESS, company_id=mine
+        )
+
+    await session.refresh(theirs_item)
+    assert theirs_item.status == WorkItemStatus.READY.value, "another company's item was transitioned"
+
+
+async def test_the_blocker_lookup_uses_the_items_company_not_the_callers(session):  # noqa: ANN001
+    """The precedence half, and it needs the ownership check to be reachable.
+
+    `cid = company_id or str(item.company_id)` preferred the CALLER's company, so
+    a blocker lookup for a cross-company item asked about the wrong company,
+    found no relations, and waved the transition through. Fixing only the
+    ownership check would hide this rather than fix it — which is why both
+    halves land together.
+
+    Here the caller legitimately owns the item, and the blockers are recorded
+    under the item's company. Reading the caller's company would still find them
+    (they are the same), so this asserts the value the lookup receives.
+    """
+    company = str(uuid.uuid4())
+    blocker = await _item(session, company, status=WorkItemStatus.READY, title="blocker-x")
+    blocked = await _item(session, company, status=WorkItemStatus.BLOCKED, title="blocked-x")
+    await _block(session, company, blocker, blocked)
+
+    seen: list = []
+
+    class _Recording:
+        async def has_unresolved_blockers(self, _session, _wid, cid):
+            seen.append(cid)
+            return False
+
+    await WorkItemService().transition_status(
+        session,
+        str(blocked.id),
+        WorkItemStatus.IN_PROGRESS,
+        company_id=company,
+        relation_svc=_Recording(),
+    )
+
+    assert seen == [str(blocked.company_id)], "the blocker lookup was given a company other than the item's"

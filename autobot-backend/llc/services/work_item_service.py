@@ -848,7 +848,8 @@ class WorkItemService(LLCServiceBase):
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
         item = result.scalar_one_or_none()
-        if item is None:
+        # #15952: loaded by id alone; same message as missing, to disclose nothing.
+        if item is None or (company_id is not None and str(item.company_id) != str(company_id)):
             raise ValueError(f"Work item {work_item_id} not found")
 
         current = WorkItemStatus(item.status)
@@ -859,13 +860,12 @@ class WorkItemService(LLCServiceBase):
                 f"Allowed: {[s.value for s in allowed]}"
             )
 
-        # GH#8252: block BLOCKED→IN_PROGRESS while unresolved blockers remain.
-        # #15931 ungated this — it required `relation_svc`, which nothing outside
-        # its own tests passed, so it had never fired. An optional collaborator is
-        # off by default. Full account in `test_blocked_by_rule_fires_15931.py`.
+        # GH#8252: block BLOCKED→IN_PROGRESS while blockers remain. #15931 ungated
+        # this — it required `relation_svc`, which nothing outside its own tests
+        # passed, so it had never fired. See test_blocked_by_rule_fires_15931.py.
         if current == WorkItemStatus.BLOCKED and new_status == WorkItemStatus.IN_PROGRESS:
             svc = relation_svc if relation_svc is not None else WorkItemRelationService()
-            cid = company_id or str(item.company_id)
+            cid = str(item.company_id)  # the ITEM's, not the caller's (#15952)
             if await svc.has_unresolved_blockers(session, work_item_id, cid):
                 raise InvalidTransition("Cannot move to in_progress: item has unresolved blocked_by relations")
 
