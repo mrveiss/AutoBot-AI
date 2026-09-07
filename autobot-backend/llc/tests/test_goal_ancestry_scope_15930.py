@@ -229,3 +229,49 @@ async def test_the_route_still_refuses_a_non_admin_from_another_org(session):  #
     response = _client(session, other_org, is_admin=False).get(f"/api/llc/goals/{leaf.id}/ancestors")
 
     assert response.status_code == 404, "a non-admin reached another org's goal"
+
+
+async def test_the_route_omits_a_foreign_ancestor_for_the_childs_own_owner(session):  # noqa: ANN001
+    """#15930 criterion 2: the leak scenario, at the boundary a caller sees.
+
+    Everything above proves this at the service layer. That is the same layer the
+    defect hid behind — `get_ancestors` looked scoped because a caller *could*
+    pass `company_id`, and the route did not. So the scenario is asserted here
+    through the mounted router, as an ordinary tenant asking for its own goal's
+    ancestry, with the assertion on the RESPONSE BODY rather than on a log line
+    or a return value.
+
+    The seeded shape is the pre-guard state #13704 stopped anyone creating new:
+    a goal whose parent belongs to another company. `create` refuses that edge
+    today, which is why `_goal` inserts directly — an installation that predates
+    the guard can still hold one.
+    """
+    mine, theirs = str(uuid.uuid4()), str(uuid.uuid4())
+    foreign_root = await _goal(session, theirs, "their objective", level=GoalLevel.OBJECTIVE)
+    my_leaf = await _goal(session, mine, "my key result", parent=foreign_root, level=GoalLevel.KEY_RESULT)
+
+    response = _client(session, mine, is_admin=False).get(f"/api/llc/goals/{my_leaf.id}/ancestors")
+
+    assert response.status_code == 200, "the child's own owner must reach its own goal"
+    titles = [g["title"] for g in response.json()]
+    assert titles == [], (
+        "another company's goal was returned in the ancestry response for a caller "
+        f"who owns only the child: {titles}"
+    )
+
+
+async def test_the_route_returns_an_own_company_chain_in_full(session):  # noqa: ANN001
+    """The contrast that stops the assertion above being satisfied by returning nothing.
+
+    An empty list is the correct answer to the foreign-parent case and the wrong
+    answer to this one. Without both, a route that always returned `[]` would
+    pass the criterion.
+    """
+    mine = str(uuid.uuid4())
+    root = await _goal(session, mine, "my objective", level=GoalLevel.OBJECTIVE)
+    leaf = await _goal(session, mine, "my key result", parent=root, level=GoalLevel.KEY_RESULT)
+
+    response = _client(session, mine, is_admin=False).get(f"/api/llc/goals/{leaf.id}/ancestors")
+
+    assert response.status_code == 200
+    assert [g["title"] for g in response.json()] == ["my objective"]
