@@ -49,6 +49,7 @@ from ..models.label import LLCWorkItemLabel
 from ..models.membership import LLCCompanyMembership
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from .base import LLCServiceBase
+from .work_item_relations import WorkItemRelationService
 
 logger = logging.getLogger(__name__)
 
@@ -843,8 +844,6 @@ class WorkItemService(LLCServiceBase):
         relation_svc: Optional[Any] = None,
     ) -> LLCWorkItem:
         """Transition a work item to a new status, enforcing the state machine."""
-        from .work_item_relations import WorkItemRelationService
-
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
