@@ -153,3 +153,123 @@ async def test_a_priced_free_model_still_accrues_nothing(session):  # noqa: ANN0
 
     assert cost == Decimal("0")
     assert await _spent(session, agent, company) == Decimal("0")
+
+
+# ---------------------------------------------------------------------------
+# Through the route handler, not just the service (#15859)
+# ---------------------------------------------------------------------------
+#
+# The service tests above pass against a route that crashes before reaching it.
+# That is not hypothetical: the first version of this fix dropped
+# `_agent_context(request)` from both handlers, so every request would have
+# raised NameError -- and every test here still passed, because none of them
+# entered a handler.
+#
+# The PR named that gap as a limitation ("nothing issues a request through the
+# mounted router"), honestly and correctly, and the defect landed in it. A
+# proxy shipped with its blind spot named is honest; it is still a blind spot.
+#
+# These call the handler with a mocked Request and a REAL session factory, so
+# the body runs end to end and `budget_spent` actually moves. Same shape as
+# `test_agent_context_tenant_scope.py`, which is the existing precedent for
+# exercising these handlers without an HTTP stack.
+
+
+def _request(agent_id: str, company_id: str):
+    from unittest.mock import MagicMock
+
+    req = MagicMock()
+    req.state.agent_id = agent_id
+    req.state.company_id = company_id
+    return req
+
+
+def _factory_yielding(session: AsyncSession):
+    """Stand-in for `get_async_session_factory` that hands back the test session.
+
+    Two levels of indirection, matching the production shape: the handler calls
+    `get_async_session_factory()` to obtain a factory, then calls *that* to get
+    a context manager. Patching with the inner lambda directly is one level off
+    and fails with `AsyncContextDecorator.__call__() missing 'func'`.
+    """
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _cm():
+        yield session
+
+    def _get_factory():
+        return lambda: _cm()
+
+    return _get_factory
+
+
+async def test_the_cost_event_route_moves_the_budget(session):  # noqa: ANN001
+    """Through the handler: the assertion the service tests cannot make.
+
+    A handler that raises before calling the service passes every service test
+    in this file and fails this one.
+    """
+    from unittest.mock import patch
+
+    from llc.api import agent_api
+
+    agent, company = "agent-route", str(uuid.uuid4())
+    await _seed_budget(session, agent, company)
+
+    with patch("user_management.database.get_async_session_factory", new=_factory_yielding(session)):
+        result = await agent_api.ingest_cost_event(
+            agent_api.CostEvent(model=DEFAULT_MODEL, tokens_in=1_000_000, tokens_out=0),
+            _request(agent, company),
+        )
+
+    assert result["recorded"] is True
+    assert await _spent(session, agent, company) > Decimal("0"), (
+        "the route returned recorded=True and budget_spent did not move — which is the "
+        "defect #15859 describes, reintroduced"
+    )
+
+
+async def test_the_cost_event_route_refuses_an_unpriced_model(session):  # noqa: ANN001
+    """422 rather than a silent zero, asserted at the boundary a caller sees."""
+    from unittest.mock import patch
+
+    from fastapi import HTTPException
+
+    from llc.api import agent_api
+
+    agent, company = "agent-route-2", str(uuid.uuid4())
+    await _seed_budget(session, agent, company)
+
+    with patch("user_management.database.get_async_session_factory", new=_factory_yielding(session)):
+        with pytest.raises(HTTPException) as exc:
+            await agent_api.ingest_cost_event(
+                agent_api.CostEvent(model="a-model-nobody-priced", tokens_in=10, tokens_out=10),
+                _request(agent, company),
+            )
+
+    assert exc.value.status_code == 422
+    assert await _spent(session, agent, company) == Decimal("0")
+
+
+async def test_the_cost_event_route_requires_agent_context(session):  # noqa: ANN001
+    """401 when middleware injected nothing.
+
+    Also the regression test for the handler losing its `_agent_context` call:
+    without it the body raises NameError rather than this HTTPException.
+    """
+    from unittest.mock import MagicMock, patch
+
+    from fastapi import HTTPException
+
+    from llc.api import agent_api
+
+    req = MagicMock()
+    req.state.agent_id = None
+    req.state.company_id = None
+
+    with patch("user_management.database.get_async_session_factory", new=_factory_yielding(session)):
+        with pytest.raises(HTTPException) as exc:
+            await agent_api.ingest_cost_event(agent_api.CostEvent(model=DEFAULT_MODEL, tokens_in=1, tokens_out=1), req)
+
+    assert exc.value.status_code == 401

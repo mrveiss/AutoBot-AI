@@ -91,6 +91,7 @@ async def update_work_item_status(item_id: uuid.UUID, body: StatusUpdate, reques
     from ..models.enums import WorkItemStatus
     from ..services.work_item_service import WorkItemService
 
+    _, company_id = _agent_context(request)
     try:
         new_status = WorkItemStatus(body.status)
     except ValueError as exc:
@@ -140,6 +141,7 @@ async def ingest_cost_event(body: CostEvent, request: Request) -> Dict[str, Any]
     from ..exceptions import BudgetExhausted, UnpricedModel
     from ..services.budget import BudgetService
 
+    agent_id, company_id = _agent_context(request)
     factory = get_async_session_factory()
     try:
         async with factory() as session:
