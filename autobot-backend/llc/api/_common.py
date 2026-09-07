@@ -15,12 +15,10 @@ query. A client-supplied actor let the audit trail's identity and its
 USER/SYSTEM discriminator be whatever the caller typed (#13969 review M1).
 """
 
-
 from __future__ import annotations
 
 import uuid
 from typing import Optional
-
 
 from fastapi import HTTPException, status
 
@@ -72,9 +70,9 @@ async def agent_node_uuid(agent_id: str, company_id: str) -> Optional[uuid.UUID]
     which reads as "this agent has no node" rather than as a broken query.
     """
     from sqlalchemy import select as _select
-    from user_management.database import get_async_session_factory
 
     from models.agent_org import AgentOrgNode
+    from user_management.database import get_async_session_factory
 
     factory = get_async_session_factory()
     async with factory() as session:

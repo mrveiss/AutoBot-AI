@@ -324,6 +324,7 @@ async def report_heartbeat(body: HeartbeatReport, request: Request) -> Dict[str,
     not be able to close out another company's run by guessing or replaying one.
     """
     from sqlalchemy import update
+
     from user_management.database import get_async_session_factory
 
     from ..models.enums import LLCRunStatus

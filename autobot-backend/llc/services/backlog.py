@@ -69,11 +69,7 @@ class BacklogService(LLCServiceBase):
         # never been reordered keep their natural priority/age ordering), then
         # fall back to priority rank, then creation date.  This makes
         # bulk_reorder's writes immediately observable in list responses (H3).
-        q = (
-            q.order_by(*backlog_order())
-            .limit(limit)
-            .offset(offset)
-        )
+        q = q.order_by(*backlog_order()).limit(limit).offset(offset)
         rows = (await session.execute(q)).scalars().all()
         return rows, total
 

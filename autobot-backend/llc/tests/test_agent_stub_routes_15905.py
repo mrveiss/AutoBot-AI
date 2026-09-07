@@ -130,7 +130,6 @@ async def _seed_item(
     needs `ready` items in a chosen order.
     """
     from autobot_shared.singleton_factory import lazy_singleton
-
     from llc.services.work_item_service import WorkItemService
 
     item = await lazy_singleton(WorkItemService)().create(
@@ -219,7 +218,7 @@ async def test_the_next_route_will_not_reach_into_another_company(session):  # n
 
 
 async def test_the_next_route_honours_the_backlog_ordering(session):  # noqa: ANN001
-    """"Next" must be the backlog's next, not an arbitrary row.
+    """ "Next" must be the backlog's next, not an arbitrary row.
 
     The point of reusing `BacklogService`'s ordering is that the agent gets what
     a human sees at the top of the same list. Seeding in the wrong order is what
@@ -264,8 +263,10 @@ async def test_the_comment_route_stores_a_readable_comment(session):  # noqa: AN
 
     assert result["recorded"] is True
     stored = (
-        await session.execute(select(LLCWorkItemComment).where(LLCWorkItemComment.work_item_id == item.id))
-    ).scalars().all()
+        (await session.execute(select(LLCWorkItemComment).where(LLCWorkItemComment.work_item_id == item.id)))
+        .scalars()
+        .all()
+    )
     assert len(stored) == 1, "the route reported the comment recorded and nothing was stored"
     assert stored[0].body == "the agent said this"
     assert str(stored[0].id) == result["comment_id"]
@@ -296,8 +297,10 @@ async def test_the_comment_route_refuses_another_companys_item(session):  # noqa
 
     assert exc.value.status_code == 404
     rows = (
-        await session.execute(select(LLCWorkItemComment).where(LLCWorkItemComment.work_item_id == item.id))
-    ).scalars().all()
+        (await session.execute(select(LLCWorkItemComment).where(LLCWorkItemComment.work_item_id == item.id)))
+        .scalars()
+        .all()
+    )
     assert rows == [], "a comment was stored on another company's work item"
 
 
@@ -338,9 +341,7 @@ async def _run_status(session: AsyncSession, run_id: uuid.UUID) -> tuple:
     """
     from llc.models.heartbeat_run import LLCHeartbeatRun
 
-    row = (
-        await session.execute(select(LLCHeartbeatRun).where(LLCHeartbeatRun.id == run_id))
-    ).scalar_one_or_none()
+    row = (await session.execute(select(LLCHeartbeatRun).where(LLCHeartbeatRun.id == run_id))).scalar_one_or_none()
     if row is None:
         return (None, None)
     await session.refresh(row)
