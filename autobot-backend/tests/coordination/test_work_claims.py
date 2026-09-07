@@ -187,9 +187,7 @@ async def test_a_second_task_of_the_same_agent_is_not_the_same_holder(redis):
 @pytest.mark.asyncio
 async def test_concurrent_overlapping_acquires_yield_exactly_one_winner(redis):
     scopes = ["path:a", "path:a/b", "path:a/b/c", "path:a/b/c/d"]
-    results = await asyncio.gather(
-        *(_acquire(s, f"agent-{i}", f"t{i}") for i, s in enumerate(scopes))
-    )
+    results = await asyncio.gather(*(_acquire(s, f"agent-{i}", f"t{i}") for i, s in enumerate(scopes)))
     assert sum(isinstance(r, Claim) for r in results) == 1
 
 
