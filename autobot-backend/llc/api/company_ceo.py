@@ -92,9 +92,7 @@ async def _explain_refusal(session: AsyncSession, body: "CEODesignationWrite", o
 
     from models.agent_org import AgentOrgNode
 
-    node = (
-        await session.execute(_select(AgentOrgNode.company_id).where(AgentOrgNode.id == body.holder_id))
-    ).first()
+    node = (await session.execute(_select(AgentOrgNode.company_id).where(AgentOrgNode.id == body.holder_id))).first()
     if node is None:
         return f"agent {body.holder_id} does not exist"
     if node[0] is None:
