@@ -65,7 +65,8 @@ class BacklogService(LLCServiceBase):
         count_q = select(func.count()).select_from(q.subquery())
         total = (await session.execute(count_q)).scalar_one()
 
-        # Order by explicit backlog_position first (NULLS LAST — items that have
+        # Order by explicit backlog_position first (the NULLS LAST branch is dead:
+        # the column is nullable=False default 0 — see `backlog_order()`) — items that have
         # never been reordered keep their natural priority/age ordering), then
         # fall back to priority rank, then creation date.  This makes
         # bulk_reorder's writes immediately observable in list responses (H3).
