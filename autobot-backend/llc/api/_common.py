@@ -142,11 +142,18 @@ def agent_context(request: Request) -> tuple[str, str]:
     return agent_id, company_id
 
 
-async def assert_item_in_company(item_id: str, company_id: str) -> None:
+async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
     """GH#12156: 404 unless the work item belongs to the caller's company.
 
     KB collections are keyed by work_item_id alone, so tenant isolation must be
     enforced at the handler by verifying ownership before any KB read.
+
+    **Returns the parsed id** so a caller needing the UUID uses the one this
+    validated rather than re-parsing. `report_heartbeat` did re-parse, and was
+    safe only because this call happened to run first -- an invariant held by
+    statement order and nothing else, invisible to whoever next edits the
+    function. Returning the value removes the ordering dependency instead of
+    documenting it.
     """
     from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
@@ -163,7 +170,7 @@ async def assert_item_in_company(item_id: str, company_id: str) -> None:
     # The guard went on the input that looked dangerous, not the one that was
     # unchecked.
     try:
-        uuid.UUID(str(item_id))
+        parsed = uuid.UUID(str(item_id))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=f"work_item_id {item_id!r} is not a UUID") from exc
 
@@ -173,3 +180,4 @@ async def assert_item_in_company(item_id: str, company_id: str) -> None:
         item = await svc.get(session, item_id)
     if item is None or str(item.company_id) != str(company_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    return parsed

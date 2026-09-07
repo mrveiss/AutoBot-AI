@@ -314,15 +314,16 @@ async def report_heartbeat(body: HeartbeatReport, request: Request) -> Dict[str,
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=f"run_id {body.run_id!r} is not a UUID") from exc
 
+    item_uuid: Optional[uuid.UUID] = None
     if body.work_item_id is not None:
-        await assert_item_in_company(body.work_item_id, company_id)
+        item_uuid = await assert_item_in_company(body.work_item_id, company_id)
 
     values: Dict[str, Any] = {
         "status": status.value,
         "finished_at": datetime.now(tz=timezone.utc),
     }
-    if body.work_item_id is not None:
-        values["work_item_id"] = uuid.UUID(body.work_item_id)
+    if item_uuid is not None:
+        values["work_item_id"] = item_uuid
 
     factory = get_async_session_factory()
     async with factory() as session:
