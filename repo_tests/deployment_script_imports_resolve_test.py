@@ -132,7 +132,32 @@ def _resolves(module: str, script_dir: Path | None = None) -> bool:
     roots = list(_IMPORT_ROOTS) + ([script_dir] if script_dir else [])
     for root in roots:
         base = root / Path(*module.split("."))
+        if _traverses_a_symlink(root, base):
+            # `autobot-backend/backend -> .` is a WSL2 shim the post-checkout hook
+            # creates (#886), so `backend.x` aliases `autobot-backend/x`. It exists
+            # in every worktree and not in the primary checkout, which made this
+            # guard's NEGATIVE control invert depending on where it ran (#15986).
+            #
+            # An alias is not a package. Resolution through a symlinked component
+            # is not a module this repository provides, so it does not count --
+            # rather than exempting the one module that exposed it, which would
+            # stop the control asserting anything.
+            continue
         if base.with_suffix(".py").exists() or (base / "__init__.py").exists():
+            return True
+    return False
+
+
+def _traverses_a_symlink(root: Path, base: Path) -> bool:
+    """Whether reaching *base* from *root* passes through a symlinked directory."""
+    try:
+        parts = base.relative_to(root).parts
+    except ValueError:
+        return False
+    current = root
+    for part in parts[:-1]:
+        current = current / part
+        if current.is_symlink():
             return True
     return False
 
