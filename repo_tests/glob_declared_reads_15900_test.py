@@ -72,6 +72,13 @@ def _is_path_like(candidate: str) -> bool:
     if "[" in candidate and "/" not in candidate and not _SUFFIX_GLOB.match(candidate):
         return False
     if "/" in candidate:
+        # `..` and `.` are not repo-relative (#15998 review). `"../*.py"` passed
+        # because `REPO_ROOT / ".."` IS a directory — the check answered "does
+        # this resolve to something" when the question was "is this a path
+        # inside this repository". A traversal component is checked BEFORE the
+        # directory test, because the directory test cannot distinguish them.
+        if any(part in {".", ".."} for part in candidate.split("/")):
+            return False
         return (REPO_ROOT / candidate.split("/", 1)[0]).is_dir()
     return bool(_SUFFIX_GLOB.match(candidate))
 
@@ -372,3 +379,18 @@ def test_the_record_cannot_rediscover_itself() -> None:
     declarations, _ = _declared()
     own = {g for g, guards in declarations.items() if any(Path(__file__).name in x for x in guards)}
     assert not own, f"this module's own strings entered the population: {sorted(own)}"
+
+
+@pytest.mark.parametrize(
+    "source",
+    ['x = "../*.py"', 'x = "./*.py"', 'x = "scripts/../../*.py"'],
+    ids=["parent", "current", "traversal-after-a-real-dir"],
+)
+def test_the_detector_rejects_paths_that_leave_the_repository(source: str) -> None:
+    """`REPO_ROOT / ".."` is a directory, so the `is_dir()` test accepted it (#15998).
+
+    The check answered "does this resolve to something" when the question was
+    "is this a path inside this repository" — and the third case shows why the
+    component scan cannot be limited to the first segment.
+    """
+    assert glob_declarations_in(source) == set()
