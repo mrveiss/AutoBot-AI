@@ -61,8 +61,19 @@ async def agent_node_uuid(agent_id: str, company_id: str) -> Optional[uuid.UUID]
     company's comment to another company's agent. Nothing would look wrong: the
     query returns exactly one row.
 
-    ``None`` when the agent has no node — an API key can outlive its node, and a
-    comment from an agent that no longer exists is still a comment worth storing.
+    ``None`` has **two** causes and the caller cannot tell them apart:
+
+    * the agent has no node — an API key can outlive its node, and a comment
+      from an agent that no longer exists is still worth storing;
+    * the node exists but its ``company_id`` is NULL. ``AgentOrgNode.company_id``
+      is ``nullable=True`` with nothing backfilling it, so on a pre-backfill
+      deployment a perfectly healthy agent resolves to ``None`` here and its
+      comment is stored **authorless**. Same shape as a correct company predicate
+      against a column nobody has populated (#15858, #15864).
+
+    Storing the comment either way is deliberate — losing the comment would be
+    worse than losing its author — but the second cause is a data gap, not an
+    absent agent, and this docstring named only the first.
 
     Core `select`, not `text()`: comparing a `uuid` column to a bound string is
     dialect-fragile. PostgreSQL rejects `uuid = text` outright, and SQLite stores

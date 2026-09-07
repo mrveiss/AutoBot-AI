@@ -35,11 +35,42 @@ router = APIRouter(prefix="/agent", tags=["llc-agent"])
 
 
 def _agent_context(request: Request) -> tuple[str, str]:
-    """Extract agent_id and company_id from middleware-injected state."""
+    """Extract agent_id and company_id from middleware-injected state.
+
+    **`company_id` is validated as a UUID here, and that is not belt-and-braces
+    (#15905).** Five call sites in this file do `uuid.UUID(company_id)` against a
+    UUID column, and the value is not constrained to be one:
+    `LLCApiKey.company_id` is `mapped_column(String(255))`, this function checked
+    truthiness only, and the auth middleware's own test asserts
+    `req.state.company_id == "co-1"`. So a malformed company reached
+    `uuid.UUID()` and raised `ValueError` — a 500 for something that is not a
+    server fault.
+
+    That is the defect this PR fixes for `agent_id`, on the other element of the
+    same tuple. The comment on `get_next_work_item` names the class; this is the
+    other instance of it, two lines down, and I committed it while writing that
+    comment.
+
+    Validated **here** rather than at the five use sites because this is where
+    the value enters. A guard per site is a guard the sixth site will not have —
+    and two of the five (`:544`, `:570`) predate this PR, so per-site fixing
+    would have left them.
+
+    401 rather than 422: a well-formed request carrying an auth context the auth
+    layer built wrong is not the caller's error to correct. Every LLC table but
+    `llc_agent_api_keys` keys company on a UUID column, so a non-UUID company
+    could never match a row anyway — this reports that instead of failing later
+    and elsewhere.
+    """
     agent_id = getattr(request.state, "agent_id", None)
     company_id = getattr(request.state, "company_id", None)
     if not agent_id or not company_id:
         raise HTTPException(status_code=401, detail="Agent context not injected")
+    try:
+        uuid.UUID(str(company_id))
+    except ValueError as exc:
+        logger.warning("Agent context for %s carries a non-UUID company: %r", agent_id, company_id)
+        raise HTTPException(status_code=401, detail="Agent context carries a malformed company") from exc
     return agent_id, company_id
 
 
@@ -53,6 +84,20 @@ async def _assert_item_in_company(item_id: str, company_id: str) -> None:
     from user_management.database import get_async_session_factory
 
     from ..services.work_item_service import WorkItemService
+
+    # `WorkItemService.get` does `uuid.UUID(str(work_item_id))` unguarded, and
+    # `item_id` is a client-supplied body field on both callers. Without this a
+    # malformed id is a `ValueError` -> 500, for a request the caller can fix.
+    #
+    # Third instance of the class this PR names in `get_next_work_item`'s
+    # comment, found by grepping the file for the class rather than by review:
+    # `run_id` had an explicit 422 two lines from `work_item_id` that had none.
+    # The guard went on the input that looked dangerous, not the one that was
+    # unchecked.
+    try:
+        uuid.UUID(str(item_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"work_item_id {item_id!r} is not a UUID") from exc
 
     factory = get_async_session_factory()
     async with factory() as session:

@@ -445,3 +445,74 @@ async def test_no_route_still_announces_itself_as_a_stub(session):  # noqa: ANN0
 
     source = inspect.getsource(agent_api)
     assert "Not implemented (stub)" not in source, "a stub marker remains on a route that now performs its work"
+
+
+async def test_a_non_uuid_company_in_the_agent_context_is_a_401_not_a_500(session):  # noqa: ANN001
+    """The other element of the same tuple (#15905).
+
+    This PR's whole subject is that `_agent_context` yields values the code then
+    feeds to `uuid.UUID()` unguarded. It fixed that for `agent_id` and left
+    `company_id`, which is *less* constrained: `LLCApiKey.company_id` is
+    `String(255)`, `_agent_context` checked truthiness only, and the auth
+    middleware's own test asserts `company_id == "co-1"`.
+
+    So a malformed company reached `uuid.UUID()` and raised `ValueError` — a 500
+    for something that is not a server fault, which is the exact sentence in the
+    comment on `get_next_work_item`.
+    """
+    from fastapi import HTTPException
+
+    from llc.api import agent_api
+
+    with pytest.raises(HTTPException) as exc:
+        agent_api._agent_context(_request("agent-bad-co", "co-1"))
+
+    assert exc.value.status_code == 401
+    assert "malformed company" in str(exc.value.detail)
+
+
+async def test_a_well_formed_company_still_passes(session):  # noqa: ANN001
+    """The contrast case. Without it, a `_agent_context` that rejected every
+    company would satisfy the assertion above and break every other route."""
+    from llc.api import agent_api
+
+    company = str(uuid.uuid4())
+    agent_id, returned = agent_api._agent_context(_request("agent-ok", company))
+
+    assert (agent_id, returned) == ("agent-ok", company)
+
+
+async def test_a_malformed_work_item_id_is_422_on_both_routes(session):  # noqa: ANN001
+    """The third instance of this PR's own class, on client-supplied input.
+
+    `WorkItemService.get` converts with `uuid.UUID(str(...))` and no guard, so a
+    malformed body field was a 500 on both `post_comment` and `report_heartbeat`
+    — while `run_id`, two lines away in the same handler, had an explicit 422.
+    The guard was on the input that looked dangerous rather than the one that
+    was unchecked.
+
+    Both routes asserted together because they share `_assert_item_in_company`:
+    fixing one and leaving the other is the shape this PR keeps finding.
+    """
+    from fastapi import HTTPException
+
+    from llc.api import agent_api
+
+    company, agent = str(uuid.uuid4()), "agent-badid"
+    run_id = await _seed_run(session, company, agent)
+
+    with pytest.raises(HTTPException) as via_comment:
+        await agent_api.post_comment(
+            agent_api.CommentBody(work_item_id="not-a-uuid", body="x"),
+            _request(agent, company),
+        )
+    assert via_comment.value.status_code == 422
+
+    with pytest.raises(HTTPException) as via_heartbeat:
+        await agent_api.report_heartbeat(
+            agent_api.HeartbeatReport(
+                run_id=str(run_id), status=LLCRunStatus.COMPLETED.value, work_item_id="not-a-uuid"
+            ),
+            _request(agent, company),
+        )
+    assert via_heartbeat.value.status_code == 422
