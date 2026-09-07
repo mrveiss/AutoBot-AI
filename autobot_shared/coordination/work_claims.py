@@ -61,11 +61,11 @@ from __future__ import annotations
 import json
 import re
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 from datetime import timedelta
 from enum import Enum
-from collections.abc import AsyncIterator
 from typing import Any
 
 from autobot_shared.env_utils import env_int_clamped
@@ -382,9 +382,7 @@ async def try_acquire(
     not a conflict: an agent that deadlocks against itself is a bug in the
     primitive, not in the caller.
     """
-    _, result = await _acquire(
-        scope, agent_id=agent_id, task_id=task_id, mode=mode, intent=intent, ttl_s=ttl_s
-    )
+    _, result = await _acquire(scope, agent_id=agent_id, task_id=task_id, mode=mode, intent=intent, ttl_s=ttl_s)
     return result
 
 
@@ -480,9 +478,7 @@ async def work_claim(
             the exception as ``.conflict``.
     """
     tid = task_id or f"adhoc-{uuid.uuid4()}"
-    verdict, outcome = await _acquire(
-        scope, agent_id=agent_id, task_id=tid, mode=mode, intent=intent, ttl_s=ttl_s
-    )
+    verdict, outcome = await _acquire(scope, agent_id=agent_id, task_id=tid, mode=mode, intent=intent, ttl_s=ttl_s)
     if isinstance(outcome, ClaimConflict):
         raise ClaimConflictError(outcome)
     try:
