@@ -269,11 +269,7 @@ _KINDS = ("path", "kb")
 
 def _bounded_scopes() -> list[str]:
     """Every scope over a deliberately tiny space: 2 kinds x 39 paths."""
-    paths = [
-        "/".join(combo)
-        for depth in (1, 2, 3)
-        for combo in itertools.product(_ALPHABET, repeat=depth)
-    ]
+    paths = ["/".join(combo) for depth in (1, 2, 3) for combo in itertools.product(_ALPHABET, repeat=depth)]
     return [f"{kind}:{path}" for kind in _KINDS for path in paths]
 
 
