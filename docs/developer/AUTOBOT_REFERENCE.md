@@ -93,6 +93,15 @@ autobot-infrastructure/
 
 ## Deployment
 
+**The installer and the Ansible fleet are sequential stages, not alternatives (#15993).**
+`install.sh` provisions **one** host — the SLM control node — on blank Debian/Ubuntu, and
+installs the ansible-core that node runs (`constraints/ansible-core.txt`). Ansible then
+provisions the **fleet nodes** *from* that control node; its own usage text states the
+order: *"After installation, use the SLM web UI setup wizard to add fleet nodes."*
+So the installer is what turns a blank host into a control node, and Ansible is what
+reaches every other node. Ansible *can* act on the control node afterwards — the
+`slm_manager` role and `hosts: slm_server` plays do — but it does not bootstrap one.
+
 ### Sync Commands
 
 ```bash
