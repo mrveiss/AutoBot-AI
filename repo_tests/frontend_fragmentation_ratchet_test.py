@@ -59,8 +59,9 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = repo_root()
 _FRONTEND_SRC = _REPO_ROOT / "autobot-frontend" / "src"
 
 _SOURCE_SUFFIXES = (".ts", ".vue", ".css", ".scss")

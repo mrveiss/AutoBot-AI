@@ -49,13 +49,13 @@ union comparison where an unresolvable site would look exactly like a clean one.
 from __future__ import annotations
 
 import functools
-import pathlib
 import re
 from typing import Dict, NamedTuple, Tuple
 
 import yaml
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+_REPO_ROOT = repo_root()
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 
 # The manifests sites resolve to. Repo-relative, and every one of them is read by

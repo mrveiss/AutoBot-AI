@@ -43,8 +43,9 @@ import shutil
 import sys
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _MODULE_PATH = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "run_code_analysis.py"
 
 

@@ -27,8 +27,9 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 # Every directory that can hold a playbook, not just the main one. A narrower
 # scan misses a templated `hosts:` added elsewhere and reports clean — the same
 # under-approximation this guard exists to catch.

@@ -30,9 +30,10 @@ it exists to catch.
 
 import ast
 import re
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+REPO_ROOT = repo_root()
 _PLAYBOOK = REPO_ROOT / "autobot-slm-backend/ansible/playbooks/configure-python-provision-permissions.yml"
 _CODE_SYNC = REPO_ROOT / "autobot-slm-backend/api/code_sync.py"
 _GIT_TRACKER = REPO_ROOT / "autobot-slm-backend/services/git_tracker.py"

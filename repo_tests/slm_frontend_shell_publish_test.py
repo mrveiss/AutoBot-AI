@@ -52,9 +52,10 @@ import re
 from pathlib import Path
 from typing import Iterator
 
+from repo_tests._paths import repo_root
 from repo_tests.slm_frontend_publish_contract import CLAUSES
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 
 _SHARED_HELPER = (
     _REPO_ROOT / "autobot-infrastructure" / "autobot-slm-frontend" / "templates" / "build-publish-slm-frontend.sh"

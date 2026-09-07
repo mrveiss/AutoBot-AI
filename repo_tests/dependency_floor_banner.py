@@ -22,10 +22,11 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-from pathlib import Path
 from types import ModuleType
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+_REPO_ROOT = repo_root()
 _CHECKER = _REPO_ROOT / "pipeline-scripts" / "check_dependency_floors.py"
 _MODULE_NAME = "check_dependency_floors"
 

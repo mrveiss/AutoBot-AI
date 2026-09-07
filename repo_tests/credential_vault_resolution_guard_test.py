@@ -77,12 +77,13 @@ import re
 import subprocess  # nosec B404  # fixed argv (git ls-files), no shell, no caller input
 from pathlib import Path
 
+from repo_tests._paths import repo_root
 from repo_tests.credential_vault_prose_strip import UnparseableSourceError, strip_prose
 from repo_tests.credential_vault_resolution_allowlist import ALLOWLIST
 
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 SSOT_CONFIG = REPO_ROOT / "autobot_shared" / "ssot_config.py"
 
 #: Alias suffixes that mark a ssot_config field as credential-shaped. ``_PASS`` is

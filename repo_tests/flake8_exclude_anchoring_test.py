@@ -44,13 +44,13 @@ from __future__ import annotations
 
 import importlib.util
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 FLAKE8_CONFIG = REPO_ROOT / ".flake8"
 _CHECKER = REPO_ROOT / "tools" / "lint" / "check_flake8_exclude_anchoring.py"
 
