@@ -26,13 +26,12 @@ untouched without an allowlist naming them.
 from __future__ import annotations
 
 import ast
-import subprocess
 from pathlib import Path
 
 import pytest
-
-from autobot_shared.paths import scrubbed_git_env
 from repo_tests._paths import repo_root
+
+from tools.lint._scan_helpers import tracked_paths
 
 #: The one file allowed to bind the root from `__file__`: it is the anchor the
 #: helper resolves from, and it cannot ask itself where the tree is.
@@ -54,16 +53,14 @@ _MIN_FILES_PARSED = 200
 
 
 def _tracked_repo_tests() -> list[Path]:
-    """Guard files, from git rather than a filesystem walk (#15955)."""
+    """Guard files, from git rather than a filesystem walk (#15955).
+
+    Through the one enumeration helper (#15926) rather than its own subprocess:
+    the scrub, the anchor and the refusal-on-empty are decided once there
+    instead of re-decided here.
+    """
     root = repo_root()
-    out = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "repo_tests/*.py", "repo_tests/**/*.py"],
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    ).stdout.split()
-    return [root / rel for rel in out]
+    return [root / rel for rel in tracked_paths(root, "repo_tests/*.py", "repo_tests/**/*.py")]
 
 
 def _strip_resolve(node: ast.AST) -> ast.AST:
@@ -117,7 +114,9 @@ def hand_rolled_roots_in(source: str, file_path: Path, root: Path) -> list[tuple
         resolved = file_path.resolve().parents[hops - 1] if hops > 0 else file_path.resolve()
         if resolved != root:
             continue
-        names = [t.id for t in (node.targets if isinstance(node, ast.Assign) else [node.target]) if isinstance(t, ast.Name)]
+        names = [
+            t.id for t in (node.targets if isinstance(node, ast.Assign) else [node.target]) if isinstance(t, ast.Name)
+        ]
         found.append((node.lineno, names[0] if names else "<unnamed>"))
     return found
 
@@ -184,7 +183,9 @@ def test_a_binding_that_names_something_other_than_the_root_is_not_reported() ->
     anchor = Path(repo_root()) / "repo_tests" / "lint" / "canonical" / "rules" / "example_test.py"
     # `parents[1]` from rules/ is `lint/canonical`, not the root -- the real
     # shape of the eight FIXTURES bindings.
-    assert hand_rolled_roots_in("FIXTURES = Path(__file__).resolve().parents[1] / 'fixtures'\n", anchor, repo_root()) == []
+    assert (
+        hand_rolled_roots_in("FIXTURES = Path(__file__).resolve().parents[1] / 'fixtures'\n", anchor, repo_root()) == []
+    )
     # `Path(__file__).resolve()` names the file itself -- the two `_SELF` bindings.
     top = Path(repo_root()) / "repo_tests" / "example_test.py"
     assert hand_rolled_roots_in("_SELF = Path(__file__).resolve()\n", top, repo_root()) == []
