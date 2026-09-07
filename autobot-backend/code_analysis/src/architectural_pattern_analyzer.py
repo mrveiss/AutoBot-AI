@@ -220,7 +220,7 @@ async def main():
     # Print summary
     print("\n=== Architectural Pattern Analysis Results ===")  # noqa: print
     print(f"Total components: {results['total_components']}")  # noqa: print
-    print(f"Architectural issues: {results['architectural_issues']}")  # noqa: print
+    print(f"Architectural issues: {results['architectural_issues_count']}")  # noqa: print
     print(f"Design patterns found: {results['design_patterns_found']}")  # noqa: print
     print(f"Architecture score: {results['architecture_score']}/100")  # noqa: print
     print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print

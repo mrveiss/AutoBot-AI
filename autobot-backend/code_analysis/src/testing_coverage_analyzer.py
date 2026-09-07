@@ -846,7 +846,7 @@ async def main():
     print(f"Total functions: {results['total_functions']}")  # noqa: print
     print(f"Total tests: {results['total_tests']}")  # noqa: print
     print(f"Test coverage: {results['test_coverage_percentage']}%")  # noqa: print
-    print(f"Coverage gaps found: {results['coverage_gaps']}")  # noqa: print
+    print(f"Coverage gaps found: {results['coverage_gaps_count']}")  # noqa: print
     print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print detailed metrics
