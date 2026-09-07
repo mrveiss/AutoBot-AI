@@ -32,8 +32,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from llc.models.goal import GoalLevel
-from llc.models.goal import LLCGoal
+from llc.models.goal import GoalLevel, LLCGoal
 from llc.services.goal import GoalService
 from llc.tests import _e2e_harness as harness
 
