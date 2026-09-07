@@ -18,18 +18,22 @@
 #   --issue N     the issue this PR links to (required)
 #   --body FILE   the PR body you are about to post
 #   --message F   the commit message file you are about to pass to git commit -F
+#   --full        also run the required checks that import the backend or run a
+#                 suite. Minutes rather than seconds; skipped by default so the
+#                 fast path stays worth running before every push (#15933).
 #
 # Exit 0 = every gate that can be checked locally would pass.
 
 set -uo pipefail
 
-ISSUE="" BODY_FILE="" MSG_FILE=""
+ISSUE="" BODY_FILE="" MSG_FILE="" FULL=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --issue)   ISSUE="$2";     shift 2 ;;
     --body)    BODY_FILE="$2"; shift 2 ;;
     --message) MSG_FILE="$2";  shift 2 ;;
-    -h|--help) sed -n '3,22p' "$0"; exit 0 ;;
+    --full)    FULL=1;         shift ;;
+    -h|--help) sed -n '3,25p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -386,6 +390,132 @@ else
       pass "no TODO/FIXME in added lines"
     fi
   fi
+fi
+
+# ------------------------------------------------- required status checks
+#
+# Everything above predicts a gate that is cheap to run. This block covers the
+# TEN contexts the `Main` ruleset actually requires on Dev_new_gui, because
+# those are the ones whose failure costs a push -- and a push costs an 8.9-minute
+# suite (#15932: ~6 commits per PR, 49 failed check-runs across 9 merged PRs,
+# so every PR goes red at least once on the way).
+#
+# Each entry names the SAME script its workflow invokes. The rule is that a
+# check here must not re-implement its gate: a local re-implementation drifts
+# from CI silently, which is the failure mode #13573 and #13521 both were.
+# Where a workflow's gate is inline YAML with no extractable script, the check
+# is reported as unavailable with that as its reason rather than approximated.
+#
+# Cost tiers, because a preflight nobody runs saves nothing:
+#   default   script-only gates -- no imports, no services, seconds
+#   --full    gates that import the backend or run a suite -- minutes
+#   never     gates needing infrastructure this box does not have
+#
+# `migration-matrix` sits in that last tier: it needs a live PostgreSQL and is
+# reported unavailable unless AUTOBOT_MIGRATION_TEST_ADMIN_URL is set. #15933
+# was filed claiming nine of the ten were locally reproducible; that was one
+# too many, and the honest count is eight plus one conditional.
+
+section "required status checks"
+
+# Run one required context locally. Args: <context> <path-filter-regex> <cmd...>
+# An empty path filter means the gate is unconditional.
+require_check() {
+  local ctx="$1" filter="$2"; shift 2
+
+  if [ -n "$filter" ] && [ "${#CHANGED[@]}" -gt 0 ]; then
+    if ! printf '%s\n' "${CHANGED[@]}" | grep -qE "$filter"; then
+      note "$ctx -- no matching paths changed (CI path-filters it too)"
+      return 0
+    fi
+  fi
+
+  if "$@" >/tmp/preflight-$$.log 2>&1; then
+    pass "$ctx"
+  else
+    fail "$ctx -- reproduce with: $*"
+    head -12 /tmp/preflight-$$.log | sed 's/^/        /'
+  fi
+  rm -f /tmp/preflight-$$.log
+}
+
+# Report a gate this box cannot run, naming the reason. Never approximated:
+# a check that silently does something weaker than CI is worse than no check,
+# because it is read as coverage.
+skip_check() { note "$1 -- $2"; }
+
+if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
+  note "$BASE not found -- skipping required checks (run git fetch)"
+else
+  # verify-precommit-config: enforce-precommit.yml runs exactly these two.
+  require_check "verify-precommit-config (gating hooks)" \
+    '\.pre-commit-config\.yaml|\.github/workflows/enforce-precommit\.yml' \
+    "$PY" pipeline-scripts/check_gating_precommit_hooks.py
+
+  require_check "verify-precommit-config (hooks executed)" \
+    '\.pre-commit-config\.yaml' \
+    "$PY" pipeline-scripts/check_precommit_hooks_executed.py
+
+  # code-quality runs these repo-wide script gates alongside the lint above.
+  require_check "code-quality (env var registry)" \
+    '\.py$|\.env|docs/.*env' \
+    "$PY" pipeline-scripts/check_env_var_registry.py
+
+  require_check "code-quality (nosec format)" \
+    '\.py$' \
+    "$PY" scripts/check_nosec_format.py
+
+  require_check "code-quality (doc references)" \
+    '\.md$|docs/' \
+    "$PY" pipeline-scripts/check-doc-references.py
+
+  # Several workflows gate themselves on .github/filters/*.yml; this verifies
+  # the filters still name paths that exist, which is how a required context
+  # silently stops covering a tree.
+  require_check "workflow path filters" \
+    '\.github/' \
+    "$PY" pipeline-scripts/check_workflow_path_filters.py
+
+  # ---- gates that import the backend or run a suite: --full only ----------
+  if [ "$FULL" = "1" ]; then
+    require_check "api-wiring" \
+      'autobot-backend/|autobot-frontend/src/' \
+      env PYTHONPATH="$REPO_ROOT:$REPO_ROOT/autobot-backend" AUTOBOT_SINGLE_USER=true \
+      "$PY" scripts/audit_api_wiring.py --dump-openapi /tmp/preflight-openapi-$$.json
+
+    require_check "startup-import-smoke" \
+      'autobot-backend/' \
+      env PYTHONPATH="$REPO_ROOT:$REPO_ROOT/autobot-backend" \
+      "$PY" -c 'import initialization.lifespan'
+  else
+    skip_check "api-wiring"           "imports the backend -- re-run with --full"
+    skip_check "startup-import-smoke" "imports the backend -- re-run with --full"
+  fi
+
+  # These two are reproducible but multi-step: each needs an `npm ci` in a
+  # frontend workspace before its gate means anything, and a preflight that
+  # installs packages is a preflight that gets run once and then avoided.
+  # Named with their exact remediation rather than wired half-way -- a check
+  # that runs a weaker version of its gate reads as coverage and is not.
+  # Wiring these properly is the remaining half of #15933.
+  skip_check "verify-generated-types" \
+    "needs npm ci + a schema dump: see .github/workflows/verify-generated-types.yml, then npm run gen:types"
+  skip_check "Unit & Integration Tests" \
+    "needs npm ci in autobot-frontend: npm --prefix autobot-frontend ci && npm --prefix autobot-frontend run test:unit"
+
+  # ---- gates this box cannot reproduce -----------------------------------
+  if [ -n "${AUTOBOT_MIGRATION_TEST_ADMIN_URL:-}" ]; then
+    note "migration-matrix -- AUTOBOT_MIGRATION_TEST_ADMIN_URL is set; run the suite in autobot-backend/tests/migrations/"
+  else
+    skip_check "migration-matrix" "needs a live PostgreSQL (set AUTOBOT_MIGRATION_TEST_ADMIN_URL)"
+  fi
+  skip_check "smoke-test" "builds images and starts the compose stack -- CI only"
+  skip_check "No open blocks-merge issues reference this PR" "reads GitHub issue state, not the working tree"
+
+  # `No commit trailers` is already predicted by the commit-message section
+  # above; naming it here keeps the required-context list complete rather than
+  # leaving the reader to notice the ninth entry is missing.
+  note "No commit trailers -- covered by the commit message section above"
 fi
 
 # ---------------------------------------------------------------- result

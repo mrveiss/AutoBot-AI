@@ -144,6 +144,69 @@ else
     echo "  SKIP: ${FLEET_RULE} not readable"
 fi
 
+# ------------------------------------------- required status check coverage
+#
+# The failure this guards is silence, not a wrong verdict: a required context
+# that stops being mentioned reads as coverage the preflight does not have.
+# #15933 exists because a push costs an 8.9-minute suite, so a context the
+# preflight forgets is a round-trip it was supposed to save.
+#
+# The expected list is read from branch protection where the token allows it,
+# so adding an eleventh required check fails this test instead of quietly
+# widening the gap. Without a token it falls back to the ten known at the time
+# of writing -- a weaker check that still catches a deletion.
+
+echo ""
+echo "required status check coverage"
+
+REQUIRED_FALLBACK=(
+    "code-quality"
+    "Unit & Integration Tests"
+    "smoke-test"
+    "startup-import-smoke"
+    "verify-generated-types"
+    "api-wiring"
+    "migration-matrix"
+    "verify-precommit-config"
+    "No commit trailers"
+    "No open blocks-merge issues reference this PR"
+)
+
+mapfile -t REQUIRED < <(
+    gh api repos/mrveiss/AutoBot-AI/branches/Dev_new_gui/protection \
+        --jq '.required_status_checks.contexts[]' 2>/dev/null
+)
+if [ "${#REQUIRED[@]}" -eq 0 ]; then
+    REQUIRED=("${REQUIRED_FALLBACK[@]}")
+    echo "  --    branch protection unreadable; using the ten contexts known at #15933"
+fi
+
+COVERAGE_OUT=$(PREFLIGHT_BASE=HEAD bash "${SCRIPT}" --issue 9999 2>&1)
+
+for ctx in "${REQUIRED[@]}"; do
+    # A context is covered when the script names it -- as a run, as a skip with
+    # a reason, or as a cross-reference to the section that already predicts it.
+    if printf '%s' "${COVERAGE_OUT}" | grep -qF "${ctx}"; then
+        pass=$((pass + 1))
+    else
+        fail=$((fail + 1))
+        echo "  FAIL: required context '${ctx}' is never mentioned by pr-preflight.sh"
+    fi
+done
+
+# Every path the script names must resolve. The paths were taken from workflow
+# YAML during #15933 and five of the six were wrong: an unanchored `scripts/...`
+# regex matched inside `pipeline-scripts/...`, and both directories exist, so
+# nothing surfaced until the checks were run.
+while read -r referenced; do
+    if [ -f "${HERE}/../${referenced}" ]; then
+        pass=$((pass + 1))
+    else
+        fail=$((fail + 1))
+        echo "  FAIL: pr-preflight.sh names '${referenced}', which does not exist"
+    fi
+done < <(grep -oE '(pipeline-)?scripts/[a-z0-9_.-]+\.py' "${SCRIPT}" | sort -u)
+
 # ---------------------------------------------------------------- result
 
 echo ""
