@@ -215,36 +215,7 @@ INHERITED_ENV_MESSAGE = (
     "this gate existed: #13882/#13983, #15176, #15245/#15303, #15777 (#15783)."
 )
 
-#: Files allowed to call ``--show-toplevel`` with an environment that is NOT
-#: scrubbed, POSIX-relative to the repository root. Each entry is a call that
-#: needs the hook environment *intact* to mean anything.
-ALLOWLIST = {
-    # The #15176 reproduction. It runs git with GIT_DIR deliberately exported
-    # to confirm the defect still reproduces on this git version before
-    # asserting that the six sites survive it; scrubbing there would make the
-    # suite assert nothing and pass.
-    "repo_tests/git_repo_root_scrub_test.py",
-    # scripts/lib/git-root.sh IS the scrub -- its one raw call is the
-    # implementation `git_repo_root` wraps, run inside a subshell with
-    # GIT_ROOT_AMBIENT_VARS unset (#15245).
-    "scripts/lib/git-root.sh",
-    # #15246 already scrubbed this file's entire process environment
-    # (`unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE` up front,
-    # ahead of every git call the script makes, not only this one) and that
-    # fix is covered by repo_tests/git_hooks_installer_test.py. Converging it
-    # onto scripts/lib/git-root.sh would need that test's throwaway fixture
-    # -- which copies only this file's bytes, not scripts/lib/ -- to seed the
-    # helper too; correct today, tracked as follow-up rather than risked here.
-    "scripts/install-git-hooks.sh",
-    # The #15245 shell reproduction, same reasoning as the Python one above:
-    # it deliberately calls git with GIT_DIR exported, unscrubbed, to prove
-    # the defect still reproduces before asserting git_repo_root survives it.
-    "scripts/lib/git-root_test.sh",
-    # A literal command STRING passed as a test case to the branch-switch
-    # guard (#15296) -- not a call this test script itself makes. The guard
-    # under test is required to ALLOW exactly this shape.
-    ".claude/hooks/block-dangerous-commands_test.sh",
-}
+from _git_scrub_allowlist import ALLOWLIST  # noqa: E402
 
 
 def subprocess_names(tree: ast.AST) -> Tuple[Set[str], Set[str]]:
