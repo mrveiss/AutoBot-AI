@@ -241,8 +241,14 @@ async def test_transition_blocked_to_in_progress_with_active_blocker_raises():
     """BLOCKED → IN_PROGRESS must fail when unresolved blockers exist."""
     svc = WorkItemService()
 
+    company = uuid.uuid4()
     item = MagicMock(spec=LLCWorkItem)
     item.id = uuid.uuid4()
+    # #15952: `transition_status` now refuses an item outside the caller's
+    # company. These mocks left `company_id` unset, so it was a MagicMock that
+    # could never match — the tests passed a random UUID and only worked because
+    # the service checked nothing.
+    item.company_id = company
     item.status = WorkItemStatus.BLOCKED.value
     item.started_at = None
     item.version = 1
@@ -265,7 +271,7 @@ async def test_transition_blocked_to_in_progress_with_active_blocker_raises():
             session,
             str(item.id),
             WorkItemStatus.IN_PROGRESS,
-            company_id=str(uuid.uuid4()),
+            company_id=str(company),
             relation_svc=relation_svc,
         )
 
@@ -275,8 +281,14 @@ async def test_transition_blocked_to_in_progress_when_blockers_resolved():
     """BLOCKED → IN_PROGRESS must succeed when all blockers are done/cancelled."""
     svc = WorkItemService()
 
+    company = uuid.uuid4()
     item = MagicMock(spec=LLCWorkItem)
     item.id = uuid.uuid4()
+    # #15952: `transition_status` now refuses an item outside the caller's
+    # company. These mocks left `company_id` unset, so it was a MagicMock that
+    # could never match — the tests passed a random UUID and only worked because
+    # the service checked nothing.
+    item.company_id = company
     item.status = WorkItemStatus.BLOCKED.value
     item.started_at = None
     item.version = 1
@@ -298,7 +310,7 @@ async def test_transition_blocked_to_in_progress_when_blockers_resolved():
         session,
         str(item.id),
         WorkItemStatus.IN_PROGRESS,
-        company_id=str(uuid.uuid4()),
+        company_id=str(company),
         relation_svc=relation_svc,
     )
     assert result is item
