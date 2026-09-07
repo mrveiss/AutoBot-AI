@@ -125,7 +125,22 @@ def verdict(required: Iterable[str], observed: dict[str, str]) -> dict:
         ),
         key=lambda entry: entry["context"],
     )
-    if failing_unrequired and result == "CONTEXTS-GREEN":
+    # A NON-REQUIRED check that is still running is not absent. Reporting only the
+    # failing ones made a PR read CONTEXTS-GREEN while eight `python-suite` shards
+    # were pending -- including the shard that had turned base red an hour earlier.
+    # An unfinished check cannot have failed yet, which is exactly why it must not
+    # be read as having passed.
+    running_unrequired = sorted(
+        (
+            {"context": name, "state": state}
+            for name, state in observed.items()
+            if name not in required_set and state in _RUNNING
+        ),
+        key=lambda entry: entry["context"],
+    )
+    if running_unrequired and result == "CONTEXTS-GREEN" and not failing_unrequired:
+        result = "GREEN-BUT-OTHERS-RUNNING"
+    if failing_unrequired and result in ("CONTEXTS-GREEN", "GREEN-BUT-OTHERS-RUNNING"):
         # Honest naming: the required contexts really are green. The caller is not
         # clear to merge, and the verdict must not read as though they were.
         result = "GREEN-BUT-OTHERS-FAILING"
@@ -136,6 +151,7 @@ def verdict(required: Iterable[str], observed: dict[str, str]) -> dict:
         "not_green": not_green,
         "green": green,
         "failing_unrequired": failing_unrequired,
+        "running_unrequired": running_unrequired,
     }
 
 
@@ -178,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  not-green       {entry['context']} = {entry['state']}")
         for entry in result["failing_unrequired"]:
             print(f"  FAILING (not required)  {entry['context']} = {entry['state']}")
+        for entry in result["running_unrequired"][:3]:
+            print(f"  running (not required)  {entry['context']}")
     return 0 if result["verdict"] == "CONTEXTS-GREEN" else 1  # PENDING and BLOCKED both non-zero: neither is mergeable
 
 

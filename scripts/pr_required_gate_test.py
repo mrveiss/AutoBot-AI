@@ -155,3 +155,28 @@ def test_a_running_unrequired_check_is_not_reported_as_failing():
     result = verdict(["code-quality"], {"code-quality": "success", "extra": "pending"})
     assert result["failing_unrequired"] == []
     assert result["verdict"] == "CONTEXTS-GREEN"
+
+
+def test_a_running_unrequired_check_blocks_the_green_verdict():
+    """The defect that nearly merged #15962 with eight test shards still running.
+
+    An earlier revision surfaced *failing* unrequired checks and treated *pending*
+    ones as absent -- so a PR read CONTEXTS-GREEN while eight `python-suite`
+    shards were pending, including the shard that had turned base red an hour
+    earlier. An unfinished check cannot have failed yet, which is precisely why it
+    must not be read as having passed.
+    """
+    observed = {"code-quality": "success", "python-suite shard 6/12": "pending"}
+    result = verdict(["code-quality"], observed)
+    assert result["verdict"] == "GREEN-BUT-OTHERS-RUNNING"
+    assert result["failing_unrequired"] == []
+    assert [e["context"] for e in result["running_unrequired"]] == ["python-suite shard 6/12"]
+
+
+def test_a_failing_unrequired_check_outranks_a_running_one():
+    """Contrast: a known failure must not be softened by something else still going."""
+    observed = {"a": "failure", "b": "pending"}
+    result = verdict([], observed)
+    assert result["verdict"] == "GREEN-BUT-OTHERS-FAILING"
+    assert [e["context"] for e in result["failing_unrequired"]] == ["a"]
+    assert [e["context"] for e in result["running_unrequired"]] == ["b"]
