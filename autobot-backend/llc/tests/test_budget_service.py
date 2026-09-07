@@ -138,3 +138,10 @@ async def test_unknown_model_refuses_rather_than_costing_zero() -> None:
         mock_redis.return_value = None
         with pytest.raises(UnpricedModel):
             await svc.ingest_cost_event(session, "agent-001", "company-1", 1000, 500, "unknown-model-xyz")
+
+    # The version this replaced asserted `session.execute.call_count >= 1` -- that
+    # the UPDATE ran with cost=0. Inverting the test dropped that assertion rather
+    # than inverting it, so nothing checked the write. It passes today because the
+    # raise precedes the UPDATE; the regression it guards is the refusal moving
+    # after a partial write, which is exactly when it would matter.
+    assert session.execute.call_count == 0, "an unpriced event still reached the database"
