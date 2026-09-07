@@ -48,7 +48,7 @@ def _app_manifests() -> List[Path]:
     return [
         p
         for p in REPO_ROOT.glob("autobot-*frontend/package.json")
-        if "node_modules" not in p.parts
+        if "node_modules" not in p.relative_to(REPO_ROOT).parts  # #15510
     ]
 
 
