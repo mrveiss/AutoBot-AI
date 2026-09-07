@@ -27,7 +27,6 @@ Issue #49 - Additional MCP Bridges (Browser, HTTP, Database, Git)
 
 import asyncio
 import re
-import subprocess
 from pathlib import Path
 from typing import List
 
@@ -49,6 +48,7 @@ from api.schemas_code import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.git_probe import start_git
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_config import PROJECT_ROOT
@@ -286,11 +286,26 @@ def _validate_git_command(git_args: List[str]) -> None:
 
 
 async def _run_git_process(cmd: List[str], repo_path: str, timeout: int) -> Metadata:
-    """Execute git process and return result (Issue #665: extracted helper)."""
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+    """Execute git process and return result (Issue #665: extracted helper).
+
+    Through :func:`autobot_shared.git_probe.start_git`, which scrubs the ambient
+    git environment (#15991). This ran `create_subprocess_exec` with no `env=`,
+    so it inherited `GIT_DIR`/`GIT_WORK_TREE` whole — and **`GIT_DIR` outranks
+    both the `-C repo_path` in the argv and the `cwd=` here**:
+
+        git -C /a ls-files                        -> /a's files
+        GIT_DIR=/b/.git git -C /a ls-files        -> /b's files
+
+    So `is_repository_allowed` validated a path that git then did not operate
+    on. Not "the path is unused" — it is used twice, and one environment
+    variable outranks both, which is why adding a third path check could not
+    have helped.
+
+    `start_git` also REFUSES a caller-supplied `env=` (`_reject_env`), so the
+    scrub is not a parameter this call site can omit later.
+    """
+    process = await start_git(
+        *cmd[1:],  # `cmd[0]` is "git"; start_git supplies the executable itself
         cwd=repo_path,
     )
 
