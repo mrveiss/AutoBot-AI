@@ -65,10 +65,16 @@ class BacklogService(LLCServiceBase):
         count_q = select(func.count()).select_from(q.subquery())
         total = (await session.execute(count_q)).scalar_one()
 
-        # Order by explicit backlog_position first (NULLS LAST — items that have
-        # never been reordered keep their natural priority/age ordering), then
-        # fall back to priority rank, then creation date.  This makes
-        # bulk_reorder's writes immediately observable in list responses (H3).
+        # Order by explicit backlog_position, then priority rank, then creation
+        # date. This makes bulk_reorder's writes observable in list responses (H3).
+        #
+        # #15963: the `nulls_last` in `backlog_order()` is DEAD, and the sentence
+        # that used to be here claimed the opposite. The column is
+        # `nullable=False` with `server_default="0"` and `bulk_reorder` assigns
+        # `0..n-1`, so no row is ever NULL: items never reordered sit at 0 and
+        # sort AHEAD of anything reordered to position >= 1. #15964 corrected
+        # half of this comment and left the rest — the same neighbour miss the
+        # correction was about.
         q = q.order_by(*backlog_order()).limit(limit).offset(offset)
         rows = (await session.execute(q)).scalars().all()
         return rows, total
