@@ -66,6 +66,26 @@ MAX_DIRECT_INVOCATIONS = 41
 #: finding nothing, which is also what a collapsed sweep reports.
 _MIN_FILES_PARSED = 180
 
+#: Every `subprocess` entry point that executes an argv. `call` and `check_call`
+#: were missing, so `subprocess.call(["git", "ls-files"])` bypassed the census
+#: (#15990 review) — the function-name dimension of the same generalisation the
+#: keyword fix made, applied late because I widened one axis and not the other.
+_EXECUTORS = frozenset({"run", "check_output", "check_call", "call", "Popen"})
+
+
+def _executor_name(func: ast.expr) -> str | None:
+    """The called name, matched EXACTLY rather than as a substring.
+
+    `"call" in ast.unparse(func)` would also match `recall`, `caller` and any
+    module path containing the word — the same substring weakness a review
+    already found in the argv match, one expression up.
+    """
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    if isinstance(func, ast.Name):
+        return func.id
+    return None
+
 
 def invokes_ls_files(node: ast.Call) -> bool:
     """Whether *node* is a subprocess invocation of ``git ls-files``.
@@ -76,7 +96,7 @@ def invokes_ls_files(node: ast.Call) -> bool:
     instances is the argument for reading the keyword wherever positional argv
     is read, rather than fixing the one shape a review happened to report.
     """
-    if not any(k in ast.unparse(node.func) for k in ("run", "check_output", "Popen")):
+    if _executor_name(node.func) not in _EXECUTORS:
         return False
     argv = list(node.args) + [k.value for k in node.keywords if k.arg == "args"]
     # STRUCTURE, not substring: `["printf", "ls-files"]` matched a substring test
@@ -360,3 +380,34 @@ def test_this_module_is_inside_its_own_census() -> None:
         "added here would not move the baseline. It holds exactly one deliberate "
         "invocation — the unscrubbed contrast fixture — and that one must be visible."
     )
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'subprocess.call(["git", "ls-files"])',
+        "subprocess.call(args=['git', 'ls-files'])",
+        'subprocess.check_call(["git", "ls-files"])',
+        "subprocess.check_call(args=['git', 'ls-files'])",
+    ],
+    ids=["call", "call-kw", "check_call", "check_call-kw"],
+)
+def test_the_call_execution_apis_are_covered(source: str) -> None:
+    """`call` and `check_call` execute an argv too (#15990 review).
+
+    I widened the KEYWORD axis ahead of a report and left the FUNCTION-NAME axis
+    to be reported. Both are the same generalisation; only one got made in time.
+    """
+    call = next(n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call))
+    assert invokes_ls_files(call)
+
+
+def test_a_name_merely_containing_an_executor_word_is_not_matched() -> None:
+    """Exact attribute match, not substring — the flaw already found in the argv test.
+
+    Without this, adding `call` to the set flags `recall(...)`, `caller(...)` and
+    anything else whose name contains the word.
+    """
+    for source in ('recall(["git", "ls-files"])', 'my.caller(["git", "ls-files"])'):
+        node = next(n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call))
+        assert not invokes_ls_files(node), source
