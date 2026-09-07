@@ -137,7 +137,18 @@ def test_protobuf_is_one_of_the_packages_the_guard_actually_compares():
     root = checker.parse_direct_requirements(REPO_ROOT / "requirements.txt")
     backend = checker.parse_direct_requirements(REPO_ROOT / "autobot-backend" / "requirements.txt")
     assert "protobuf" in set(root) & set(backend)
-    assert root["protobuf"] == backend["protobuf"] == ">=7.36.0,<8.0.0"
+    # Parity, not a version. This test's subject is reach -- that protobuf is
+    # inside the set the guard compares -- and #15070's subject is divergence
+    # between the two files. Neither is a claim about *which* version. Asserting
+    # the literal here made every protobuf bump fail a reach check, and the
+    # failure named a version mismatch, so it read as the guard working rather
+    # than as this line over-specifying (#15981).
+    #
+    # The deliberate version tripwire lives in the test below, where the
+    # opentelemetry-proto pin and the protobuf constraint are asserted together
+    # on purpose and the failure message says what to re-read. That one is meant
+    # to fail on a bump; this one is not.
+    assert root["protobuf"] == backend["protobuf"]
 
 
 def test_the_protobuf_cap_matches_what_opentelemetry_proto_declares():
