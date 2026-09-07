@@ -51846,7 +51846,7 @@ export interface paths {
          * @description Store an agent's comment on a work item (#15905).
          *
          *     The company check is not incidental. `add_comment` writes `company_id` from
-         *     its argument without reading the item, so without `_assert_item_in_company`
+         *     its argument without reading the item, so without `assert_item_in_company`
          *     an agent could comment on another company's work item and the comment would
          *     be stored under its OWN company — readable by neither side and attached to
          *     an item its company does not own.
