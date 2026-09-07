@@ -85,7 +85,11 @@ _OPERATOR_ENTRYPOINTS = (
 
 
 def _discover_scripts() -> list[Path]:
-    return sorted(p for p in _SCRIPTS_DIR.rglob("*.py") if "__pycache__" not in p.parts)
+    # #15510: relative to the scan root, so an ancestor named `__pycache__`
+    # above the checkout cannot empty the sweep.
+    return sorted(
+        p for p in _SCRIPTS_DIR.rglob("*.py") if "__pycache__" not in p.relative_to(_SCRIPTS_DIR).parts
+    )
 
 
 def _relative_key(path: Path) -> str:
