@@ -51,7 +51,6 @@ from autobot_shared.status_enums import Severity
 from constants.model_constants import (
     EXPENSIVE_MODEL_MARKER_GPT4,
     EXPENSIVE_MODEL_MARKER_OPUS,
-    MODEL_COSTS_PER_1M_TOKENS,
     OPENAI_GPT4O,
 )
 from constants.threshold_constants import CategoryDefaults
@@ -79,7 +78,9 @@ SIMPLE_PROMPT_CATEGORIES = {
 
 
 # Model costs per 1M tokens (USD) — single source of truth in
-# constants/model_constants.MODEL_COSTS_PER_1M_TOKENS (#3528).
+# autobot_shared.model_pricing.MODEL_PRICING_PER_1M_TOKENS (#3528, #15912).
+from autobot_shared.model_pricing import MODEL_COSTS_PER_1M_TOKENS  # noqa: E402
+
 MODEL_COSTS = MODEL_COSTS_PER_1M_TOKENS
 
 # Pattern detection rules for prompt categorization

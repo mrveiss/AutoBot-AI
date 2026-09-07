@@ -23,31 +23,46 @@ the auto-formatter, since it reads as an unused import -- #15911 -- but that is
 contingent on a bot's configuration, and the cycle is not.) The importers were
 repointed instead.
 
-**This is not the only model-price table, and this module's name should not be
-read as saying otherwise.** Two others remain in ``ssot_constants``:
+**This is the only literal table of model prices in the repository.** It was
+not, until #15912: ``MODEL_COSTS_PER_1M_TOKENS`` (13 entries, same unit, same
+schema) and ``MODEL_PRICING_PER_1K_TOKENS`` (10 entries, different unit) sat in
+``ssot_constants`` beside where this one used to be. Both are now comprehensions
+over this table, defined below. A comprehension cannot drift; two literals can,
+and had:
 
-* ``MODEL_COSTS_PER_1M_TOKENS`` (13 entries) -- the same unit and the same
-  ``input``/``output`` schema as this table, overlapping it on **9 models**:
-  ``OPENAI_GPT4O``, ``OPENAI_GPT4O_MINI``, ``OPENAI_GPT4_TURBO``,
-  ``OPENAI_GPT35_TURBO``, ``GOOGLE_GEMINI15_PRO``, ``GOOGLE_GEMINI15_FLASH``,
-  ``LOCAL_LLAMA3``, ``LOCAL_MISTRAL``, ``LOCAL_CODELLAMA``. All nine agree
-  today -- checked by comparing values, not by eye -- and nothing enforces it.
-* ``MODEL_PRICING_PER_1K_TOKENS`` (10 entries) -- a different unit.
+* ``PER_1K`` priced ``gpt-4o`` at 5.00/15.00 per 1M against 2.50/10.00 here, and
+  ``gpt-3.5-turbo`` at 1.50/2.00 against 0.50/1.50. Stale, plausible, and the
+  only table its consumers read.
+* ``llm_shared/pricing/deepseek_source.py`` charged 0.55/2.19 against the model
+  id ``deepseek-r1`` -- which is ``LOCAL_DEEPSEEK_R1``, priced 0.0/0.0 here as a
+  locally-hosted model. One string, two meanings, depending on which table you
+  reached for.
 
-Before this extraction the three sat in one file, so anyone editing a price saw
-all of them. They no longer do, and a module called ``model_pricing`` reads as
-*the* home for model pricing. Consolidation is #15912; until then, changing a
-price here means checking whether the model also appears in
-``MODEL_COSTS_PER_1M_TOKENS``.
+Five provider baselines remain in ``llm_shared/pricing/`` and are **not**
+derived: they exist as a fallback for when a provider's pricing API is
+unreachable, and carry provider-specific fields this table does not. They are
+held in step by ``repo_tests/model_pricing_tables_agree_15912_test.py``, which
+discovers pricing tables by *shape* rather than by name -- a search for the four
+baselines that named this module found four, and there are five. Nothing pointed
+at ``vertexai_source.py``.
+
+Before #15910 the three dict tables sat in one file, so anyone editing a price
+saw all of them. Proximity was the whole mechanism, and extracting this table
+removed it. The guard is what replaces it.
+
 """
 
 from typing import Dict
 
 from autobot_shared.ssot_constants import (
+    ANTHROPIC_CLAUDE3_HAIKU,
     ANTHROPIC_CLAUDE3_HAIKU_DATED,
+    ANTHROPIC_CLAUDE3_OPUS,
     ANTHROPIC_CLAUDE3_OPUS_DATED,
+    ANTHROPIC_CLAUDE3_SONNET,
     ANTHROPIC_CLAUDE3_SONNET_DATED,
     ANTHROPIC_CLAUDE35_HAIKU,
+    ANTHROPIC_CLAUDE_SONNET4_SHORT,
     ANTHROPIC_CLAUDE35_SONNET,
     ANTHROPIC_CLAUDE_HAIKU4_5,
     ANTHROPIC_CLAUDE_OPUS4,
@@ -143,4 +158,46 @@ MODEL_PRICING_PER_1M_TOKENS: Dict[str, Dict[str, float]] = {
     LOCAL_PHI4: {"input": 0.0, "output": 0.0},
     LOCAL_GEMMA2: {"input": 0.0, "output": 0.0},
     LOCAL_GEMMA3: {"input": 0.0, "output": 0.0},
+    # #15912: folded in from `MODEL_COSTS_PER_1M_TOKENS`, which is now a view over
+    # this table. These are undated aliases of models already priced above --
+    # `claude-3-opus` for `claude-3-opus-20240229`, and so on. Both spellings are
+    # in use by callers, and both must resolve, so both are keys.
+    #
+    # An alias pair is the one drift the agreement guard cannot see: it compares
+    # model id strings, so these could diverge from their dated twins without
+    # failing anything. Keeping them adjacent is the whole mitigation.
+    ANTHROPIC_CLAUDE3_OPUS: {"input": 15.00, "output": 75.00},
+    ANTHROPIC_CLAUDE3_SONNET: {"input": 3.00, "output": 15.00},
+    ANTHROPIC_CLAUDE3_HAIKU: {"input": 0.25, "output": 1.25},
+    ANTHROPIC_CLAUDE_SONNET4_SHORT: {"input": 3.00, "output": 15.00},
 }
+
+
+#: Per-1K view. **Derived, never written.** `MODEL_PRICING_PER_1K_TOKENS` used to
+#: be a second literal in `ssot_constants`, and it had drifted: `gpt-4o` at
+#: 5.00/15.00 against 2.50/10.00 everywhere else, `gpt-3.5-turbo` at 1.50/2.00
+#: against 0.50/1.50. Nobody had reason to look -- the numbers were plausible and
+#: the table was the only one its consumers read. A comprehension cannot drift;
+#: two literals can, and did (#15912).
+#:
+#: The key rename lives here, visibly, rather than in a reader's head.
+MODEL_PRICING_PER_1K_TOKENS: Dict[str, Dict[str, float]] = {
+    model: {"prompt": price["input"] / 1000, "completion": price["output"] / 1000}
+    for model, price in MODEL_PRICING_PER_1M_TOKENS.items()
+}
+
+#: Two entries that are not models and so cannot be derived from a table of
+#: models. `calculators.py:102` reads `"default"` as its fallback when a model is
+#: unknown, so dropping it would silently make every unknown model free.
+MODEL_PRICING_PER_1K_TOKENS.update(
+    {
+        "ollama": {"prompt": 0.0, "completion": 0.0},
+        "default": {"prompt": 0.001, "completion": 0.002},
+    }
+)
+
+#: Per-1M view under the older name. **Derived, never written.** Was a 13-entry
+#: literal in `ssot_constants` with the same unit and schema as the table above,
+#: overlapping it on nine models and agreeing with it only because somebody kept
+#: them agreeing by hand (#15912).
+MODEL_COSTS_PER_1M_TOKENS: Dict[str, Dict[str, float]] = MODEL_PRICING_PER_1M_TOKENS
