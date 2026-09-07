@@ -13,13 +13,12 @@ Issue #424: Added periodic task for incremental man page updates.
 import asyncio
 import fnmatch
 import os
-import subprocess  # nosec B404  # used for internal script execution only
-import sys
 import time
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
 from celery_app import celery_app
+from tasks.man_page_indexing import run_indexing_subprocess
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -59,55 +58,6 @@ def _is_excluded(path: Path) -> bool:
     return False
 
 
-def _parse_indexing_output(output: str) -> tuple:
-    """Parse indexing script output for statistics (Issue #315: extracted helper).
-
-    Args:
-        output: Raw stdout from indexing script
-
-    Returns:
-        Tuple of (indexed_count, total_facts)
-    """
-    indexed_count = 0
-    total_facts = 0
-    for line in output.split("\n"):
-        if "Successfully indexed:" in line:
-            indexed_count = int(line.split(":")[1].strip())
-        elif "Total facts in KB:" in line:
-            total_facts = int(line.split(":")[1].strip())
-    return indexed_count, total_facts
-
-
-def _run_indexing_subprocess() -> dict:
-    """Helper for refresh_system_knowledge. Ref: #1088.
-
-    Runs the index_all_man_pages.py script as a subprocess and returns a result
-    dict.  On non-zero exit returns a 'failed' dict; on success returns a
-    'success' dict with commands_indexed and total_facts.
-    """
-    result = subprocess.run(  # nosec B603  # uses sys.executable with fixed internal script path
-        [sys.executable, "scripts/utilities/index_all_man_pages.py"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        error_msg = result.stderr[:500] if result.stderr else "Unknown error"
-        logger.error("System knowledge refresh failed: %s", error_msg)
-        return {
-            "status": "failed",
-            "error": error_msg,
-            "message": "Knowledge refresh failed",
-        }
-    indexed_count, total_facts = _parse_indexing_output(result.stdout)
-    logger.info(f"System knowledge refresh complete: {indexed_count} commands indexed, " f"{total_facts} total facts")
-    return {
-        "status": "success",
-        "commands_indexed": indexed_count,
-        "total_facts": total_facts,
-        "message": "System knowledge refreshed successfully",
-    }
-
-
 @celery_app.task(bind=True, name="tasks.refresh_system_knowledge")
 def refresh_system_knowledge(self) -> Metadata:
     """
@@ -115,7 +65,7 @@ def refresh_system_knowledge(self) -> Metadata:
 
     This is a long-running operation (can take up to 10 minutes) that indexes
     all system man pages and AutoBot documentation into the knowledge base.
-    Issue #1088: Subprocess execution extracted to _run_indexing_subprocess.
+    Issue #1088: subprocess execution extracted; #15853 moved it to tasks.man_page_indexing.
 
     Args:
         self: Celery task instance (bound for progress updates)
@@ -136,7 +86,7 @@ def refresh_system_knowledge(self) -> Metadata:
             },
         )
         logger.info("Starting comprehensive system knowledge refresh (background task)...")
-        return _run_indexing_subprocess()
+        return run_indexing_subprocess()
 
     except Exception as e:
         logger.exception("System knowledge refresh task failed: %s", e)
