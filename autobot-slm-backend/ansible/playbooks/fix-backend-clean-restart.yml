@@ -13,7 +13,7 @@
   gather_facts: true
 
   vars:
-    backend_code_dir: /opt/autobot/autobot-user-backend
+    backend_code_dir: /opt/autobot/autobot-backend
     backend_log_dir: /var/log/autobot
 
   tasks:

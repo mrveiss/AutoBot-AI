@@ -58,6 +58,7 @@ from typing import Any, Iterator
 
 import pytest
 import yaml
+from repo_tests.slm_frontend_publish_contract import CLAUSES
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
@@ -211,6 +212,14 @@ _SWEPT = _ansible_yaml_files()
 _NGINX_FILES = _nginx_files()
 
 
+def _clause(name: str):
+    """One clause of the shared publish contract, by name (#15724)."""
+    for clause in CLAUSES:
+        if clause.name == name:
+            return clause
+    raise AssertionError(f"no contract clause named {name!r} — the contract moved without this guard")
+
+
 def test_the_sweep_is_not_vacuous() -> None:
     """Floors under every count this module draws a conclusion from."""
     for name, path in _PUBLISHERS.items():
@@ -250,13 +259,15 @@ def test_the_shared_publish_writes_the_served_pointer_exactly_once() -> None:
         f"{publishing!r}. Splitting the swap across two steps is #15610 itself."
     )
     idiom = publishing[0]
-    assert "ln -sfn " in idiom and f".{_SERVED_LINK}.next" in idiom, (
-        f"the publish does not stage the new symlink under a temporary name: {idiom!r}"
-    )
-    assert re.search(rf"mv -T \.{_SERVED_LINK}\.next {_SERVED_LINK}", idiom), (
-        f"the publish does not replace the served pointer with a single rename(2): {idiom!r}. "
-        "`ln -sfn <target> current` unlinks the name before recreating it — that is the window."
-    )
+    # #15724: the staging and flip patterns come from the shared contract rather
+    # than being restated here. Restating them is how two guards drift into
+    # asserting different contracts while both stay green — the property nobody
+    # was checking was the agreement itself.
+    for clause_name in ("flips the served pointer atomically", "completes the flip with mv -T"):
+        clause = _clause(clause_name)
+        assert re.search(
+            clause.patterns["ansible"], idiom
+        ), f"the shared publish does not satisfy {clause_name!r}: {idiom!r}\n{clause.why}"
 
 
 def test_no_ansible_file_renames_the_served_path() -> None:
@@ -297,9 +308,7 @@ def test_the_shared_publish_never_stages_into_a_retired_name() -> None:
     file that still writes them is one that still renames directories.
     """
     text = _SHARED_BUILD.read_text(encoding="utf-8")
-    commands = " ".join(
-        cmd for mapping in _walk(yaml.safe_load(text)) for cmd in _command_strings(mapping)
-    )
+    commands = " ".join(cmd for mapping in _walk(yaml.safe_load(text)) for cmd in _command_strings(mapping))
     still_used = [name for name in _RETIRED_NAMES if name in commands]
     assert not still_used, (
         f"the shared publish still writes the pre-#15610 names {still_used}. The rollback slot is "
@@ -327,9 +336,7 @@ def test_every_nginx_config_serves_the_flipped_pointer() -> None:
 
 
 def _template_files() -> list[Path]:
-    return sorted(
-        path for root in _TEMPLATE_ROOTS if root.is_dir() for path in root.rglob("*") if path.is_file()
-    )
+    return sorted(path for root in _TEMPLATE_ROOTS if root.is_dir() for path in root.rglob("*") if path.is_file())
 
 
 def test_no_slm_host_template_still_names_the_retired_directory() -> None:

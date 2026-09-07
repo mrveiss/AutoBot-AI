@@ -31,6 +31,7 @@ against.
 Run from the repo root:  python3 scripts/check_ansible_file_references.py
 """
 
+import logging
 import pathlib
 import re
 import sys
@@ -51,8 +52,12 @@ _FILE_KEYS = ("requirements", "src", "chdir", "creates")
 
 _EXCLUDE_DIRS = (".worktrees", ".git", "node_modules", "__pycache__")
 
+# The value is one unbroken token, except that a ``{{ name }}`` reference may
+# contain spaces inside its braces. A plain ``\S+`` stops at the first space and
+# so cannot match a templated value at all -- which would have made #15687's
+# whole point unreachable.
 _ASSIGNMENT = re.compile(
-    r"^\s*(?P<key>" + "|".join(_FILE_KEYS) + r")\s*:\s*(?P<value>\S+)\s*$",
+    r"^\s*(?P<key>" + "|".join(_FILE_KEYS) + r")\s*:\s*(?P<value>(?:\{\{[^{}]*\}\}|\S)+)\s*$",
 )
 
 _HOSTS = re.compile(r"^\s*hosts:\s*(?P<pattern>\S+)\s*$")
@@ -90,21 +95,114 @@ def _ansible_files(root: pathlib.Path) -> list[pathlib.Path]:
     return sorted(found)
 
 
-def _referenced_repo_paths(text: str) -> list[tuple[int, str, str]]:
-    """Return ``(line_no, key, repo_relative_path)`` for deployed-src references."""
-    hits = []
+#: A ``vars:`` entry whose value is an absolute path, e.g.
+#: ``deployed_src_root: /opt/autobot/src``. Only these are substituted -- a map
+#: built from every ``key: value`` in the file would let an unrelated task key
+#: shadow a variable name.
+_VARS_BLOCK = re.compile(r"^(?P<indent>\s*)vars:\s*$")
+_VAR_DEFINITION = re.compile(r"^(?P<indent>\s+)(?P<name>\w+)\s*:\s*(?P<value>/\S+)\s*$")
+
+#: One ``{{ name }}`` reference, with or without inner spacing.
+_TEMPLATE_REF = re.compile(r"\{\{\s*(?P<name>\w+)\s*\}\}")
+
+
+def _var_definitions(text: str) -> dict[str, str]:
+    """Absolute-path variables declared in this file's ``vars:`` blocks.
+
+    Scoped to ``vars:`` deliberately. #15687 moves twenty literal deploy-root
+    references behind a variable, and without substitution every one of them
+    leaves this guard's population -- which is how #13744 would become
+    undetectable again. The guard has to learn the templated form *before* the
+    literals move, not after.
+    """
+    # YAML first: PyYAML resolves anchors (`&name` / `*name`) and merge keys
+    # (`<<:`) for us, which is how the deploy root can be stated once in a file
+    # of seven plays. A line scan cannot see through an alias -- it would read
+    # `vars: *deploy_paths` as defining nothing, and every reference behind it
+    # would silently leave this guard's population.
+    try:
+        document = yaml.safe_load(text)
+    except yaml.YAMLError:
+        document = None
+    if isinstance(document, list):
+        resolved: dict[str, str] = {}
+        for play in document:
+            if not isinstance(play, dict):
+                continue
+            play_vars = play.get("vars")
+            if not isinstance(play_vars, dict):
+                continue
+            for name, value in play_vars.items():
+                if isinstance(value, str) and value.startswith("/"):
+                    resolved[str(name)] = value
+        if resolved:
+            return resolved
+
+    definitions: dict[str, str] = {}
+    block_indent: int | None = None
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        opening = _VARS_BLOCK.match(line)
+        if opening:
+            block_indent = len(opening.group("indent"))
+            continue
+        if block_indent is None:
+            continue
+        definition = _VAR_DEFINITION.match(line)
+        if definition and len(definition.group("indent")) > block_indent:
+            definitions[definition.group("name")] = definition.group("value")
+            continue
+        # Any line at or left of the `vars:` indent ends the block.
+        if len(line) - len(line.lstrip()) <= block_indent:
+            block_indent = None
+    return definitions
+
+
+def _resolve(value: str, variables: dict[str, str]) -> str | None:
+    """Substitute ``{{ name }}`` from *variables*; None when it cannot be resolved."""
+    resolved = _TEMPLATE_REF.sub(lambda m: variables.get(m.group("name"), m.group(0)), value)
+    if "{{" in resolved or "$" in resolved:
+        return None
+    return resolved
+
+
+def _referenced_repo_paths(
+    text: str,
+) -> tuple[list[tuple[int, str, str]], list[tuple[int, str, str]]]:
+    """Return ``(resolved, unresolvable)`` deployed-src references.
+
+    ``resolved`` is ``(line_no, key, repo_relative_path)``. ``unresolvable`` is
+    every file-key assignment whose template could not be resolved -- returned
+    rather than skipped, because a reference silently leaving the population is
+    indistinguishable from one that was never there.
+    """
+    variables = _var_definitions(text)
+    hits: list[tuple[int, str, str]] = []
+    unresolvable: list[tuple[int, str, str]] = []
     for line_no, line in enumerate(text.splitlines(), 1):
         match = _ASSIGNMENT.match(line)
         if not match:
             continue
         value = match.group("value").strip("\"'")
-        if not value.startswith(_DEPLOYED_SRC_PREFIX):
+        # Resolve templates against this file's vars before judging the prefix:
+        # a value is no less checkable for being spelled `{{ root }}/x` (#15687).
+        resolved = _resolve(value, variables)
+        if resolved is None:
+            # #15901 review: this used to `continue`, so a reference that stopped
+            # resolving LEFT the population instead of failing. The count then
+            # stayed constant across exactly the change that lost it -- the
+            # figure reported on what survived. Unresolvable values are returned
+            # so the caller can fail on them rather than quietly not counting
+            # them.
+            unresolvable.append((line_no, match.group("key"), value))
             continue
-        # A templated segment cannot be resolved statically; skip rather than guess.
-        if "{{" in value or "$" in value:
+        if not resolved.startswith(_DEPLOYED_SRC_PREFIX):
+            # Genuinely out of scope: a path that is not under the deploy root
+            # is not a repo path and never was. Distinct from unresolvable.
             continue
-        hits.append((line_no, match.group("key"), value[len(_DEPLOYED_SRC_PREFIX) :]))
-    return hits
+        hits.append((line_no, match.group("key"), resolved[len(_DEPLOYED_SRC_PREFIX) :]))
+    return hits, unresolvable
 
 
 def _groups_in(node, acc: set) -> None:
@@ -202,8 +300,33 @@ def _unresolvable_hosts(text: str, all_groups: set) -> list[tuple[int, str]]:
     return unresolved
 
 
+# Plain stdlib logging, deliberately (#1082): this runs as a bare script in CI,
+# where autobot_shared.logging_manager would pull in config this job does not
+# have -- and its RotatingFileHandler compares maxBytes against whatever a
+# config-mocking harness supplies, which breaks collection rather than the test.
+# Same convention as the module logger in scripts/check_pr_issue_batching.py.
+#
+# The violation reports below are the *findings* a developer reads; this logger
+# carries the *summary of what was examined*. One says what is wrong, the other
+# says how much was looked at, and if this file is ever converted wholesale they
+# should stay distinct.
+#
+# Written without naming the builtin: #1082's guard is line-based, so a comment
+# containing the call would be flagged as the regression it describes.
+logger = logging.getLogger(__name__)
+
 #: Name this guard reports under.
 HOOK_ID = "ansible-file-references"
+
+#: Floor for deployed-src references in THIS repository, asserted by
+#: `check_ansible_file_references_test.py` rather than by `main()`.
+#:
+#: It cannot live in `main()`: an arbitrary tree may legitimately contain no
+#: deployed-src reference at all, which `test_a_play_resolving_nothing_is_still_a_pass`
+#: exists to protect. The floor is a fact about this repository, so it is
+#: enforced where repository facts are -- and it catches the loss the
+#: `plays_read` floor cannot, a reference that stopped resolving (#15901).
+MIN_DEPLOYED_SRC_REFERENCES = 1
 
 
 # The vacuity floor below (#14896) counts plays READ, not references
@@ -215,11 +338,41 @@ HOOK_ID = "ansible-file-references"
 # 'localhost') legitimately resolves nothing, and that tree is honest.
 def main() -> int:
     """Report every deployed-src reference with no matching repo path."""
+    # A handler on *this* logger, not `basicConfig`: that configures the root
+    # logger, which routed `_scan_helpers`' reach failure to stdout as well and
+    # moved its "FIX THE SWEEP" message off stderr where its test reads it.
+    # Configuring the root logger from a library-shaped module changes streams
+    # for everyone who logs, which is a behaviour change riding a lint fix.
+    #
+    # Attached and removed per call, not cached on the logger. A persistent
+    # handler binds whatever `sys.stdout` was at construction, and pytest's
+    # sys-level capture replaces that object per test -- so a second test
+    # invoking this writes to the first test's torn-down stream and its own
+    # capture reads empty. That fails by shard composition rather than
+    # deterministically, which is the worst way for it to fail.
+    handler = logging.StreamHandler(stream=sys.stdout)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(handler)
+    previous_level, previous_propagate = logger.level, logger.propagate
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    try:
+        return _run()
+    finally:
+        logger.removeHandler(handler)
+        handler.close()
+        logger.setLevel(previous_level)
+        logger.propagate = previous_propagate
+
+
+def _run() -> int:
+    """The sweep itself. Split from `main()` so the handler lifecycle is a
+    wrapper rather than something the body has to unwind on every return path."""
     root = pathlib.Path(".").resolve()
     inventories = inventory_groups(root)
     all_groups = set().union(*inventories.values()) if inventories else set()
 
-    path_violations, host_violations = [], []
+    path_violations, host_violations, unresolvable_refs = [], [], []
     paths_checked = hosts_checked = plays_read = 0
 
     for play in _ansible_files(root):
@@ -229,10 +382,13 @@ def main() -> int:
             continue
         plays_read += 1
         rel_play = play.relative_to(root)
-        for line_no, key, rel in _referenced_repo_paths(text):
+        resolved_refs, unresolved_here = _referenced_repo_paths(text)
+        for line_no, key, rel in resolved_refs:
             paths_checked += 1
             if not (root / rel).exists():
                 path_violations.append(f"{rel_play}:{line_no}: {key} -> {rel} does not exist in the repo")
+        for line_no, key, value in unresolved_here:
+            unresolvable_refs.append(f"{rel_play}:{line_no}: {key} -> {value}")
         hosts_checked += len(_host_patterns(text))
         for line_no, pattern in _unresolvable_hosts(text, all_groups):
             host_violations.append(f"{rel_play}:{line_no}: hosts: {pattern} — no inventory defines it")
@@ -256,10 +412,21 @@ def main() -> int:
     if enforce_reach(plays_read, 1, hook=HOOK_ID, full_repo=True):
         return 1
 
-    print(
-        f"check_ansible_file_references: {paths_checked} deployed-src reference(s) resolve; "
-        f"{hosts_checked} host pattern(s) resolve against {len(inventories)} inventor"
-        f"{'y' if len(inventories) == 1 else 'ies'}."
+    # #15901 review: report the unresolvable count too. Most are legitimately
+    # unresolvable -- `{{ item }}` in a loop, `{{ cert_file }}` supplied at run
+    # time, network subnets in group_vars -- so failing on them would be wrong.
+    # But printing only the resolved count makes a reference LEAVING the
+    # population invisible: the figure reports on what survived. Both numbers
+    # together make the denominator visible, and the floor above catches the
+    # resolved side dropping.
+    logger.info(
+        "check_ansible_file_references: %d deployed-src reference(s) resolve, %d unresolvable; "
+        "%d host pattern(s) resolve against %d inventor%s.",
+        paths_checked,
+        len(unresolvable_refs),
+        hosts_checked,
+        len(inventories),
+        "y" if len(inventories) == 1 else "ies",
     )
     return 0
 
