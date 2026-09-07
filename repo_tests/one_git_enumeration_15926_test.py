@@ -59,25 +59,46 @@ MAX_DIRECT_INVOCATIONS = 40
 _MIN_FILES_PARSED = 180
 
 
-def _direct_invocations() -> list[str]:
-    """`repo_tests` sites that shell out to `git ls-files` themselves."""
+def invokes_ls_files(node: ast.Call) -> bool:
+    """Whether *node* is a subprocess invocation of ``git ls-files``.
+
+    `subprocess.run(args=[...])` is the same call as the positional form.
+    Reading only `node.args` missed it -- the THIRD keyword-form blind spot in
+    this family, after `os.walk(top=)` and `Path.glob(pattern=)`. Three
+    instances is the argument for reading the keyword wherever positional argv
+    is read, rather than fixing the one shape a review happened to report.
+    """
+    if not any(k in ast.unparse(node.func) for k in ("run", "check_output", "Popen")):
+        return False
+    argv = list(node.args) + [k.value for k in node.keywords if k.arg == "args"]
+    return "ls-files" in " ".join(ast.unparse(a) for a in argv)
+
+
+def _direct_invocations() -> tuple[list[str], int]:
+    """`repo_tests` sites that shell out to `git ls-files`, and files PARSED.
+
+    Returns the parse count, not the enumeration count. The floor has to bind to
+    what the sweep actually read: a file skipped for `SyntaxError` was never
+    examined, and a floor counting `tracked_paths` results cannot tell the
+    difference between "parsed 200 files, found none" and "parsed none".
+    """
     found: list[str] = []
+    parsed = 0
+    unreadable: list[str] = []
     for rel in tracked_paths(REPO_ROOT, "repo_tests/*.py"):
         if Path(rel).name == Path(__file__).name:
             continue  # this file names the verb in prose and in its own fixtures
         try:
             tree = ast.parse((REPO_ROOT / rel).read_text(encoding="utf-8"))
-        except SyntaxError:
+        except (SyntaxError, OSError) as exc:
+            unreadable.append(f"{rel}: {exc}")
             continue
+        parsed += 1
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            if not any(k in ast.unparse(node.func) for k in ("run", "check_output", "Popen")):
-                continue
-            if "ls-files" not in " ".join(ast.unparse(a) for a in node.args):
-                continue
-            found.append(f"{rel}:{node.lineno}")
-    return sorted(set(found))
+            if isinstance(node, ast.Call) and invokes_ls_files(node):
+                found.append(f"{rel}:{node.lineno}")
+    assert not unreadable, "tracked files this sweep could not parse:\n  " + "\n  ".join(unreadable)
+    return sorted(set(found)), parsed
 
 
 def _decoy_repository(tmp_path: Path) -> Path:
@@ -101,12 +122,11 @@ def _decoy_repository(tmp_path: Path) -> Path:
 
 def test_the_direct_invocation_count_only_shrinks() -> None:
     """Equality, not a bound: headroom under a ceiling is where the next one hides."""
-    parsed = len(tracked_paths(REPO_ROOT, "repo_tests/*.py"))
+    direct, parsed = _direct_invocations()
     assert parsed >= _MIN_FILES_PARSED, (
-        f"the sweep parsed {parsed} files, below the floor of {_MIN_FILES_PARSED} — "
+        f"the sweep PARSED {parsed} files, below the floor of {_MIN_FILES_PARSED} — "
         "a shrunken population reports 'no bypasses' for the same reason a migrated tree does"
     )
-    direct = _direct_invocations()
     assert len(direct) == MAX_DIRECT_INVOCATIONS, (
         f"{len(direct)} direct `git ls-files` invocations in repo_tests/, but "
         f"MAX_DIRECT_INVOCATIONS says {MAX_DIRECT_INVOCATIONS}. If you migrated one, "
@@ -211,3 +231,57 @@ def test_the_scrubbed_env_is_what_the_helper_passes() -> None:
     body = source.split("def tracked_paths")[1].split("\ndef ")[0]
     assert "env=scrubbed_git_env()" in body, "tracked_paths must scrub unconditionally (#15176)"
     assert scrubbed_git_env is not None
+
+
+def test_the_detector_reads_the_args_keyword_form() -> None:
+    """`subprocess.run(args=[...])` is the same invocation (#15990 review).
+
+    Asserted through `invokes_ls_files`, the predicate the sweep actually calls.
+    An earlier version of this test re-implemented the argv logic inline and so
+    passed identically with the fix reverted -- a contrast at the wrong layer
+    cannot see the change it exists for.
+    """
+    call = next(
+        n for n in ast.walk(ast.parse('subprocess.run(args=["git", "ls-files", "*.py"])')) if isinstance(n, ast.Call)
+    )
+    assert call.args == [], "fixture must use the keyword form for this to mean anything"
+    assert invokes_ls_files(call)
+
+
+def test_the_detector_does_not_report_an_unrelated_subprocess() -> None:
+    """Contrast: reading the keyword must not flag every `args=` call."""
+    call = next(n for n in ast.walk(ast.parse('subprocess.run(args=["git", "status"])')) if isinstance(n, ast.Call))
+    assert not invokes_ls_files(call)
+
+
+def test_a_glob_exclusion_is_not_treated_as_a_directory(tmp_path: Path) -> None:
+    """`?` and `[` are glob metacharacters, not directory names (#15990 review).
+
+    `?.min.js` took the directory branch and became `:(exclude)?.min.js/*`,
+    which excludes a DIRECTORY of that name and silently matches no file. A
+    filter that quietly excludes nothing is the report-clean shape again.
+    """
+    repo = tmp_path / "r"
+    repo.mkdir()
+    env = scrubbed_git_env()
+    subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True, env=env)  # nosec B603 B607
+    for name in ("a.min.js", "ab.min.js"):
+        (repo / name).write_text("x", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, env=env)  # nosec B603 B607
+
+    assert sorted(tracked_paths(repo, "*.min.js")) == ["a.min.js", "ab.min.js"]
+    assert tracked_paths(repo, "*.min.js", exclude=["?.min.js"]) == ["ab.min.js"]
+
+
+def test_the_floor_counts_parses_not_enumerated_paths() -> None:
+    """The floor must bind to files READ, not to the list handed to the loop.
+
+    `tracked_paths` can return 200 names while the sweep parses none of them.
+    Binding the floor to the enumeration cannot tell those apart, which is the
+    denominator-from-the-same-source defect one level up.
+    """
+    direct, parsed = _direct_invocations()
+    enumerated = len(tracked_paths(REPO_ROOT, "repo_tests/*.py"))
+    assert parsed <= enumerated, "more parses than files enumerated is impossible"
+    assert parsed >= _MIN_FILES_PARSED
+    assert isinstance(direct, list)

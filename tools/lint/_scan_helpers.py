@@ -79,6 +79,11 @@ EXCLUDED_DIR_NAMES: frozenset[str] = frozenset(
 PY_FLOOR = 4000
 
 
+def _looks_like_a_pattern(entry: str) -> bool:
+    """Whether *entry* is already a pathspec rather than a bare directory name."""
+    return any(ch in entry for ch in "*?[") or "/" in entry
+
+
 def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) -> List[str]:
     """Git-tracked paths under *repo_root* matching *patterns*, repo-relative.
 
@@ -108,7 +113,10 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
     """
     # A directory name needs `/*` to exclude its contents; a pattern that already
     # contains a glob or a slash is passed through as the caller wrote it.
-    excludes = [f":(exclude){e}" if ("*" in e or "/" in e) else f":(exclude){e}/*" for e in exclude]
+    # `?` and `[` are glob metacharacters too: `?.min.js` took the directory
+    # branch and became `:(exclude)?.min.js/*`, which excludes a DIRECTORY of
+    # that name and silently matches no file (#15990 review).
+    excludes = [f":(exclude){e}" if _looks_like_a_pattern(e) else f":(exclude){e}/*" for e in exclude]
     result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "ls-files", *patterns, *excludes],
         cwd=str(repo_root),
