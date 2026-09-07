@@ -201,6 +201,18 @@ STORE_AUTHORITY: dict[str, Concept] = {
         note="Deliberate exception. The challenge is single-use and TTL'd; the credential it "
         "issues is device_credentials, which is durable in Postgres.",
     ),
+    "agent_work_claims": Concept(
+        name="agent_work_claims",
+        system_of_record=Store.REDIS,
+        projections=(),
+        write_sites=("autobot_shared/coordination/work_claims.py",),
+        rebuilt_by="The holding agent re-acquires the scope on its next work step.",
+        note="Deliberate exception, and the ephemerality is the feature (#15947). A claim says "
+        "which agent is holding which scope right now; a claim that outlived its holder would turn "
+        "one crashed agent into a permanently blocked project, which is worse than the collision "
+        "claims exist to prevent. Every claim carries a TTL and is renewed by its holder, so the "
+        "durable record of the work is the a2a Task, never the claim.",
+    ),
     "autoresearch_proposal": Concept(
         name="autoresearch_proposal",
         system_of_record=Store.REDIS,

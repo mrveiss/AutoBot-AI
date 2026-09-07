@@ -210,7 +210,12 @@ class HeartbeatContextBuilder:
         # Build goal ancestry
         goal_ancestry = []
         if work_item.goal_id:
-            goal_ancestry = await self.goal_service.get_goal_ancestry_for_work_item(session, work_item.goal_id)
+            # #15930: the work item's company enables the entry check, which
+            # refuses a goal belonging to another company. Omitting it left that
+            # check off -- an optional tenant scope is off by default.
+            goal_ancestry = await self.goal_service.get_goal_ancestry_for_work_item(
+                session, work_item.goal_id, company_id=str(work_item.company_id)
+            )
 
         return {
             "work_item_id": str(work_item_id),
