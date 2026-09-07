@@ -21,6 +21,8 @@ from repo_tests.slm_frontend_publish_contract import (
     REPO_ROOT,
 )
 
+from tools.lint._scan_helpers import tracked_paths
+
 #: What makes a file a *publisher* is that it flips the served pointer, not that
 #: it builds. `npm run build:slm` alone is a builder: `role_registry.py` and
 #: `role.json.j2` both run it, and neither publishes -- vite's default `outDir`
@@ -137,21 +139,7 @@ _MIN_CANDIDATES = 400
 
 def _tracked_candidates() -> List[str]:
     """Tracked files a publisher could live in, from ``git`` not a walk (#15955)."""
-    import subprocess  # noqa: PLC0415  # local: keeps the module import side-effect free
-
-    from autobot_shared.paths import scrubbed_git_env
-
-    completed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "-z", "--", "*.sh", "*.yml", "*.yaml", "*.j2", "*.py"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        # An inherited GIT_DIR outranks `cwd=` and would enumerate another
-        # checkout's index while REPO_ROOT names this one (#14896).
-        env=scrubbed_git_env(),
-    )
-    return sorted(name for name in completed.stdout.split("\0") if name)
+    return sorted(tracked_paths(REPO_ROOT, "*.sh", "*.yml", "*.yaml", "*.j2", "*.py"))
 
 
 def test_the_candidate_sweep_reached_the_tree() -> None:

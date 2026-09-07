@@ -31,12 +31,13 @@ from __future__ import annotations
 import ast
 import os
 import subprocess
-from pathlib import Path
 from typing import Dict, List, Set, Tuple
+
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 #: Backstop only. Bound to dict literals *parsed*, never to duplicates found: a
 #: floor that tracked findings would relax itself as the tree improved, and this

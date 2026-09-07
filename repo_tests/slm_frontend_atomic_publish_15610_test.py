@@ -58,9 +58,12 @@ from typing import Any, Iterator
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 from repo_tests.slm_frontend_publish_contract import CLAUSES
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+from tools.lint._scan_helpers import tracked_paths
+
+_REPO_ROOT = repo_root()
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 _SHARED_BUILD = _ANSIBLE_ROOT / "roles" / "_shared" / "tasks" / "build_publish_slm_frontend.yml"
 _PYTHON_PUBLISHER = _REPO_ROOT / "autobot-slm-backend" / "services" / "slm_frontend_build.py"
@@ -192,21 +195,9 @@ def _nginx_files() -> list[Path]:
 
     ``git ls-files`` reads an index and never descends at all.
     """
-    import subprocess  # noqa: PLC0415  # local: keeps the module import side-effect free
 
-    from autobot_shared.paths import scrubbed_git_env
 
-    completed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "-z", "--", "*.conf", "*.conf.j2"],
-        cwd=_REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        # An inherited GIT_DIR outranks `cwd=` and would enumerate another
-        # checkout's index while _REPO_ROOT names this one (#14896).
-        env=scrubbed_git_env(),
-    )
-    return sorted({_REPO_ROOT / name for name in completed.stdout.split("\0") if name})
+    return sorted({_REPO_ROOT / name for name in tracked_paths(_REPO_ROOT, "*.conf", "*.conf.j2")})
 
 
 def _served_path_directives() -> dict[str, list[str]]:

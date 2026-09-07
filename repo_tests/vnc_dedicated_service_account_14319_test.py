@@ -21,11 +21,11 @@ account name, so a test that only checked the happy path would not pass.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import yaml
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 VNC_ROLE = REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "vnc"
 DEFAULTS = VNC_ROLE / "defaults" / "main.yml"
 TASKS = VNC_ROLE / "tasks" / "main.yml"

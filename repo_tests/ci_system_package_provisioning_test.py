@@ -14,12 +14,12 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 _CHECKER = REPO_ROOT / "tools" / "lint" / "check_ci_system_package_provisioning.py"
 
 

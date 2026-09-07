@@ -46,14 +46,14 @@ reason each — never counted.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Dict, List
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.api_routing.mount_graph import APP_ROOT, MountGraph, build_graph, registry_dirname
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = repo_root()
 _BACKEND = _REPO / "autobot-backend"
 _REGISTRY_DIRNAME = registry_dirname()
 

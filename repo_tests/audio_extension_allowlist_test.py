@@ -28,12 +28,13 @@ import ast
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
-
+from repo_tests._paths import repo_root
 from repo_tests._reach import declare
+
+from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.ssot_constants import SecurityConstants
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 
 #: The canonical definition itself, which is the one literal that must exist.
 _CANONICAL = Path("autobot_shared/ssot_constants.py")

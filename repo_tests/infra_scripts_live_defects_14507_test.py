@@ -26,8 +26,9 @@ import sys
 from unittest.mock import create_autospec
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _SCRIPTS = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts"
 _BACKEND = _REPO_ROOT / "autobot-backend"
 

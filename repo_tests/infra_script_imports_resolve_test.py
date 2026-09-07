@@ -39,10 +39,10 @@ import sys
 from pathlib import Path
 
 import pytest
-
+from repo_tests._paths import repo_root
 from repo_tests.declared_distributions import SKIP_PARTS, declared_distributions
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _SCRIPTS = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts"
 # ``.claude`` for the same reason as ``.worktrees`` (#14985): agent worktrees are
 # checked out under it, and a requirements file belonging to another branch would

@@ -41,13 +41,13 @@ tolerate.
 from __future__ import annotations
 
 import ast
-import subprocess
-from pathlib import Path
 from typing import List, Tuple
 
-from autobot_shared.paths import scrubbed_git_env
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from tools.lint._scan_helpers import tracked_paths
+
+REPO_ROOT = repo_root()
 
 #: Names a walk is rooted at when it is rooted at the repository itself. A walk
 #: from a SUBDIRECTORY cannot reach the nested checkouts and is not in scope.
@@ -85,15 +85,8 @@ Finding = Tuple[str, int, str]
 
 
 def _tooling_files() -> List[str]:
-    completed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "-z", "--", "repo_tests/*.py", "tools/*.py", "scripts/*.py", "pipeline-scripts/*.py"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    )
-    return [n for n in completed.stdout.split("\0") if n and not n.startswith(_SKIP_TREES)]
+    names = tracked_paths(REPO_ROOT, "repo_tests/*.py", "tools/*.py", "scripts/*.py", "pipeline-scripts/*.py")
+    return [n for n in names if not n.startswith(_SKIP_TREES)]
 
 
 def root_walks_in(source: str) -> List[Tuple[int, str]]:

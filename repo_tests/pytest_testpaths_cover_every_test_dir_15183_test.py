@@ -28,10 +28,14 @@ from pathlib import Path
 from typing import List, Set
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+# Base migrated this to the shared anchor (#15925); this branch had edited the
+# hand-rolled binding beside it. Take base's `repo_root()` and keep the scrub
+# import, which this branch still uses.
+REPO_ROOT = repo_root()
 
 _SKIP_PARTS = {".git", "node_modules", "venv", ".venv", "__pycache__", ".worktrees"}
 
@@ -42,14 +46,22 @@ def _tracked(root: Path, pattern: str) -> List[str]:
     ``git ls-files`` reads an index, so it cannot enter another checkout at all —
     stronger than pruning, because there is no descent to prune.
     """
+    # NOT through `tracked_paths` (#15926), deliberately. That helper RAISES on an
+    # empty result -- correct for "enumerate the population", where empty means a
+    # broken sweep (#15826). This asks a different question: "does this pattern
+    # match anything?", whose answer is legitimately no. `test_*.py` matches
+    # nothing at the repository root, and that is the finding, not a failure.
+    #
+    # An `allow_empty=` flag on the helper would be the obvious move and the
+    # wrong one: an optional parameter that switches off a guard is off by
+    # default at every site that forgets it, which is the shape of #15930 and
+    # #15931. Two questions, two call shapes.
     completed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "ls-files", "-z", "--", pattern],
         cwd=root,
         capture_output=True,
         text=True,
         check=True,
-        # An inherited GIT_DIR outranks `cwd=` and would enumerate another
-        # checkout's index while *root* names this one (#14896).
         env=scrubbed_git_env(),
     )
     return [n for n in completed.stdout.split("\0") if n]

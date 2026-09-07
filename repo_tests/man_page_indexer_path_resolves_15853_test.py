@@ -56,9 +56,11 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from repo_tests._paths import repo_root
+
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 _MODULE = REPO_ROOT / "autobot-backend/tasks/man_page_indexing.py"
 _CALLER = REPO_ROOT / "autobot-backend/tasks/knowledge_tasks.py"
 
