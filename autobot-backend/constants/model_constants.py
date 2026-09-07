@@ -11,6 +11,14 @@ MIGRATION (Issue #GH7440):
     Import directly from autobot_shared.ssot_constants for new code.
 """
 
+# #15912: both are views over `MODEL_PRICING_PER_1M_TOKENS` and live with it now.
+# `noqa: F401` because this module exists to re-export — an unused import is
+# exactly what a re-export looks like to autoflake, which has deleted one
+# before (#15911).
+from autobot_shared.model_pricing import (  # noqa: F401
+    MODEL_COSTS_PER_1M_TOKENS,
+    MODEL_PRICING_PER_1K_TOKENS,
+)
 from autobot_shared.ssot_constants import (  # noqa: F401,F403
     ANTHROPIC_CLAUDE3_HAIKU,
     ANTHROPIC_CLAUDE3_HAIKU_DATED,
@@ -68,8 +76,6 @@ from autobot_shared.ssot_constants import (  # noqa: F401,F403
     MISTRAL_MEDIUM_LATEST,
     MISTRAL_NEMO,
     MISTRAL_SMALL_LATEST,
-    MODEL_COSTS_PER_1M_TOKENS,
-    MODEL_PRICING_PER_1K_TOKENS,
     OPENAI_GPT4,
     OPENAI_GPT4_TURBO,
     OPENAI_GPT4_TURBO_PREVIEW,
