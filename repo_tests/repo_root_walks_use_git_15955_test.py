@@ -134,7 +134,10 @@ def root_walks_in_node(tree) -> List[Tuple[int, str]]:
         # reached 4,644 test files of which 3,251 -- 70% -- were another
         # checkout's. Only `**` patterns: a plain `glob("*.py")` sees one level.
         if node.func.attr == "glob" and isinstance(base, ast.Name) and base.id in _ROOT_NAMES | {"root", "base"}:
-            first = node.args[0] if node.args else None
+            # `pattern` is positional-or-keyword, so `root.glob(pattern="**/*.py")`
+            # recurses identically and was invisible while only `args[0]` was read.
+            kw = next((k.value for k in node.keywords if k.arg == "pattern"), None)
+            first = node.args[0] if node.args else kw
             if isinstance(first, ast.Constant) and isinstance(first.value, str) and "**" in first.value:
                 found.append((node.lineno, ast.unparse(node)[:90]))
     return found
@@ -352,3 +355,25 @@ def test_the_detector_ignores_a_single_level_glob() -> None:
 def test_the_detector_ignores_os_walk_of_a_subdirectory_keyword() -> None:
     """The contrast for the keyword form."""
     assert root_walks_in("for a, b, c in os.walk(top=_ANSIBLE_ROOT):\n    pass\n") == []
+
+
+def test_the_detector_reports_a_recursive_glob_with_a_pattern_keyword() -> None:
+    """`Path.glob`'s `pattern` is positional-or-keyword; both forms recurse.
+
+    Reading only `node.args[0]` saw the positional form and missed this one --
+    the same keyword blind spot already fixed for `os.walk(top=...)`, left in
+    place one branch below it. Writing the fix for one call shape and not its
+    neighbour is the miss, not the shape itself.
+    """
+    src = 'for p in root.glob(pattern="**/*_test.py"):\n    pass\n'
+    assert root_walks_in(src) == [(1, "root.glob(pattern='**/*_test.py')")]
+
+
+def test_the_detector_ignores_a_single_level_glob_by_keyword() -> None:
+    """Contrast: the keyword branch must keep the `**` restriction, not bypass it.
+
+    Without this, "handle the keyword form" could be satisfied by reporting
+    every keyword glob regardless of pattern -- passing the test above while
+    flagging anchored single-level globs across the tree.
+    """
+    assert root_walks_in('for p in root.glob(pattern="*.py"):\n    pass\n') == []
