@@ -27,8 +27,9 @@ import ast
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _BACKEND = _REPO_ROOT / "autobot-backend"
 _SKIP_PARTS = {".git", "node_modules", "__pycache__", ".worktrees", ".claude", "venv", ".venv"}
 

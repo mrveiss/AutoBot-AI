@@ -48,10 +48,11 @@ from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 _SCRIPT = REPO_ROOT / "scripts" / "check_python_file_size.py"
 _BASELINE_SCRIPT = REPO_ROOT / "repo_tests" / "python_file_size_ratchet_baseline.py"
 _KNOWN_LARGE_SCRIPT = REPO_ROOT / "scripts" / "python_file_size_known_large.py"

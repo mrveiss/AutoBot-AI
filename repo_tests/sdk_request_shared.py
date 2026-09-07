@@ -34,12 +34,12 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from pathlib import Path
 
 import httpx
 from autobot_sdk import AutoBot
+from repo_tests._paths import repo_root
 
-_REPO = Path(__file__).resolve().parents[1]
+_REPO = repo_root()
 _BACKEND = _REPO / "autobot-backend"
 
 # The BACKEND's API root, stated here independently of the SDK. If the oracle

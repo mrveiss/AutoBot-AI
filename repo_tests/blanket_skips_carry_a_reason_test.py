@@ -24,9 +24,12 @@ import ast
 import re
 from pathlib import Path
 
-from autobot_shared.paths import git_repo_root
+from repo_tests._paths import repo_root
 
-REPO = git_repo_root()
+# `git_repo_root()` with no argument asks from the process working directory, so
+# this guard's root was whatever pytest happened to be invoked from. `repo_root()`
+# anchors on the tree this file belongs to (#15925).
+REPO = repo_root()
 
 # Every blanket skip in base, with the issue that would lift it. THIS ONLY SHRINKS.
 # Never add an entry to make a new skip pass -- record the reason on the skip instead.

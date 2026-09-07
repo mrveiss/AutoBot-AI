@@ -44,8 +44,9 @@ from typing import Any, Iterator
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 
 _SHARED_BUILD = _ANSIBLE_ROOT / "roles" / "_shared" / "tasks" / "build_publish_slm_frontend.yml"

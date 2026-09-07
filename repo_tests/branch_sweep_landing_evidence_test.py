@@ -35,10 +35,11 @@ import subprocess
 from pathlib import Path
 
 import yaml
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _WORKFLOWS = _REPO_ROOT / ".github/workflows"
 _GUARD_LIB = _REPO_ROOT / "scripts/lib/branch-guards.sh"
 

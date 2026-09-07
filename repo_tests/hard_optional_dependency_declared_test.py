@@ -41,12 +41,12 @@ import sys
 from pathlib import Path
 
 import pytest
-
+from repo_tests._paths import repo_root
 from repo_tests.declared_distributions import SKIP_PARTS, declared_distributions
 
 from autobot_shared.paths import scrubbed_git_env
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _SKIP_PARTS = SKIP_PARTS
 
 # Top-level trees that must each contribute at least one parsed file. Flooring

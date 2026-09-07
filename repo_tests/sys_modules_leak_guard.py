@@ -82,14 +82,15 @@ Configuration:
 from __future__ import annotations
 
 import os
-import types
 import sys
+import types
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
 import pytest
+from repo_tests._paths import repo_root
 
 _MODE_ENV = "AUTOBOT_SYSMODULES_GUARD"
 _MODE_OFF = "off"
@@ -842,9 +843,8 @@ class _SysModulesLeakWarning(pytest.PytestWarning):
 # pytest hooks
 # ---------------------------------------------------------------------------
 
-# The repo root, derived from this file's own location — never hard-coded, so
-# moving the checkout or the machine cannot strand the guard.
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+# The repo root — asked of git, never hard-coded, so moving the checkout cannot strand the guard.
+_REPO_ROOT = repo_root()
 
 # Read once, at import: the file is small, and every hook below needs it.
 _BASELINE_PATH = _baseline_path()

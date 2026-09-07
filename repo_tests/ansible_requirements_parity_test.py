@@ -87,12 +87,13 @@ import re
 from typing import NamedTuple
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml")
 
 from repo_tests import ansible_manifest_resolution as resolution  # noqa: E402
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+_REPO_ROOT = repo_root()
 _CONSTRAINTS = _REPO_ROOT / "constraints" / "shared.txt"
 # Named `..._pip_parity_...`, NOT `..._requirements_...`: this file RECORDS
 # divergences (none, as of #15596/#15597/#15598), it does not DECLARE
