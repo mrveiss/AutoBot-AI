@@ -33,13 +33,28 @@ files invoking the indexer in *executable* code is exactly the one module that
 should. Comments and docstrings are stripped first -- the module documents the
 old cwd-relative path directly above the constant that replaced it, so a raw
 match is satisfied by the explanation of the fix rather than by the fix.
+
+**Two known limits, stated rather than half-covered.**
+
+A name built by concatenation -- ``"index_all_man_" + "pages.py"`` -- is missed.
+A partial constant-folder for a form nobody writes would be worse than a
+recorded gap: it would cover the easy cases and read as covering all of them.
+*Implicit* concatenation (adjacent string literals) IS caught, because ``ast``
+merges them into one ``Constant`` before ``unparse`` runs -- that is the form
+someone actually reaches for when a path gets long, and it works by a property
+of the AST rather than by design here.
+
+The floor counts files **parsed**, not files opened: ``executable_source``
+returns ``None`` for a file it cannot parse, and those are skipped rather than
+counted. A floor tracking the larger set is satisfied by files that contribute
+nothing, which is how a floor stops being a reach check.
 """
 
 import ast
 import re
 import subprocess
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from autobot_shared.paths import scrubbed_git_env
 
@@ -86,7 +101,7 @@ def _tracked_python_files() -> List[str]:
     return [n for n in completed.stdout.split("\n") if n and not n.startswith(".worktrees/")]
 
 
-def executable_source(text: str) -> str:
+def executable_source(text: str) -> Optional[str]:
     """*text* with comments and docstrings removed, other string literals kept.
 
     Both of those have to go and nothing else may. A comment mentioning the
@@ -104,15 +119,21 @@ def executable_source(text: str) -> str:
     try:
         tree = ast.parse(text)
     except SyntaxError:
-        return ""
+        return None
     for node in ast.walk(tree):
         body = getattr(node, "body", None)
         if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and body:
             first = body[0]
             if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
                 first.value.value = ""
-        if isinstance(body, list):
-            for stmt in body:
+        # `orelse`, `handlers` and `finalbody` as well as `body`: a bare string
+        # in an `else:` or `except:` block is the same comment-shaped statement,
+        # and reading only `body` reported it as executable code.
+        for attr in ("body", "orelse", "finalbody", "handlers"):
+            # `isinstance(..., list)`: `ast.Lambda.body` and `ast.IfExp.body` are
+            # single expressions, not statement lists, and iterating one raises.
+            statements = getattr(node, attr, None)
+            for stmt in statements if isinstance(statements, list) else []:
                 if (
                     isinstance(stmt, ast.Expr)
                     and isinstance(stmt.value, ast.Constant)
@@ -131,8 +152,17 @@ def files_naming_the_indexer() -> Tuple[List[str], int]:
             text = (REPO_ROOT / name).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
+        source = executable_source(text)
+        if source is None:
+            # Unparseable. NOT counted: `executable_source` returns "" for a file
+            # it cannot parse, so counting it here would let the floor track the
+            # files *opened* while the check only sees the files *parsed*. The
+            # docstring on the floor says "files examined", and examined has to
+            # mean examined -- a superset floor is satisfied by files that
+            # contribute nothing, which is how a floor stops being a reach check.
+            continue
         swept += 1
-        if _INDEXER_NAME in executable_source(text):
+        if _INDEXER_NAME in source:
             found.append(name)
     return sorted(found), swept
 
@@ -289,6 +319,34 @@ def test_the_expected_executor_is_still_there() -> None:
     )
 
 
+def stale_allowlist_entries(allowed, found) -> List[str]:
+    """Entries in *allowed* that no longer appear in *found*.
+
+    Extracted so it can be tested against a fixture. It was the one check in
+    this file with nothing proving it fires — asserted rather than demonstrated,
+    in a file whose whole subject is the difference.
+    """
+    return sorted(path for path in allowed if path not in found)
+
+
+def test_the_staleness_check_reports_an_entry_nothing_needs() -> None:
+    """The fixture that SHOULD trip it, and the answer to the strongest
+    objection against keeping an allowlist at all.
+
+    A tree where every entry is still live says nothing about whether a dead one
+    would be caught, which is exactly the enumerate-vs-discover complaint this
+    guard exists to answer — applied to the exemption list rather than to the
+    callers.
+    """
+    assert stale_allowlist_entries({"gone.py": "reason"}, ["still/here.py"]) == ["gone.py"]
+
+
+def test_the_staleness_check_passes_a_live_entry() -> None:
+    """The contrast case. Without it, a function returning every key satisfies
+    the assertion above."""
+    assert stale_allowlist_entries({"live.py": "reason"}, ["live.py", "other.py"]) == []
+
+
 def test_every_allowlist_entry_still_names_the_indexer() -> None:
     """An allowlist is a measurement, and measurements go stale.
 
@@ -296,7 +354,7 @@ def test_every_allowlist_entry_still_names_the_indexer() -> None:
     for a condition that no longer exists — and the next file at that path
     inherits it silently.
     """
-    stale = sorted(path for path in _ALLOWED if path not in _FOUND)
+    stale = stale_allowlist_entries(_ALLOWED, _FOUND)
     assert not stale, (
         f"`_ALLOWED` exempts {stale}, which no longer name {_INDEXER_NAME} in executable code. "
         "Remove the entry: an exemption nothing needs is one the next file at that path inherits."
