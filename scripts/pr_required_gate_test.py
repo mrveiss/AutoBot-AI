@@ -121,7 +121,15 @@ def test_the_required_population_is_an_input_not_a_constant():
     Asserted structurally -- `verdict` cannot answer without being given the list,
     so no hardcoded set can drift out of date with the protection rules.
     """
-    assert verdict([], {"anything": "failure"})["verdict"] == "CONTEXTS-GREEN"
+    # With no required contexts the required set is vacuously satisfied -- and the
+    # failing check is still surfaced, because "nothing is required" is not
+    # "nothing is wrong".
+    empty = verdict([], {"anything": "failure"})
+    assert empty["not_green"] == []
+    assert empty["failing_unrequired"] == [{"context": "anything", "state": "failure"}]
+    # And the population genuinely comes from the argument: the same observation
+    # with that context REQUIRED moves it from surfaced-aside to blocking.
+    assert verdict(["anything"], {"anything": "failure"})["verdict"] == "BLOCKED"
     assert verdict(["x"], {})["never_reported"] == ["x"]
 
 
