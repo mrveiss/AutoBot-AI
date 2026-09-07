@@ -155,6 +155,19 @@ it is a *technique*, available to one person, and it is what turns "apply the
 check to the measurement" from a diagnosis into something you can actually do.
 
 
+**The same rule applies to a mutation, from the other end.** A mutation that
+*survives* is a claim to check, not a result to report. One re-derivation on
+#15962 replaced a return statement and left the `subprocess.run(["git",
+"ls-files", …])` above it, so the file still read as git-sourced: the mutant
+survived, the detector was correct, and the probe was the broken thing. Re-run
+against the whole block it failed 1 of 12.
+
+A known positive proves the detector **can** fire. Verifying the mutation proves
+the probe **did** what it claimed. Both exist because an instrument's output
+cannot distinguish *"the subject is broken"* from *"I measured wrong"* — and a
+surviving mutant is the more dangerous of the two, because it presents as a
+finding rather than as a silence.
+
 ## Worked example — the one that passes
 
 `repo_tests/python_file_size_ratchet_baseline.py`, measured against
