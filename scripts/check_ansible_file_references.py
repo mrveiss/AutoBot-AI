@@ -304,7 +304,7 @@ def _unresolvable_hosts(text: str, all_groups: set) -> list[tuple[int, str]]:
 # where autobot_shared.logging_manager would pull in config this job does not
 # have -- and its RotatingFileHandler compares maxBytes against whatever a
 # config-mocking harness supplies, which breaks collection rather than the test.
-# Same convention as scripts/check_pr_issue_batching.py:55.
+# Same convention as the module logger in scripts/check_pr_issue_batching.py.
 #
 # The violation reports below are the *findings* a developer reads; this logger
 # carries the *summary of what was examined*. One says what is wrong, the other
