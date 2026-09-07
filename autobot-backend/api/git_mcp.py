@@ -286,24 +286,9 @@ def _validate_git_command(git_args: List[str]) -> None:
 
 
 async def _run_git_process(cmd: List[str], repo_path: str, timeout: int) -> Metadata:
-    """Execute git process and return result (Issue #665: extracted helper).
-
-    Through :func:`autobot_shared.git_probe.start_git`, which scrubs the ambient
-    git environment (#15991). This ran `create_subprocess_exec` with no `env=`,
-    so it inherited `GIT_DIR`/`GIT_WORK_TREE` whole — and **`GIT_DIR` outranks
-    both the `-C repo_path` in the argv and the `cwd=` here**:
-
-        git -C /a ls-files                        -> /a's files
-        GIT_DIR=/b/.git git -C /a ls-files        -> /b's files
-
-    So `is_repository_allowed` validated a path that git then did not operate
-    on. Not "the path is unused" — it is used twice, and one environment
-    variable outranks both, which is why adding a third path check could not
-    have helped.
-
-    `start_git` also REFUSES a caller-supplied `env=` (`_reject_env`), so the
-    scrub is not a parameter this call site can omit later.
-    """
+    """Execute git process (Issue #665) via `start_git`, which scrubs the ambient env:
+    GIT_DIR outranks `-C` and `cwd=`, so an inherited one made the VALIDATED path the
+    one git did not operate on (#15991)."""
     process = await start_git(
         *cmd[1:],  # `cmd[0]` is "git"; start_git supplies the executable itself
         cwd=repo_path,

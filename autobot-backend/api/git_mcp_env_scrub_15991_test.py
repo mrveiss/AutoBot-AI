@@ -63,8 +63,7 @@ async def test_the_endpoint_reads_the_validated_repository_not_git_dir(tmp_path,
     assert result["success"], result["stderr"]
     assert "mine.txt" in result["stdout"]
     assert "theirs.txt" not in result["stdout"], (
-        "the endpoint enumerated the repository GIT_DIR named, not the one its "
-        "containment check validated"
+        "the endpoint enumerated the repository GIT_DIR named, not the one its " "containment check validated"
     )
 
 
