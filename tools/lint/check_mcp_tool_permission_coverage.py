@@ -40,7 +40,7 @@ under-granted tool makes `mcp_tool_permissions_test.py` and this module both
 GREENER by doing nothing, not redder — there is no accidental failure to
 notice. `.github/workflows/code-quality.yml` therefore calls this module with
 ``--audit``, the same shape as ``check_flake8_exclude_anchoring.py
---audit-excludes`` and ``check_infra_scripts_undefined_names.py --audit``.
+--audit-excludes`` and ``check_undefined_names.py --audit``.
 
 The audit reports how many live tools it reached and fails below a floor,
 because a scan that finds zero tools passes having asserted nothing — the
@@ -88,7 +88,7 @@ from autobot_shared.auth.mcp_tool_permissions import (  # noqa: E402
 )
 
 # Plain stdlib logging, deliberately (#1082) — same trade as
-# `check_infra_scripts_undefined_names.py`: this runs as a bare script inside a
+# `check_undefined_names.py`: this runs as a bare script inside a
 # required check, and `autobot_shared.logging_manager` would drag config
 # loading into that path.
 logger = logging.getLogger(__name__)
