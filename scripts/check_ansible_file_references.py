@@ -344,15 +344,30 @@ def main() -> int:
     # Configuring the root logger from a library-shaped module changes streams
     # for everyone who logs, which is a behaviour change riding a lint fix.
     #
-    # Attached here rather than at import so importing this module for its
-    # helpers adds no handler; and on stdout because this summary was already on
-    # stdout and consumers read it there.
-    if not logger.handlers:
-        handler = logging.StreamHandler(stream=sys.stdout)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
-        logger.propagate = False
+    # Attached and removed per call, not cached on the logger. A persistent
+    # handler binds whatever `sys.stdout` was at construction, and pytest's
+    # sys-level capture replaces that object per test -- so a second test
+    # invoking this writes to the first test's torn-down stream and its own
+    # capture reads empty. That fails by shard composition rather than
+    # deterministically, which is the worst way for it to fail.
+    handler = logging.StreamHandler(stream=sys.stdout)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(handler)
+    previous_level, previous_propagate = logger.level, logger.propagate
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    try:
+        return _run()
+    finally:
+        logger.removeHandler(handler)
+        handler.close()
+        logger.setLevel(previous_level)
+        logger.propagate = previous_propagate
+
+
+def _run() -> int:
+    """The sweep itself. Split from `main()` so the handler lifecycle is a
+    wrapper rather than something the body has to unwind on every return path."""
     root = pathlib.Path(".").resolve()
     inventories = inventory_groups(root)
     all_groups = set().union(*inventories.values()) if inventories else set()
