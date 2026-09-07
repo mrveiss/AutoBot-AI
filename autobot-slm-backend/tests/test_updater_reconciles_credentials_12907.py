@@ -178,11 +178,7 @@ def test_reconcile_is_defined_exactly_once():
         f"(floor {_MIN_YAML_FILES}). FIX THE SWEEP -- a sweep that reads nothing "
         "cannot find a duplicated credential-strip and passes for free."
     )
-    copies = [
-        path
-        for path in scanned
-        if _STRIP_FINGERPRINT in path.read_text(encoding="utf-8", errors="ignore")
-    ]
+    copies = [path for path in scanned if _STRIP_FINGERPRINT in path.read_text(encoding="utf-8", errors="ignore")]
     assert copies == [_RECONCILE], (
         "the credential-strip logic must live only in "
         f"{_RECONCILE.name}; also found in {[str(p) for p in copies if p != _RECONCILE]}"
