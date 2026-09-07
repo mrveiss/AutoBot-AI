@@ -32,7 +32,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+REPO_ROOT = repo_root()
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 ACTIONS_DIR = REPO_ROOT / ".github" / "actions"
 

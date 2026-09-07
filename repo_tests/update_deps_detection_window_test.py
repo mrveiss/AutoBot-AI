@@ -32,10 +32,11 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 yaml = pytest.importorskip("yaml")
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = repo_root()
 _PLAYBOOK = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "playbooks" / "update-all-nodes.yml"
 
 

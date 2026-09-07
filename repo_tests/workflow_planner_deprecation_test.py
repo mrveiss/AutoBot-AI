@@ -29,7 +29,9 @@ import ast
 from pathlib import Path
 from typing import List
 
-_REPO = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+_REPO = repo_root()
 _BACKEND = _REPO / "autobot-backend"
 
 _MODULE = _BACKEND / "orchestration" / "workflow_planner.py"

@@ -28,11 +28,11 @@ PR's run gets approved through.
 
 from __future__ import annotations
 
-import pathlib
 
 import yaml
+from repo_tests._paths import repo_root
 
-_WORKFLOWS_DIR = pathlib.Path(__file__).resolve().parents[1] / ".github" / "workflows"
+_WORKFLOWS_DIR = repo_root() / ".github" / "workflows"
 
 # (workflow filename, id of the job that pushes as github-actions[bot])
 _PUSH_WORKFLOWS = [

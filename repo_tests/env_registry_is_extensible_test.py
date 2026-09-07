@@ -25,7 +25,9 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from repo_tests._paths import repo_root
+
+REPO_ROOT = repo_root()
 SHARED = REPO_ROOT / "autobot_shared"
 PARENT = SHARED / "env_registry.py"
 

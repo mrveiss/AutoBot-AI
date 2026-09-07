@@ -38,10 +38,11 @@ import sys
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 
 #: The refusal every converted checker must print. Asserted as a literal so a
 #: reworded message cannot quietly stop being findable by the people it is for.

@@ -44,11 +44,12 @@ from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 from repo_tests.pip_ignore_scope_test import _files_reachable_from, _resolve_includes
 
 from autobot_shared.paths import scrubbed_git_env
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _CONFIG = _REPO_ROOT / ".github" / "dependabot.yml"
 
 # Relative to the repo root, never matched against the absolute path (#14484):

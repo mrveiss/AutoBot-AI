@@ -20,6 +20,7 @@ repeated here; where the two disagree, **this file wins**.
 | Reviewing or changing path validation, session ownership, plugin loading, or secrets | [`THREAT_MODEL.md`](docs/developer/THREAT_MODEL.md) |
 | Claiming a work scope, adding a lock/lease, or any "which agent owns this" state | [`AGENT_COORDINATION.md`](docs/developer/AGENT_COORDINATION.md) |
 | Deviating from a standard pattern on purpose | [`ARCHITECTURE_EXCEPTIONS.md`](docs/developer/ARCHITECTURE_EXCEPTIONS.md) |
+| Adding a ratchet, changing its detector or matcher, or freezing/regenerating a baseline | [`RATCHET_BASELINES.md`](docs/developer/RATCHET_BASELINES.md) |
 
 ## Engineering Standard
 

@@ -30,8 +30,9 @@ from typing import Any
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = repo_root()
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 
 _UPDATE_ALL_NODES = _ANSIBLE_ROOT / "playbooks" / "update-all-nodes.yml"
