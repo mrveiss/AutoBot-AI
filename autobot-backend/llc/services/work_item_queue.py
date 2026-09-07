@@ -28,8 +28,9 @@ import logging
 import uuid
 from typing import Any, List, Optional
 
-from sqlalchemy import case, nulls_last, select
+from sqlalchemy import and_, case, nulls_last, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from ..models.enums import WorkItemPriority, WorkItemStatus
 from ..models.work_item import LLCWorkItem
@@ -55,12 +56,46 @@ PRIORITY_RANK = case(
 def backlog_order() -> List[Any]:
     """The backlog's ordering, as `order_by` arguments.
 
-    Explicit `backlog_position` first (NULLS LAST, so items never reordered keep
-    their natural priority/age ordering), then priority rank, then age. This is
-    what makes a `bulk_reorder` write immediately observable to both the list
-    view and the next agent to ask for work.
+    Explicit `backlog_position` first, then priority rank, then age. This is what
+    makes a `bulk_reorder` write immediately observable to both the list view and
+    the next agent to ask for work.
+
+    **The `nulls_last` is currently dead, and the comment it replaces was wrong.**
+    That comment said NULLS LAST lets items never reordered keep their natural
+    priority/age ordering. `backlog_position` is `nullable=False` with
+    `server_default="0"` and `bulk_reorder` assigns `0..n-1`, so no row is ever
+    NULL: un-reordered items sit at 0 and therefore sort AHEAD of anything
+    reordered to position >= 1. `nulls_last` is retained because it costs nothing
+    and becomes correct the moment the column takes a sentinel, but it is not
+    doing the work the old wording claimed. Tracked as #15963 -- the fix is a
+    sentinel plus a data migration, and existing `0` rows are ambiguous between
+    "untouched" and "reordered to first", which no migration can separate.
     """
     return [nulls_last(LLCWorkItem.backlog_position.asc()), PRIORITY_RANK, LLCWorkItem.created_at.asc()]
+
+
+def claimable_by(agent_uuid: uuid.UUID) -> ColumnElement[bool]:
+    """Assignment predicate: unassigned, or already this agent's.
+
+    "Unassigned" requires BOTH assignee columns to be null. Testing only
+    `assignee_agent_id` let an agent claim an item assigned to a USER
+    (CWE-863) — and `checkout` writes `assignee_type = agent` for whatever it
+    claims, so the row came out naming an agent and a user at once, with the
+    type agreeing with only one of them. `checkout` now also clears
+    `assignee_user_id`, which keeps a row consistent; this predicate is what
+    stops the claim happening at all.
+
+    Split out of the `checkout_next` SELECT so the rule can be compiled and
+    asserted on directly — the behavioural path needs Postgres and skips
+    without it, and a security regression test that skips is not a test.
+    """
+    return or_(
+        and_(
+            LLCWorkItem.assignee_agent_id.is_(None),
+            LLCWorkItem.assignee_user_id.is_(None),
+        ),
+        LLCWorkItem.assignee_agent_id == agent_uuid,
+    )
 
 
 async def checkout_next(
@@ -98,13 +133,17 @@ async def checkout_next(
             LLCWorkItem.company_id == uuid.UUID(company_id),
             LLCWorkItem.status == WorkItemStatus.READY.value,
             LLCWorkItem.checkout_run_id.is_(None),
+            # In SQL, not in Python after the fact. The LIMIT must apply to
+            # ELIGIBLE rows: filtering afterwards meant ten items assigned to
+            # other agents returned "no work" while eligible items sat below
+            # them, and the bound silently became "how many of the top ten are
+            # mine" rather than "how many claims will I attempt".
+            claimable_by(uuid.UUID(agent_id)),
         )
         .order_by(*backlog_order())
         .limit(CHECKOUT_CANDIDATES)
     )
     for item in (await session.execute(eligible)).scalars().all():
-        if item.assignee_agent_id is not None and str(item.assignee_agent_id) != agent_id:
-            continue
         try:
             return await service.checkout(
                 session,
