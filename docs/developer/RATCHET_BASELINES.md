@@ -7,8 +7,10 @@ freezing, that baseline cannot distinguish **"the tree contains N instances"**
 from **"the detector can see N instances"** — and nothing in the pattern ever
 forces the difference to surface.
 
-Five baselines were re-derived by implementations sharing neither enumeration nor
-matching with their detectors. **Four had a boundary a reader cannot see. The one
+Four baselines were re-derived by implementations sharing neither enumeration nor
+matching with their detectors; the fifth (hardcoded-values) was inspected rather
+than re-derived and is congruent **by construction**, which tests nothing about
+detector blindness — it is listed below as outstanding, not as evidence. **Four had a boundary a reader cannot see. The one
 that passes is the one that declares and guards it.**
 
 ## What goes wrong
@@ -88,22 +90,50 @@ flag silently discards the majority case.
 That is the whole difficulty: both re-derivations of this one gate produced
 large, plausible numbers from a correctly transcribed regex, and nothing in
 either result announced which predicate had actually been measured. The first
-author's script escaped only because Python makes the flag part of the compiled
-pattern, so the invocation could not be separated from it — the instrument
-prevented the mistake rather than the reader.
+author's script escaped only because it **passed `re.I` explicitly**; Python
+stores the flag on the compiled object but enforces nothing about a second
+implementation, which is free to omit it and did. So the re-derivation must
+reproduce the flag **and** the invocation, not merely the pattern text — parity
+here was a choice that happened to be made, never a property of the language.
 
-### 6. Give the re-derivation its own non-vacuity floor
+### 6. Give the re-derivation a known positive it must find
 
-The instrument checking the instrument is an instrument. A re-derivation of the
-file-size ratchet first reported **497 over-limit files with no baseline entry** —
-a catastrophic-looking finding produced by parsing `KNOWN_LARGE` as an
-`ast.Assign` when it is annotated and therefore an `ast.AnnAssign`. The parse
-returned zero entries, so every file read as missing.
+The instrument checking the instrument is an instrument, and it gets the same
+free pass everything else on this page is about.
 
-The tell was the number: 497 missing and 497 over-limit are the same number,
-which is what comparing against an empty set looks like. A floor asserting the
-baseline parsed to more than zero entries would have caught it before the result
-was ever read.
+A re-derivation of the file-size ratchet first reported **497 over-limit files
+with no baseline entry** — a catastrophic-looking finding produced by parsing
+`KNOWN_LARGE` as an `ast.Assign` when it is annotated and therefore an
+`ast.AnnAssign`. The parse returned zero entries, so every file read as missing.
+A second attempt to count the same baseline by grep returned **501**, then
+**499** on a variant — both catching docstring lines, and neither agreeing with
+the AST parse's 497.
+
+So assert a **known positive** before the output means anything: a case whose
+answer you already have, which the detector must find.
+
+    assert found_control, "detector does not find the known instance — result below is meaningless"
+
+This is not a floor on the count. A floor on the count is a claim about the
+*result*, so it breaks the moment a population is legitimately empty — which is
+every ratchet on the day it is introduced. A known positive is a claim about the
+*instrument*, so it holds at any population size including zero, and it is the
+only one of the two that distinguishes **"nothing is wrong"** from **"nothing
+was measured"**.
+
+That distinction is the whole point: *a zero from a broken detector is
+indistinguishable from a clean codebase.* A count that changes when you rephrase
+the question — 497, 501, 499 — was never a count, and only a fixed known case
+tells you which of the three instruments to trust.
+
+**And this is the one rule on this page a lone author can apply.** Every other
+error recorded here was caught by a second party or a second method, never by
+the author rereading — which is a strong argument for independent re-derivation
+and a weak one for individual care, because nobody can reread their way out of a
+blind spot they share with their own instrument. A known positive is different:
+it is a *technique*, available to one person, and it is what turns "apply the
+check to the measurement" from a diagnosis into something you can actually do.
+
 
 ## Worked example — the one that passes
 
@@ -162,7 +192,7 @@ symmetric difference.
 | citations (#15896) | docstring bodies unreadable by the filter | no | no | 8 vs 26 |
 | commit-trailer | history unexamined; only PR ranges | no | no | 4 vs 7,087 |
 | `inline_generics` | counter matches inside comments (#15771) | no | no | 577 vs 573 |
-| hardcoded-values | `HV_SCAN_EXTENSIONS`; systemd units unreachable (#15903) | partly | no | congruent by construction |
+| hardcoded-values | `HV_SCAN_EXTENSIONS`; systemd units unreachable (#15903) | partly | no | **not independently re-derived** |
 
 ### Why commit-trailer is the clearest case
 
@@ -187,4 +217,4 @@ rather than coverage.
 - [ ] The population was derived a second way before freezing, sharing neither enumeration nor matching
 - [ ] That comparison was over **sets**, not counts
 - [ ] The second derivation replicated the predicate — anchoring, exemptions, and all
-- [ ] Both the detector and the re-derivation have non-vacuity floors bound to *what was examined*, never to *what was found*
+- [ ] Both the detector and the re-derivation have a known positive they must find before their output is read
