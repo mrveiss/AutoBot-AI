@@ -43,7 +43,7 @@ import logging
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -79,8 +79,19 @@ EXCLUDED_DIR_NAMES: frozenset[str] = frozenset(
 PY_FLOOR = 4000
 
 
-def tracked_paths(repo_root: Path, *patterns: str) -> List[str]:
+def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) -> List[str]:
     """Git-tracked paths under *repo_root* matching *patterns*, repo-relative.
+
+    *exclude* entries become git ``:(exclude)`` pathspecs, so **git does the
+    matching** (#15926). Every caller before this filtered in Python after
+    enumerating, which is two matchers over one question — and #15510 is what
+    that costs: an exclusion tested against the ABSOLUTE path fired on every
+    file when the checkout itself lived under a directory of that name. Git
+    matches the same repo-relative path it returns, so the two cannot disagree.
+
+    Pass bare directory or glob fragments (``"node_modules"``, ``"*.min.js"``);
+    the ``:(exclude)`` prefix and a trailing ``/*`` for directories are added
+    here, so no caller re-decides the pathspec syntax.
 
     ``cwd=repo_root`` anchors the answer: run from a subdirectory,
     ``git ls-files`` still succeeds and returns paths re-prefixed relative
@@ -95,8 +106,11 @@ def tracked_paths(repo_root: Path, *patterns: str) -> List[str]:
             the caller cannot tell the two apart, so this refuses to make
             them look alike.
     """
+    # A directory name needs `/*` to exclude its contents; a pattern that already
+    # contains a glob or a slash is passed through as the caller wrote it.
+    excludes = [f":(exclude){e}" if ("*" in e or "/" in e) else f":(exclude){e}/*" for e in exclude]
     result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", *patterns],
+        ["git", "ls-files", *patterns, *excludes],
         cwd=str(repo_root),
         capture_output=True,
         text=True,
