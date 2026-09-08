@@ -93,6 +93,20 @@ autobot-infrastructure/
 
 ## Deployment
 
+**The installer and the Ansible fleet are sequential stages, not alternatives (#15993).**
+**Both stages are Ansible** — what differs is the inventory it runs against.
+
+1. `install.sh` turns a blank Debian/Ubuntu host into the SLM control node. It installs
+   ansible-core (`constraints/ansible-core.txt` pins the version that node runs),
+   generates a **localhost** inventory (`install.sh:534`), and runs
+   `ansible-playbook playbooks/deploy-slm-manager.yml -e target_host=localhost` (`:652`).
+2. From that control node, Ansible then reaches the **fleet nodes**. The installer's own
+   usage text states the order: *"After installation, use the SLM web UI setup wizard to
+   add fleet nodes."*
+
+So a reader choosing "installer *or* Ansible" has misread the question: the installer is
+Ansible-against-localhost, and the fleet stage is Ansible-against-everything-else.
+
 ### Sync Commands
 
 ```bash
