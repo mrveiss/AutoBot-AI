@@ -46,12 +46,7 @@ logger = logging.getLogger(__name__)
 # Role to systemd service mapping
 ROLE_SERVICE_MAP: Dict[str, list] = {
     "slm-agent": ["slm-agent"],
-    # #16060: `redis-stack-server` FIRST -- that is what roles/redis installs,
-    # and neither of the other two exists on a provisioned node. The reconciler
-    # was looking for units that are not there, so it could not find the service
-    # it is responsible for. The legacy names stay as a fallback for a node
-    # provisioned before the Redis Stack move, not as equal candidates.
-    "redis": ["redis-stack-server", "redis-server", "redis"],
+    "redis": ["redis-stack-server", "redis-server", "redis"],  # canonical 1st (#16060)
     "backend": ["autobot-backend", "autobot"],
     "frontend": ["autobot-frontend"],
     "npu-worker": ["autobot-npu-worker"],
