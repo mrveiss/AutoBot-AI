@@ -48,6 +48,37 @@ def _jobs(filename: str) -> dict:
     return document["jobs"]
 
 
+def test_there_is_a_bot_push_workflow_to_check():
+    """Runs first: every assertion below is inside a `for … in _PUSH_WORKFLOWS`.
+
+    An empty list makes all three pass by having nothing to iterate, which is a
+    clean result reporting on nothing — the exact shape those tests exist to
+    prevent in the workflows they guard.
+
+    This is not hypothetical. The list held two entries until #15934 deleted
+    `auto-fix-formatting.yml`; it holds one now, and the codegen half is
+    already announced for deletion once *fail-with-the-recipe* replaces
+    *fix-and-push*. **The commit that empties this list will turn three passing
+    tests into three vacuous ones, and nobody will look, because they will be
+    passing.**
+
+    So the floor is here rather than in the reviewer's memory. If the last bot
+    push workflow genuinely goes away, delete this file — do not let it stand
+    as three green assertions over an empty list.
+    """
+    assert _PUSH_WORKFLOWS, (
+        "no bot-push workflows declared, so every assertion in this file "
+        "iterates nothing and passes.\n"
+        "If the last one was deliberately removed, delete this file; if one was "
+        "missed, add it to _PUSH_WORKFLOWS."
+    )
+    for filename, _ in _PUSH_WORKFLOWS:
+        assert (_WORKFLOWS_DIR / filename).is_file(), (
+            f"{filename} is declared here but absent from {_WORKFLOWS_DIR} — "
+            "the entry outlived the workflow it names."
+        )
+
+
 def test_every_bot_push_job_has_a_same_repo_fork_guard():
     """Precondition for the rest of this file: if the push job itself were
     unguarded, scoping only the approval job would still leave a fork path."""
