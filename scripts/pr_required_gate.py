@@ -75,17 +75,10 @@ def latest_per_name(runs: Iterable[dict]) -> dict[str, str]:
     return {name: state for name, (_started, state) in newest.items()}
 
 
-def verdict(required: Iterable[str], observed: dict[str, str]) -> dict:
-    """Split required contexts into never-reported, running, not-green, and green.
-
-    Also reports checks that are FAILING BUT NOT REQUIRED. GitHub will merge past
-    those, and this tool answering only "are the required contexts green" is a
-    narrower question than "is this safe to merge" -- a distinction that nearly
-    landed #15972 with three failing `python-suite` shards, because `python-suite`
-    is not in branch protection's list. A failing test is a failing test whether or
-    not a protection rule happens to name it, so it is surfaced rather than
-    silently excluded from a verdict a reader will treat as a merge decision.
-    """
+def _split_required(
+    required: Iterable[str], observed: dict[str, str]
+) -> tuple[list[str], list[dict[str, str]], list[dict[str, str]], list[str]]:
+    """Sort every required context into never-reported / running / not-green / green."""
     never: list[str] = []
     running: list[dict[str, str]] = []
     not_green: list[dict[str, str]] = []
@@ -100,44 +93,71 @@ def verdict(required: Iterable[str], observed: dict[str, str]) -> dict:
             running.append({"context": context, "state": state})
         else:
             not_green.append({"context": context, "state": state})
+    return never, running, not_green, green
+
+
+def _required_result(never: list, running: list, not_green: list) -> str:
+    """The verdict from the required contexts alone, before unrequired checks weigh in."""
     if not never and not running and not not_green:
-        result = "CONTEXTS-GREEN"
-    elif not_green or never:
+        return "CONTEXTS-GREEN"
+    if not_green or never:
         # `never` BLOCKS rather than pends, and the distinction is the whole point.
         # A context that has not reported is ambiguous between "has not started
         # yet" and "will never start" -- a branch conflicting with base produces
         # ZERO required contexts and waits forever. Only looking distinguishes
         # them, so the verdict must send someone to look.
-        result = "BLOCKED"
-    else:
-        # Every required context is running and none has disagreed: the answer is
-        # not yet knowable. Distinct from BLOCKED so a caller can tell "wait" from
-        # "act" without parsing lists.
-        result = "PENDING"
-    required_set = set(required)
-    failing_unrequired = sorted(
-        (
-            {"context": name, "state": state}
-            for name, state in observed.items()
-            if name not in required_set
-            and state not in _ACCEPTABLE
-            and state not in _RUNNING
-        ),
-        key=lambda entry: entry["context"],
-    )
-    # A NON-REQUIRED check that is still running is not absent. Reporting only the
-    # failing ones made a PR read CONTEXTS-GREEN while eight `python-suite` shards
-    # were pending -- including the shard that had turned base red an hour earlier.
-    # An unfinished check cannot have failed yet, which is exactly why it must not
-    # be read as having passed.
-    running_unrequired = sorted(
-        (
-            {"context": name, "state": state}
-            for name, state in observed.items()
-            if name not in required_set and state in _RUNNING
-        ),
-        key=lambda entry: entry["context"],
-    )
+        return "BLOCKED"
+    # Every required context is running and none has disagreed: the answer is not
+    # yet knowable. Distinct from BLOCKED so a caller can tell "wait" from "act"
+    # without parsing lists.
+    return "PENDING"
+
+
+def _unrequired(
+    observed: dict[str, str], required_set: set[str]
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Checks outside branch protection, split into failing and still-running.
+
+    A NON-REQUIRED check that is still running is not absent. Reporting only the
+    failing ones made a PR read CONTEXTS-GREEN while eight `python-suite` shards
+    were pending -- including the shard that had turned base red an hour earlier.
+    An unfinished check cannot have failed yet, which is exactly why it must not
+    be read as having passed.
+    """
+
+    def pick(predicate) -> list[dict[str, str]]:
+        return sorted(
+            (
+                {"context": name, "state": state}
+                for name, state in observed.items()
+                if name not in required_set and predicate(state)
+            ),
+            key=lambda entry: entry["context"],
+        )
+
+    failing = pick(lambda state: state not in _ACCEPTABLE and state not in _RUNNING)
+    return failing, pick(lambda state: state in _RUNNING)
+
+
+def verdict(required: Iterable[str], observed: dict[str, str]) -> dict:
+    """Split required contexts into never-reported, running, not-green, and green.
+
+    Also reports checks that are FAILING BUT NOT REQUIRED. GitHub will merge past
+    those, and this tool answering only "are the required contexts green" is a
+    narrower question than "is this safe to merge" -- a distinction that nearly
+    landed #15972 with three failing `python-suite` shards, because `python-suite`
+    is not in branch protection's list. A failing test is a failing test whether or
+    not a protection rule happens to name it, so it is surfaced rather than
+    silently excluded from a verdict a reader will treat as a merge decision.
+    """
+    # Materialise ONCE. `required` is typed Iterable, and this function reads it
+    # twice; a generator would be exhausted by the first read, so `set(required)`
+    # would come back empty and every required context would be reclassified as
+    # unrequired -- the failure mode this whole tool exists to catch, in the tool.
+    required = list(required)
+    never, running, not_green, green = _split_required(required, observed)
+    result = _required_result(never, running, not_green)
+    failing_unrequired, running_unrequired = _unrequired(observed, set(required))
     if running_unrequired and result == "CONTEXTS-GREEN" and not failing_unrequired:
         result = "GREEN-BUT-OTHERS-RUNNING"
     if failing_unrequired and result in ("CONTEXTS-GREEN", "GREEN-BUT-OTHERS-RUNNING"):
@@ -162,12 +182,27 @@ def _gh(*args: str) -> str:
 def _fetch(pr: int, repo: str, base: str) -> dict:
     protection = json.loads(_gh("api", f"repos/{repo}/branches/{base}/protection"))
     required = protection.get("required_status_checks", {}).get("contexts", [])
-    head = json.loads(_gh("pr", "view", str(pr), "--repo", repo, "--json", "headRefOid"))["headRefOid"]
+    head_json = _gh("pr", "view", str(pr), "--repo", repo, "--json", "headRefOid")
+    head = json.loads(head_json)["headRefOid"]
     # Union of both kinds: some required contexts are legacy commit statuses, and
     # counting those as unreported is the mirror of the bug this tool exists for.
-    runs = json.loads(_gh("api", "--paginate", f"repos/{repo}/commits/{head}/check-runs")).get("check_runs", [])
+    runs_json = _gh("api", "--paginate", f"repos/{repo}/commits/{head}/check-runs")
+    runs = json.loads(runs_json).get("check_runs", [])
     statuses = json.loads(_gh("api", f"repos/{repo}/commits/{head}/status")).get("statuses", [])
     return {"required": required, "observed": latest_per_name([*runs, *statuses]), "head": head}
+
+
+def _emit(line: str) -> None:
+    """Write one line of the verdict to stdout.
+
+    stdout IS this tool's interface -- the verdict is read by `$(...)` in a
+    sweep and by eye in a terminal, so a merge gate that logged its answer
+    instead of printing it would not be a gate. The no-print rule is right for
+    production code and wrong here, so the suppression lives once, in the only
+    function that writes, rather than once per call site: one decision a
+    reviewer can weigh, not a pattern that spreads by copy.
+    """
+    print(line)  # noqa: print
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -183,20 +218,22 @@ def main(argv: list[str] | None = None) -> int:
     result["head"] = fetched["head"]
 
     if args.json:
-        print(json.dumps(result, indent=2))
+        _emit(json.dumps(result, indent=2))
     else:
-        print(f"#{args.pr} {fetched['head'][:10]}  {result['verdict']}")
+        _emit(f"#{args.pr} {fetched['head'][:10]}  {result['verdict']}")
         for context in result["never_reported"]:
-            print(f"  never-reported  {context}")
+            _emit(f"  never-reported  {context}")
         for entry in result["running"]:
-            print(f"  running         {entry['context']} = {entry['state']}")
+            _emit(f"  running         {entry['context']} = {entry['state']}")
         for entry in result["not_green"]:
-            print(f"  not-green       {entry['context']} = {entry['state']}")
+            _emit(f"  not-green       {entry['context']} = {entry['state']}")
         for entry in result["failing_unrequired"]:
-            print(f"  FAILING (not required)  {entry['context']} = {entry['state']}")
+            _emit(f"  FAILING (not required)  {entry['context']} = {entry['state']}")
         for entry in result["running_unrequired"][:3]:
-            print(f"  running (not required)  {entry['context']}")
-    return 0 if result["verdict"] == "CONTEXTS-GREEN" else 1  # PENDING and BLOCKED both non-zero: neither is mergeable
+            _emit(f"  running (not required)  {entry['context']}")
+    # PENDING and BLOCKED are both non-zero: neither is mergeable, and a caller
+    # branching on the exit status alone must not read "wait" as "go".
+    return 0 if result["verdict"] == "CONTEXTS-GREEN" else 1
 
 
 if __name__ == "__main__":

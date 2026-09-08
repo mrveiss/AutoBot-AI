@@ -185,3 +185,22 @@ def test_a_failing_unrequired_check_outranks_a_running_one():
     assert result["verdict"] == "GREEN-BUT-OTHERS-FAILING"
     assert [e["context"] for e in result["failing_unrequired"]] == ["a"]
     assert [e["context"] for e in result["running_unrequired"]] == ["b"]
+
+
+def test_a_generator_of_required_contexts_is_not_silently_empty():
+    """`required` is typed Iterable and read twice; a generator must not vanish.
+
+    An exhausted iterator answers "no required contexts", which reclassifies every
+    failing required check as unrequired and reads as green -- the defect this
+    tool was written to catch, occurring inside the tool. The contrast is the
+    assertion: the same states passed as a list must give the same verdict.
+    """
+    required = ["smoke-test", "code-quality"]
+    observed = {"smoke-test": "success", "code-quality": "failure"}
+    from_list = verdict(list(required), observed)
+    from_generator = verdict((name for name in required), observed)
+    assert from_generator["verdict"] == from_list["verdict"] == "BLOCKED"
+    assert from_generator["not_green"] == from_list["not_green"]
+    assert from_generator["failing_unrequired"] == [], (
+        "a required check was reclassified as unrequired -- the iterator was exhausted"
+    )
