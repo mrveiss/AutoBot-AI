@@ -21,7 +21,7 @@ situations that render identically, so a oneshot that finished successfully was
 indistinguishable from a node nobody could reach.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from slm.agent.health_collector import HealthCollector
 
