@@ -139,12 +139,12 @@ async def test_the_route_refuses_a_blocked_item(client, session):  # noqa: ANN00
 
     response = await _transition(client, blocked, WorkItemStatus.IN_PROGRESS)
 
-    assert response.status_code == 409, (
-        f"expected the blocked-by refusal to surface as 409, got {response.status_code}: {response.text}"
-    )
-    assert "blocked_by" in response.json()["detail"], (
-        "the 409 must carry the reason — a generic conflict cannot be acted on by the UI"
-    )
+    assert (
+        response.status_code == 409
+    ), f"expected the blocked-by refusal to surface as 409, got {response.status_code}: {response.text}"
+    assert (
+        "blocked_by" in response.json()["detail"]
+    ), "the 409 must carry the reason — a generic conflict cannot be acted on by the UI"
 
     await session.refresh(blocked)
     assert blocked.status == WorkItemStatus.BLOCKED.value, "the refusal must not have moved the item"
