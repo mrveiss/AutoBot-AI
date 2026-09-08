@@ -233,8 +233,8 @@ def test_every_declared_floor_is_pinned_to_its_population(reach: Reach) -> None:
     unparseable -- 262 of 5,599 for `audio-extension-allowlist`. A floor that
     satisfies this test can still fail the guard's own `completed()` check, and
     the first version of this ratchet did exactly that: the pre-push hook
-    rejected it. The band has to absorb that gap, which is why both
-    declarations carry 500 rather than the 250 ordinary churn alone would need.
+    rejected it. `skips` now carries that gap under its own name, so `growth`
+    means only what it says and each number can be chosen against one quantity.
 
     So this check is necessary and not sufficient. It catches a floor far below
     its population; `completed()` remains the binding constraint. Giving the
@@ -248,11 +248,16 @@ def test_every_declared_floor_is_pinned_to_its_population(reach: Reach) -> None:
         f"{count} {reach.what}. The guard cannot pass; lower the floor to "
         f"{count} only if the population genuinely shrank."
     )
-    assert slack <= reach.growth, (
+    allowance = reach.skips + reach.growth
+    assert slack <= allowance, (
         f"[{reach.name}] floor {reach.floor} sits {slack} below its live "
-        f"population of {count} {reach.what} (declared growth: {reach.growth}).\n"
+        f"population of {count} {reach.what}, which exceeds the declared "
+        f"allowance of {allowance} (skips={reach.skips} + growth={reach.growth}).\n"
         f"A floor this far below what the sweep finds passes while most of the "
         f"tree stops being reached.\n"
-        f"Either ratchet the floor to {count}, or -- if ordinary work moves this "
-        f"number -- declare the band explicitly with growth=N."
+        f"Raise the one that is actually short:\n"
+        f"  skips=  items this guard cannot COMPLETE (unreadable, unparseable). "
+        f"Measure it from a `completed` failure; do not estimate it.\n"
+        f"  growth= ordinary growth tolerated before a deliberate ratchet.\n"
+        f"If neither is short, the floor is stale: ratchet it toward {count}."
     )

@@ -244,9 +244,15 @@ def measurement() -> Measurement:
 #: Measured on Dev_new_gui: comfortably above 1000 tracked, non-test .py files.
 MIN_FILES_SCANNED = 2850
 
-#: See `audio_extension_allowlist_test` for the derivation; same reasoning,
-#: same band. Ratcheted from 500, which was 16% of this guard's population.
-MAX_GROWTH_BEFORE_RATCHET = 500
+#: See `audio_extension_allowlist_test` for the derivation.
+#:
+#: `EXPECTED_SKIPS` here is **not measured** -- this guard's `completed` count
+#: has never failed, so the gap between what it discovers and what it finishes
+#: is unknown and 200 is a conservative guess. Recorded as a guess rather than
+#: presented as a measurement: the next `completed` failure gives the real
+#: number, and whoever sees it should replace this.
+MAX_GROWTH_BEFORE_RATCHET = 400
+EXPECTED_SKIPS = 200
 
 #: The same floor, declared so it can be **proved to fire** rather than trusted
 #: (#15826). This guard already had a floor and a vacuity test; what it did not
@@ -258,6 +264,7 @@ REACH = declare(
     discover=tracked_python_files,
     floor=MIN_FILES_SCANNED,
     growth=MAX_GROWTH_BEFORE_RATCHET,
+    skips=EXPECTED_SKIPS,
     what="tracked python files",
 )
 

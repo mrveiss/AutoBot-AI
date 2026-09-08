@@ -87,6 +87,21 @@ class Reach:
     #: field exists to stop: the two guards that adopted this module first
     #: declared floors of 500 and 1000 against a live population of 5,599.
     growth: int = 0
+    #: Discovered items this guard is expected to be unable to **complete** --
+    #: unreadable, unparseable, skipped for cause (#15928). Declared separately
+    #: from ``growth`` because one floor serves two populations: ``examined()``
+    #: bounds what ``discover`` returned, ``completed()`` bounds what the guard
+    #: finished, and the floor has to clear the lower one while the meta-test
+    #: measures the higher.
+    #:
+    #: Folding this into ``growth`` is what broke the first version of this
+    #: change. ``audio-extension-allowlist`` discovers 5,601 files and completes
+    #: 5,337, so a single band of 500 spent 264 of itself on the skip gap before
+    #: buying one file of growth headroom -- and the tree consumed the remainder
+    #: within the hour. **A number that silently spends most of itself on a
+    #: different quantity cannot be chosen well**, which is the argument for two
+    #: names rather than a bigger one.
+    skips: int = 0
 
     def examined(self, root: Path) -> Sequence[object]:
         """Discover under *root*, or fail loudly having found implausibly little.
@@ -127,6 +142,7 @@ def declare(
     floor: int,
     what: str,
     growth: int = 0,
+    skips: int = 0,
 ) -> Reach:
     """Register a reach declaration and return it.
 
@@ -145,6 +161,6 @@ def declare(
     during #15896, #15901 and #15913 was set the same way. The mechanism was
     never the missing part; the number was.
     """
-    reach = Reach(name=name, discover=discover, floor=floor, what=what, growth=growth)
+    reach = Reach(name=name, discover=discover, floor=floor, what=what, growth=growth, skips=skips)
     REGISTRY[name] = reach
     return reach
