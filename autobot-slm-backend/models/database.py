@@ -304,9 +304,20 @@ class ServiceStatus(str, enum.Enum):
     """Systemd service status enumeration."""
 
     RUNNING = "running"
+    # #16019: a oneshot that ran to completion reports `active (exited)`. It is
+    # neither RUNNING (nothing is resident) nor STOPPED (it succeeded), and it
+    # is emphatically not UNKNOWN -- systemd is telling us it worked.
+    # `slm-admin-ui` and the `postgresql` wrapper are in this state on every
+    # healthy node.
+    COMPLETED = "completed"
+    STARTING = "starting"
+    STOPPING = "stopping"
     STOPPED = "stopped"
     FAILED = "failed"
     CRASH_LOOP = "crash-loop"  # Issue #1604: activating/auto-restart
+    #: The probe got no usable answer. NOT "systemd said something with no
+    #: branch here" -- that conflation is what made a healthy oneshot
+    #: indistinguishable from an unreachable node (#16019).
     UNKNOWN = "unknown"
 
 

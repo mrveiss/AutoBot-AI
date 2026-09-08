@@ -283,10 +283,18 @@ async def _get_services_by_node(db: AsyncSession) -> Dict[str, Dict[str, int]]:
     for row in services_result:
         if row.node_id not in services_by_node:
             services_by_node[row.node_id] = {"running": 0, "failed": 0}
-        if row.status == ServiceStatus.RUNNING.value:
-            services_by_node[row.node_id]["running"] = row.count
+        # #16019: COMPLETED counts as healthy. A oneshot that ran to completion
+        # did its job, and bucketing only RUNNING and FAILED dropped it into
+        # neither -- so `slm-admin-ui` and the `postgresql` wrapper were absent
+        # from the operator's counts on every healthy node.
+        #
+        # That is the SAME symptom this issue was opened for, one layer up: the
+        # per-node view stopped reporting them as `unknown`, and the count the
+        # operator actually reads still did not see them at all.
+        if row.status in (ServiceStatus.RUNNING.value, ServiceStatus.COMPLETED.value):
+            services_by_node[row.node_id]["running"] += row.count
         elif row.status == ServiceStatus.FAILED.value:
-            services_by_node[row.node_id]["failed"] = row.count
+            services_by_node[row.node_id]["failed"] += row.count
     return services_by_node
 
 
@@ -424,10 +432,14 @@ async def get_node_metrics(
     running = 0
     failed = 0
     for row in services_result:
-        if row.status == ServiceStatus.RUNNING.value:
-            running = row.count
+        # #16019: see the note in the per-node aggregate above -- COMPLETED is a
+        # healthy terminal state and was counted nowhere. `+=` rather than `=`
+        # because two statuses now feed one bucket, and assignment would let
+        # whichever row arrived last silently discard the other.
+        if row.status in (ServiceStatus.RUNNING.value, ServiceStatus.COMPLETED.value):
+            running += row.count
         elif row.status == ServiceStatus.FAILED.value:
-            failed = row.count
+            failed += row.count
 
     return NodeMetrics(
         node_id=node.node_id,
