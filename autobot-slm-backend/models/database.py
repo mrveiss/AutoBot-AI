@@ -300,14 +300,9 @@ class ReplicationStatus(str, enum.Enum):
     STOPPED = "stopped"
 
 
-class ServiceStatus(str, enum.Enum):
-    """Systemd service status enumeration."""
-
-    RUNNING = "running"
-    STOPPED = "stopped"
-    FAILED = "failed"
-    CRASH_LOOP = "crash-loop"  # Issue #1604: activating/auto-restart
-    UNKNOWN = "unknown"
+# ServiceStatus moved to top-level service_status.py (#16019) -- this file is
+# AT its ceiling, and models/ would drag in autobot_shared. See that docstring.
+from service_status import ServiceStatus  # noqa: E402,F401
 
 
 class ServiceCategory(str, enum.Enum):
