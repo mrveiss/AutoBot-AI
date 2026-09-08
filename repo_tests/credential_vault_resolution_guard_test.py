@@ -74,14 +74,13 @@ same PR) and ``initialization/lifespan.py`` (an existing, allowlisted gap).
 from __future__ import annotations
 
 import re
-import subprocess  # nosec B404  # fixed argv (git ls-files), no shell, no caller input
 from pathlib import Path
 
 from repo_tests._paths import repo_root
 from repo_tests.credential_vault_prose_strip import UnparseableSourceError, strip_prose
 from repo_tests.credential_vault_resolution_allowlist import ALLOWLIST
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
 SSOT_CONFIG = REPO_ROOT / "autobot_shared" / "ssot_config.py"
@@ -237,14 +236,7 @@ def find_direct_reads(text: str, fields: dict[str, str]) -> list[tuple[str, int,
 
 
 def _tracked_python_files() -> list[str]:
-    out = subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "ls-files", "*.py"],
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    ).stdout
-    return [line for line in out.splitlines() if line]
+    return tracked_paths(REPO_ROOT, "*.py")
 
 
 def _is_production_file(rel_path: str) -> bool:
