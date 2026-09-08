@@ -39,7 +39,6 @@ misses every one of them) and ``constraints/shared.txt``.
 
 from __future__ import annotations
 
-import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 import pytest
@@ -47,7 +46,7 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests.pip_ignore_scope_test import _files_reachable_from, _resolve_includes
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 _REPO_ROOT = repo_root()
 _CONFIG = _REPO_ROOT / ".github" / "dependabot.yml"
@@ -84,14 +83,7 @@ def _tracked_manifests(root: Path = _REPO_ROOT) -> list[Path]:
     ``git ls-files`` and not ``rglob`` for the reason the sibling guards give:
     a walk under a worktree checkout picks up files belonging to other branches.
     """
-    out = subprocess.run(  # nosec B603  # fixed argv
-        ["git", "-C", str(root), "ls-files", "*requirements*.txt"],
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    ).stdout
-    paths = [root / line for line in out.splitlines() if line]
+    paths = [root / line for line in tracked_paths(root, "*requirements*.txt")]
     return [p for p in paths if not any(part in _SKIP_PARTS for part in p.relative_to(root).parts)]
 
 
