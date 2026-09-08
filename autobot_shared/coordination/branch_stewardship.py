@@ -81,6 +81,19 @@ class HandoffRefused(RuntimeError):
     """A handoff the receiving side declined, or that the chain limit stopped."""
 
 
+class EmptyLiveSet(RuntimeError):
+    """:func:`prune` was handed no live branches without being told to expect that.
+
+    A subclass of ``RuntimeError`` so an existing broad ``except`` keeps working,
+    and named after the condition rather than the caller's mistake, because both
+    a genuine "nothing is open" and a failed fetch arrive here identically -- that
+    is the whole reason it must be said out loud rather than inferred.
+
+    Mirrors ``tools/lint/_scan_helpers.EmptyEnumeration`` (#15962), which refuses
+    to report an empty enumeration as a clean tree for the same reason.
+    """
+
+
 @dataclass(frozen=True)
 class Interest:
     """An unlanded branch's stake in a scope, and who is currently carrying it."""
@@ -248,16 +261,42 @@ async def release(scope: str | Scope, *, branch: str) -> bool:
     return bool(removed)
 
 
-async def prune(live_branches: Iterable[str], *, kind: str | None = None) -> list[Interest]:
+async def prune(
+    live_branches: Iterable[str],
+    *,
+    kind: str | None = None,
+    allow_empty: bool = False,
+) -> list[Interest]:
     """Drop interests whose branch is no longer open. Returns what was dropped.
 
     *live_branches* comes from the caller because this package has no GitHub
     client and must not grow one -- the branch's state is the authority, and only
-    something outside `autobot_shared` can read it. Passing an empty set drops
-    everything, so a caller that failed to fetch its branch list must not call
-    this with the empty result of that failure.
+    something outside `autobot_shared` can read it.
+
+    An empty *live_branches* would drop every interest, and an empty set is also
+    what a failed fetch returns, so it must be **stated** rather than inferred:
+    without ``allow_empty=True`` this raises :class:`EmptyLiveSet` instead. That
+    is not defensiveness about a rare case -- ``except: return []`` is the most
+    common shape a failed GitHub call takes, and the log line would have read
+    "pruned N interest(s) whose branch is no longer open", which is false in
+    precisely the situation that produced it.
+
+    Raises:
+        EmptyLiveSet: *live_branches* is empty and *allow_empty* is not set.
     """
     live = set(live_branches)
+    if not live and not allow_empty:
+        # An empty live set and a failed fetch are the same value. The most
+        # common shape of a failed GitHub call is `except: return []`, and
+        # accepting it here would delete every interest in the registry while
+        # logging "pruned N whose branch is no longer open" -- a false statement
+        # in exactly the case that matters. A caller that genuinely means "no
+        # branches are open" can say so; a caller handing over the wreckage of a
+        # failed query cannot say it by accident.
+        raise EmptyLiveSet(
+            "prune() received no live branches. If nothing is genuinely open, pass "
+            "allow_empty=True; if the branch listing failed, do not prune on its result."
+        )
     from autobot_shared.coordination.work_claims import VALID_KINDS
 
     kinds = sorted(VALID_KINDS) if kind is None else [kind]

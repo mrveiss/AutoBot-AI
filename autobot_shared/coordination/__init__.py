@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Cross-worker coordination primitives — Issues #6630, #15947, #15948, #15987."""
 
-from .branch_stewardship import HandoffRefused, Interest, acquire_aware
+from .branch_stewardship import EmptyLiveSet, HandoffRefused, Interest, acquire_aware
 from .claim_waitlist import Waiter, arbitrate
 from .shared_runtime_bag import ChangeEvent, SharedRuntimeBag
 from .work_claims import (
@@ -30,6 +30,7 @@ __all__ = [
     "arbitrate",
     "Interest",
     "HandoffRefused",
+    "EmptyLiveSet",
     "acquire_aware",
     "Claim",
     "ClaimConflict",

@@ -16,6 +16,7 @@ import pytest
 import pytest_asyncio
 
 from autobot_shared.coordination.branch_stewardship import (
+    EmptyLiveSet,
     HandoffRefused,
     acquire_aware,
     declare,
@@ -176,15 +177,32 @@ async def test_prune_drops_interests_whose_branch_is_gone(redis):
 
 
 @pytest.mark.asyncio
-async def test_prune_with_an_empty_live_set_drops_everything(redis):
-    """Documented, and the reason the docstring warns about it.
+async def test_prune_refuses_an_empty_live_set_unless_told_to_expect_it(redis):
+    """The registry cannot tell 'no branches' from 'no answer', so it must be told.
 
-    A caller whose branch-list fetch failed must not pass the empty result: this
-    is indistinguishable from 'every branch closed', and the registry cannot tell
-    the difference between no branches and no answer.
+    An earlier revision documented this hazard and let the call through — a rule
+    with nothing enforcing it, which is the failure this whole module exists to
+    remove. `except: return []` is the most common shape a failed GitHub call
+    takes, and accepting it would delete every interest while logging "pruned N
+    whose branch is no longer open": false in precisely the case that produced it.
     """
     await declare("path:a/b.py", branch="open-one", steward="s", intent="live")
-    assert [i.branch for i in await prune(set())] == ["open-one"]
+    with pytest.raises(EmptyLiveSet, match="allow_empty"):
+        await prune(set())
+    # Nothing was dropped by the refusal.
+    assert [i.branch for i in await interests("path:a/b.py")] == ["open-one"]
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_empty_live_set_still_drops_everything(redis):
+    """'Nothing is open' is a legitimate state, and stays expressible.
+
+    A floor would have been the other option and is worse here: it cannot tell a
+    genuine zero from a failed fetch, which is the distinction that matters.
+    """
+    await declare("path:a/b.py", branch="gone", steward="s", intent="landed")
+    assert [i.branch for i in await prune(set(), allow_empty=True)] == ["gone"]
+    assert await interests("path:a/b.py") == []
 
 
 @pytest.mark.asyncio
