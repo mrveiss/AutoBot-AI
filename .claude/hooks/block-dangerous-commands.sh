@@ -10,6 +10,9 @@
 # Issue: #3021
 
 if ! command -v jq >/dev/null 2>&1; then
+  # Before `deny()` exists, so this repeats its stderr write rather than calling
+  # it. With no jq, every command is blocked and this is the only explanation.
+  printf '%s\n' "jq is required for command protection hooks but is not installed." >&2
   echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"jq is required for command protection hooks but is not installed."}}'
   exit 2
 fi
@@ -33,6 +36,12 @@ if [[ "$COMMAND" =~ git[[:space:]]+commit ]]; then
 fi
 
 deny() {
+  # STDERR, because this exits 2 (#15956). The harness parses the JSON below
+  # from stdout only on exit 0 and takes an exit-2 reason from stderr, so
+  # without this line a blocked command is reported with no explanation at all.
+  # Found by the channel guard in repo_tests/hook_decision_exit_codes_15956_test.py,
+  # which was written for two other hooks and caught this one on its first run.
+  printf '%s\n' "$1" >&2
   echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"$1\"}}"
   exit 2
 }
