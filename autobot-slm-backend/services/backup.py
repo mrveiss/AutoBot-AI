@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.security.path_validator import require_path_string
 from config import settings
 from models.database import Backup, BackupStatus, Node
+from services.role_registry import systemd_unit_for_role
 
 logger = logging.getLogger(__name__)
 
@@ -248,9 +249,17 @@ class BackupService:
 
         Helper for execute_restore (Issue #665).
         """
-        logger.info("Stopping Redis on %s for restore", host)
-        stop_cmd = self._build_ssh_command(host, ssh_user, ssh_port, "sudo systemctl stop redis-server")
-        await self._run_command(stop_cmd, timeout=30)
+        unit = systemd_unit_for_role("redis") or "redis-stack-server"
+        logger.info("Stopping %s on %s for restore", unit, host)
+        stop_cmd = self._build_ssh_command(host, ssh_user, ssh_port, f"sudo systemctl stop {unit}")
+        success, output = await self._run_command(stop_cmd, timeout=30)
+        if not success:
+            # #16060: the result was discarded. `systemctl stop redis-server`
+            # against a unit that does not exist fails, the restore continued,
+            # and the RDB was replaced under a LIVE server -- which then
+            # overwrites it on its next save. A restore that cannot stop the
+            # server is not a restore, so this raises rather than logging.
+            raise RuntimeError(f"cannot restore: failed to stop {unit} on {host}: {output.strip()}")
 
     async def _copy_local_backup_to_target(
         self, backup: Backup, host: str, ssh_user: str, ssh_port: int
@@ -315,7 +324,8 @@ class BackupService:
         """
         # Start Redis
         logger.info("Starting Redis on %s after restore", host)
-        start_cmd = self._build_ssh_command(host, ssh_user, ssh_port, "sudo systemctl start redis-server")
+        unit = systemd_unit_for_role("redis") or "redis-stack-server"
+        start_cmd = self._build_ssh_command(host, ssh_user, ssh_port, f"sudo systemctl start {unit}")
         success, output = await self._run_command(start_cmd, timeout=30)
         if not success:
             return False, f"Failed to start Redis: {output}"

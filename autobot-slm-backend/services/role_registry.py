@@ -479,6 +479,26 @@ DEFAULT_ROLES = (
     _SLM_ROLES + _BACKEND_ROLES + _FRONTEND_ROLES + _DATABASE_ROLES + _AI_STACK_ROLES + _OPTIONAL_ROLES + _INFRA_ROLES
 )
 
+def systemd_unit_for_role(role_name: str) -> str | None:
+    """The systemd unit a role's service actually runs under (#16060).
+
+    One source, because the fleet has had three. `roles/redis` installs
+    **redis-stack-server**, and separate hardcoded copies named `redis-server`
+    and `redis` — units that do not exist on a provisioned node — had drifted
+    into `services/reconciler.py` and `services/backup.py`. The reconciler then
+    could not find the service it manages, and the restore path issued
+    `systemctl stop redis-server` against nothing.
+
+    Callers that must tolerate a legacy node should fall back explicitly rather
+    than hardcoding a second name here; what this returns is what the role
+    installs today.
+    """
+    for role in DEFAULT_ROLES:
+        if role.get("name") == role_name:
+            return role.get("systemd_service") or None
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Role → Ansible inventory group mapping  (#1346)
 #
