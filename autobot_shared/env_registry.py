@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Registry for AUTOBOT_* environment variables.
 
-Provides discovery, documentation, and type-safe access.
-All AUTOBOT_* vars must be registered here before use; the
-``check_env_var_registry`` pre-commit hook enforces this.
+Discovery and type-safe access; ``check_env_var_registry`` requires every var
+to be registered. A NEW one goes in an ``env_registry_<component>.py`` sibling
+imported below -- this file is at its ceiling and may not grow (#14236).
 
 Closes GH#7081.
 """
