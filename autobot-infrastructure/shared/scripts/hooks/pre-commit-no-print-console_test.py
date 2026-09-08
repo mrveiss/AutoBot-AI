@@ -53,7 +53,24 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # scripts/check_ansible_file_references.py from the builtin to a module logger.
 # Lowered in the same commit as the removal, per this test's own instruction:
 # a drop is either a fix recorded here, or the scan silently losing reach.
-_KNOWN_REPO_VIOLATIONS = 443
+# 359 since #16008: `scripts/` CLI ENTRY POINTS became exempt, so the drop is a
+# change of POPULATION, not of tree -- 84 call sites that were violations are now
+# outside the definition, and not one of them was fixed. Recording that distinction
+# is the whole point: this test's own message offers only "they were fixed" or "the
+# scan lost reach", and a third case read as either would be a bypass licensed by a
+# number nobody could audit.
+#
+# The delta was MEASURED, not inferred: the pre-#16008 hook and the current one were
+# each run over the same tracked `scripts/**/*.py` set, from the hooks directory so
+# `lib/_common.sh` resolves for both. Old 84, new 0, and 443 - 84 = 359 exactly, so
+# the whole drop is accounted for with no residue -- which is what rules out the
+# second case, the scan quietly losing reach somewhere else.
+#
+# An earlier ESTIMATE of this delta said ~96, from 107 `print(` occurrences minus 11
+# carrying noqa. It was wrong because a multi-line call reports as ONE violation
+# spanning a line range, and some occurrences sit inside strings. A count of a proxy
+# is not a count of the thing, and the ratchet is pinned to the thing.
+_KNOWN_REPO_VIOLATIONS = 359
 
 
 def _test_git_env() -> dict[str, str]:

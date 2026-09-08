@@ -57,6 +57,38 @@ Any "no" needs a written justification in the issue.
 - Would a second agent see the same answer as the first? (Acquire is one Lua
   script for this reason — read-then-write in Python cannot promise it.)
 
+## Contention: queue, ask, arbitrate
+
+A refusal is the start of a negotiation, not the end of one (#15948).
+
+- **Queue.** A refused agent joins the scope's waitlist. Position is join order,
+  and re-joining as the same `(agent_id, task_id)` refreshes in place — a retry
+  loop must not push an agent to the back of a queue it is already in.
+- **Promotion is an invitation, not a grant.** Nothing computes whether a waiter
+  *could* acquire; the waiter is told to retry and calls `try_acquire` itself.
+  This is deliberate: that predicate already exists twice (`Scope.overlaps` and
+  the acquire Lua) and needed an exhaustive test to keep the two in step. A
+  third copy would need pinning to both. It also makes the multi-holder case
+  correct for free — a path can carry several SHARED claims, so one release need
+  not free it, and a waiter that retries simply fails and keeps its place.
+- **Ask.** A requester may ask the holder to release early, on the holder's own
+  a2a task channel. No new bus.
+- **Silence means hold.** An unanswered yield resolves to a refusal. Treating no
+  answer as consent would take a scope from a holder precisely when it is least
+  able to object.
+- **Arbitrate.** When two contenders must be compared, one pure function decides:
+  priority, then who waited longer, then agent id. The last rule is arbitrary and
+  that is the point — an arbitrary *stable* rule beats a fair *unstable* one,
+  because two callers comparing the same pair must reach the same answer or they
+  will both yield and the scope goes to nobody.
+
+**Where each half lives.** The queue and the arbitration are in
+`autobot_shared/coordination/claim_waitlist.py`; the notification is in
+`autobot-backend/services/claim_yield.py`. The split is not stylistic:
+publishing on the a2a channel needs the task manager, and `autobot_shared` must
+not import from `autobot-backend`. It also leaves the queue testable with no
+task manager and no running backend.
+
 ## Anti-goals
 
 This layer does **not** provide:
