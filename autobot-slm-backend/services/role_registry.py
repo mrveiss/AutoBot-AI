@@ -479,6 +479,7 @@ DEFAULT_ROLES = (
     _SLM_ROLES + _BACKEND_ROLES + _FRONTEND_ROLES + _DATABASE_ROLES + _AI_STACK_ROLES + _OPTIONAL_ROLES + _INFRA_ROLES
 )
 
+
 def systemd_unit_for_role(role_name: str) -> str | None:
     """The systemd unit a role's service actually runs under (#16060).
 
