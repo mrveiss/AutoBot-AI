@@ -71,7 +71,7 @@ python_security_updates:
   python-multipart: "0.0.32"       # Arbitrary file write
   cryptography: "50.0.1"           # Subgroup attack on SECT curves
   pillow: "12.3.0"                 # OOB write loading PSD images
-  protobuf: "7.36.0,<8.0.0"        # JSON recursion depth bypass
+  protobuf: "7.36.1,<8.0.0"        # JSON recursion depth bypass
   # Medium (pypdf - 10 CVEs)
   pypdf: "6.16.2"                  # Infinite loops, RAM exhaustion, malformed streams
   # Carried forward from prior patches
