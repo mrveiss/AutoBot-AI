@@ -24,6 +24,7 @@ from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
 from api.agent_org import router as agent_org_router  # #1405
 from api.approval_gates import router as approval_gates_router  # #1402
+from api.coordination import router as coordination_router  # #15949
 from api.audit import router as audit_router
 from api.auth import router as auth_router
 from api.benchmarks import router as benchmarks_router  # Issue #9024
@@ -487,6 +488,7 @@ def _get_agent_routers() -> list:
         ),
         (overseer_router, "/overseer", ["overseer", "agent"], "overseer"),
         (agent_org_router, "/agents", ["agent-org"], "agent_org"),
+        (coordination_router, "/coordination", ["coordination", "agent"], "coordination"),
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
         (memory_router, "/memory", ["memory"], "memory"),
