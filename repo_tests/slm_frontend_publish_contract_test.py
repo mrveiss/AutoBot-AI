@@ -11,7 +11,6 @@ satisfied on one side and not the other is a failure naming both.
 """
 
 import re
-from pathlib import Path
 from typing import Dict, List, Tuple
 
 import pytest
@@ -21,6 +20,8 @@ from repo_tests.slm_frontend_publish_contract import (
     MIN_IMPLEMENTATIONS,
     REPO_ROOT,
 )
+
+from tools.lint._scan_helpers import tracked_paths
 
 #: What makes a file a *publisher* is that it flips the served pointer, not that
 #: it builds. `npm run build:slm` alone is a builder: `role_registry.py` and
@@ -131,17 +132,47 @@ def test_each_clause_is_stated_for_every_implementation(clause) -> None:
     )
 
 
+#: Below this the enumeration collapsed rather than the tree being clean. Bound
+#: to files enumerated, never to publishers found.
+_MIN_CANDIDATES = 400
+
+
+def _tracked_candidates() -> List[str]:
+    """Tracked files a publisher could live in, from ``git`` not a walk (#15955)."""
+    return sorted(tracked_paths(REPO_ROOT, "*.sh", "*.yml", "*.yaml", "*.j2", "*.py"))
+
+
+def test_the_candidate_sweep_reached_the_tree() -> None:
+    """Runs first: an empty enumeration finds no unlisted publisher either."""
+    found = _tracked_candidates()
+    assert len(found) >= _MIN_CANDIDATES, (
+        f"enumerated only {len(found)} candidate file(s) (floor {_MIN_CANDIDATES}) — "
+        "the enumeration broke, so a clean result below asserts nothing."
+    )
+
+
 def test_no_unlisted_publisher_exists() -> None:
     """A third implementation in a third language is caught, not accommodated."""
     registered = {str(p.relative_to(REPO_ROOT)) for p in IMPLEMENTATIONS.values()}
     unlisted: List[str] = []
 
-    for path in REPO_ROOT.rglob("*"):
-        if not path.is_file() or path.suffix not in {".sh", ".yml", ".yaml", ".j2", ".py"}:
-            continue
-        rel = str(path.relative_to(REPO_ROOT))
-        if rel.startswith((".git/", ".worktrees/")) or "/node_modules/" in f"/{rel}":
-            continue
+    # #15955: was `REPO_ROOT.rglob("*")` with a hand-written prefix prune. Two
+    # defects, both mine, both invisible in CI:
+    #
+    # 1. The prune listed `.worktrees/` and not `.claude/worktrees/`, where this
+    #    repository also keeps checkouts. 5,307 files from another checkout were
+    #    scanned on every developer run. No false positive TODAY only because
+    #    that worktree sits on a revision predating the publisher work -- one
+    #    merge into it and this guard names paths its author has never seen.
+    #
+    # 2. `rglob("*")` DESCENDS into `node_modules` and filters afterwards, so the
+    #    prune never protected the walk. A root-owned `node_modules` made the
+    #    whole sweep die on PermissionError, red with no explanation.
+    #
+    # `git ls-files` fixes both by never entering either directory, so the prune
+    # is deleted rather than extended.
+    for rel in _tracked_candidates():
+        path = REPO_ROOT / rel
         if rel in registered or rel in _NOT_PUBLISHERS:
             continue
         try:

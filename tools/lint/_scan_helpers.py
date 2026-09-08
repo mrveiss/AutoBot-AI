@@ -84,6 +84,17 @@ def _looks_like_a_pattern(entry: str) -> bool:
     return any(ch in entry for ch in "*?[") or "/" in entry
 
 
+class EmptyEnumeration(RuntimeError):
+    """`git ls-files` succeeded and listed nothing.
+
+    A subclass so every existing `except RuntimeError` keeps working, while a
+    caller that has its OWN floor can tell this apart from a git failure. Those
+    are different conditions and want different answers: a broken git is an
+    error, an empty result is a finding the caller may be contracted to report
+    in its own words (#15962).
+    """
+
+
 def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) -> List[str]:
     """Git-tracked paths under *repo_root* matching *patterns*, repo-relative.
 
@@ -131,7 +142,7 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
         raise RuntimeError(f"git ls-files {described} failed in {repo_root}: {result.stderr.strip()}")
     paths = [line.replace("\\", "/") for line in result.stdout.splitlines() if line.strip()]
     if not paths:
-        raise RuntimeError(
+        raise EmptyEnumeration(
             f"git ls-files {described} listed nothing in {repo_root} — refusing to "
             "report an empty enumeration as a clean tree."
         )

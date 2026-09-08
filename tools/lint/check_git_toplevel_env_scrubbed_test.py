@@ -481,3 +481,40 @@ def test_the_args_keyword_and_absolute_paths_count_toward_discovery(tmp_path: Pa
 
     assert args_form == 1
     assert absolute_form == 1
+
+
+def test_an_empty_enumeration_is_absorbed_so_the_floor_can_speak(tmp_path, monkeypatch):
+    """`iter_shell_files` yields nothing on an empty index, letting `enforce_reach` refuse.
+
+    This checker is contracted to refuse AUDIBLY — `scan_helpers_vacuity_test`
+    requires the refusal on stderr, not merely a non-zero exit. `tracked_paths`
+    raises on empty, which satisfied the exit code and broke the contract
+    (#15962).
+    """
+    import _scan_helpers
+    import check_git_toplevel_env_scrubbed as checker
+
+    def _empty(*_a, **_k):
+        raise _scan_helpers.EmptyEnumeration("listed nothing")
+
+    monkeypatch.setattr(checker, "tracked_paths", _empty)
+    assert list(checker.iter_shell_files([], tmp_path)) == []
+
+
+def test_a_git_failure_still_propagates(tmp_path, monkeypatch):
+    """A broken git is an ERROR, not an empty population.
+
+    The absorption above must be narrow. Catching `RuntimeError` instead of
+    `EmptyEnumeration` swallows a git failure too, and the checker would then
+    scan zero shell files and report a clean tree — the report-clean shape this
+    whole file exists to prevent, reached through its own remedy.
+    """
+
+    import check_git_toplevel_env_scrubbed as checker
+
+    def _broken(*_a, **_k):
+        raise RuntimeError("git ls-files failed: not a git repository")
+
+    monkeypatch.setattr(checker, "tracked_paths", _broken)
+    with pytest.raises(RuntimeError, match="failed"):
+        list(checker.iter_shell_files([], tmp_path))
