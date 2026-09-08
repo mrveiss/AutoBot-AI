@@ -450,7 +450,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/api/code_sync.py": 6094,  # #15881: stage-log restore and version gate moved to _resume_plan.py
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,
-    "autobot-slm-backend/api/monitoring.py": 1096,
+    "autobot-slm-backend/api/monitoring.py": 1087,
     "autobot-slm-backend/api/nodes.py": 3017,
     "autobot-slm-backend/api/nodes_execution.py": 703,
     "autobot-slm-backend/api/nodes_execution_test.py": 756,
