@@ -32,6 +32,7 @@ import re
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
+from tools.lint._scan_helpers import TRACKED_PY_FLOOR
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
@@ -128,7 +129,7 @@ SEVERITY_SHAPE_LITERAL_FLOOR = 160
 
 # Floor for the tracked-file enumeration itself — an empty walk must not
 # read as "nothing to convert".
-_TRACKED_PY_FLOOR = 3000
+_TRACKED_PY_FLOOR = TRACKED_PY_FLOOR  # canonical: one measured floor, was a local 3000 (#15928)
 
 
 @functools.lru_cache(maxsize=1)

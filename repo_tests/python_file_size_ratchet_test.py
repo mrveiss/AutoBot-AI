@@ -49,7 +49,7 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import tracked_paths, TRACKED_PY_FLOOR
 
 REPO_ROOT = repo_root()
 _SCRIPT = REPO_ROOT / "scripts" / "check_python_file_size.py"
@@ -96,7 +96,7 @@ MAX_KNOWN_LARGE_ENTRIES = 497
 
 # Floor for the tracked-Python enumeration (4958 files at the time of writing).
 # An enumeration that returns nothing must not read as "nothing to check".
-_TRACKED_PY_FLOOR = 3000
+_TRACKED_PY_FLOOR = TRACKED_PY_FLOOR  # canonical: one measured floor, was a local 3000 (#15928)
 
 
 def _count_lines(rel: str) -> int | None:

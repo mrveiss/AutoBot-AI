@@ -36,7 +36,14 @@ VERIFICATION_METHOD_UNION = {
 # exact #14956 regression the severity ratchet now guards against).
 _DELIBERATE_PROSE_FILE = "autobot-backend/api/knowledge_grounding.py"
 
-_TRACKED_PY_FLOOR = 3000
+# The seventh copy of this number (#15928). The canonical one is
+# `tools.lint._scan_helpers.TRACKED_PY_FLOOR`, which the six sites in
+# `repo_tests/` and `tools/lint/` now import. This file is not imported from
+# there and the cross-tree import path is unverified, so the VALUE is corrected
+# here and the consolidation is left undone deliberately rather than risked:
+# 3000 was 53% of the 5,613 tracked `.py` files and detected only the loss of
+# `autobot-backend`. Lower it only after re-measuring.
+_TRACKED_PY_FLOOR = 5_400
 
 
 def test_verification_method_is_exactly_the_produced_and_reserved_union():
