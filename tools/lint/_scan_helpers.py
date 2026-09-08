@@ -40,6 +40,7 @@ Two pieces close it, and the split between them is the whole design:
 from __future__ import annotations
 
 import logging
+import posixpath
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
@@ -84,6 +85,17 @@ def _looks_like_a_pattern(entry: str) -> bool:
     return any(ch in entry for ch in "*?[") or "/" in entry
 
 
+class EmptyEnumeration(RuntimeError):
+    """`git ls-files` succeeded and listed nothing.
+
+    A subclass so every existing `except RuntimeError` keeps working, while a
+    caller that has its OWN floor can tell this apart from a git failure. Those
+    are different conditions and want different answers: a broken git is an
+    error, an empty result is a finding the caller may be contracted to report
+    in its own words (#15962).
+    """
+
+
 def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) -> List[str]:
     """Git-tracked paths under *repo_root* matching *patterns*, repo-relative.
 
@@ -95,8 +107,10 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
     matches the same repo-relative path it returns, so the two cannot disagree.
 
     Pass bare directory or glob fragments (``"node_modules"``, ``"*.min.js"``);
-    the ``:(exclude)`` prefix and a trailing ``/*`` for directories are added
-    here, so no caller re-decides the pathspec syntax.
+    the ``:(exclude)`` prefix and the rooting are added here, so no caller
+    re-decides the pathspec syntax. A bare entry needs no trailing ``/*``: git
+    excludes a directory's contents from the bare name, measured identical for
+    files, directories and nested directories (#16013).
 
     ``cwd=repo_root`` anchors the answer: run from a subdirectory,
     ``git ls-files`` still succeeds and returns paths re-prefixed relative
@@ -113,10 +127,40 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
     """
     # A directory name needs `/*` to exclude its contents; a pattern that already
     # contains a glob or a slash is passed through as the caller wrote it.
-    # `?` and `[` are glob metacharacters too: `?.min.js` took the directory
-    # branch and became `:(exclude)?.min.js/*`, which excludes a DIRECTORY of
-    # that name and silently matches no file (#15990 review).
-    excludes = [f":(exclude){e}" if _looks_like_a_pattern(e) else f":(exclude){e}/*" for e in exclude]
+    # Two things have to be right here, and each was wrong on its own.
+    #
+    # 1. ROOTING. `git ls-files` derives a common prefix from the POSITIVE
+    #    pathspecs and anchors traversal to it, so an unrooted exclude under a
+    #    single prefixed positive matches every entry and empties the result:
+    #
+    #        scripts/*.py                 + :(exclude)*_test.py  ->  0 files
+    #        scripts/*.py + tools/*.py    + :(exclude)*_test.py  ->  correct
+    #
+    #    Adding a second positive under a different top-level directory empties
+    #    the common prefix and the identical exclude starts working. So an entry
+    #    with no `/` is emitted once per distinct positive prefix (#16013).
+    #
+    # 2. FILE vs DIRECTORY needs no special case once (1) is right. A bare
+    #    `:(exclude)scripts` already excludes everything under it, and
+    #    `:(exclude)a.py` excludes the file — measured identical to emitting a
+    #    `<entry>/*` companion for directories, files and nested directories.
+    #    An earlier draft emitted both; the mutation that deleted the companion
+    #    changed no result, which is what showed it was dead. `_looks_like_a_pattern`
+    #    is retained for the callers that ask whether an entry IS a pattern.
+    # `or [""]` because NO positive pattern means no prefix, not no exclusions.
+    # Without it an empty `patterns` produced an empty prefix set, the loop below
+    # emitted nothing, and `tracked_paths(root, exclude=["generated"])` returned
+    # `generated` — an exclusion that silently does nothing, which is worse than
+    # one that fails because the result comes back plausible and full-length.
+    # `EmptyEnumeration` cannot catch it: the list is non-empty, just wrong.
+    positive_prefixes = sorted({posixpath.dirname(p) for p in patterns}) or [""]
+    excludes = []
+    for entry in exclude:
+        if "/" in entry:
+            rooted = [entry]  # already rooted; re-prefixing would move it
+        else:
+            rooted = [posixpath.join(pre, entry) if pre else entry for pre in positive_prefixes]
+        excludes.extend(f":(exclude){spec}" for spec in rooted)
     result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "ls-files", *patterns, *excludes],
         cwd=str(repo_root),
@@ -131,7 +175,7 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
         raise RuntimeError(f"git ls-files {described} failed in {repo_root}: {result.stderr.strip()}")
     paths = [line.replace("\\", "/") for line in result.stdout.splitlines() if line.strip()]
     if not paths:
-        raise RuntimeError(
+        raise EmptyEnumeration(
             f"git ls-files {described} listed nothing in {repo_root} — refusing to "
             "report an empty enumeration as a clean tree."
         )
