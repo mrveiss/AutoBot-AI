@@ -100,7 +100,9 @@ def duplicate_keys_in(source: str) -> List[Tuple[int, str]]:
 
 #: Never descended into when discovering trees: not source, or another
 #: checkout's copy of this one.
-_PRUNED = frozenset({".git", ".worktrees", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache", ".pytest_cache"})
+_PRUNED = frozenset(
+    {".git", ".worktrees", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache", ".pytest_cache"}
+)
 
 
 def _tree_of(name: str) -> str:
@@ -128,7 +130,17 @@ def _trees_holding_python() -> Set[str]:
                 trees.add("<root>")
             continue
         for dirpath, dirnames, filenames in os.walk(entry):
-            dirnames[:] = [d for d in dirnames if d not in _PRUNED]
+            # #15955: `_PRUNED` named `.worktrees` and not `.claude/worktrees`,
+            # where this repo also keeps checkouts -- so the walk descended into
+            # another checkout of itself. Detected structurally instead: a nested
+            # checkout's `.git` is a FILE holding a `gitdir:` pointer, where the
+            # primary checkout's is a directory. That needs no list to keep
+            # current, which matters because nine guards hand-maintain the same
+            # one and the two that were broken are the two where it was not
+            # fully copied.
+            dirnames[:] = [
+                d for d in dirnames if d not in _PRUNED and not os.path.isfile(os.path.join(dirpath, d, ".git"))
+            ]
             if any(f.endswith(".py") for f in filenames):
                 trees.add(entry.name)
                 break
