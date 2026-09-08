@@ -58,7 +58,7 @@ from typing import List, Optional, Tuple
 
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
 _MODULE = REPO_ROOT / "autobot-backend/tasks/man_page_indexing.py"
@@ -92,15 +92,7 @@ _MIN_FILES_SWEPT = 4_000
 
 
 def _tracked_python_files() -> List[str]:
-    completed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "*.py"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    )
-    return [n for n in completed.stdout.split("\n") if n and not n.startswith(".worktrees/")]
+    return [n for n in tracked_paths(REPO_ROOT, "*.py") if not n.startswith(".worktrees/")]
 
 
 def executable_source(text: str) -> Optional[str]:
