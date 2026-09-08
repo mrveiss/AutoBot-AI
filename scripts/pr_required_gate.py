@@ -337,6 +337,32 @@ def _emit(line: str) -> None:
     print(line)  # noqa: print
 
 
+#: Merge preconditions this tool does NOT examine, named in every verdict.
+#:
+#: Five states have now been found by discovering them one at a time: pending
+#: contributing to no bucket, a conflicted PR producing no runs, a superseded
+#: `cancelled`, a merged PR reading green, and a skip outranking a failure. Each
+#: was fixed by adding a case. **Adding cases does not change the property that
+#: produced them** -- a check that enumerates conditions is blind to the
+#: conditions it does not enumerate, and every blind spot reads as success.
+#:
+#: So the verdict says what it did not look at. That does not make the tool
+#: complete; it makes its incompleteness visible, which is the only part a
+#: reader can act on. A verdict that cannot say "I do not know what I did not
+#: examine" spends its blind spots as green (#16044).
+#:
+#: Add to this list when a precondition is identified, whether or not it is
+#: implemented. An unimplemented check that is NAMED costs a reader one glance;
+#: an unimplemented check that is silent costs them the incident.
+NOT_EXAMINED = (
+    "review threads — an unresolved thread blocks merge and is not read here",
+    "base freshness — not required by protection (`strict` is false), but a stale "
+    "branch may still fail a check it would pass rebased",
+    "branch conflicts — a conflicted PR produces NO runs, which reads identically " "to 'CI has not started'",
+    "app pinning — a required context can be pinned to one publisher; matched by name only",
+)
+
+
 def _report(pr: int, result: dict) -> None:
     """Render the verdict as text: every non-green context, none of them elided."""
     _emit(f"#{pr} {result['head'][:10]}  {result['verdict']}")
@@ -366,6 +392,11 @@ def _report(pr: int, result: dict) -> None:
     pinned = result.get("app_pinned", [])
     if pinned:
         _emit(f"  note: {len(pinned)} required context(s) pin an app_id; matched by name only")
+    # Printed on EVERY verdict, including a green one. A boundary shown only on
+    # failure is absent exactly when someone is about to act on the good news.
+    _emit("  NOT EXAMINED by this tool:")
+    for item in NOT_EXAMINED:
+        _emit(f"    - {item}")
 
 
 def main(argv: list[str] | None = None) -> int:
