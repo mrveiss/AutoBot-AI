@@ -583,6 +583,23 @@ updates:
         patterns:
           - "*"
     ignore:
+      - dependency-name: "ansible-core"
+        # #15983: `constraints/ansible-core.txt` is NOT an upstream dependency. It
+        # tracks a DEPLOYMENT FACT -- "the ansible-core the fleet's control node
+        # runs" (#15824) -- so it may only move after the hosts move. A PR changing
+        # it in isolation is wrong regardless of the version it names, which is why
+        # this is a total freeze rather than a major-version cap.
+        #
+        # #15822 is the cost of a mismatch: the fleet's 2.17.14 applies `set_fact`
+        # bool coercion and newer interpreters do not, so the guard read a decidable
+        # token where every host read a bool -- wrong-node cleanup stayed dead for
+        # ELEVEN DAYS behind a green check.
+        #
+        # Proposed twice on 2026-09-07 (#15975 closed, #15980 reverted by hand)
+        # because nothing here excluded it. `update-types` alone does NOT stop a
+        # grouped all-dependencies bump -- #14431 recorded that for openai, #14727
+        # for protobuf -- so the unbounded `versions` range is what holds.
+        versions: [">2.17.14"]
       - dependency-name: "fastapi"
         update-types: ["version-update:semver-major"]
       - dependency-name: "numpy"
