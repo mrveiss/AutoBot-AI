@@ -78,6 +78,18 @@ def _pinned_version() -> str:
     raise AssertionError(f"{_PIN} pins no ansible-core version -- nothing to compare against")
 
 
+def _range_matches_pin(versions: list[str], pinned: str) -> bool:
+    """Whether the ignore range is the open-ended range this pin requires.
+
+    Extracted so it can be exercised against a MISMATCHING pair as well as a
+    matching one. Asserted only against the live configuration, this comparison
+    is checked exclusively in the state where it happens to agree -- and a
+    comparison that has never been shown to fail is indistinguishable from one
+    that cannot.
+    """
+    return versions == [f">{pinned}"]
+
+
 def test_ansible_core_is_frozen_not_merely_capped() -> None:
     entries = [i for i in _root_pip_block().get("ignore", []) if i.get("dependency-name") == "ansible-core"]
     assert entries, (
@@ -92,7 +104,7 @@ def test_ansible_core_is_frozen_not_merely_capped() -> None:
         "An unbounded `versions` range is what holds (#15983)."
     )
     pinned = _pinned_version()
-    assert versions == [f">{pinned}"], (
+    assert _range_matches_pin(versions, pinned), (
         f"ansible-core's ignore range is {versions!r} but the pin is {pinned!r}. These two "
         "numbers are one fact written twice, and the release procedure in the pin's header "
         "moves them together -- fleet first, then the pin, then this lower bound. A range "
@@ -109,3 +121,32 @@ def test_the_pin_tells_the_reader_it_is_frozen() -> None:
         "wondering why the pin never moves must find the answer at the pin (#15983)."
     )
     assert "dependabot" in text.lower(), "the pin's header does not name dependabot as the frozen actor"
+
+
+def test_the_range_comparison_rejects_a_drifted_lower_bound() -> None:
+    """The contrast pair. The live configuration only ever exercises the True branch.
+
+    `>2.17.15` against a `2.17.14` pin is not hypothetical -- it is what the three
+    step release produces if someone moves the ignore's lower bound before moving
+    the pin, and it is the precise state the old `startswith(">")` check accepted.
+    The two assertions are one test on purpose: a matching pair passing proves
+    nothing on its own, because a function returning True unconditionally passes it.
+    """
+    assert _range_matches_pin([">2.17.14"], "2.17.14")
+    assert not _range_matches_pin([">2.17.15"], "2.17.14"), (
+        "the comparison accepted an ignore range above the pin -- the two numbers "
+        "are one fact written twice and must move together (#15983)"
+    )
+
+
+def test_the_range_comparison_rejects_the_shapes_that_are_not_a_freeze() -> None:
+    """A cap, a closed interval and an empty list are all `not a freeze`.
+
+    `update-types` alone does not stop a grouped bump -- #14431 recorded it for
+    openai, #14727 for protobuf -- so each of these reads as protection while
+    leaving the dependency reachable by the `all-dependencies` group.
+    """
+    assert not _range_matches_pin([], "2.17.14")
+    assert not _range_matches_pin(["<2.18"], "2.17.14")
+    assert not _range_matches_pin([">2.17.14", "<2.18"], "2.17.14")
+    assert not _range_matches_pin([">=2.17.14"], "2.17.14")
