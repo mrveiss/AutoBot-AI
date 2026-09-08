@@ -56,6 +56,7 @@ import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 import pytest
+from tools.lint._scan_helpers import TRACKED_PY_FLOOR
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
@@ -98,7 +99,7 @@ OUT_OF_VOCABULARY_FLOOR = 15
 KNOWN_OUT_OF_VOCABULARY = frozenset({"none", "moderate", "missing", "forbidden"})
 
 # Floor for the file enumeration itself. An empty walk agrees with everything.
-_TRACKED_PY_FLOOR = 3000
+_TRACKED_PY_FLOOR = TRACKED_PY_FLOOR  # canonical: one measured floor, was a local 3000 (#15928)
 
 # A file that certainly carries each shape, so a matcher that has silently
 # stopped matching the tree fails by name instead of reporting a clean sweep.

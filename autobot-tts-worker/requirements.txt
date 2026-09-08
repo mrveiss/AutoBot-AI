@@ -1,11 +1,11 @@
 fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=0.52.1
 uvicorn[standard]>=0.52.4
 transformers>=5.16.1
-torch>=2.13.0
+torch>=2.14.0
 soundfile>=0.14.0
 -c ../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
-huggingface_hub>=1.29.0
+huggingface_hub>=1.30.0
 aiofiles>=25.1.0
 python-multipart>=0.0.32          # SECURITY UPDATE - arbitrary file write fix
 
@@ -16,5 +16,5 @@ python-multipart>=0.0.32          # SECURITY UPDATE - arbitrary file write fix
 # `predownload-model.py.j2` both `from pocket_tts import TTSModel`); scipy is
 # pocket-tts's own unconditional dependency (`Requires-Dist: scipy>=1.5.0`),
 # declared here because this worker holds it above that upstream floor.
-pocket-tts>=2.0.0
-scipy>=1.10.0
+pocket-tts>=3.1.0
+scipy>=1.18.1
