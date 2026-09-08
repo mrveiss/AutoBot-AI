@@ -76340,7 +76340,29 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** HeartbeatReport */
+        /**
+         * HeartbeatReport
+         * @description What an agent reports when a heartbeat run ends (#15966).
+         *
+         *     This model used to declare ``duration_seconds``, ``tokens_in``,
+         *     ``tokens_out`` and ``model``. ``report_heartbeat`` read none of them: they
+         *     were accepted, answered ``200``, and discarded on every call. The only reads
+         *     of those names in this module belong to ``CostEvent`` on ``/cost-events``.
+         *
+         *     They are removed rather than persisted, because each already has a system of
+         *     record and a second durable copy is the wrong answer (``store_authority``):
+         *
+         *     * **duration** is derivable — ``report_heartbeat`` writes ``finished_at`` and
+         *       the scheduler writes ``started_at`` on the same row.
+         *     * **token counts and model** belong to ``POST /cost-events``, which passes
+         *       them to ``BudgetService.ingest_cost_event`` and charges the agent's budget.
+         *       A budget that is never charged is never exceeded (#15859), so cost has to
+         *       arrive on the route that charges it.
+         *
+         *     An agent reporting cost must call ``/cost-events``. Sending those fields here
+         *     never recorded them; not declaring them is what makes that visible instead of
+         *     silently true.
+         */
         HeartbeatReport: {
             /** Run Id */
             run_id: string;
@@ -76348,14 +76370,6 @@ export interface components {
             work_item_id?: string | null;
             /** Status */
             status: string;
-            /** Duration Seconds */
-            duration_seconds?: number | null;
-            /** Tokens In */
-            tokens_in?: number | null;
-            /** Tokens Out */
-            tokens_out?: number | null;
-            /** Model */
-            model?: string | null;
         } & {
             [key: string]: unknown;
         };
