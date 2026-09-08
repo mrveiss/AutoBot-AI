@@ -128,10 +128,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         },
         "root-relative `*.md` sweep; the matching files live outside the python filter's trees",
     ),
-    "*.min.js": (
-        {"repo_tests/one_git_enumeration_15926_test.py"},
-        "test fixture — a pathspec used against a throwaway repository, not a dependency on this tree",
-    ),
     "*.promtool-test.yml": (
         {"repo_tests/promtool_rules_test.py"},
         "root-relative `*.promtool-test.yml` sweep; the matching files live outside the python filter's trees",
@@ -215,10 +211,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ".github/workflows/*.yml": (
         {"repo_tests/comment_line_number_citations_test.py", "repo_tests/python_version_declaration_drift_test.py"},
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
-    ),
-    "?.min.js": (
-        {"repo_tests/one_git_enumeration_15926_test.py"},
-        "test fixture — a pathspec used against a throwaway repository, not a dependency on this tree",
     ),
     "scripts/lib/*.sh": (
         {"repo_tests/comment_line_number_citations_test.py"},
