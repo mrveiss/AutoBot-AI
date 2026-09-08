@@ -150,3 +150,38 @@ def test_every_printing_script_is_an_entry_point_and_no_library_module_prints():
         "property does not describe the exempt set: "
         f"{sorted(str(p.relative_to(repo_root())) for p in printing - entry_points)}"
     )
+
+
+_DOCSTRING_DECOY = '''"""A library module whose docstring shows usage, unindented:
+
+if __name__ == "__main__":
+    main()
+
+...but this module has no entry point of its own.
+"""
+
+
+def emit(msg):
+    print(msg)
+'''
+
+
+def test_a_docstring_that_mentions_the_guard_does_not_earn_the_exemption():
+    """The predicate must parse, not match text (#16011's finding, inside its own fix).
+
+    `grep -E '^if __name__ == .__main__.:'` reads raw text, so this module -- a
+    library with the guard only in its docstring at column zero -- read as a
+    standalone entry point, became exempt, and had its real `print()` call go
+    unscanned. A line-oriented scanner cannot see that a line is inside a string,
+    which is the same blindness the PR body cited about a different guard.
+
+    The contrast is the other test above: a genuine entry point must still be
+    exempt. A predicate that answers "no" to everything passes this test alone
+    and reinstates the violation the exemption exists to avoid.
+    """
+    with _with_probe("_probe_16008_decoy.py", _DOCSTRING_DECOY):
+        result = _run_hook("scripts/_probe_16008_decoy.py")
+        assert "VIOLATION" in result.stdout, (
+            "a module whose docstring merely mentions the __main__ guard was "
+            f"exempted, so its real print() call was never scanned:\n{result.stdout}"
+        )

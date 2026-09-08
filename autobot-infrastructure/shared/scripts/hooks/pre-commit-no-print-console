@@ -210,13 +210,20 @@ CLI_OUTPUT_ROOTS='^scripts/'
 # module. Deliberately a property the hook can TEST, not a list it has to be
 # told: a path list is exactly what let the previous exemption go unrecorded.
 #
+# PARSED, not grepped. `grep -qE '^if __name__ == .__main__.:'` matches raw
+# text, so a library module whose DOCSTRING contains that line at column 0
+# became exempt and its real print() calls went unscanned -- #16011's finding
+# (a line-oriented scanner cannot see that a line is inside a string) landing
+# inside the fix that cited it. The AST answers the question actually being
+# asked: is there a top-level `if __name__ == "__main__"` NODE.
+#
 # Verified against the tree before being trusted (#16008): of 48 tracked
 # scripts/*.py, all 15 that call print() have this block, and the two non-test
 # library modules that do not -- child_ref.py and python_file_size_known_large.py
 # -- call print() zero times. The property separates the population exactly,
 # which is why it can replace the prefix rather than merely widen it.
 is_cli_entry_point() {
-    grep -qE '^if __name__ == .__main__.:' "$1" 2>/dev/null
+    python3 "$SCRIPT_DIR/lib/is_cli_entry_point.py" "$1" 2>/dev/null
 }
 
 get_staged_python_files() {
