@@ -35,10 +35,12 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+from repo_tests._paths import repo_root
 from repo_tests._reach import declare
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+#: #15925: one spelling of the root, not a hand-rolled `__file__` walk.
+_REPO_ROOT = repo_root()
 _HOOK = _REPO_ROOT / "scripts" / "check_python_file_size.py"
 
 #: Trees excluded from the size sweep that ARE repository source. `.worktrees/`
@@ -71,7 +73,24 @@ def _source_tree_files(root: Path) -> list[str]:
     `tracked_python_files`, which applies `EXCLUDED_PREFIXES` and would return
     exactly the empty set this exists to look inside.
     """
-    return [rel for rel in tracked_paths(root, "*.py") if rel.startswith(_SOURCE_TREES)]
+    try:
+        tracked = tracked_paths(root, "*.py")
+    except EmptyEnumeration:
+        # `tracked_paths` refuses to report an empty enumeration as a clean tree,
+        # which is right for a guard that would otherwise pass on nothing. Here
+        # the refusal is one layer too early: `reach_declarations_test` hands
+        # every declaration an empty repository on purpose, and needs an empty
+        # *result* to compare against the live one — its own docstring says
+        # "an empty result to compare instead of an exception that ends the test
+        # early and proves nothing".
+        #
+        # Returning [] does not weaken the refusal, it relocates it: REACH's
+        # floor of 300 then raises `ReachFloorError`, which is the typed refusal
+        # the meta-test is built around and a stronger signal than a bare
+        # assertion. An empty tree still fails; it fails as the mechanism
+        # intends rather than one layer above it.
+        return []
+    return [rel for rel in tracked if rel.startswith(_SOURCE_TREES)]
 
 
 REACH = declare(
