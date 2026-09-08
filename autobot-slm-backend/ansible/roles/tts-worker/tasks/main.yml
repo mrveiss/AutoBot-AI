@@ -214,7 +214,7 @@
 - name: "TTS Worker | Install torch CPU-only from the CPU wheel index"
   ansible.builtin.pip:
     name:
-      - "torch>=2.13.0"
+      - "torch>=2.14.0"
     virtualenv: "{{ tts_install_dir }}/venv"
     state: present
     extra_args: "--index-url https://download.pytorch.org/whl/cpu --timeout 300"
@@ -227,13 +227,19 @@
 - name: "TTS Worker | Install pocket-tts and audio dependencies"
   ansible.builtin.pip:
     name:
-      # pocket-tts>=2.0.0 is required for TTSModel.generate_audio_stream()
+      # pocket-tts>=3.1.0 is required for TTSModel.generate_audio_stream()
       # (incremental audio-chunk streaming used by /tts/synthesize/stream,
-      # #12501) — verified present on 1.1.1, 2.0.0, and 2.1.0 (latest at
-      # pin time). Floor pinned to the earliest version validated against
-      # the worker's streaming code path, rather than an unbounded
-      # latest-wins resolve.
-      - pocket-tts>=2.0.0
+      # #12501) — verified present on 1.1.1, 2.0.0, 2.1.0, and re-verified
+      # across the 2->3 major against the upstream Python API reference,
+      # which lists `generate_audio_stream(model_state, text_to_generate,
+      # frames_after_eos=None, copy_state=True)` beside `load_model` and
+      # `generate_audio` — the three methods this worker calls
+      # (templates/tts-worker.py.j2:210, :214, :332).
+      #
+      # A major bump is not a floor move. The parity guard fires on the
+      # NUMBER and cannot know whether the API that number gates still
+      # exists; answering that is the only reason this pin carries a comment.
+      - pocket-tts>=3.1.0
       # #15598: `>=0.14.0` is the floor `autobot-tts-worker/requirements.txt`
       # declares for this worker; `>=0.12.0` here undercut it by two minors.
       - soundfile>=0.14.0
@@ -249,7 +255,7 @@
       # roles/npu-worker, roles/agent_config/openvino and roles/browser onto this
       # same shape, so all five pip constraint sites now agree.
       - numpy
-      - scipy>=1.10.0
+      - scipy>=1.18.1
     virtualenv: "{{ tts_install_dir }}/venv"
     state: present
     extra_args: >-
