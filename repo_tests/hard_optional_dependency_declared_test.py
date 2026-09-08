@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import ast
 import functools
-import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 import sys
 from pathlib import Path
 
@@ -44,7 +43,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests.declared_distributions import SKIP_PARTS, declared_distributions
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 _REPO_ROOT = repo_root()
 _SKIP_PARTS = SKIP_PARTS
@@ -112,14 +111,7 @@ _STDLIB = set(sys.stdlib_module_names) | {"__future__"}
 
 def _tracked_python() -> list[Path]:
     """Tracked ``*.py``, from git rather than a walk — see the note in the sibling guard."""
-    out = subprocess.run(  # nosec B603  # fixed argv
-        ["git", "-C", str(_REPO_ROOT), "ls-files", "*.py"],
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    ).stdout
-    return [_REPO_ROOT / line for line in out.splitlines() if line]
+    return [_REPO_ROOT / line for line in tracked_paths(_REPO_ROOT, "*.py")]
 
 
 _DECLARED, _REQUIREMENTS_FILES = declared_distributions(_REPO_ROOT)
