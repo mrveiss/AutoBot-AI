@@ -24,33 +24,41 @@ echo "📦 Installing system dependencies..."
 # Detect OS
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     # Linux
+    # Redis is deliberately absent from these lists (#16071). This tool talks
+    # to AutoBot's Redis through autobot_shared.redis_client -- it does not want
+    # a second local instance, and the apt/yum/dnf packages are plain Redis with
+    # none of the modules the platform uses.
     if command -v apt-get &> /dev/null; then
         sudo apt-get update
-        sudo apt-get install -y redis-stack-server python3-pip python3-venv
+        sudo apt-get install -y python3-pip python3-venv
     elif command -v yum &> /dev/null; then
-        sudo yum install -y redis python3-pip python3-venv
+        sudo yum install -y python3-pip python3-venv
     elif command -v dnf &> /dev/null; then
-        sudo dnf install -y redis python3-pip python3-venv
+        sudo dnf install -y python3-pip python3-venv
     fi
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS
     if command -v brew &> /dev/null; then
-        brew install redis python3
+        brew install python3
     else
-        echo "❌ Homebrew not found. Please install Redis manually."
+        echo "❌ Homebrew not found. Please install Python 3 manually."
         exit 1
     fi
 fi
 
-# Start Redis
-echo "🔄 Starting Redis server..."
-if command -v systemctl &> /dev/null; then
-    sudo systemctl start redis
-    sudo systemctl enable redis
-elif command -v brew &> /dev/null; then
-    brew services start redis
+# Redis is provisioned by roles/redis, not by this script (#16071). It owns the
+# Redis Stack repository, the suite pin (#7178) and the package, and a second
+# copy of that logic here would drift out of step invisibly. Report whether the
+# service this tool needs is reachable; do not try to create it.
+echo "🔄 Checking Redis Stack..."
+if command -v systemctl &> /dev/null && systemctl is-active --quiet redis-stack-server; then
+    echo "✅ redis-stack-server is running"
 else
-    echo "⚠️  Please start Redis manually: redis-stack-server"
+    echo "⚠️  redis-stack-server is not running here."
+    echo "    This tool connects through autobot_shared.redis_client, so it needs"
+    echo "    AutoBot's Redis Stack -- provision it with roles/redis, or point the"
+    echo "    client at an existing instance. Plain Redis from apt/brew will not do:"
+    echo "    it has no RediSearch, RedisJSON or RedisTimeSeries."
 fi
 
 # Create virtual environment

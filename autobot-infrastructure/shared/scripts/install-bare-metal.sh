@@ -208,29 +208,31 @@ install_prerequisites() {
         apt-get install -y -qq nodejs
     fi
 
-    # Redis Stack -- NOT the apt `redis-server` package (#16071).
-    # AutoBot uses RediSearch, RedisJSON and RedisTimeSeries. Plain Redis starts
-    # cleanly and then fails on the first module command, which is a worse
-    # failure than not installing at all. See autobot-database/README.md.
+    # Redis is NOT installed here (#16071).
+    #
+    # This block used to `apt-get install redis-server`, which is plain Redis:
+    # no RediSearch, no RedisJSON, no RedisTimeSeries. It starts cleanly and
+    # then fails on the first module command, so the node looks provisioned and
+    # is not -- a worse failure than not installing at all, and exactly what
+    # autobot-database/README.md warns about.
+    #
+    # The fix is not to hand-roll the Redis Stack repo here. `roles/redis`
+    # already adds it, pins the suite (#7178: Redis publishes
+    # redis-stack-server for jammy/bullseye/focal only, and noble's dist ships
+    # plain Redis), and installs the package idempotently (#7218). A second
+    # copy in bash is the duplicated-guarantee problem this repo keeps paying
+    # for: it drifts, and the drift is invisible until a node is wrong.
+    #
+    # So this bootstrap refuses rather than guesses. Provisioning the database
+    # node is the role's job.
     if [[ "$SKIP_REDIS" == false ]]; then
         if ! command -v redis-stack-server &>/dev/null; then
-            log_info "Installing Redis Stack"
-            # #7178: Redis publishes redis-stack-server for jammy/bullseye/focal
-            # only. Noble's repo dist exists but ships plain redis-server, so pin
-            # to jammy elsewhere -- the same fallback roles/redis applies.
-            local redis_suite
-            redis_suite="$(. /etc/os-release && echo "${VERSION_CODENAME:-}")"
-            case "$redis_suite" in
-                jammy|bullseye|focal) ;;
-                *) redis_suite="jammy" ;;
-            esac
-            curl -fsSL https://packages.redis.io/gpg \
-                | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
-            echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg]" \
-                 "https://packages.redis.io/deb ${redis_suite} main" \
-                 > /etc/apt/sources.list.d/redis.list
-            apt-get update -qq
-            apt-get install -y -qq redis-stack-server
+            log_error "Redis Stack is not installed on this host."
+            log_error "This bootstrap does not install it: roles/redis owns the"
+            log_error "repository, the suite pin and the package. Provision this"
+            log_error "node with that role, or re-run with --skip-redis if it is"
+            log_error "not the database node."
+            return 1
         fi
         systemctl enable redis-stack-server
         systemctl start redis-stack-server

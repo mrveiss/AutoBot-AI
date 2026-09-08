@@ -20,11 +20,16 @@ The Code Analysis Suite provides code quality monitoring with 9 specialized anal
 
 ### Prerequisites
 
+This tool reaches Redis through `autobot_shared.redis_client`, so it needs
+AutoBot's **Redis Stack** — not a second local instance, and not plain Redis.
+The apt package and the `redis:alpine` image both lack RediSearch, RedisJSON
+and RedisTimeSeries, so they connect and then fail on the first module command.
+
+Provision it with `roles/redis`, which owns the repository, the suite pin
+(#7178) and the package. To check what you have:
+
 ```bash
-# Install Redis (required for caching)
-sudo apt install redis-server
-# or
-docker run -d -p 6379:6379 redis:alpine
+systemctl is-active redis-stack-server
 
 # Install Python dependencies
 pip install redis aioredis numpy scikit-learn chromadb
