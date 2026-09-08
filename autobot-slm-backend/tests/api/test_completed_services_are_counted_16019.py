@@ -50,6 +50,7 @@ def _declared_statuses() -> set[str]:
             }
     raise AssertionError("ServiceStatus not found in models/service_status.py")
 
+
 #: Every value `HealthCollector._map_status_from_states` can return (#16019).
 _COLLECTOR_STATES = {
     "running",
@@ -106,6 +107,5 @@ def test_the_aggregates_switch_on_completed():
     """
     source = (_SLM / "api" / "monitoring.py").read_text(encoding="utf-8")
     assert source.count("ServiceStatus.COMPLETED.value") == 2, (
-        "both service-count aggregates must treat COMPLETED as healthy — one of "
-        "them still drops it (#16019)"
+        "both service-count aggregates must treat COMPLETED as healthy — one of " "them still drops it (#16019)"
     )
