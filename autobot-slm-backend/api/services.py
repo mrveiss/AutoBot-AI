@@ -65,8 +65,6 @@ async def _get_node_or_404(db: AsyncSession, node_id: str) -> Node:
     return node
 
 
-
-
 async def _kill_orphan_on_port(node: Node, port: int) -> Tuple[bool, str]:
     """
     Kill any orphaned process using a specific port on a node.
