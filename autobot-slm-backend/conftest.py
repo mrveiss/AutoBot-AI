@@ -183,20 +183,6 @@ _ss_spec.loader.exec_module(_ss_mod)
 sys.modules["models.schemas_secrets"] = _ss_mod
 setattr(sys.modules["models"], "schemas_secrets", _ss_mod)
 
-# #16019: `models.service_status` carries ServiceStatus, extracted from
-# models/database.py because that file is AT its grandfathered size ceiling and
-# a grandfathered file may not grow. `models` is a hollow stub here with no
-# `__path__`, so `from models.service_status import ...` raises "not a package"
-# unless the submodule is registered the same way schemas_secrets is above.
-# It imports only `enum`, so loading it by path is safe.
-_service_status_path = Path(__file__).parent / "models" / "service_status.py"
-if not _service_status_path.is_file():
-    raise RuntimeError("conftest: models/service_status.py is named here but does not exist")
-_svc_spec = _ss_importlib_util.spec_from_file_location("models.service_status", _service_status_path)
-_svc_mod = _ss_importlib_util.module_from_spec(_svc_spec)
-_svc_spec.loader.exec_module(_svc_mod)
-sys.modules["models.service_status"] = _svc_mod
-setattr(sys.modules["models"], "service_status", _svc_mod)
 
 # ── services ──────────────────────────────────────────────────────────────────
 # The services.* modules api/code_sync.py and api/setup_wizard.py import are

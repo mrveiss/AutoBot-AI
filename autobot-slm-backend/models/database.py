@@ -300,9 +300,9 @@ class ReplicationStatus(str, enum.Enum):
     STOPPED = "stopped"
 
 
-# ServiceStatus lives in models/service_status.py (#16019): this file is at
-# its grandfathered ceiling, so the three new states could not be added here.
-from models.service_status import ServiceStatus  # noqa: E402,F401
+# ServiceStatus moved to top-level service_status.py (#16019) -- this file is
+# AT its ceiling, and models/ would drag in autobot_shared. See that docstring.
+from service_status import ServiceStatus  # noqa: E402,F401
 
 
 class ServiceCategory(str, enum.Enum):

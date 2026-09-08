@@ -6,9 +6,15 @@
 
 Extracted from ``models/database.py`` because that file sits at its
 grandfathered size ceiling (#14236): adding the three states below pushed it
-over, and a grandfathered file may not grow. The ceiling is doing what it is
-for -- new material goes somewhere new rather than accreting in a file nobody
-can read. `SERVICE_PORT_MAP` left `api/services.py` for the same reason.
+over, and a grandfathered file may not grow. `SERVICE_PORT_MAP` left
+`api/services.py` for the same reason.
+
+**Top-level, deliberately not under ``models/``.** ``from models.x import ...``
+imports the models PACKAGE, and ``models/__init__.py`` pulls in
+``user_management`` and thence ``autobot_shared``. The migration runner has
+neither on its path, so placing this under ``models/`` turned a flat module
+import into a package import and broke `SLM migration runner — Postgres 16`
+with ``ModuleNotFoundError: No module named 'autobot_shared'``.
 
 Re-exported from ``models.database`` so the six existing importers are
 unaffected.
