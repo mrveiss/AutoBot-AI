@@ -75,6 +75,64 @@ async def test_the_second_agent_learns_before_editing_not_at_merge(redis):
 
 
 @pytest.mark.asyncio
+async def test_two_non_overlapping_edits_to_one_file_still_find_each_other(redis):
+    """The silent case, and the reason this module exists at all.
+
+    Two agents fix two unrelated defects in one file, in regions that never
+    touch. Every signal downstream of this moment is blind to it: the two diffs
+    do not conflict, the merge is clean, `git` reports nothing, and CI is green
+    on each branch alone. The collision is real regardless -- whichever lands
+    second was reasoning about a version of the file that no longer exists --
+    and it surfaces as a silent logical regression rather than as a conflict
+    anybody is asked to resolve.
+
+    Acquire time is therefore the only moment either agent can still hear about
+    the other, which is what makes this the case worth pinning: a merge-time
+    check cannot be written, because at merge time there is nothing to see.
+
+    Two assertions, and the first is the one a stricter implementation would
+    get wrong. The claim must be GRANTED -- serialising unrelated work behind
+    review would make the registry worse than not having it -- while the
+    disclosure still names the other branch and what it is doing there.
+    """
+    scope = "path:autobot-backend/services/parser.py"
+    await declare(
+        scope,
+        branch="issue-1",
+        steward="agent-1",
+        intent="fix the header parse at the top of the file",
+    )
+
+    outcome, found = await acquire_aware(
+        scope,
+        agent_id="agent-2",
+        task_id="t2",
+        intent="fix the footer checksum at the bottom of the file",
+    )
+
+    assert isinstance(outcome, Claim), "non-overlapping edits to one file must not be serialised"
+    assert [i.branch for i in found] == ["issue-1"]
+    assert found[0].steward == "agent-1"
+    assert "header parse" in found[0].intent, "a disclosure that omits the intent cannot be acted on"
+
+
+@pytest.mark.asyncio
+async def test_awareness_is_mutual_once_both_branches_have_declared(redis):
+    """The incumbent has to be able to learn too, not only the newcomer.
+
+    `acquire_aware` tells the arriving agent about work already declared, which
+    is a one-way disclosure: on its own it leaves the agent who got there first
+    still believing it is alone in the file. An implementation that only ever
+    reported *prior* interests to a newcomer would pass every other test here.
+    """
+    scope = "path:autobot-backend/services/parser.py"
+    await declare(scope, branch="issue-1", steward="agent-1", intent="header parse")
+    await declare(scope, branch="issue-2", steward="agent-2", intent="footer checksum")
+
+    assert sorted(i.branch for i in await interests(scope)) == ["issue-1", "issue-2"]
+
+
+@pytest.mark.asyncio
 async def test_an_interest_in_a_parent_path_covers_a_child_scope(redis):
     """A branch holding a directory is in flight for files under it."""
     await declare("path:a", branch="issue-1", steward="agent-1", intent="tree-wide")
