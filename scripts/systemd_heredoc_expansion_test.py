@@ -32,7 +32,10 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
-_SKIP_DIRS = ("venv/", "node_modules/", ".git/", ".worktrees/")
+#: Below this the enumeration collapsed rather than the tree being clean. Bound
+#: to files swept, never to findings: a floor tracking findings relaxes itself as
+#: the tree improves. 216 tracked shell scripts when this landed.
+_MIN_SHELL_FILES_SWEPT = 150
 
 # A heredoc whose target is a unit file, or anywhere under a systemd directory.
 _UNIT_SUFFIXES = (".service", ".timer", ".socket", ".mount", ".path")
@@ -46,8 +49,7 @@ _VAR_REF = re.compile(r"\$\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)[^}]*\}|\$(?P<bare
 # assignment does. Reading only the bare form reported 10 false positives in
 # install-bare-metal.sh, where every unit variable is a function `local`.
 _ASSIGNMENT = re.compile(
-    r"^\s*(?:export\s+|local\s+|declare\s+(?:-\w+\s+)?|readonly\s+|typeset\s+)?"
-    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)="
+    r"^\s*(?:export\s+|local\s+|declare\s+(?:-\w+\s+)?|readonly\s+|typeset\s+)?" r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)="
 )
 
 # No allowlist. Review finding on this PR: the previous one exempted USER and
@@ -68,10 +70,47 @@ _SYSTEMD_RUNTIME_VARS: frozenset = frozenset()
 
 
 def _shell_scripts() -> list[Path]:
-    return sorted(
-        p
-        for p in _REPO_ROOT.rglob("*.sh")
-        if not any(skip in str(p.relative_to(_REPO_ROOT)) for skip in _SKIP_DIRS)
+    """Tracked shell scripts, from ``git`` rather than from a filesystem walk (#15955).
+
+    This used ``_REPO_ROOT.rglob("*.sh")`` with a hand-maintained skip list of
+    ``("venv/", "node_modules/", ".git/", ".worktrees/")``. That list is missing
+    ``.claude/worktrees/``, where this repository also keeps checkouts — so on a
+    developer machine the sweep reached **431 files, 215 of them belonging to
+    another checkout at a revision nobody chose**. CI was never affected: it
+    checks out clean, so the walk and the index agreed there.
+
+    A guard that answers differently on different machines is the one thing a
+    reach floor cannot tolerate, and it is invisible in CI.
+
+    ``git ls-files`` fixes it by never entering either directory, so the skip
+    list is deleted rather than extended. Nine other guards in this repository
+    hand-maintain the same four-entry list; this one and
+    ``slm_frontend_publish_contract_test.py`` are the two where it was not fully
+    copied, which is the argument against keeping such a list at all.
+    """
+    import subprocess  # noqa: PLC0415  # local: keeps the module import side-effect free
+
+    from autobot_shared.paths import scrubbed_git_env
+
+    completed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "ls-files", "-z", "--", "*.sh"],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+        # An inherited GIT_DIR outranks `cwd=` and would enumerate another
+        # checkout's index while _REPO_ROOT names this one (#14896).
+        env=scrubbed_git_env(),
+    )
+    return sorted(_REPO_ROOT / name for name in completed.stdout.split("\0") if name)
+
+
+def test_the_sweep_reached_the_shell_scripts() -> None:
+    """Runs first: every assertion below passes vacuously over an empty list."""
+    found = _shell_scripts()
+    assert len(found) >= _MIN_SHELL_FILES_SWEPT, (
+        f"enumerated only {len(found)} shell script(s) (floor {_MIN_SHELL_FILES_SWEPT}) — "
+        "the enumeration broke, so a clean result below asserts nothing."
     )
 
 
