@@ -19,6 +19,7 @@ the old code and the new code equally.
 
 from __future__ import annotations
 
+import os
 import subprocess
 
 from repo_tests._paths import repo_root
@@ -38,6 +39,7 @@ ALLOW_TIMEOUT="${{AUTOBOT_PREPUSH_ALLOW_TIMEOUT:-0}}"
 {body}
 did_not_run "pytest" "120"
 echo "EXIT_CODE=$EXIT_CODE"
+exit "$EXIT_CODE"
 """
 
 
@@ -49,34 +51,54 @@ def _did_not_run_body() -> str:
     return text[start:end]
 
 
-def _run(env_extra: dict[str, str] | None = None) -> str:
-    script = _HARNESS.format(body=_did_not_run_body())
-    import os
+def _run(env_extra: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    """Run the harness and hand back the PROCESS, not a transcript of it.
 
+    Returning `stdout + stderr` was the same defect these tests exist to catch,
+    one level up: the harness ended in `echo`, so `bash -c` exited 0 however
+    `did_not_run` had set `EXIT_CODE`, and every assertion read a line of text
+    *about* the exit status instead of the status. A test for "the push fails"
+    that cannot observe a failing process is checking the message again.
+    """
+    script = _HARNESS.format(body=_did_not_run_body())
     env = dict(os.environ)
     env.pop("AUTOBOT_PREPUSH_ALLOW_TIMEOUT", None)
     env.update(env_extra or {})
-    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env)
+    return subprocess.run(  # noqa: S603
+        ["bash", "-c", script],  # noqa: S607
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+
+def _text(result: subprocess.CompletedProcess[str]) -> str:
     return result.stdout + result.stderr
 
 
-def test_a_timeout_sets_a_failing_exit_code():
+def test_a_timeout_fails_the_push():
     """The regression: a timeout used to leave EXIT_CODE at 0 and the push proceeded."""
-    output = _run()
-    assert "EXIT_CODE=1" in output, f"a timed-out check did not fail the push:\n{output}"
+    result = _run()
+    assert result.returncode != 0, (
+        f"a timed-out check exited {result.returncode} -- the push was permitted:\n{_text(result)}"
+    )
+    assert "EXIT_CODE=1" in _text(result)
 
 
 def test_the_timeout_message_does_not_read_like_a_pass():
     """`WARN ... skipping` is the shape that made "did not run" look like "ran"."""
-    output = _run()
+    output = _text(_run())
     assert "DID NOT RUN" in output, f"the timeout message does not say it did not run:\n{output}"
     assert "NOT verified" in output
 
 
 def test_the_opt_out_works_and_names_itself():
     """An escape hatch invisible in the transcript is indistinguishable from the bug."""
-    output = _run({"AUTOBOT_PREPUSH_ALLOW_TIMEOUT": "1"})
-    assert "EXIT_CODE=0" in output, f"the opt-out did not permit the push:\n{output}"
+    result = _run({"AUTOBOT_PREPUSH_ALLOW_TIMEOUT": "1"})
+    output = _text(result)
+    assert result.returncode == 0, f"the opt-out did not permit the push:\n{output}"
+    assert "EXIT_CODE=0" in output
     assert "AUTOBOT_PREPUSH_ALLOW_TIMEOUT=1" in output, (
         "the opt-out did not name itself in the output, so a reader of the transcript "
         "cannot tell an allowed-unverified push from a verified one"
