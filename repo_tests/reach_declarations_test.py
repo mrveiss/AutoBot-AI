@@ -28,6 +28,7 @@ from autobot_shared.paths import scrubbed_git_env
 from repo_tests._reach import REGISTRY, Reach, ReachFloorError, declare
 
 _REPO_TESTS = Path(__file__).resolve().parent
+_REPO_ROOT = _REPO_TESTS.parent
 
 #: A **shrink-guard, not a reach floor.** At the current adoption count this
 #: cannot fail until someone *removes* a declaration — which is worth having,
@@ -201,4 +202,62 @@ def test_no_guard_failed_to_import() -> None:
     assert not IMPORT_FAILURES, (
         "these guard modules could not be imported, so their declarations (if any) are missing "
         f"from the registry: {IMPORT_FAILURES}"
+    )
+
+
+@pytest.mark.parametrize("reach", _declarations(), ids=lambda r: r.name)
+def test_every_declared_floor_is_pinned_to_its_population(reach: Reach) -> None:
+    """A floor far below its population catches only total collapse (#15928).
+
+    `test_no_guard_can_succeed_against_an_empty_tree` proves a floor *fires*.
+    It cannot prove the floor is **tight**, and every floor examined in review
+    during #15896, #15901 and #15913 fired correctly against an empty tree
+    while tolerating the loss of most of a real one.
+
+    Total collapse is not the failure that happens. Partial loss is: a glob
+    narrowed, a directory moved, a change propagated to some call sites and not
+    others. A floor of 3,000 against 5,241 files detects only the loss of the
+    one tree holding 75% of them; the other five can vanish silently. That is
+    the shape this asserts against.
+
+    The rule is equality by default -- `growth=0` -- because a floor that sits
+    at its population turns any shrinkage into a failure, and shrinking a
+    guarded population is exactly the event worth a deliberate line in a diff.
+    A population that ordinary work grows declares `growth=N` and says so where
+    a reviewer sees it, rather than being pinned low and quietly meaning
+    nothing.
+
+    **This measures `discover`, and one floor serves two populations.**
+    `examined()` bounds what discovery returned; `completed()` bounds what the
+    guard finished, which is lower whenever files are skipped as unreadable or
+    unparseable -- 262 of 5,599 for `audio-extension-allowlist`. A floor that
+    satisfies this test can still fail the guard's own `completed()` check, and
+    the first version of this ratchet did exactly that: the pre-push hook
+    rejected it. `skips` now carries that gap under its own name, so `growth`
+    means only what it says and each number can be chosen against one quantity.
+
+    So this check is necessary and not sufficient. It catches a floor far below
+    its population; `completed()` remains the binding constraint. Giving the
+    two populations separate floors is the fuller fix and is not this change.
+    """
+    count = len(reach.discover(_REPO_ROOT))
+    slack = count - reach.floor
+
+    assert slack >= 0, (
+        f"[{reach.name}] floor {reach.floor} exceeds the live population of "
+        f"{count} {reach.what}. The guard cannot pass; lower the floor to "
+        f"{count} only if the population genuinely shrank."
+    )
+    allowance = reach.skips + reach.growth
+    assert slack <= allowance, (
+        f"[{reach.name}] floor {reach.floor} sits {slack} below its live "
+        f"population of {count} {reach.what}, which exceeds the declared "
+        f"allowance of {allowance} (skips={reach.skips} + growth={reach.growth}).\n"
+        f"A floor this far below what the sweep finds passes while most of the "
+        f"tree stops being reached.\n"
+        f"Raise the one that is actually short:\n"
+        f"  skips=  items this guard cannot COMPLETE (unreadable, unparseable). "
+        f"Measure it from a `completed` failure; do not estimate it.\n"
+        f"  growth= ordinary growth tolerated before a deliberate ratchet.\n"
+        f"If neither is short, the floor is stale: ratchet it toward {count}."
     )
