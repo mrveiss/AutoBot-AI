@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.security.path_validator import require_path_string
 from config import settings
 from models.database import Backup, BackupStatus, Node
+from services.role_units import REDIS_UNIT
 
 logger = logging.getLogger(__name__)
 
@@ -244,13 +245,12 @@ class BackupService:
             logger.warning("Could not remove staged file %s on %s: %s", path, host, exc)
 
     async def _stop_redis_for_restore(self, host: str, ssh_user: str, ssh_port: int) -> None:
-        """Stop Redis service on the target node.
-
-        Helper for execute_restore (Issue #665).
-        """
-        logger.info("Stopping Redis on %s for restore", host)
-        stop_cmd = self._build_ssh_command(host, ssh_user, ssh_port, "sudo systemctl stop redis-server")
-        await self._run_command(stop_cmd, timeout=30)
+        """Stop Redis on the target node; raise if it will not stop (#665, #16060)."""
+        logger.info("Stopping %s on %s for restore", REDIS_UNIT, host)
+        cmd = self._build_ssh_command(host, ssh_user, ssh_port, f"sudo systemctl stop {REDIS_UNIT}")
+        ok, out = await self._run_command(cmd, timeout=30)
+        if not ok:  # #16060: discarded before -- see services/role_units.py
+            raise RuntimeError(f"cannot restore: stop {REDIS_UNIT} on {host}: {out.strip()}")
 
     async def _copy_local_backup_to_target(
         self, backup: Backup, host: str, ssh_user: str, ssh_port: int
@@ -315,7 +315,7 @@ class BackupService:
         """
         # Start Redis
         logger.info("Starting Redis on %s after restore", host)
-        start_cmd = self._build_ssh_command(host, ssh_user, ssh_port, "sudo systemctl start redis-server")
+        start_cmd = self._build_ssh_command(host, ssh_user, ssh_port, f"sudo systemctl start {REDIS_UNIT}")
         success, output = await self._run_command(start_cmd, timeout=30)
         if not success:
             return False, f"Failed to start Redis: {output}"

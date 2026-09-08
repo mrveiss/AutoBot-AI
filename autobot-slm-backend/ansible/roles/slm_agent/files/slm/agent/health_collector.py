@@ -230,8 +230,15 @@ class HealthCollector:
         if len(parts) < 4:
             return None
         unit_name = parts[0]
-        if "@" in unit_name or not unit_name.endswith(".service"):
+        if not unit_name.endswith(".service"):
             return None
+        # #16020/#16019: a templated unit is NOT a phantom. `postgresql@16-main`
+        # IS the running PostgreSQL on this fleet -- the bare `postgresql.service`
+        # is a oneshot wrapper that exits. Dropping every name containing `@`
+        # discarded the unit doing the work and kept the one that looks stopped,
+        # so PostgreSQL reported `unknown` on a healthy node. The instance is
+        # kept in the reported name so two instances of one template stay
+        # distinguishable.
 
         service_name = unit_name.replace(".service", "")
         load_state = parts[1]
@@ -250,14 +257,38 @@ class HealthCollector:
         }
 
     def _map_status_from_states(self, active_state: str, sub_state: str) -> str:
-        """Map systemd active/sub states to our status enum. Issue #620."""
+        """Map systemd active/sub states to our status enum. Issue #620.
+
+        `unknown` means **the probe got no usable answer** -- it must never mean
+        "systemd told me something I have no branch for". Those are opposite
+        situations and the UI renders them identically, so a oneshot that
+        finished successfully looked exactly like an unreachable node (#16019).
+
+        The gap was `active (exited)`: a completed oneshot, which is what
+        `slm-admin-ui` and the `postgresql` wrapper report on every healthy
+        node. It matched no branch and fell through to `unknown`.
+        """
         if active_state == "active" and sub_state == "running":
             return "running"
-        elif active_state == "failed" or sub_state == "failed":
+        if active_state == "active" and sub_state == "exited":
+            # A oneshot that ran to completion. Distinct from `running` (nothing
+            # is resident) and emphatically not `unknown` -- systemd is telling
+            # us it SUCCEEDED.
+            return "completed"
+        if active_state == "active":
+            # Any other active sub-state (start-pre, reload, mounting...) is a
+            # live unit. Reporting the sub-state's novelty as `unknown` is what
+            # this method exists to stop doing.
+            return "running"
+        if active_state == "failed" or sub_state == "failed":
             return "failed"
-        elif active_state == "activating" and sub_state == "auto-restart":
+        if active_state == "activating" and sub_state == "auto-restart":
             return "crash-loop"  # Issue #1604
-        elif active_state == "inactive":
+        if active_state == "activating":
+            return "starting"
+        if active_state == "deactivating":
+            return "stopping"
+        if active_state == "inactive":
             return "stopped"
         return "unknown"
 
