@@ -54,8 +54,21 @@ _ACCEPTABLE = frozenset({"success", "skipped", "neutral"})
 _RUNNING = frozenset({"pending", "in_progress", "queued", "waiting", "requested"})
 
 
-def latest_per_name(runs: Iterable[dict]) -> dict[str, str]:
-    """Conclusion of the most recently *started* run for each context name.
+#: Precedence when two SOURCES report the same context name. GitHub evaluates a
+#: check run and a legacy commit status separately, so a green one must never
+#: stand in for a red one -- the tool's own defect, in the direction it exists to
+#: prevent. Lower is worse; the worst observation wins.
+_SEVERITY = {"failing": 0, "running": 1, "acceptable": 2}
+
+
+def _rank(state: str) -> str:
+    if state in _ACCEPTABLE:
+        return "acceptable"
+    return "running" if state in _RUNNING else "failing"
+
+
+def _latest_within(observations: Iterable[dict]) -> dict[str, str]:
+    """Conclusion of the most recently *started* observation for each name.
 
     A superseded run is a real state, just not the current one: re-pushing leaves
     `cancelled` entries behind a later `success` for the same name, and taking the
@@ -63,7 +76,7 @@ def latest_per_name(runs: Iterable[dict]) -> dict[str, str]:
     Sorting by `started_at` is what makes the answer current rather than arbitrary.
     """
     newest: dict[str, tuple[str, str]] = {}
-    for run in runs:
+    for run in observations:
         name = run.get("name") or run.get("context")
         if not name:
             continue
@@ -73,6 +86,35 @@ def latest_per_name(runs: Iterable[dict]) -> dict[str, str]:
         if previous is None or started >= previous[0]:
             newest[name] = (started, state)
     return {name: state for name, (_started, state) in newest.items()}
+
+
+def latest_per_name(*sources: Iterable[dict]) -> dict[str, str]:
+    """Current state per context name: newest WITHIN a source, worst ACROSS sources.
+
+    The two rules answer different failures and neither substitutes for the other.
+
+    *Newest within* handles supersession -- a re-push leaves `cancelled` behind a
+    later `success`, and the arbitrary element of an unordered response inverts
+    the verdict.
+
+    *Worst across* handles masking. GitHub evaluates check runs and legacy commit
+    statuses as separate requirements, so one dict keyed by name alone lets a
+    passing observation of one kind hide a failing observation of the other, and
+    the gate prints CONTEXTS-GREEN while the merge button stays red. Collapsing
+    two independent verdicts into one key is the same error as a histogram
+    collapsing three states into `pending=0, fail=0`, which is why this tool
+    exists at all.
+
+    Called with one source it behaves exactly as before, so a caller that has
+    only check runs does not have to know about any of this.
+    """
+    merged: dict[str, str] = {}
+    for observations in sources:
+        for name, state in _latest_within(observations).items():
+            current = merged.get(name)
+            if current is None or _SEVERITY[_rank(state)] < _SEVERITY[_rank(current)]:
+                merged[name] = state
+    return merged
 
 
 def _split_required(
@@ -139,6 +181,20 @@ def _unrequired(
     return failing, pick(lambda state: state in _RUNNING)
 
 
+def _qualify(result: str, failing_unrequired: list, running_unrequired: list) -> str:
+    """Green on the required contexts is not the same as clear to merge.
+
+    Honest naming: the required contexts really are green, and the caller is not
+    clear to merge. A verdict that read CONTEXTS-GREEN with three failing shards
+    would be read at the label -- which is how #15972 nearly landed.
+    """
+    if failing_unrequired and result in ("CONTEXTS-GREEN", "GREEN-BUT-OTHERS-RUNNING"):
+        return "GREEN-BUT-OTHERS-FAILING"
+    if running_unrequired and result == "CONTEXTS-GREEN":
+        return "GREEN-BUT-OTHERS-RUNNING"
+    return result
+
+
 def verdict(required: Iterable[str], observed: dict[str, str]) -> dict:
     """Split required contexts into never-reported, running, not-green, and green.
 
@@ -158,12 +214,7 @@ def verdict(required: Iterable[str], observed: dict[str, str]) -> dict:
     never, running, not_green, green = _split_required(required, observed)
     result = _required_result(never, running, not_green)
     failing_unrequired, running_unrequired = _unrequired(observed, set(required))
-    if running_unrequired and result == "CONTEXTS-GREEN" and not failing_unrequired:
-        result = "GREEN-BUT-OTHERS-RUNNING"
-    if failing_unrequired and result in ("CONTEXTS-GREEN", "GREEN-BUT-OTHERS-RUNNING"):
-        # Honest naming: the required contexts really are green. The caller is not
-        # clear to merge, and the verdict must not read as though they were.
-        result = "GREEN-BUT-OTHERS-FAILING"
+    result = _qualify(result, failing_unrequired, running_unrequired)
     return {
         "verdict": result,
         "never_reported": never,
@@ -179,17 +230,58 @@ def _gh(*args: str) -> str:
     return subprocess.run(["gh", *args], capture_output=True, text=True, check=True).stdout
 
 
+def _all_pages(endpoint: str, key: str | None = None) -> list[dict]:
+    """Every page of a paginated endpoint, flattened.
+
+    `--paginate` alone concatenates one JSON document PER PAGE, which
+    `json.loads` rejects outright -- so the tool worked only while every list fit
+    in one page and would have died, not degraded, the day it did not. `--slurp`
+    makes the pages one array. `per_page=100` is set by the caller.
+    """
+    pages = json.loads(_gh("api", "--paginate", "--slurp", endpoint))
+    if key is None:
+        return [item for page in pages for item in page]
+    return [item for page in pages for item in page.get(key, [])]
+
+
+def _required_contexts(protection: dict) -> tuple[list[str], list[str]]:
+    """Required context names, plus those pinned to a specific app.
+
+    `contexts` is the deprecated mirror of `checks`, and a protection rule can
+    name a context that only counts when a PARTICULAR app publishes it. This
+    tool matches on name alone, so it cannot enforce that pinning -- and the
+    honest response is to name the ones it cannot verify rather than to report
+    a green it did not earn. Reading only `contexts` would additionally MISS a
+    requirement declared solely under `checks`, which is the mirror of the bug
+    this tool exists for: a requirement invisible to the instrument reads as
+    satisfied.
+    """
+    required_block = protection.get("required_status_checks", {})
+    checks = required_block.get("checks", [])
+    names = sorted({*required_block.get("contexts", []), *(c["context"] for c in checks)})
+    app_pinned = sorted(c["context"] for c in checks if c.get("app_id") is not None)
+    return names, app_pinned
+
+
 def _fetch(pr: int, repo: str, base: str) -> dict:
     protection = json.loads(_gh("api", f"repos/{repo}/branches/{base}/protection"))
-    required = protection.get("required_status_checks", {}).get("contexts", [])
+    required, app_pinned = _required_contexts(protection)
     head_json = _gh("pr", "view", str(pr), "--repo", repo, "--json", "headRefOid")
     head = json.loads(head_json)["headRefOid"]
-    # Union of both kinds: some required contexts are legacy commit statuses, and
-    # counting those as unreported is the mirror of the bug this tool exists for.
-    runs_json = _gh("api", "--paginate", f"repos/{repo}/commits/{head}/check-runs")
-    runs = json.loads(runs_json).get("check_runs", [])
-    statuses = json.loads(_gh("api", f"repos/{repo}/commits/{head}/status")).get("statuses", [])
-    return {"required": required, "observed": latest_per_name([*runs, *statuses]), "head": head}
+    # BOTH kinds, kept as SEPARATE sources. Some required contexts are legacy
+    # commit statuses, and counting those as unreported is the mirror of the bug
+    # this tool exists for -- but merging them into one list lets a green check
+    # run hide a red status of the same name, which is that bug itself.
+    # `/statuses` (plural) paginates; `/status` (singular) silently caps at 30,
+    # and a required status past the cap reads as never-reported.
+    runs = _all_pages(f"repos/{repo}/commits/{head}/check-runs?per_page=100", "check_runs")
+    statuses = _all_pages(f"repos/{repo}/commits/{head}/statuses?per_page=100")
+    return {
+        "required": required,
+        "app_pinned": app_pinned,
+        "observed": latest_per_name(runs, statuses),
+        "head": head,
+    }
 
 
 def _emit(line: str) -> None:
@@ -205,6 +297,34 @@ def _emit(line: str) -> None:
     print(line)  # noqa: print
 
 
+def _report(pr: int, result: dict) -> None:
+    """Render the verdict as text: every non-green context, none of them elided."""
+    _emit(f"#{pr} {result['head'][:10]}  {result['verdict']}")
+    for context in result["never_reported"]:
+        _emit(f"  never-reported  {context}")
+    for entry in result["running"]:
+        _emit(f"  running         {entry['context']} = {entry['state']}")
+    for entry in result["not_green"]:
+        _emit(f"  not-green       {entry['context']} = {entry['state']}")
+    for entry in result["failing_unrequired"]:
+        _emit(f"  FAILING (not required)  {entry['context']} = {entry['state']}")
+    # Every one, with its state. The `[:3]` this replaces was the tool's own
+    # defect in miniature: a display that silently drops rows reports a
+    # shorter list of blockers than exists, which is exactly the reading
+    # error -- "nothing else is running" -- that `running_unrequired` was
+    # added to prevent. A cap here would need to announce itself; none does.
+    for entry in result["running_unrequired"]:
+        _emit(f"  running (not required)  {entry['context']} = {entry['state']}")
+    # ONE line, not one per context. Every required context on this repository
+    # pins an app_id, so a per-context notice would print ten identical rows on
+    # every run and bury the rows that differ. A boundary stated once is read;
+    # a boundary repeated on every line is skipped, which leaves it as
+    # undeclared in practice as saying nothing.
+    pinned = result.get("app_pinned", [])
+    if pinned:
+        _emit(f"  note: {len(pinned)} required context(s) pin an app_id; matched by name only")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pr", type=int)
@@ -216,21 +336,16 @@ def main(argv: list[str] | None = None) -> int:
     fetched = _fetch(args.pr, args.repo, args.base)
     result = verdict(fetched["required"], fetched["observed"])
     result["head"] = fetched["head"]
+    # Carried into the output rather than dropped: branch protection can require a
+    # context only when a PARTICULAR app publishes it, and matching on name alone
+    # cannot check that. Saying so is the difference between a verdict with a
+    # stated boundary and one that quietly answers a narrower question.
+    result["app_pinned"] = fetched.get("app_pinned", [])
 
     if args.json:
         _emit(json.dumps(result, indent=2))
     else:
-        _emit(f"#{args.pr} {fetched['head'][:10]}  {result['verdict']}")
-        for context in result["never_reported"]:
-            _emit(f"  never-reported  {context}")
-        for entry in result["running"]:
-            _emit(f"  running         {entry['context']} = {entry['state']}")
-        for entry in result["not_green"]:
-            _emit(f"  not-green       {entry['context']} = {entry['state']}")
-        for entry in result["failing_unrequired"]:
-            _emit(f"  FAILING (not required)  {entry['context']} = {entry['state']}")
-        for entry in result["running_unrequired"][:3]:
-            _emit(f"  running (not required)  {entry['context']}")
+        _report(args.pr, result)
     # PENDING and BLOCKED are both non-zero: neither is mergeable, and a caller
     # branching on the exit status alone must not read "wait" as "go".
     return 0 if result["verdict"] == "CONTEXTS-GREEN" else 1
