@@ -31,6 +31,21 @@ Two reporting rules the exit code alone cannot carry, hence `--json`:
   and a verdict labelled with more scope than it measured is read at the label.
   (#15994 was merged past three unresolved threads by an author whose own gate
   printed MERGEABLE having checked only contexts.)
+
+This tool has been wrong four times, and they were not four bugs: `pending`
+contributing to no bucket; a conflicted branch producing no runs at all; a
+superseded `cancelled` outranking the `success` that replaced it; and a MERGED
+PR reading green because its checks completed before it landed. One design
+property produced all four --
+
+    a check that enumerates conditions is blind to the conditions it does not
+    enumerate, and every blind spot reads as success.
+
+The fifth is one nobody has thought of yet, so the verdict states what it
+examined rather than implying the list is complete. That is why it says
+`CONTEXTS-GREEN` and not `MERGEABLE`, and why a non-open PR gets a sentence
+saying the question does not apply rather than the answer to a question nobody
+asked.
 """
 
 from __future__ import annotations
@@ -67,6 +82,31 @@ def _rank(state: str) -> str:
     return "running" if state in _RUNNING else "failing"
 
 
+def _supersedes(previous: tuple[str, str], candidate: tuple[str, str]) -> bool:
+    """Whether *candidate* replaces *previous* as this context's current state.
+
+    Newest-by-start wins, with one exception: **a `skipped` run never supersedes
+    one that actually ran.**
+
+    Two workflows publish some context names -- the real job and a path-filtered
+    shim that reports `skipped` when the change does not apply. On one PR
+    `code-quality` concluded `failure` at 06:43 and the shim concluded `skipped`
+    at 06:45 on the SAME commit, and newest-wins read the pair as green.
+
+    A skip states that the check did not apply. It is not a result, and it
+    cannot retroactively make a failure not have happened on the same commit.
+    Every other transition keeps newest-wins, because a failure followed by a
+    re-run's success is a real supersession and the whole reason this sorts.
+    """
+    _, previous_state = previous
+    started, state = candidate
+    if state == "skipped" and previous_state != "skipped":
+        return False
+    if previous_state == "skipped" and state != "skipped":
+        return True
+    return started >= previous[0]
+
+
 def _latest_within(observations: Iterable[dict]) -> dict[str, str]:
     """Conclusion of the most recently *started* observation for each name.
 
@@ -83,7 +123,7 @@ def _latest_within(observations: Iterable[dict]) -> dict[str, str]:
         started = run.get("started_at") or run.get("created_at") or ""
         state = run.get("conclusion") or run.get("state") or "pending"
         previous = newest.get(name)
-        if previous is None or started >= previous[0]:
+        if previous is None or _supersedes(previous, (started, state)):
             newest[name] = (started, state)
     return {name: state for name, (_started, state) in newest.items()}
 
@@ -263,19 +303,38 @@ def _required_contexts(protection: dict) -> tuple[list[str], list[str]]:
     return names, app_pinned
 
 
+def _pr_head_and_state(pr: int, repo: str) -> dict:
+    """The PR's head SHA and state, read together so neither is used without the other."""
+    return json.loads(_gh("pr", "view", str(pr), "--repo", repo, "--json", "headRefOid,state"))
+
+
+def _observations(repo: str, head: str) -> tuple[list[dict], list[dict]]:
+    """Check runs and legacy commit statuses for *head*, kept as SEPARATE sources.
+
+    Some required contexts are legacy commit statuses, and counting those as
+    unreported is the mirror of the bug this tool exists for -- but merging them
+    into one list lets a green check run hide a red status of the same name,
+    which is that bug itself.
+
+    `/statuses` (plural) paginates; `/status` (singular) silently caps at 30, and
+    a required status past the cap reads as never-reported.
+    """
+    return (
+        _all_pages(f"repos/{repo}/commits/{head}/check-runs?per_page=100", "check_runs"),
+        _all_pages(f"repos/{repo}/commits/{head}/statuses?per_page=100"),
+    )
+
+
 def _fetch(pr: int, repo: str, base: str) -> dict:
     protection = json.loads(_gh("api", f"repos/{repo}/branches/{base}/protection"))
     required, app_pinned = _required_contexts(protection)
-    head_json = _gh("pr", "view", str(pr), "--repo", repo, "--json", "headRefOid")
-    head = json.loads(head_json)["headRefOid"]
-    # BOTH kinds, kept as SEPARATE sources. Some required contexts are legacy
-    # commit statuses, and counting those as unreported is the mirror of the bug
-    # this tool exists for -- but merging them into one list lets a green check
-    # run hide a red status of the same name, which is that bug itself.
-    # `/statuses` (plural) paginates; `/status` (singular) silently caps at 30,
-    # and a required status past the cap reads as never-reported.
-    runs = _all_pages(f"repos/{repo}/commits/{head}/check-runs?per_page=100", "check_runs")
-    statuses = _all_pages(f"repos/{repo}/commits/{head}/statuses?per_page=100")
+    # State BEFORE checks (#16025) -- see the module docstring for why.
+    pr_data = _pr_head_and_state(pr, repo)
+    head = pr_data["headRefOid"]
+    if pr_data.get("state") != "OPEN":
+        return {"required": [], "app_pinned": [], "observed": {}, "head": head,
+                "pr_state": pr_data.get("state")}
+    runs, statuses = _observations(repo, head)
     return {
         "required": required,
         "app_pinned": app_pinned,
@@ -325,6 +384,26 @@ def _report(pr: int, result: dict) -> None:
         _emit(f"  note: {len(pinned)} required context(s) pin an app_id; matched by name only")
 
 
+def _emit_result(args, result: dict) -> None:
+    if args.json:
+        _emit(json.dumps(result, indent=2))
+    else:
+        _report(args.pr, result)
+
+
+def _not_open_result(fetched: dict) -> dict:
+    """A verdict for a PR that is not open: the question does not apply."""
+    empty: dict = {key: [] for key in
+                   ("never_reported", "running", "not_green", "green",
+                    "failing_unrequired", "running_unrequired", "app_pinned")}
+    return {
+        "verdict": f"{fetched['pr_state']} — not open; required contexts read "
+        "green because it already landed",
+        "head": fetched["head"],
+        **empty,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pr", type=int)
@@ -334,6 +413,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     fetched = _fetch(args.pr, args.repo, args.base)
+    if fetched.get("pr_state") not in (None, "OPEN"):
+        # Not a verdict about mergeability -- a statement that the question does
+        # not apply. Reporting CONTEXTS-GREEN here would be true and useless.
+        _emit_result(args, _not_open_result(fetched))
+        return 1
+
     result = verdict(fetched["required"], fetched["observed"])
     result["head"] = fetched["head"]
     # Carried into the output rather than dropped: branch protection can require a

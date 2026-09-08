@@ -23,6 +23,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from pr_required_gate import (  # noqa: E402
     _all_pages,
+    _not_open_result,
     _report,
     _required_contexts,
     latest_per_name,
@@ -313,3 +314,52 @@ def test_no_running_context_is_dropped_from_the_text_report(capsys):
     for n in range(1, 13):
         assert f"shard {n}/12" in printed, f"shard {n} was dropped from the report"
     assert printed.count("running (not required)") == 12
+
+
+def test_a_skipped_shim_does_not_supersede_a_real_failure():
+    """Two workflows publish some context names, and only one of them ran.
+
+    On #16027 `code-quality` concluded `failure` at 06:43 and a path-filtered
+    shim concluded `skipped` at 06:45 on the SAME commit. Newest-wins read the
+    pair as green. A skip states the check did not apply; it is not a result and
+    cannot make a failure not have happened on the same commit.
+    """
+    runs = [
+        {"name": "code-quality", "started_at": "2026-09-08T06:43:17Z", "conclusion": "failure"},
+        {"name": "code-quality", "started_at": "2026-09-08T06:45:24Z", "conclusion": "skipped"},
+    ]
+    assert latest_per_name(runs)["code-quality"] == "failure"
+    assert verdict(["code-quality"], latest_per_name(runs))["verdict"] == "BLOCKED"
+
+
+def test_a_real_rerun_still_supersedes_an_earlier_failure():
+    """The contrast. Exempting `skipped` must not break ordinary supersession --
+    a failure followed by a re-run's success is the case this sorting exists for,
+    and a rule that kept every failure forever would report every fixed PR red."""
+    runs = [
+        {"name": "code-quality", "started_at": "2026-09-08T06:43:17Z", "conclusion": "failure"},
+        {"name": "code-quality", "started_at": "2026-09-08T06:50:00Z", "conclusion": "success"},
+    ]
+    assert latest_per_name(runs)["code-quality"] == "success"
+
+
+def test_a_context_only_ever_skipped_is_still_acceptable():
+    """A shim that reports `skipped` with no real run beside it is the normal
+    path-filtered case, and must stay green rather than becoming unreadable."""
+    runs = [{"name": "docker-smoke", "started_at": "2026-09-08T06:45:24Z", "conclusion": "skipped"}]
+    assert latest_per_name(runs)["docker-smoke"] == "skipped"
+    assert verdict(["docker-smoke"], latest_per_name(runs))["verdict"] == "CONTEXTS-GREEN"
+
+
+def test_a_merged_pr_is_reported_as_not_open_rather_than_green():
+    """A merged PR's required contexts ARE green -- they completed before it landed.
+
+    True and useless: every question this tool asks returns the answer for "clear
+    to merge". One session read that as clearance and told another a window was
+    open on three PRs that had merged hours earlier.
+    """
+    result = _not_open_result({"pr_state": "MERGED", "head": "0123456789abcdef"})
+    assert "MERGED" in result["verdict"]
+    assert "not open" in result["verdict"]
+    assert result["verdict"] != "CONTEXTS-GREEN"
+    assert result["green"] == [] and result["not_green"] == []
