@@ -138,7 +138,13 @@ from typing import Iterable, List, Set, Tuple
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import EXCLUDED_DIR_NAMES, enforce_reach, scan_python_files  # noqa: E402
+from _scan_helpers import (  # noqa: E402
+    EXCLUDED_DIR_NAMES,
+    EmptyEnumeration,
+    enforce_reach,
+    scan_python_files,
+    tracked_paths,
+)
 
 #: The canonical scrubbing helper, ``autobot_shared.paths.scrubbed_git_env``.
 SCRUB_HELPER = "scrubbed_git_env"
@@ -473,11 +479,19 @@ def iter_shell_files(args: List[str], repo_root: Path) -> Iterable[Path]:
             if candidate.is_file() and candidate.suffix == ".sh":
                 yield candidate
         return
-    for candidate in repo_root.rglob("*.sh"):
-        parts = candidate.relative_to(repo_root).parts
-        if any(part in EXCLUDED_DIR_NAMES for part in parts):
+    # Git-tracked like `iter_python_files`: `rglob` read 215 files from other checkouts (#15926).
+    try:
+        names = tracked_paths(repo_root, "*.sh")
+    except EmptyEnumeration:
+        # This checker has its OWN floor and is contracted to refuse AUDIBLY --
+        # `enforce_reach` prints why. Letting the raise through satisfied the
+        # exit code and broke the contract (#15962). A git FAILURE still
+        # propagates: that is an error, not a finding this checker reports.
+        return
+    for rel in names:
+        if any(part in EXCLUDED_DIR_NAMES for part in rel.split("/")):
             continue
-        yield candidate
+        yield repo_root / rel
 
 
 def scan_shell(path: Path, repo_root: Path) -> List[Tuple[int, str]]:

@@ -86,3 +86,51 @@ class TestFailsClosedOnGitFailure:
 
         result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
         assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"
+
+
+def _stage(repo: Path, body: str) -> subprocess.CompletedProcess:
+    """Stage *body* as an API module and run the hook against it."""
+    f = repo / "autobot-backend" / "api" / "foo.py"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(body, encoding="utf-8")
+    _git(repo, "add", "autobot-backend/api/foo.py")
+    return subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
+
+
+def test_a_comment_warning_against_the_pattern_is_not_a_violation(tmp_path: Path) -> None:
+    """The matcher was unanchored, so prose containing the pattern was reported (#16011).
+
+    The sentence most likely to contain `@router.get("/health")` is one WARNING
+    against it, so the guard punished documenting the rule it enforces. This is
+    a plain comment, not even a docstring — strictly easier to trigger than the
+    docstring case that started the enumeration.
+    """
+    result = _stage(tmp_path_repo(tmp_path), '# Never add @router.get("/health") - use the shared health router\n')
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_a_real_decorator_is_still_a_violation(tmp_path: Path) -> None:
+    """The contrast. Without it, anchoring is satisfied by matching nothing.
+
+    A guard that reports no violations and a guard that cannot report one
+    produce the same clean run, which is the failure this whole family is about.
+    """
+    result = _stage(tmp_path_repo(tmp_path), '@router.get("/health")\nasync def h():\n    return {}\n')
+    assert result.returncode != 0, result.stdout + result.stderr
+
+
+def test_an_indented_decorator_is_still_a_violation(tmp_path: Path) -> None:
+    """The anchor allows leading whitespace — a decorator inside a class body."""
+    body = 'class R:\n    @router.get("/health")\n    async def h(self):\n        return {}\n'
+    assert _stage(tmp_path_repo(tmp_path), body).returncode != 0
+
+
+def test_a_docstring_mention_is_not_a_violation(tmp_path: Path) -> None:
+    """A one-line docstring mentioning the pattern starts with a quote, not `@`."""
+    result = _stage(tmp_path_repo(tmp_path), '"""Do not add @router.get("/health") here."""\n')
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def tmp_path_repo(tmp_path: Path) -> Path:
+    """A fresh repository per test, since each stages the same path."""
+    return _init_repo(tmp_path)

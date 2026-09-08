@@ -51,16 +51,22 @@ from tools.lint._scan_helpers import tracked_paths
 REPO_ROOT = repo_root()
 
 #: Direct `git ls-files` invocations in `repo_tests/`, measured on the tree:
-#: **40 awaiting migration, plus 1 deliberate** — the unscrubbed contrast
+#: **40 awaiting migration, plus 2 deliberate** — the unscrubbed contrast
 #: fixture in this file, which must stay a raw call because its whole purpose is
-#: to show that an unscrubbed enumeration follows `GIT_DIR`.
+#: to show that an unscrubbed enumeration follows `GIT_DIR`; and the pattern
+#: PROBE in `pytest_testpaths_cover_every_test_dir_15183_test.py`, which asks
+#: "does this pattern match anything?" — a question whose answer is legitimately
+#: no, where `tracked_paths` raises on empty because it answers "enumerate the
+#: population" (#15826). An `allow_empty=` flag would be the obvious fix and the
+#: wrong one: an optional parameter that switches off a guard is off by default
+#: at every site that forgets it.
 #:
 #: THIS ONLY SHRINKS. It moved 40 -> 41 once, when this module stopped exempting
 #: itself from its own census (#15990 review) — the population definition
 #: changed, not the tree, and #15897's rule applies: correcting a denominator is
 #: not licensing a bypass. Never raise it to make a new bypass pass; route the
 #: new guard through `tracked_paths` instead.
-MAX_DIRECT_INVOCATIONS = 41
+MAX_DIRECT_INVOCATIONS = 42
 
 #: Floor on files EXAMINED, not on findings. A findings floor is satisfied by
 #: finding nothing, which is also what a collapsed sweep reports.
@@ -298,23 +304,85 @@ def test_the_detector_does_not_report_an_unrelated_subprocess() -> None:
     assert not invokes_ls_files(call)
 
 
-def test_a_glob_exclusion_is_not_treated_as_a_directory(tmp_path: Path) -> None:
-    """`?` and `[` are glob metacharacters, not directory names (#15990 review).
+def _nested_repo(tmp_path: Path) -> Path:
+    """A throwaway repository WITH SUBDIRECTORIES, built with a scrubbed env.
 
-    `?.min.js` took the directory branch and became `:(exclude)?.min.js/*`,
-    which excludes a DIRECTORY of that name and silently matches no file. A
-    filter that quietly excludes nothing is the report-clean shape again.
+    The subdirectories are the point (#16013). The previous fixture wrote both
+    files at the root, and **in a flat tree a rooted pathspec and a basename
+    match return the same answer** — so the one distinction that breaks
+    `exclude=` could not arise in the fixture certifying it. A flat fixture is a
+    fixture that cannot fail.
     """
     repo = tmp_path / "r"
-    repo.mkdir()
+    (repo / "scripts").mkdir(parents=True)
+    (repo / "pkg").mkdir(parents=True)
     env = scrubbed_git_env()
     subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True, env=env)  # nosec B603 B607
-    for name in ("a.min.js", "ab.min.js"):
-        (repo / name).write_text("x", encoding="utf-8")
+    # BOTH prefixed directories carry a test file, so the two-positive case is
+    # symmetric with the one-positive case; otherwise the discriminator between
+    # them is the fixture's asymmetry rather than the rooting behaviour.
+    for rel in ("a.py", "a_test.py", "scripts/b.py", "scripts/b_test.py", "pkg/c.py", "pkg/c_test.py", "x.min.js"):
+        (repo / rel).write_text("x\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, env=env)  # nosec B603 B607
+    return repo
 
-    assert sorted(tracked_paths(repo, "*.min.js")) == ["a.min.js", "ab.min.js"]
-    assert tracked_paths(repo, "*.min.js", exclude=["?.min.js"]) == ["ab.min.js"]
+
+@pytest.mark.parametrize(
+    "positive, entry, removed",
+    [
+        # The defect: ONE positive pathspec with a directory prefix. `git ls-files`
+        # derives a common prefix and anchors traversal to it, so an unrooted
+        # exclude matched every entry and emptied the result.
+        (["scripts/*.py"], "*_test.py", {"scripts/b_test.py"}),
+        # The discriminator: TWO positives under different top-level directories
+        # empty the common prefix, and the identical exclude works. Row 4 passing
+        # while row 3 fails is the entire defect, so a fixture with only one of
+        # these shapes cannot see it (#16013).
+        (["scripts/*.py", "pkg/*.py"], "*_test.py", {"scripts/b_test.py", "pkg/c_test.py"}),
+        # No prefix at all — the shape that always worked, kept so a fix that
+        # breaks it is caught.
+        (["*.py"], "*_test.py", {"a_test.py", "scripts/b_test.py", "pkg/c_test.py"}),
+        # Bare names: nothing distinguishes a file from a directory as a string.
+        (["*"], "a.py", {"a.py"}),
+        (["*"], "x.min.js", {"x.min.js"}),
+        (["*"], "scripts", {"scripts/b.py", "scripts/b_test.py"}),
+        # An already-rooted exclude must not be re-prefixed.
+        (["*"], "scripts/*_test.py", {"scripts/b_test.py"}),
+        # NO positive pattern at all. An empty `patterns` gave an empty prefix
+        # set, so no exclusion pathspec was emitted and the exclude silently did
+        # nothing — a full-length, plausible result (#16014 review).
+        ([], "scripts", {"scripts/b.py", "scripts/b_test.py"}),
+        ([], "a.py", {"a.py"}),
+    ],
+    ids=[
+        "one-prefixed-positive",
+        "two-prefixed-positives",
+        "unprefixed-positive",
+        "bare-file",
+        "bare-file-with-dots",
+        "bare-directory",
+        "already-rooted",
+        "no-positive-directory",
+        "no-positive-file",
+    ],
+)
+def test_exclude_removes_exactly_the_named_entry(tmp_path: Path, positive: list, entry: str, removed: set) -> None:
+    """`exclude=` against every combination of positive shape and entry shape.
+
+    Two variables, and each was wrong on its own: the ROOTING (an unrooted
+    exclude under a single prefixed positive removed everything) and the
+    FILE-vs-DIRECTORY guess (a bare file name became `name/*` and removed
+    nothing). Holding either fixed while varying the other reports a working
+    feature.
+    """
+    repo = _nested_repo(tmp_path)
+    everything = set(tracked_paths(repo, *positive))
+    kept = set(tracked_paths(repo, *positive, exclude=[entry]))
+
+    assert (
+        everything - kept == removed
+    ), f"positive={positive} exclude={entry!r} removed {sorted(everything - kept)}, expected {sorted(removed)}"
+    assert kept, "the exclusion emptied the population"
 
 
 def test_the_floor_counts_parses_not_enumerated_paths() -> None:

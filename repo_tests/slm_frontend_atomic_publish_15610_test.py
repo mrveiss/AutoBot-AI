@@ -61,6 +61,8 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests.slm_frontend_publish_contract import CLAUSES
 
+from tools.lint._scan_helpers import tracked_paths
+
 _REPO_ROOT = repo_root()
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 _SHARED_BUILD = _ANSIBLE_ROOT / "roles" / "_shared" / "tasks" / "build_publish_slm_frontend.yml"
@@ -184,14 +186,18 @@ def _ansible_yaml_files() -> list[Path]:
 
 
 def _nginx_files() -> list[Path]:
-    found: list[Path] = []
-    for pattern in ("*.conf", "*.conf.j2"):
-        found += [
-            path
-            for path in _REPO_ROOT.rglob(pattern)
-            if path.is_file() and "node_modules" not in path.parts and ".git" not in path.parts
-        ]
-    return sorted(set(found))
+    """Tracked nginx configs, from git (#15955).
+
+    Was `_REPO_ROOT.rglob(pattern)` with the nested-checkout test applied to the
+    RESULT. Filtering after the walk is not pruning: `rglob` had already
+    descended into `.claude/worktrees/`, so the traversal cost was paid and an
+    unreadable directory it meant to skip could still abort it.
+
+    ``git ls-files`` reads an index and never descends at all.
+    """
+
+
+    return sorted({_REPO_ROOT / name for name in tracked_paths(_REPO_ROOT, "*.conf", "*.conf.j2")})
 
 
 def _served_path_directives() -> dict[str, list[str]]:
