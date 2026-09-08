@@ -88,6 +88,13 @@ _PURGE_PLAYBOOK_TEMPLATE = """# AutoBot - AI-Powered Automation Platform
         - slm-agent
         - autobot-agent
       redis:
+        # #16071: redis-stack-server is what roles/redis installs and the only
+        # one of these three that exists on a provisioned node. Without it the
+        # purge stopped two absent units, left Redis Stack serving data on a
+        # node that had released the role, and reported success -- the loop
+        # below carries ignore_errors, so a wrong unit name and a right one
+        # were indistinguishable in the output.
+        - redis-stack-server
         - redis-server
         - redis
       backend:

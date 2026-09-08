@@ -120,7 +120,7 @@ commands:
     usage: "systemctl [options] COMMAND [service]"
     examples:
       - "systemctl status nginx"
-      - "systemctl start redis-server"
+      - "systemctl start redis-stack-server"
       - "systemctl enable docker"
       - "systemctl restart apache2"
     options:

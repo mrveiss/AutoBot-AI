@@ -96,7 +96,7 @@ Services installed:
   - autobot-slm         (port 8000) — SLM management backend
   - autobot-frontend    (port 5173) — Vue.js frontend (built to static)
   - nginx               (port 80/443) — reverse proxy
-  - redis-server        (port 6379) — data store
+  - redis-stack-server  (port 6379) — data store (Redis Stack: JSON/search/timeseries)
   - ollama              (port 11434) — local LLM (optional)
 
 Each Python service gets its own venv under /opt/autobot/<service>/venv
@@ -208,14 +208,32 @@ install_prerequisites() {
         apt-get install -y -qq nodejs
     fi
 
-    # Redis
+    # Redis Stack -- NOT the apt `redis-server` package (#16071).
+    # AutoBot uses RediSearch, RedisJSON and RedisTimeSeries. Plain Redis starts
+    # cleanly and then fails on the first module command, which is a worse
+    # failure than not installing at all. See autobot-database/README.md.
     if [[ "$SKIP_REDIS" == false ]]; then
-        if ! command -v redis-server &>/dev/null; then
-            log_info "Installing Redis"
-            apt-get install -y -qq redis-server
+        if ! command -v redis-stack-server &>/dev/null; then
+            log_info "Installing Redis Stack"
+            # #7178: Redis publishes redis-stack-server for jammy/bullseye/focal
+            # only. Noble's repo dist exists but ships plain redis-server, so pin
+            # to jammy elsewhere -- the same fallback roles/redis applies.
+            local redis_suite
+            redis_suite="$(. /etc/os-release && echo "${VERSION_CODENAME:-}")"
+            case "$redis_suite" in
+                jammy|bullseye|focal) ;;
+                *) redis_suite="jammy" ;;
+            esac
+            curl -fsSL https://packages.redis.io/gpg \
+                | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+            echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg]" \
+                 "https://packages.redis.io/deb ${redis_suite} main" \
+                 > /etc/apt/sources.list.d/redis.list
+            apt-get update -qq
+            apt-get install -y -qq redis-stack-server
         fi
-        systemctl enable redis-server
-        systemctl start redis-server
+        systemctl enable redis-stack-server
+        systemctl start redis-stack-server
     fi
 }
 
@@ -596,8 +614,8 @@ create_systemd_service() {
     cat > "/etc/systemd/system/autobot-${service_name}.service" <<EOF
 [Unit]
 Description=AutoBot ${service_name}
-After=network.target redis-server.service
-Wants=redis-server.service
+After=network.target redis-stack-server.service
+Wants=redis-stack-server.service
 # #14100 / #4090: every unit this factory emits sets Restart=on-failure with
 # RestartSec=10 below, so without a start limit a unit whose ExecStart can never
 # succeed restarts forever, never reaches \`failed\`, and never appears in

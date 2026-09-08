@@ -26,7 +26,7 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     # Linux
     if command -v apt-get &> /dev/null; then
         sudo apt-get update
-        sudo apt-get install -y redis-server python3-pip python3-venv
+        sudo apt-get install -y redis-stack-server python3-pip python3-venv
     elif command -v yum &> /dev/null; then
         sudo yum install -y redis python3-pip python3-venv
     elif command -v dnf &> /dev/null; then
@@ -50,7 +50,7 @@ if command -v systemctl &> /dev/null; then
 elif command -v brew &> /dev/null; then
     brew services start redis
 else
-    echo "⚠️  Please start Redis manually: redis-server"
+    echo "⚠️  Please start Redis manually: redis-stack-server"
 fi
 
 # Create virtual environment
