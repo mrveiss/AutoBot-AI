@@ -24,7 +24,6 @@ from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
 from api.agent_org import router as agent_org_router  # #1405
 from api.approval_gates import router as approval_gates_router  # #1402
-from api.coordination import router as coordination_router  # #15949
 from api.audit import router as audit_router
 from api.auth import router as auth_router
 from api.benchmarks import router as benchmarks_router  # Issue #9024
@@ -36,6 +35,7 @@ from api.chat_embed import router as chat_embed_router  # GH#9047
 from api.chat_presets import router as chat_presets_router  # GH#8595
 from api.collaboration import router as collaboration_router
 from api.config_revisions import router as config_revisions_router  # #1404
+from api.coordination import router as coordination_router  # #15949
 from api.data_storage import router as data_storage_router
 from api.database_mcp import router as database_mcp_router
 from api.developer import router as developer_router

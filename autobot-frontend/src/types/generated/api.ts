@@ -17150,6 +17150,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/coordination/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Claims
+         * @description The live claim table, optionally filtered.
+         *
+         *     A malformed `scope` or unknown `kind` is the caller's error and is reported
+         *     as 400 rather than silently returning everything -- a filter that fails open
+         *     would tell an operator "nothing holds this" when the truth is "that question
+         *     was not understood".
+         */
+        get: operations["get_claims_api_coordination_claims_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/files/list": {
         parameters: {
             query?: never;
@@ -125982,6 +126007,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DelegationResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_claims_api_coordination_claims_get: {
+        parameters: {
+            query?: {
+                /** @description Only claims held by this agent */
+                agent_id?: string | null;
+                /** @description Only claims at or under this scope, segment-aligned */
+                scope?: string | null;
+                /** @description Only claims of this scope kind */
+                kind?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
