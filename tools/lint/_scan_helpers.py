@@ -40,6 +40,7 @@ Two pieces close it, and the split between them is the whole design:
 from __future__ import annotations
 
 import logging
+import posixpath
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
@@ -124,20 +125,34 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
     """
     # A directory name needs `/*` to exclude its contents; a pattern that already
     # contains a glob or a slash is passed through as the caller wrote it.
-    # A bare entry gets BOTH forms: the path itself and its contents. Deciding
-    # between them from the string alone is not possible — `scripts` is a
-    # directory and `audit_api_wiring.py` is a file, and neither carries a
-    # metacharacter or a slash to tell them apart. Guessing "directory" made a
-    # bare FILE name expand to `:(exclude)audit_api_wiring.py/*`, which excludes
-    # a directory of that name and therefore excludes nothing (#16013).
+    # Two things have to be right here, and each was wrong on its own.
     #
-    # Emitting both is safe: git accepts an exclude pathspec that matches
-    # nothing, so the unused form costs an argument and changes no result.
+    # 1. ROOTING. `git ls-files` derives a common prefix from the POSITIVE
+    #    pathspecs and anchors traversal to it, so an unrooted exclude under a
+    #    single prefixed positive matches every entry and empties the result:
+    #
+    #        scripts/*.py                 + :(exclude)*_test.py  ->  0 files
+    #        scripts/*.py + tools/*.py    + :(exclude)*_test.py  ->  correct
+    #
+    #    Adding a second positive under a different top-level directory empties
+    #    the common prefix and the identical exclude starts working. So an entry
+    #    with no `/` is emitted once per distinct positive prefix (#16013).
+    #
+    # 2. FILE vs DIRECTORY needs no special case once (1) is right. A bare
+    #    `:(exclude)scripts` already excludes everything under it, and
+    #    `:(exclude)a.py` excludes the file — measured identical to emitting a
+    #    `<entry>/*` companion for directories, files and nested directories.
+    #    An earlier draft emitted both; the mutation that deleted the companion
+    #    changed no result, which is what showed it was dead. `_looks_like_a_pattern`
+    #    is retained for the callers that ask whether an entry IS a pattern.
+    positive_prefixes = sorted({posixpath.dirname(p) for p in patterns})
     excludes = []
     for entry in exclude:
-        excludes.append(f":(exclude){entry}")
-        if not _looks_like_a_pattern(entry):
-            excludes.append(f":(exclude){entry}/*")
+        if "/" in entry:
+            rooted = [entry]  # already rooted; re-prefixing would move it
+        else:
+            rooted = [posixpath.join(pre, entry) if pre else entry for pre in positive_prefixes]
+        excludes.extend(f":(exclude){spec}" for spec in rooted)
     result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "ls-files", *patterns, *excludes],
         cwd=str(repo_root),

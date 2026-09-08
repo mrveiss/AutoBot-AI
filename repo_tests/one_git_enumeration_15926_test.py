@@ -318,37 +318,63 @@ def _nested_repo(tmp_path: Path) -> Path:
     (repo / "pkg").mkdir(parents=True)
     env = scrubbed_git_env()
     subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True, env=env)  # nosec B603 B607
-    for rel in ("a.py", "a_test.py", "scripts/b.py", "scripts/b_test.py", "pkg/c.py", "x.min.js"):
+    # BOTH prefixed directories carry a test file, so the two-positive case is
+    # symmetric with the one-positive case; otherwise the discriminator between
+    # them is the fixture's asymmetry rather than the rooting behaviour.
+    for rel in ("a.py", "a_test.py", "scripts/b.py", "scripts/b_test.py", "pkg/c.py", "pkg/c_test.py", "x.min.js"):
         (repo / rel).write_text("x\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, env=env)  # nosec B603 B607
     return repo
 
 
 @pytest.mark.parametrize(
-    "entry, removed",
+    "positive, entry, removed",
     [
-        ("a.py", {"a.py"}),
-        ("x.min.js", {"x.min.js"}),
-        ("scripts", {"scripts/b.py", "scripts/b_test.py"}),
-        ("*_test.py", {"a_test.py", "scripts/b_test.py"}),
-        ("scripts/*_test.py", {"scripts/b_test.py"}),
+        # The defect: ONE positive pathspec with a directory prefix. `git ls-files`
+        # derives a common prefix and anchors traversal to it, so an unrooted
+        # exclude matched every entry and emptied the result.
+        (["scripts/*.py"], "*_test.py", {"scripts/b_test.py"}),
+        # The discriminator: TWO positives under different top-level directories
+        # empty the common prefix, and the identical exclude works. Row 4 passing
+        # while row 3 fails is the entire defect, so a fixture with only one of
+        # these shapes cannot see it (#16013).
+        (["scripts/*.py", "pkg/*.py"], "*_test.py", {"scripts/b_test.py", "pkg/c_test.py"}),
+        # No prefix at all — the shape that always worked, kept so a fix that
+        # breaks it is caught.
+        (["*.py"], "*_test.py", {"a_test.py", "scripts/b_test.py", "pkg/c_test.py"}),
+        # Bare names: nothing distinguishes a file from a directory as a string.
+        (["*"], "a.py", {"a.py"}),
+        (["*"], "x.min.js", {"x.min.js"}),
+        (["*"], "scripts", {"scripts/b.py", "scripts/b_test.py"}),
+        # An already-rooted exclude must not be re-prefixed.
+        (["*"], "scripts/*_test.py", {"scripts/b_test.py"}),
     ],
-    ids=["bare-file", "bare-file-with-dots", "bare-directory", "suffix-glob", "path-glob"],
+    ids=[
+        "one-prefixed-positive",
+        "two-prefixed-positives",
+        "unprefixed-positive",
+        "bare-file",
+        "bare-file-with-dots",
+        "bare-directory",
+        "already-rooted",
+    ],
 )
-def test_exclude_removes_exactly_the_named_entry(tmp_path: Path, entry: str, removed: set) -> None:
-    """Every `exclude=` shape, against a tree that has subdirectories (#16013).
+def test_exclude_removes_exactly_the_named_entry(tmp_path: Path, positive: list, entry: str, removed: set) -> None:
+    """`exclude=` against every combination of positive shape and entry shape.
 
-    A **bare file name** is the case that was broken: with no metacharacter and
-    no slash it was assumed to be a directory and became `:(exclude)a.py/*`,
-    which excludes a directory of that name and therefore excludes nothing.
-    Nothing distinguishes `scripts` from `audit_api_wiring.py` as strings, so
-    both forms are emitted and the unused one matches nothing.
+    Two variables, and each was wrong on its own: the ROOTING (an unrooted
+    exclude under a single prefixed positive removed everything) and the
+    FILE-vs-DIRECTORY guess (a bare file name became `name/*` and removed
+    nothing). Holding either fixed while varying the other reports a working
+    feature.
     """
     repo = _nested_repo(tmp_path)
-    everything = set(tracked_paths(repo, "*"))
-    kept = set(tracked_paths(repo, "*", exclude=[entry]))
+    everything = set(tracked_paths(repo, *positive))
+    kept = set(tracked_paths(repo, *positive, exclude=[entry]))
 
-    assert everything - kept == removed, f"exclude={entry!r} removed {sorted(everything - kept)}"
+    assert (
+        everything - kept == removed
+    ), f"positive={positive} exclude={entry!r} removed {sorted(everything - kept)}, expected {sorted(removed)}"
     assert kept, "the exclusion emptied the population"
 
 
