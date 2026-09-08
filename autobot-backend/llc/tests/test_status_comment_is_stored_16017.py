@@ -23,7 +23,6 @@ about the sibling route.
 from __future__ import annotations
 
 import uuid
-from typing import AsyncIterator
 from unittest.mock import patch
 
 import pytest
@@ -100,9 +99,7 @@ async def _transition(factory, item_id: uuid.UUID, comment: str | None):  # noqa
 
 async def _comments(factory, item_id: uuid.UUID) -> list[LLCWorkItemComment]:  # noqa: ANN001
     async with factory() as session:
-        rows = await session.execute(
-            select(LLCWorkItemComment).where(LLCWorkItemComment.work_item_id == item_id)
-        )
+        rows = await session.execute(select(LLCWorkItemComment).where(LLCWorkItemComment.work_item_id == item_id))
         return list(rows.scalars())
 
 
