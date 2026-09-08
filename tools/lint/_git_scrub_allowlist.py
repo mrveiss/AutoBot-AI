@@ -39,6 +39,13 @@ ALLOWLIST = {
     # `git ls-files` invocations in `repo_tests/` INCLUDING that file, so a
     # second raw call there fails that guard even though this one allows it.
     "repo_tests/one_git_enumeration_15926_test.py",
+    # The #15991 contrast fixture. `test_an_unscrubbed_call_does_follow_git_dir_here`
+    # runs git UNSCRUBBED under a GIT_DIR pointed at a throwaway repository and
+    # asserts it reads the decoy — so the paired test cannot credit the scrub for
+    # an absence this machine would have produced anyway. Same reasoning as the
+    # #15176 entry below, and caught before pushing this time rather than by base
+    # going red.
+    "autobot-backend/api/git_mcp_env_scrub_15991_test.py",
     # The #15176 reproduction. It runs git with GIT_DIR deliberately exported
     # to confirm the defect still reproduces on this git version before
     # asserting that the six sites survive it; scrubbing there would make the
