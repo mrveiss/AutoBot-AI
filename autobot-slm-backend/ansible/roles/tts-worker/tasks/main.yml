@@ -233,8 +233,8 @@
       # across the 2->3 major against the upstream Python API reference,
       # which lists `generate_audio_stream(model_state, text_to_generate,
       # frames_after_eos=None, copy_state=True)` beside `load_model` and
-      # `generate_audio` — the three methods this worker calls
-      # (templates/tts-worker.py.j2:210, :214, :332).
+      # `generate_audio` — the three methods the rendered worker
+      # template calls.
       #
       # A major bump is not a floor move. The parity guard fires on the
       # NUMBER and cannot know whether the API that number gates still
