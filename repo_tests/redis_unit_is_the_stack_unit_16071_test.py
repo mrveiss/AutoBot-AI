@@ -57,13 +57,44 @@ _BACKTICKED = re.compile(r"`[^`\n]*`")
 _COMMENT = re.compile(r"^\s*(#|//|--|\*|/\*)")
 
 _VERBS = "start|stop|restart|enable|disable|status|reload|is-active|is-enabled|mask|unmask"
+
+#: `redis` and `redis-server` are BOTH absent. Measured on a provisioned node:
+#: `systemctl show -p LoadState` returns `not-found` for `redis`, `redis-server`
+#: and `autobot-redis`, and `loaded` for `redis-stack-server` alone. The first
+#: version of this guard matched only `redis-server`, and a shipped unit
+#: template carried `Wants=redis.service` straight past it -- the same
+#: narrowness that let #16060 miss the sites #16071 then had to fix.
+_UNIT = r"redis(?:-server)?(?![-\w])"
+
 _OPERATES = [
-    ("a systemctl verb", re.compile(rf"systemctl\s+(?:--\S+\s+)*(?:{_VERBS})\s+redis-server\b")),
-    ("a unit dependency", re.compile(r"\b(?:After|Wants|Requires|BindsTo|PartOf)=[^\n]*\bredis-server\.service\b")),
-    ("an apt install target", re.compile(r"\bapt(?:-get)?\s+install\b[^\n]*\bredis-server\b")),
+    ("a systemctl verb", re.compile(rf"systemctl\s+(?:--\S+\s+)*(?:{_VERBS})\s+{_UNIT}")),
+    ("a unit dependency", re.compile(r"\b(?:After|Wants|Requires|BindsTo|PartOf)=[^\n]*(?<![-\w])redis(?:-server)?\.service\b")),
+    ("an apt install target", re.compile(rf"\bapt(?:-get)?\s+install\b[^\n]*(?<![-\w]){_UNIT}")),
 ]
 
 _CANONICAL = "redis-stack-server"
+
+#: Stripped before matching, with reasons.
+#:
+#: `redis-stack-server` is the right answer and contains `redis` as a prefix, so
+#: it must go before a `redis`-anchored pattern ever sees the line.
+#:
+#: `autobot-redis` is a DIFFERENT unit, not a misspelling of this one. It is
+#: AutoBot's own wrapper -- `autobot-database/templates/autobot-redis.service`,
+#: whose ExecStart is the Redis Stack binary -- and the scripts that operate it
+#: check for it first and fall back:
+#:
+#:     if systemctl list-unit-files "autobot-redis.service" &>/dev/null; then
+#:         sudo systemctl start autobot-redis
+#:     elif systemctl list-unit-files "redis-stack-server.service" &>/dev/null; then
+#:
+#: That discriminator works -- `list-unit-files` exits 1 for an absent unit,
+#: verified both ways -- so those sites are correct on a host where the wrapper
+#: is installed and correct on one where it is not. `autobot-redis` is also a
+#: Docker service name and a DNS name in roughly fifty files, where renaming it
+#: would break resolution outright. Flagging it would be the blanket rename this
+#: guard exists to avoid.
+_NOT_THIS_UNIT = (_CANONICAL, "autobot-redis")
 
 #: One declared exemption, with its reason, rather than a list that may grow
 #: quietly. `fix-architecture-issues.sh` enforces "Redis runs only on the
@@ -93,7 +124,9 @@ def _offences_in(text: str) -> list[str]:
         if _COMMENT.match(line):
             continue
         # Prose citing the command is not the command. Strip it before matching.
-        bare = _BACKTICKED.sub("", line).replace(_CANONICAL, "")
+        bare = _BACKTICKED.sub("", line)
+        for other in _NOT_THIS_UNIT:
+            bare = bare.replace(other, "")
         for label, pattern in _OPERATES:
             if pattern.search(bare):
                 found.append(f"{label}: {line.strip()[:110]}")
