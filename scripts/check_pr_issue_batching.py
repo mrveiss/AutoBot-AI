@@ -51,6 +51,21 @@ _SPLIT = re.compile(_SEP_RE, re.IGNORECASE)
 # left in, a PR could satisfy the rule with sample text and never link anything.
 _FENCE = re.compile(r"```.*?```|~~~.*?~~~|`[^`\n]*`", re.DOTALL)
 _RATIONALE = re.compile(r"^\s*Single-issue rationale:\s*(.+?)\s*$", re.IGNORECASE | re.MULTILINE)
+# #16050: the same rationale written as a markdown HEADING, with the reason in
+# the prose that follows. Two independent sessions wrote it this way within four
+# hours -- #16018 and #16049, the latter the CRITICAL auth fix -- because it
+# matches the section style the rest of the PR body already uses (`## Thinking
+# Path`, `## What Changed`, `## Verification`). Two authors independently
+# choosing a form the checker rejects is the checker's defect, and the rejected
+# form is the more readable one.
+#
+# The hint below printed the inline form INDENTED, as an example, which reads as
+# illustration rather than as an exact-match requirement -- so the gate taught
+# the shape it refused.
+_RATIONALE_HEADING = re.compile(
+    r"^[ \t]*#{1,6}[ \t]*Single-issue rationale[ \t]*:?[ \t]*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 # Plain stdlib logging, deliberately (#1082): this runs as a bare script in CI,
 # where autobot_shared.logging_manager would pull in config this job does not have.
@@ -60,7 +75,9 @@ RATIONALE_HINT = (
     "This PR references exactly one issue. Batch same-scope issues into one PR "
     "(one CI suite per batch, not per issue), or state why this one stands alone "
     "by adding a line to the PR body:\n\n"
-    "    Single-issue rationale: <why this cannot ride with another issue>"
+    "    Single-issue rationale: <why this cannot ride with another issue>\n\n"
+    "or as a section, with the reason in the prose beneath it:\n\n"
+    "    ## Single-issue rationale\n\n    <why this cannot ride with another issue>"
 )
 
 
@@ -75,12 +92,40 @@ def referenced_issues(body: str) -> set[str]:
     return found
 
 
-def single_issue_rationale(body: str) -> str | None:
-    """The non-empty rationale line, or None when absent or blank."""
-    match = _RATIONALE.search(body or "")
+def _rationale_under_heading(body: str) -> str | None:
+    """Prose following a `## Single-issue rationale` heading, or None (#16050).
+
+    Scans forward past blank lines to the first non-empty, non-heading line, so
+    a reason two paragraphs down still counts. Stops at the next heading: an
+    empty section must NOT borrow the next section's text as its rationale --
+    that is how a heading-only body would pass a check about whether a human
+    justified something.
+    """
+    match = _RATIONALE_HEADING.search(body or "")
     if match is None:
         return None
-    return match.group(1).strip() or None
+    for line in body[match.end() :].splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            return None
+        return stripped or None
+    return None
+
+
+def single_issue_rationale(body: str) -> str | None:
+    """The non-empty rationale, inline or under a heading, or None (#16050).
+
+    Both forms require actual prose. Widening WHERE the reason may sit must not
+    widen whether one is needed: this gate asks whether a human justified
+    standing alone, so a heading with nothing under it has to fail exactly as
+    `Single-issue rationale:` with nothing after the colon already does.
+    """
+    match = _RATIONALE.search(body or "")
+    if match is not None and match.group(1).strip():
+        return match.group(1).strip()
+    return _rationale_under_heading(body)
 
 
 def exemption(actor: str, branch: str, title: str) -> str | None:
