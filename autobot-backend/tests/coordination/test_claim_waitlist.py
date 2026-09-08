@@ -261,13 +261,19 @@ async def test_a_waiter_invited_while_a_shared_holder_remains_stays_queued(redis
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("redis")
 @pytest.mark.parametrize("bad", [0, -1, -900])
-async def test_a_non_positive_ttl_is_refused(redis, bad):
+async def test_a_non_positive_ttl_is_refused(bad):
     """An entry born expired is a silent no-op, not a short wait.
 
     The caller would believe it was queued, every prune would drop it, and it
     would never be promoted — failure with no error anywhere, which is the
     shape this whole module exists to remove.
+
+    ``match=`` is load-bearing, not decoration: ``HolderError`` subclasses
+    ``ValueError``, so a bare ``pytest.raises(ValueError)`` would also pass if
+    holder validation fired first and the TTL check never ran at all — the test
+    would go green while proving nothing about the TTL.
     """
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="ttl_s must be positive"):
         await join("path:a/b", agent_id="a1", task_id="t1", intent="x", ttl_s=bad)
