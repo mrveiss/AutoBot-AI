@@ -59,7 +59,6 @@ Store it as the repository secret `AUTOBOT_PUSH_TOKEN`.
 
 ### Applies to
 
-- `.github/workflows/auto-fix-formatting.yml`
 - `.github/workflows/auto-fix-generated-types.yml`
 - `.github/workflows/auto-update-pr-branches.yml`
 

@@ -4,7 +4,7 @@
 # Author: mrveiss
 """The auto-fix bot's own push must not leave its PR parked (#14311).
 
-``auto-fix-formatting.yml`` and ``auto-fix-generated-types.yml`` both push a
+``auto-fix-generated-types.yml`` pushes a
 commit back to the PR branch as ``github-actions[bot]``. This repository's
 fork-PR approval policy (``all_external_contributors``) treats that bot as an
 external contributor, so every ``pull_request`` run the push triggers is
@@ -36,7 +36,6 @@ _WORKFLOWS_DIR = repo_root() / ".github" / "workflows"
 
 # (workflow filename, id of the job that pushes as github-actions[bot])
 _PUSH_WORKFLOWS = [
-    ("auto-fix-formatting.yml", "autofix"),
     ("auto-fix-generated-types.yml", "autofix-types"),
 ]
 
