@@ -105,3 +105,8 @@ python:
   - '.github/workflows/release.yml'
   - 'autobot-frontend/package.json'
   - 'install.sh'
+  # #15983: `ansible_core_pin_frozen_15983_test.py` reads this pin to assert the
+  # dependabot freeze holds. Without an entry here, editing the pin is exactly the
+  # change that skips the suite guarding it -- the guard would be bypassable by
+  # touching the one file it exists to watch. #15900's coverage checker caught it.
+  - 'constraints/ansible-core.txt'
