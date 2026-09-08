@@ -124,10 +124,20 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
     """
     # A directory name needs `/*` to exclude its contents; a pattern that already
     # contains a glob or a slash is passed through as the caller wrote it.
-    # `?` and `[` are glob metacharacters too: `?.min.js` took the directory
-    # branch and became `:(exclude)?.min.js/*`, which excludes a DIRECTORY of
-    # that name and silently matches no file (#15990 review).
-    excludes = [f":(exclude){e}" if _looks_like_a_pattern(e) else f":(exclude){e}/*" for e in exclude]
+    # A bare entry gets BOTH forms: the path itself and its contents. Deciding
+    # between them from the string alone is not possible — `scripts` is a
+    # directory and `audit_api_wiring.py` is a file, and neither carries a
+    # metacharacter or a slash to tell them apart. Guessing "directory" made a
+    # bare FILE name expand to `:(exclude)audit_api_wiring.py/*`, which excludes
+    # a directory of that name and therefore excludes nothing (#16013).
+    #
+    # Emitting both is safe: git accepts an exclude pathspec that matches
+    # nothing, so the unused form costs an argument and changes no result.
+    excludes = []
+    for entry in exclude:
+        excludes.append(f":(exclude){entry}")
+        if not _looks_like_a_pattern(entry):
+            excludes.append(f":(exclude){entry}/*")
     result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "ls-files", *patterns, *excludes],
         cwd=str(repo_root),

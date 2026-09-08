@@ -304,23 +304,52 @@ def test_the_detector_does_not_report_an_unrelated_subprocess() -> None:
     assert not invokes_ls_files(call)
 
 
-def test_a_glob_exclusion_is_not_treated_as_a_directory(tmp_path: Path) -> None:
-    """`?` and `[` are glob metacharacters, not directory names (#15990 review).
+def _nested_repo(tmp_path: Path) -> Path:
+    """A throwaway repository WITH SUBDIRECTORIES, built with a scrubbed env.
 
-    `?.min.js` took the directory branch and became `:(exclude)?.min.js/*`,
-    which excludes a DIRECTORY of that name and silently matches no file. A
-    filter that quietly excludes nothing is the report-clean shape again.
+    The subdirectories are the point (#16013). The previous fixture wrote both
+    files at the root, and **in a flat tree a rooted pathspec and a basename
+    match return the same answer** — so the one distinction that breaks
+    `exclude=` could not arise in the fixture certifying it. A flat fixture is a
+    fixture that cannot fail.
     """
     repo = tmp_path / "r"
-    repo.mkdir()
+    (repo / "scripts").mkdir(parents=True)
+    (repo / "pkg").mkdir(parents=True)
     env = scrubbed_git_env()
     subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True, env=env)  # nosec B603 B607
-    for name in ("a.min.js", "ab.min.js"):
-        (repo / name).write_text("x", encoding="utf-8")
+    for rel in ("a.py", "a_test.py", "scripts/b.py", "scripts/b_test.py", "pkg/c.py", "x.min.js"):
+        (repo / rel).write_text("x\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, env=env)  # nosec B603 B607
+    return repo
 
-    assert sorted(tracked_paths(repo, "*.min.js")) == ["a.min.js", "ab.min.js"]
-    assert tracked_paths(repo, "*.min.js", exclude=["?.min.js"]) == ["ab.min.js"]
+
+@pytest.mark.parametrize(
+    "entry, removed",
+    [
+        ("a.py", {"a.py"}),
+        ("x.min.js", {"x.min.js"}),
+        ("scripts", {"scripts/b.py", "scripts/b_test.py"}),
+        ("*_test.py", {"a_test.py", "scripts/b_test.py"}),
+        ("scripts/*_test.py", {"scripts/b_test.py"}),
+    ],
+    ids=["bare-file", "bare-file-with-dots", "bare-directory", "suffix-glob", "path-glob"],
+)
+def test_exclude_removes_exactly_the_named_entry(tmp_path: Path, entry: str, removed: set) -> None:
+    """Every `exclude=` shape, against a tree that has subdirectories (#16013).
+
+    A **bare file name** is the case that was broken: with no metacharacter and
+    no slash it was assumed to be a directory and became `:(exclude)a.py/*`,
+    which excludes a directory of that name and therefore excludes nothing.
+    Nothing distinguishes `scripts` from `audit_api_wiring.py` as strings, so
+    both forms are emitted and the unused one matches nothing.
+    """
+    repo = _nested_repo(tmp_path)
+    everything = set(tracked_paths(repo, "*"))
+    kept = set(tracked_paths(repo, "*", exclude=[entry]))
+
+    assert everything - kept == removed, f"exclude={entry!r} removed {sorted(everything - kept)}"
+    assert kept, "the exclusion emptied the population"
 
 
 def test_the_floor_counts_parses_not_enumerated_paths() -> None:
