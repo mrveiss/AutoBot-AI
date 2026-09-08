@@ -132,9 +132,51 @@ def _resolves(module: str, script_dir: Path | None = None) -> bool:
     roots = list(_IMPORT_ROOTS) + ([script_dir] if script_dir else [])
     for root in roots:
         base = root / Path(*module.split("."))
+        if _reached_through_a_symlink(root, base):
+            # `autobot-backend/backend -> .` is a WSL2 shim the post-checkout hook
+            # creates (#886), so `backend.x` aliases `autobot-backend/x`. It exists
+            # in every worktree and not in the primary checkout, which made this
+            # guard's NEGATIVE control invert depending on where it ran (#15986).
+            #
+            # An alias is not a package. Resolution through a symlinked component
+            # is not a module this repository provides, so it does not count --
+            # rather than exempting the one module that exposed it, which would
+            # stop the control asserting anything.
+            continue
         if base.with_suffix(".py").exists() or (base / "__init__.py").exists():
             return True
     return False
+
+
+def _reached_through_a_symlink(root: Path, base: Path) -> bool:
+    """Whether *base*, or anything on the way to it from *root*, is a symlink.
+
+    **Including the last component**, which an earlier version skipped. For a
+    module (`foo.py`) the question is about the path *to* it, so `parts[:-1]`
+    looked right. For a PACKAGE, `base` **is** the directory — so the skipped
+    component was exactly the one that mattered, `(base / "__init__.py").exists()`
+    followed the link, and a symlinked package resolved: the state this guard
+    exists to make impossible (#15986 review).
+
+    The `.py` candidate is tested too, since a symlinked module file is the same
+    hazard one suffix along.
+    """
+    try:
+        parts = base.relative_to(root).parts
+    except ValueError:
+        return False
+    current = root
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            return True
+    # BOTH candidates `_resolves` accepts, not just the module one. Checking
+    # `base` and `base.with_suffix(".py")` left `base / "__init__.py"`: a real
+    # directory holding a symlinked initialiser resolved, so a symlinked module
+    # file was treated as a package. Third layer of one bug — the directory, the
+    # module file, and the initialiser are three ways in, and fixing two of them
+    # reads exactly like fixing it (#16005 review).
+    return base.with_suffix(".py").is_symlink() or (base / "__init__.py").is_symlink()
 
 
 def _imported_modules(script: Path) -> list[tuple[str, int, str]]:
@@ -455,3 +497,67 @@ def test_no_script_awaits_the_sync_redis_client() -> None:
         "returns a SYNC client and raises TypeError at call time — an import-layer "
         "guard cannot see this (#14866):\n  " + "\n  ".join(offenders)
     )
+
+
+def test_a_symlinked_package_does_not_resolve(tmp_path):
+    """The last path component is a symlink too (#15986 review).
+
+    An earlier version iterated `parts[:-1]` — right for a module, where the
+    question is about the path *to* it, and wrong for a package, where `base`
+    IS the directory. `(base / "__init__.py").exists()` then followed the link
+    and the alias resolved.
+    """
+    real = tmp_path / "realpkg"
+    real.mkdir()
+    (real / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "aliaspkg").symlink_to(real)
+
+    assert not _resolves("aliaspkg", tmp_path), "a symlinked package directory resolved"
+
+
+def test_a_real_package_still_resolves(tmp_path):
+    """The contrast. Without it, rejecting EVERYTHING passes the test above.
+
+    The guard's positive direction is what makes its negative control mean
+    something: a resolver that never resolves reports every import as missing
+    and the sweep above it stops distinguishing anything.
+    """
+    real = tmp_path / "realpkg"
+    real.mkdir()
+    (real / "__init__.py").write_text("", encoding="utf-8")
+
+    assert _resolves("realpkg", tmp_path)
+
+
+def test_a_symlinked_module_file_does_not_resolve(tmp_path):
+    """Same hazard one suffix along: `base` has no suffix, the `.py` does."""
+    (tmp_path / "realmod.py").write_text("", encoding="utf-8")
+    (tmp_path / "aliasmod.py").symlink_to(tmp_path / "realmod.py")
+
+    assert _resolves("realmod", tmp_path)
+    assert not _resolves("aliasmod", tmp_path), "a symlinked module file resolved"
+
+
+def test_a_package_with_a_symlinked_initialiser_does_not_resolve(tmp_path):
+    """`base / "__init__.py"` is the third way in (#16005 review).
+
+    `_resolves` accepts two candidates — `base.py` and `base/__init__.py` — and
+    an earlier fix checked only the first. A real directory holding a symlinked
+    initialiser therefore resolved, and a symlinked module file was treated as a
+    package.
+    """
+    (tmp_path / "realmod.py").write_text("", encoding="utf-8")
+    pkg = tmp_path / "fakepkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").symlink_to(tmp_path / "realmod.py")
+
+    assert not _resolves("fakepkg", tmp_path), "a package with a symlinked __init__.py resolved"
+
+
+def test_a_package_with_a_real_initialiser_still_resolves(tmp_path):
+    """The contrast for the case above, kept separate so each is pinned alone."""
+    real = tmp_path / "realpkg"
+    real.mkdir()
+    (real / "__init__.py").write_text("", encoding="utf-8")
+
+    assert _resolves("realpkg", tmp_path)
