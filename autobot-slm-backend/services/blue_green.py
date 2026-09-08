@@ -74,7 +74,6 @@ VALID_ROLES = frozenset(
 VALID_SERVICE_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
-
 def _validate_role(role: str) -> bool:
     """Validate a role name against the allowlist."""
     return role in VALID_ROLES
