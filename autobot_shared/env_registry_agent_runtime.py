@@ -300,3 +300,38 @@ register_env_var(
         range=(1, 600),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BRANCH_INTEREST_TTL_S",
+        type=int,
+        default=1209600,
+        description=(
+            "Backstop lifetime for a branch's recorded interest in a scope (#15987). This is NOT "
+            "how long the interest is meant to last: an interest ends when its branch merges or "
+            "closes, which is a fact someone looks up, not a timer. The TTL exists only so a "
+            "record nobody pruned cannot outlive the repository, and a record reaching it means "
+            "prune() was never called rather than that the work was abandoned. Two weeks by "
+            "default, which no healthy branch should reach."
+        ),
+        component="orchestration",
+        range=(3600, 7776000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_STEWARDSHIP_MAX_HANDOFFS",
+        type=int,
+        default=3,
+        description=(
+            "How many times one branch may change stewards before it must land (#15987). An "
+            "unbounded chain recreates, inside a single branch, the pile of unlanded work the "
+            "worktree ceiling exists to prevent — and it is less visible there, because one "
+            "growing branch looks like progress while four stalled ones look like a queue. "
+            "Raising it buys more accretion, not more throughput."
+        ),
+        component="orchestration",
+        range=(1, 20),
+    )
+)

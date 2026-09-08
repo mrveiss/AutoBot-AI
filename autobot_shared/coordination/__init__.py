@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Cross-worker coordination primitives — Issues #6630, #15947, #15948."""
+"""Cross-worker coordination primitives — Issues #6630, #15947, #15948, #15987."""
 
+from .branch_stewardship import HandoffRefused, Interest, acquire_aware
 from .claim_waitlist import Waiter, arbitrate
 from .shared_runtime_bag import ChangeEvent, SharedRuntimeBag
 from .work_claims import (
@@ -27,6 +28,9 @@ __all__ = [
     "ChangeEvent",
     "Waiter",
     "arbitrate",
+    "Interest",
+    "HandoffRefused",
+    "acquire_aware",
     "Claim",
     "ClaimConflict",
     "ClaimConflictError",
