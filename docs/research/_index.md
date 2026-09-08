@@ -31,6 +31,8 @@ Research reports covering hardware integration, system conflicts, and technology
 | [[agent-host-and-agent-client-protocols]] | Agent Host Protocol and Agent Client Protocol — source analysis; two layers of one stack rather than competitors. Phase 1 complete, AutoBot comparison not started (#11843, #12366) |
 | [[email-reading-capability-audit]] | Email reading capability audit — whether AutoBot can read email, and what the Company OS gains from giving the CEO agent an address (#10533, #13228, #13250, #13421, #13587, #13588) |
 | [[loop-velocity-patterns]] | Why commit progress feels slow — measured loop/subagent patterns on `Dev_new_gui`; throughput is not the problem at ~30 commits/day and a 2.09h median PR open-to-merge (#15294, #15295, #15296, #15306, #15309, #15376) |
+| [[host-management-console-patterns]] | Host-lifecycle methods from Cockpit, Webmin/Virtualmin and oVirt compared against the SLM layer — manifest gating, drift baselines, drain-before-update (#16028) |
+| [[fleet-and-panel-management-patterns]] | Nine fleet managers, panels and config-management systems against the SLM layer — commissioning gates, restore-verified backups, corrective-vs-intentional change, deploy generations (#16028) |
 
 ## Related Sections
 
