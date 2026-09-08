@@ -23,11 +23,17 @@ to `global` "so a dashboard sees the whole project". Measured on
 `live_event_manager.py:126-127`, the second one is already done for us: every
 publish to a non-`global` channel is delivered to that channel's subscribers
 **union the `global` subscribers**. Publishing twice would therefore deliver
-each event twice to every dashboard, and -- because `next_event_id` is a
-per-channel Redis `INCR` -- the two copies would carry *different* event ids, so
-a client could not dedupe them. `test_a_global_subscriber_sees_an_agent_scoped_claim`
-pins the fan-out that makes the single publish sufficient, and
-`test_the_dashboard_is_not_told_twice` pins the reason we do not add the second.
+each event twice to every dashboard, and the duplicate is the bad kind.
+`next_event_id` is a per-channel Redis `INCR` (`channel_stream.py:119`), so
+`agent:{id}` and `global` each carry their own sequence and each starts at 1:
+the dashboard receives two deliveries **with the same event id**, which it
+cannot tell from a replay. That is worse than a duplicate with a distinct id,
+because a client deduping by id would be right to drop the second copy here, and
+would then silently drop a legitimate second event that collided with one on
+another channel. `test_a_global_subscriber_sees_an_agent_scoped_claim` pins the
+fan-out that makes one publish sufficient, and
+`test_the_dashboard_is_not_told_twice` pins the collision that makes the second
+one harmful.
 
 `PersistStrategy.MEMORY`, not durable replay: the recovery path for a client
 that was offline is `GET /api/coordination/claims`, which reads the live table

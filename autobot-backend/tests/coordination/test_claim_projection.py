@@ -78,17 +78,30 @@ def live_manager(monkeypatch):
     import live_event_manager as lem
 
     class _Stream:
+        """Per-CHANNEL counters, mirroring the Redis `INCR` this stands in for.
+
+        `channel_stream.py:119` increments `self._seq_key(channel)`, so every
+        channel has its own sequence and every one of them starts at 1. A stub
+        with a single global counter would hand out 1 and 2 where the real
+        system hands out 1 and 1, and `test_the_dashboard_is_not_told_twice`
+        would then pass while asserting the opposite of what production does.
+        """
+
         def __init__(self) -> None:
-            self._n = 0
+            self._n: dict[str, int] = {}
 
         async def next_event_id(self, channel: str) -> int:
-            self._n += 1
-            return self._n
+            self._n[channel] = self._n.get(channel, 0) + 1
+            return self._n[channel]
 
         async def append(self, channel: str, message: dict) -> None:
             return None
 
-    monkeypatch.setattr(lem, "get_channel_event_stream", lambda: _Stream())
+    # One instance, not one per call: `lambda: _Stream()` would rebuild the
+    # counters on every publish and return 1 forever, which looks like the
+    # collision below but is a stub artefact rather than the behaviour.
+    stream = _Stream()
+    monkeypatch.setattr(lem, "get_channel_event_stream", lambda: stream)
     return lem.LiveEventManager()
 
 
@@ -147,10 +160,16 @@ async def test_a_global_subscriber_sees_an_agent_scoped_claim(live_manager):
 async def test_the_dashboard_is_not_told_twice(live_manager):
     """What publishing to `agent:{id}` *and* `global` would have cost.
 
-    The two copies carry different `event_id`s -- the sequence is a per-channel
-    counter -- so a client cannot dedupe them. Asserting the second publish
-    produces a second, differently-numbered message is what makes the single
-    publish a decision rather than an omission.
+    The sequence is a per-channel Redis `INCR`, and that is precisely why the
+    two copies collide rather than differ: `agent:agent-1` and `global` are
+    different channels, so each has its own counter and each starts at 1. The
+    dashboard receives two deliveries **carrying the same `event_id`**, which it
+    cannot tell apart from a replay of one.
+
+    That is worse than a duplicate with a distinct id, and it is the reason the
+    second publish is omitted: a client deduping by id would be right to drop
+    the second copy here, and would then silently drop a *legitimate* second
+    event that happened to collide with one on another channel.
     """
     dashboard = _FakeWS()
     await live_manager.subscribe(dashboard, "global")
@@ -160,7 +179,10 @@ async def test_the_dashboard_is_not_told_twice(live_manager):
 
     await live_manager.publish("global", ACQUIRED, {"scope": "path:a/b.py"})
     assert len(dashboard.messages) == 2, "a second publish is a second delivery, not a no-op"
-    assert dashboard.messages[0]["event_id"] != dashboard.messages[1]["event_id"]
+    assert dashboard.messages[0]["event_id"] == dashboard.messages[1]["event_id"], (
+        "per-channel counters collide across channels: both deliveries are id 1, "
+        "so the duplicate is indistinguishable from a replay"
+    )
 
 
 # ---------------------------------------------------------------------------
