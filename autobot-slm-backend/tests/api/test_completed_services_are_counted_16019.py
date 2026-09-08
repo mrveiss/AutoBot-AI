@@ -35,8 +35,12 @@ _SLM = Path(__file__).resolve().parents[2]
 
 
 def _declared_statuses() -> set[str]:
-    """Values of `ServiceStatus`, parsed from models/database.py."""
-    tree = ast.parse((_SLM / "models" / "database.py").read_text(encoding="utf-8"))
+    """Values of `ServiceStatus`, parsed from models/service_status.py.
+
+    It moved out of `models/database.py` in #16019: that file was AT its
+    grandfathered ceiling, so the three new states could not be added there.
+    """
+    tree = ast.parse((_SLM / "models" / "service_status.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and node.name == "ServiceStatus":
             return {
@@ -44,7 +48,7 @@ def _declared_statuses() -> set[str]:
                 for stmt in node.body
                 if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Constant)
             }
-    raise AssertionError("ServiceStatus not found in models/database.py")
+    raise AssertionError("ServiceStatus not found in models/service_status.py")
 
 #: Every value `HealthCollector._map_status_from_states` can return (#16019).
 _COLLECTOR_STATES = {
