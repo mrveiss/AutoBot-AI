@@ -27,7 +27,6 @@ from api.nodes_execution import _is_local_ip, _require_online_node, _run_command
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.security.redaction import redact_text
 from config import settings
-from service_status import bucket_service_counts
 from models.database import (
     Deployment,
     DeploymentStatus,
@@ -39,6 +38,7 @@ from models.database import (
     Service,
     ServiceStatus,
 )
+from service_status import bucket_service_counts
 from services.auth import get_current_user, require_permission
 from services.database import get_db
 
