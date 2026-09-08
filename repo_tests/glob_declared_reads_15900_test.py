@@ -36,6 +36,7 @@ The population is **discovered** — every quoted repo-relative string containin
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -83,9 +84,16 @@ def _is_path_like(candidate: str) -> bool:
         # this resolve to something" when the question was "is this a path
         # inside this repository". A traversal component is checked BEFORE the
         # directory test, because the directory test cannot distinguish them.
+        #
+        # A LEADING slash is the same defect with an empty first segment:
+        # `"/actions/runs?"` split to `""`, and `REPO_ROOT / ""` is the root, so
+        # `.is_dir()` said yes and URL fragments entered the population.
+        head = candidate.split("/", 1)[0]
+        if head in ("", ".", ".."):
+            return False
         if any(part in {".", ".."} for part in candidate.split("/")):
             return False
-        return (REPO_ROOT / candidate.split("/", 1)[0]).is_dir()
+        return (REPO_ROOT / head).is_dir()
     return bool(_SUFFIX_GLOB.match(candidate))
 
 
@@ -107,6 +115,10 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     "*.conf.j2": (
         {"repo_tests/slm_frontend_atomic_publish_15610_test.py"},
         "root-relative `*.conf.j2` sweep; the matching files live outside the python filter's trees",
+    ),
+    "*.j2": (
+        {"repo_tests/slm_frontend_publish_contract_test.py"},
+        "root-relative `*.j2` sweep; the matching files live outside the python filter's trees",
     ),
     "*.md": (
         {
@@ -130,8 +142,8 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/deployment_script_scan.py",
             "repo_tests/embedded_python_dependency_declared_test.py",
             "repo_tests/one_git_enumeration_15926_test.py",
-            "repo_tests/shell_lib_sources_resolve_test.py",
             "repo_tests/shell_lib_test.py",
+            "repo_tests/slm_frontend_publish_contract_test.py",
             "repo_tests/slm_frontend_shell_publish_test.py",
         },
         "root-relative `*.sh` sweep; the matching files live outside the python filter's trees",
@@ -145,7 +157,11 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "root-relative `*.vue` sweep; the matching files live outside the python filter's trees",
     ),
     "*.yaml": (
-        {"repo_tests/hook_suites_run_in_ci_test.py", "repo_tests/infra_libs_test_wiring_guard_15051_test.py"},
+        {
+            "repo_tests/hook_suites_run_in_ci_test.py",
+            "repo_tests/infra_libs_test_wiring_guard_15051_test.py",
+            "repo_tests/slm_frontend_publish_contract_test.py",
+        },
         "root-relative `*.yaml` sweep; the matching files live outside the python filter's trees",
     ),
     "*.yml": (
@@ -162,6 +178,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/pip_relative_editable_needs_chdir_test.py",
             "repo_tests/python_interpreter_role_rename_test.py",
             "repo_tests/required_context_complements_test.py",
+            "repo_tests/slm_frontend_publish_contract_test.py",
             "repo_tests/test_agent_venv_isolation_14278.py",
             "repo_tests/test_ci_import_smoke_paths_14252.py",
             "repo_tests/test_deploy_constraint_rewrite_14272.py",
@@ -196,11 +213,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
     ".github/workflows/*.yml": (
-        {
-            "repo_tests/comment_line_number_citations_test.py",
-            "repo_tests/python_filter_covers_its_guards_test.py",
-            "repo_tests/python_version_declaration_drift_test.py",
-        },
+        {"repo_tests/comment_line_number_citations_test.py", "repo_tests/python_version_declaration_drift_test.py"},
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
     "?.min.js": (
@@ -220,7 +233,28 @@ _MIN_GUARDS_PARSED = 180
 
 def glob_declarations_in(source: str) -> set[str]:
     """Repo-relative glob declarations mentioned in *source*."""
-    return {m.group(1) for m in _QUOTED_GLOB.finditer(source) if _is_path_like(m.group(1))}
+    # Parsed, not grepped (#15998 review). A regex over raw source counts a glob
+    # mentioned INSIDE a string literal — `source = 'for p in ROOT.rglob("*.sh")'`
+    # is test data, not a read of the tree — and counts one mentioned in prose.
+    # That is exactly the blindness #16011 enumerates, in the guard that found it.
+    #
+    # A declaration is a string CONSTANT that IS the path, so the whole value is
+    # tested rather than a substring of it. A constant containing a newline or a
+    # quote is source-as-data or prose, never a pathspec.
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    found = set()
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+            continue
+        value = node.value
+        if "\n" in value or '"' in value or "'" in value:
+            continue
+        if _is_path_like(value):
+            found.add(value)
+    return found
 
 
 def _probe_path(glob: str) -> str:
@@ -442,3 +476,49 @@ def test_the_pattern_still_matches_every_declaration_form() -> None:
         ('x = "*requirements*.txt"', {"*requirements*.txt"}),
     ):
         assert glob_declarations_in(source) == expected, source
+
+
+def test_a_glob_inside_a_string_literal_is_not_a_declaration() -> None:
+    """Test data is not a read of the tree (#15998 review).
+
+    `repo_root_walks_use_git_15955_test.py` builds fixtures like
+    `source = 'for p in ROOT.rglob("*.sh"): pass'`. A regex over raw source
+    counted that `"*.sh"` as a declaration and demanded a record entry for a
+    dependency that does not exist — which the record's own header forbids
+    satisfying by adding one.
+
+    This is #16011's blindness in the guard that enumerates it, and the fix is
+    the same: parse, do not grep.
+    """
+    source = "fixture = 'for p in ROOT.rglob(\"*.sh\"):\\n    pass\\n'\n"
+    assert glob_declarations_in(source) == set()
+
+
+def test_a_glob_in_prose_is_not_a_declaration() -> None:
+    """A docstring naming a pattern is documentation, not a dependency."""
+    source = '"""This guard sweeps .github/workflows/*.yml and scripts/lib/*.sh."""\n'
+    assert glob_declarations_in(source) == set()
+
+
+def test_a_real_declaration_beside_a_string_fixture_is_still_found() -> None:
+    """The contrast. Without it, "ignore strings" is satisfied by ignoring everything.
+
+    A file may hold both — a fixture mentioning a glob and a real pathspec
+    argument — and only the second is a read of the tree.
+    """
+    source = 'fixture = \'ROOT.rglob("*.sh")\'\nnames = tracked_paths(ROOT, "*.j2")\n'
+    assert glob_declarations_in(source) == {"*.j2"}
+
+
+@pytest.mark.parametrize(
+    "source",
+    ['x = "/actions/runs?"', 'x = "/pulls?"', 'x = "/*.py"'],
+    ids=["url-fragment", "url-fragment-2", "leading-slash"],
+)
+def test_an_absolute_or_url_fragment_is_not_a_declaration(source: str) -> None:
+    """A leading slash split to an EMPTY first segment, and `REPO_ROOT / ""` is the root.
+
+    So `.is_dir()` said yes and URL fragments entered the population — the same
+    shape as `".."` resolving to the parent, one character shorter.
+    """
+    assert glob_declarations_in(source) == set()
