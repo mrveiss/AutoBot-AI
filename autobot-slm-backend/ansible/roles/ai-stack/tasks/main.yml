@@ -214,7 +214,7 @@
       - langchain>=1.4.0,<2.0.0
       - langchain-community
       - transformers>=5.16.1
-      - sentence-transformers
+      - sentence-transformers>=6.0.1
       - torch>=2.14.0
       - numpy
       - pandas
