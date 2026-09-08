@@ -28,14 +28,13 @@ Two things are deliberately NOT flagged, because both are correct:
 from __future__ import annotations
 
 import re
-import subprocess
 from pathlib import Path
 from typing import List, Tuple
 
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
 
@@ -58,10 +57,7 @@ _SCRATCH = re.compile(r"tmp_path\s*/\s*[\"']\.worktrees[\"']")
 
 
 def _tracked_python_files() -> List[Path]:
-    out = subprocess.run(
-        ["git", "ls-files", "*.py"], cwd=REPO_ROOT, capture_output=True, text=True, check=True, env=scrubbed_git_env()
-    ).stdout.split()
-    return [REPO_ROOT / p for p in out]
+    return [REPO_ROOT / p for p in tracked_paths(REPO_ROOT, "*.py")]
 
 
 #: This file quotes the defective line in its docstring and again in the

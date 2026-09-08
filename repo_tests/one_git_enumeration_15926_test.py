@@ -66,7 +66,16 @@ REPO_ROOT = repo_root()
 #: changed, not the tree, and #15897's rule applies: correcting a denominator is
 #: not licensing a bypass. Never raise it to make a new bypass pass; route the
 #: new guard through `tracked_paths` instead.
-MAX_DIRECT_INVOCATIONS = 42
+#: 42 -> 33: nine plain `git ls-files "*.py"` sites migrated in one batch
+#: (#15926). Two candidates were deliberately NOT migrated, and they are a
+#: class rather than an oversight: `audio_extension_allowlist_test` and
+#: `env_var_bare_cast_test` pass their enumerator to `declare(discover=...)`,
+#: and `reach_declarations_test` drives that against an EMPTY tree to prove the
+#: floor fires. `tracked_paths` raises there instead of returning `[]`, so
+#: migrating them breaks the test that proves their floors work. That is the
+#: same empty-population tension described above, reached from the other side:
+#: here the empty result is the evidence, not the failure.
+MAX_DIRECT_INVOCATIONS = 33
 
 #: Floor on files EXAMINED, not on findings. A findings floor is satisfied by
 #: finding nothing, which is also what a collapsed sweep reports.
