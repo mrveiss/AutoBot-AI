@@ -46,7 +46,7 @@ from pathlib import Path
 import pytest
 
 from autobot_shared.status_enums import CommandRisk, RiskLevel, SecretType, Severity
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import tracked_paths, TRACKED_PY_FLOOR
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKEND = REPO_ROOT / "autobot-backend"
@@ -303,7 +303,7 @@ DELIBERATE_SEVERITY_LITERALS = {
 }
 
 # Floor for the enumeration itself. An empty walk must not read as "clean".
-_TRACKED_PY_FLOOR = 3000
+_TRACKED_PY_FLOOR = TRACKED_PY_FLOOR  # canonical: one measured floor, was a local 3000 (#15928)
 
 # Floor for the enum scan (measured at 300+ on this tree). A parse pass that
 # silently stopped matching would otherwise report every fork as collapsed.
