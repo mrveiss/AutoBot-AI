@@ -36,11 +36,21 @@ neighbours, so the neighbour check is kept here permanently instead of being
 performed once: any hook added later that emits a non-deny decision before a
 non-zero exit fails this test rather than joining the pattern silently.
 
-The parse is deliberately shallow — it pairs each decision with the next ``exit``
-that follows it in the file. That is sufficient for the guard shape in use here,
-where a decision is always immediately followed by its exit, and it fails loudly
-rather than silently if a hook adopts a structure it cannot read: see
-``test_every_decision_has_a_reachable_exit``.
+The parse is deliberately shallow, but it does not guess. It pairs a decision
+with the next ``exit`` only when that exit is not indented deeper than the
+decision itself; a deeper one sits inside a branch this parser cannot evaluate,
+so execution may bypass it and reach a different exit later. Crediting it anyway
+would let the guard certify a contract it never checked, silently and in the
+passing direction — the defect this file exists to catch, one level up. Refused
+pairings fail loudly through ``test_every_decision_has_a_reachable_exit``.
+
+**Three dimensions, because the defect has moved twice.** ``EXPECTED_EXIT``
+reads the exit code; ``STDERR_WRITE`` reads the channel the reason travels on;
+and the membership check reads the decision *value* — added after a hook was
+found emitting ``warn``, which is not in the contract and therefore does nothing
+at all while looking exactly like a decision that works (#16079). Each dimension
+was added because a fix relocated the bug into it. The lesson is kept here
+deliberately: a guard measures one dimension, and the bug moves to the next.
 """
 
 from __future__ import annotations
@@ -58,8 +68,25 @@ HOOKS_DIR = repo_root() / ".claude" / "hooks"
 # so exit 2 is correct. Every other decision is only read on exit 0.
 EXPECTED_EXIT = {"deny": 2, "ask": 0, "allow": 0}
 
-DECISION_RE = re.compile(r'permissionDecision\\?":\\?"(?P<decision>ask|allow|deny)')
-EXIT_RE = re.compile(r"^\s*exit\s+(?P<code>\d+)\s*$")
+# Matches ANY value, not only the valid three. A detector that enumerates the
+# valid set cannot see an invalid member of it -- and an invalid decision is
+# inert, which is the single thing this file most needs to catch. Found #16079
+# that way: a `warn` this regex was blind to, sitting green for its whole life.
+DECISION_RE = re.compile(r'permissionDecision\\?":\\?"(?P<decision>[A-Za-z_]*)')
+EXIT_RE = re.compile(r"^(?P<indent>\s*)exit\s+(?P<code>\d+)\s*$")
+INDENT_RE = re.compile(r"^\s*")
+STDERR_WRITE = re.compile(r">&\s*2")
+
+VALID_DECISIONS = frozenset(EXPECTED_EXIT)
+
+# Emitted values outside the contract, each pinned to the issue owning its
+# remedy. A ratchet, not an exemption list: the test below asserts each entry is
+# STILL emitted and STILL invalid, so a fix fails this suite until the entry is
+# dropped in the same PR. An exemption list that only grows is where this class
+# of defect hides.
+KNOWN_INVALID = {
+    ("block-dangerous-commands.sh", "warn"): "#16079",
+}
 
 
 def _hook_files() -> list[Path]:
@@ -68,25 +95,60 @@ def _hook_files() -> list[Path]:
     return sorted(p for p in HOOKS_DIR.glob("*.sh") if not p.name.endswith("_test.sh"))
 
 
-def _decisions_with_exits(path: Path) -> list[tuple[int, str, int | None]]:
-    """Pair each decision emission with the next ``exit`` line after it.
+def _pair_exit(lines: list[str], index: int) -> tuple[int | None, int, str]:
+    """Pair the decision at ``lines[index]`` with the exit it actually reaches.
 
-    Returns ``(line number, decision, exit code or None)`` per emission.
+    Returns ``(code, last line scanned, status)``, where status is ``"paired"``,
+    ``"none"`` when no ``exit`` appears in the window, or ``"conditional"``.
+
+    The indent rule is the substance here. Accepting the first *textual* ``exit``
+    lets a conditional ``exit 0`` be selected while execution falls through to a
+    later ``exit 2``: the guard would then certify a contract it never checked,
+    silently and in the passing direction -- the same shape as the defect this
+    file exists to catch. An ``exit`` nested deeper than its decision is reached
+    only through a branch this parser cannot evaluate, so it is refused rather
+    than assumed, and the caller turns that refusal into a loud failure.
     """
-    lines = path.read_text(encoding="utf-8").splitlines()
-    found: list[tuple[int, str, int | None]] = []
+    decision_indent = len(INDENT_RE.match(lines[index]).group(0))
+    for offset in range(index + 1, min(index + 8, len(lines))):
+        exit_match = EXIT_RE.match(lines[offset])
+        if not exit_match:
+            continue
+        if len(exit_match.group("indent")) > decision_indent:
+            return None, offset, "conditional"
+        return int(exit_match.group("code")), offset, "paired"
+    return None, min(index + 7, len(lines) - 1), "none"
+
+
+def _emissions(path: Path) -> list[tuple[int, str, int | None, str, bool]]:
+    """Every decision in ``path``: line, value, exit code, pairing status, stderr.
+
+    One scanner, deliberately. The exit window and the stderr window were
+    computed by two functions that had to agree and nothing made them; a guard
+    whose two halves can drift apart is the thing this suite is about.
+    """
+    return _scan(path.read_text(encoding="utf-8").splitlines())
+
+
+def _scan(lines: list[str]) -> list[tuple[int, str, int | None, str, bool]]:
+    """The scan itself, over lines, so fixtures can exercise it without a file."""
+    out: list[tuple[int, str, int | None, str, bool]] = []
     for index, line in enumerate(lines):
         match = DECISION_RE.search(line)
         if not match:
             continue
-        code: int | None = None
-        for following in lines[index + 1 : index + 8]:
-            exit_match = EXIT_RE.match(following)
-            if exit_match:
-                code = int(exit_match.group("code"))
-                break
-        found.append((index + 1, match.group("decision"), code))
-    return found
+        code, end, status = _pair_exit(lines, index)
+        window = lines[max(0, index - 8) : end + 1]
+        out.append(
+            (
+                index + 1,
+                match.group("decision"),
+                code,
+                status,
+                any(STDERR_WRITE.search(w) for w in window),
+            )
+        )
+    return out
 
 
 @pytest.mark.parametrize("hook", _hook_files(), ids=lambda p: p.name)
@@ -94,8 +156,10 @@ def test_decision_exit_codes_match_the_harness_contract(hook: Path) -> None:
     """An `ask` or `allow` must exit 0, or the harness discards it as a denial."""
     wrong = [
         (line, decision, code)
-        for line, decision, code in _decisions_with_exits(hook)
-        if code is not None and code != EXPECTED_EXIT[decision]
+        for line, decision, code, _status, _err in _emissions(hook)
+        if decision in VALID_DECISIONS
+        and code is not None
+        and code != EXPECTED_EXIT[decision]
     ]
     assert not wrong, "\n".join(
         f"{hook.name}:{line} emits permissionDecision '{decision}' then exits {code}; "
@@ -121,15 +185,21 @@ def test_every_decision_has_a_reachable_exit(hook: Path) -> None:
     green that covered nothing.
     """
     unpaired = [
-        (line, decision)
-        for line, decision, code in _decisions_with_exits(hook)
-        if code is None
+        (line, decision, status)
+        for line, decision, code, status, _err in _emissions(hook)
+        if code is None and decision in VALID_DECISIONS
     ]
     assert not unpaired, "\n".join(
-        f"{hook.name}:{line} emits permissionDecision '{decision}' with no `exit` "
-        "within the following 7 lines. This guard cannot tell whether the harness "
-        "will read it. Restructure the hook or extend the parser — do not skip it."
-        for line, decision in unpaired
+        f"{hook.name}:{line} emits permissionDecision '{decision}' "
+        + (
+            "with no `exit` within the following 7 lines."
+            if status == "none"
+            else "whose next `exit` is indented deeper than the decision, so it sits "
+            "inside a branch and execution may bypass it to reach a different one."
+        )
+        + " This guard cannot tell whether the harness will read it. Restructure "
+        "the hook or extend the parser — do not skip it."
+        for line, decision, status in unpaired
     )
 
 
@@ -146,7 +216,7 @@ def test_the_sweep_covers_more_than_the_two_known_hooks() -> None:
         "check every hook, not the two that were known when it was written"
     )
     assert any(
-        _decisions_with_exits(hook) for hook in hooks
+        _emissions(hook) for hook in hooks
     ), "no hook emits a permissionDecision — the regex has probably gone stale"
 
 
@@ -164,30 +234,6 @@ def test_the_sweep_covers_more_than_the_two_known_hooks() -> None:
 # move with it.** A suite that only ever checks the old dimension reports green
 # on the new bug.
 
-STDERR_WRITE = re.compile(r">&\s*2")
-
-
-def _emissions_with_context(path: Path) -> list[tuple[int, str, int | None, bool]]:
-    """Each decision, its exit code, and whether stderr is written near it."""
-    lines = path.read_text(encoding="utf-8").splitlines()
-    out: list[tuple[int, str, int | None, bool]] = []
-    for index, line in enumerate(lines):
-        match = DECISION_RE.search(line)
-        if not match:
-            continue
-        code: int | None = None
-        end = index + 1
-        for offset, following in enumerate(lines[index + 1 : index + 8], start=index + 1):
-            exit_match = EXIT_RE.match(following)
-            if exit_match:
-                code = int(exit_match.group("code"))
-                end = offset
-                break
-        window = lines[max(0, index - 8) : end + 1]
-        out.append((index + 1, match.group("decision"), code, any(STDERR_WRITE.search(w) for w in window)))
-    return out
-
-
 @pytest.mark.parametrize("hook", _hook_files(), ids=lambda p: p.name)
 def test_a_blocking_decision_writes_its_reason_to_stderr(hook: Path) -> None:
     """Exit 2 takes its reason from stderr, so a silent exit-2 explains nothing.
@@ -198,7 +244,7 @@ def test_a_blocking_decision_writes_its_reason_to_stderr(hook: Path) -> None:
     """
     silent = [
         (line, decision)
-        for line, decision, code, has_stderr in _emissions_with_context(hook)
+        for line, decision, code, _status, has_stderr in _emissions(hook)
         if code not in (None, 0) and not has_stderr
     ]
     assert not silent, "\n".join(
@@ -208,3 +254,117 @@ def test_a_blocking_decision_writes_its_reason_to_stderr(hook: Path) -> None:
         "Add `printf '%s\\n' \"$REASON\" >&2` beside it."
         for line, decision in silent
     )
+
+
+# ------------------------------------------------------------ the value
+#
+# EXPECTED_EXIT measures the exit code and STDERR_WRITE measures the channel.
+# A decision has a third dimension that neither reads: **the value itself**.
+# `warn` is well-formed JSON in the right place with the right shape and is not
+# in the contract, so nothing acts on it -- inert, and indistinguishable from a
+# working decision at every site a reader would check. See #16079.
+#
+# The detector could not see it, and that is the part worth keeping: the regex
+# enumerated `ask|allow|deny`, so it matched the valid values and was blind to
+# an invalid one. A guard keyed on the set of correct answers cannot report a
+# wrong answer. It now matches any value and checks membership here.
+
+
+@pytest.mark.parametrize("hook", _hook_files(), ids=lambda p: p.name)
+def test_every_decision_value_is_in_the_harness_contract(hook: Path) -> None:
+    """A value outside allow/deny/ask is not a weaker decision -- it is none."""
+    invalid = [
+        (line, decision)
+        for line, decision, _code, _status, _err in _emissions(hook)
+        if decision not in VALID_DECISIONS
+        and (hook.name, decision) not in KNOWN_INVALID
+    ]
+    assert not invalid, "\n".join(
+        f"{hook.name}:{line} emits permissionDecision '{decision}', which is not one "
+        f"of {sorted(VALID_DECISIONS)}. The harness does not recognise it, so the "
+        "emission does nothing at all while looking exactly like one that works. "
+        "Use a contract value, or drop the JSON and print plain text."
+        for line, decision in invalid
+    )
+
+
+def test_the_known_invalid_ratchet_only_shrinks() -> None:
+    """Each pinned entry must still be present and still invalid.
+
+    This is what separates a ratchet from an exemption list. When #16079 is
+    fixed, this fails until its entry is removed in the same PR -- so the list
+    cannot quietly outlive the defects it records, which is the failure mode of
+    every allowlist that only ever grows.
+    """
+    live = {
+        (hook.name, decision)
+        for hook in _hook_files()
+        for _line, decision, _code, _status, _err in _emissions(hook)
+        if decision not in VALID_DECISIONS
+    }
+    stale = sorted(set(KNOWN_INVALID) - live)
+    assert not stale, "\n".join(
+        f"KNOWN_INVALID pins {hook}:'{decision}' ({KNOWN_INVALID[(hook, decision)]}) "
+        "but that emission is gone or now valid. Remove the entry in the PR that "
+        "fixed it."
+        for hook, decision in stale
+    )
+
+
+# ------------------------------------------------------- guarding the detector
+#
+# Every assertion above is only as good as `_scan`. Run over the real hooks
+# alone, a detector that stopped detecting would report an empty population --
+# and an empty population passes every "no bad emissions" assertion in this file.
+# The sweep test catches total blindness; these fixtures catch the rest: that it
+# matches what it must, refuses what it must not, and pairs the right `exit`.
+
+_FALL_THROUGH = [
+    'echo \'{"permissionDecision":"deny"}\'',
+    "if [ -n \"$X\" ]; then",
+    "    exit 0",
+    "fi",
+    "exit 2",
+]
+
+
+def test_the_detector_matches_a_real_emission() -> None:
+    found = _scan(['  echo \'{"permissionDecision":"ask"}\'', "  exit 0"])
+    assert found == [(1, "ask", 0, "paired", False)]
+
+
+def test_the_detector_ignores_a_line_that_is_not_an_emission() -> None:
+    assert _scan(["# permissionDecision is discussed here", "exit 0"]) == []
+
+
+def test_the_detector_sees_a_value_outside_the_contract() -> None:
+    """The #16079 case: blindness to an invalid value is the failure that matters."""
+    found = _scan(['echo \'{"permissionDecision":"warn"}\' >&2', "exit 0"])
+    assert [(d, s) for _l, d, _c, s, _e in found] == [("warn", "paired")]
+
+
+def test_a_conditional_exit_is_refused_rather_than_paired() -> None:
+    """Taking the first textual `exit` here would report exit 0 for a deny.
+
+    That is a pass in the wrong direction: the guard would certify the contract
+    on a path execution may never take. Refusing the pairing routes it to
+    `test_every_decision_has_a_reachable_exit`, which fails loudly instead.
+    """
+    (_line, decision, code, status, _err), = _scan(_FALL_THROUGH)
+    assert (decision, code, status) == ("deny", None, "conditional")
+
+
+def test_an_unconditional_exit_at_the_same_indent_is_paired() -> None:
+    """The contrast case -- the rule must not refuse the shape the hooks use."""
+    (_line, _decision, code, status, _err), = _scan(
+        ['  echo \'{"permissionDecision":"deny"}\'', "  exit 2", "exit 0"]
+    )
+    assert (code, status) == (2, "paired")
+
+
+def test_the_stderr_window_closes_at_the_paired_exit() -> None:
+    """A `>&2` after the exit belongs to a later block, not to this decision."""
+    found = _scan(
+        ['echo \'{"permissionDecision":"deny"}\'', "exit 2", 'echo "other" >&2']
+    )
+    assert found[0][4] is False
