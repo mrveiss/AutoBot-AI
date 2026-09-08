@@ -13,7 +13,9 @@ proves nothing about the copy that actually blocks a merge.
 from __future__ import annotations
 
 import importlib.util
+import sys
 
+import pytest
 import yaml
 from repo_tests._paths import repo_root
 
@@ -314,14 +316,134 @@ def test_setup_python_suite_installs_ffmpeg_directly():
     assert "ffmpeg" in action, "setup-python-suite/action.yml no longer installs ffmpeg (#14550)"
 
 
+#: Repo-local, stdlib-only, and the sanctioned home for git enumeration (#15955).
+_SCAN_HELPERS = "_scan_helpers"
+
+
 def test_the_checker_needs_no_third_party_import():
     """It must run in a job that installs linters, not the application's dependencies."""
     source = _CHECKER.read_text(encoding="utf-8")
+    # Stdlib asked of the interpreter, not listed by hand: the previous literal
+    # set of five names failed on `os` and `subprocess` -- both stdlib, neither
+    # in the list -- so it was enforcing "these five modules", not "stdlib".
+    allowed = set(sys.stdlib_module_names) | {_SCAN_HELPERS}
     third_party = [
         line
         for line in source.splitlines()
         if line.startswith(("import ", "from "))
         and not line.startswith("from __future__")
-        and line.split()[1].split(".")[0] not in {"argparse", "logging", "pathlib", "re", "sys"}
+        and line.split()[1].split(".")[0] not in allowed
     ]
     assert third_party == [], f"the checker imports non-stdlib modules: {third_party}"
+
+
+def test_the_scan_helper_the_checker_leans_on_is_itself_dependency_free():
+    """The one non-stdlib import above must not become a door to the application's deps.
+
+    Exempting `_scan_helpers` is only safe while `_scan_helpers` is safe. Without
+    this, the exemption launders whatever that module grows to import.
+    """
+    helper = REPO_ROOT / "tools" / "lint" / "_scan_helpers.py"
+    allowed = set(sys.stdlib_module_names) | {"autobot_shared"}
+    offenders = [
+        line
+        for line in helper.read_text(encoding="utf-8").splitlines()
+        if line.startswith(("import ", "from "))
+        and not line.startswith("from __future__")
+        and line.split()[1].split(".")[0] not in allowed
+    ]
+    assert offenders == [], f"_scan_helpers reaches beyond stdlib and autobot_shared: {offenders}"
+
+
+def test_a_real_checkout_is_enumerated_by_git_not_by_the_walk():
+    """The #15955 property, asserted on BEHAVIOUR rather than on the source.
+
+    `_test_files` has two branches, and the static guard in
+    `repo_root_walks_use_git_15955_test.py` can only see that the git one
+    exists. Nothing there notices if the fallback starts answering for a real
+    checkout -- which would restore the exact defect this guard was written for,
+    silently, while every source-level check still passed.
+
+    This repository keeps worktrees INSIDE the working copy, so a walk of the
+    root returns another checkout's files. Their absence is the evidence.
+    """
+    assert checker._inside_work_tree(REPO_ROOT), "this test needs a real checkout to mean anything"
+    found = checker._test_files(REPO_ROOT)
+    # RELATIVE to the root, never absolute: this checkout ITSELF sits under
+    # `.worktrees/<branch>/`, so an absolute-path test matches every file it
+    # found and reports 2,239 strays in a clean tree. #14550 caught this shape
+    # against its own guard, and `_test_files`'s docstring says so two functions
+    # above -- prose about a hazard is not a defence against it.
+    strays = [str(p) for p in found if {".worktrees", ".claude"} & set(p.relative_to(REPO_ROOT).parts)]
+    assert strays == [], (
+        f"{len(strays)} test files came from another checkout of this repository, so the "
+        "enumeration walked the filesystem instead of reading git's index (#15955). "
+        f"First: {strays[:3]}"
+    )
+
+
+def test_the_non_git_fallback_still_refuses_to_enter_a_nested_checkout(tmp_path):
+    """The fallback prunes too -- it is a second door into the same room.
+
+    Only reached for a tree that is not a checkout, where nested checkouts
+    should not exist. "Should not" is the assumption that produced #15955 in the
+    first place, so the fallback prunes and this proves it.
+    """
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "real_test.py").write_text("# real\n", encoding="utf-8")
+    nested = tmp_path / ".worktrees" / "other" / "pkg"
+    nested.mkdir(parents=True)
+    (nested / "stray_test.py").write_text("# another checkout\n", encoding="utf-8")
+
+    names = checker._walked_test_files(tmp_path)
+    assert "pkg/real_test.py" in names
+    assert not [n for n in names if ".worktrees" in n], f"walked into a nested checkout: {names}"
+
+
+def test_a_real_checkout_excludes_an_untracked_test_file():
+    """What git gives that a pruned walk does not: it reads an INDEX.
+
+    A pruned walk agrees with git about nested checkouts, so the stray test
+    above passes either way -- it cannot tell the two branches apart. The
+    difference that remains is untracked files: build output, a scratch file, a
+    half-written module nobody has added. Those are not the repository's test
+    suite, and a walk cannot know it.
+
+    Creates one and removes it, so the assertion does not depend on the tree
+    happening to be dirty.
+    """
+    stray = REPO_ROOT / "pkg_provisioning_untracked_probe_test.py"
+    assert not stray.exists(), "probe path already exists -- a previous run leaked it"
+    stray.write_text("# untracked probe\n", encoding="utf-8")
+    try:
+        found = {p.name for p in checker._test_files(REPO_ROOT)}
+        assert stray.name not in found, (
+            "an UNTRACKED file was enumerated as part of the test suite, so the "
+            "enumeration walked the filesystem rather than reading git's index. A "
+            "pruned walk cannot make this distinction -- only the index can (#15955)."
+        )
+    finally:
+        stray.unlink()
+
+
+def test_a_non_checkout_falls_back_to_the_walk(tmp_path):
+    """A directory that is genuinely not a repository is walked, not refused."""
+    assert checker._inside_work_tree(tmp_path) is False
+
+
+def test_an_operational_git_failure_raises_instead_of_walking(monkeypatch, tmp_path):
+    """A git failure that is NOT "no repository here" must not become a walk.
+
+    Returning `False` for every non-zero exit meant a transient failure in a real
+    checkout silently produced an `os.walk` of the repository root — the
+    nested-checkout defect this change exists to remove, reached through its own
+    remedy. The distinguishing signal is git's own message.
+    """
+    import subprocess as sp
+
+    def _broken(*args, **kwargs):
+        return sp.CompletedProcess(args=[], returncode=128, stdout="", stderr="fatal: index file corrupt")
+
+    monkeypatch.setattr(checker.subprocess, "run", _broken)
+    with pytest.raises(RuntimeError, match="is-inside-work-tree"):
+        checker._inside_work_tree(tmp_path)

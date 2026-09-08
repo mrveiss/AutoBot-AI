@@ -51,16 +51,22 @@ from tools.lint._scan_helpers import tracked_paths
 REPO_ROOT = repo_root()
 
 #: Direct `git ls-files` invocations in `repo_tests/`, measured on the tree:
-#: **40 awaiting migration, plus 1 deliberate** — the unscrubbed contrast
+#: **40 awaiting migration, plus 2 deliberate** — the unscrubbed contrast
 #: fixture in this file, which must stay a raw call because its whole purpose is
-#: to show that an unscrubbed enumeration follows `GIT_DIR`.
+#: to show that an unscrubbed enumeration follows `GIT_DIR`; and the pattern
+#: PROBE in `pytest_testpaths_cover_every_test_dir_15183_test.py`, which asks
+#: "does this pattern match anything?" — a question whose answer is legitimately
+#: no, where `tracked_paths` raises on empty because it answers "enumerate the
+#: population" (#15826). An `allow_empty=` flag would be the obvious fix and the
+#: wrong one: an optional parameter that switches off a guard is off by default
+#: at every site that forgets it.
 #:
 #: THIS ONLY SHRINKS. It moved 40 -> 41 once, when this module stopped exempting
 #: itself from its own census (#15990 review) — the population definition
 #: changed, not the tree, and #15897's rule applies: correcting a denominator is
 #: not licensing a bypass. Never raise it to make a new bypass pass; route the
 #: new guard through `tracked_paths` instead.
-MAX_DIRECT_INVOCATIONS = 41
+MAX_DIRECT_INVOCATIONS = 42
 
 #: Floor on files EXAMINED, not on findings. A findings floor is satisfied by
 #: finding nothing, which is also what a collapsed sweep reports.
