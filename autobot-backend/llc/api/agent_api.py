@@ -130,20 +130,11 @@ async def update_work_item_status(item_id: uuid.UUID, body: StatusUpdate, reques
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-        # #16017: `comment` was declared and read nowhere. An agent explaining a
-        # transition got a 200 and the explanation was discarded on every call.
-        #
-        # Wired rather than removed, because the store already exists and the
-        # field was plainly meant to reach it: `LLCWorkItemComment`
-        # (llc/models/work_item.py:193) and `add_comment` are what `post_comment`
-        # on this same router already writes to. Removing the field would make
-        # the discard honest; wiring it makes the transition reviewable, and
-        # **the comment is the part a human reads** -- a status change without
-        # its reason is the change nobody can review.
-        #
-        # Same session and the same commit as the transition. A comment stored
-        # against a transition that then failed to commit would be a reason for
-        # something that did not happen, which is worse than no reason.
+        # #16017: `comment` was declared and read nowhere -- accepted, answered
+        # 200, discarded. Wired not removed: the store already exists unreached
+        # (`LLCWorkItemComment`, written by `post_comment` here). Same session
+        # and commit as the transition -- a comment surviving a transition that
+        # failed to commit is a reason for something that did not happen.
         comment_id = None
         if body.comment and body.comment.strip():
             author_uuid = await agent_node_uuid(agent_id, company_id)
@@ -159,8 +150,8 @@ async def update_work_item_status(item_id: uuid.UUID, body: StatusUpdate, reques
         await session.commit()
         resulting = str(item.status)
 
-    # `comment_id` distinguishes a 200 that stored the comment from one that had
-    # none to store -- the caller could not tell those apart before (#16017).
+    # `comment_id` separates a 200 that stored the comment from one with none
+    # to store; the caller could not tell those apart (#16017).
     return {
         "updated": True,
         "item_id": str(item_id),
