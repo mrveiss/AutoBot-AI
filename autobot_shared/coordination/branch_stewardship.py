@@ -44,7 +44,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
-from datetime import timedelta
 from typing import Any, Iterable
 
 from autobot_shared.coordination.work_claims import (
@@ -227,9 +226,7 @@ async def transfer(
             f"{branch} has changed hands {current.hops} times (limit {MAX_HANDOFFS}); "
             "land it before accepting more work onto it"
         )
-    moved = Interest(
-        **{**asdict(current), "steward": to_steward, "handoffs": current.handoffs + (to_steward,)}
-    )
+    moved = Interest(**{**asdict(current), "steward": to_steward, "handoffs": current.handoffs + (to_steward,)})
     await client.set(key, json.dumps(asdict(moved)), ex=INTEREST_TTL_S)
     return moved
 

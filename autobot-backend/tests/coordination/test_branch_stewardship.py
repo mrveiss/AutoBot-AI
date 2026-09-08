@@ -59,9 +59,7 @@ async def redis(monkeypatch):
 async def test_an_interest_does_not_block_the_claim(redis):
     """Blocking on an open PR would serialise the fleet behind review."""
     await declare("path:a/b.py", branch="issue-1", steward="agent-1", intent="refactor")
-    outcome, found = await acquire_aware(
-        "path:a/b.py", agent_id="agent-2", task_id="t2", intent="rename"
-    )
+    outcome, found = await acquire_aware("path:a/b.py", agent_id="agent-2", task_id="t2", intent="rename")
     assert isinstance(outcome, Claim), "an unlanded branch must not refuse a claim"
     assert [i.branch for i in found] == ["issue-1"]
     assert "refactor" in found[0].intent
