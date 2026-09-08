@@ -170,7 +170,13 @@ def _reached_through_a_symlink(root: Path, base: Path) -> bool:
         current = current / part
         if current.is_symlink():
             return True
-    return base.with_suffix(".py").is_symlink()
+    # BOTH candidates `_resolves` accepts, not just the module one. Checking
+    # `base` and `base.with_suffix(".py")` left `base / "__init__.py"`: a real
+    # directory holding a symlinked initialiser resolved, so a symlinked module
+    # file was treated as a package. Third layer of one bug — the directory, the
+    # module file, and the initialiser are three ways in, and fixing two of them
+    # reads exactly like fixing it (#16005 review).
+    return base.with_suffix(".py").is_symlink() or (base / "__init__.py").is_symlink()
 
 
 def _imported_modules(script: Path) -> list[tuple[str, int, str]]:
@@ -530,3 +536,28 @@ def test_a_symlinked_module_file_does_not_resolve(tmp_path):
 
     assert _resolves("realmod", tmp_path)
     assert not _resolves("aliasmod", tmp_path), "a symlinked module file resolved"
+
+
+def test_a_package_with_a_symlinked_initialiser_does_not_resolve(tmp_path):
+    """`base / "__init__.py"` is the third way in (#16005 review).
+
+    `_resolves` accepts two candidates — `base.py` and `base/__init__.py` — and
+    an earlier fix checked only the first. A real directory holding a symlinked
+    initialiser therefore resolved, and a symlinked module file was treated as a
+    package.
+    """
+    (tmp_path / "realmod.py").write_text("", encoding="utf-8")
+    pkg = tmp_path / "fakepkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").symlink_to(tmp_path / "realmod.py")
+
+    assert not _resolves("fakepkg", tmp_path), "a package with a symlinked __init__.py resolved"
+
+
+def test_a_package_with_a_real_initialiser_still_resolves(tmp_path):
+    """The contrast for the case above, kept separate so each is pinned alone."""
+    real = tmp_path / "realpkg"
+    real.mkdir()
+    (real / "__init__.py").write_text("", encoding="utf-8")
+
+    assert _resolves("realpkg", tmp_path)
