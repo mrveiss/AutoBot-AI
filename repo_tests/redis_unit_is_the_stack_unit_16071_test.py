@@ -41,11 +41,11 @@ would be #16011 repeated inside the fix for #16060.
 from __future__ import annotations
 
 import re
-import subprocess
 
 import pytest
 
 from repo_tests._paths import repo_root
+from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
 
@@ -111,10 +111,16 @@ _LEGACY_CLEANUP = {
 
 
 def _tracked_files() -> list[str]:
-    out = subprocess.run(
-        ["git", "ls-files"], cwd=_ROOT, capture_output=True, text=True, check=True
-    ).stdout.split()
-    return [f for f in out if not _SKIP.search(f)]
+    """Tracked paths, enumerated through the one helper that scrubs the git env.
+
+    A bare `git ls-files` with `cwd=` is not enough: an inherited GIT_DIR
+    outranks the working directory, so the sweep can enumerate a different
+    repository than the one it names and report a clean tree for it
+    (#15925/#15926). `tracked_paths` scrubs unconditionally, and using it also
+    keeps this guard out of the direct-invocation census rather than becoming
+    its thirty-fourth entry against a ceiling of thirty-three.
+    """
+    return [f for f in tracked_paths(_ROOT) if not _SKIP.search(f)]
 
 
 def _offences_in(text: str) -> list[str]:
