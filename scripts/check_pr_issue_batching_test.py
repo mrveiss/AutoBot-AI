@@ -20,6 +20,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from check_pr_issue_batching import (  # noqa: E402
+    RATIONALE_HINT,
     check,
     exemption,
     referenced_issues,
@@ -142,3 +143,50 @@ class TestRationaleParsing:
 
     def test_absent_returns_none(self) -> None:
         assert single_issue_rationale("## What Changed\n") is None
+
+
+class TestRationaleAsAHeading:
+    """`## Single-issue rationale` with the reason beneath it (#16050).
+
+    Two independent sessions wrote it this way within four hours -- #16018, and
+    #16049 which was the CRITICAL auth fix -- because it matches the section
+    style the rest of the PR body uses. Two authors independently choosing a
+    form the checker rejects is the checker's defect.
+    """
+
+    def test_a_heading_with_prose_beneath_it_counts(self) -> None:
+        body = ONE + "## Single-issue rationale\n\nan auth fix must read in one pass\n"
+        assert check(body)[0]
+        assert single_issue_rationale(body) == "an auth fix must read in one pass"
+
+    def test_the_reason_may_sit_several_blank_lines_down(self) -> None:
+        """The naive fix reads only the next line, which is blank in every real body."""
+        body = ONE + "## Single-issue rationale\n\n\n\nreason far below\n"
+        assert single_issue_rationale(body) == "reason far below"
+
+    def test_an_empty_section_does_not_borrow_the_next_one(self) -> None:
+        """The contrast, and the one that keeps this a check rather than a keyword.
+
+        This gate asks whether a human justified standing alone. A fix that
+        matches the heading and stops looking lets any PR pass by including a
+        heading with nothing under it -- and the next section's prose would be
+        silently adopted as the rationale.
+        """
+        body = ONE + "## Single-issue rationale\n\n## What Changed\n\nunrelated prose\n"
+        assert single_issue_rationale(body) is None
+        assert not check(body)[0]
+
+    def test_a_heading_at_the_end_of_the_body_is_not_a_rationale(self) -> None:
+        assert single_issue_rationale(ONE + "## Single-issue rationale\n\n") is None
+
+    def test_the_inline_form_still_works_and_still_rejects_a_blank(self) -> None:
+        """Widening WHERE the reason may sit must not widen WHETHER one is needed."""
+        assert single_issue_rationale(ONE + "Single-issue rationale: stands alone\n") == "stands alone"
+        assert single_issue_rationale(ONE + "Single-issue rationale:   \n") is None
+
+    def test_the_hint_names_both_accepted_forms(self) -> None:
+        """The old hint printed one indented example, which read as illustration
+        rather than as an exact-match requirement -- so the gate taught the shape
+        it refused."""
+        assert "## Single-issue rationale" in RATIONALE_HINT
+        assert "Single-issue rationale: <why" in RATIONALE_HINT
