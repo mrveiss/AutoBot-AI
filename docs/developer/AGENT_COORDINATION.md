@@ -89,6 +89,48 @@ publishing on the a2a channel needs the task manager, and `autobot_shared` must
 not import from `autobot-backend`. It also leaves the queue testable with no
 task manager and no running backend.
 
+## Unlanded work: interest and stewardship
+
+A claim frees when the task ends. The **change** does not land until its PR
+merges, and between those two moments the scope is unclaimed but not safe
+(#15987).
+
+- **The branch holds the interest, not the session.** A session is not a durable
+  holder — a 2026-09-07 census found 13 of 17 worktrees belonged to sessions that
+  were offline or ended, and a session-keyed lock on any of them would have held
+  its scope with nobody alive to release it. A branch's end condition, merged or
+  closed, is externally observable.
+- **A session is the branch's steward, and stewardship transfers.** Handing a
+  branch on beats opening a parallel one: one branch carries the file forward,
+  one PR touches it, one review sees the whole change.
+- **An interest never refuses a claim.** Blocking on an open PR would serialise
+  the fleet behind review. `acquire_aware` grants the claim and reports what else
+  is in flight, so the second agent finds out before editing rather than at merge.
+- **A handoff must be refusable.** One that could not be declined turns the
+  batching *default* into a batching *requirement* and overrules the rule that
+  independent or different-risk changes get separate PRs.
+- **The chain is bounded.** Unbounded handoff recreates, inside one branch, the
+  pile of unlanded work the worktree ceiling exists to prevent — and hides it,
+  because a growing branch looks like progress.
+- **No TTL decides this.** An interest ends when its branch does. `prune` takes
+  the live-branch set from a caller with a GitHub client, because this package
+  has none and must not grow one.
+
+### Three relationships, three answers
+
+| | Relationship | Answer |
+|---|---|---|
+| 1 | Disjoint scopes | Independent branches; claims keep them apart |
+| 2 | Sequential overlap | Handoff — stewardship of the branch transfers |
+| 3 | Interdependent | One branch, worked in turns |
+
+Mode 3 cannot mean two agents editing one branch at once: `git worktree add`
+refuses a branch already checked out elsewhere, and agents never share a
+worktree. It means **ping-pong stewardship** — the lock alternates — or stacked
+branches when the dependency is one-directional. Before entering mode 3, check
+whether the dependency is one-directional (sequence it with a `blocked_by` edge)
+or whether the two issues should have been one.
+
 ## Anti-goals
 
 This layer does **not** provide:
