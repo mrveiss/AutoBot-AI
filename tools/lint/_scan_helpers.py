@@ -107,8 +107,10 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
     matches the same repo-relative path it returns, so the two cannot disagree.
 
     Pass bare directory or glob fragments (``"node_modules"``, ``"*.min.js"``);
-    the ``:(exclude)`` prefix and a trailing ``/*`` for directories are added
-    here, so no caller re-decides the pathspec syntax.
+    the ``:(exclude)`` prefix and the rooting are added here, so no caller
+    re-decides the pathspec syntax. A bare entry needs no trailing ``/*``: git
+    excludes a directory's contents from the bare name, measured identical for
+    files, directories and nested directories (#16013).
 
     ``cwd=repo_root`` anchors the answer: run from a subdirectory,
     ``git ls-files`` still succeeds and returns paths re-prefixed relative
@@ -145,7 +147,13 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
     #    An earlier draft emitted both; the mutation that deleted the companion
     #    changed no result, which is what showed it was dead. `_looks_like_a_pattern`
     #    is retained for the callers that ask whether an entry IS a pattern.
-    positive_prefixes = sorted({posixpath.dirname(p) for p in patterns})
+    # `or [""]` because NO positive pattern means no prefix, not no exclusions.
+    # Without it an empty `patterns` produced an empty prefix set, the loop below
+    # emitted nothing, and `tracked_paths(root, exclude=["generated"])` returned
+    # `generated` — an exclusion that silently does nothing, which is worse than
+    # one that fails because the result comes back plausible and full-length.
+    # `EmptyEnumeration` cannot catch it: the list is non-empty, just wrong.
+    positive_prefixes = sorted({posixpath.dirname(p) for p in patterns}) or [""]
     excludes = []
     for entry in exclude:
         if "/" in entry:

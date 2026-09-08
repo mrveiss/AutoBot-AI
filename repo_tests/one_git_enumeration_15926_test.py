@@ -348,6 +348,11 @@ def _nested_repo(tmp_path: Path) -> Path:
         (["*"], "scripts", {"scripts/b.py", "scripts/b_test.py"}),
         # An already-rooted exclude must not be re-prefixed.
         (["*"], "scripts/*_test.py", {"scripts/b_test.py"}),
+        # NO positive pattern at all. An empty `patterns` gave an empty prefix
+        # set, so no exclusion pathspec was emitted and the exclude silently did
+        # nothing — a full-length, plausible result (#16014 review).
+        ([], "scripts", {"scripts/b.py", "scripts/b_test.py"}),
+        ([], "a.py", {"a.py"}),
     ],
     ids=[
         "one-prefixed-positive",
@@ -357,6 +362,8 @@ def _nested_repo(tmp_path: Path) -> Path:
         "bare-file-with-dots",
         "bare-directory",
         "already-rooted",
+        "no-positive-directory",
+        "no-positive-file",
     ],
 )
 def test_exclude_removes_exactly_the_named_entry(tmp_path: Path, positive: list, entry: str, removed: set) -> None:
