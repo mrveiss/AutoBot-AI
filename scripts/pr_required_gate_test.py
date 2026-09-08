@@ -155,9 +155,7 @@ def test_a_failing_check_outside_the_required_list_is_surfaced():
     result = verdict(["code-quality"], observed)
     assert result["verdict"] == "GREEN-BUT-OTHERS-FAILING"
     assert result["not_green"] == []
-    assert result["failing_unrequired"] == [
-        {"context": "python-suite shard 8/12", "state": "failure"}
-    ]
+    assert result["failing_unrequired"] == [{"context": "python-suite shard 8/12", "state": "failure"}]
 
 
 def test_a_running_unrequired_check_is_not_reported_as_failing():
@@ -211,9 +209,9 @@ def test_a_generator_of_required_contexts_is_not_silently_empty():
     from_generator = verdict((name for name in required), observed)
     assert from_generator["verdict"] == from_list["verdict"] == "BLOCKED"
     assert from_generator["not_green"] == from_list["not_green"]
-    assert from_generator["failing_unrequired"] == [], (
-        "a required check was reclassified as unrequired -- the iterator was exhausted"
-    )
+    assert (
+        from_generator["failing_unrequired"] == []
+    ), "a required check was reclassified as unrequired -- the iterator was exhausted"
 
 
 def test_a_green_check_run_cannot_hide_a_red_commit_status():
@@ -226,13 +224,9 @@ def test_a_green_check_run_cannot_hide_a_red_commit_status():
     `pending=0, fail=0`.
     """
     runs = [{"name": "code-quality", "started_at": "2026-09-08T01:00:00Z", "conclusion": "success"}]
-    statuses = [
-        {"context": "code-quality", "created_at": "2026-09-08T02:00:00Z", "state": "failure"}
-    ]
+    statuses = [{"context": "code-quality", "created_at": "2026-09-08T02:00:00Z", "state": "failure"}]
     observed = latest_per_name(runs, statuses)
-    assert observed["code-quality"] == "failure", (
-        "a passing check run masked a failing commit status of the same name"
-    )
+    assert observed["code-quality"] == "failure", "a passing check run masked a failing commit status of the same name"
     assert verdict(["code-quality"], observed)["verdict"] == "BLOCKED"
 
 
@@ -303,9 +297,7 @@ def test_no_running_context_is_dropped_from_the_text_report(capsys):
         "running": [],
         "not_green": [],
         "failing_unrequired": [],
-        "running_unrequired": [
-            {"context": f"shard {n}/12", "state": "pending"} for n in range(1, 13)
-        ],
+        "running_unrequired": [{"context": f"shard {n}/12", "state": "pending"} for n in range(1, 13)],
         "app_pinned": [],
     }
     _report(16014, result)
@@ -313,3 +305,128 @@ def test_no_running_context_is_dropped_from_the_text_report(capsys):
     for n in range(1, 13):
         assert f"shard {n}/12" in printed, f"shard {n} was dropped from the report"
     assert printed.count("running (not required)") == 12
+
+
+def test_a_skip_never_overrides_a_conclusive_result_whatever_the_order():
+    """Two workflows, one context name — newest-wins reported the shim (#16040).
+
+    A path-filtered shim can land `skipped` AFTER a real `failure` on the same
+    commit. Newest-wins then reported green while the merge button stayed red,
+    which is GitHub disagreeing with the tool built to predict it.
+
+    A skip means "this publisher declined to run here". It cannot invalidate a
+    failure that already happened on the same commit, and the ordering carries no
+    information about which publisher is authoritative.
+    """
+    after = [
+        {"name": "c", "started_at": "10:00", "conclusion": "failure"},
+        {"name": "c", "started_at": "10:05", "conclusion": "skipped"},
+    ]
+    before = [
+        {"name": "c", "started_at": "10:00", "conclusion": "skipped"},
+        {"name": "c", "started_at": "10:05", "conclusion": "failure"},
+    ]
+    assert latest_per_name(after)["c"] == "failure"
+    assert latest_per_name(before)["c"] == "failure"
+
+
+def test_supersession_is_still_newest_wins():
+    """The contrast, and the reason this could not be fixed with `worst wins`.
+
+    A re-push leaves `cancelled` behind a later `success`, and a re-run leaves
+    `failure` behind a later `success`. Both must report the newer result — so
+    the rule cannot be "take the worst", only "a skip is not an answer when a
+    real one exists".
+    """
+    superseded = [
+        {"name": "c", "started_at": "10:00", "conclusion": "cancelled"},
+        {"name": "c", "started_at": "10:05", "conclusion": "success"},
+    ]
+    rerun = [
+        {"name": "c", "started_at": "10:00", "conclusion": "failure"},
+        {"name": "c", "started_at": "10:05", "conclusion": "success"},
+    ]
+    assert latest_per_name(superseded)["c"] == "success"
+    assert latest_per_name(rerun)["c"] == "success"
+
+
+def test_a_skip_is_still_the_answer_when_nothing_else_reported():
+    """A path-filtered context that only ever skips is legitimately green.
+
+    Without this, "a skip is never authoritative" becomes "a skip is always
+    ignored", and every path-filtered required context reads as never-reported.
+    """
+    assert latest_per_name([{"name": "c", "started_at": "10:00", "conclusion": "skipped"}])["c"] == "skipped"
+
+
+def test_a_merged_pull_request_is_not_reported_as_mergeable(monkeypatch):
+    """A merged PR's required contexts are all green — its checks finished first.
+
+    So the verdict was true and useless, and read as clearance it says "ready to
+    merge" about something already merged. I did exactly that and told another
+    session to merge alongside three PRs that had landed hours earlier (#16040).
+
+    Fourth state this tool could not see, and not a fourth bug: pending in no
+    bucket, a conflicted PR with no runs, a superseded `cancelled`, a merged PR.
+    One property — a check that enumerates conditions is blind to the ones it
+    does not enumerate, and every blind spot reads as success.
+    """
+    import pr_required_gate as gate
+
+    monkeypatch.setattr(
+        gate,
+        "_fetch",
+        lambda pr, repo, base: {
+            "required": ["smoke-test"],
+            "app_pinned": [],
+            "observed": {"smoke-test": "success"},
+            "head": "0" * 40,
+            "pr_state": "MERGED",
+        },
+    )
+    emitted: list[str] = []
+    monkeypatch.setattr(gate, "_emit", emitted.append)
+
+    assert gate.main(["123"]) == 1, "a merged PR must not exit 0"
+    assert any("NOT-OPEN (MERGED)" in line for line in emitted), emitted
+
+
+def test_an_open_pull_request_with_green_contexts_is_still_green(monkeypatch):
+    """The contrast. Without it, "check the state" is satisfied by failing everything."""
+    import pr_required_gate as gate
+
+    monkeypatch.setattr(
+        gate,
+        "_fetch",
+        lambda pr, repo, base: {
+            "required": ["smoke-test"],
+            "app_pinned": [],
+            "observed": {"smoke-test": "success"},
+            "head": "0" * 40,
+            "pr_state": "OPEN",
+        },
+    )
+    emitted: list[str] = []
+    monkeypatch.setattr(gate, "_emit", emitted.append)
+
+    assert gate.main(["123"]) == 0
+    assert any("CONTEXTS-GREEN" in line for line in emitted), emitted
+
+
+def test_a_conclusive_result_wins_even_when_the_skip_is_seen_first():
+    """The API returns runs UNORDERED, which is the only path to the promote branch.
+
+    A newer `skipped` can arrive first in the list while the older `failure`
+    arrives second. Without promotion the timestamp comparison keeps the skip —
+    so the rule is not "prefer the newest" but "a real result outranks a
+    declined one, whichever order they are seen in".
+
+    Found because a mutation that ignored skips entirely passed every other test
+    here: the cases I had written all put the conclusive run later in the list,
+    so the branch that handles the opposite ordering was never exercised.
+    """
+    seen_skip_first = [
+        {"name": "c", "started_at": "10:05", "conclusion": "skipped"},
+        {"name": "c", "started_at": "10:00", "conclusion": "failure"},
+    ]
+    assert latest_per_name(seen_skip_first)["c"] == "failure"

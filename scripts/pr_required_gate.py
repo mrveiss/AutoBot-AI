@@ -67,6 +67,12 @@ def _rank(state: str) -> str:
     return "running" if state in _RUNNING else "failing"
 
 
+#: States that say "this publisher declined to run", not "this publisher passed".
+#: They are acceptable as a FINAL answer for a context nothing else reported, and
+#: never as an override of one that did.
+_INCONCLUSIVE = frozenset({"skipped", "neutral"})
+
+
 def _latest_within(observations: Iterable[dict]) -> dict[str, str]:
     """Conclusion of the most recently *started* observation for each name.
 
@@ -83,7 +89,28 @@ def _latest_within(observations: Iterable[dict]) -> dict[str, str]:
         started = run.get("started_at") or run.get("created_at") or ""
         state = run.get("conclusion") or run.get("state") or "pending"
         previous = newest.get(name)
-        if previous is None or started >= previous[0]:
+        if previous is None:
+            newest[name] = (started, state)
+            continue
+        # A SKIP NEVER OVERRIDES A CONCLUSIVE RESULT (#16040). Newest-wins is
+        # right for supersession -- one workflow re-run, `cancelled` then
+        # `success` -- and wrong for two workflows publishing one context name,
+        # where a path-filtered shim can land `skipped` AFTER a real `failure` on
+        # the same commit. Newest-wins then reported green while the merge button
+        # stayed red, which is GitHub disagreeing with the tool built to predict
+        # it.
+        #
+        # A skip means "this publisher declined to run here". It cannot
+        # invalidate a failure that already happened on the same commit, and the
+        # ordering carries no information about which publisher is authoritative.
+        # Among CONCLUSIVE observations newest still wins, so `failure` then
+        # `success` from a genuine re-run is unaffected.
+        if state in _INCONCLUSIVE and previous[1] not in _INCONCLUSIVE:
+            continue
+        if previous[1] in _INCONCLUSIVE and state not in _INCONCLUSIVE:
+            newest[name] = (started, state)
+            continue
+        if started >= previous[0]:
             newest[name] = (started, state)
     return {name: state for name, (_started, state) in newest.items()}
 
@@ -155,9 +182,7 @@ def _required_result(never: list, running: list, not_green: list) -> str:
     return "PENDING"
 
 
-def _unrequired(
-    observed: dict[str, str], required_set: set[str]
-) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+def _unrequired(observed: dict[str, str], required_set: set[str]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     """Checks outside branch protection, split into failing and still-running.
 
     A NON-REQUIRED check that is still running is not absent. Reporting only the
@@ -266,8 +291,22 @@ def _required_contexts(protection: dict) -> tuple[list[str], list[str]]:
 def _fetch(pr: int, repo: str, base: str) -> dict:
     protection = json.loads(_gh("api", f"repos/{repo}/branches/{base}/protection"))
     required, app_pinned = _required_contexts(protection)
-    head_json = _gh("pr", "view", str(pr), "--repo", repo, "--json", "headRefOid")
-    head = json.loads(head_json)["headRefOid"]
+    # STATE FIRST. A merged or closed PR reports every required context green,
+    # because its checks completed before it landed -- so the verdict is true and
+    # useless. Read as clearance it says "ready to merge" about something already
+    # merged; I did exactly that and told another session to merge alongside
+    # three PRs that had landed hours earlier (#16040).
+    #
+    # This is the fourth state this tool could not see, and they are not four
+    # bugs: pending contributing to no bucket, a conflicted PR producing no runs,
+    # a superseded `cancelled`, and now a merged PR. One design property --
+    # **a check that enumerates conditions is blind to the conditions it does not
+    # enumerate, and every blind spot reads as success.** The corollary is what
+    # this comment is for: assume there is a fifth.
+    head_json = _gh("pr", "view", str(pr), "--repo", repo, "--json", "headRefOid,state")
+    head_data = json.loads(head_json)
+    head = head_data["headRefOid"]
+    pr_state = head_data.get("state", "OPEN")
     # BOTH kinds, kept as SEPARATE sources. Some required contexts are legacy
     # commit statuses, and counting those as unreported is the mirror of the bug
     # this tool exists for -- but merging them into one list lets a green check
@@ -281,6 +320,7 @@ def _fetch(pr: int, repo: str, base: str) -> dict:
         "app_pinned": app_pinned,
         "observed": latest_per_name(runs, statuses),
         "head": head,
+        "pr_state": pr_state,
     }
 
 
@@ -300,6 +340,9 @@ def _emit(line: str) -> None:
 def _report(pr: int, result: dict) -> None:
     """Render the verdict as text: every non-green context, none of them elided."""
     _emit(f"#{pr} {result['head'][:10]}  {result['verdict']}")
+    if result.get("pr_state", "OPEN") != "OPEN":
+        _emit("  its required contexts read green because they completed before it landed")
+        return
     for context in result["never_reported"]:
         _emit(f"  never-reported  {context}")
     for entry in result["running"]:
@@ -336,6 +379,12 @@ def main(argv: list[str] | None = None) -> int:
     fetched = _fetch(args.pr, args.repo, args.base)
     result = verdict(fetched["required"], fetched["observed"])
     result["head"] = fetched["head"]
+    result["pr_state"] = fetched.get("pr_state", "OPEN")
+    # A closed or merged PR is not a mergeable one, whatever its contexts say.
+    # Overriding AFTER `verdict()` rather than short-circuiting before the fetch
+    # keeps the context detail in `--json` for anyone auditing why it looked green.
+    if result["pr_state"] != "OPEN":
+        result["verdict"] = f"NOT-OPEN ({result['pr_state']})"
     # Carried into the output rather than dropped: branch protection can require a
     # context only when a PARTICULAR app publishes it, and matching on name alone
     # cannot check that. Saying so is the difference between a verdict with a
