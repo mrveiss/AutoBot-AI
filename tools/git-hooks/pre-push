@@ -252,20 +252,53 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     all_py_tests=$(printf "%s\n%s" "$py_tests" "$sibling_tests" \
       | sort -u | grep -v '^$' || true)
 
+    # #16069: autobot-slm-backend must be a SEPARATE pytest invocation.
+    # pytest.ini says so in as many words: the two backends define top-level
+    # packages with identical names (api, services, user_management,
+    # middleware, migrations), so whichever collects first binds those dotted
+    # names in sys.modules for the rest of the session. CI already obeys this
+    # -- two invocations, one for `autobot-backend autobot_shared
+    # autobot-tts-worker repo_tests` and one for `autobot-slm-backend` alone.
+    # This hook did not, so a changeset touching both trees was tested in a
+    # shape CI never runs and pytest.ini forbids.
+    #
+    # What that cost: slm-backend's conftest installs its stubs at import, so
+    # in a combined session `sqlalchemy`, `models` and `models.database` stay
+    # MagicMocks while repo_tests collects afterwards. The leak guard caught it
+    # and blocked the push -- correctly, and for a condition the changeset had
+    # not introduced. The conftest is unchanged from base; the invocation was
+    # the defect. Splitting here is not a workaround for that guard: it stops
+    # producing the state the guard exists to report.
+    slm_py_tests=$(echo "$all_py_tests" | grep -E '^autobot-slm-backend/' || true)
+    other_py_tests=$(echo "$all_py_tests" | grep -vE '^autobot-slm-backend/' || true)
+
     if [ -n "$all_py_tests" ] && command -v pytest >/dev/null 2>&1; then
       log "running pytest on:"
       echo "$all_py_tests" | sed 's/^/    /' >&2
-      pytest_output=$(
-        timeout "$TEST_TIMEOUT" python3 -m pytest -xvs $all_py_tests 2>&1
-      ) || pytest_exit=$?
-      pytest_exit=${pytest_exit:-0}
+      [ -n "$slm_py_tests" ] && [ -n "$other_py_tests" ] && \
+        log "  (two invocations: autobot-slm-backend separately, per pytest.ini #13084)"
 
-      if [ "$pytest_exit" = "124" ]; then
-        did_not_run "pytest" "${TEST_TIMEOUT}"
-      elif [ "$pytest_exit" != "0" ]; then
-        fail "pytest failures (#5142):"
-        echo "$pytest_output" | tail -25 >&2
+      pytest_failed=0
+      pytest_timed_out=0
+      for group in "$other_py_tests" "$slm_py_tests"; do
+        [ -z "$group" ] && continue
+        group_exit=0
+        group_output=$(
+          timeout "$TEST_TIMEOUT" python3 -m pytest -xvs $group 2>&1
+        ) || group_exit=$?
+        if [ "$group_exit" = "124" ]; then
+          pytest_timed_out=1
+        elif [ "$group_exit" != "0" ]; then
+          pytest_failed=1
+          fail "pytest failures (#5142):"
+          echo "$group_output" | tail -25 >&2
+        fi
+      done
+
+      if [ "$pytest_failed" != "0" ]; then
         EXIT_CODE=1
+      elif [ "$pytest_timed_out" != "0" ]; then
+        did_not_run "pytest" "${TEST_TIMEOUT}"
       else
         ok "pytest: all relevant tests pass"
       fi
