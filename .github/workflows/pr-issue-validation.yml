@@ -133,38 +133,17 @@ jobs:
           # never an author naming something.
           keyword_re="(^|[^[:alnum:]_-])(resolves|closes|fixes)[[:space:]]+(#[1-9][0-9]*|MVA-[1-9][0-9]*)([^0-9]|$)"
 
-          # #16051: the body wins over the branch for EVERY PR, not only forks.
-          #
-          # #14241 already decided this and scoped it to forks, on the reasoning
-          # that an outside contributor cannot be asked to rename their branch.
-          # An internal author cannot either: **GitHub does not allow changing a
-          # PR's head branch after it is opened.** So the fork restriction drew
-          # the line at who *could* rename, and the answer is nobody.
-          #
-          # It cost a real correction. Two sessions reserved issue number 16040
-          # six minutes apart; the loser's branch was already `issue-16040-*`
-          # and the number went to a CRITICAL auth issue. They rewrote their
-          # commits to the right number -- and this gate then failed the PR for
-          # not referencing the wrong one, instructing them in its own error
-          # message to add it back. A gate whose remediation re-creates the
-          # defect is worse than no gate.
-          #
-          # The escape still requires an EXPLICIT closing keyword, so this
-          # widens who may override the inference, not what counts as one. A PR
-          # that links nothing at all still fails above.
-          if printf '%s' "$PROSE" | grep -iqE "$keyword_re"; then
-            echo "::notice::Branch implies ${EXPECTED_ISSUE}, but the body explicitly closes a different issue."
-            echo "::notice::Accepting the body over the branch name (#14241, widened by #16051)."
+          if [ "${PR_IS_FORK:-false}" = "true" ] \
+             && printf '%s' "$PROSE" | grep -iqE "$keyword_re"; then
+            echo "::notice::Fork PR: branch implies ${EXPECTED_ISSUE}, but the body explicitly closes a different issue."
+            echo "::notice::Accepting the body over the branch name (#14241)."
             echo "::notice::This gate checks that a claim was MADE, not that it is the right one — that is review's job."
             echo "status=success" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # The branch-derived number is a GUESS. Say so, so nobody is
-          # instructed to add a reference that is wrong (#16051).
-          echo "::error::PR body links an issue, but not ${EXPECTED_ISSUE} — which is only GUESSED from the branch name ${PR_BRANCH}."
-          echo "::error::If ${EXPECTED_ISSUE} is right, add 'Closes #${EXPECTED_ISSUE}' or 'Refs #${EXPECTED_ISSUE}'."
-          echo "::error::If the branch name is stale, use an explicit 'Closes #<the real issue>' — that overrides this guess."
+          echo "::error::PR links some issue(s) but not ${EXPECTED_ISSUE} (implied by branch ${PR_BRANCH})."
+          echo "::error::Add 'Closes #${EXPECTED_ISSUE}' or 'Refs #${EXPECTED_ISSUE}' to the PR body."
           echo "status=failure" >> "$GITHUB_OUTPUT"
           exit 1
 
