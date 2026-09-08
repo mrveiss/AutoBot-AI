@@ -183,6 +183,7 @@ _ss_spec.loader.exec_module(_ss_mod)
 sys.modules["models.schemas_secrets"] = _ss_mod
 setattr(sys.modules["models"], "schemas_secrets", _ss_mod)
 
+
 # ── services ──────────────────────────────────────────────────────────────────
 # The services.* modules api/code_sync.py and api/setup_wizard.py import are
 # AST-derived from their sources (#11575, #11794) — a hand-maintained list rots

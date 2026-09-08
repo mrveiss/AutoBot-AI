@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from api.service_ports import SERVICE_PORT_MAP
 from api.websocket import ws_manager
 from autobot_shared.ssot_config import config
 from models.database import Node, Service, ServiceConflict, ServiceStatus
@@ -62,20 +63,6 @@ async def _get_node_or_404(db: AsyncSession, node_id: str) -> Node:
             detail="Node not found",
         )
     return node
-
-
-# Port mapping for services that bind to specific ports
-SERVICE_PORT_MAP = {
-    "autobot-frontend": 5173,
-    "autobot-backend": 8001,
-    "slm-backend": 8000,
-    "slm-admin-ui": 5174,
-    "redis-server": 6379,
-    "redis": 6379,
-    "grafana-server": 3000,
-    "prometheus": 9090,
-    "nginx": 80,
-}
 
 
 async def _kill_orphan_on_port(node: Node, port: int) -> Tuple[bool, str]:
