@@ -190,19 +190,37 @@ class APIKey(Base):
         self.revoked_by = revoked_by_user_id
 
     def has_scope(self, scope: str) -> bool:
-        """Check if this key has a specific scope."""
+        """Check if this key has a specific scope.
+
+        Fails **closed** on a malformed ``scopes`` value (#16040). Every check
+        below is a membership test, and ``in`` against a *string* is a substring
+        test — so a scalar ``scopes`` of ``"read:*"`` answers ``True`` to
+        ``"*" in self.scopes`` and this method then grants **every** scope,
+        including admin. That is silent and in the direction of more privilege.
+
+        ``scopes`` is ``Mapped[list]`` over ``JSONB``. The annotation is not a
+        database constraint and JSONB stores a scalar happily, so the type is
+        guaranteed by whoever writes the row rather than by the column. The HTTP
+        path is defended — ``APIKeyCreate.scopes: List[str]`` validates at the
+        boundary — but a migration, a backfill or a second writer is not, and
+        this method is now load-bearing for an authorisation decision
+        (``get_api_key_user``). One line here is cheaper than trusting every
+        future writer.
+        """
+        scopes = self.scopes if isinstance(self.scopes, list) else []
+
         # Check exact match
-        if scope in self.scopes:
+        if scope in scopes:
             return True
 
         # Check wildcard (e.g., "chat:*" matches "chat:use")
         resource = scope.split(":")[0] if ":" in scope else scope
         wildcard = f"{resource}:*"
-        if wildcard in self.scopes:
+        if wildcard in scopes:
             return True
 
         # Check global admin scope
-        if "*" in self.scopes or "admin:*" in self.scopes:
+        if "*" in scopes or "admin:*" in scopes:
             return True
 
         return False
