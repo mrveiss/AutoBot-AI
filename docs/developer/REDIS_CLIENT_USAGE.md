@@ -380,7 +380,7 @@ result = redis_client.get(key)  # What if connection fails?
 **Solution**:
 ```bash
 # Check Redis VM is running
-ssh autobot@<database-ip> "systemctl status redis"
+ssh autobot@<database-ip> "systemctl status redis-stack-server"
 
 # Check Redis is listening
 redis-cli -h <database-ip> ping

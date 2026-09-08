@@ -49,9 +49,26 @@ from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
 
-#: Documentation, tests and generated artefacts. A `.md` file naming the apt
-#: package is usually contrasting it with Redis Stack, which is the point.
-_SKIP = re.compile(r"(_test\.py$|/tests?/|/test_|baseline|\.md$|\.lock$|node_modules/|openapi\.json$)")
+#: Tests, generated artefacts, and the three documentation trees that record
+#: what was true at the time rather than what an operator should do now.
+#:
+#: **`.md` is NOT excluded wholesale, and that was the first version's mistake.**
+#: The defect had two halves -- code operating an absent unit, and documentation
+#: instructing a human to -- and this guard shipped covering only the first while
+#: the same change fixed 97 documentation lines. The unguarded half is arguably
+#: worse: wrong code fails visibly in CI, whereas a runbook saying
+#: `systemctl restart redis-server` produces `Unit not found` at 3am and reads
+#: as a broken machine rather than a stale instruction.
+#:
+#: `archives/`, `audit/` and `planning/` stay out because they are records. A
+#: superseded plan should keep saying what was planned -- `planning/tasks/`
+#: still spells the sudoers rules `redis-server` while the playbook that
+#: implemented them uses `redis_service_name: "redis-stack-server"`, and
+#: rewriting the plan to match the build would erase that the two diverged.
+_SKIP = re.compile(
+    r"(_test\.py$|/tests?/|/test_|baseline|\.lock$|node_modules/|openapi\.json$"
+    r"|^docs/archives/|^docs/audit/|^docs/planning/)"
+)
 
 _BACKTICKED = re.compile(r"`[^`\n]*`")
 _COMMENT = re.compile(r"^\s*(#|//|--|\*|/\*)")

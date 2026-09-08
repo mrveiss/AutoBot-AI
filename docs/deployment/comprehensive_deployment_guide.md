@@ -272,8 +272,13 @@ sqlite3 data/autobot_dev.db ".schema"
 # Update system
 sudo apt update && sudo apt upgrade -y
 
-# Install system dependencies
-sudo apt install -y python3 python3-pip python3-venv nodejs npm nginx redis-server postgresql
+# Install system dependencies. Redis is NOT in this list on purpose (#16071):
+# `redis-server` from apt is plain Redis, with no RediSearch, RedisJSON or
+# RedisTimeSeries. It installs, starts, and fails on the first module command,
+# which leaves a host that looks provisioned and is not. Redis Stack comes from
+# packages.redis.io and is provisioned by `roles/redis`, which owns the
+# repository, the suite pin (#7178) and the package.
+sudo apt install -y python3 python3-pip python3-venv nodejs npm nginx postgresql
 
 # Create autobot user
 sudo useradd -m -s /bin/bash autobot
@@ -360,7 +365,7 @@ python scripts/migrate_database.py --production
 ```ini
 [Unit]
 Description=AutoBot Backend Service
-After=network.target postgresql.service redis.service
+After=network.target postgresql.service redis-stack-server.service
 
 [Service]
 Type=exec
