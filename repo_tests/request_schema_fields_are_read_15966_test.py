@@ -59,8 +59,10 @@ _HANDLER_READS_WHOLE_MODEL: dict[str, str] = {}
 # fixed, forcing its removal here in the same PR. An exemption list that only
 # ever grows is where this defect would hide, which is the thing being guarded.
 _KNOWN_UNREAD: dict[str, tuple[str, str]] = {
+    # #16017 removed: StatusUpdate.comment now reaches `add_comment` in the same
+    # commit as the transition. The ratchet worked as designed -- wiring the field
+    # failed this test, which is what forced the entry out in the same PR.
     "CostEvent": ("work_item_id", "#16016"),
-    "StatusUpdate": ("comment", "#16017"),
 }
 
 
