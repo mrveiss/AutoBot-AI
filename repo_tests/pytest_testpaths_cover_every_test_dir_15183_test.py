@@ -23,26 +23,60 @@ that looks like when it is not.
 from __future__ import annotations
 
 import configparser
+import subprocess
 from pathlib import Path
 from typing import List, Set
 
 import pytest
 from repo_tests._paths import repo_root
 
+from autobot_shared.paths import scrubbed_git_env
+
+# Base migrated this to the shared anchor (#15925); this branch had edited the
+# hand-rolled binding beside it. Take base's `repo_root()` and keep the scrub
+# import, which this branch still uses.
 REPO_ROOT = repo_root()
 
 _SKIP_PARTS = {".git", "node_modules", "venv", ".venv", "__pycache__", ".worktrees"}
+
+
+def _tracked(root: Path, pattern: str) -> List[str]:
+    """Tracked paths under *root* matching *pattern*, from git (#15955).
+
+    ``git ls-files`` reads an index, so it cannot enter another checkout at all —
+    stronger than pruning, because there is no descent to prune.
+    """
+    # NOT through `tracked_paths` (#15926), deliberately. That helper RAISES on an
+    # empty result -- correct for "enumerate the population", where empty means a
+    # broken sweep (#15826). This asks a different question: "does this pattern
+    # match anything?", whose answer is legitimately no. `test_*.py` matches
+    # nothing at the repository root, and that is the finding, not a failure.
+    #
+    # An `allow_empty=` flag on the helper would be the obvious move and the
+    # wrong one: an optional parameter that switches off a guard is off by
+    # default at every site that forgets it, which is the shape of #15930 and
+    # #15931. Two questions, two call shapes.
+    completed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "ls-files", "-z", "--", pattern],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=scrubbed_git_env(),
+    )
+    return [n for n in completed.stdout.split("\0") if n]
 
 
 def _pytest_inis() -> List[Path]:
     # Filtered on the path RELATIVE to the repo root, not the absolute one: a
     # checkout inside `.worktrees/` would otherwise match its own skip entry and
     # this guard would find nothing while reporting success.
-    return [
-        p
-        for p in REPO_ROOT.rglob("pytest.ini")
-        if not _SKIP_PARTS & set(p.relative_to(REPO_ROOT).parts)
-    ]
+    # #15955: `_SKIP_PARTS` named `.worktrees` and not `.claude/worktrees`, so
+    # this reached 9 `pytest.ini` files of which 6 belonged to other checkouts of
+    # this repository. Detected structurally as well: a nested checkout's `.git`
+    # is a FILE, where the primary checkout's is a directory -- no list to keep
+    # current.
+    return [REPO_ROOT / name for name in _tracked(REPO_ROOT, "pytest.ini")]
 
 
 def _declared_testpaths(ini: Path) -> List[str]:
@@ -65,12 +99,16 @@ _TEST_FILE_GLOBS = ("test_*.py", "*_test.py")
 
 def _dirs_holding_tests(root: Path) -> Set[Path]:
     """Directories under *root* holding at least one file pytest would collect."""
+    # #15955: `root.rglob(...)` with a post-hoc `_SKIP_PARTS` filter DESCENDED
+    # into `.claude/worktrees/`, adding another checkout's test directories.
+    # Filtering after the walk is not pruning -- the walk has already been there,
+    # which also costs the traversal and can die on an unreadable directory it
+    # meant to skip. This is `_pytest_inis`' sibling in the same file, and my
+    # first fix corrected only that one.
     found: Set[Path] = set()
     for pattern in _TEST_FILE_GLOBS:
-        for path in root.rglob(pattern):
-            if _SKIP_PARTS & set(path.relative_to(root).parts):
-                continue
-            found.add(path.parent)
+        for name in _tracked(root, pattern):
+            found.add((root / name).parent)
     return found
 
 
@@ -159,9 +197,7 @@ def test_every_declared_testpath_exists(ini: Path) -> None:
 def test_every_directory_holding_tests_is_selected(ini: Path) -> None:
     root = ini.parent
     declared = _declared_testpaths(ini)
-    uncovered = sorted(
-        str(d.relative_to(root)) for d in _dirs_holding_tests(root) if not _covered(root, declared, d)
-    )
+    uncovered = sorted(str(d.relative_to(root)) for d in _dirs_holding_tests(root) if not _covered(root, declared, d))
     if uncovered and str(ini.relative_to(REPO_ROOT)) in KNOWN_UNCOVERED:
         pytest.skip(KNOWN_UNCOVERED[str(ini.relative_to(REPO_ROOT))])
 
