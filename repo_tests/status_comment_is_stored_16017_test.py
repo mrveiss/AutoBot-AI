@@ -16,10 +16,18 @@ was the wrong answer. This one had a store already built and unreached —
 `LLCWorkItemComment` and `add_comment`, which `post_comment` on this same router
 writes to.
 
-These assertions read the SOURCE rather than exercising the route, because the
-route needs a database session, an agent context and a work item. What is being
-pinned is that the field reaches the service at all, which is exactly what was
-missing and is visible statically.
+These assertions read the SOURCE rather than exercising the route: they pin the
+**call site**, which is what #16017 was missing. The **effect** is pinned
+behaviourally in `autobot-backend/llc/tests/test_status_comment_is_stored_16017.py`,
+because gutting `add_comment`'s implementation leaves every assertion here
+passing. Removing the call site fails both. Two halves, two different mutations.
+
+**A caution for whoever adds an assertion here.** `ast.unparse` strips `#`
+comments but PRESERVES docstrings, so a source-text probe can be satisfied by
+prose describing the code rather than the code — #15724 was exactly that. It
+holds today only because `update_work_item_status`'s docstring happens to
+contain none of the three probe strings, which is luck rather than
+construction. A new probe should be checked against the docstring first.
 """
 
 from __future__ import annotations
@@ -61,9 +69,15 @@ def test_the_comment_is_stored_before_the_commit():
     A comment committed separately from the transition can outlive a transition
     that failed — a recorded reason for something that did not happen, which is
     worse than no reason. Both must ride one commit.
+
+    `index` on BOTH sides, deliberately. The first draft compared against
+    `rindex("session.commit")`, which asserts "before the LAST commit" while
+    the name promises "before the commit". With one of each it is exact; insert
+    a second `session.commit` *before* the write and it still passes — which is
+    precisely the ordering bug this exists to catch (review of #16017).
     """
     source = ast.unparse(_function("update_work_item_status"))
-    assert source.index("add_comment") < source.rindex("session.commit"), (
+    assert source.index("add_comment") < source.index("session.commit"), (
         "the comment is stored after the commit, so a failed transition can still "
         "leave its explanation behind (#16017)"
     )
