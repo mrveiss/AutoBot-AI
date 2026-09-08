@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from api.service_ports import SERVICE_PORT_MAP
 from api.websocket import ws_manager
 from autobot_shared.ssot_config import config
 from models.database import Node, Service, ServiceConflict, ServiceStatus
@@ -64,31 +65,6 @@ async def _get_node_or_404(db: AsyncSession, node_id: str) -> Node:
     return node
 
 
-# Port mapping for services that bind to specific ports
-SERVICE_PORT_MAP = {
-    "autobot-frontend": 5173,
-    "autobot-backend": 8001,
-    "slm-backend": 8000,
-    "slm-admin-ui": 5174,
-    # #16019: this fleet installs **redis-stack-server** -- roles/redis/tasks/main.yml
-    # installs that package and pins the repo to jammy on Noble because Noble
-    # ships no redis-stack-server build. Neither `redis` nor `redis-server` is
-    # a unit on a provisioned node: measured, both report
-    # `LoadState=not-found`, and `ActiveState` still answers `inactive` for a
-    # unit that does not exist -- indistinguishable from one that is merely
-    # stopped. So the per-node view asked about a service the node does not
-    # have, was told "inactive", and rendered it as unknown.
-    #
-    # The two legacy names stay: roles/redis notes that a host with no
-    # redis-stack-server build falls back to the stock `redis-server` package,
-    # and a node provisioned that way must still be identified.
-    "redis-stack-server": 6379,
-    "redis-server": 6379,
-    "redis": 6379,
-    "grafana-server": 3000,
-    "prometheus": 9090,
-    "nginx": 80,
-}
 
 
 async def _kill_orphan_on_port(node: Node, port: int) -> Tuple[bool, str]:
