@@ -21,7 +21,7 @@ asyncssh>=2.24.0
 # comment, so it spent two months telling readers to revert a cap that had
 # become correct. Recorded here so the next reader does not have to guess.
 #
-# FLOOR >=7.36.0. Walked up by Dependabot (#14951); it carries forward the
+# FLOOR >=7.36.1. Walked up by Dependabot (#14951, then #15972); it carries forward the
 # JSON recursion-depth bypass fix that first set a floor at 5.29.6 (#3933).
 # TensorFlow is not a project dependency — the historical <6.0.0 cap it
 # justified caused pip conflicts and was removed in #3971.
@@ -29,7 +29,7 @@ asyncssh>=2.24.0
 # autobot-backend/requirements.txt `-r`-includes this file and ALSO declares
 # protobuf. pip resolves the intersection, so the two lines must stay
 # identical; tools/lint/check_requirements_pin_parity.py enforces that.
-protobuf>=7.36.0,<8.0.0
+protobuf>=7.36.1,<8.0.0
 
 # vLLM (GPU inference) is an OPTIONAL extra — NOT a default dependency (#10251).
 # It pulls the full CUDA toolkit (cuda-toolkit, nvidia-*, flashinfer, CUDA torch),
