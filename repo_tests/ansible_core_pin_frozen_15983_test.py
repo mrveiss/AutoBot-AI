@@ -64,6 +64,20 @@ def test_the_root_pip_block_still_groups_everything() -> None:
     )
 
 
+def _pinned_version() -> str:
+    """The version `constraints/ansible-core.txt` pins, read from the pin itself.
+
+    Read rather than restated. A literal here would be a third copy of the same
+    fact, and the copy a test asserts against is the one that never gets updated
+    -- the assertion would then pass by agreeing with itself.
+    """
+    for line in _PIN.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("ansible-core=="):
+            return stripped.split("==", 1)[1].split()[0]
+    raise AssertionError(f"{_PIN} pins no ansible-core version -- nothing to compare against")
+
+
 def test_ansible_core_is_frozen_not_merely_capped() -> None:
     entries = [i for i in _root_pip_block().get("ignore", []) if i.get("dependency-name") == "ansible-core"]
     assert entries, (
@@ -77,10 +91,13 @@ def test_ansible_core_is_frozen_not_merely_capped() -> None:
         "all-dependencies bump -- #14431 recorded it for openai, #14727 for protobuf. "
         "An unbounded `versions` range is what holds (#15983)."
     )
-    assert any(v.strip().startswith(">") for v in versions), (
-        f"ansible-core's ignore range {versions!r} is not open-ended, so a version above "
-        "it can still be proposed. The pin tracks a deployment fact; no automated bump "
-        "of it is correct (#15824, #15822)."
+    pinned = _pinned_version()
+    assert versions == [f">{pinned}"], (
+        f"ansible-core's ignore range is {versions!r} but the pin is {pinned!r}. These two "
+        "numbers are one fact written twice, and the release procedure in the pin's header "
+        "moves them together -- fleet first, then the pin, then this lower bound. A range "
+        "that merely STARTS with '>' passes while reading '>2.17.15' against a 2.17.14 pin, "
+        "which re-opens exactly the gap that let #15975 and #15980 be proposed (#15983)."
     )
 
 
