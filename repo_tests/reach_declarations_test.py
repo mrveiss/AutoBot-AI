@@ -226,6 +226,19 @@ def test_every_declared_floor_is_pinned_to_its_population(reach: Reach) -> None:
     A population that ordinary work grows declares `growth=N` and says so where
     a reviewer sees it, rather than being pinned low and quietly meaning
     nothing.
+
+    **This measures `discover`, and one floor serves two populations.**
+    `examined()` bounds what discovery returned; `completed()` bounds what the
+    guard finished, which is lower whenever files are skipped as unreadable or
+    unparseable -- 262 of 5,599 for `audio-extension-allowlist`. A floor that
+    satisfies this test can still fail the guard's own `completed()` check, and
+    the first version of this ratchet did exactly that: the pre-push hook
+    rejected it. The band has to absorb that gap, which is why both
+    declarations carry 500 rather than the 250 ordinary churn alone would need.
+
+    So this check is necessary and not sufficient. It catches a floor far below
+    its population; `completed()` remains the binding constraint. Giving the
+    two populations separate floors is the fuller fix and is not this change.
     """
     count = len(reach.discover(_REPO_ROOT))
     slack = count - reach.floor

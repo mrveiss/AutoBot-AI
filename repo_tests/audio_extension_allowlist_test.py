@@ -94,11 +94,20 @@ def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
 #: often the ratchet asks for a deliberate line. 250 absorbs ordinary churn in
 #: both directions -- files are added and deleted every week -- while staying
 #: far below the size of any subtree whose loss this exists to catch.
+#:
+#: The band also absorbs the gap between the two populations this one floor
+#: serves. `examined()` bounds what `discover` returned -- 5,599 here --
+#: while `completed()` bounds what the guard actually finished: 5,337, because
+#: 262 files are skipped as unreadable or unparseable. A floor pinned to the
+#: discovered count passes the first check and fails the second, which is how
+#: the pre-push hook rejected the first version of this ratchet. **The binding
+#: population is the lower one**, and the meta-test below can only see the
+#: higher one.
 REACH = declare(
     "audio-extension-allowlist",
     discover=_tracked_python_files,
-    floor=5500,
-    growth=250,
+    floor=5100,
+    growth=500,
     what="tracked python files",
 )
 
