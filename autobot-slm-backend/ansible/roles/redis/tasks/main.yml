@@ -58,6 +58,15 @@
   when: _redis_installed.rc != 0
   tags: ['redis', 'packages']
 
+# #16020: Redis reads /etc/autobot/certs/server-cert.pem (see
+# templates/redis-stack.conf.j2 and defaults/main.yml) but was one of TWO
+# consumers that never provisioned it -- the census was five consumers against
+# four provisioners. It has not bitten yet only because every node running
+# Redis so far also ran a role that happened to create the keypair.
+- name: "Redis | Ensure the shared node TLS keypair exists (#16020)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
+  tags: ['redis', 'tls']
+
 - name: "Redis | Install Redis Stack"
   apt:
     name:
