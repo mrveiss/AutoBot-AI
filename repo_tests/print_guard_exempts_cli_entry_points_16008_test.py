@@ -26,6 +26,7 @@ import pathlib
 import subprocess
 
 from repo_tests._paths import repo_root
+from tools.lint._scan_helpers import tracked_paths
 
 _HOOK = (
     repo_root()
@@ -103,14 +104,26 @@ def test_the_exemption_names_the_files_it_declined_to_scan():
 
 
 def _tracked_scripts() -> list[pathlib.Path]:
-    listing = subprocess.run(  # noqa: S603
-        ["git", "ls-files", "scripts/*.py", "scripts/**/*.py"],  # noqa: S607
-        capture_output=True,
-        text=True,
-        cwd=repo_root(),
-        check=True,
-    ).stdout.split()
-    return [repo_root() / name for name in listing if not name.endswith("_test.py")]
+    """Non-test scripts, enumerated through the one helper (#15926).
+
+    A raw `git ls-files` here would be the 42nd direct invocation the census in
+    `one_git_enumeration_15926_test.py` is ratcheting down, and it would inherit
+    any `GIT_DIR` the environment carries -- enumerating another checkout's
+    index while `repo_root()` names this one, which exits 0 with plausible
+    output (#15176). `tracked_paths` scrubs that and lets git do the excluding.
+    """
+    # The excludes carry their `scripts/` prefix DELIBERATELY. A git pathspec is
+    # rooted, not matched against a basename, and a bare `*_test.py` here excludes
+    # the entire enumeration -- measured, git 2.34.1: 48 files -> 0. The docstring
+    # invites bare glob fragments and its own example (`*.min.js`) is in that
+    # broken class; #16013 has the table.
+    listing = tracked_paths(
+        repo_root(),
+        "scripts/*.py",
+        "scripts/**/*.py",
+        exclude=("scripts/*_test.py", "scripts/**/*_test.py"),
+    )
+    return [repo_root() / name for name in listing]
 
 
 def test_every_printing_script_is_an_entry_point_and_no_library_module_prints():
