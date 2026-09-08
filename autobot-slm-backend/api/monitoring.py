@@ -27,6 +27,7 @@ from api.nodes_execution import _is_local_ip, _require_online_node, _run_command
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.security.redaction import redact_text
 from config import settings
+from service_status import bucket_service_counts
 from models.database import (
     Deployment,
     DeploymentStatus,
@@ -279,15 +280,10 @@ async def _get_services_by_node(db: AsyncSession) -> Dict[str, Dict[str, int]]:
             Service.node_id, Service.status
         )
     )
-    services_by_node: Dict[str, Dict[str, int]] = {}
+    by_node: Dict[str, list] = {}
     for row in services_result:
-        if row.node_id not in services_by_node:
-            services_by_node[row.node_id] = {"running": 0, "failed": 0}
-        if row.status in (ServiceStatus.RUNNING.value, ServiceStatus.COMPLETED.value):
-            services_by_node[row.node_id]["running"] += row.count
-        elif row.status == ServiceStatus.FAILED.value:
-            services_by_node[row.node_id]["failed"] += row.count
-    return services_by_node
+        by_node.setdefault(row.node_id, []).append(row)
+    return {node_id: bucket_service_counts(rows) for node_id, rows in by_node.items()}
 
 
 def _calculate_node_status_counts(nodes: List[Node]) -> tuple:
@@ -421,13 +417,8 @@ async def get_node_metrics(
         .where(Service.node_id == node_id)
         .group_by(Service.status)
     )
-    running = 0
-    failed = 0
-    for row in services_result:
-        if row.status in (ServiceStatus.RUNNING.value, ServiceStatus.COMPLETED.value):
-            running += row.count
-        elif row.status == ServiceStatus.FAILED.value:
-            failed += row.count
+    counts = bucket_service_counts(services_result)
+    running, failed = counts["running"], counts["failed"]
 
     return NodeMetrics(
         node_id=node.node_id,

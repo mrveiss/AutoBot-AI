@@ -99,13 +99,66 @@ def test_unknown_is_not_healthy():
         assert absent not in _HEALTHY
 
 
-def test_the_aggregates_switch_on_completed():
-    """Ordering-free source check on both call sites.
+def test_both_aggregates_share_one_bucketing_implementation():
+    """They were separate loops and had drifted apart once (#16019 review).
 
-    The per-node aggregate and NodeMetrics are separate loops that drifted apart
-    before; asserting one would leave the other exactly as it was.
+    Asserting the shared call rather than a status literal: a source-level count
+    of `ServiceStatus.COMPLETED.value` was satisfied by the text alone and would
+    pass with `+=` reverted to `=`. What matters is that neither aggregate has
+    its own copy to drift again.
     """
     source = (_SLM / "api" / "monitoring.py").read_text(encoding="utf-8")
-    assert source.count("ServiceStatus.COMPLETED.value") == 2, (
-        "both service-count aggregates must treat COMPLETED as healthy — one of " "them still drops it (#16019)"
+    assert source.count("bucket_service_counts(") == 2, (
+        "the per-node aggregate and NodeMetrics must both fold through the "
+        "shared helper; one of them has grown its own loop again (#16019)"
     )
+
+
+class _Row:
+    """A `(status, count)` row as the aggregate query yields it."""
+
+    def __init__(self, status: str, count: int) -> None:
+        self.status = status
+        self.count = count
+
+
+def _bucket(rows):
+    """`bucket_service_counts`, loaded by path (the package pulls in autobot_shared)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_svc_16019", _SLM / "service_status.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.bucket_service_counts(rows)
+
+
+def test_running_and_completed_are_summed_not_overwritten():
+    """The subtlest line in the fix, and nothing could see it (review of #16019).
+
+    Two statuses feed one bucket. With `=` instead of `+=`, whichever row
+    arrives last wins — a node with 3 running and 2 completed reports **2**, and
+    the source-level assertion that COMPLETED appears twice still passes.
+    """
+    assert _bucket([_Row("running", 3), _Row("completed", 2), _Row("failed", 1)]) == {
+        "running": 5,
+        "failed": 1,
+    }
+
+
+def test_order_does_not_change_the_answer():
+    """`=` would make this pair disagree; `+=` cannot."""
+    forward = _bucket([_Row("running", 3), _Row("completed", 2)])
+    reverse = _bucket([_Row("completed", 2), _Row("running", 3)])
+    assert forward == reverse == {"running": 5, "failed": 0}
+
+
+def test_unhealthy_and_transitional_states_are_counted_in_neither():
+    """The contrast, and the deliberate gap #16019 leaves.
+
+    `starting`/`stopping` are declared and emitted but land in neither bucket,
+    so the two counts do not sum to the total. That is intended — a starting
+    service is not running — and it is asserted here so the next reader finds a
+    decision rather than an oversight.
+    """
+    counts = _bucket([_Row("starting", 4), _Row("stopping", 2), _Row("unknown", 7)])
+    assert counts == {"running": 0, "failed": 0}
