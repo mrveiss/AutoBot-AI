@@ -10,6 +10,10 @@
 # Issue: #3026
 
 if ! command -v jq >/dev/null 2>&1; then
+  # Before `deny()` is defined, so this repeats its stderr write rather than
+  # calling it. Worst of the deny sites to leave silent: with no jq, EVERY edit
+  # is blocked, and the one sentence explaining why went to the discarded stream.
+  printf '%s\n' "jq is required for file protection hooks but is not installed." >&2
   echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"jq is required for file protection hooks but is not installed."}}'
   exit 2
 fi
@@ -22,13 +26,40 @@ if [ -z "$FILE_PATH" ]; then
 fi
 
 deny() {
+  # The reason goes to STDERR because this exits 2 (#15956).
+  #
+  # The comment below this function states the rule, and the first version of
+  # that fix applied it to `ask` only -- so every one of the five deny sites
+  # still discarded its reason and the operator got a bare block. `ask` and
+  # `deny` differ in EXIT CODE; they do not differ in which stream carries the
+  # explanation. On exit 2 that stream is stderr, and it is stderr for both.
+  printf '%s\n' "$1" >&2
   echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"$1\"}}"
   exit 2
 }
 
+# `ask` and `deny` end in DIFFERENT exit codes, and that difference is the whole
+# mechanism (#15956).
+#
+# PreToolUse reads exit 2 as a blocking error and takes its reason from STDERR.
+# The JSON below goes to STDOUT, which is parsed only on exit 0. So `ask` with
+# `exit 2` discarded its own payload: every prompt this function exists to raise
+# became a hard denial, and -- nothing having been written to stderr -- the
+# operator saw "No stderr output" with no reason at all.
+#
+# It survived because a denial and a discarded ask produce an identical
+# observable. Nothing in the output distinguishes "refused on purpose" from
+# "meant to ask you and could not", so the hook looked like it was working.
+#
+# Both `ask` sites in this file guard the settings files, and they are its only
+# two against five `deny` sites -- so for the whole life of that bug, the only
+# path here capable of reaching a human never did.
+#
+# `deny` keeps `exit 2`: for a denial that is correct, and its reason is the one
+# the operator should see.
 ask() {
   echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"$1\"}}"
-  exit 2
+  exit 0
 }
 
 BASENAME=$(basename "$FILE_PATH")
