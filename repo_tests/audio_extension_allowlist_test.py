@@ -84,10 +84,21 @@ def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
 #: This sweep read every tracked file and asserted "no offenders" with no floor
 #: at all: a `git ls-files` that returned nothing — wrong cwd, a broken env, a
 #: partial checkout — passed having examined zero files (#15826).
+#: Ratcheted from 1000 (18% of the live population) under #15928. A floor that
+#: low fires only against a tree that has almost entirely stopped being read;
+#: the loss that actually happens is a narrowed glob or a moved directory,
+#: worth hundreds of files, and it cleared 1000 comfortably.
+#:
+#: `growth` is a maintenance-frequency choice, not a safety one: safety comes
+#: from the floor sitting near the population, and the band only decides how
+#: often the ratchet asks for a deliberate line. 250 absorbs ordinary churn in
+#: both directions -- files are added and deleted every week -- while staying
+#: far below the size of any subtree whose loss this exists to catch.
 REACH = declare(
     "audio-extension-allowlist",
     discover=_tracked_python_files,
-    floor=1000,
+    floor=5500,
+    growth=250,
     what="tracked python files",
 )
 

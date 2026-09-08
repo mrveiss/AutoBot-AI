@@ -73,6 +73,20 @@ class Reach:
     discover: Callable[[Path], Sequence[object]]
     floor: int
     what: str
+    #: How far the live population may sit **above** ``floor`` before
+    #: ``reach_declarations_test`` demands the floor be ratcheted up (#15928).
+    #:
+    #: Zero — equality — is right whenever ordinary work does not move the
+    #: number: a fixed set of workflows, of provider baselines, of scrub sites.
+    #: A population that grows with almost every commit (tracked files, dict
+    #: literals) cannot be equality-pinned without failing unrelated PRs, and
+    #: states a band instead.
+    #:
+    #: The question that decides it is **"does normal work move this number?"**
+    #: -- not "how much slack feels safe". Slack chosen by feel is what this
+    #: field exists to stop: the two guards that adopted this module first
+    #: declared floors of 500 and 1000 against a live population of 5,599.
+    growth: int = 0
 
     def examined(self, root: Path) -> Sequence[object]:
         """Discover under *root*, or fail loudly having found implausibly little.
@@ -106,12 +120,31 @@ class Reach:
             )
 
 
-def declare(name: str, *, discover: Callable[[Path], Sequence[object]], floor: int, what: str) -> Reach:
+def declare(
+    name: str,
+    *,
+    discover: Callable[[Path], Sequence[object]],
+    floor: int,
+    what: str,
+    growth: int = 0,
+) -> Reach:
     """Register a reach declaration and return it.
 
     Registration is the point: an undeclared guard is invisible to the meta-test
     and its floor is unproven, so adoption is measurable rather than assumed.
+
+    ``floor`` is checked against the live population by
+    ``reach_declarations_test.test_every_declared_floor_is_pinned_to_its_population``
+    rather than here (#15928). Validating at declaration time would walk the
+    tree once per imported guard, and the meta-test already enumerates every
+    declaration — so the guarantee is the same and the cost is paid once.
+
+    Adoption alone does not make a floor tight. Both guards that adopted this
+    module first passed a number chosen by feel, an order of magnitude below
+    what their own ``discover`` returns, and every floor examined in review
+    during #15896, #15901 and #15913 was set the same way. The mechanism was
+    never the missing part; the number was.
     """
-    reach = Reach(name=name, discover=discover, floor=floor, what=what)
+    reach = Reach(name=name, discover=discover, floor=floor, what=what, growth=growth)
     REGISTRY[name] = reach
     return reach

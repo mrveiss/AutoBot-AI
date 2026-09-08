@@ -242,7 +242,11 @@ def measurement() -> Measurement:
 #: Floor on files reached, so a scanner that has stopped walking the tree
 #: fails loudly instead of passing on an empty sweep (the #15018 lesson).
 #: Measured on Dev_new_gui: comfortably above 1000 tracked, non-test .py files.
-MIN_FILES_SCANNED = 500
+MIN_FILES_SCANNED = 3100
+
+#: See `audio_extension_allowlist_test` for the derivation; same reasoning,
+#: same band. Ratcheted from 500, which was 16% of this guard's population.
+MAX_GROWTH_BEFORE_RATCHET = 250
 
 #: The same floor, declared so it can be **proved to fire** rather than trusted
 #: (#15826). This guard already had a floor and a vacuity test; what it did not
@@ -253,6 +257,7 @@ REACH = declare(
     "env-var-bare-cast",
     discover=tracked_python_files,
     floor=MIN_FILES_SCANNED,
+    growth=MAX_GROWTH_BEFORE_RATCHET,
     what="tracked python files",
 )
 
