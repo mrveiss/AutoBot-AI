@@ -187,9 +187,7 @@ async def test_a_broken_projection_never_breaks_the_claim(redis, monkeypatch):
 
     monkeypatch.setattr(claim_projection, "publish_event", _explode)
 
-    outcome = await claim_projection.acquire_and_publish(
-        "path:a/b.py", agent_id="agent-1", task_id="t1", intent="x"
-    )
+    outcome = await claim_projection.acquire_and_publish("path:a/b.py", agent_id="agent-1", task_id="t1", intent="x")
 
     assert isinstance(outcome, Claim), "the claim is the coordination fact; the event is only a view"
     assert [c["scope"] for c in await claim_table()] == ["path:a/b.py"]
