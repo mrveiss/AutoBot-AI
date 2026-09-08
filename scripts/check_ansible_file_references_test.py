@@ -306,7 +306,8 @@ def test_the_workflow_installs_every_third_party_import_the_guard_needs():
     local = {_SCRIPT.stem} | {
         entry.stem if entry.suffix == ".py" else entry.name
         for entry in repo_root.iterdir()
-        if entry.is_dir() or entry.suffix == ".py"
+        # Nested checkouts are not this repository's top-level names (#15926).
+        if (entry.is_dir() or entry.suffix == ".py") and entry.name not in {".worktrees", ".claude"}
     }
     third_party = {m for m in imported - stdlib - local if not m.startswith("_")}
 
