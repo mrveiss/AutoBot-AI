@@ -15,6 +15,7 @@ not cross.
 
 from __future__ import annotations
 
+import ast
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
@@ -36,14 +37,55 @@ VERIFICATION_METHOD_UNION = {
 # exact #14956 regression the severity ratchet now guards against).
 _DELIBERATE_PROSE_FILE = "autobot-backend/api/knowledge_grounding.py"
 
-# The seventh copy of this number (#15928). The canonical one is
+#: The canonical floor's source file, located relative to this one rather than
+#: through `repo_tests._paths.repo_root()`. Importing that helper would add the
+#: cross-tree dependency this whole arrangement exists to avoid — the point is
+#: to compare against `tools/lint/` without importing from it. #15925's
+#: one-root-spelling guard scopes to `repo_tests/`, so this is outside it by
+#: design rather than by omission.
+_CANONICAL_FLOOR_SOURCE = Path(__file__).resolve().parents[2] / "tools" / "lint" / "_scan_helpers.py"
+
+# The seventh copy of this number (#15928, #16076). The canonical one is
 # `tools.lint._scan_helpers.TRACKED_PY_FLOOR`, which the six sites in
-# `repo_tests/` and `tools/lint/` now import. This file is not imported from
-# there and the cross-tree import path is unverified, so the VALUE is corrected
-# here and the consolidation is left undone deliberately rather than risked:
-# 3000 was 53% of the 5,613 tracked `.py` files and detected only the loss of
-# `autobot-backend`. Lower it only after re-measuring.
+# `repo_tests/` and `tools/lint/` import directly. This file cannot: it lives in
+# a tree that does not import from `tools/lint/`, and adding that dependency to
+# a backend unit test to share an integer is the worse trade.
+#
+# So the value is duplicated and the DUPLICATION is pinned instead. Reading the
+# canonical value out of its source with `ast` needs no import to resolve, and
+# it turns "these two agree today" into "these two cannot disagree" -- which is
+# the whole of #15928 applied to the one site that could not be consolidated.
+# Without it this is #15928's own defect at one-seventh scale: a number that is
+# right today, in a second place, pinned by nothing, waiting for the next
+# re-measure to move six sites and silently strand this one.
 _TRACKED_PY_FLOOR = 5_400
+
+
+def _canonical_tracked_py_floor() -> int:
+    """`TRACKED_PY_FLOOR` from `tools/lint/_scan_helpers.py`, read not imported."""
+    source = _CANONICAL_FLOOR_SOURCE.read_text(encoding="utf-8")
+    for node in ast.parse(source).body:
+        targets = node.targets if isinstance(node, ast.Assign) else []
+        if any(isinstance(t, ast.Name) and t.id == "TRACKED_PY_FLOOR" for t in targets):
+            return int(ast.literal_eval(node.value))
+    raise AssertionError(f"TRACKED_PY_FLOOR not found in {_CANONICAL_FLOOR_SOURCE} — the parse read nothing")
+
+
+def test_the_local_floor_still_matches_the_canonical_one():
+    """#16076: the copy this file has to keep cannot drift from the original.
+
+    Six sites import the canonical constant and move with it. This one cannot,
+    so it is compared to it instead — by reading the file, which adds no
+    cross-tree import and so sidesteps the dependency that made consolidation
+    the wrong trade in the first place.
+    """
+    canonical = _canonical_tracked_py_floor()
+    assert _TRACKED_PY_FLOOR == canonical, (
+        f"_TRACKED_PY_FLOOR here is {_TRACKED_PY_FLOOR}; the canonical "
+        f"tools.lint._scan_helpers.TRACKED_PY_FLOOR is {canonical}.\n"
+        f"Six sites import that constant and moved with it; this one is a copy "
+        f"and did not. Set this to {canonical}."
+    )
 
 
 def test_verification_method_is_exactly_the_produced_and_reserved_union():
