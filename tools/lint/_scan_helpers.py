@@ -96,6 +96,27 @@ class EmptyEnumeration(RuntimeError):
     """
 
 
+#: Floor for a full `tracked_paths(root, "*.py")` sweep — the canonical one,
+#: because six places had their own copy of `3000` and none of them had been
+#: measured against the tree (#15928).
+#:
+#: Live population: **5,613** tracked `.py` files. The old 3,000 was 53% of it,
+#: which detects only the loss of `autobot-backend` — the one tree holding 70%
+#: of the files. Every other tree could vanish from the enumeration and all six
+#: guards would report a clean sweep.
+#:
+#: 5,400 leaves 213 files of headroom, so it catches the loss of any tree
+#: bigger than that: `autobot-slm-backend` (443), `autobot_shared`, `repo_tests`,
+#: `autobot-infrastructure`. **It does not catch losing the two smallest**
+#: (`autobot-npu-worker`, `tools`), which would need headroom under ~59 and a
+#: ratchet on every ordinary deletion. That trade is stated rather than implied:
+#: the floor exists for "the enumeration broke", and a break that costs fewer
+#: than 213 files is not the failure it was built for.
+#:
+#: Re-measure before lowering. `git ls-files "*.py" | wc -l`.
+TRACKED_PY_FLOOR = 5_400
+
+
 def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) -> List[str]:
     """Git-tracked paths under *repo_root* matching *patterns*, repo-relative.
 
