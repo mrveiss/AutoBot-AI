@@ -78,8 +78,9 @@ docker-compose --version  # Should be 2.0.0 or higher
 
 #### Optional Dependencies
 ```bash
-# Redis (for enhanced performance)
-redis-server --version
+# Redis Stack (for enhanced performance). Its binary lives in
+# /opt/redis-stack/bin/ and is not necessarily on PATH, so check the service.
+systemctl is-active redis-stack-server
 
 # PostgreSQL (for production databases)
 psql --version
@@ -525,10 +526,14 @@ services:
       - autobot-network
 
   redis:
-    image: redis:7-alpine
+    # redis-stack, not redis:7-alpine (#16071). The plain image has no
+    # RediSearch, RedisJSON or RedisTimeSeries, so it starts and then fails on
+    # the first module command -- the container form of the same defect as
+    # `apt install redis-server`. Matches the repository's own
+    # docker-compose.yml, which uses redis/redis-stack:7.4.0-v1.
+    image: redis/redis-stack:7.4.0-v1
     container_name: autobot-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
     networks:
