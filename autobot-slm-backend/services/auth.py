@@ -382,9 +382,28 @@ async def get_api_key_user(
             detail="User not found for API key",
         )
 
+    # The KEY's authority, not the USER's (#16040).
+    #
+    # This returned `user.is_platform_admin` unconditionally, so a key created
+    # with narrow scopes carried its owner's full authority -- platform admin
+    # included -- while the UI that issued it displayed the narrow scopes. The
+    # scope a person selected and the authority they granted were two different
+    # things, and nothing in the console showed the difference.
+    #
+    # It has never been exploitable: this dependency has no callers, so no route
+    # authenticates by API key through it. That is exactly why it is fixed now.
+    # An unwired dependency and a wired one are indistinguishable from the
+    # function body, and the first route to adopt this would have inherited the
+    # defect silently rather than by anyone deciding to.
+    #
+    # `admin` is an AND: a key cannot exceed its owner's authority, and it cannot
+    # exceed its own scopes either. `APIKey.has_scope` already implements exact,
+    # wildcard and global-admin matching, so the check belongs there rather than
+    # in a second copy here.
     return {
         "sub": user.username,
-        "admin": user.is_platform_admin,
+        "admin": user.is_platform_admin and api_key.has_scope("admin:*"),
+        "scopes": list(api_key.scopes or []),
         "api_key_id": str(api_key.id),
     }
 
