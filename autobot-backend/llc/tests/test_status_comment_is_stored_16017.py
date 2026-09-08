@@ -139,3 +139,54 @@ async def test_a_whitespace_only_comment_is_not_a_comment(factory):  # noqa: ANN
     item_id = await _seed_item(factory)
     await _transition(factory, item_id, "   ")
     assert await _comments(factory, item_id) == []
+
+
+async def test_a_failed_commit_leaves_no_comment_behind(factory):  # noqa: ANN001
+    """The claim the code comment makes, which nothing tested (review of #16017).
+
+    `add_comment` sits before `session.commit()` because a comment committed
+    separately could outlive a transition that failed — a recorded reason for
+    something that did not happen. Every other test here takes the happy path,
+    so moving the write after the commit leaves them all green.
+
+    This forces the commit to fail and asserts the comment did not survive it.
+    Both writes ride one transaction; if they ever stop doing so, this is what
+    notices.
+    """
+    from sqlalchemy.exc import OperationalError
+
+    item_id = await _seed_item(factory)
+
+    class _FailingCommitSession:
+        """Delegates everything to the real session but refuses to commit."""
+
+        def __init__(self, inner):
+            self._inner = inner
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+        async def commit(self):
+            raise OperationalError("forced", None, Exception("commit refused"))
+
+    real = factory()
+
+    class _Factory:
+        def __call__(self):
+            return self
+
+        async def __aenter__(self):
+            return _FailingCommitSession(await real.__aenter__())
+
+        async def __aexit__(self, *exc):
+            return await real.__aexit__(*exc)
+
+    with pytest.raises(OperationalError):
+        await _transition(_Factory(), item_id, "this reason must not survive")
+
+    # Read through a FRESH session: the failed transaction must have taken the
+    # comment with it.
+    assert await _comments(factory, item_id) == [], (
+        "a comment survived a transaction that never committed — the transition "
+        "did not happen and its reason did (#16017)"
+    )
