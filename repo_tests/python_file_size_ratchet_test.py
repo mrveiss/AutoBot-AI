@@ -43,14 +43,13 @@ from __future__ import annotations
 import ast
 import importlib.util
 import logging
-import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 import pytest
 import yaml
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
 _SCRIPT = REPO_ROOT / "scripts" / "check_python_file_size.py"
@@ -124,15 +123,7 @@ def hook():
 @pytest.fixture(scope="module")
 def tracked_py_files() -> list[str]:
     """Every tracked ``*.py`` path, enumerated by git rather than by the hook."""
-    out = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "*.py"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    )
-    return [line for line in out.stdout.splitlines() if line.strip()]
+    return tracked_paths(REPO_ROOT, "*.py")
 
 
 # --------------------------------------------------------------------------

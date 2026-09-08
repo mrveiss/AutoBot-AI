@@ -30,12 +30,11 @@ from __future__ import annotations
 
 import ast
 import os
-import subprocess
 from typing import Dict, List, Set, Tuple
 
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
 
@@ -66,15 +65,7 @@ Duplicate = Tuple[str, int, str]
 
 
 def _tracked_python_files() -> List[str]:
-    completed = subprocess.run(
-        ["git", "ls-files", "*.py"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    )
-    return [name for name in completed.stdout.split("\n") if name and not name.startswith(".worktrees/")]
+    return [name for name in tracked_paths(REPO_ROOT, "*.py") if not name.startswith(".worktrees/")]
 
 
 def duplicate_keys_in(source: str) -> List[Tuple[int, str]]:
