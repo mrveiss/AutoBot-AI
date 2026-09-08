@@ -50,7 +50,13 @@ REPO_ROOT = repo_root()
 #: A repo-relative path mentioned in a guard, containing a glob. Anchored on a
 #: quote for the same reason the sibling checker is: an unquoted match picks up
 #: prose and import paths, which are not reads of the tree.
-_QUOTED_GLOB = re.compile(r"""["']([A-Za-z0-9_.*?\[\]-]+(?:/[A-Za-z0-9_./*?\[\]-]+)*)["']""")
+#: The inner class deliberately omits `/`: with it, a separator could be matched
+#: either by the literal `/` or inside the class, and the two alternatives
+#: multiply. CodeQL measured it as exponential and it is — `"` followed by N
+#: repetitions of `*/` took 0.13 ms at N=12 and 573 ms at N=24. Removing the
+#: ambiguity makes it linear (0.002 ms at N=30) and matches identically on every
+#: real declaration.
+_QUOTED_GLOB = re.compile(r"""["']([A-Za-z0-9_.*?\[\]-]+(?:/[A-Za-z0-9_.*?\[\]-]+)*)["']""")
 
 
 def _is_path_like(candidate: str) -> bool:
@@ -394,3 +400,45 @@ def test_the_detector_rejects_paths_that_leave_the_repository(source: str) -> No
     component scan cannot be limited to the first segment.
     """
     assert glob_declarations_in(source) == set()
+
+
+def test_the_declaration_pattern_does_not_backtrack_exponentially() -> None:
+    """CodeQL flagged `_QUOTED_GLOB` as exponential, and it was (#15998 review).
+
+    A separator could be matched by the literal `/` or by a class that also
+    contained `/`, and the alternatives multiply. Measured before the fix: 0.13 ms
+    at 12 repetitions of `*/`, 573 ms at 24 — roughly x4 per two repetitions.
+
+    Asserted as a TIME BUDGET rather than by inspecting the pattern, because the
+    property is about matching behaviour and a future edit could reintroduce the
+    ambiguity with different characters. Generous enough not to flake on a loaded
+    runner; the failing case took half a second at N=24 and would take minutes at
+    the N used here.
+    """
+    import time
+
+    # N=26, not larger. The ambiguous pattern takes ~2.3s here and fails this
+    # assertion cleanly; at N=40 it never returns and the mutation HANGS the
+    # suite instead of failing it. A test that hangs is worse than one that
+    # fails — it reports nothing and blocks the runner.
+    pathological = '"' + "*/" * 26 + "!"
+    started = time.perf_counter()
+    _QUOTED_GLOB.search(pathological)
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 1.0, f"the declaration pattern took {elapsed:.1f}s on a pathological input"
+
+
+def test_the_pattern_still_matches_every_declaration_form() -> None:
+    """The contrast: a pattern that matches nothing also cannot backtrack.
+
+    Without this, "fixed the ReDoS" is satisfied by breaking the detector, and
+    the record would silently stop discovering anything.
+    """
+    for source, expected in (
+        ('x = "*.toml"', {"*.toml"}),
+        ('x = ".github/workflows/*.yml"', {".github/workflows/*.yml"}),
+        ('x = "scripts/?.sh"', {"scripts/?.sh"}),
+        ('x = "*requirements*.txt"', {"*requirements*.txt"}),
+    ):
+        assert glob_declarations_in(source) == expected, source
