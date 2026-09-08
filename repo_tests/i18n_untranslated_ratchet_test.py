@@ -6,13 +6,16 @@
 
 #14209 reports one key — `llc.orgChart.confirmTerminate` — sitting as
 byte-identical English in all ten non-English locales. Measuring found it is
-one instance of a systemic gap: **26,991** values across the ten locales are
-identical to their English source.
+one instance of a systemic gap. When this guard was written, **26,991** values
+across the ten locales were identical to their English source:
 
 ```
 ar 3755 · fa 3819 · he 3819 · ur 3819   (~49% of 7,811 keys)
 lv 2273 · pl 2239 · pt 2076 · fr 1878 · es 1681 · de 1632
 ```
+
+Those figures are the measurement that motivated the guard, not the live state
+— `BASELINE` below is the live number and is the only one that gates anything.
 
 Sampling confirms these are real prose, not terms that legitimately match:
 
@@ -32,11 +35,22 @@ Growth is a regression. An unrecorded *shrink* also fails, so translating a
 batch means lowering the number in the same commit — which keeps each figure a
 claim someone made deliberately rather than a drifting artefact.
 
-A value counts as untranslated when it is byte-identical to English, longer
-than 12 characters, and contains a letter. The length and letter filters are
-what keep `"OK"`, `"%"`, `"ID"` and bare numerals out: short tokens and
-symbols are frequently identical across languages for good reasons, and
-counting them would bury the real gap in noise.
+A key counts as untranslated when its English source is longer than 12
+characters, contains a letter, and the locale does not render it differently.
+The length and letter filters are what keep `"OK"`, `"%"`, `"ID"` and bare
+numerals out: short tokens and symbols are frequently identical across
+languages for good reasons, and counting them would bury the real gap in noise.
+
+**"Does not render it differently" covers two states, deliberately (#16063).**
+The key may be present with the English string copied in, or absent entirely —
+in which case `fallbackLocale: 'en'` renders the English string anyway, so the
+reader sees exactly the same thing. This guard used to count only the first,
+which was safe only because `locale-parity.test.ts` forbade the second
+outright. Now that a locale is allowed to lag `en.json`, counting only the
+present-and-identical case would mean an English-only key added today is
+invisible here — and since an unrecorded shrink also fails, a locale falling
+further behind would register as **progress**. A state the instrument cannot
+see must not read as the good state.
 """
 
 from __future__ import annotations
@@ -84,18 +98,25 @@ def _load(code: str) -> dict[str, str]:
     return _flatten(json.loads((_LOCALES / f"{code}.json").read_text(encoding="utf-8")))
 
 
+def _is_meaningful(value: str) -> bool:
+    """Long enough and wordy enough that matching English means something."""
+    return len(value) > _MIN_MEANINGFUL_LENGTH and any(character.isalpha() for character in value)
+
+
+def _untranslated_keys(english: dict[str, str], locale: dict[str, str]) -> list[str]:
+    """English keys the locale does not render in its own words.
+
+    `locale.get(key, source)` is what folds the two states into one count: a
+    missing key falls back to the English source here exactly as it does at
+    runtime, so absent and present-but-identical are both equal to `source`.
+    Keys the locale carries that English does not are excluded by construction
+    — `locale-parity.test.ts` is what fails on those.
+    """
+    return [key for key, source in english.items() if _is_meaningful(source) and locale.get(key, source) == source]
+
+
 def _untranslated(code: str) -> list[str]:
-    """Keys whose value is byte-identical to the English source."""
-    english = _load("en")
-    locale = _load(code)
-    return [
-        key
-        for key, value in locale.items()
-        if key in english
-        and value == english[key]
-        and len(value) > _MIN_MEANINGFUL_LENGTH
-        and any(character.isalpha() for character in value)
-    ]
+    return _untranslated_keys(_load("en"), _load(code))
 
 
 def test_the_locale_files_this_guard_reads_are_present() -> None:
@@ -107,6 +128,23 @@ def test_the_locale_files_this_guard_reads_are_present() -> None:
         f"only {len(english)} English keys found — the flatten has stopped reaching the catalogue, "
         "which would make every count below meaningless"
     )
+
+
+def test_a_key_a_locale_does_not_carry_is_counted_as_untranslated() -> None:
+    """The known positive for the missing-key half (#16063).
+
+    Deleting a key from a locale must not shrink the count. It is the one way
+    this ratchet could be gamed into reporting progress for a regression, and
+    it is unreachable through the locale files themselves while any of them is
+    complete — so it is asserted against dictionaries rather than fixtures.
+    """
+    key = "a.key.with.a.sentence"
+    english = {key: "A sentence long enough to count"}
+
+    assert _untranslated_keys(english, dict(english)) == [key], "present and identical must count"
+    assert _untranslated_keys(english, {}) == [key], "absent must count — the runtime renders English either way"
+    assert _untranslated_keys(english, {key: "Une phrase assez longue pour compter"}) == []
+    assert _untranslated_keys({key: "OK"}, {}) == [], "the length filter still applies to a missing key"
 
 
 @pytest.mark.parametrize("code", sorted(BASELINE))
