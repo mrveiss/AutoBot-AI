@@ -133,7 +133,7 @@ async def test_the_route_refuses_a_blocked_item(client, session):  # noqa: ANN00
     returned 200 and moved the item, because the rule's collaborator was never
     supplied by this route.
     """
-    blocker = await _item(session, status=WorkItemStatus.TODO, title="blocker")
+    blocker = await _item(session, status=WorkItemStatus.READY, title="blocker")
     blocked = await _item(session, status=WorkItemStatus.BLOCKED, title="blocked")
     await _block(session, blocker, blocked)
 
