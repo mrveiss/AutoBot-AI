@@ -268,13 +268,31 @@ async def upload_work_product(body: WorkProduct, request: Request) -> Dict[str, 
 
 
 class HeartbeatReport(BaseModel):
+    """What an agent reports when a heartbeat run ends (#15966).
+
+    This model used to declare ``duration_seconds``, ``tokens_in``,
+    ``tokens_out`` and ``model``. ``report_heartbeat`` read none of them: they
+    were accepted, answered ``200``, and discarded on every call. The only reads
+    of those names in this module belong to ``CostEvent`` on ``/cost-events``.
+
+    They are removed rather than persisted, because each already has a system of
+    record and a second durable copy is the wrong answer (``store_authority``):
+
+    * **duration** is derivable — ``report_heartbeat`` writes ``finished_at`` and
+      the scheduler writes ``started_at`` on the same row.
+    * **token counts and model** belong to ``POST /cost-events``, which passes
+      them to ``BudgetService.ingest_cost_event`` and charges the agent's budget.
+      A budget that is never charged is never exceeded (#15859), so cost has to
+      arrive on the route that charges it.
+
+    An agent reporting cost must call ``/cost-events``. Sending those fields here
+    never recorded them; not declaring them is what makes that visible instead of
+    silently true.
+    """
+
     run_id: str
     work_item_id: Optional[str] = None
     status: str
-    duration_seconds: Optional[float] = None
-    tokens_in: Optional[int] = None
-    tokens_out: Optional[int] = None
-    model: Optional[str] = None
 
 
 @router.post("/heartbeat/report")
