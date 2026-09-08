@@ -2,17 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Registry for AUTOBOT_* environment variables.
 
-Provides discovery, documentation, and type-safe access.
-All AUTOBOT_* vars must be registered before use; the
-``check_env_var_registry`` pre-commit hook enforces this.
-
-**A new variable goes in a per-component sibling, not in this file.**
-``env_registry_<component>.py`` modules are imported below, and every
-registration they make lands in the same ``REGISTRY``. This file is at its
-recorded size ceiling, so adding here can fail the size ratchet and the
-generated-table freshness check at once -- and the ratchet is never raised to
-make a check pass (#14236). Pick the sibling whose component matches, or add one
-and import it below beside the others.
+Discovery and type-safe access; ``check_env_var_registry`` requires every var
+to be registered. A NEW one goes in an ``env_registry_<component>.py`` sibling
+imported below -- this file is at its ceiling and may not grow (#14236).
 
 Closes GH#7081.
 """
