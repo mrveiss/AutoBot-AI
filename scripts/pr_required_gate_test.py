@@ -21,6 +21,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import pr_required_gate as gate_module  # noqa: E402
 from pr_required_gate import (  # noqa: E402
     _all_pages,
     _report,
@@ -430,3 +431,53 @@ def test_a_conclusive_result_wins_even_when_the_skip_is_seen_first():
         {"name": "c", "started_at": "10:00", "conclusion": "failure"},
     ]
     assert latest_per_name(seen_skip_first)["c"] == "failure"
+
+
+def test_the_verdict_names_what_it_did_not_examine(monkeypatch):
+    """Five blind spots were found one at a time; adding cases does not change that (#16044).
+
+    Each of pending-in-no-bucket, a conflicted PR with no runs, a superseded
+    `cancelled`, a merged PR, and a skip outranking a failure was fixed by adding
+    a case. The property that produced them is untouched by any of those fixes:
+    a check that enumerates conditions is blind to the ones it does not
+    enumerate, and every blind spot reads as success.
+
+    Naming the unexamined preconditions does not make the tool complete. It makes
+    its incompleteness visible, which is the part a reader can act on.
+    """
+    import pr_required_gate as gate
+
+    monkeypatch.setattr(
+        gate,
+        "_fetch",
+        lambda pr, repo, base: {
+            "required": ["smoke-test"],
+            "app_pinned": [],
+            "observed": {"smoke-test": "success"},
+            "head": "0" * 40,
+            "pr_state": "OPEN",
+        },
+    )
+    emitted: list[str] = []
+    monkeypatch.setattr(gate, "_emit", emitted.append)
+
+    assert gate.main(["123"]) == 0
+    text = "\n".join(emitted)
+    # On a GREEN verdict specifically: a boundary shown only on failure is absent
+    # exactly when someone is about to act on the good news.
+    assert "CONTEXTS-GREEN" in text
+    assert "NOT EXAMINED" in text
+    assert "review threads" in text, "the precondition that caused #15994 must be named"
+    assert "branch conflicts" in text
+
+
+def test_every_unexamined_precondition_says_what_it_costs():
+    """A bare list of names is a checklist; the consequence is what makes it usable.
+
+    An entry reading only "review threads" tells a reader nothing about why they
+    should care, which is the state #15900 describes as indistinguishable from an
+    absent dependency.
+    """
+    for item in gate_module.NOT_EXAMINED:
+        assert "—" in item or "--" in item, f"no consequence stated: {item!r}"
+        assert len(item) > 40, f"too thin to act on: {item!r}"
