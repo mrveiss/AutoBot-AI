@@ -10,6 +10,10 @@
 # Issue: #3026
 
 if ! command -v jq >/dev/null 2>&1; then
+  # Before `deny()` is defined, so this repeats its stderr write rather than
+  # calling it. Worst of the deny sites to leave silent: with no jq, EVERY edit
+  # is blocked, and the one sentence explaining why went to the discarded stream.
+  printf '%s\n' "jq is required for file protection hooks but is not installed." >&2
   echo '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"jq is required for file protection hooks but is not installed."}}'
   exit 2
 fi
@@ -22,6 +26,14 @@ if [ -z "$FILE_PATH" ]; then
 fi
 
 deny() {
+  # The reason goes to STDERR because this exits 2 (#15956).
+  #
+  # The comment below this function states the rule, and the first version of
+  # that fix applied it to `ask` only -- so every one of the five deny sites
+  # still discarded its reason and the operator got a bare block. `ask` and
+  # `deny` differ in EXIT CODE; they do not differ in which stream carries the
+  # explanation. On exit 2 that stream is stderr, and it is stderr for both.
+  printf '%s\n' "$1" >&2
   echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"$1\"}}"
   exit 2
 }

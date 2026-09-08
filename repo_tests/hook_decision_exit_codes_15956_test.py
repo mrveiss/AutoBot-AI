@@ -148,3 +148,63 @@ def test_the_sweep_covers_more_than_the_two_known_hooks() -> None:
     assert any(
         _decisions_with_exits(hook) for hook in hooks
     ), "no hook emits a permissionDecision — the regex has probably gone stale"
+
+
+# --------------------------------------------------------------- the channel
+#
+# EXPECTED_EXIT above measures the EXIT CODE. Once `ask` was corrected to exit 0,
+# the remaining half of this defect moved into the CHANNEL: `deny` still exits 2,
+# which is right, but its reason went to stdout, which exit 2 discards. The guard
+# was then unable to tell the fixed file from the broken one -- it pinned the
+# broken half as correct, because the dimension it measures was no longer the
+# dimension the bug lived in.
+#
+# That is the generalisable lesson and the reason this second check exists:
+# **when a fix moves a defect from one dimension to another, the guard has to
+# move with it.** A suite that only ever checks the old dimension reports green
+# on the new bug.
+
+STDERR_WRITE = re.compile(r">&\s*2")
+
+
+def _emissions_with_context(path: Path) -> list[tuple[int, str, int | None, bool]]:
+    """Each decision, its exit code, and whether stderr is written near it."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    out: list[tuple[int, str, int | None, bool]] = []
+    for index, line in enumerate(lines):
+        match = DECISION_RE.search(line)
+        if not match:
+            continue
+        code: int | None = None
+        end = index + 1
+        for offset, following in enumerate(lines[index + 1 : index + 8], start=index + 1):
+            exit_match = EXIT_RE.match(following)
+            if exit_match:
+                code = int(exit_match.group("code"))
+                end = offset
+                break
+        window = lines[max(0, index - 8) : end + 1]
+        out.append((index + 1, match.group("decision"), code, any(STDERR_WRITE.search(w) for w in window)))
+    return out
+
+
+@pytest.mark.parametrize("hook", _hook_files(), ids=lambda p: p.name)
+def test_a_blocking_decision_writes_its_reason_to_stderr(hook: Path) -> None:
+    """Exit 2 takes its reason from stderr, so a silent exit-2 explains nothing.
+
+    Without this, a hook can satisfy every exit-code assertion above and still
+    give the operator a bare block -- which is the original #15956 symptom
+    ("No stderr output"), simply relocated from `ask` to `deny`.
+    """
+    silent = [
+        (line, decision)
+        for line, decision, code, has_stderr in _emissions_with_context(hook)
+        if code not in (None, 0) and not has_stderr
+    ]
+    assert not silent, "\n".join(
+        f"{hook.name}:{line} emits '{decision}' and exits non-zero without writing to stderr. "
+        "The harness takes an exit-2 reason from stderr and parses stdout only on exit 0, so "
+        "the reason above is discarded and the operator sees a block with no explanation. "
+        "Add `printf '%s\\n' \"$REASON\" >&2` beside it."
+        for line, decision in silent
+    )
