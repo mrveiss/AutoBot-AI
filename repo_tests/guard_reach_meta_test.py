@@ -57,6 +57,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import pytest  # noqa: E402
 from repo_tests._paths import repo_root  # noqa: E402
 
 from tools.lint._scan_helpers import tracked_paths  # noqa: E402
@@ -87,6 +88,25 @@ _ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(
 #: below the then-current 80 and 41 below the true population, so it could not
 #: have fired on the very blind spot #16147 reports.
 MIN_GUARDS_EXAMINED = 95
+
+#: WHAT THIS MODULE CHECKS, AND WHAT IT DOES NOT (#16154).
+#:
+#: This asks whether a floor **exists**. Whether that floor can actually **fire**
+#: is a different question, answered by `reach_declarations_test`, which hands
+#: every declaration an empty repository and requires it to raise.
+#:
+#: The two run at different times. This module is in the pre-push set;
+#: `reach_declarations_test` is not. So a floor that exists but cannot fire --
+#: because its `discover` raises on an empty tree instead of returning [] --
+#: passes pre-push and fails in CI, which is the slowest possible place to learn
+#: it. Stating the gap here rather than implying full coverage: an author who
+#: reads this module and sees "reach is checked" will not go looking for the
+#: half that is not checked until it is pushed.
+#:
+#: `_reach.declare` documents the empty-tree contract at the point an author
+#: writes a `discover`, and `_reach.Reach.examined` raises `ReachDiscoveryError`
+#: naming a raising `discover` as the cause rather than letting a bare traceback
+#: read as a broken guard.
 
 #: Tree-scanning `*_test.py` guards with no floor of any kind, frozen so a NEW
 #: one fails. May only shrink, and a shrink must be recorded here.
@@ -293,3 +313,45 @@ def test_glob_reaches_guards_no_other_term_does() -> None:
 
     assert "repo_tests/promtool_rules_test.py" in only_via_glob
     assert "repo_tests/workflow_concurrency_guard_test.py" in only_via_glob
+
+
+def test_a_raising_discover_is_named_as_the_cause_not_a_bare_traceback() -> None:
+    """#16154: "the sweep is broken" and "the tree is small" are different states.
+
+    A `discover` that raises on an empty tree used to surface as whatever
+    exception it threw -- an `EmptyEnumeration`, a `FileNotFoundError` -- which
+    reads as a broken guard rather than as the specific, documented contract
+    violation it is. `reach_declarations_test` then ends early having proven
+    nothing, and the floor it was checking is untested while looking checked.
+    """
+    from repo_tests._reach import Reach, ReachDiscoveryError, ReachFloorError
+
+    def _raises(_root):
+        raise RuntimeError("enumeration exploded")
+
+    reach = Reach(name="synthetic", discover=_raises, floor=1, what="things")
+
+    with pytest.raises(ReachDiscoveryError) as caught:
+        reach.examined(repo_root())
+
+    message = str(caught.value)
+    assert "RuntimeError" in message, "the original exception type must survive into the message"
+    assert "must return an empty sequence" in message or "empty" in message
+    assert "excluded_tree_size_debt_test" in message, "must point at the handling it expects"
+    assert not isinstance(
+        caught.value, ReachFloorError
+    ), "a broken sweep must not present as a floor breach -- they call for opposite fixes"
+
+
+def test_a_floor_breach_is_still_a_floor_error() -> None:
+    """The control: wrapping discover must not swallow the ordinary case.
+
+    A change that turned every failure into `ReachDiscoveryError` would pass the
+    test above and destroy the distinction it exists to draw.
+    """
+    from repo_tests._reach import Reach, ReachFloorError
+
+    reach = Reach(name="synthetic-floor", discover=lambda _root: [], floor=5, what="things")
+
+    with pytest.raises(ReachFloorError):
+        reach.examined(repo_root())
