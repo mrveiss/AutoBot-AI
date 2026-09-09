@@ -8,13 +8,10 @@ Provides unified interface for agents running locally or in containers
 """
 
 import asyncio
-import json
 import threading
 import uuid
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -34,87 +31,22 @@ from protocols.agent_communication import (
 
 logger = get_logger(__name__)
 
+# The exchanged data types live in `base_agent_types` (#15950): this module was
+# at its size ceiling, and they were the part of it that never referenced
+# `BaseAgent`. Re-exported here so the existing import sites keep working.
+from agents.base_agent_types import (  # noqa: F401
+    AVAILABLE_AGENT_STATUSES,
+    AgentHealth,
+    AgentRequest,
+    AgentResponse,
+    DeploymentMode,
+    create_agent_request,
+    deserialize_agent_request,
+    deserialize_agent_response,
+    serialize_agent_request,
+    serialize_agent_response,
+)
 
-class DeploymentMode(Enum):
-    """Agent deployment modes"""
-
-    LOCAL = "local"
-    CONTAINER = "container"
-    REMOTE = "remote"
-
-
-# Performance optimization: O(1) lookup for available agent statuses (Issue #326)
-AVAILABLE_AGENT_STATUSES = {AgentStatus.HEALTHY, AgentStatus.DEGRADED}
-
-
-@dataclass
-class AgentRequest:
-    """Standardized agent request format"""
-
-    request_id: str
-    agent_type: str
-    action: str
-    payload: Dict[str, Any]
-    context: Dict[str, Any] | None = None
-    priority: str = "normal"  # low, normal, high, urgent
-    timeout: float = 30.0
-    metadata: Dict[str, Any] | None = None
-
-
-@dataclass
-class AgentResponse:
-    """Standardized agent response format"""
-
-    request_id: str
-    agent_type: str
-    status: str  # success, error, partial
-    result: Any
-    error: str | None = None
-    execution_time: float = 0.0
-    metadata: Dict[str, Any] | None = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            "request_id": self.request_id,
-            "agent_type": self.agent_type,
-            "status": self.status,
-            "result": self.result,
-            "error": self.error,
-            "execution_time": self.execution_time,
-            "metadata": self.metadata or {},
-        }
-
-
-@dataclass
-class AgentHealth:
-    """Agent health information"""
-
-    agent_type: str
-    status: AgentStatus
-    deployment_mode: DeploymentMode
-    last_heartbeat: datetime
-    response_time_ms: float
-    success_rate: float
-    error_count: int
-    resource_usage: Dict[str, Any]
-    capabilities: List[str]
-    details: Dict[str, Any] | None = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            "agent_type": self.agent_type,
-            "status": self.status.value,
-            "deployment_mode": self.deployment_mode.value,
-            "last_heartbeat": self.last_heartbeat.isoformat(),
-            "response_time_ms": self.response_time_ms,
-            "success_rate": self.success_rate,
-            "error_count": self.error_count,
-            "resource_usage": self.resource_usage,
-            "capabilities": self.capabilities,
-            "details": self.details or {},
-        }
 
 
 class BaseAgent(ABC):
@@ -611,65 +543,3 @@ class ContainerAgent(BaseAgent):
             return health.status in AVAILABLE_AGENT_STATUSES
         except Exception:
             return False
-
-
-# Utility functions for agent management
-
-
-def create_agent_request(
-    agent_type: str,
-    action: str,
-    payload: Dict[str, Any],
-    context: Dict[str, Any] | None = None,
-    priority: str = "normal",
-    timeout: float = 30.0,
-) -> AgentRequest:
-    """Helper function to create standardized agent requests"""
-    import uuid
-
-    return AgentRequest(
-        request_id=str(uuid.uuid4()),
-        agent_type=agent_type,
-        action=action,
-        payload=payload,
-        context=context or {},
-        priority=priority,
-        timeout=timeout,
-        metadata={
-            "created_at": datetime.now(tz=timezone.utc).isoformat(),
-            "source": "autobot_orchestrator",
-        },
-    )
-
-
-def serialize_agent_request(request: AgentRequest) -> str:
-    """Serialize agent request for transmission"""
-    return json.dumps(
-        {
-            "request_id": request.request_id,
-            "agent_type": request.agent_type,
-            "action": request.action,
-            "payload": request.payload,
-            "context": request.context,
-            "priority": request.priority,
-            "timeout": request.timeout,
-            "metadata": request.metadata,
-        }
-    )
-
-
-def deserialize_agent_request(data: str) -> AgentRequest:
-    """Deserialize agent request from transmission"""
-    parsed = json.loads(data)
-    return AgentRequest(**parsed)
-
-
-def serialize_agent_response(response: AgentResponse) -> str:
-    """Serialize agent response for transmission"""
-    return json.dumps(response.to_dict())
-
-
-def deserialize_agent_response(data: str) -> AgentResponse:
-    """Deserialize agent response from transmission"""
-    parsed = json.loads(data)
-    return AgentResponse(**parsed)
