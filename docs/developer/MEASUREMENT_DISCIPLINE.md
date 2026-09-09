@@ -392,6 +392,32 @@ that arrives *through* another finding is fixed at the source, and an exemption
 written for it is a permanent exemption for a condition that was never going to
 persist.
 
+## A wrong reference that resolves
+
+Two sessions wrote an issue number before filing the issue, on the same day.
+
+One predicted `#16135` for a follow-up and filed it as `#16139`. `#16135` exists —
+it is an unrelated open issue about a 404ing landing page. A reader following that
+citation arrives somewhere real, plausible and wrong.
+
+The other — this author — wrote `(#16135)` into a commit message before filing,
+then filed and **happened to get #16135.** Same act, opposite outcome, and the
+difference was availability of the next id rather than anything either of us did.
+
+**A broken reference announces itself. A valid reference to the wrong thing does
+not.** It renders normally, carries a plausible title, and gets believed —
+so it is the more expensive of the two by a wide margin, and it is the one that
+looks fine in review.
+
+**File first, cite second.** Never write an identifier that has not been read back
+from the system that issues it. This is the same rule as the rest of this page,
+applied to a number you produced rather than one you measured: a predicted id is
+a claim about the world, and the world assigns ids without consulting you.
+
+The lucky case is the instructive one. Getting away with it produced no signal at
+all — no error, no correction, nothing to learn from — which is exactly why the
+habit survives until the day the number is taken.
+
 ## A zero is a sample, not a state
 
 `gh run list --status in_progress` returned **0** while 47 runs sat queued. Read as
