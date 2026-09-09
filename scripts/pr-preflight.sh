@@ -44,6 +44,10 @@ REPO_ROOT=$(git_repo_root) || exit 2
 cd "$REPO_ROOT" || exit 2
 
 BASE="${PREFLIGHT_BASE:-origin/Dev_new_gui}"
+# Commits behind base that still allow a PR. Env-var backed, never a literal in
+# a condition: the number is a policy, and a policy nobody can change without
+# editing a script is one people route around instead (#15938).
+MAX_BEHIND="${PREFLIGHT_MAX_BEHIND:-50}"
 
 # Which interpreter runs the lint gates. CI runs 3.14; this box's default python3
 # is often older, and running the gates on it makes this script's whole premise
@@ -186,6 +190,34 @@ if git rev-parse --verify --quiet "$BASE" >/dev/null; then
     fail "a commit already on this branch carries an authorship trailer"
   else
     pass "no authorship trailers in $(git rev-list --count "$BASE..HEAD") commit(s)"
+  fi
+
+  # Behind-base gate (#15938). A stale base makes "is this already done?" answer
+  # NO when the truth is yes, so the session builds work that already exists --
+  # and nothing pushes back on that answer, because doing more work never looks
+  # like a mistake. Freshness was previously a side effect of having a PR:
+  # auto-update-pr-branches.yml keeps PR branches current, and before the first
+  # push there was no mechanism at all. This is that mechanism.
+  #
+  # Measured AFTER a best-effort fetch. Against a stale remote-tracking ref the
+  # count is a lower bound, and a lower bound presented as a verdict is the same
+  # defect one level up -- so when the fetch fails the basis is stated rather
+  # than the number being quietly trusted.
+  behind_basis="a freshly fetched $BASE"
+  case "$BASE" in
+    origin/*)
+      git fetch --quiet origin "${BASE#origin/}" 2>/dev/null \
+        || behind_basis="the LAST FETCH (origin unreachable) -- treat as a lower bound" ;;
+    *) behind_basis="$BASE as it stands locally" ;;
+  esac
+  behind=$(git rev-list --count "HEAD..$BASE" 2>/dev/null || echo "")
+  if [ -z "$behind" ]; then
+    skip_check "behind-base check" "cannot count commits between HEAD and $BASE"
+  elif [ "$behind" -gt "$MAX_BEHIND" ]; then
+    fail "branch is $behind commits behind $BASE (limit $MAX_BEHIND), measured against $behind_basis"
+    note "rebase before opening the PR:  git fetch origin && git rebase $BASE"
+  else
+    pass "branch is $behind commit(s) behind $BASE (limit $MAX_BEHIND), measured against $behind_basis"
   fi
 else
   skip_check "branch-commit checks" "$BASE not found -- run git fetch"
