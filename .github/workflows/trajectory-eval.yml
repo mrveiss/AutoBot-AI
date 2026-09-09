@@ -5,10 +5,21 @@
 # Replays the golden trajectory set (eval/golden/) against the current
 # candidate and emits a per-task-class pass/regress report.
 #
-# NON-BLOCKING signal (continue-on-error): this reports drift but does NOT
-# gate merges yet — mirroring how other advisory checks (api-wiring pre-#9864)
-# were introduced. Once the golden corpus is broad enough it can be promoted
-# to a gate by dropping continue-on-error and passing --fail-on-regression.
+# NON-BLOCKING signal (continue-on-error): this does NOT gate merges yet —
+# mirroring how other advisory checks (api-wiring pre-#9864) were introduced.
+#
+# It does not report drift yet either, and the header used to say it did.
+# Without recorded runs to replay against, eval.run falls through to the
+# self-consistency baseline, which answers with each golden's own expectations;
+# every comparison is then a file against itself and nothing can turn it red
+# (#16157). --require-real-candidate makes that state visible as UNMEASURED
+# rather than as a pass.
+#
+# Promotion to a gate needs three things, not one: recorded runs so the
+# comparison has two sides (#16157), trigger paths that include the behaviour
+# being asserted rather than only this harness (#16158), and a corpus
+# proportioned to a measured backlog (#16159). Only then does dropping
+# continue-on-error and passing --fail-on-regression mean anything (#16115).
 
 name: Trajectory Eval (non-blocking)
 
@@ -70,7 +81,14 @@ jobs:
           # #11062: keep pipefail but drop `|| true` so a harness crash surfaces
           # as a red step; continue-on-error on the step keeps it non-blocking.
           set -o pipefail
-          python -m eval.run --json trajectory-eval-report.json | tee trajectory-eval-report.md
+          # --require-real-candidate: refuse to report a pass when the replay fell
+          # through to the self-consistency baseline, which answers with each
+          # golden's own expectations and therefore cannot go red (#16157). Until
+          # recordings exist this step is UNMEASURED rather than green -- a true
+          # red that says nothing was compared, instead of a green that reads as
+          # drift detection. continue-on-error keeps it non-blocking either way.
+          python -m eval.run --require-real-candidate --json trajectory-eval-report.json \
+            | tee trajectory-eval-report.md
 
       - name: Upload eval report
         if: always()

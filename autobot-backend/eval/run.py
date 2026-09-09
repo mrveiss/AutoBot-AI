@@ -29,7 +29,7 @@ from pathlib import Path
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
-from eval.candidates import baseline_candidate
+from eval.candidates import baseline_candidate, recorded_replay_candidate
 from eval.report import DEFAULT_SCORE_EPSILON, RegressionReport
 from eval.runner import CandidateRunner, TrajectoryReplayer
 from eval.store import load_golden_set
@@ -66,7 +66,33 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Exit 1 when any regression is found (gated mode). Default: non-blocking (exit 0).",
     )
+    parser.add_argument(
+        "--recorded-dir",
+        default="",
+        help="Directory of recorded runs to replay against (defaults to eval/recorded/).",
+    )
+    parser.add_argument(
+        "--require-real-candidate",
+        action="store_true",
+        help=(
+            "Exit 1 if the run fell through to the self-consistency baseline. "
+            "CI passes this so a comparison of the goldens with themselves cannot "
+            "be reported as a pass (#16157)."
+        ),
+    )
     return parser.parse_args()
+
+
+def resolve_candidate(recorded_dir: Path) -> tuple[CandidateRunner, bool]:
+    """Pick the candidate to replay against, and say whether it is a real one.
+
+    Returns ``(candidate, is_real)``. ``is_real`` is False only for the
+    self-consistency baseline, which compares each golden with itself and
+    therefore cannot fail. Callers use it to refuse to call that a pass.
+    """
+    if recorded_dir.is_dir() and any(recorded_dir.glob("*.json")):
+        return recorded_replay_candidate(recorded_dir), True
+    return baseline_candidate, False
 
 
 def _resolve_output_path(json_path: str) -> Path | None:
@@ -101,8 +127,23 @@ def main() -> int:
     args = _parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    report = run_or_schedule(run_eval(epsilon=args.epsilon))
+    recorded_dir = Path(args.recorded_dir) if args.recorded_dir else Path(__file__).parent / "recorded"
+    candidate, is_real = resolve_candidate(recorded_dir)
+    report = run_or_schedule(run_eval(candidate=candidate, epsilon=args.epsilon))
     _emit(report, args.json)
+
+    if not is_real:
+        # The baseline candidate replays each golden's own recorded outcome, so
+        # every comparison is a file against itself and no input can make it
+        # red. Saying so is the point: a green here otherwise reads as drift
+        # detection to anyone who did not open candidates.py (#16157).
+        logger.warning(
+            "UNMEASURED: no recorded runs in %s, so this replay compared each golden "
+            "with itself. It cannot detect drift and its result asserts nothing.",
+            recorded_dir,
+        )
+        if args.require_real_candidate:
+            return 1
 
     if args.fail_on_regression and report.has_regressions:
         logger.error("Regressions detected — failing (gated mode).")
