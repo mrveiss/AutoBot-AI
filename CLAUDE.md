@@ -21,6 +21,7 @@ repeated here; where the two disagree, **this file wins**.
 | Claiming a work scope, adding a lock/lease, or any "which agent owns this" state | [`AGENT_COORDINATION.md`](docs/developer/AGENT_COORDINATION.md) |
 | Deviating from a standard pattern on purpose | [`ARCHITECTURE_EXCEPTIONS.md`](docs/developer/ARCHITECTURE_EXCEPTIONS.md) |
 | Adding a ratchet, changing its detector or matcher, or freezing/regenerating a baseline | [`RATCHET_BASELINES.md`](docs/developer/RATCHET_BASELINES.md) |
+| Writing or changing a guard, sweep, count, or acceptance criterion — or reading an empty result | [`MEASUREMENT_DISCIPLINE.md`](docs/developer/MEASUREMENT_DISCIPLINE.md) |
 
 ## Engineering Standard
 
@@ -36,6 +37,7 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 
 ## Never violate
 
+- **Say "I don't know" — never fabricate.** But an admission is not a closure — it is an opening: it means *"I need help, let's find this together"*, so **ask right then** in an interactive session, and where there is nobody to ask leave the criterion unticked, file it, and never drop it. A *stated* gap is a finding; an *unstated* one is the defect. A guessed cause, count or verdict is the one error treated as serious — for an agent a wrong answer is not an opinion, it executes. "I could not determine X" is a contribution. Guards and reports distinguish *nothing found* from *did not look*. See [`MEASUREMENT_DISCIPLINE.md`](docs/developer/MEASUREMENT_DISCIPLINE.md).
 - **PRs target `Dev_new_gui`.** `main`/`master` are blocked by the pre-commit hook — use `issue-*` or `hotfix-*`.
 - **Never work from a stale base** — and the half that bites is the judgement, not the freshness. Answer "is this already done?" against current `origin/Dev_new_gui` and the issue's acceptance criteria, **never against an old branch**: a stale answer points toward doing *more* work, so nothing pushes back on it, and reviving such a branch can regress newer code. `git fetch origin` and branch from (or rebase onto) current base before the first edit — the auto-update bot only refreshes branches that already have a PR, so the window this covers is everything before the first push.
 - **Commit format:** `<type>(scope): <description> (#issue-number)`. Never `--no-verify` — a PostToolUse hook auto-formats `.py`.
