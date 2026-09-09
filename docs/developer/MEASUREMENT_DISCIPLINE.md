@@ -392,6 +392,42 @@ that arrives *through* another finding is fixed at the source, and an exemption
 written for it is a permanent exemption for a condition that was never going to
 persist.
 
+## A slow queue and a hung job are the same status field
+
+Three deploys of one page produced no live site, and not one of them failed on
+content:
+
+```
+a8fad32   queued ~17 min for a runner, then marked errored
+            -- at the exact second the next push arrived
+e1cc415   build SUCCEEDED, deploy job CANCELLED two minutes later
+            -- by a POST asking for a build, sent because the row looked stuck
+```
+
+Deploys run one at a time, so **each attempt to help cancelled the work already
+in flight.** The API reported every cancellation as `Page build failed.`, duration
+`0`, error detail `null` — indistinguishable from a genuine failure, and it sent
+two sessions looking for a defect in a page that had built cleanly.
+
+**The status field cannot tell a slow queue from a stuck job.** Both show a row
+that has not moved. And the intuitive response to "not moving" — retry, re-request,
+re-push — is precisely the action that destroys the in-progress attempt. The
+instinct is not merely useless here; it is the mechanism of the failure.
+
+So the question is not *"has this stopped moving?"* but **"is anything working on
+it right now?"** — a question about a *runner*, which a status field does not
+answer and a queue-aware view does:
+
+| reads | answers |
+|---|---|
+| `pages/builds` status | what someone recorded, including cancellations, as "failed" |
+| `gh run list` | whether a runner has actually picked the job up |
+| the live URL | whether it landed |
+
+**Where an operation is exclusive, the cost of a wrong nudge is not a wasted call
+— it is the destruction of the attempt that was about to succeed.** Push once,
+then leave it alone long enough for the queue to be the explanation.
+
 ## "Latest" is not a fixed referent
 
 A watcher polled `/pages/builds/latest` waiting for one build and reported
