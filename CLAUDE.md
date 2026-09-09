@@ -37,6 +37,7 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 
 ## Never violate
 
+- **Say "I don't know" — never fabricate.** A *stated* gap is a deliverable and counts as done; an *unstated* one is the defect. A guessed cause, count or verdict is the one error treated as serious — for an agent a wrong answer is not an opinion, it executes. "I could not determine X" is a contribution. Guards and reports distinguish *nothing found* from *did not look*. See [`MEASUREMENT_DISCIPLINE.md`](docs/developer/MEASUREMENT_DISCIPLINE.md).
 - **PRs target `Dev_new_gui`.** `main`/`master` are blocked by the pre-commit hook — use `issue-*` or `hotfix-*`.
 - **Never work from a stale base** — and the half that bites is the judgement, not the freshness. Answer "is this already done?" against current `origin/Dev_new_gui` and the issue's acceptance criteria, **never against an old branch**: a stale answer points toward doing *more* work, so nothing pushes back on it, and reviving such a branch can regress newer code. `git fetch origin` and branch from (or rebase onto) current base before the first edit — the auto-update bot only refreshes branches that already have a PR, so the window this covers is everything before the first push.
 - **Commit format:** `<type>(scope): <description> (#issue-number)`. Never `--no-verify` — a PostToolUse hook auto-formats `.py`.
