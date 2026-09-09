@@ -33,6 +33,14 @@ on:
       - 'autobot-frontend/src/**/*.ts'
       - 'autobot-frontend/src/**/*.js'
       - 'autobot-frontend/src/**/*.vue'
+      # #13044: these three trees were ungated. A PR touching only
+      # `autobot_shared/` did not trigger this workflow at all, so the
+      # guard reported nothing rather than reporting clean.
+      - 'autobot_shared/**/*.py'
+      - 'autobot-slm-backend/**/*.py'
+      - 'autobot-slm-frontend/src/**/*.ts'
+      - 'autobot-slm-frontend/src/**/*.js'
+      - 'autobot-slm-frontend/src/**/*.vue'
       - '.github/workflows/duplication-guard.yml'
   push:
     branches: [Dev_new_gui]
@@ -41,6 +49,11 @@ on:
       - 'autobot-frontend/src/**/*.ts'
       - 'autobot-frontend/src/**/*.js'
       - 'autobot-frontend/src/**/*.vue'
+      - 'autobot_shared/**/*.py'
+      - 'autobot-slm-backend/**/*.py'
+      - 'autobot-slm-frontend/src/**/*.ts'
+      - 'autobot-slm-frontend/src/**/*.js'
+      - 'autobot-slm-frontend/src/**/*.vue'
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -66,6 +79,17 @@ jobs:
     env:
       # Maximum allowed duplication percentage. Ratchet DOWN only.
       THRESHOLD: '1.05'
+      # #13044: the three trees this guard never scanned get their OWN number
+      # rather than being folded into THRESHOLD above. That one is documented
+      # "Ratchet DOWN only", and widening its scope would force it up to absorb
+      # a population it never measured — which is how a down-only ratchet gets
+      # quietly re-licensed. Two scopes, two numbers, each meaning one thing.
+      #
+      # UNMEASURED is deliberate and self-destructing: the step below fails
+      # while it is set, so this cannot merge un-pinned. The real figure comes
+      # from this PR's own first run, which scans these trees for the first time
+      # in the repo's history — there is no way to know it before then.
+      SLM_THRESHOLD: 'UNMEASURED'
       JSCPD_VERSION: '5.0.6'
     steps:
       - uses: actions/checkout@v7
@@ -83,6 +107,35 @@ jobs:
             -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
             -r threshold,console \
             --threshold "${THRESHOLD}"
+
+      - name: Run duplication detector on the previously ungated trees
+        run: |
+          set -o pipefail
+          npx --yes "jscpd@${JSCPD_VERSION}" \
+            autobot_shared autobot-slm-backend autobot-slm-frontend/src \
+            -k 70 -l 8 --skip-comments \
+            -f python,typescript,javascript,vue \
+            -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
+            -r console 2>&1 | tee /tmp/slm-dup.log
+
+      - name: Gate the previously ungated trees
+        run: |
+          if [ "${SLM_THRESHOLD}" = "UNMEASURED" ]; then
+            echo "::error::SLM_THRESHOLD is still UNMEASURED. The scan above printed"
+            echo "the real figure for autobot_shared + autobot-slm-backend +"
+            echo "autobot-slm-frontend/src — the first measurement of those trees."
+            echo "Pin SLM_THRESHOLD to it (rounded UP to 2dp) before merging."
+            echo "This step exists so an unmeasured threshold cannot land as a"
+            echo "guard that never fails."
+            exit 1
+          fi
+          npx --yes "jscpd@${JSCPD_VERSION}" \
+            autobot_shared autobot-slm-backend autobot-slm-frontend/src \
+            -k 70 -l 8 --skip-comments \
+            -f python,typescript,javascript,vue \
+            -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
+            -r threshold,console \
+            --threshold "${SLM_THRESHOLD}"
 
       - name: Explain failure
         if: failure()
