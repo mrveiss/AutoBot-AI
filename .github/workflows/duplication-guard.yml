@@ -85,11 +85,20 @@ jobs:
       # a population it never measured — which is how a down-only ratchet gets
       # quietly re-licensed. Two scopes, two numbers, each meaning one thing.
       #
-      # UNMEASURED is deliberate and self-destructing: the step below fails
-      # while it is set, so this cannot merge un-pinned. The real figure comes
-      # from this PR's own first run, which scans these trees for the first time
-      # in the repo's history — there is no way to know it before then.
-      SLM_THRESHOLD: 'UNMEASURED'
+      # Measured on this PR's first run — the first time these trees were
+      # scanned in the repo's history: 754 files, 134 clones, **1.81%**
+      # duplicated lines. Pinned to 1.82, one hundredth above, so the current
+      # state passes and any increase fails.
+      #
+      # Worth recording beside the number: the trees nobody was measuring carry
+      # **2.4x** the duplication of the trees that were. The gated scan on the
+      # same run reported 4,168 files at 0.74%. That gap is the cost of the
+      # blind spot, not a coincidence — and it is why this gets its own ratchet
+      # rather than being averaged into THRESHOLD, where 1.81% of a small tree
+      # would disappear inside 0.74% of a large one.
+      #
+      # Ratchet DOWN only, as with THRESHOLD above.
+      SLM_THRESHOLD: '1.82'
       JSCPD_VERSION: '5.0.6'
     steps:
       - uses: actions/checkout@v7
@@ -123,10 +132,9 @@ jobs:
           if [ "${SLM_THRESHOLD}" = "UNMEASURED" ]; then
             echo "::error::SLM_THRESHOLD is still UNMEASURED. The scan above printed"
             echo "the real figure for autobot_shared + autobot-slm-backend +"
-            echo "autobot-slm-frontend/src — the first measurement of those trees."
-            echo "Pin SLM_THRESHOLD to it (rounded UP to 2dp) before merging."
-            echo "This step exists so an unmeasured threshold cannot land as a"
-            echo "guard that never fails."
+            echo "autobot-slm-frontend/src. Pin SLM_THRESHOLD to it (rounded UP"
+            echo "to 2dp). This step exists so an unmeasured threshold cannot"
+            echo "land as a guard that never fails."
             exit 1
           fi
           npx --yes "jscpd@${JSCPD_VERSION}" \
@@ -140,8 +148,11 @@ jobs:
       - name: Explain failure
         if: failure()
         run: |
-          echo "::error::Code duplication exceeded the baseline threshold of ${THRESHOLD}%."
+          echo "::error::A duplication scope exceeded its baseline. There are TWO,"
+          echo "and this step cannot tell which failed — read the step above."
+          echo "  THRESHOLD=${THRESHOLD}%      autobot-backend + autobot-frontend/src"
+          echo "  SLM_THRESHOLD=${SLM_THRESHOLD}%  autobot_shared + autobot-slm-backend + autobot-slm-frontend/src"
           echo "Reduce duplication (extract shared modules / shims) or, if the new"
-          echo "duplication is unavoidable and justified, raise THRESHOLD in"
-          echo ".github/workflows/duplication-guard.yml with a documented reason."
+          echo "duplication is unavoidable and justified, raise the ONE that failed"
+          echo "in .github/workflows/duplication-guard.yml with a documented reason."
           echo "See docs/reports/DEDUP_REPORT.md and the dedup methodology in #9794."
