@@ -116,7 +116,7 @@ jobs:
           printf '%s\n' "$pr_heads" > /tmp/pr_heads.txt
           echo "open PR head branches: $(grep -c . /tmp/pr_heads.txt || echo 0)"
 
-          updated=(); conflicted=(); current=(); skipped=(); pushfail=()
+          updated=(); conflicted=(); current=(); skipped=(); pushfail=(); errored=()
 
           # Read the branch list into an array BEFORE looping, rather than
           # feeding the loop from a process substitution. A `while read` loop
@@ -158,10 +158,22 @@ jobs:
                   continue
               fi
 
-              # --no-rebase is explicit, not redundant: a repo- or user-level
-              # pull.rebase setting must never silently turn this into the one
-              # operation the design forbids.
-              if git merge --no-rebase --no-edit "origin/$BASE" >/dev/null 2>&1; then
+              # NO --no-rebase here, and the reason is #15938. It was added to
+              # stop a repo- or user-level `pull.rebase` from turning this into
+              # a rebase. `pull.rebase` governs `git pull`; `git merge` has no
+              # rebase mode to disable and does not accept the flag -- so every
+              # merge died with `error: unknown option 'no-rebase'`, and the
+              # else-branch below filed each one as CONFLICTS. Measured on the
+              # 2026-09-09 02:42 run: updated=0, conflicted=11, job green. A
+              # trial of the same 11 without the flag merged 5 cleanly and hit
+              # 2 real conflicts, so this workflow had never merged anything.
+              #
+              # A guard added against an impossible risk disabled the thing it
+              # guarded, and reported the outcome the reader most expected.
+              # repo_tests/git_merge_rejects_pull_only_flags_15938_test.py pins it.
+              merge_out=$(git merge --no-edit "origin/$BASE" 2>&1)
+              merge_rc=$?
+              if [ "$merge_rc" = "0" ]; then
                   if [ "$DRY_RUN" = "true" ]; then
                       echo "    would push (dry run)"
                       updated+=("$branch ($behind)")
@@ -174,12 +186,21 @@ jobs:
                       echo "::warning::push rejected for $branch (moved concurrently?); not forcing"
                       pushfail+=("$branch")
                   fi
-              else
+              elif printf '%s' "$merge_out" | grep -q '^CONFLICT'; then
                   # Skipped and named, never forced. A branch that will not
                   # merge is information about unfinished work.
                   git merge --abort >/dev/null 2>&1 || true
                   echo "    CONFLICTS — skipped"
                   conflicted+=("$branch ($behind)")
+              else
+                  # A merge that failed WITHOUT a conflict is a defect in this
+                  # job, not information about the branch. Kept in its own
+                  # bucket and surfaced with git's own words: collapsing it into
+                  # "conflicted" is what hid #15938 for the life of the file.
+                  git merge --abort >/dev/null 2>&1 || true
+                  echo "::error::merge of $BASE into $branch failed without a conflict (rc=$merge_rc): $(printf '%s' "$merge_out" | head -1)"
+                  echo "    FAILED (not a conflict) — $(printf '%s' "$merge_out" | head -1)"
+                  errored+=("$branch ($behind): $(printf '%s' "$merge_out" | head -1)")
               fi
           done
 
@@ -194,12 +215,21 @@ jobs:
                   "| already current | ${#current[@]} |" \
                   "| skipped for conflict | ${#conflicted[@]} |" \
                   "| push rejected | ${#pushfail[@]} |" \
+                  "| FAILED (not a conflict) | ${#errored[@]} |" \
                   "| excluded by policy | ${#skipped[@]} |" ""
           if [ ${#conflicted[@]} -gt 0 ]; then
               summary "### Skipped for conflict — these need a person" ""
               summary "These will not merge cleanly. That is information about" \
                       "unfinished work, not garbage: land it or decide against it." ""
               for b in "${conflicted[@]}"; do summary "- \`$b\` commits behind"; done
+              summary ""
+          fi
+          if [ ${#errored[@]} -gt 0 ]; then
+              summary "### Failed without a conflict — this job is broken, not the branches" ""
+              summary "A merge that fails for a reason other than a conflict is a defect here." \
+                      "#15938 was exactly this, filed as \`conflicted\` and green for the life" \
+                      "of the file." ""
+              for b in "${errored[@]}"; do summary "- \`$b\`"; done
               summary ""
           fi
           if [ ${#pushfail[@]} -gt 0 ]; then
@@ -213,9 +243,30 @@ jobs:
           fi
 
           echo "updated=${#updated[@]} current=${#current[@]} conflicted=${#conflicted[@]}" \
-               "pushfail=${#pushfail[@]} excluded=${#skipped[@]}"
+               "pushfail=${#pushfail[@]} errored=${#errored[@]} excluded=${#skipped[@]}"
 
           # A conflict is a reportable outcome, not a job failure: failing here
           # would make the run red every time until a human resolved 18 parked
           # branches, and a check that is always red stops being read.
+          #
+          # A NON-conflict failure is the opposite -- it means this job did not
+          # do its work, and #15938 is what that looks like when it is not
+          # surfaced: eleven branches filed as conflicted, zero merged, green.
+          if [ ${#errored[@]} -gt 0 ]; then
+              echo "::error::${#errored[@]} branch(es) failed to merge for a reason that is " \
+                   "NOT a conflict; this job is broken. See the summary."
+              exit 1
+          fi
+
+          # The signature of #15938 without needing its specific cause: work was
+          # considered and none of it moved. A conflict-only outcome across every
+          # eligible branch is possible in principle and has never once been the
+          # explanation -- so it is reported as suspicious rather than accepted.
+          considered=$(( ${#updated[@]} + ${#current[@]} + ${#conflicted[@]} + ${#pushfail[@]} + ${#errored[@]} ))
+          if [ "$considered" -gt 0 ] && [ ${#updated[@]} -eq 0 ] && [ ${#current[@]} -eq 0 ]; then
+              echo "::warning::considered $considered branch(es) and neither merged nor found " \
+                   "any already current. That is the shape of a broken merge step (#15938), " \
+                   "not of a busy week. Check the per-branch lines above before trusting this run."
+          fi
+
           exit 0

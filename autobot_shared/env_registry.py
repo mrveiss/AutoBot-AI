@@ -217,6 +217,20 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_WORKSPACE_BASE_REF",
+        type=str,
+        default="origin/Dev_new_gui",
+        description=(
+            "Ref that new task workspaces branch from (#15938). Distinct from "
+            "AUTOBOT_GIT_BRANCH, which records the branch the running instance was "
+            "built from: one describes this deployment, the other where new work starts."
+        ),
+        component="system",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_GIT_BRANCH",
         type=str,
         default="Dev_new_gui",

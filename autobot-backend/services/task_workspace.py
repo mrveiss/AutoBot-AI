@@ -46,6 +46,13 @@ _ACTIVE_LOCK_FILENAME = ".active-lock"
 # cleanup worker and the request-handler resume path run in different processes.
 _GUARD_LOCK_FILENAME = ".wt-guard"
 _MAX_WORKTREES_PER_AGENT = 5
+# The ref every new workspace branches from (#15938). Env-var backed, never a
+# literal at the call site. Without an explicit start point `git worktree add`
+# branches from the main tree's HEAD, so a workspace inherits whatever that tree
+# had last fetched -- and a stale base makes "is this already done?" answer NO
+# when the truth is yes, which costs a whole session's work and never looks like
+# a mistake while it is happening.
+_WORKSPACE_BASE_REF = os.environ.get("AUTOBOT_WORKSPACE_BASE_REF") or "origin/Dev_new_gui"
 
 
 @contextmanager
@@ -345,11 +352,48 @@ async def release_for_task(
 # ---------------------------------------------------------------------------
 
 
+def _fetched_base_ref(root: Path) -> str:
+    """Refresh and return the ref new workspaces branch from (#15938).
+
+    The fetch is best effort: offline, the last-known base is still far better
+    than the main tree's HEAD, which is what an absent start point uses. A
+    missing ref is different and raises -- branching from an unknown base is the
+    defect, and silently falling back to HEAD would restore it while looking
+    like success.
+    """
+    remote, _, ref = _WORKSPACE_BASE_REF.partition("/")
+    if remote and ref:
+        subprocess.run(  # nosec B603 B607  # fixed git argv; values come from a module constant
+            ["git", "fetch", "--quiet", remote, ref],
+            cwd=str(root),
+            check=False,
+            capture_output=True,
+            text=True,
+            env=scrubbed_git_env(),  # #15246: an inherited GIT_DIR overrides cwd here too
+        )
+    resolved = subprocess.run(  # nosec B603 B607  # fixed git argv
+        ["git", "rev-parse", "--verify", "--quiet", f"{_WORKSPACE_BASE_REF}^{{commit}}"],
+        cwd=str(root),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=scrubbed_git_env(),
+    )
+    if resolved.returncode != 0:
+        raise RuntimeError(
+            f"cannot resolve workspace base ref {_WORKSPACE_BASE_REF!r} in {root}; "
+            "refusing to branch from the main tree's HEAD, which may be stale "
+            "(set AUTOBOT_WORKSPACE_BASE_REF, or fetch the remote)"
+        )
+    return _WORKSPACE_BASE_REF
+
+
 def _git_add_worktree(root: Path, workspace_dir: Path, branch: str) -> None:
     """Run git worktree add, handling pre-existing branch/directory gracefully."""
+    base_ref = _fetched_base_ref(root)
     try:
         subprocess.run(  # nosec B603 B607  # fixed git argv; branch and workspace_dir are validated Path/str values
-            ["git", "worktree", "add", "-b", branch, str(workspace_dir)],
+            ["git", "worktree", "add", "-b", branch, str(workspace_dir), base_ref],
             cwd=str(root),
             check=True,
             capture_output=True,
