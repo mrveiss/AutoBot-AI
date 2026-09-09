@@ -18,7 +18,10 @@
 #   |           | scanned trees           | GATES at `any`, no allowance        |
 #   | pip-audit | 4 advisories, all in chromadb==1.5.9 (run 32834864623)
 #   |           |                         | GATES at `any`, 4 named allowances  |
-#   | npm audit | 0 advisories at every severity across 1191 deps (#13400),
+#   | npm audit | 0 advisories at every severity across 1191 deps in
+#   |           | autobot-frontend ONLY (#13400). SEVEN workspaces have a
+#   |           | lockfile and can be audited; ONE is (#16131) -- so this
+#   |           | number is one workspace's, not the repository's.
 #   |           | re-confirmed by the same run
 #   |           |                         | GATES at `high`, no allowance       |
 #   | safety    | not measurable in CI — unauthenticated `safety check` is

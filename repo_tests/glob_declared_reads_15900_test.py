@@ -139,6 +139,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/embedded_python_dependency_declared_test.py",
             "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
             "repo_tests/hook_decision_exit_codes_15956_test.py",
+            "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/one_git_enumeration_15926_test.py",
             "repo_tests/shell_lib_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
@@ -158,6 +159,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         {
             "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
             "repo_tests/hook_suites_run_in_ci_test.py",
+            "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/infra_libs_test_wiring_guard_15051_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
         },
@@ -173,6 +175,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/frontend_duplicate_typecheck_compile_guard_test.py",
             "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
             "repo_tests/hook_suites_run_in_ci_test.py",
+            "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/infra_libs_test_wiring_guard_15051_test.py",
             "repo_tests/job_name_names_what_it_runs_test.py",
             "repo_tests/pip_relative_editable_needs_chdir_test.py",
