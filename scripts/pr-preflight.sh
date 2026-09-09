@@ -583,16 +583,48 @@ CQEOF
     skip_check "startup-import-smoke" "imports the backend -- re-run with --full"
   fi
 
-  # These two are reproducible but multi-step: each needs an `npm ci` in a
-  # frontend workspace before its gate means anything, and a preflight that
-  # installs packages is a preflight that gets run once and then avoided.
-  # Named with their exact remediation rather than wired half-way -- a check
-  # that runs a weaker version of its gate reads as coverage and is not.
-  # Wiring these properly is the remaining half of #15933.
-  skip_check "verify-generated-types" \
-    "needs npm ci + a schema dump: see .github/workflows/verify-generated-types.yml, then npm run gen:types"
-  skip_check "Unit & Integration Tests" \
-    "needs npm ci in autobot-frontend: npm --prefix autobot-frontend ci && npm --prefix autobot-frontend run test:unit"
+  # #15933: these two were skipped outright because each needs an `npm ci`
+  # first, and a preflight that installs packages is a preflight that gets run
+  # once and then avoided. That reasoning stands -- so this CHECKS rather than
+  # installs, exactly as the Python side does at the top of this script with
+  # `setup-ci-parity-env.sh --check`: run the gate when the workspace is ready,
+  # name the single command when it is not, never install from in here.
+  #
+  # The freshness test is `node_modules/.package-lock.json` against
+  # `package-lock.json`. npm writes the former on every install, so a lockfile
+  # newer than it means the tree was installed from a different lockfile. This
+  # needs no npm invocation, which matters: asking npm whether npm needs to run
+  # is slow enough that people stop running the preflight.
+  #
+  # A stale tree is a `skip_check`, not a `note`: the gate COULD NOT RUN, and
+  # the distinction those two draw is the whole reason SKIPPED is counted.
+  frontend_deps_current() {
+    local ws="$REPO_ROOT/autobot-frontend"
+    [ -d "$ws/node_modules" ] || return 1
+    [ -f "$ws/node_modules/.package-lock.json" ] || return 1
+    [ ! "$ws/package-lock.json" -nt "$ws/node_modules/.package-lock.json" ]
+  }
+
+  # verify-generated-types needs NO node_modules, which is worth stating because
+  # the issue and this script both assumed it did. `npm run verify:types` is
+  # `git diff --exit-code src/types/generated/api.ts` -- a git command wearing an
+  # npm script's clothes. It runs unconditionally, so a stale workspace still
+  # gets this gate. The `test -f` first mirrors the workflow: npm reports a
+  # missing file as a script failure, and "the artefact is absent" and "the
+  # artefact differs" want different fixes.
+  require_check "verify-generated-types" \
+    '^autobot-frontend/' \
+    bash -c 'cd "$0/autobot-frontend" && test -f src/types/generated/api.ts && npm run verify:types' "$REPO_ROOT"
+
+  # `test:unit` is `vitest run`, which genuinely needs the workspace installed.
+  if frontend_deps_current; then
+    require_check "Unit & Integration Tests" \
+      '^autobot-frontend/' \
+      bash -c 'cd "$0/autobot-frontend" && npm run test:unit' "$REPO_ROOT"
+  else
+    skip_check "Unit & Integration Tests" \
+      "autobot-frontend/node_modules is absent or older than package-lock.json -- npm --prefix autobot-frontend ci"
+  fi
 
   # ---- gates this box cannot reproduce -----------------------------------
   if [ -n "${AUTOBOT_MIGRATION_TEST_ADMIN_URL:-}" ]; then
