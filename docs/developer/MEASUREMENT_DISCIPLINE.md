@@ -21,6 +21,13 @@ nothing, and the nothing is indistinguishable from a true negative.
 
 ## Six families, six different remedies
 
+Instances carry the issue they came from where one was filed. Some did not get
+one — they were caught inside a single session's own work and fixed in the same
+change, so there is nothing to link. **That absence is itself worth reading: an
+instance with no issue number was found and fixed by the person who caused it,
+which is the rarest outcome on this page and never the one to plan for.**
+
+
 Sorting the instances showed these are not one law. Conflating them produces the
 wrong fix.
 
@@ -49,8 +56,8 @@ something else, and it looked identical.
 Nothing is narrowed. Authored prose describing what code does is taken as proof
 that it does it.
 
-- An acceptance criterion ticked against `test_the_second_agent_learns_before_editing_not_at_merge`. Read in full, the body used intent `"x"` for the second edit, so nothing expressed *non-overlapping* — and `_, found = await acquire_aware(...)` discarded the half that proves the claim is granted. **An implementation that refused the claim passed it unchanged.**
-- A criterion nearly ticked on `grep -cE "class Interest|branch|intent"` returning **66** — word frequency in a 300-line file.
+- An acceptance criterion ticked against `test_the_second_agent_learns_before_editing_not_at_merge`. Read in full, the body used intent `"x"` for the second edit, so nothing expressed *non-overlapping* — and `_, found = await acquire_aware(...)` discarded the half that proves the claim is granted (#15987). **An implementation that refused the claim passed it unchanged.**
+- A criterion nearly ticked on `grep -cE "class Interest|branch|intent"` returning **66** — word frequency in a 300-line file (#15987).
 - An acceptance list written from a two-hook symptom while a third hook carried the same defect.
 
 **Remedy: read the behaviour, not the label.**
@@ -94,7 +101,23 @@ A verdict that stops you acting feels safe in a way one telling you to act does
 not. A gate saying WAIT is indistinguishable from a healthy queue, so it receives
 less scrutiny than one saying MERGE.
 
+Worked example, from the gate's own author. A merge gate reported `STALE PR
+OBJECT` — **truthfully, for an hour** — while the reviewer reading it supplied a
+cause the gate had never reported. The output was correct and the explanation was
+invented on top of it, and went unexamined because **a refusal feels like it has
+already been investigated.** Nobody audits a "no".
+
+That is also what separates D from the guard ladder's second rung. Rung 2 is a
+*guard* answering an adjacent question; D is a *person* answering one on the
+guard's behalf.
+
 ### F. The output is correct, complete, and about a different question
+
+*(E is the sixth family and is introduced further down, with the gate ladder its
+evidence belongs to. The letters are out of sequence because E was written first
+and is cited by number on #16100 and #13148; renaming it would break those. The
+sequence is stated here rather than left for a reader to trip over — on this page
+above all, a label that does not match what it labels is the subject.)*
 
 Nothing is narrowed and nothing is stale. The instrument answers perfectly — a
 question next to the one being asked.
@@ -103,9 +126,9 @@ question next to the one being asked.
 the instrument saw a subset of the truth. If no, it is F, and no amount of
 additional data will help, because the output was never about the thing.
 
-- `js-yaml [high] 4.0.0 - 4.3.1` read as *no fix exists*, and an allowance written on it. That line is an exact answer to **which versions are vulnerable**. It answers **which versions exist** not at all — 4.3.1 is the last *affected* release, 4.3.2 was already shipping, and dependabot was already carrying the bump.
+- `js-yaml [high] 4.0.0 - 4.3.1` read as *no fix exists*, and an allowance written on it (#16089). That line is an exact answer to **which versions are vulnerable**. It answers **which versions exist** not at all — 4.3.1 is the last *affected* release, 4.3.2 was already shipping, and dependabot was already carrying the bump.
 - `git cherry` reporting 5, 3 and 2 commits "not in base" for three worktrees whose work had landed. Accurate about patch-id divergence under squash merges; silent about landedness.
-- `gh pr list --author @me` returning six sessions' PRs. Every branch here is authored `mrveiss`, so it is a correct answer to *which PRs did this account author*, read as *which PRs are mine*.
+- `gh pr list --author @me` returning six sessions' PRs. Every branch here is authored `mrveiss`, so it is a correct answer to *which PRs did this account author*, read as *which PRs are mine* (#16124).
 
 **Remedy: name the field's actual question before building on it.**
 
@@ -245,6 +268,21 @@ after a narrowing is a count of "things in the forms I thought of".
 **sets, not counts**: two implementations can agree on a total and disagree on
 membership.
 
+**And a count mismatch is a prompt to compare definitions — not proof that the
+lower one is blind.** This is the counterweight to everything else on this page,
+which otherwise trains a reflex that is wrong often enough to cause work.
+
+`grep "self.config = config"` finds **7**; `flake8 --select=F821` finds **5**.
+Neither is blind. One counts assignments and the other counts undefined names,
+and the two they differ on are exactly the two files that bind the name — so
+both are right, about different questions. Reaching for "the lower number is the
+broken instrument" would have sent someone fixing two files that were already
+correct.
+
+The rule is symmetric with the rest: when two instruments disagree, the finding
+is in the **gap between their definitions**, and either one of them may be the
+one telling the truth.
+
 ## Why care is not the remedy
 
 Every instance on this page was found by someone actively hunting this class of
@@ -252,7 +290,7 @@ error — usually in someone else's work, in the same hour they committed it in
 their own. Three examples from one night:
 
 - A session wrote up the "produced and consumed by nothing" rule, then an hour later shipped a sweep printing `MERGEABLE` beside `shards={'queued': 12}` on one line.
-- Two sessions reasoned all evening from *"the required context is `python-suite`"*. Neither listed the required contexts. It was load-bearing for every conclusion and one API call away. **An unexamined premise shared by everyone stops looking like a premise** — agreement converts it into the ground the argument stands on.
+- Two sessions reasoned all evening from *"the required context is `python-suite`"*. Neither listed the required contexts (#16087). It was load-bearing for every conclusion and one API call away. **An unexamined premise shared by everyone stops looking like a premise** — agreement converts it into the ground the argument stands on.
 - Two sessions produced wrong figures, both inside comments that carefully enumerated *other* unmeasured quantities. **The scrutiny went to the numbers each author already doubted; the number they were confident about got none** — which is anti-correlated with where the error was, because confidence is what buys the exemption from checking.
 
 So the remedy is mechanical, not attitudinal: name the selector, read the
