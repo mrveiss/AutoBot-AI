@@ -90,6 +90,36 @@ READ_OR_REMOVE = ("--get", "--get-all", "--get-regexp", "--list", "--unset", "--
 
 SCANNED = ("*.sh", "*.py", "*.yml", "*.yaml")
 
+#: Shebang forms that mean "this file is a shell script whatever it is called".
+SHELL_SHEBANG = ("sh", "bash", "dash", "zsh", "ksh")
+
+
+def _shell_scripts_without_an_extension(root: Path) -> list[str]:
+    """Tracked files with no suffix whose shebang says shell (#16139).
+
+    Extension-based scanning cannot see a git hook. `pre-commit`, `pre-push`,
+    `post-commit-doc-sync` and 26 more carry no suffix by git's own convention,
+    and they are the **most** likely place for a `core.hooksPath` override --
+    the guard existed to police hook configuration and could not read the hooks.
+
+    Detected by shebang rather than by listing the hook directories: a new hook
+    directory would walk straight past a path allowlist, and silently, which is
+    the failure this guard is about.
+    """
+    found = []
+    for rel in tracked_paths(root, "*"):
+        if "." in Path(rel).name:
+            continue
+        try:
+            with (root / rel).open(encoding="utf-8") as handle:
+                first = handle.readline(200)
+        except (OSError, UnicodeDecodeError):
+            continue
+        if first.startswith("#!") and any(sh in first for sh in SHELL_SHEBANG):
+            found.append(rel)
+    return found
+
+
 # This guard's own file states the pattern in prose and in its fixtures.
 EXEMPT = {"repo_tests/hooks_path_override_15961_test.py"}
 
@@ -118,7 +148,8 @@ def test_no_tracked_script_overrides_the_hooks_path() -> None:
     """An override in a tracked script is the pattern becoming a habit."""
     root = repo_root()
     offenders = []
-    for rel in tracked_paths(root, *SCANNED):
+    swept = list(tracked_paths(root, *SCANNED)) + _shell_scripts_without_an_extension(root)
+    for rel in swept:
         if rel in EXEMPT:
             continue
         path = root / rel
@@ -269,3 +300,22 @@ def test_a_relative_hookspath_defeats_hooks_in_a_worktree(
         "resolves it, #15961's premise has changed"
     )
     assert "bypass" in _git("log", "--oneline", cwd=repo_with_a_blocking_hook).stdout
+
+
+def test_the_sweep_reaches_the_hooks_it_exists_to_police() -> None:
+    """#16139: extension-based scanning could not see a single git hook.
+
+    A guard whose population excludes its subject reports clean about a tree it
+    never opened, and the report is indistinguishable from a real one. The floor
+    is on the *population*, not on findings -- a findings floor is satisfied by
+    finding nothing, which is also what a collapsed sweep returns.
+    """
+    hooks = _shell_scripts_without_an_extension(repo_root())
+    assert len(hooks) >= 20, (
+        f"only {len(hooks)} extensionless shell script(s) found; this repo tracks ~29 "
+        "git hooks with no suffix, and they are the files most likely to set "
+        "core.hooksPath. A collapsed sweep here passes every assertion above."
+    )
+    assert any(
+        Path(rel).name in {"pre-commit", "pre-push"} for rel in hooks
+    ), "the canonical git hooks are not in the swept set — the sweep is not reaching them"
