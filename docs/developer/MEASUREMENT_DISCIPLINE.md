@@ -280,15 +280,18 @@ each one prevented a wrong commit:
 Each cost one sentence. Each was made by someone who could have said nothing and
 been believed.
 
-**But "I don't know" is not done.** It is the honest *start* of the work, not a
-discharge of it. An admission is rewarded because it routes a problem to someone
-who can solve it — not because it settles the problem. Saying it and moving on
-is the same defect as guessing, with better manners.
+**But "I don't know" is not done — it is an opening.** It means *"I need help
+with this: let's research it, guide me, let's find the answer together."* An
+admission is rewarded because it **starts** the conversation that solves the
+problem, not because it settles it. Saying it and moving on is the same defect as
+guessing, with better manners.
 
-So a stated gap carries an obligation, and the existing rules already say what
-it is: leave the criterion **unticked** and say why; fix it in the current scope
-or **file it**; never drop it. An admission that produces no issue, no unticked
-box and no follow-up has simply lost the finding more politely.
+So the follow-through is not silence. **In an interactive session, ask right
+then** — for the guidance, the decision, or the joint dig that closes the gap;
+that is what the admission is *for*. Where there is nobody to ask, the existing
+rules say the rest: leave the criterion **unticked** and say why; fix it in
+scope or **file it**; never drop it. An admission that opens no dialog and
+produces no issue has lost the finding more politely.
 
 What the admission changes is *blame*, not *status*. The rule that partial
 delivery closes nothing is about **unstated** gaps — work quietly narrowed to
