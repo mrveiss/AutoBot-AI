@@ -117,6 +117,39 @@ def latest_per_name(*sources: Iterable[dict]) -> dict[str, str]:
     return merged
 
 
+def latest_runs(observations: Iterable[dict]) -> list[dict]:
+    """The surviving run OBJECT per name, applying the same rules as
+    :func:`latest_per_name`.
+
+    :func:`latest_per_name` answers "what is the state", which is enough for a
+    gate. A caller that must then INSPECT the run -- read its job id, its steps,
+    its url -- needs the object that won, not its conclusion. Returning the
+    conclusion and making the caller re-find its run is how a caller ends up
+    re-deriving the grouping, or skipping it.
+    """
+    winners: dict[str, dict] = {}
+    for run in observations:
+        name = run.get("name") or run.get("context")
+        if not name:
+            continue
+        previous = winners.get(name)
+        if previous is None:
+            winners[name] = run
+            continue
+        state = run.get("conclusion") or run.get("state") or "pending"
+        prev_state = previous.get("conclusion") or previous.get("state") or "pending"
+        if state in INCONCLUSIVE and prev_state not in INCONCLUSIVE:
+            continue
+        if prev_state in INCONCLUSIVE and state not in INCONCLUSIVE:
+            winners[name] = run
+            continue
+        started = run.get("started_at") or run.get("created_at") or ""
+        prev_started = previous.get("started_at") or previous.get("created_at") or ""
+        if started >= prev_started:
+            winners[name] = run
+    return list(winners.values())
+
+
 def all_pages(endpoint: str, key: str | None = None) -> list[dict]:
     """Every page of a paginated endpoint, flattened.
 
