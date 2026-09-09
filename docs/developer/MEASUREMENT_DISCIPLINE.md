@@ -494,7 +494,7 @@ Any endpoint whose name is a superlative — `latest`, `head`, `current` — ans
 *"what is at this position now"*, and the position is not what you were asking
 about.
 
-## A scoped absence degrades into an absolute one, and never back
+## Compression drops the qualifier, with or without a relay
 
 An issue reported, correctly and in these words, *"a scoped absence"*: within
 `autobot-backend/judges/`, nothing imports `ResponseQualityEvaluator`. Its author
@@ -520,12 +520,26 @@ The drift has a direction, and it is not symmetric:
 Everything that makes a sentence survive retelling also strips its scope. Nobody
 adds a path back in.
 
-**So where findings are handed between people, the selector travels with the
-result or the result does not travel.** A path, a glob, a directory: these are not
-context around a grep finding, they are part of it. The rule at the top of this
-page — name the selector where the result is reported — applies with more force
-to a claim being *forwarded* than to one being published, because each hop is an
-opportunity to shed the qualifier and none is an opportunity to recover it.
+**And it is not a transmission defect.** The tidiest instance had no relay at all:
+a research document stated its claim bounded — *"nothing in the source's loop
+design is ahead of ours"*, six named axes, `file:line` evidence — and the index
+row summarising it said *"our loop design is ahead on every axis"*. Same session,
+same document, same sitting. Nothing was retold and the bound was still lost.
+
+So the mechanism is **compression**, and a relay is only the case where it happens
+repeatedly. Any act of shortening selects for the version without the qualifier,
+because the qualifier is the part that costs words and invites a question.
+
+Two places this bites hardest, both being *summaries of something more careful*:
+
+- **an index row**, which is the surface people scan to decide whether to open the document — so the scoping ends up in the file they then do not read
+- **a message forwarding a finding**, where each hop can shed the qualifier and none can recover it
+
+The remedy is the same in both: **the summary carries the bound, or it is not a
+summary of that claim.** Where a shortened form cannot hold the qualifier, the
+honest move is to quote the original sentence rather than compress it — a longer
+row is cheaper than an unbounded claim on the surface most likely to be read
+alone.
 
 ## A number that keeps being wrong and never changes a conclusion
 
