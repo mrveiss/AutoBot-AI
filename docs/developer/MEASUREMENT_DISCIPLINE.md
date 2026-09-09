@@ -392,6 +392,39 @@ that arrives *through* another finding is fixed at the source, and an exemption
 written for it is a permanent exemption for a condition that was never going to
 persist.
 
+## A scoped absence degrades into an absolute one, and never back
+
+An issue reported, correctly and in these words, *"a scoped absence"*: within
+`autobot-backend/judges/`, nothing imports `ResponseQualityEvaluator`. Its author
+anticipated the misreading and named two real importers in the body.
+
+Relayed to a second session, the path fell out — *"six judge modules and not one
+importing it"*. Relayed again to a third, it arrived as **nothing imports it**.
+Measured on base: **eight importers**, including the production KB compaction
+path the neighbouring issues are about. Zero within `judges/`, exactly as filed.
+
+**The remedies are opposite.** *Nothing imports it* is dead code: revive or
+delete. *The judge modules reimplement it* is duplicated live code: converge onto
+the one that works. So the relay did not merely lose precision — it substituted
+the weaker argument while making it sound more dramatic.
+
+The drift has a direction, and it is not symmetric:
+
+| | |
+|---|---|
+| the scoped claim | longer, needs a qualifier, invites "which directory?" |
+| the absolute claim | shorter, more striking, self-contained |
+
+Everything that makes a sentence survive retelling also strips its scope. Nobody
+adds a path back in.
+
+**So where findings are handed between people, the selector travels with the
+result or the result does not travel.** A path, a glob, a directory: these are not
+context around a grep finding, they are part of it. The rule at the top of this
+page — name the selector where the result is reported — applies with more force
+to a claim being *forwarded* than to one being published, because each hop is an
+opportunity to shed the qualifier and none is an opportunity to recover it.
+
 ## A number that keeps being wrong and never changes a conclusion
 
 One count was stated four times by three sessions and was wrong three of them:
