@@ -227,6 +227,20 @@ every ratchet on the day it is introduced. A known positive is a claim about the
 *instrument*, so it holds at any population size including zero — and it is the
 one check on this page a lone author can apply.
 
+**But one control is a control for one shape**, and that is a real limit on the
+remedy this page recommends most. A narrowing pass over 136 anchored tests kept
+87 and dropped one that mattered — and its positive control survived the
+narrowing *because the control was of the surviving shape*:
+
+```python
+Path(__file__).parent / "nodes.py"     # the control — matched
+SLM / "models" / "database.py"         # missed: the root is a module-level variable
+```
+
+A control witnesses only the form it is written in. So a control **set** needs
+one case per *shape* the population takes, not one case — and a count published
+after a narrowing is a count of "things in the forms I thought of".
+
 **A second derivation, sharing neither enumeration nor matching.** Then compare
 **sets, not counts**: two implementations can agree on a total and disagree on
 membership.
@@ -280,6 +294,12 @@ and a failure explainer must distinguish *this failed* from *I cannot tell which
 of these failed*.
 
 **A failure explainer that guesses is worse than one that says it does not know.**
+This codebase already says it better than this page can, in a shipped prompt:
+*"Providing plausible-sounding but fabricated information is worse than saying
+'I don't know.'"* Fabricating a cause makes the author look competent for
+exactly as long as it takes someone to act on it; admitting the gap is what lets
+a second person find the answer, which — as every entry on this page shows — is
+the only thing that ever finds it.
 One that asserted a threshold breach on *any* job failure printed a confident
 wrong number to change, on top of a real failure. Manufacturing a false cause is
 worse than reporting none, because **a guess laundered through an explainer stops
