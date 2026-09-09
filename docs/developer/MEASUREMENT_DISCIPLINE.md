@@ -392,6 +392,36 @@ that arrives *through* another finding is fixed at the source, and an exemption
 written for it is a permanent exemption for a condition that was never going to
 persist.
 
+## "Latest" is not a fixed referent
+
+A watcher polled `/pages/builds/latest` waiting for one build and reported
+**"still building"** for its whole lifetime. The build it was waiting on had
+**errored**. A second push arrived, `latest` re-pointed to the new build, and the
+watcher — which had never held a SHA — saw an unbroken run of `building`: first
+one build, then a different one.
+
+```
+12:13:36  a8fad32   errored     <- never observed
+12:22:01  e1cc415   building    <- what "latest" became
+watcher:  building, building, building, ... TIMEOUT
+```
+
+**The failure was not missed through inattention. It was overwritten.** The
+watcher was reading a pointer, not a thing, and nothing in the response says
+which build the status belongs to unless you compare `.commit` yourself.
+
+Related to the endpoint returning a *superset* of what you meant, and worse in
+one respect: there the extra rows are visible and you can filter them. Here the
+row you wanted is simply gone from the answer, replaced by one that looks the
+same. And the direction is the dangerous one — a superseded failure reads as
+**still working**, which prompts waiting rather than investigating.
+
+**Key a watch to the identity you care about, never to a positional alias.** Match
+the build by `.commit`, the check-run by `name` plus `started_at`, the PR by SHA.
+Any endpoint whose name is a superlative — `latest`, `head`, `current` — answers
+*"what is at this position now"*, and the position is not what you were asking
+about.
+
 ## A scoped absence degrades into an absolute one, and never back
 
 An issue reported, correctly and in these words, *"a scoped absence"*: within
