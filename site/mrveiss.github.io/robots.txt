@@ -1,0 +1,24 @@
+# https://mrveiss.github.io/
+#
+# Everything here is public documentation and source links. Nothing is gated,
+# so nothing is disallowed -- an empty Disallow is the honest statement, rather
+# than a list of paths that do not exist.
+
+User-agent: *
+Allow: /
+
+# Named explicitly rather than relying on the wildcard: several of these read
+# robots.txt for a specific token and treat its absence as ambiguous.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://mrveiss.github.io/sitemap.xml

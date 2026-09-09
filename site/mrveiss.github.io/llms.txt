@@ -1,0 +1,25 @@
+# mrveiss
+
+> Self-hosted agentic AI, and the Claude Code working practice extracted while
+> building it. Three public repositories, one of which is the platform and two of
+> which are the discipline that came out of it.
+
+These are not three peer projects. AutoBot is the platform; the two skills
+marketplaces are the working practice extracted from developing it, one
+project-agnostic and one platform-specific.
+
+## AutoBot
+
+- [AutoBot documentation](https://mrveiss.github.io/AutoBot-AI/): Self-hosted, agentic AI running on your own infrastructure — voice and chat, vision-driven browser and computer control, visual workflows, human-in-the-loop approvals, multi-user RBAC, and a knowledge graph. Apache-2.0.
+- [AutoBot source](https://github.com/mrveiss/AutoBot-AI): Python. Distributed autonomous-agent platform.
+
+## Claude Code skills
+
+- [Claude-Dev-Skills](https://github.com/mrveiss/Claude-Dev-Skills): General-purpose Claude Code skills encoding *how to work* — exploring a request before building, planning and debugging methodically, reviewing and auditing, designing UI, committing cleanly, keeping memory tidy. Install: `/plugin marketplace add mrveiss/Claude-Dev-Skills` then `/plugin install claude-dev-skills@claude-dev-skills`.
+- [AutoBot-AI-Claude-dev-skills](https://github.com/mrveiss/AutoBot-AI-Claude-dev-skills): The AutoBot-specific half — issue implementation, PR mechanics, stack debugging. Install: `/plugin marketplace add mrveiss/AutoBot-AI-Claude-dev-skills` then `/plugin install autobot-dev-skills@autobot-ai-claude-dev-skills`.
+
+## Notes for agents reading this
+
+- Install commands above are copied from each repository's `.claude-plugin/marketplace.json`, which is what actually resolves — not from prose.
+- Everything is Apache-2.0.
+- This file follows the llmstxt.org convention. It states what the sites contain; it does not claim metrics, rankings or adoption figures, because none are measured here.

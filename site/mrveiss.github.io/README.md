@@ -12,6 +12,23 @@ existed.
 So the page is authored here, where it gets review and CI like anything else, and the
 `mrveiss.github.io` repository holds a copy of `index.html` and nothing else.
 
+## What actually deploys
+
+**Deployed** — these must be byte-identical in both places:
+
+```
+index.html      the landing page
+_config.yml     Jekyll config; the theme, and the exclude that keeps README unpublished
+robots.txt      crawler policy, including named AI agents
+llms.txt        llmstxt.org summary for agents
+```
+
+**Not deployed** — `README.md`. The two repositories' READMEs are *deliberately
+different*: this one is the deploy contract for people working in AutoBot-AI, and
+the one in `mrveiss.github.io` is that repository's public front page. A checker
+comparing the two would report a difference that is not a defect, so it must
+compare the deployed set above and nothing else.
+
 ## Deploying a change
 
 1. Edit `index.html` here, in a PR.

@@ -1,0 +1,29 @@
+# GitHub Pages configuration for https://mrveiss.github.io/
+#
+# THE THEME DOES NOT STYLE THE LANDING PAGE, deliberately.
+#
+# `index.html` begins with `<!DOCTYPE html>` and carries no YAML front matter, so
+# Jekyll copies it verbatim rather than wrapping it in a layout. Its palette and
+# type come from AutoBot-AI/docs/index.html so the root and the project site read
+# as one property; a theme layout around it would fight that.
+#
+# The theme is here for anything Markdown added later — a notes page, a changelog
+# — so such a page has a consistent frame instead of arriving unstyled.
+#
+# If `index.html` ever gains front matter it WILL start being wrapped by the
+# theme layout, which is the one change that would silently alter the page.
+
+title: mrveiss
+description: >-
+  AutoBot — self-hosted agentic AI you own. Plus the Claude Code skills
+  extracted while building it.
+
+theme: jekyll-theme-minimal
+
+# The landing page is hand-authored; keep Jekyll away from it and from the
+# deploy contract in the README.
+exclude:
+  - README.md
+
+plugins:
+  - jekyll-sitemap

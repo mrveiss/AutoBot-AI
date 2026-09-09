@@ -5,8 +5,114 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="AutoBot — self-hosted agentic AI you own. Plus the Claude Code skills extracted while building it.">
 <meta name="theme-color" content="#c4651a">
+<link rel="canonical" href="https://mrveiss.github.io/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="author" content="mrveiss">
+
+<!-- Open Graph. og:image MUST be absolute -- a relative path renders nothing on
+     every platform and none of them warn. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="mrveiss">
+<meta property="og:url" content="https://mrveiss.github.io/">
+<meta property="og:title" content="AutoBot — agentic AI you own">
+<meta property="og:description" content="Self-hosted agentic AI running on your own infrastructure, plus the Claude Code skills extracted while building it.">
+<meta property="og:image" content="https://mrveiss.github.io/AutoBot-AI/screenshots/01-chat.png">
+<meta property="og:image:alt" content="AutoBot's chat interface">
+<meta property="og:locale" content="en_GB">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="AutoBot — agentic AI you own">
+<meta name="twitter:description" content="Self-hosted agentic AI running on your own infrastructure, plus the Claude Code skills extracted while building it.">
+<meta name="twitter:image" content="https://mrveiss.github.io/AutoBot-AI/screenshots/01-chat.png">
+
+<!-- Structured data. Deliberately no aggregateRating, downloadCount or
+     interactionStatistic: this page measures none of them, and a number that is
+     indexed and then stops being true is worse than an absent one. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://mrveiss.github.io/#website",
+      "url": "https://mrveiss.github.io/",
+      "name": "mrveiss",
+      "description": "AutoBot and the Claude Code skills extracted while building it.",
+      "inLanguage": "en-GB",
+      "publisher": { "@id": "https://mrveiss.github.io/#person" }
+    },
+    {
+      "@type": "Person",
+      "@id": "https://mrveiss.github.io/#person",
+      "name": "mrveiss",
+      "url": "https://github.com/mrveiss"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "AutoBot",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Linux",
+      "url": "https://mrveiss.github.io/AutoBot-AI/",
+      "codeRepository": "https://github.com/mrveiss/AutoBot-AI",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "description": "Self-hosted, agentic AI: voice and chat, vision-driven browser and computer control, visual workflows, human-in-the-loop approvals, multi-user RBAC and a knowledge graph.",
+      "author": { "@id": "https://mrveiss.github.io/#person" }
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "name": "Claude-Dev-Skills",
+      "codeRepository": "https://github.com/mrveiss/Claude-Dev-Skills",
+      "programmingLanguage": "Markdown",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "description": "General-purpose Claude Code skills encoding how to work: exploring, planning, reviewing, auditing, committing.",
+      "author": { "@id": "https://mrveiss.github.io/#person" }
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "name": "AutoBot-AI-Claude-dev-skills",
+      "codeRepository": "https://github.com/mrveiss/AutoBot-AI-Claude-dev-skills",
+      "programmingLanguage": "Markdown",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "description": "AutoBot-specific Claude Code skills: issue implementation, PR mechanics, stack debugging.",
+      "author": { "@id": "https://mrveiss.github.io/#person" }
+    }
+  ]
+}
+</script>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='24' r='22' fill='%23c4651a'/%3E%3C/svg%3E">
 <title>mrveiss — AutoBot &amp; Claude Code Skills</title>
+<!-- Consent Mode v2: defaults MUST be set before gtag.js loads -->
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('consent', 'default', {
+    analytics_storage:  'denied',
+    ad_storage:         'denied',
+    ad_user_data:       'denied',
+    ad_personalization: 'denied',
+    wait_for_update:    500
+  });
+  (function(){
+    // Same key and same origin as /AutoBot-AI/, so a visitor who has already
+    // answered there is not asked again here.
+    try {
+      if (localStorage.getItem('ab-consent') === 'granted') {
+        gtag('consent', 'update', {
+          analytics_storage:  'granted',
+          ad_storage:         'denied',
+          ad_user_data:       'denied',
+          ad_personalization: 'denied'
+        });
+      }
+    } catch (e) { /* storage blocked: defaults stand, which are denied */ }
+  })();
+</script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZV9XT0XSWR"></script>
+<script>
+  gtag('js', new Date());
+  gtag('config', 'G-ZV9XT0XSWR', { send_page_view: true });
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&family=Schibsted+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -124,6 +230,30 @@ h2{
 .copy:hover{color:var(--accent);border-color:var(--accent)}
 .copy[data-done="1"]{color:var(--accent);border-color:var(--accent)}
 
+#consent-banner{
+  position:fixed;left:0;right:0;bottom:0;z-index:50;
+  background:var(--surface-raised);border-top:1px solid var(--border-strong);
+  transform:translateY(110%);transition:transform 320ms var(--ease)
+}
+#consent-banner.visible{transform:translateY(0)}
+.consent-inner{
+  max-width:62rem;margin:0 auto;padding:1rem 1.5rem;
+  display:flex;flex-wrap:wrap;gap:1rem;align-items:center;justify-content:space-between
+}
+.consent-text{flex:1;min-width:16rem;font-size:.85rem;color:var(--text-muted);line-height:1.5;margin:0}
+.consent-text strong{color:var(--text);font-weight:600}
+.consent-text a{font-size:.8rem}
+.consent-actions{display:flex;gap:.6rem;flex-wrap:wrap}
+.consent-btn{
+  padding:.5rem 1.1rem;border-radius:var(--r-full);font-size:.85rem;font-weight:600;
+  font-family:inherit;cursor:pointer;border:1px solid transparent;
+  transition:background-color 200ms var(--ease),border-color 200ms var(--ease)
+}
+.consent-btn-accept{background:var(--accent);color:var(--on-accent)}
+.consent-btn-accept:hover{background:var(--accent-hover)}
+.consent-btn-decline{background:none;border-color:var(--border-strong);color:var(--text-muted)}
+.consent-btn-decline:hover{background:var(--surface-sunken);color:var(--text)}
+@media (max-width:640px){.consent-actions{width:100%}.consent-btn{flex:1}}
 footer{
   border-top:1px solid var(--border);padding:2.5rem 0 3.5rem;
   color:var(--text-subtle);font-size:.85rem
@@ -264,6 +394,47 @@ document.querySelectorAll('.copy').forEach(function (btn) {
     }
   });
 });
+</script>
+<div id="consent-banner" role="dialog" aria-label="Cookie consent" aria-live="polite">
+  <div class="consent-inner">
+    <p class="consent-text">
+      <strong>We use analytics cookies</strong> to understand how visitors use this site.
+      No ads, no ad-personalisation — page-view data via Google Analytics only.
+      <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>
+    </p>
+    <div class="consent-actions">
+      <button class="consent-btn consent-btn-decline" id="consent-decline" type="button">Decline</button>
+      <button class="consent-btn consent-btn-accept" id="consent-accept" type="button">Accept analytics</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var banner = document.getElementById('consent-banner');
+  var stored = null;
+  try { stored = localStorage.getItem('ab-consent'); } catch (e) { /* blocked */ }
+
+  if (!stored) {
+    setTimeout(function () { banner.classList.add('visible'); }, 800);
+  }
+
+  function answer(value, analytics) {
+    gtag('consent', 'update', {
+      analytics_storage:  analytics,
+      ad_storage:         'denied',
+      ad_user_data:       'denied',
+      ad_personalization: 'denied'
+    });
+    try { localStorage.setItem('ab-consent', value); } catch (e) { /* blocked */ }
+    banner.classList.remove('visible');
+  }
+
+  document.getElementById('consent-accept')
+    .addEventListener('click', function () { answer('granted', 'granted'); });
+  document.getElementById('consent-decline')
+    .addEventListener('click', function () { answer('denied', 'denied'); });
+})();
 </script>
 </body>
 </html>
