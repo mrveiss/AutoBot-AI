@@ -143,7 +143,12 @@ def main() -> int:
             recorded_dir,
         )
         if args.require_real_candidate:
-            return 1
+            # Exit 2, like the unmeasured case below: falling through to the echo
+            # is "could not examine", not "a golden regressed". Returning 1 here
+            # would put a not-examined state under the code reserved for a claim
+            # about the corpus -- the conflation this module exists to remove,
+            # committed in the code removing it.
+            return 2
 
     if args.fail_on_regression and report.has_regressions:
         logger.error("Regressions detected — failing (gated mode).")

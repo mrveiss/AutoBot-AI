@@ -238,3 +238,52 @@ def test_the_report_says_unmeasured_out_loud() -> None:
 
     assert "unmeasured" in rendered.lower()
     assert "could not be scored" in rendered
+
+
+# ---------------------------------------------------------------------------
+# Exit codes: a claim about the corpus vs being unable to make one
+# ---------------------------------------------------------------------------
+
+
+def _report(unmeasured: bool) -> RegressionReport:
+    return RegressionReport(
+        [
+            TrajectoryOutcome(
+                trajectory_id="t1",
+                task_class="code_fix",
+                baseline_score=0.9,
+                candidate_score=0.7 if unmeasured else 0.9,
+                tools_ok=True,
+                status_ok=True,
+                score_indeterminate=unmeasured,
+            )
+        ]
+    )
+
+
+@pytest.mark.parametrize(
+    ("real_candidate", "unmeasured", "argv"),
+    [
+        pytest.param(False, False, ["--require-real-candidate"], id="no-real-candidate"),
+        pytest.param(True, True, [], id="scorer-gave-no-verdict"),
+    ],
+)
+def test_being_unable_to_judge_exits_two_not_one(monkeypatch, real_candidate, unmeasured, argv) -> None:
+    """Both not-examined states use exit 2, and neither may use exit 1.
+
+    Exit 1 is reserved for a claim about the corpus -- a golden regressed.
+    "No real candidate" and "the scorer returned no verdict" are both the
+    harness being unable to make that claim. Giving either of them exit 1 would
+    reintroduce, in the exit code, exactly the conflation this module removes
+    from the report -- which is what the first version of this file did.
+    """
+    import sys
+
+    from eval import run as run_module
+
+    monkeypatch.setattr(sys, "argv", ["eval.run", *argv])
+    monkeypatch.setattr(run_module, "resolve_candidate", lambda _dir: (baseline_candidate, real_candidate))
+    monkeypatch.setattr(run_module, "run_or_schedule", lambda _coro: _report(unmeasured))
+    monkeypatch.setattr(run_module, "run_eval", lambda **_kw: None)
+
+    assert run_module.main() == 2
