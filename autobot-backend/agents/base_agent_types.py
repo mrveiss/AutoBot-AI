@@ -121,8 +121,6 @@ def create_agent_request(
     timeout: float = 30.0,
 ) -> AgentRequest:
     """Helper function to create standardized agent requests"""
-    import uuid
-
     return AgentRequest(
         request_id=str(uuid.uuid4()),
         agent_type=agent_type,
