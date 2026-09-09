@@ -260,7 +260,7 @@ behaviour, consume the result, ask what else produces a refusal — and where a
 constraint can be violated by a future edit, make it a test rather than a
 sentence.
 
-## A stated gap is a deliverable
+## A stated gap is a finding, never a closure
 
 The mechanics above only get used if saying **"I don't know"** is a good outcome
 for the person saying it. Where an admission reads as failure, the cheapest
@@ -280,13 +280,22 @@ each one prevented a wrong commit:
 Each cost one sentence. Each was made by someone who could have said nothing and
 been believed.
 
-**So state the gap and it counts as done.** The rule that partial delivery closes
-nothing is about *unstated* gaps — work quietly narrowed to what was easy. A
-scope you deliver in full while naming precisely what you could not determine is
-complete work, and the naming is part of the deliverable rather than a deduction
-from it. The two are opposites and must not be confused: an unstated gap is a
-defect, a stated one is a finding, and the same missing knowledge produces either
-depending only on whether someone wrote it down.
+**But "I don't know" is not done.** It is the honest *start* of the work, not a
+discharge of it. An admission is rewarded because it routes a problem to someone
+who can solve it — not because it settles the problem. Saying it and moving on
+is the same defect as guessing, with better manners.
+
+So a stated gap carries an obligation, and the existing rules already say what
+it is: leave the criterion **unticked** and say why; fix it in the current scope
+or **file it**; never drop it. An admission that produces no issue, no unticked
+box and no follow-up has simply lost the finding more politely.
+
+What the admission changes is *blame*, not *status*. The rule that partial
+delivery closes nothing is about **unstated** gaps — work quietly narrowed to
+what was easy. Naming what you could not determine is not a deduction from your
+work, and it does not close the issue either. The two errors are opposite: an
+unstated gap is a defect and a stated one is a finding, and the same missing
+knowledge produces either depending only on whether someone wrote it down.
 
 The corollary is for whoever receives it. **An admission has to be cheaper than a
 guess, or the next one will be a guess** — so treat "I could not determine this"
