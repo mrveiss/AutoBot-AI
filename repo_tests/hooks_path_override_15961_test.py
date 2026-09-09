@@ -111,9 +111,42 @@ def _scanned_files(root: Path) -> list[str]:
     Same reason `excluded_tree_size_debt_test` catches it (#16068).
     """
     try:
-        return list(tracked_paths(root, *SCANNED))
+        globbed = list(tracked_paths(root, *SCANNED))
     except EmptyEnumeration:
         return []
+    return sorted(set(globbed) | set(_shell_scripts_without_an_extension(root)))
+
+
+#: Shebang forms that mean "this is a shell script whatever it is called".
+SHELL_SHEBANG = ("sh", "bash", "dash", "zsh", "ksh")
+
+
+def _shell_scripts_without_an_extension(root: Path) -> list[str]:
+    """Tracked files with no suffix whose shebang says shell (#16139).
+
+    `SCANNED` is four globs, and **a git hook carries no suffix** by git's own
+    convention. So `pre-commit`, `pre-push`, `post-commit-doc-sync` and 26 more
+    sat outside the population entirely -- the guard existed to police hook
+    configuration and could not read a single hook. Not a gap at the edge: the
+    guard's own subject, outside its reach, reporting clean about files it never
+    opened.
+
+    Detected by shebang rather than by listing the hook directories. A path
+    allowlist works today and is walked past by the next hook directory,
+    silently, which is the failure mode this file is about.
+    """
+    found = []
+    for rel in tracked_paths(root, "*"):
+        if "." in Path(rel).name:
+            continue
+        try:
+            with (root / rel).open(encoding="utf-8") as handle:
+                first = handle.readline(200)
+        except (OSError, UnicodeDecodeError):
+            continue
+        if first.startswith("#!") and any(sh in first for sh in SHELL_SHEBANG):
+            found.append(rel)
+    return found
 
 
 #: `tracked_paths` already raises when git lists **nothing**, so total collapse was
@@ -123,7 +156,7 @@ def _scanned_files(root: Path) -> list[str]:
 #: passing having read a fraction of its population. A floor below the population
 #: catches only the collapse; partial loss is the failure that actually happens.
 #:
-#: `skips=0` is **measured, not estimated**: every one of the 6,377 discovered files
+#: `skips=0` is **measured, not estimated**: every one of the 6,407 discovered files
 #: reads cleanly as UTF-8, so the `except (OSError, UnicodeDecodeError)` branch is
 #: currently dead and nothing legitimately goes unread. If that stops being true the
 #: number has to move, and saying it is zero is what makes that visible.
@@ -132,10 +165,10 @@ def _scanned_files(root: Path) -> list[str]:
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6000,
+    floor=6027,
     growth=400,
     skips=0,
-    what="tracked shell, python and YAML files",
+    what="tracked shell, python and YAML files, plus extensionless shell scripts",
 )
 
 
@@ -176,7 +209,7 @@ def test_no_tracked_script_overrides_the_hooks_path() -> None:
         offenders += [(rel, n, line) for n, line in _offending_lines(text)]
 
     # Candidates are not coverage: `examined` bounds what was listed, this bounds
-    # what was actually opened. Without it a sweep could list 6,377 files, fail to
+    # what was actually opened. Without it a sweep could list 6,407 files, fail to
     # read 6,300 of them, and still report the same green as a clean tree.
     REACH.completed(read)
 
@@ -321,3 +354,26 @@ def test_a_relative_hookspath_defeats_hooks_in_a_worktree(
         "resolves it, #15961's premise has changed"
     )
     assert "bypass" in _git("log", "--oneline", cwd=repo_with_a_blocking_hook).stdout
+
+
+def test_the_sweep_reaches_the_hooks_it_exists_to_police() -> None:
+    """#16139: extension-based discovery reached zero git hooks.
+
+    `REACH` bounds the population by COUNT, which is necessary and not
+    sufficient here: 6,407 files can be discovered with every hook missing, and
+    the number would look healthy. `core.hooksPath` is a hook setting, so the
+    files most likely to carry an override are exactly the ones a suffix filter
+    cannot see -- the count stays large while the subject is absent.
+
+    So this asserts the canonical hooks are present BY NAME. A floor on the
+    population catches the collapse; naming catches the case that actually
+    happened.
+    """
+    hooks = _shell_scripts_without_an_extension(repo_root())
+    names = {Path(rel).name for rel in hooks}
+    missing = {"pre-commit", "pre-push"} - names
+    assert not missing, (
+        f"the sweep no longer reaches {sorted(missing)}. These carry no suffix by git's "
+        "own convention, so a suffix-based discovery drops them while the file count "
+        "stays healthy — which is #16139 exactly."
+    )
