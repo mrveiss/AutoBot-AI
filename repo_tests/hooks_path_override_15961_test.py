@@ -62,9 +62,10 @@ from pathlib import Path
 import pytest
 
 from autobot_shared.paths import scrubbed_git_env
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 from ._paths import repo_root
+from ._reach import declare
 
 # Two ways to override, and the review that caught the gap is the reason both are
 # here. The first version matched only `-c core.hooksPath=…`, which is the
@@ -90,21 +91,49 @@ READ_OR_REMOVE = ("--get", "--get-all", "--get-regexp", "--list", "--unset", "--
 
 SCANNED = ("*.sh", "*.py", "*.yml", "*.yaml")
 
-#: Shebang forms that mean "this file is a shell script whatever it is called".
+# This guard's own file states the pattern in prose and in its fixtures.
+EXEMPT = {"repo_tests/hooks_path_override_15961_test.py"}
+
+
+def _scanned_files(root: Path) -> list[str]:
+    """Tracked files this guard reads, enumerated through the canonical helper.
+
+    The `EmptyEnumeration` catch is required by the declaration contract, not a
+    convenience. `tracked_paths` refuses to report an empty enumeration as a clean
+    tree, which is right for a guard that would otherwise pass on nothing — but
+    `reach_declarations_test` hands every declaration an empty repository on
+    purpose and demands `ReachFloorError` **specifically**, because that is the
+    only exception the floor itself raises. Letting `EmptyEnumeration` escape
+    means the guard fails loudly while saying nothing about whether its floor
+    binds, which is the distinction that test exists to draw. Returning an empty
+    result puts the refusal back where the floor can make it.
+
+    Same reason `excluded_tree_size_debt_test` catches it (#16068).
+    """
+    try:
+        globbed = list(tracked_paths(root, *SCANNED))
+    except EmptyEnumeration:
+        return []
+    return sorted(set(globbed) | set(_shell_scripts_without_an_extension(root)))
+
+
+#: Shebang forms that mean "this is a shell script whatever it is called".
 SHELL_SHEBANG = ("sh", "bash", "dash", "zsh", "ksh")
 
 
 def _shell_scripts_without_an_extension(root: Path) -> list[str]:
     """Tracked files with no suffix whose shebang says shell (#16139).
 
-    Extension-based scanning cannot see a git hook. `pre-commit`, `pre-push`,
-    `post-commit-doc-sync` and 26 more carry no suffix by git's own convention,
-    and they are the **most** likely place for a `core.hooksPath` override --
-    the guard existed to police hook configuration and could not read the hooks.
+    `SCANNED` is four globs, and **a git hook carries no suffix** by git's own
+    convention. So `pre-commit`, `pre-push`, `post-commit-doc-sync` and 26 more
+    sat outside the population entirely -- the guard existed to police hook
+    configuration and could not read a single hook. Not a gap at the edge: the
+    guard's own subject, outside its reach, reporting clean about files it never
+    opened.
 
-    Detected by shebang rather than by listing the hook directories: a new hook
-    directory would walk straight past a path allowlist, and silently, which is
-    the failure this guard is about.
+    Detected by shebang rather than by listing the hook directories. A path
+    allowlist works today and is walked past by the next hook directory,
+    silently, which is the failure mode this file is about.
     """
     found = []
     for rel in tracked_paths(root, "*"):
@@ -120,8 +149,27 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
     return found
 
 
-# This guard's own file states the pattern in prose and in its fixtures.
-EXEMPT = {"repo_tests/hooks_path_override_15961_test.py"}
+#: `tracked_paths` already raises when git lists **nothing**, so total collapse was
+#: covered. This is the other half, raised in review on #16097 and merged without it:
+#: narrowing `SCANNED` from four globs to one -- or moving a directory -- drops
+#: thousands of files while the enumeration stays non-empty, so the guard keeps
+#: passing having read a fraction of its population. A floor below the population
+#: catches only the collapse; partial loss is the failure that actually happens.
+#:
+#: `skips=0` is **measured, not estimated**: every one of the 6,407 discovered files
+#: reads cleanly as UTF-8, so the `except (OSError, UnicodeDecodeError)` branch is
+#: currently dead and nothing legitimately goes unread. If that stops being true the
+#: number has to move, and saying it is zero is what makes that visible.
+#: `growth=400` is the judgement call -- roughly a week of this repo's growth -- and
+#: is the only figure here not taken from a measurement.
+REACH = declare(
+    "hooks-path-override",
+    discover=_scanned_files,
+    floor=6027,
+    growth=400,
+    skips=0,
+    what="tracked shell, python and YAML files, plus extensionless shell scripts",
+)
 
 
 def _offending_lines(text: str) -> list[tuple[int, str]]:
@@ -148,8 +196,8 @@ def test_no_tracked_script_overrides_the_hooks_path() -> None:
     """An override in a tracked script is the pattern becoming a habit."""
     root = repo_root()
     offenders = []
-    swept = list(tracked_paths(root, *SCANNED)) + _shell_scripts_without_an_extension(root)
-    for rel in swept:
+    read = 0
+    for rel in REACH.examined(root):
         if rel in EXEMPT:
             continue
         path = root / rel
@@ -157,7 +205,13 @@ def test_no_tracked_script_overrides_the_hooks_path() -> None:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
+        read += 1
         offenders += [(rel, n, line) for n, line in _offending_lines(text)]
+
+    # Candidates are not coverage: `examined` bounds what was listed, this bounds
+    # what was actually opened. Without it a sweep could list 6,407 files, fail to
+    # read 6,300 of them, and still report the same green as a clean tree.
+    REACH.completed(read)
 
     assert not offenders, "\n".join(
         f"{rel}:{n}: {line}\n"
@@ -303,19 +357,23 @@ def test_a_relative_hookspath_defeats_hooks_in_a_worktree(
 
 
 def test_the_sweep_reaches_the_hooks_it_exists_to_police() -> None:
-    """#16139: extension-based scanning could not see a single git hook.
+    """#16139: extension-based discovery reached zero git hooks.
 
-    A guard whose population excludes its subject reports clean about a tree it
-    never opened, and the report is indistinguishable from a real one. The floor
-    is on the *population*, not on findings -- a findings floor is satisfied by
-    finding nothing, which is also what a collapsed sweep returns.
+    `REACH` bounds the population by COUNT, which is necessary and not
+    sufficient here: 6,407 files can be discovered with every hook missing, and
+    the number would look healthy. `core.hooksPath` is a hook setting, so the
+    files most likely to carry an override are exactly the ones a suffix filter
+    cannot see -- the count stays large while the subject is absent.
+
+    So this asserts the canonical hooks are present BY NAME. A floor on the
+    population catches the collapse; naming catches the case that actually
+    happened.
     """
     hooks = _shell_scripts_without_an_extension(repo_root())
-    assert len(hooks) >= 20, (
-        f"only {len(hooks)} extensionless shell script(s) found; this repo tracks ~29 "
-        "git hooks with no suffix, and they are the files most likely to set "
-        "core.hooksPath. A collapsed sweep here passes every assertion above."
+    names = {Path(rel).name for rel in hooks}
+    missing = {"pre-commit", "pre-push"} - names
+    assert not missing, (
+        f"the sweep no longer reaches {sorted(missing)}. These carry no suffix by git's "
+        "own convention, so a suffix-based discovery drops them while the file count "
+        "stays healthy — which is #16139 exactly."
     )
-    assert any(
-        Path(rel).name in {"pre-commit", "pre-push"} for rel in hooks
-    ), "the canonical git hooks are not in the swept set — the sweep is not reaching them"
