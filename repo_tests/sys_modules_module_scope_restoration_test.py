@@ -48,14 +48,14 @@ from __future__ import annotations
 
 import ast
 import re
-import subprocess  # nosec B404
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 from repo_tests._paths import repo_root  # noqa: E402
+
+from tools.lint._scan_helpers import tracked_paths  # noqa: E402
 
 #: Bound to files EXAMINED. A `git ls-files` returning nothing would otherwise
 #: pass this module having parsed zero files -- the same green a clean tree gives.
@@ -145,11 +145,9 @@ def module_scope_sys_modules_writes(tree: ast.Module) -> list[int]:
 
 
 def _tracked_python() -> list[Path]:
+    """Enumerated through the canonical helper (#15926), not a direct git call."""
     root = repo_root()
-    result = subprocess.run(  # nosec B603 B607
-        ["git", "ls-files", "*.py"], cwd=root, capture_output=True, text=True, check=False, env=scrubbed_git_env()
-    )
-    return [root / line for line in result.stdout.splitlines() if line]
+    return [root / rel for rel in tracked_paths(root, "*.py")]
 
 
 def _scan() -> tuple[set[str], int]:
@@ -209,6 +207,6 @@ def test_the_grandfathered_list_has_not_gone_stale() -> None:
     be removed, or the list silently permits the next module to lose one."""
     offenders, _ = _scan()
     stale = sorted(GRANDFATHERED - offenders)
-    assert not stale, (
-        "GRANDFATHERED entries that now restore -- remove them, the list only shrinks:\n  " + "\n  ".join(stale)
+    assert not stale, "GRANDFATHERED entries that now restore -- remove them, the list only shrinks:\n  " + "\n  ".join(
+        stale
     )

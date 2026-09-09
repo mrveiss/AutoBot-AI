@@ -52,14 +52,14 @@ from __future__ import annotations
 
 import ast
 import re
-import subprocess  # nosec B404
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 from repo_tests._paths import repo_root  # noqa: E402
+
+from tools.lint._scan_helpers import tracked_paths  # noqa: E402
 
 #: What counts as enumerating the tree.
 _ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(")
@@ -109,16 +109,14 @@ def has_floor(source: str) -> bool:
 
 
 def _tracked_guards() -> list[Path]:
+    """Enumerated through the canonical helper (#15926), not a direct git call.
+
+    `tracked_paths` lets **git** do the pathspec matching, so the filter and the
+    returned paths cannot disagree -- which is what #15510 cost when an
+    exclusion was tested against the absolute path.
+    """
     root = repo_root()
-    result = subprocess.run(  # nosec B603 B607
-        ["git", "ls-files", "repo_tests/*_test.py"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-        env=scrubbed_git_env(),
-    )
-    return [root / line for line in result.stdout.splitlines() if line]
+    return [root / rel for rel in tracked_paths(root, "repo_tests/*_test.py")]
 
 
 def _scanning_guards() -> dict[str, bool]:
@@ -210,6 +208,6 @@ def test_the_grandfathered_list_has_not_gone_stale() -> None:
     """
     unfloored = {name for name, floored in _scanning_guards().items() if not floored}
     stale = sorted(GRANDFATHERED - unfloored)
-    assert not stale, (
-        "GRANDFATHERED entries that now have a floor -- remove them, the list only shrinks:\n  " + "\n  ".join(stale)
-    )
+    assert (
+        not stale
+    ), "GRANDFATHERED entries that now have a floor -- remove them, the list only shrinks:\n  " + "\n  ".join(stale)
