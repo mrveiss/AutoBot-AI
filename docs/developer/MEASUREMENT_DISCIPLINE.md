@@ -300,6 +300,24 @@ This codebase already says it better than this page can, in a shipped prompt:
 exactly as long as it takes someone to act on it; admitting the gap is what lets
 a second person find the answer, which — as every entry on this page shows — is
 the only thing that ever finds it.
+
+**And for an agent, a wrong answer is not an opinion — it is an action.** A
+person who fabricates a cause is embarrassing until someone checks. An agent
+that fabricates one *executes* it, at machine speed, against the environment it
+depends on to keep working.
+
+That is not hypothetical here. A commit message body written to explain a Redis
+finding contained the commands it was describing, in backticks. The shell did
+not quote them — **it ran them**, launching a `redis-server` that then died on an
+already-bound port, and the claim being explained was itself wrong and had to be
+withdrawn publicly. One unchecked sentence became a state change on the host,
+inside the act of documenting it.
+
+The failure modes compound in the dangerous direction: a fabricated cause
+produces an action, the action produces new state, and the new state is then
+read as evidence. **The blast radius of a guess scales with how much the guesser
+can do** — which, for anything running here, is a great deal. `--body-file`, and
+say what you do not know.
 One that asserted a threshold breach on *any* job failure printed a confident
 wrong number to change, on top of a real failure. Manufacturing a false cause is
 worse than reporting none, because **a guess laundered through an explainer stops
