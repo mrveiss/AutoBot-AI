@@ -76,6 +76,32 @@ def test_the_filter_covers_its_own_inputs():
     assert "**/*.py" in patterns
 
 
+def test_the_shim_triggers_only_on_pull_request():
+    """The shim's trigger set, pinned so #15937's decision cannot drift (#16098).
+
+    This file checked conditions, job names, runners and the shared filter -- and
+    NOT triggers. A complement only holds while both workflows run, so "which
+    events run this" is half of the property the file exists to protect, and it
+    was the half blind to the axis #16098 changed.
+
+    The shim must not gain `merge_group`. Inside a queue `ci.yml` always triggers
+    and publishes `python-suite` on its own -- running when the group touches
+    Python, reporting skipped when it does not -- so a shim that also triggered
+    would publish a second, competing report of the same context. #15937 records
+    that as an acceptance criterion; this asserts it.
+
+    Stated as an exact set rather than an absence: `assert "merge_group" not in
+    on` would still pass if the shim quietly gained `push` or `schedule`, which
+    is the same silent-widening this file exists to prevent.
+    """
+    doc = yaml.safe_load(SHIM.read_text(encoding="utf-8"))
+    on = doc.get(True) or doc.get("on") or {}
+    assert set(on) == {"pull_request"}, (
+        f"the shim's triggers are {sorted(on)}; #15937 fixes them at pull_request alone. "
+        "Adding merge_group would double-publish python-suite inside a queue."
+    )
+
+
 def test_the_shim_declares_no_concurrency_group():
     """A shared concurrency group is what made the frontend shim useless (#13405).
 
