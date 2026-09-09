@@ -26,6 +26,15 @@ log_error() {
     echo -e "${RED}[FAIL]${NC} $1"
 }
 
+# Tracked-file enumeration goes through the scrubbed helper: an inherited
+# GIT_DIR outranks the working directory, so a bare `git ls-files` audits the
+# other checkout's index and reports this tree clean (#15506).
+# shellcheck source=scripts/lib/git-root.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)/scripts/lib/git-root.sh" || {
+    echo "FATAL: cannot load scripts/lib/git-root.sh — refusing to report clean" >&2
+    exit 2
+}
+
 log_header() {
     echo -e "${BLUE}[AUDIT]${NC} $1"
 }
@@ -60,7 +69,7 @@ SENSITIVE_PATTERNS=(
 )
 
 for pattern in "${SENSITIVE_PATTERNS[@]}"; do
-    results=$(git ls-files | grep -E "$pattern" 2>/dev/null || true)
+    results=$(git_tracked_files . | grep -E "$pattern" 2>/dev/null || true)
     if [ -n "$results" ]; then
         log_error "Found sensitive files matching pattern '$pattern':"
         echo "$results" | sed 's/^/  /'
@@ -168,7 +177,7 @@ fi
 log_header "Checking environment configuration..."
 
 if [ -f .env ]; then
-    if git ls-files .env 2>/dev/null | grep -q ".env"; then
+    if git_tracked_files . -- .env 2>/dev/null | grep -q ".env"; then
         log_error ".env file is tracked in git!"
         ISSUES_FOUND=$((ISSUES_FOUND + 1))
     else

@@ -78,12 +78,22 @@ SCOPE, AND WHAT IS DELIBERATELY NOT SCOPED
   erroring. #14896 found unscrubbed ``ls-files`` call sites still standing on
   that argument, so the subcommand joins :data:`TOPLEVEL_FLAG` in
   :data:`GATED_TOKENS`.
-* **Shell ``git ls-files`` is NOT gated.** :func:`scan_shell` matches
-  ``rev-parse`` + ``--show-toplevel`` as a pair; ``ls-files`` has no such
-  second token, and shell has no scrub helper for it the way
-  ``scripts/lib/git-root.sh`` provides one for the root. Three ``.sh`` call
-  sites carry the defect and are tracked separately rather than half-fixed
-  behind a text match here.
+* **Shell ``git ls-files`` IS gated, since #15506.** It was left out because
+  :func:`scan_shell` matched ``rev-parse`` + ``--show-toplevel`` as a *pair*
+  while ``ls-files`` has no second token, and — the real blocker — shell had
+  no scrub helper for enumeration to point an offender at. ``git_tracked_files``
+  in ``scripts/lib/git-root.sh`` supplies one, so the single-token match now
+  has a fix to name. The three ``.sh`` call sites were converted in the same
+  change; a guard that lands before its remedy only teaches people to silence
+  it.
+
+  The single-token match is looser than the pair, and deliberately so: it fires
+  on ``ls-files`` anywhere in a non-comment line, which catches
+  ``git -C "$d" ls-files`` that a literal ``git ls-files`` match would miss.
+  The cost is that ``ls-files`` inside a quoted string — an error message, a
+  heredoc — reads as a call. That is a known false positive rather than an
+  unknown one, and it is why the converted call sites had their ``die``
+  messages reworded to name the helper instead.
 
 KNOWN GAPS — WHAT THIS DOES **NOT** CATCH
 -----------------------------------------
@@ -163,6 +173,11 @@ SCRUB_HELPERS = frozenset({SCRUB_HELPER, STRICT_SCRUB_HELPER})
 #: though ``scan_shell`` cannot verify the source line was actually reached —
 #: same trust boundary as ``_scrubs`` below for the shadowed-helper gap.
 SHELL_HELPER = "git_repo_root"
+
+#: The shell scrub for the enumeration question, added with #15506. Until it
+#: existed there was nothing to point a shell offender at, which is why
+#: `ls-files` was gated in Python and not in shell.
+SHELL_LS_FILES_HELPER = "git_tracked_files"
 
 #: Name this guard reports under.
 HOOK_ID = "git-toplevel-env-scrubbed"
@@ -516,6 +531,18 @@ def scan_shell(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
     findings: List[Tuple[int, str]] = []
     for line_no, line in enumerate(lines, start=1):
         if line.strip().startswith("#"):
+            continue
+        if LS_FILES_VERB in line and SHELL_LS_FILES_HELPER not in line:
+            findings.append(
+                (
+                    line_no,
+                    f"`git {LS_FILES_VERB}` without a scrubbed git environment. An "
+                    "inherited GIT_DIR outranks the directory passed, so this "
+                    "enumerates the other checkout's index and answers without "
+                    "erroring. Source scripts/lib/git-root.sh and call "
+                    f"{SHELL_LS_FILES_HELPER}() (#15506).",
+                )
+            )
             continue
         if "rev-parse" not in line or TOPLEVEL_FLAG not in line:
             continue

@@ -22,6 +22,16 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 LIB="${REPO_ROOT}/autobot-infrastructure/shared/scripts/lib/ssot-config.sh"
 
+# Tracked-file enumeration goes through the scrubbed helper. This file runs as a
+# test and is reachable from a hook context, where GIT_DIR is exported and
+# outranks the directory passed -- so a bare `git ls-files` would enumerate
+# another checkout and this suite would assert about the wrong tree (#15506).
+# shellcheck source=scripts/lib/git-root.sh
+source "${REPO_ROOT}/scripts/lib/git-root.sh" || {
+    echo "FATAL: cannot load scripts/lib/git-root.sh — refusing to report clean" >&2
+    exit 2
+}
+
 pass=0
 fail=0
 
@@ -256,7 +266,7 @@ while IFS= read -r f; do
         offenders="${offenders}${f}: ${hit}
 "
     fi
-done < <(cd "$REPO_ROOT" && git ls-files -- '*.sh')
+done < <(git_tracked_files "$REPO_ROOT" -- '*.sh')
 
 if [ -n "$offenders" ]; then
     echo "FAIL: tracked file(s) source the non-autobot- path:"
@@ -443,7 +453,7 @@ fi
 #     matching anything (an empty/near-empty result reads as "clean" unless
 #     presence is checked, not absence of failure); the var-count floor
 #     catches a regex that stops matching a variable shape. -----------------
-_all_sh_files="$(cd "$REPO_ROOT" && git ls-files -- '*.sh')"
+_all_sh_files="$(git_tracked_files "$REPO_ROOT" -- '*.sh')"
 _sh_count=$(echo "$_all_sh_files" | grep -c . || true)
 if [ "$_sh_count" -lt 100 ]; then
     echo "FAIL: reach self-check scanned too few shell scripts ($_sh_count) -- probe is too narrow"
@@ -453,7 +463,7 @@ else
     pass=$((pass + 1))
 fi
 
-_distinct_vars=$(cd "$REPO_ROOT" && git ls-files -- '*.sh' | xargs grep -ohE '\$\{?AUTOBOT_[A-Z0-9_]+' 2>/dev/null | sed -E 's/^\$\{?//' | sort -u)
+_distinct_vars=$(git_tracked_files "$REPO_ROOT" -- '*.sh' | xargs grep -ohE '\$\{?AUTOBOT_[A-Z0-9_]+' 2>/dev/null | sed -E 's/^\$\{?//' | sort -u)
 _distinct_count=$(echo "$_distinct_vars" | grep -c . || true)
 # 59, not 61: #15127 retired
 # autobot-infrastructure/shared/scripts/utilities/load-env.sh, which was the only
