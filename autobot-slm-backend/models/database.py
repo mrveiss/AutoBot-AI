@@ -27,116 +27,22 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
+# Re-exported so ``models.database`` stays the historical import site for
+# these names -- 67 modules import them from here. See models/enums.py.
+from .enums import (  # noqa: F401
+    BackupServiceType,
+    BackupStatus,
+    CodeStatus,
+    DeploymentStatus,
+    NodeStatus,
+    RoleStatus,
+    SyncType,
+)
+
 
 class Base(DeclarativeBase):
     """Base class for all models."""
 
-
-class NodeStatus(str, enum.Enum):
-    """Node status enumeration."""
-
-    PENDING = "pending"
-    ENROLLING = "enrolling"
-    ONLINE = "online"
-    DEGRADED = "degraded"
-    OFFLINE = "offline"
-    ERROR = "error"
-    MAINTENANCE = "maintenance"
-    DECOMMISSIONED = "decommissioned"
-
-
-class DeploymentStatus(str, enum.Enum):
-    """Deployment status enumeration."""
-
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    ROLLED_BACK = "rolled_back"
-    CANCELLED = "cancelled"
-
-
-class BackupStatus(str, enum.Enum):
-    """Backup status enumeration."""
-
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
-class CodeStatus(str, enum.Enum):
-    """Code version status (Issue #741)."""
-
-    UP_TO_DATE = "up_to_date"
-    OUTDATED = "outdated"
-    CODE_CURRENT_SERVICE_FAILED = "code_current_service_failed"  # #1605
-    UNKNOWN = "unknown"
-
-
-class RoleStatus(str, enum.Enum):
-    """Role detection status (Issue #779)."""
-
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    NOT_INSTALLED = "not_installed"
-
-
-class SyncType(str, enum.Enum):
-    """Code sync type (Issue #779)."""
-
-    COMPONENT = "component"
-    PACKAGE = "package"
-
-
-class BackupServiceType(str, enum.Enum):
-    """Data service a backup, replication or verification targets (#13578).
-
-    ``service_type`` was the outlier among the eight sibling enums in this
-    module: a bare ``String(32)`` with no constraint anywhere. The cost landed
-    the moment a second engine arrived — the dispatch table in
-    ``api/stateful.py`` had to accept two spellings of the same engine, and an
-    unknown value was not rejected at the API boundary at all. It reached
-    ``_run_backup``, wrote a ``Backup`` row, and only then failed, leaving a
-    ``BackupStatus.FAILED`` row for a typo that is indistinguishable from one
-    for a real failure.
-
-    The column stays a string at rest (#13578: existing rows keep working);
-    this enum is the boundary that decides what may enter.
-    """
-
-    REDIS = "redis"
-    POSTGRES = "postgres"
-
-    @classmethod
-    def _missing_(cls, value: object) -> "BackupServiceType | None":
-        """Accept ``postgresql`` as a spelling of ``postgres``.
-
-        Both spellings were live keys in the backup dispatch table, so both are
-        already in stored ``backups.service_type`` values and in whatever
-        callers send. Resolving the alias here keeps every old spelling parsing
-        without a second class to keep in step — and collapses it to one
-        canonical member at the boundary, so nothing downstream branches twice.
-        """
-        if not isinstance(value, str):
-            return None
-        normalized = value.strip().lower()
-        if normalized in _BACKUP_SERVICE_TYPE_ALIASES:
-            return _BACKUP_SERVICE_TYPE_ALIASES[normalized]
-        # Case only. Without this the resolution is inconsistent in a way that
-        # reads as a bug from outside: "POSTGRESQL" would resolve through the
-        # alias table while "POSTGRES" — the canonical spelling — would 422.
-        for member in cls:
-            if member.value == normalized:
-                return member
-        return None
-
-
-# Wire spellings that are not member values. Kept next to the enum so the set of
-# accepted inputs is one greppable place rather than a dispatch-table key.
-_BACKUP_SERVICE_TYPE_ALIASES: dict[str, BackupServiceType] = {
-    "postgresql": BackupServiceType.POSTGRES,
-}
 
 
 class Node(Base):

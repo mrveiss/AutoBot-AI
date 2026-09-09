@@ -227,6 +227,17 @@
   notify: Restart SLM agent
   tags: ['slm_agent', 'deploy']
 
+- name: "SLM Agent | Copy agent source - heartbeat_payload.py"
+  copy:
+    src: slm/agent/heartbeat_payload.py
+    dest: "{{ slm_agent_dir }}/slm/agent/heartbeat_payload.py"
+    owner: "{{ slm_agent_user }}"
+    group: "{{ slm_agent_group }}"
+    mode: '0644'
+  become: true
+  notify: Restart SLM agent
+  tags: ['slm_agent', 'deploy']
+
 - name: "SLM Agent | Deploy agent configuration"
   template:
     src: agent-config.yaml.j2
