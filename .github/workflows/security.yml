@@ -18,8 +18,10 @@
 #   |           | scanned trees           | GATES at `any`, no allowance        |
 #   | pip-audit | 4 advisories, all in chromadb==1.5.9 (run 32834864623)
 #   |           |                         | GATES at `any`, 4 named allowances  |
-#   | npm audit | 0 advisories at every severity across 1191 deps in
-#   |           | autobot-frontend ONLY (#13400). SEVEN workspaces have a
+#   | npm audit | scans EVERY workspace with a lockfile (#16131). Blocking
+#   |           | for autobot-frontend; reporting-only for the rest until
+#   |           | each is triaged. Previously autobot-frontend ONLY (#13400),
+#   |           | while reporting a repository-wide figure. SEVEN have a
 #   |           | lockfile and can be audited; ONE is (#16131) -- so this
 #   |           | number is one workspace's, not the repository's.
 #   |           | re-confirmed by the same run
@@ -81,7 +83,8 @@ on:
       - 'requirements-ci/**'
       - 'pyproject.toml'
       - 'autobot_shared/pyproject.toml'
-      - 'autobot-frontend/package*.json'
+      - '**/package*.json'
+      - '**/package-lock.json'
       - '.github/workflows/security.yml'
   schedule:
     # Run security scans daily at 2 AM UTC
@@ -261,7 +264,20 @@ jobs:
         # Subshell rather than a bare `cd`, so the gate below is invoked on the
         # canonical repo-root path — a `../` prefix here would be a script
         # reference that repo-root path checks cannot resolve.
-        ( cd autobot-frontend && npm audit --audit-level=moderate --json > npm-audit.json ) || true
+        # EVERY workspace with a lockfile, discovered rather than listed (#16131).
+        # This step scanned autobot-frontend alone while six others carried a
+        # lockfile, and its summary reported a repository-wide result. The number
+        # was true; the scope was not. A hard-coded list would move the same
+        # defect up one level -- the list, not the tree, deciding what "every
+        # workspace" means -- so the set comes from git.
+        #
+        # repo_tests/npm_audit_covers_its_workspaces_test.py asserts this set
+        # against the tracked tree, so a new workspace fails there rather than
+        # sitting silently outside the scan.
+        for lock in $(git ls-files '*package-lock.json' | grep -v node_modules); do
+          ws="$(dirname "$lock")"
+          ( cd "$ws" && npm audit --audit-level=moderate --json > npm-audit.json ) || true
+        done
         # NO ALLOWANCES, AND THAT IS THE LIST DOING ITS JOB (#16089).
         #
         # This step carried `--allow-id @redocly/openapi-core` for one advisory
@@ -283,11 +299,32 @@ jobs:
         # fix (checked against the registry, not the advisory range -- a fix at a
         # major version behind a third party's dependency range is still a fix),
         # and it does not ship. Anything else is a bump.
+        # BLOCKING for autobot-frontend, REPORTING for the rest (#16131 AC5).
+        # Widening the scan and a backlog of untriaged findings in one change
+        # lands as a wall of failures nobody can action, and the usual response
+        # to that is to switch the gate off. So the widening lands first and each
+        # workspace becomes blocking as it is triaged. The staging list lives in
+        # repo_tests/npm_audit_covers_its_workspaces_test.py:UNTRIAGED and may
+        # only shrink -- a test fails if it goes stale, so it cannot quietly
+        # become a second permanent scope.
         python3 pipeline-scripts/security_scan_gate.py \
           --format npm-audit \
           --report autobot-frontend/npm-audit.json \
           --title "Frontend dependency audit (npm audit)" \
           --fail-on high
+
+        for lock in $(git ls-files '*package-lock.json' | grep -v node_modules); do
+          ws="$(dirname "$lock")"
+          [ "$ws" = "autobot-frontend" ] && continue
+          [ -f "$ws/npm-audit.json" ] || continue
+          echo "::group::npm audit — $ws (reporting only, not yet triaged)"
+          python3 pipeline-scripts/security_scan_gate.py \
+            --format npm-audit \
+            --report "$ws/npm-audit.json" \
+            --title "Dependency audit — $ws (reporting)" \
+            --fail-on never || true
+          echo "::endgroup::"
+        done
 
     - name: Upload Security Reports
       uses: actions/upload-artifact@v7
@@ -298,6 +335,7 @@ jobs:
           python-audit.json
           safety-report.json
           autobot-frontend/npm-audit.json
+          **/npm-audit.json
         retention-days: 30
 
     - name: Cleanup
