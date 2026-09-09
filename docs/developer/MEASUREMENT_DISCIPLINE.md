@@ -19,7 +19,7 @@ like.
 A query that answers a narrower question does not fail. It succeeds, returns
 nothing, and the nothing is indistinguishable from a true negative.
 
-## Four families, four different remedies
+## Six families, six different remedies
 
 Sorting the instances showed these are not one law. Conflating them produces the
 wrong fix.
@@ -58,6 +58,10 @@ that it does it.
 Worse than A, because a blind instrument is caught when someone re-measures. **A
 ticked box and a closed issue are what stop anyone measuring again.**
 
+B is the narrowest and most frequent instance of **F** below — a name is a
+correct answer to *what is this called*, read as *what does it do*. It keeps its
+own entry because its remedy is sharper than F's: for a test, read the body.
+
 ### C. A result produced and consumed by nothing
 
 The check ran, was correct, and reached no decision.
@@ -90,6 +94,32 @@ A verdict that stops you acting feels safe in a way one telling you to act does
 not. A gate saying WAIT is indistinguishable from a healthy queue, so it receives
 less scrutiny than one saying MERGE.
 
+### F. The output is correct, complete, and about a different question
+
+Nothing is narrowed and nothing is stale. The instrument answers perfectly — a
+question next to the one being asked.
+
+**The discriminator: would more data have changed the answer?** If yes, it is A —
+the instrument saw a subset of the truth. If no, it is F, and no amount of
+additional data will help, because the output was never about the thing.
+
+- `js-yaml [high] 4.0.0 - 4.3.1` read as *no fix exists*, and an allowance written on it. That line is an exact answer to **which versions are vulnerable**. It answers **which versions exist** not at all — 4.3.1 is the last *affected* release, 4.3.2 was already shipping, and dependabot was already carrying the bump.
+- `git cherry` reporting 5, 3 and 2 commits "not in base" for three worktrees whose work had landed. Accurate about patch-id divergence under squash merges; silent about landedness.
+- `gh pr list --author @me` returning six sessions' PRs. Every branch here is authored `mrveiss`, so it is a correct answer to *which PRs did this account author*, read as *which PRs are mine*.
+
+**Remedy: name the field's actual question before building on it.**
+
+**A positive control does not catch this one, and that is why it is separate.**
+Asserting a known instance is the standard defence against A, and it works because
+A's failure is an empty or truncated population. Here the control passes
+cheerfully — the instrument is working. A family whose remedy is the negation of
+the previous families' remedy has earned its own entry.
+
+Note the direction of all three. *No fix, so allow it. Not landed, so keep the
+worktree. These are mine, so take them.* **F's benign reading is the available
+one, and it points toward more work or less safety, so nothing pushes back on
+it.**
+
 ## Three gates, one shape
 
 All three report two distinct states identically:
@@ -104,7 +134,7 @@ And a guard can fail in three escalating ways, in order of how hard they are to
 notice — all producing the same green:
 
 1. **The guard never ran.** A duplication guard scanned 2 of 5 trees, and the *trigger paths* excluded the other three, so it reported nothing rather than a passing number.
-2. **The guard ran and answered an adjacent question.** A drift check enforced byte-identity between a directory and its mirror while nothing checked that every module was actually deployed. Content parity and shipping parity are different claims about the same two directories.
+2. **The guard ran and answered an adjacent question.** A drift check enforced byte-identity between a directory and its mirror while nothing checked that every module was actually deployed. Content parity and shipping parity are different claims about the same two directories. A second, from a different domain: a dependency gate fails when an allowance names a finding the scanner *no longer reports* — a real property, verified and written up approvingly, and then read as covering a too-broad allowance. It does not. It fires only when the scanner **stops** reporting a package, so an over-broad allowance on a still-reported one never trips it. **Verifying an adjacent safety property and taking coverage from it is the same rung, not a new one.**
 3. **The guard would have answered correctly and was never selected.** Three tests parse one file by path; the pre-push hook ran exactly one. It failed, which is the only reason the break was found. The guard is not defective — it is correct and loud. **The only observable is that it did not run, and "did not run" has no output.**
 
 ### E. The constraint was recorded, in-file, and the editor read past it
@@ -216,6 +246,42 @@ behaviour, consume the result, ask what else produces a refusal — and where a
 constraint can be violated by a future edit, make it a test rather than a
 sentence.
 
+## An exemption is a blind spot you can read
+
+A guard's blind spots and its exemptions are the same surface. **Only one of them
+is written down.** An exemption gets a comment and a reviewer; a blind spot gets
+nothing, because there is no line of code to review. That is why the trigger-path
+half of a missed-trees guard mattered more than the scan half — a narrow scan
+leaves a number someone can question, a trigger that never fires leaves no row at
+all.
+
+Which makes the direction of an exemption error worth stating:
+
+| exemption error | consequence | lifetime |
+|---|---|---|
+| too **narrow** | a red | usually short |
+| too **broad** | a **green** | indefinite |
+
+**But "narrow fails loudly" is not the same as "narrow fails informatively", and
+the difference decides whether it is self-correcting.** A batching gate rejected a
+rationale section that was present and filled, because its parser treats any line
+starting with `#` as the next heading and the section opened with an issue
+reference — `#15961 alone…`. The hint said *add a section* to an author who had
+added one. The natural response is to reword until green, which is what happened,
+and that response leaves no trace: every previous author who hit it fixed it
+silently, so the same gate taught the same wrong lesson twice.
+
+A red with a misleading cause is repaired by working around it. So the loud half
+of the asymmetry only pays out when the message names the real cause — which
+means a gate must distinguish *no section found* from *section found but empty*,
+and a failure explainer must distinguish *this failed* from *I cannot tell which
+of these failed*.
+
+**A failure explainer that guesses is worse than one that says it does not know.**
+One that asserted a threshold breach on any job failure printed a confident wrong
+number to change, on top of a real failure — manufacturing a false cause is worse
+than reporting none, because the false one gets acted on.
+
 ## Checklist
 
 - [ ] The sentence reporting a result names the selector that produced it
@@ -223,6 +289,8 @@ sentence.
 - [ ] Any population that gates a decision was derived a second way, and the **sets** compared
 - [ ] Every check's output is read by a following line, or deleted
 - [ ] For any refusal: what else produces this, and does it want the same action?
+- [ ] For any field read as evidence: would more data change this answer? If no, name the question it actually answers
+- [ ] For any exemption: it is narrow, and the red it produces names its real cause
 - [ ] For any acceptance criterion: ticked against a behaviour, never a name
 - [ ] Before editing a file that carries a constraint comment: the constraint is a test, or you have read the region around your edit
 - [ ] A new guard was run against a clean base and found green there, before it was trusted to find anything
