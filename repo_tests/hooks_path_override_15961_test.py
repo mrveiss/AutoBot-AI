@@ -35,10 +35,18 @@ was made with the flag — nothing in a commit records which hooks ran. That is 
 real limit, stated rather than papered over: this guard stops the pattern from
 being written down, so it is not copied from a script into a habit.
 
-**The matcher refuses the override form only.** ``git config --get
-core.hooksPath`` and ``--unset core.hooksPath`` are how ``install-git-hooks.sh``
-*repairs* a bad value, and a guard that fires on those would refuse the fix along
-with the defect. Prose describing the flag — this docstring included — must also
+**The matcher refuses both ways of overriding, and that is a review finding
+rather than the first design.** ``-c core.hooksPath=…`` is transient — one
+invocation. ``git config core.hooksPath <value>`` writes to ``.git/config`` and
+applies to every later command in the repository. The first version caught only
+the transient form, so it refused the milder spelling and permitted the worse
+one; merged, it would have made "hooksPath overrides are guarded" true-sounding
+and false, and a passing guard is not re-read.
+
+Reading and removing stay legal: ``git config --get core.hooksPath`` and
+``--unset core.hooksPath`` are how ``install-git-hooks.sh`` *repairs* a bad
+value, and a guard that fired on those would refuse the fix along with the
+defect. Prose describing the flag — this docstring included — must also
 not trip it. That distinction is not assumed: ``test_the_matcher_ignores_…``
 cases pin it, because a guard keyed on a substring reports on the words rather
 than the operation (#15756).
@@ -58,9 +66,27 @@ from tools.lint._scan_helpers import tracked_paths
 
 from ._paths import repo_root
 
-# The OVERRIDE form only: `-c core.hooksPath=<value>`. `git config … core.hooksPath`
-# carries no `=` and is how the installer repairs a bad value, so it never matches.
+# Two ways to override, and the review that caught the gap is the reason both are
+# here. The first version matched only `-c core.hooksPath=…`, which is the
+# TRANSIENT form -- one invocation, one process. `git config core.hooksPath <v>`
+# writes to `.git/config` and applies to every later command in the repository,
+# so the guard refused the milder spelling and permitted the worse one. A guard
+# with a hole is worse than no guard: it makes "hooksPath overrides are guarded"
+# true-sounding and false, and nobody re-checks a passing guard.
+#
+# `-c` requires whitespace, and that is checked rather than assumed: git rejects
+# the attached form `-ccore.hooksPath=x` with `unknown option`, so `\s+` misses
+# nothing.
 OVERRIDE_RE = re.compile(r"-c\s+core\.hooksPath\s*=")
+
+#: A `git config` invocation naming the key. Assignment is the default verb, so
+#: this is an override UNLESS it carries a read-only or removing flag.
+CONFIG_RE = re.compile(r"\bgit\s+config\b[^\n;|&]*\bcore\.hooksPath\b[^\n;|&]*")
+
+#: Reading and unsetting stay legal: `install-git-hooks.sh` REPAIRS a bad value
+#: with exactly these, and a guard that refused them would refuse the fix along
+#: with the defect.
+READ_OR_REMOVE = ("--get", "--get-all", "--get-regexp", "--list", "--unset", "--unset-all")
 
 SCANNED = ("*.sh", "*.py", "*.yml", "*.yaml")
 
@@ -81,6 +107,10 @@ def _offending_lines(text: str) -> list[tuple[int, str]]:
             continue
         if OVERRIDE_RE.search(line):
             out.append((number, line.strip()))
+            continue
+        match = CONFIG_RE.search(line)
+        if match and not any(flag in match.group(0) for flag in READ_OR_REMOVE):
+            out.append((number, line.strip()))
     return out
 
 
@@ -100,7 +130,7 @@ def test_no_tracked_script_overrides_the_hooks_path() -> None:
 
     assert not offenders, "\n".join(
         f"{rel}:{n}: {line}\n"
-        "    `-c core.hooksPath=…` does not restate git's default — it replaces it. "
+        "    Overriding core.hooksPath does not restate git's default — it replaces it. "
         "Inside a worktree `.git` is a file, so a relative value resolves to nothing, "
         "git runs NO hooks, and the commit still succeeds and looks verified. Git "
         "already shares hooks with worktrees via $GIT_COMMON_DIR/hooks; delete the "
@@ -122,6 +152,10 @@ def test_no_tracked_script_overrides_the_hooks_path() -> None:
         "git -c core.hooksPath=.git/hooks commit -m x",
         "  git -c core.hooksPath=/tmp/nowhere commit",
         "git -c core.hooksPath = .git/hooks commit",
+        # The persistent form: this one survives the process and applies to
+        # every later git command in the repository.
+        "git config core.hooksPath /tmp/nowhere",
+        "git config --local core.hooksPath .git/hooks",
     ],
 )
 def test_the_matcher_catches_an_override_invocation(line: str) -> None:
@@ -136,6 +170,8 @@ def test_the_matcher_catches_an_override_invocation(line: str) -> None:
         "# never run git -c core.hooksPath=.git/hooks — it disables every hook",
         "    # -c core.hooksPath=.git/hooks is the footgun this guard refuses",
         "core.hooksPath is set by install-git-hooks.sh",
+        "git config --get-all core.hooksPath",
+        "git config --unset-all core.hooksPath",
     ],
 )
 def test_the_matcher_ignores_repair_and_prose(line: str) -> None:
@@ -188,9 +224,9 @@ def repo_with_a_blocking_hook(tmp_path: Path) -> Path:
     hook = main / ".git" / "hooks" / "pre-commit"
     hook.write_text("#!/usr/bin/env bash\nexit 1\n", encoding="utf-8")
     hook.chmod(0o755)
-    assert not _git("config", "--get", "core.hooksPath", cwd=main).stdout.strip(), (
-        "this fixture must prove git's DEFAULT behaviour; core.hooksPath is set"
-    )
+    assert not _git(
+        "config", "--get", "core.hooksPath", cwd=main
+    ).stdout.strip(), "this fixture must prove git's DEFAULT behaviour; core.hooksPath is set"
     _git("worktree", "add", "-q", str(tmp_path / "wt"), "-b", "wt", cwd=main)
     return tmp_path / "wt"
 
