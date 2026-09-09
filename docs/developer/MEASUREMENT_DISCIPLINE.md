@@ -130,6 +130,16 @@ additional data will help, because the output was never about the thing.
 - `git cherry` reporting 5, 3 and 2 commits "not in base" for three worktrees whose work had landed. Accurate about patch-id divergence under squash merges; silent about landedness.
 - `gh pr list --author @me` returning six sessions' PRs. Every branch here is authored `mrveiss`, so it is a correct answer to *which PRs did this account author*, read as *which PRs are mine* (#16124).
 
+Provenance claims are the same trap, and the tell is that they describe a
+*gesture* rather than an *artefact*. "I took the files wholesale, so there is no
+difference to miss" is a true statement about what someone did. It is not a
+statement about what the files contain — a formatter is a third party that edits
+between the copy and the commit, and `black` reflowed five regions on the way in.
+The reviewer hashed both copies, found they differ, read every difference, and
+confirmed the load-bearing part was byte-identical anyway. **The conclusion
+survived; the claim did not, and the claim was the thing offered as a reason not
+to check.**
+
 **Remedy: name the field's actual question before building on it.**
 
 **A positive control does not catch this one, and that is why it is separate.**
