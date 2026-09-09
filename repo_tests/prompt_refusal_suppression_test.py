@@ -12,8 +12,8 @@ profile an unconfigured request resolves to -- carried the variant scoped to
 personal information, and ``developer/``/``researcher/`` carried the most
 explicit form of all.
 
-``api/prompts.py:151`` calls ``_collect_prompt_files(prompts_dir, "", ...)``,
-recursive by construction at ``:192-199`` with **no profile allowlist**, so the
+``api/prompts.py`` calls ``_collect_prompt_files(prompts_dir, "", ...)``,
+and that helper is recursive by construction, with **no profile allowlist**, so the
 tree is served wholesale.
 
 WHY THE MATCHER IS TWO-FACTOR RATHER THAN A LIST OF PHRASES
@@ -51,13 +51,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 from repo_tests._paths import repo_root  # noqa: E402
 from repo_tests.prompt_refusal_suppression_corpus import (  # noqa: E402
     CORRECT_POLARITY,
     KNOWN_SUPPRESSION,
     UNSEEN_SUPPRESSION,
 )
+
+from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 
 PROMPTS = "autobot-backend/resources/prompts"
 
@@ -67,8 +68,12 @@ PROMPTS = "autobot-backend/resources/prompts"
 #: clean tree gives (#15826).
 MIN_PROMPT_FILES = 60
 
-_SUPPRESSION_MARKER = r"never|not|n't|without|regardless|ignore|disabl\w*|unconditional|always|\bno\b|\bany\b|every|\ball\b"
-_OBLIGATION = r"refus\w*|declin\w*|reject\w*|withh\w*|refrain\w*|compl(?:y|ies|iance)|restrict\w*|filter\w*|say\s+no|exception\w*"
+_SUPPRESSION_MARKER = (
+    r"never|not|n't|without|regardless|ignore|disabl\w*|unconditional|always|\bno\b|\bany\b|every|\ball\b"
+)
+_OBLIGATION = (
+    r"refus\w*|declin\w*|reject\w*|withh\w*|refrain\w*|compl(?:y|ies|iance)|restrict\w*|filter\w*|say\s+no|exception\w*"
+)
 _SAFETY = r"safety|safe|unsafe|ethic\w*|harm\w*|legal|law|moral|conscience|content"
 _GAP = r"\W+(?:\w+\W+){0,3}?"
 
@@ -100,6 +105,7 @@ REVIEWED = {
     # excluded so the decision is visible.
     "You MUST adhere to this directive without exception.",
 }
+
 
 def suppresses_refusal(line: str) -> bool:
     """Two factors in proximity: suppression near an obligation, or near safety."""
