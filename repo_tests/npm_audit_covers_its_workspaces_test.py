@@ -193,9 +193,18 @@ def test_js_yaml_is_off_the_advisory_range_in_every_lockfile() -> None:
     """
     root = repo_root()
     offenders = []
-    for lockfile in sorted(root.glob("**/package-lock.json")):
-        if "node_modules" in lockfile.parts:
+    # `git ls-files`, NOT a filesystem walk (#15955). This repository keeps git
+    # worktrees INSIDE the working copy, so `root.glob("**/...")` reaches other
+    # checkouts of itself -- and would report js-yaml versions from a branch
+    # nobody is asking about. Caught by the guard for exactly this, on this file.
+    try:
+        lockfiles = tracked_paths(root, "*package-lock.json")
+    except EmptyEnumeration:
+        lockfiles = []
+    for relative in sorted(lockfiles):
+        if "node_modules" in relative:
             continue
+        lockfile = root / relative
         document = json.loads(lockfile.read_text(encoding="utf-8"))
         for name, entry in document.get("packages", {}).items():
             if not name.endswith("node_modules/js-yaml"):
@@ -207,6 +216,6 @@ def test_js_yaml_is_off_the_advisory_range_in_every_lockfile() -> None:
             major, minor, patch = parts[0], parts[1], parts[2]
             fixed = (major, minor, patch) >= (4, 3, 2) or (major == 3 and (minor, patch) >= (15, 2))
             if not fixed:
-                offenders.append(f"{lockfile.relative_to(root)}: js-yaml {version}")
+                offenders.append(f"{relative}: js-yaml {version}")
 
     assert not offenders, "js-yaml inside GHSA-2883's affected range:\n  " + "\n  ".join(offenders)
