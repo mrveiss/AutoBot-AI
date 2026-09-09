@@ -259,6 +259,27 @@ jobs:
         # canonical repo-root path — a `../` prefix here would be a script
         # reference that repo-root path checks cannot resolve.
         ( cd autobot-frontend && npm audit --audit-level=moderate --json > npm-audit.json ) || true
+        # NO ALLOWANCES, AND THAT IS THE LIST DOING ITS JOB (#16089).
+        #
+        # This step carried `--allow-id @redocly/openapi-core` for one advisory
+        # with no reachable fix. The gate then FAILED on it -- not because the
+        # advisory returned, but because the scanner stopped reporting it:
+        #
+        #   allowance(s) ['@redocly/openapi-core'] name findings the scanner no
+        #   longer reports. Remove them; an allowance that matches nothing
+        #   tolerates whatever appears next.
+        #
+        # That is the self-cleaning property the allowance was justified against,
+        # arriving. An entry matching nothing is not harmless -- it silently
+        # admits whatever advisory appears in that package next, and it would
+        # have sat here indefinitely because nothing else asks whether an
+        # allowance is still needed.
+        #
+        # So the list is empty, which is the state to defend. Adding an entry
+        # needs the same evidence the last one did: the advisory has NO reachable
+        # fix (checked against the registry, not the advisory range -- a fix at a
+        # major version behind a third party's dependency range is still a fix),
+        # and it does not ship. Anything else is a bump.
         python3 pipeline-scripts/security_scan_gate.py \
           --format npm-audit \
           --report autobot-frontend/npm-audit.json \

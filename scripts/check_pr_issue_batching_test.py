@@ -118,12 +118,10 @@ class TestExemptions:
         [
             ("dependabot[bot]", "dependabot/npm/x", "bump x", "dependabot"),
             ("someone", "hotfix-15499", "fix(x): urgent", "hotfix"),
-            ("someone", "issue-1", "Revert \"feat(x): thing\"", "revert"),
+            ("someone", "issue-1", 'Revert "feat(x): thing"', "revert"),
         ],
     )
-    def test_an_exempt_pr_passes_on_one_issue(
-        self, actor: str, branch: str, title: str, why: str
-    ) -> None:
+    def test_an_exempt_pr_passes_on_one_issue(self, actor: str, branch: str, title: str, why: str) -> None:
         ok, message = check(ONE, actor, branch, title)
         assert ok, message
         assert why in message
@@ -190,3 +188,72 @@ class TestRationaleAsAHeading:
         it refused."""
         assert "## Single-issue rationale" in RATIONALE_HINT
         assert "Single-issue rationale: <why" in RATIONALE_HINT
+
+
+class TestARationaleMayOpenWithAnIssueReference:
+    """`#15961 alone…` under the heading is prose, not a heading (#16104).
+
+    This is #16050 one layer in. That issue records two sessions independently
+    writing the heading form the checker refused; the heading form was then
+    accepted, and the natural way to FILL it still failed. The gate went on
+    teaching a form it refuses.
+
+    The failure mode is why it survived a fix: the hint said "add a section" to
+    an author who had added one, so the only available response was to reword
+    until green -- and a reword leaves no trace. Every author who hit this fixed
+    it silently, which is why one recurrence looked like a first occurrence.
+    """
+
+    def test_a_rationale_opening_with_an_issue_reference_counts(self) -> None:
+        """The defect. `#15961` is a reference; an ATX heading needs `# `."""
+        body = ONE + "## Single-issue rationale\n\n#15961 alone. The two findings differ.\n"
+        assert check(body)[0]
+        assert single_issue_rationale(body) == "#15961 alone. The two findings differ."
+
+    def test_the_same_reason_worded_around_the_defect_still_counts(self) -> None:
+        """The control: the workaround every previous author reached for."""
+        body = ONE + "## Single-issue rationale\n\nIssue #15961 alone. Nothing else in scope.\n"
+        assert single_issue_rationale(body) == "Issue #15961 alone. Nothing else in scope."
+
+    def test_a_real_heading_still_ends_the_section(self) -> None:
+        """The half that must NOT move. Widening what counts as prose must not
+        let an empty section borrow the next section's text."""
+        body = ONE + "## Single-issue rationale\n\n## What Changed\n\nunrelated prose\n"
+        assert single_issue_rationale(body) is None
+        assert not check(body)[0]
+
+    def test_a_single_hash_heading_still_ends_the_section(self) -> None:
+        body = ONE + "## Single-issue rationale\n\n# What Changed\n\nunrelated prose\n"
+        assert single_issue_rationale(body) is None
+
+    def test_a_bare_hash_is_a_heading_not_prose(self) -> None:
+        """`#` alone is a valid empty ATX heading; `#x` is not a heading at all."""
+        assert single_issue_rationale(ONE + "## Single-issue rationale\n\n#\n") is None
+        assert single_issue_rationale(ONE + "## Single-issue rationale\n\n#x\n") == "#x"
+
+
+class TestTheFailureNamesWhichFailureItIs:
+    """ "No section" and "section present but empty" want opposite fixes (#16104).
+
+    A red only self-corrects when it names its real cause. Reporting "add a
+    section" to an author who added one is what made the previous defect
+    invisible: the misleading hint routed every author to a workaround instead
+    of to the parser.
+    """
+
+    def test_a_missing_section_gets_the_how_to_add_one_hint(self) -> None:
+        ok, message = check(ONE)
+        assert not ok
+        assert message == RATIONALE_HINT
+
+    def test_an_empty_section_says_so_and_quotes_the_terminating_line(self) -> None:
+        ok, message = check(ONE + "## Single-issue rationale\n\n## What Changed\n\nprose\n")
+        assert not ok
+        assert message != RATIONALE_HINT
+        assert "present but reads as empty" in message
+        assert "## What Changed" in message, "the author cannot see what ended the parse"
+
+    def test_a_section_with_nothing_at_all_beneath_it_says_so(self) -> None:
+        ok, message = check(ONE + "## Single-issue rationale\n")
+        assert not ok
+        assert "no prose" in message
