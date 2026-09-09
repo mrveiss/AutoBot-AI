@@ -53,6 +53,7 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.paths import scrubbed_git_env
 from tools.lint._scan_helpers import tracked_paths
 
 from ._paths import repo_root
@@ -146,8 +147,24 @@ def test_the_matcher_ignores_repair_and_prose(line: str) -> None:
 
 
 def _git(*args: str, cwd: Path) -> subprocess.CompletedProcess:
+    """Run git in *cwd* with the ambient git environment removed.
+
+    Not optional, and this test learned it the hard way: a git hook exports
+    ``GIT_DIR``, and an inherited ``GIT_DIR`` **outranks** ``cwd=``. Under the
+    pre-push hook, ``git init .`` in a temporary directory therefore
+    re-initialised the repository named by that variable and created no ``.git``
+    in *cwd* at all, so the fixture below failed writing a hook into a directory
+    that was never made. The defect these tests are about — a git invocation
+    quietly operating on a checkout other than the one named — reached them
+    first (#15783, #15506).
+    """
     return subprocess.run(  # nosec B603  # fixed argv, no shell
-        ["git", *args], cwd=cwd, capture_output=True, text=True, check=False
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=scrubbed_git_env(),
     )
 
 
@@ -162,6 +179,12 @@ def repo_with_a_blocking_hook(tmp_path: Path) -> Path:
     _git("config", "user.email", "t@example.invalid", cwd=main)
     _git("config", "user.name", "t", cwd=main)
     _git("commit", "-q", "--allow-empty", "-m", "init", cwd=main)
+    assert (main / ".git").exists(), (
+        "`git init` created no .git in the temporary directory — the ambient git "
+        "environment reached this subprocess despite scrubbed_git_env(). Fix the "
+        "leak; do not mkdir around it, or these tests silently start describing "
+        "some other checkout."
+    )
     hook = main / ".git" / "hooks" / "pre-commit"
     hook.write_text("#!/usr/bin/env bash\nexit 1\n", encoding="utf-8")
     hook.chmod(0o755)
