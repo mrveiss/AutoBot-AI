@@ -31,10 +31,6 @@ from protocols.agent_communication import (
 
 logger = get_logger(__name__)
 
-# The exchanged data types live in `base_agent_types` (#15950): this module was
-# at its size ceiling, and they were the part of it that never referenced
-# `BaseAgent`. Re-exported here so the existing import sites keep working.
-from agents.scope_enforcement import hold_scopes, refused_response
 from agents.base_agent_types import (  # noqa: F401
     AVAILABLE_AGENT_STATUSES,
     AgentHealth,
@@ -47,6 +43,11 @@ from agents.base_agent_types import (  # noqa: F401
     serialize_agent_request,
     serialize_agent_response,
 )
+
+# The exchanged data types live in `base_agent_types` (#15950): this module was
+# at its size ceiling, and they were the part of it that never referenced
+# `BaseAgent`. Re-exported here so the existing import sites keep working.
+from agents.scope_enforcement import hold_scopes, refused_response
 
 
 class BaseAgent(ABC):
@@ -221,7 +222,7 @@ class BaseAgent(ABC):
 
         # Record invocation start in Redis analytics
         try:
-            from services.agent_analytics import TaskStatus, get_agent_analytics
+            from services.agent_analytics import get_agent_analytics
 
             analytics = get_agent_analytics()
             await analytics.track_task_start(
