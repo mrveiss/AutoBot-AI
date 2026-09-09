@@ -65,9 +65,31 @@ _ROOT = repo_root()
 #: still spells the sudoers rules `redis-server` while the playbook that
 #: implemented them uses `redis_service_name: "redis-stack-server"`, and
 #: rewriting the plan to match the build would erase that the two diverged.
+#: `/tests?/` was too broad and hid three live instances. It was written to
+#: exclude test CODE, and it also excluded `shared/tests/README.md` and
+#: `shared/tests/integration/README_KB_INTEGRATION_TESTS.md` -- documentation
+#: telling an operator to run `systemctl start redis`, and a sample CI workflow
+#: people copy. A directory named `tests` is not a statement about a file's
+#: kind, which is the same mistake as excluding `.md` wholesale: the exclusion
+#: was drawn on where a file lives rather than on what it is.
+#:
+#: **And `test_` alone is not a kind either — this is the third time.** The
+#: first version excluded `.md` wholesale, the second excluded `/tests?/` by
+#: directory, and the third excluded anything named `test_*` regardless of
+#: extension: 960 tracked paths match that prefix and many are `.yaml`, `.js`,
+#: `.json` and `.txt`. Each fix narrowed the previous over-reach and
+#: reintroduced it one notch smaller. The invariant that survives all three is
+#: that the exclusion must name the *kind* -- a Python or shell test file --
+#: and every proxy for it (a directory, an extension class, a name prefix)
+#: eventually admits something that is not one.
+#: Test code is now excluded by NAME (`*_test.py`, `test_*.py`, `*_test.sh`),
+#: which is what the rule always meant. Records stay excluded by tree, because
+#: there the location IS the statement -- a plan or an audit should keep saying
+#: what was true when it was written.
 _SKIP = re.compile(
-    r"(_test\.py$|/tests?/|/test_|baseline|\.lock$|node_modules/|openapi\.json$"
-    r"|^docs/archives/|^docs/audit/|^docs/planning/)"
+    r"(_test\.(py|sh)$|/test_[^/]*\.(py|sh)$|baseline|\.lock$|node_modules/|openapi\.json$"
+    r"|^docs/archives/|^docs/audit/|^docs/planning/"
+    r"|^autobot-infrastructure/shared/tests/results/)"
 )
 
 _BACKTICKED = re.compile(r"`[^`\n]*`")
