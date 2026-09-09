@@ -70,30 +70,17 @@ SCOPE, AND WHAT IS DELIBERATELY NOT SCOPED
   needs no allowlist entry. The name ``subprocess`` is bound to is resolved
   from the file's own imports, so ``import subprocess as sp`` and
   ``from subprocess import run`` are both caught.
-* **``git ls-files`` IS gated too, since #14896.** It was left out when this
-  hook landed on the reasoning that every call site passed ``cwd=<root>`` from
-  a root the hook already protected. That reasoning was wrong: ``cwd=`` loses
-  to an inherited ``GIT_DIR``, which names a git directory outright, so a
-  correct ``cwd`` enumerates the *other* checkout's index and answers without
-  erroring. #14896 found unscrubbed ``ls-files`` call sites still standing on
-  that argument, so the subcommand joins :data:`TOPLEVEL_FLAG` in
-  :data:`GATED_TOKENS`.
-* **Shell ``git ls-files`` IS gated, since #15506.** It was left out because
-  :func:`scan_shell` matched ``rev-parse`` + ``--show-toplevel`` as a *pair*
-  while ``ls-files`` has no second token, and — the real blocker — shell had
-  no scrub helper for enumeration to point an offender at. ``git_tracked_files``
-  in ``scripts/lib/git-root.sh`` supplies one, so the single-token match now
-  has a fix to name. The three ``.sh`` call sites were converted in the same
-  change; a guard that lands before its remedy only teaches people to silence
-  it.
-
-  The single-token match is looser than the pair, and deliberately so: it fires
-  on ``ls-files`` anywhere in a non-comment line, which catches
-  ``git -C "$d" ls-files`` that a literal ``git ls-files`` match would miss.
-  The cost is that ``ls-files`` inside a quoted string — an error message, a
-  heredoc — reads as a call. That is a known false positive rather than an
-  unknown one, and it is why the converted call sites had their ``die``
-  messages reworded to name the helper instead.
+* **``git ls-files`` IS gated too, since #14896.** It was left out on the
+  reasoning that every call site passed ``cwd=<root>``. That was wrong: ``cwd=``
+  loses to an inherited ``GIT_DIR``, so a correct ``cwd`` enumerates the *other*
+  checkout's index and answers without erroring. The subcommand therefore joins
+  :data:`TOPLEVEL_FLAG` in :data:`GATED_TOKENS`.
+* **Shell ``git ls-files`` IS gated, since #15506.** It waited on a remedy to
+  name — ``git_tracked_files`` in ``scripts/lib/git-root.sh`` — because a guard
+  landing before its remedy only teaches people to silence it.
+  :data:`SHELL_LS_FILES_CALL` anchors on ``git`` in verb position, catching
+  ``git -C "$d" ls-files`` but not a helper call. Known cost: the same text in a
+  quoted string reads as a call, hence the reworded ``die``s.
 
 KNOWN GAPS — WHAT THIS DOES **NOT** CATCH
 -----------------------------------------
@@ -140,6 +127,7 @@ Exit code:
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 from typing import Iterable, List, Set, Tuple
@@ -174,10 +162,10 @@ SCRUB_HELPERS = frozenset({SCRUB_HELPER, STRICT_SCRUB_HELPER})
 #: same trust boundary as ``_scrubs`` below for the shadowed-helper gap.
 SHELL_HELPER = "git_repo_root"
 
-#: The shell scrub for the enumeration question, added with #15506. Until it
-#: existed there was nothing to point a shell offender at, which is why
-#: `ls-files` was gated in Python and not in shell.
-SHELL_LS_FILES_HELPER = "git_tracked_files"
+#: `git … ls-files`, anchored on `git` in VERB position: `\bgit\b` cannot match
+#: inside `git_tracked_files`, so no exemption is needed and an approving comment
+#: can no longer excuse a raw call, which the old substring test allowed (#15506).
+SHELL_LS_FILES_CALL = re.compile(r"\bgit\b[^\n;|&]*\bls-files\b")
 
 #: Name this guard reports under.
 HOOK_ID = "git-toplevel-env-scrubbed"
@@ -532,7 +520,7 @@ def scan_shell(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
     for line_no, line in enumerate(lines, start=1):
         if line.strip().startswith("#"):
             continue
-        if LS_FILES_VERB in line and SHELL_LS_FILES_HELPER not in line:
+        if SHELL_LS_FILES_CALL.search(line):
             findings.append(
                 (
                     line_no,
@@ -540,7 +528,7 @@ def scan_shell(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
                     "inherited GIT_DIR outranks the directory passed, so this "
                     "enumerates the other checkout's index and answers without "
                     "erroring. Source scripts/lib/git-root.sh and call "
-                    f"{SHELL_LS_FILES_HELPER}() (#15506).",
+                    "git_tracked_files() (#15506).",
                 )
             )
             continue
