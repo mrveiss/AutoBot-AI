@@ -148,6 +148,41 @@ on the first attempt and costs nobody a CI cycle. **A comment that has been read
 past twice is evidence that it should be a test** — and a file that needs a
 comment explaining what will break is a file that needs a test saying so.
 
+**And the remedy has the same failure mode as the disease.** The first draft of
+that guard flagged *every* first-party package import in a by-path-loaded module.
+It **failed on base**: `migrations/runner.py` is loaded the same way and imports
+`from migrations import utils` quite happily. Filed as written, it would have been
+a test that fails on a clean tree — worse than the bug, because a guard that cries
+wolf gets disabled rather than fixed.
+
+Two facts had to be measured before the rule was right, and neither survives a
+guess:
+
+*Which loads are strict.* A `spec_from_file_location` with a **dotted** name
+scaffolds a parent in `sys.modules`, so package imports resolve; one with **no
+dot** has nothing behind it. Only the second is constrained — and deriving the
+target list from the workflow means a fourth by-path load is covered without
+anyone remembering.
+
+*Which imports actually fail there.* Not "package imports" — only those whose
+`__init__` chain reaches `autobot_shared`:
+
+```
+models       REACHES  via user_management.models.user
+middleware   REACHES  via monitoring.prometheus_metrics
+monitoring   REACHES
+api, migrations, services, slm, user_management   clean
+```
+
+`user_management` is **clean** while `models` reaches *through*
+`user_management.models.user` — a package's own `__init__` and its subpackage's
+`__init__` are different files, and guessing gets that backwards.
+
+**So a guard written from the same narrow read that caused the bug will encode the
+bug.** What separated the two drafts was running the candidate against base and
+finding it red on a clean tree — the second-derivation habit below, applied to the
+remedy rather than to the finding.
+
 ## Two habits that catch most of it
 
 **A known positive.** Before a count means anything, assert a case whose answer
@@ -190,3 +225,4 @@ sentence.
 - [ ] For any refusal: what else produces this, and does it want the same action?
 - [ ] For any acceptance criterion: ticked against a behaviour, never a name
 - [ ] Before editing a file that carries a constraint comment: the constraint is a test, or you have read the region around your edit
+- [ ] A new guard was run against a clean base and found green there, before it was trusted to find anything
