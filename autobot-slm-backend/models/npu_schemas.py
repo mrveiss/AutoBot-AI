@@ -20,8 +20,6 @@ from typing import Dict, List
 from pydantic import BaseModel, Field
 
 
-
-
 class NPUDeviceType(str, Enum):
     """NPU device type enumeration."""
 

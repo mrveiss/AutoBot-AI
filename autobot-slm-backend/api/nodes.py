@@ -2283,7 +2283,6 @@ async def acknowledge_remediation(
     }
 
 
-
 @router.post("/test-connection", response_model=ConnectionTestResponse)
 async def test_connection(
     request: ConnectionTestRequest,

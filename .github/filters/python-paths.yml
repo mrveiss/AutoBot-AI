@@ -103,6 +103,11 @@ python:
   - '.github/workflows/no-commit-trailers.yml'
   - '.github/workflows/pr-issue-validation.yml'
   - '.github/workflows/release.yml'
+  # #15495: `by_path_loaded_modules_are_package_free_test.py` derives its targets
+  # from this workflow's `spec_from_file_location` calls. Without an entry here,
+  # adding a fourth by-path load is exactly the change that skips the guard
+  # asserting those loads stay package-free.
+  - '.github/workflows/slm-migration-gate.yml'
   - 'autobot-frontend/package.json'
   - 'install.sh'
   # #15983: `ansible_core_pin_frozen_15983_test.py` reads this pin to assert the

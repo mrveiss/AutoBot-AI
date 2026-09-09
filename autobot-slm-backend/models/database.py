@@ -50,7 +50,6 @@ class Base(DeclarativeBase):
     """Base class for all models."""
 
 
-
 class Node(Base):
     """Node model representing a managed machine."""
 

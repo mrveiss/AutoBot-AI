@@ -238,14 +238,14 @@ def _enum_members_from_source(path: Path, class_name: str) -> set[tuple[str, str
 
 
 def test_backup_service_type_exists_and_names_both_engines():
-    members = _enum_members_from_source(SLM / "models" / "database.py", "BackupServiceType")
-    assert members is not None, "#13578: BackupServiceType is gone from models/database.py"
+    members = _enum_members_from_source(SLM / "status_enums.py", "BackupServiceType")
+    assert members is not None, "#13578: BackupServiceType is gone from status_enums.py (moved there in #15495)"
     assert members == BACKUP_SERVICE_TYPE_UNION
 
 
 def test_the_postgres_alias_is_declared_next_to_the_enum():
     """ "postgresql" was a live dispatch key, so it is already in stored rows."""
-    source = (SLM / "models" / "database.py").read_text(encoding="utf-8")
+    source = (SLM / "status_enums.py").read_text(encoding="utf-8")
     assert "_BACKUP_SERVICE_TYPE_ALIASES" in source
     assert '"postgresql"' in source
 

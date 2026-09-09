@@ -51,9 +51,7 @@ WORKFLOW = REPO_ROOT / ".github" / "workflows" / "slm-migration-gate.yml"
 #: the step registered the module under its real package path and scaffolded the
 #: parent in ``sys.modules``; those targets may import their package. A name with
 #: no dot is a synthetic label with no package behind it.
-_LOAD = re.compile(
-    r'spec_from_file_location\(\s*"(?P<name>[^"]+)"\s*,\s*Path\(\s*"(?P<file>[^"]+)"\s*\)'
-)
+_LOAD = re.compile(r'spec_from_file_location\(\s*"(?P<name>[^"]+)"\s*,\s*Path\(\s*"(?P<file>[^"]+)"\s*\)')
 
 #: The dependency the migration-runner job does not install. Named in
 #: ``service_status.py``'s docstring as the thing that broke it (#16019).
@@ -140,9 +138,9 @@ def test_the_derivation_still_finds_its_control() -> None:
     """An empty or drifted target set is a broken guard, not a clean tree."""
     targets = _package_free_targets()
     assert targets, f"no package-free by-path loads found in {WORKFLOW} — derivation broke"
-    assert _CONTROL_TARGET in targets, (
-        f"{_CONTROL_TARGET} is no longer derived as a package-free by-path load; found {targets}"
-    )
+    assert (
+        _CONTROL_TARGET in targets
+    ), f"{_CONTROL_TARGET} is no longer derived as a package-free by-path load; found {targets}"
 
 
 def test_reachability_analysis_still_finds_its_control() -> None:
