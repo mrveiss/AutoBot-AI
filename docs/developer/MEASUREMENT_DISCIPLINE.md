@@ -418,6 +418,25 @@ The lucky case is the instructive one. Getting away with it produced no signal a
 all — no error, no correction, nothing to learn from — which is exactly why the
 habit survives until the day the number is taken.
 
+**And stating the rule does not install it.** One of those two sessions wrote
+*"file first, cite second — never write an issue number I have not read back from
+the API"*, and then, **in the next artefact it produced**, wrote *"Filed as
+#16140"* before filing. It filed as #16140. Correct again, and correct is the
+worst available outcome: a wrong number gets caught, a lucky one leaves a
+citation that resolves, a closure that reads as rigorous, and a habit with fresh
+evidence that it works.
+
+The diagnosis is better than the rule it corrects. **The rule was not forgotten —
+it failed where it costs something.** A citation gets written *while composing the
+reasoning that needs it*, so obeying means breaking off mid-argument to go and
+file. **A rule whose price is highest exactly when it applies gets skipped exactly
+when it applies**, and no amount of agreeing with it beforehand changes that.
+
+So the version that survives contact is not a stronger commitment, it is a
+cheaper action: **write a placeholder, finish the argument, fill it in after
+filing.** The habit has to cost less than the thing it prevents, or good intentions
+are all it will ever be made of.
+
 ## A zero is a sample, not a state
 
 `gh run list --status in_progress` returned **0** while 47 runs sat queued. Read as
