@@ -62,7 +62,7 @@ from pathlib import Path
 import pytest
 
 from autobot_shared.paths import scrubbed_git_env
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 from ._paths import repo_root
 from ._reach import declare
@@ -96,8 +96,24 @@ EXEMPT = {"repo_tests/hooks_path_override_15961_test.py"}
 
 
 def _scanned_files(root: Path) -> list[str]:
-    """Tracked files this guard reads, enumerated through the canonical helper."""
-    return list(tracked_paths(root, *SCANNED))
+    """Tracked files this guard reads, enumerated through the canonical helper.
+
+    The `EmptyEnumeration` catch is required by the declaration contract, not a
+    convenience. `tracked_paths` refuses to report an empty enumeration as a clean
+    tree, which is right for a guard that would otherwise pass on nothing — but
+    `reach_declarations_test` hands every declaration an empty repository on
+    purpose and demands `ReachFloorError` **specifically**, because that is the
+    only exception the floor itself raises. Letting `EmptyEnumeration` escape
+    means the guard fails loudly while saying nothing about whether its floor
+    binds, which is the distinction that test exists to draw. Returning an empty
+    result puts the refusal back where the floor can make it.
+
+    Same reason `excluded_tree_size_debt_test` catches it (#16068).
+    """
+    try:
+        return list(tracked_paths(root, *SCANNED))
+    except EmptyEnumeration:
+        return []
 
 
 #: `tracked_paths` already raises when git lists **nothing**, so total collapse was
