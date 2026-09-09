@@ -65,6 +65,7 @@ from autobot_shared.paths import scrubbed_git_env
 from tools.lint._scan_helpers import tracked_paths
 
 from ._paths import repo_root
+from ._reach import declare
 
 # Two ways to override, and the review that caught the gap is the reason both are
 # here. The first version matched only `-c core.hooksPath=…`, which is the
@@ -94,6 +95,34 @@ SCANNED = ("*.sh", "*.py", "*.yml", "*.yaml")
 EXEMPT = {"repo_tests/hooks_path_override_15961_test.py"}
 
 
+def _scanned_files(root: Path) -> list[str]:
+    """Tracked files this guard reads, enumerated through the canonical helper."""
+    return list(tracked_paths(root, *SCANNED))
+
+
+#: `tracked_paths` already raises when git lists **nothing**, so total collapse was
+#: covered. This is the other half, raised in review on #16097 and merged without it:
+#: narrowing `SCANNED` from four globs to one -- or moving a directory -- drops
+#: thousands of files while the enumeration stays non-empty, so the guard keeps
+#: passing having read a fraction of its population. A floor below the population
+#: catches only the collapse; partial loss is the failure that actually happens.
+#:
+#: `skips=0` is **measured, not estimated**: every one of the 6,377 discovered files
+#: reads cleanly as UTF-8, so the `except (OSError, UnicodeDecodeError)` branch is
+#: currently dead and nothing legitimately goes unread. If that stops being true the
+#: number has to move, and saying it is zero is what makes that visible.
+#: `growth=400` is the judgement call -- roughly a week of this repo's growth -- and
+#: is the only figure here not taken from a measurement.
+REACH = declare(
+    "hooks-path-override",
+    discover=_scanned_files,
+    floor=6000,
+    growth=400,
+    skips=0,
+    what="tracked shell, python and YAML files",
+)
+
+
 def _offending_lines(text: str) -> list[tuple[int, str]]:
     """Override invocations in ``text``, ignoring comment lines.
 
@@ -118,7 +147,8 @@ def test_no_tracked_script_overrides_the_hooks_path() -> None:
     """An override in a tracked script is the pattern becoming a habit."""
     root = repo_root()
     offenders = []
-    for rel in tracked_paths(root, *SCANNED):
+    read = 0
+    for rel in REACH.examined(root):
         if rel in EXEMPT:
             continue
         path = root / rel
@@ -126,7 +156,13 @@ def test_no_tracked_script_overrides_the_hooks_path() -> None:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
+        read += 1
         offenders += [(rel, n, line) for n, line in _offending_lines(text)]
+
+    # Candidates are not coverage: `examined` bounds what was listed, this bounds
+    # what was actually opened. Without it a sweep could list 6,377 files, fail to
+    # read 6,300 of them, and still report the same green as a clean tree.
+    REACH.completed(read)
 
     assert not offenders, "\n".join(
         f"{rel}:{n}: {line}\n"
