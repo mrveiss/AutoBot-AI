@@ -18,7 +18,9 @@ from autobot_shared.logging_manager import get_logger
 
 from .pii_pipeline import PIIBlocked, scrub_outbound
 from .self_evaluator import DEFAULT_EVAL_THRESHOLD, evaluate_task_output
-from .task_manager import get_task_manager
+from agents.scope_enforcement import hold_scopes
+
+from .task_manager import _TERMINAL_STATES, get_task_manager
 from .trust_score import get_trust_manager
 from .types import TaskArtifact, TaskState
 
@@ -75,6 +77,70 @@ async def execute_a2a_task(
     manager.update_state(task_id, TaskState.WORKING)
     manager.publish_event(task_id, {"event": "state_change", "state": "working", "task_id": task_id})
 
+    # #15950: the scopes this task will touch, declared by the submitter. The
+    # executor cannot ask an agent for them -- it calls the orchestrator, which
+    # routes internally, so no specific agent is known here. Agent-level claims
+    # are taken separately in `BaseAgent.execute_with_tracking`; these are the
+    # task-level ones, and an empty declaration keeps today's behaviour exactly.
+    declared = list((context or {}).get("declared_scopes") or [])
+
+    async def _task_is_over() -> bool:
+        task = manager.get_task(task_id)
+        return task is None or task.status.state in _TERMINAL_STATES
+
+    async with hold_scopes(
+        declared, agent_id="a2a-executor", task_id=task_id, intent=input_text[:120], stop=_task_is_over
+    ) as held:
+        if not held.granted:
+            _report_refusal(manager, task_id, held.conflict)
+            return
+        await _execute_claimed(task_id, input_text, context, eval_threshold, peer_id, manager)
+
+
+def _report_refusal(manager, task_id: str, conflict) -> None:
+    """Fail the task with the holder named, not with a bare error.
+
+    The operator's next question is "blocked by what?" -- a refusal that does not
+    answer it turns a coordination event into a mystery, and the conflict object
+    already renders holder, task, mode, expiry and intent.
+    """
+    manager.add_artifact(
+        task_id,
+        TaskArtifact(
+            artifact_type="json",
+            content={
+                "refused_scope": conflict.requested,
+                "held_by_agent": conflict.holder.agent_id,
+                "held_by_task": conflict.holder.task_id,
+                "holder_intent": conflict.holder.intent,
+                "holder_expires_at": conflict.holder.expires_at,
+                "reason": str(conflict),
+            },
+        ),
+    )
+    manager.update_state(task_id, TaskState.FAILED, message="scope_conflict")
+    manager.publish_event(
+        task_id,
+        {
+            "event": "state_change",
+            "state": "failed",
+            "terminal": True,
+            "message": "scope_conflict",
+            "task_id": task_id,
+        },
+    )
+    logger.info("A2A task %s refused: %s", task_id, conflict)
+
+
+async def _execute_claimed(
+    task_id: str,
+    input_text: str,
+    context: Dict[str, Any] | None,
+    eval_threshold: float,
+    peer_id: str | None,
+    manager,
+) -> None:
+    """The original execution body, unchanged, now inside the task's claims."""
     try:
         # Issue #7355: Scrub inbound payload before forwarding to orchestrator.
         # Prevents PII/credentials that arrived in the A2A request from leaking

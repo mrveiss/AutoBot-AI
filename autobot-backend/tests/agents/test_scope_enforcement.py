@@ -146,7 +146,7 @@ async def test_an_unavailable_registry_lets_the_run_proceed_unclaimed(redis, mon
 
 
 def test_a_refusal_names_the_holder_and_their_intent():
-    """"Blocked" without "by whom, doing what" turns a collision into a mystery."""
+    """ "Blocked" without "by whom, doing what" turns a collision into a mystery."""
     from autobot_shared.coordination.work_claims import Claim, ClaimConflict
 
     holder = Claim(

@@ -140,7 +140,9 @@ def refused_response(request, conflict: ClaimConflict, *, agent_type: str):
 
 
 @contextlib.asynccontextmanager
-async def hold_scopes(scopes: Sequence[str], *, agent_id: str, task_id: str, intent: str) -> AsyncIterator[ScopesHeld]:
+async def hold_scopes(
+    scopes: Sequence[str], *, agent_id: str, task_id: str, intent: str, stop=None
+) -> AsyncIterator[ScopesHeld]:
     """Hold *scopes* for the body, renewing throughout and releasing on any exit.
 
     Yields a :class:`ScopesHeld` whose ``granted`` is False when the scopes could
@@ -171,7 +173,7 @@ async def hold_scopes(scopes: Sequence[str], *, agent_id: str, task_id: str, int
         yield held
         return
 
-    renewer = asyncio.create_task(_renew_forever(scopes, agent_id=agent_id, task_id=task_id))
+    renewer = asyncio.create_task(_renew_forever(scopes, agent_id=agent_id, task_id=task_id, stop=stop))
     try:
         yield held
     finally:
