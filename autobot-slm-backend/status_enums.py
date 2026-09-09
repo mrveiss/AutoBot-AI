@@ -2,20 +2,30 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Status enumerations for the SLM data model.
+"""Status vocabulary the SLM data model is built from (#15495).
 
-Extracted verbatim from models/database.py, which sat at exactly its recorded
-size ceiling (1229/1229). ``scripts/python_file_size_known_large.py`` says that
-mapping ONLY SHRINKS -- "never add an entry to make a new file pass; split the
-file instead" -- so the block had to move out before anything could be added.
+Extracted from ``models/database.py`` because that file sits at its
+grandfathered size ceiling (#14236) and a grandfathered file may not grow --
+the same reason ``ServiceStatus`` left it for ``service_status.py`` (#16019)
+and ``SERVICE_PORT_MAP`` left ``api/services.py``.
+
+**Top-level, deliberately not under ``models/`` -- and this is load-bearing.**
+``from models.x import ...`` imports the models PACKAGE, and
+``models/__init__.py`` pulls in ``user_management`` and thence
+``autobot_shared``. Three steps in ``.github/workflows/slm-migration-gate.yml``
+load ``models/database.py`` with ``spec_from_file_location`` to run
+``Base.metadata.create_all`` the way production does; that loader has no
+package on its path. Placing this under ``models/`` turns a flat module import
+into a package import and breaks `SLM migration runner -- Postgres 16` with
+``ModuleNotFoundError: No module named 'autobot_shared'``. #16019's docstring
+records that exact failure; this module was first written under ``models/`` and
+reproduced it, which is the second time that trap has been sprung.
 
 Scope is the contiguous run of enums that preceded the first mapped class. The
-enums defined further down database.py stay there: each sits with the model
-whose column it constrains, and pulling them out would separate them from it.
-These seven constrained nothing local, which is why they were already grouped.
+enums defined further down ``database.py`` stay there: each sits beside the
+model whose column it constrains.
 
-``models.database`` re-exports every name here, so existing imports keep
-working unchanged -- this is a pure move with no behaviour change.
+Re-exported from ``models.database`` so all existing importers are unaffected.
 """
 
 from __future__ import annotations

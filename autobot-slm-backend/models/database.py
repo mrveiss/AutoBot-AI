@@ -28,8 +28,14 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase
 
 # Re-exported so ``models.database`` stays the historical import site for
-# these names -- 67 modules import them from here. See models/enums.py.
-from .enums import (  # noqa: F401
+# these names -- 67 modules import them from here.
+#
+# Top-level module, NOT ``models.enums``: importing anything from the models
+# package runs models/__init__.py, which drags in user_management and thence
+# autobot_shared, and the migration gate loads THIS file by path with no
+# package on its path. Same reason and same shape as service_status.py
+# (#16019) two dozen lines below. Do not move this under models/.
+from status_enums import (  # noqa: E402,F401
     BackupServiceType,
     BackupStatus,
     CodeStatus,
