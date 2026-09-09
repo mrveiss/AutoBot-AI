@@ -62,12 +62,31 @@ from repo_tests._paths import repo_root  # noqa: E402
 from tools.lint._scan_helpers import tracked_paths  # noqa: E402
 
 #: What counts as enumerating the tree.
-_ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(")
+#:
+#: ``.glob(`` was missing until #16147, and its absence was the same defect this
+#: module exists to catch, one level up: the sweep reported every guard compliant
+#: while 21 tree-scanning guards were outside the set it read. A blind spot in a
+#: detector is indistinguishable from a clean result, which is why the floor below
+#: is bound to guards EXAMINED rather than to guards found wanting.
+#:
+#: ``.glob(`` is listed after ``rglob(`` deliberately -- ``rglob`` contains no
+#: literal ``.glob(``, so the two are independent alternatives rather than one
+#: subsuming the other.
+_ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(|\.glob\(")
 
 #: Bound to guards EXAMINED, never to guards found wanting. A `git ls-files`
 #: returning nothing would otherwise pass this module having read zero guards --
 #: the exact failure it exists to catch, inside itself.
-MIN_GUARDS_EXAMINED = 60
+#:
+#: MEASURED 2026-09-10 against `origin/Dev_new_gui`: 201 tracked
+#: `repo_tests/*_test.py`, of which **101** match `_ENUMERATOR` (80 before
+#: `.glob(` was added, 21 reachable only through it). The floor sits at 95 rather
+#: than at 101 so that deleting a handful of guards is a test failure about the
+#: guards rather than about this number -- but a collapse, which is what an
+#: enumeration bug produces, still trips it. The previous value of 60 sat 20
+#: below the then-current 80 and 41 below the true population, so it could not
+#: have fired on the very blind spot #16147 reports.
+MIN_GUARDS_EXAMINED = 95
 
 #: Tree-scanning `*_test.py` guards with no floor of any kind, frozen so a NEW
 #: one fails. May only shrink, and a shrink must be recorded here.
@@ -75,6 +94,12 @@ GRANDFATHERED = frozenset(
     {
         "repo_tests/background_task_retention_ratchet_test.py",
         "repo_tests/fixture_fixed_path_teardown_guard_gating_test.py",
+        # Entered the examined set with `.glob(` (#16147). It was always a
+        # tree-scanning guard with no floor; it was simply invisible to the
+        # detector. Recorded here rather than fixed in the same change, so the
+        # enumerator widening is reviewable on its own -- the alternative is a
+        # diff where a detector change and a guard change explain each other.
+        "repo_tests/promtool_rules_test.py",
         "repo_tests/workflow_planner_deprecation_test.py",
     }
 )
@@ -211,3 +236,60 @@ def test_the_grandfathered_list_has_not_gone_stale() -> None:
     assert (
         not stale
     ), "GRANDFATHERED entries that now have a floor -- remove them, the list only shrinks:\n  " + "\n  ".join(stale)
+
+
+def _examined_with(pattern: re.Pattern[str]) -> set[str]:
+    """Guards a given enumerator pattern reaches. Used to mutate the detector."""
+    root = repo_root()
+    reached = set()
+    for path in _tracked_guards():
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if pattern.search(source):
+            reached.add(path.relative_to(root).as_posix())
+    return reached
+
+
+def test_dropping_glob_from_the_enumerator_breaks_the_sweep() -> None:
+    """#16147 mutation: the `.glob(` alternative must be load-bearing.
+
+    A detector term that changes nothing when removed is decoration, and this
+    module cannot tell decoration from coverage by reading itself. So remove the
+    term and require the sweep to notice.
+
+    Measured 2026-09-10: 101 guards reached with `.glob(`, 80 without -- and 80
+    is below `MIN_GUARDS_EXAMINED`, so a regression that dropped the term would
+    fail loudly rather than quietly reading 21 fewer guards.
+
+    This is the check that the previous floor of 60 could not perform: at 60,
+    dropping `.glob(` left 80 examined, comfortably above the floor, and the
+    sweep reported the same clean result over a fifth fewer guards.
+    """
+    without_glob = re.compile(_ENUMERATOR.pattern.replace(r"|\.glob\(", ""))
+    assert without_glob.pattern != _ENUMERATOR.pattern, "the mutation did not change the pattern"
+
+    full = _examined_with(_ENUMERATOR)
+    narrowed = _examined_with(without_glob)
+
+    assert narrowed < full, "removing `.glob(` reached the same guards -- the term is decoration"
+    assert len(narrowed) < MIN_GUARDS_EXAMINED, (
+        f"removing `.glob(` still reaches {len(narrowed)} guards, at or above the floor of "
+        f"{MIN_GUARDS_EXAMINED}. The floor cannot detect the loss, so it is not protecting "
+        "the extension -- raise it or the mutation is unguarded."
+    )
+
+
+def test_glob_reaches_guards_no_other_term_does() -> None:
+    """The positive half: `.glob(` is not merely redundant with `rglob(`.
+
+    `rglob` contains no literal `.glob(`, so the two are independent — but that
+    is an argument, and this asserts it against the tree instead. Named guards
+    rather than a count, because a count can be satisfied by any 21 files.
+    """
+    without_glob = re.compile(_ENUMERATOR.pattern.replace(r"|\.glob\(", ""))
+    only_via_glob = _examined_with(_ENUMERATOR) - _examined_with(without_glob)
+
+    assert "repo_tests/promtool_rules_test.py" in only_via_glob
+    assert "repo_tests/workflow_concurrency_guard_test.py" in only_via_glob

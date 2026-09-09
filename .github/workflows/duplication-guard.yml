@@ -108,14 +108,16 @@ jobs:
           node-version: '22'
 
       - name: Run duplication detector
+        id: main_scope
         run: |
+          set -o pipefail
           npx --yes "jscpd@${JSCPD_VERSION}" \
             autobot-backend autobot-frontend/src \
             -k 70 -l 8 --skip-comments \
             -f python,typescript,javascript,vue \
             -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
             -r threshold,console \
-            --threshold "${THRESHOLD}"
+            --threshold "${THRESHOLD}" 2>&1 | tee /tmp/main-dup.log
 
       - name: Run duplication detector on the previously ungated trees
         run: |
@@ -128,7 +130,9 @@ jobs:
             -r console 2>&1 | tee /tmp/slm-dup.log
 
       - name: Gate the previously ungated trees
+        id: slm_scope
         run: |
+          set -o pipefail
           if [ "${SLM_THRESHOLD}" = "UNMEASURED" ]; then
             echo "::error::SLM_THRESHOLD is still UNMEASURED. The scan above printed"
             echo "the real figure for autobot_shared + autobot-slm-backend +"
@@ -143,15 +147,66 @@ jobs:
             -f python,typescript,javascript,vue \
             -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
             -r threshold,console \
-            --threshold "${SLM_THRESHOLD}"
+            --threshold "${SLM_THRESHOLD}" 2>&1 | tee /tmp/slm-gate.log
 
       - name: Explain failure
         if: failure()
+        env:
+          MAIN_OUTCOME: ${{ steps.main_scope.outcome }}
+          SLM_OUTCOME: ${{ steps.slm_scope.outcome }}
         run: |
-          echo "::error::A duplication scope exceeded its baseline. There are TWO,"
-          echo "and this step cannot tell which failed — read the step above."
-          echo "  THRESHOLD=${THRESHOLD}%      autobot-backend + autobot-frontend/src"
-          echo "  SLM_THRESHOLD=${SLM_THRESHOLD}%  autobot_shared + autobot-slm-backend + autobot-slm-frontend/src"
+          # #16163: this step used to say it could not tell WHICH of the two
+          # scopes failed, and send the reader to scroll a ~2000-line log. Each
+          # gating step now carries an id, so the outcome is readable here and
+          # the failing scope names itself.
+          #
+          # It also used to print jscpd's own summary line verbatim:
+          #   "found too many duplicates (1.8%) over threshold (1.8%)"
+          # Both sides rounded to 1dp, so a real 1.8203 vs 1.82 rendered as two
+          # IDENTICAL numbers with a failure between them, and the only available
+          # reading was that the guard had misfired. The overage is reported in
+          # LINES below, because "over by 0.7 lines" is actionable where
+          # "1.8% vs 1.8%" is not.
+          report() {
+            local label="$1" log="$2" threshold="$3" scope="$4"
+            echo "::error::${label} exceeded its baseline."
+            echo "  scope:     ${scope}"
+            echo "  threshold: ${threshold}%"
+            [ -f "${log}" ] || { echo "  (no captured log at ${log})"; return; }
+            local totals dup total pct allowed over
+            totals=$(grep -oE 'Total:[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*' "${log}" | tail -1)
+            dup=$(printf '%s' "${totals}" | grep -oE '[0-9]+ \([0-9.]+%\)' | head -1 | grep -oE '^[0-9]+')
+            total=$(printf '%s' "${totals}" | grep -oE '\| *[0-9]+ *\|' | sed -n '2p' | tr -dc '0-9')
+            if [ -n "${dup}" ] && [ -n "${total}" ] && [ "${total}" -gt 0 ]; then
+              pct=$(awk -v d="${dup}" -v t="${total}" 'BEGIN{printf "%.4f", d/t*100}')
+              allowed=$(awk -v t="${total}" -v x="${threshold}" 'BEGIN{printf "%.1f", t*x/100}')
+              over=$(awk -v d="${dup}" -v a="${allowed}" 'BEGIN{printf "%.1f", d-a}')
+              echo "  measured:  ${pct}%  (${dup} duplicated lines of ${total})"
+              echo "  allowed:   ${allowed} lines"
+              echo "  OVER BY:   ${over} lines"
+            else
+              echo "  (could not parse jscpd totals from ${log} -- read it directly;"
+              echo "   reporting no figure rather than a guessed one)"
+            fi
+          }
+          failed=0
+          if [ "${MAIN_OUTCOME}" = "failure" ]; then
+            failed=1
+            report "The backend/frontend duplication scope" /tmp/main-dup.log "${THRESHOLD}" \
+              "autobot-backend + autobot-frontend/src"
+          fi
+          if [ "${SLM_OUTCOME}" = "failure" ]; then
+            failed=1
+            report "The shared/SLM duplication scope" /tmp/slm-gate.log "${SLM_THRESHOLD}" \
+              "autobot_shared + autobot-slm-backend + autobot-slm-frontend/src"
+          fi
+          if [ "${failed}" = "0" ]; then
+            echo "::error::This job failed outside both duplication gates."
+            echo "  main_scope=${MAIN_OUTCOME}  slm_scope=${SLM_OUTCOME}"
+            echo "Neither detector reported failure, so the cause is a step before"
+            echo "them -- checkout, node setup, or npx fetching jscpd. Saying so is"
+            echo "the point: a duplication error here would be a guess."
+          fi
           echo "Reduce duplication (extract shared modules / shims) or, if the new"
           echo "duplication is unavoidable and justified, raise the ONE that failed"
           echo "in .github/workflows/duplication-guard.yml with a documented reason."
