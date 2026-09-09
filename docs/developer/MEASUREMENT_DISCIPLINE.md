@@ -392,6 +392,32 @@ that arrives *through* another finding is fixed at the source, and an exemption
 written for it is a permanent exemption for a condition that was never going to
 persist.
 
+## A zero is a sample, not a state
+
+`gh run list --status in_progress` returned **0** while 47 runs sat queued. Read as
+a condition, that is a fleet-wide Actions stall — nothing is executing. It was not
+one. `in_progress` is a short-lived state, the query caught an instant between
+hand-offs, and a count taken minutes later showed **5**.
+
+The value was correct. It was correct *about the moment it was taken*, and the
+conclusion was about the system.
+
+**Any instantaneous count of a transient state is a sample**, and a zero sample is
+the one most likely to be read as a fact — because "none" sounds like a property
+of the system whereas "five" obviously invites "right now?". The reading is
+seductive exactly when the number is alarming.
+
+Two cheap defences, and neither requires understanding the system:
+
+- **sample twice, separated in time.** One zero is an instant; two zeroes minutes apart is closer to a claim
+- **check the complement.** Runs *completing* proves the pool is working far better than runs in-flight proves it — and completions are durable where in-flight is not
+
+The general form, which covers the whole of this page: **prefer the durable
+signal to the momentary one.** A completed run, a merged commit, a file on disk —
+these are still true when you look again. A queue position, an `in_progress`
+count, a build's `latest` pointer are all photographs of something moving, and a
+conclusion about the system drawn from one is a conclusion about a moment.
+
 ## A sample from the head confirms only the head
 
 GitHub reported `NOASSERTION` for two repositories whose `LICENSE` files are
