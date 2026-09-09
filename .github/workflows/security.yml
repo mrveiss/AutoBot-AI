@@ -259,16 +259,9 @@ jobs:
         # canonical repo-root path — a `../` prefix here would be a script
         # reference that repo-root path checks cannot resolve.
         ( cd autobot-frontend && npm audit --audit-level=moderate --json > npm-audit.json ) || true
-        # MEASURED BACKLOG (#16089): two high advisories with no fix available,
-        # both dev-only. Named individually so a THIRD advisory, or one in a
+        # MEASURED BACKLOG (#16089): ONE high advisory with no fix available,
+        # dev-only. Named individually so a SECOND advisory, or one in a
         # different package, turns this step red on the run it appears.
-        #
-        # `js-yaml` <=4.3.1 (GHSA-2883-xcg3-v3hh). Fixed only in 5.x -- a major.
-        # It is an `overrides` entry pinned to `~4.3.1` in
-        # autobot-frontend/package.json, and its consumers ask for 4.x:
-        # @redocly/openapi-core requires `4.3.0`, cosmiconfig `^4.1.0`. Forcing
-        # the override to 5.x pushes a major onto two packages that do not
-        # declare support for it, to fix a dev-only path.
         #
         # `@redocly/openapi-core` 1.34.8-1.34.19. There is NO patched 1.x:
         # 1.34.19 is the newest release on that line and the range covers it.
@@ -277,24 +270,42 @@ jobs:
         # -- which still requires `^1.34.6`. So there is no upgrade path until
         # upstream moves to redocly 2.x.
         #
-        # NEITHER SHIPS. Both are `dev: true` in package-lock.json, so they are
-        # build tooling for `gen:types`, not runtime code. That is what makes an
-        # allowance the right answer rather than a deferral -- the exposure is a
+        # IT DOES NOT SHIP. It is `dev: true` in package-lock.json -- build
+        # tooling for `gen:types`, not runtime code. That is what makes an
+        # allowance the right answer rather than a deferral: the exposure is a
         # developer machine and a CI runner, not a deployed node.
+        #
+        # `js-yaml` IS DELIBERATELY NOT ALLOWED HERE. Its advisory range is
+        # 4.0.0-4.3.1, so 4.3.2 sits OUTSIDE it and is the fix. That bump lands
+        # as a lockfile change -- dependabot's npm_and_yarn group already
+        # carries 4.3.1 -> 4.3.2 -- not as an entry on this list, so this step
+        # stays red on js-yaml until it does. That is the correct red.
+        #
+        # An earlier draft of this block allowed js-yaml, on the reading that
+        # its fix was 5.x and therefore a major. That was wrong: the range's
+        # upper bound was read as the newest release rather than as the last
+        # AFFECTED one. An allowance is for an advisory with no fix, and
+        # reaching for one without first checking the next patch version is how
+        # a fixable vulnerability becomes permanent -- the allowance would have
+        # silenced the finding for as long as the entry sat here.
         #
         # GRANULARITY IS COARSER HERE THAN FOR pip-audit, DELIBERATELY NOTED.
         # `parse_npm_audit` (pipeline-scripts/security_scan_gate.py:100) keys a
-        # Finding on the PACKAGE NAME, not the advisory id, so these two entries
-        # admit any future advisory in those two packages. The pip-audit
-        # allowances above name a CVE each and do not have that reach. Narrowing
-        # it means teaching the npm parser to emit `via[].url`, which is a change
-        # to the gate rather than to this list.
+        # Finding on the PACKAGE NAME, not the advisory id, so this entry admits
+        # any future advisory in that package. The pip-audit allowances above
+        # name a CVE each and do not have that reach. Narrowing it means
+        # teaching the npm parser to emit `via[].url`, a change to the gate
+        # rather than to this list.
+        #
+        # THE LIST IS SELF-CLEANING, AND THAT IS MEASURED. An allowance the
+        # scanner no longer reports fails the run outright -- "an allowance that
+        # matches nothing tolerates whatever appears next" -- so this entry
+        # cannot outlive its justification.
         python3 pipeline-scripts/security_scan_gate.py \
           --format npm-audit \
           --report autobot-frontend/npm-audit.json \
           --title "Frontend dependency audit (npm audit)" \
           --fail-on high \
-          --allow-id js-yaml \
           --allow-id @redocly/openapi-core
 
     - name: Upload Security Reports
