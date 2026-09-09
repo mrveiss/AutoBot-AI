@@ -392,6 +392,42 @@ that arrives *through* another finding is fixed at the source, and an exemption
 written for it is a permanent exemption for a condition that was never going to
 persist.
 
+## A sample from the head confirms only the head
+
+GitHub reported `NOASSERTION` for two repositories whose `LICENSE` files are
+Apache-2.0. The first reading was *"the classifier is wrong, the files are
+fine"* — reached by running `head -3` on a LICENSE, seeing
+
+```
+                                 Apache License
+                           Version 2.0, January 2004
+```
+
+and generalising to the file.
+
+Both files are **736 bytes**. That is the Apache-2.0 *notice boilerplate*, not the
+licence text; the same project's main `LICENSE` is 11,343 bytes and classifies
+without trouble. GitHub matches against full licence texts, so **`NOASSERTION` was
+the correct output for a stub.** The instrument was right and the files are
+incomplete — the exact inverse of the conclusion drawn.
+
+**A truncated read answers a question about the truncation.** `head -3` establishes
+what the first three lines say, and nothing whatever about line four onward. Its
+danger is that on a file whose opening looks canonical it returns something
+shaped exactly like confirmation, so the reader stops — and stopping is the
+failure, not the command.
+
+Two properties would have settled it in one call and neither requires reading the
+file: **its size**, against a known-good example of the same kind, and **what the
+consuming instrument actually matches on**. The second is the general form of
+asking why an instrument reported what it did rather than checking the thing it
+named.
+
+Recorded because of when it happened: this was committed **while writing up a
+finding about instruments answering narrower questions than intended**, by the
+session that had spent the day finding that failure in other people's guards.
+Knowing the pattern by name does not exempt the next command you type.
+
 ## A slow queue and a hung job are the same status field
 
 Three deploys of one page produced no live site, and not one of them failed on
