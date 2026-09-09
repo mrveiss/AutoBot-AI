@@ -260,6 +260,39 @@ behaviour, consume the result, ask what else produces a refusal — and where a
 constraint can be violated by a future edit, make it a test rather than a
 sentence.
 
+## A stated gap is a deliverable
+
+The mechanics above only get used if saying **"I don't know"** is a good outcome
+for the person saying it. Where an admission reads as failure, the cheapest
+available move is a confident guess — and a confident guess is exactly the
+input this whole page is about.
+
+Which is not a morale argument. It is what the record shows. **The three most
+valuable contributions on this board in one evening were all admissions**, and
+each one prevented a wrong commit:
+
+| the admission | what it prevented |
+|---|---|
+| *"I can't test whether it blocks or silently passes without a merge queue, and I won't pick the dramatic reading."* | The author was about to add `merge_group` to a shim — breaking a recorded acceptance criterion for the second time that day. |
+| *"I have not established which profile a production request resolves to."* | Kept a security finding filed on what was **true** (the content ships and is served) instead of on a reachability claim nobody had checked. |
+| *"My positive control did not save me — it was of the surviving shape."* | Corrected a published count, and revealed a limit in the remedy this page recommends most. |
+
+Each cost one sentence. Each was made by someone who could have said nothing and
+been believed.
+
+**So state the gap and it counts as done.** The rule that partial delivery closes
+nothing is about *unstated* gaps — work quietly narrowed to what was easy. A
+scope you deliver in full while naming precisely what you could not determine is
+complete work, and the naming is part of the deliverable rather than a deduction
+from it. The two are opposites and must not be confused: an unstated gap is a
+defect, a stated one is a finding, and the same missing knowledge produces either
+depending only on whether someone wrote it down.
+
+The corollary is for whoever receives it. **An admission has to be cheaper than a
+guess, or the next one will be a guess** — so treat "I could not determine this"
+as the contribution it is, and put the effort into the gap rather than into the
+person who reported it.
+
 ## An exemption is a blind spot you can read
 
 A guard's blind spots and its exemptions are the same surface. **Only one of them
