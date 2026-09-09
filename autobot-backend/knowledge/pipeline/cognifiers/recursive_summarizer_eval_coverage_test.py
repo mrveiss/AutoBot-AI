@@ -20,10 +20,13 @@ score must not be presented as a fidelity measure when the source was sampled.
 
 from __future__ import annotations
 
+import pytest
+
 from knowledge.pipeline.cognifiers.recursive_summarizer import (
     _EVAL_SOURCE_BUDGET,
     _PARTIAL_SOURCE_NOTE,
     build_eval_excerpt,
+    coverage_percent,
 )
 
 
@@ -80,3 +83,49 @@ class TestTheScoreIsNotPresentedAsFidelityWhenTheSourceWasSampled:
         text = "HEAD" + "." * (_EVAL_SOURCE_BUDGET * 2) + "TAIL"
         excerpt, _ = build_eval_excerpt(text)
         assert "[...]" in excerpt
+
+
+class TestTheExcerptNeverOverstatesOrUnderstatesWhatItSaw:
+    """Both bugs found in review, and both are this module's own defect (#16110).
+
+    This PR exists because a score was computed against a source the evaluator
+    could not see. A fix that *misreports* what it saw is the same failure with
+    a better disguise — it produces a number that looks like measurement.
+    """
+
+    def test_a_budget_too_small_to_sample_does_not_return_the_whole_document(self) -> None:
+        """`span = budget // 3` is 0 below 3, and `text[-0:]` is `text[0:]`.
+
+        So the excerpt was the ENTIRE source while `coverage` read 0.0: more
+        than the budget permitted, described as almost none of it. Inverted, not
+        merely wrong.
+        """
+        text = "X" * 100
+        excerpt, coverage = build_eval_excerpt(text, budget=2)
+        assert len(excerpt) <= 2, "excerpt exceeds the budget it was given"
+        assert len(excerpt) < len(text), "excerpt returned the whole source it was meant to sample"
+        assert coverage == pytest.approx(2 / 100), "coverage must describe what was actually handed over"
+
+    def test_the_old_negative_slice_is_what_made_it_whole(self) -> None:
+        """The contrast. Without this the test above could pass for a new reason."""
+        assert ("ABC"[-0:]) == "ABC", "python's negative-zero slice is the mechanism"
+        assert ("ABC"[len("ABC") - 0 :]) == "", "and this is the form that behaves"
+
+    def test_a_sampled_source_never_reports_one_hundred_percent(self) -> None:
+        """`round(6000/6001 * 100)` is 100, so the note claimed the evaluator saw
+        approximately all of a source whose excerpt still contains `[...]`."""
+        text = "Y" * (_EVAL_SOURCE_BUDGET + 1)
+        excerpt, coverage = build_eval_excerpt(text)
+        assert "[...]" in excerpt, "precondition: this source is sampled, not whole"
+        assert coverage < 1.0
+        assert coverage_percent(coverage) == 99, "a sampled source must not announce itself as complete"
+
+    def test_a_whole_source_still_reports_one_hundred(self) -> None:
+        """The floor must not understate the honest case."""
+        assert coverage_percent(1.0) == 100
+
+    def test_the_tail_survives_the_slice_fix(self) -> None:
+        """Guarding the negative-zero case must not stop the tail being sampled."""
+        text = "A" * (_EVAL_SOURCE_BUDGET * 3) + "TAIL-FACT"
+        excerpt, _ = build_eval_excerpt(text)
+        assert "TAIL-FACT" in excerpt
