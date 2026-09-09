@@ -392,6 +392,35 @@ that arrives *through* another finding is fixed at the source, and an exemption
 written for it is a permanent exemption for a condition that was never going to
 persist.
 
+## A number that keeps being wrong and never changes a conclusion
+
+One count was stated four times by three sessions and was wrong three of them:
+
+```
+ 6   counted from the top-level layout by eye
+11   partial count
+14   glob `*package.json` matched `browser-package.json` -- a name that ENDS with it
+13   measured
+```
+
+Four different causes, each produced by someone looking straight at the number,
+**immediately after watching the previous count fail.** Care was not the variable;
+it was maximal every time. Enumeration is where attention goes and transcription
+is where it breaks.
+
+**The tell is that being wrong never changed a conclusion.** The total was never
+the relevant denominator — three of those workspaces have no lockfile, so the
+audit could not run in them whatever the total said. The load-bearing figures,
+*seven auditable, one audited*, were correct in every version.
+
+So the remedy is not to count more carefully. **It is to delete the number.** A
+figure that cannot change the decision does not earn its place beside one that
+can, and its presence is not neutral: it is the part a reader checks, and getting
+it right feels like having checked the claim.
+
+Before publishing a count, ask which decision moves if it is wrong. If none does,
+it is decoration with the texture of evidence.
+
 ## A detector built from what was found inherits its vocabulary
 
 Naming the selector governs an **empty** result. This governs a **positive** one,
