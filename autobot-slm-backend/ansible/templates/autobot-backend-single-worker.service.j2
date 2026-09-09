@@ -3,7 +3,7 @@
 # Author: mrveiss
 [Unit]
 Description=AutoBot Backend API
-After=network.target redis.service
+After=network.target redis-stack-server.service
 # #4090: these live in [Unit], NOT [Service]. systemd's own verdict on the
 # wrong placement is "Unknown key name 'StartLimitIntervalSec' in section
 # 'Service', ignoring" — so the fix merged for #4090 was discarded on every unit
