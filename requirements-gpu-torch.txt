@@ -19,5 +19,5 @@
 #
 # Requires: CUDA-compatible GPU, Python 3.12.
 
-torch==2.13.0
-torchvision==0.28.0
+torch==2.14.0
+torchvision==0.29.0
