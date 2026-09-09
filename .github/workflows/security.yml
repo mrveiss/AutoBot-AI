@@ -313,7 +313,7 @@ jobs:
         # silenced the finding for as long as the entry sat here.
         #
         # GRANULARITY IS COARSER HERE THAN FOR pip-audit, DELIBERATELY NOTED.
-        # `parse_npm_audit` (pipeline-scripts/security_scan_gate.py:100) keys a
+        # `parse_npm_audit` in pipeline-scripts/security_scan_gate.py keys a
         # Finding on the PACKAGE NAME, not the advisory id, so this entry admits
         # any future advisory in that package. The pip-audit allowances above
         # name a CVE each and do not have that reach. Narrowing it means
