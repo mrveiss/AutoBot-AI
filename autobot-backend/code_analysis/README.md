@@ -233,7 +233,11 @@ jobs:
     runs-on: ubuntu-latest
     services:
       redis:
-        image: redis
+        # redis-stack, not redis (#16071). The plain image has no RediSearch,
+        # RedisJSON or RedisTimeSeries: it starts and then fails on the first
+        # module command, which is the container form of `apt install
+        # redis-server`. The platform runs redis/redis-stack.
+        image: redis/redis-stack:7.4.0-v1
         ports:
           - 6379:6379
     steps:
