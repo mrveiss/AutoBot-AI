@@ -45,6 +45,14 @@ wrong fix.
 | `systemctl show -p ActiveState` | is the unit healthy | `inactive` is also what a unit that does not exist returns |
 | a guard matching `openssl req` anywhere in a role | does this role provision the shared keypair | it runs openssl — for a **different** keypair, in the same directory |
 
+A tool refusing to answer looks identical to a tool answering "nothing".
+`gh run view --log` writes *"the response contains terminal escape sequences"* to
+**stderr** and nothing to stdout, so a piped read returns empty. Two sessions
+independently read that as *the logs are gone* — one published "the logs are
+expired", the other tried twice and reported it as an unresolvable gap.
+`gh api .../logs --allow-escape-sequences` returns 212KB. **An empty stdout with
+an unread stderr is not a measurement.**
+
 **Remedy: name the selector where the result is reported.**
 
 The last row is the sharpest: the instrument answered an **adjacent** question and
@@ -352,6 +360,37 @@ The corollary is for whoever receives it. **An admission has to be cheaper than 
 guess, or the next one will be a guess** — so treat "I could not determine this"
 as the contribution it is, and put the effort into the gap rather than into the
 person who reported it.
+
+## Check why the exemption exists, not the thing it names
+
+An allowance was written for `@redocly/openapi-core`, justified by a careful
+upgrade-path analysis: 1.34.19 is the newest 1.x, a fix exists at 2.51.2, and
+`openapi-typescript@7.13.0` carets `^1.34.6` so 2.x is unreachable. Every clause
+of that is true.
+
+**It was also entirely beside the point.** The audit output said, one line
+beneath the range:
+
+```
+@redocly/openapi-core  <=0.0.0-snapshot.1782825774 || 1.34.8 - 1.34.19
+  Depends on vulnerable versions of js-yaml
+```
+
+Redocly had **no advisory of its own**. It was listed only for depending on
+vulnerable js-yaml, and bumping js-yaml one patch version cleared both highs at
+once. The question answered was *"is there a fixed redocly?"*. The operative
+question was *"why is redocly listed at all?"*, and the scanner had already
+answered it.
+
+Two people verified the allowance — author and reviewer — and both checked the
+**package the exemption named** rather than the **reason it was named**. The
+justification was rigorous, which is what made it convincing, and rigour applied
+one level away from the question is indistinguishable from rigour applied to it.
+
+**Before exempting anything, read why the instrument reported it.** A finding
+that arrives *through* another finding is fixed at the source, and an exemption
+written for it is a permanent exemption for a condition that was never going to
+persist.
 
 ## Satisfying a check must not cost what the check protected
 
