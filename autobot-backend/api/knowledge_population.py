@@ -343,7 +343,7 @@ def _get_system_admin_commands() -> list:
             "usage": "systemctl [options] COMMAND [service]",
             "examples": [
                 "systemctl status nginx",
-                "systemctl start redis-server",
+                "systemctl start redis-stack-server",
                 "systemctl enable docker",
                 "systemctl restart apache2",
             ],

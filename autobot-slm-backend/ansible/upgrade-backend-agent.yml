@@ -48,7 +48,11 @@
           # AutoBot-related services to discover
           AUTOBOT_SERVICES = [
               "slm-agent", "autobot-agent", "autobot-backend", "autobot-frontend",
-              "redis-server", "redis", "autobot-npu-worker",
+              # redis-stack-server first: it is the unit roles/redis installs,
+              # and the two names beside it resolve to LoadState=not-found on a
+              # provisioned node, so the agent was sweeping for absent units and
+              # missing the running one (#16071).
+              "redis-stack-server", "redis-server", "redis", "autobot-npu-worker",
               "playwright-server", "browser-automation",
               "prometheus", "grafana-server", "node_exporter",
               "ollama", "autobot-ai-stack",
