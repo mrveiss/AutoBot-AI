@@ -392,6 +392,36 @@ that arrives *through* another finding is fixed at the source, and an exemption
 written for it is a permanent exemption for a condition that was never going to
 persist.
 
+## A detector built from what was found inherits its vocabulary
+
+Naming the selector governs an **empty** result. This governs a **positive** one,
+and they are mirrors: a detector written from the instances someone already found
+will match those instances and nothing else, then report a confident zero over
+everything phrased differently.
+
+A guard forbidding refusal-suppression in shipped prompts was written from the six
+strings in the tree. Probed by a session that had not seen the pattern, against
+fourteen phrasings absent from it:
+
+```
+live strings      6/6   found
+unseen phrasings  0/14  found
+```
+
+Every branch was anchored on the lemma `refuse`/`refus`. The fourteenth was the
+shipped line **with one word changed**, and it passed clean. After rewriting to
+two factors in proximity — a suppression marker near an obligation verb, or near
+a safety noun — the same corpus scored **17/17**.
+
+**So measure recall against phrasings that are not in the tree yet**, and keep the
+corpus in a **separate file from the pattern**. A detector holding its own exam
+invites the fix that makes the test pass; split, editing the detector and editing
+what it must catch are two files in the diff.
+
+The general form: *"broader than the strings I found"* is not the same as
+*"broad enough"*. The first is measured against a population the instrument
+already saw.
+
 ## Satisfying a check must not cost what the check protected
 
 The cheapest way to turn a red green is usually to delete the thing being
