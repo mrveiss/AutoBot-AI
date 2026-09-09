@@ -113,11 +113,11 @@ curl http://localhost:8001/health
 **Solutions**:
 ```bash
 # Install Redis
-sudo apt install redis-server  # Ubuntu/Debian
+sudo apt install redis-stack-server  # Ubuntu/Debian
 brew install redis             # macOS
 
 # Start Redis service
-sudo systemctl start redis-server
+sudo systemctl start redis-stack-server
 
 # Test connection
 redis-cli ping
