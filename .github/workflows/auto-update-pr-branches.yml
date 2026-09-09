@@ -123,7 +123,7 @@ jobs:
       # dance (apt keyring + sudo) is no longer needed (#13401).
       - name: Update the next due PR branch, skipping any still mid-run
         env:
-          # #13791: see auto-fix-formatting.yml — a human-attributed token
+          # #13791: see auto-fix-generated-types.yml — a human-attributed token
           # keeps the runs this update triggers out of action_required.
           GH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}

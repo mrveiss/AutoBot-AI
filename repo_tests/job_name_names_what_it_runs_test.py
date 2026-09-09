@@ -54,8 +54,17 @@ _ACCUSES = re.compile(r"^(Check|Validate|Verify|Assert)\s+\S")
 #: scope -- and partial loss is the failure mode this whole PR is about.
 _MIN_ACCUSING_JOBS = 3
 
-#: Same reasoning for the whole-tree parse: 105 jobs parse today.
-_MIN_JOBS = 105
+#: Same reasoning for the whole-tree parse: 103 jobs parse today.
+#:
+#: Was 105. Lowered by #15934, which deleted `auto-fix-formatting.yml` and its
+#: two jobs (`autofix`, `approve-parked-runs`). **This followed a deliberate
+#: deletion, not a regression** -- worth stating, because a floor left above the
+#: new population re-licenses the gap it exists to close, and a ratchet that
+#: does not move with an intentional shrink is indistinguishable from one that
+#: missed a real one. The guard was right to fail: it cannot tell "two jobs were
+#: deleted" from "the glob narrowed and dropped two silently", which is the
+#: whole reason it is bound to reach rather than to findings.
+_MIN_JOBS = 103
 
 
 def _jobs():
