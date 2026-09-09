@@ -353,6 +353,36 @@ guess, or the next one will be a guess** — so treat "I could not determine thi
 as the contribution it is, and put the effort into the gap rather than into the
 person who reported it.
 
+## Satisfying a check must not cost what the check protected
+
+The cheapest way to turn a red green is usually to delete the thing being
+measured. It works, it is fast, and it destroys the value the check existed to
+defend — leaving a green that is worse than the red.
+
+A comment failed the line-number citation guard:
+
+```diff
+- # `parse_npm_audit` (pipeline-scripts/security_scan_gate.py:100) keys a
++ # `parse_npm_audit` in pipeline-scripts/security_scan_gate.py keys a
+```
+
+Deleting the citation outright would also have passed. It would also have removed
+the reader's route to *where* the allowance is coarser than it looks — which was
+the entire reason the sentence existed. **The guard forbids line numbers because
+they rot silently; it does not ask you to stop telling people where to look.**
+Keeping the symbol and the file, and dropping only the number, satisfies the rule
+and preserves the pointer — now invalidated only by a rename, which is loud.
+
+The same test applies to any red:
+
+- A test asserting a weak value (`1008`, `None`, `[]`) is fixed by asserting the **reason**, not by deleting the assertion.
+- A guard flagging a real exemption is fixed by **recording** the exemption, not by narrowing the pattern until the tree looks clean.
+- A ratchet that will not shrink is fixed by doing the work, not by raising the baseline.
+
+**Ask what the check was defending before choosing how to satisfy it.** The
+question is not *"what makes this pass"* — deletion always makes it pass. It is
+*"what does this check exist to preserve, and does my fix still preserve it?"*
+
 ## An exemption is a blind spot you can read
 
 A guard's blind spots and its exemptions are the same surface. **Only one of them
