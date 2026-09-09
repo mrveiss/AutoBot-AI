@@ -48,7 +48,6 @@ from agents.base_agent_types import (  # noqa: F401
 )
 
 
-
 class BaseAgent(ABC):
     """
     Abstract base class for all AutoBot agents.

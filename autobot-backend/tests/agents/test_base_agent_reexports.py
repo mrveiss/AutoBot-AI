@@ -26,9 +26,7 @@ def _public_names(module_path: pathlib.Path) -> set[str]:
     """Every class, function and module-level constant the file defines."""
     tree = ast.parse(module_path.read_text(encoding="utf-8"))
     names = {n.name for n in tree.body if isinstance(n, (ast.ClassDef, ast.FunctionDef))}
-    names |= {
-        t.id for n in tree.body if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name)
-    }
+    names |= {t.id for n in tree.body if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name)}
     return {n for n in names if not n.startswith("_")}
 
 
