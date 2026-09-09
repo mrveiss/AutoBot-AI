@@ -31,6 +31,7 @@ from autobot_shared.logging_manager import get_logger
 from eval.report import RegressionReport, TrajectoryOutcome
 from eval.store import GoldenTrajectory
 from rlm.evaluator import ResponseQualityEvaluator
+from rlm.types import ReflectionVerdict
 
 # #11062: a hung/slow candidate must not stall the whole regression run.
 _REPLAY_TIMEOUT_S = env_float("EVAL_REPLAY_TIMEOUT_S", 120.0)
@@ -78,6 +79,15 @@ class TrajectoryReplayer:
         elif not status_ok:
             detail = f"status expected={golden.expected_status} got={result.final_status}"
 
+        # The evaluator distinguishes "scored badly" from "could not score" via
+        # INDETERMINATE, and until now this dropped that and kept only the
+        # number. Its pass-through default is 0.7, which against a 0.9 baseline
+        # is arithmetically a regression — so an evaluator outage reported as
+        # quality drift (#16157).
+        indeterminate = reflection.verdict == ReflectionVerdict.INDETERMINATE
+        if indeterminate and not detail:
+            detail = "evaluator returned no verdict; quality score not measured"
+
         return TrajectoryOutcome(
             trajectory_id=golden.trajectory_id,
             task_class=golden.task_class,
@@ -87,6 +97,7 @@ class TrajectoryReplayer:
             status_ok=status_ok,
             candidate_tools=result.tool_sequence,
             detail=detail,
+            score_indeterminate=indeterminate,
         )
 
     async def run(self, goldens: List[GoldenTrajectory], candidate: CandidateRunner) -> RegressionReport:

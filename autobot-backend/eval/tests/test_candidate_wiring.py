@@ -24,6 +24,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from eval.candidates import RecordingMissing, baseline_candidate
+from eval.report import RegressionReport, TrajectoryOutcome
 from eval.run import resolve_candidate
 from eval.runner import TrajectoryReplayer
 from eval.store import GoldenTrajectory
@@ -157,3 +158,83 @@ async def test_the_echo_cannot_fail_which_is_why_it_is_not_a_measurement() -> No
     report = await replayer.run([golden], baseline_candidate)
 
     assert not report.has_regressions, "the baseline candidate is expected to be unfalsifiable"
+
+
+# ---------------------------------------------------------------------------
+# "Could not judge" is not "judged and failed"
+# ---------------------------------------------------------------------------
+
+
+def test_an_unscoreable_trajectory_is_unmeasured_not_a_regression() -> None:
+    """The evaluator's INDETERMINATE must not arrive as quality drift.
+
+    Its pass-through default is 0.7; goldens carry a 0.9 baseline. Arithmetically
+    that is a regression, and reporting it as one means an evaluator outage reads
+    as the candidate getting worse.
+    """
+    outcome = TrajectoryOutcome(
+        trajectory_id="t1",
+        task_class="code_fix",
+        baseline_score=0.9,
+        candidate_score=0.7,
+        tools_ok=True,
+        status_ok=True,
+        score_indeterminate=True,
+    )
+
+    assert outcome.classify() == "unmeasured"
+    assert RegressionReport([outcome]).total_unmeasured == 1
+    assert not RegressionReport([outcome]).has_regressions
+
+
+def test_a_broken_tool_sequence_is_still_a_regression_when_unscoreable() -> None:
+    """The deterministic half does not need the scorer and must survive it.
+
+    Tool and status comparisons are computed locally, so an evaluator outage
+    must not launder a genuinely wrong tool sequence into "unmeasured".
+    """
+    outcome = TrajectoryOutcome(
+        trajectory_id="t1",
+        task_class="code_fix",
+        baseline_score=0.9,
+        candidate_score=0.7,
+        tools_ok=False,
+        status_ok=True,
+        score_indeterminate=True,
+    )
+
+    assert outcome.classify() == "regression"
+    assert RegressionReport([outcome]).has_regressions
+
+
+def test_a_real_score_drop_is_still_a_regression() -> None:
+    """The contrast pair: `unmeasured` must not swallow genuine drift."""
+    outcome = TrajectoryOutcome(
+        trajectory_id="t1",
+        task_class="code_fix",
+        baseline_score=0.9,
+        candidate_score=0.7,
+        tools_ok=True,
+        status_ok=True,
+        score_indeterminate=False,
+    )
+
+    assert outcome.classify() == "regression"
+
+
+def test_the_report_says_unmeasured_out_loud() -> None:
+    """A reader must not have to infer it from a table column."""
+    outcome = TrajectoryOutcome(
+        trajectory_id="t1",
+        task_class="code_fix",
+        baseline_score=0.9,
+        candidate_score=0.7,
+        tools_ok=True,
+        status_ok=True,
+        score_indeterminate=True,
+    )
+
+    rendered = RegressionReport([outcome]).render_markdown()
+
+    assert "unmeasured" in rendered.lower()
+    assert "could not be scored" in rendered

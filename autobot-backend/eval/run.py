@@ -148,6 +148,19 @@ def main() -> int:
     if args.fail_on_regression and report.has_regressions:
         logger.error("Regressions detected — failing (gated mode).")
         return 1
+
+    if report.total_unmeasured:
+        # Exit 2, not 1: "a golden regressed" and "the harness could not judge
+        # one" want opposite responses, and a single failure code makes an
+        # evaluator outage indistinguishable from quality drift. Same split as
+        # the SPDX gate (#15817) — 1 is a claim about the tree, 2 is being
+        # unable to examine it.
+        logger.error(
+            "%d trajectory/ies could not be scored (evaluator returned no verdict). "
+            "This is not a pass and not a regression — the run could not judge them.",
+            report.total_unmeasured,
+        )
+        return 2
     return 0
 
 
