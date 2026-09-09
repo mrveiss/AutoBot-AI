@@ -325,3 +325,76 @@ def test_timed_out_step_counts_as_a_failing_step(rc):
     """exit 124 surfaces as `timed_out` on some runners — the apt case (#15139)."""
     steps = [_step(4, "Run ./.github/actions/setup-python-suite", "timed_out")]
     assert rc.classify_steps(steps)[0] == rc.CAUSE_PROVISIONING
+
+
+class _PagedApi:
+    """An API whose check-run listing spans more than one page.
+
+    The plain `_FakeApi` returns one response for every path containing
+    `check-runs`, which cannot express pagination -- and would hang a paginating
+    caller if it returned a full page. Keying on `page=` is what makes the second
+    page reachable and the walk terminable.
+    """
+
+    def __init__(self, pages: List[List[Dict[str, Any]]]):
+        self.pages = pages
+        self.repository = REPO
+        self.calls: List[str] = []
+
+    def request(self, method: str, path: str):
+        self.calls.append(path)
+        if "check-runs" not in path:
+            return 404, None
+        number = 1
+        for fragment in path.split("&"):
+            if fragment.startswith("page="):
+                number = int(fragment.split("=", 1)[1])
+        total = sum(len(p) for p in self.pages)
+        if number > len(self.pages):
+            return 200, {"total_count": total, "check_runs": []}
+        return 200, {"total_count": total, "check_runs": self.pages[number - 1]}
+
+
+def test_a_red_check_on_the_second_page_is_not_missed(rc) -> None:
+    """#16120: `per_page=100` without a page walk truncates SILENTLY.
+
+    Measured on one real PR -- 100 runs on a single page, 111 paginated, and the
+    eleven dropped were hiding a not-green required context. This fixture puts
+    the ONLY red on page two, so a single-page read reports the commit clean.
+
+    Delete the page loop in `list_check_runs` and this fails.
+    """
+    green = [_check(name=f"shard {i}", conclusion="success") for i in range(100)]
+    red = [_check(name="startup-import-smoke", conclusion="cancelled")]
+    api = _PagedApi([green, red])
+
+    runs, error = rc.list_check_runs(api, SHA)
+
+    assert error == ""
+    assert len(runs) == 101
+    assert any(r.get("name") == "startup-import-smoke" for r in runs)
+
+
+def test_a_short_walk_is_reported_rather_than_returned_as_complete(rc) -> None:
+    """`total_count` is the endpoint's own statement of the population.
+
+    A walk that ends below it has not seen everything, and returning that list
+    silently is how "no red checks" becomes a verdict nobody earned. The honest
+    response is to hand back what was read AND say it is short.
+    """
+
+    class _ShortApi(_PagedApi):
+        def request(self, method: str, path: str):
+            status, body = super().request(method, path)
+            if isinstance(body, dict):
+                body = dict(body)
+                body["total_count"] = 500
+            return status, body
+
+    api = _ShortApi([[_check(name="only", conclusion="success")]])
+
+    runs, error = rc.list_check_runs(api, SHA)
+
+    assert len(runs) == 1
+    assert "reached 1 of 500" in error
+    assert "unearned" in error
