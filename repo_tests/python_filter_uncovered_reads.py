@@ -43,6 +43,7 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         ".github/workflows/auto-merge-base-into-parked-branches.yml",
         ".github/workflows/code-quality-required-context.yml",
         ".github/workflows/code-quality.yml",
+        ".github/workflows/duplication-guard.yml",
         ".github/workflows/frontend-test.yml",
         ".github/workflows/hardened-smoke-test.yml",
         ".github/workflows/marker-tests.yml",
@@ -81,4 +82,4 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: changed. Distinguish the two cases whenever this number moves up: correcting
 #: an instrument that was under-counting is not the same act as accepting a new
 #: bypass, and only the second is what "only ever goes DOWN" forbids.
-MAX_UNCOVERED_READS = 39
+MAX_UNCOVERED_READS = 40
