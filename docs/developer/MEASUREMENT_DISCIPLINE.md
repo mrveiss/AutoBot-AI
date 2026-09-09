@@ -249,8 +249,10 @@ sentence.
 ## An exemption is a blind spot you can read
 
 A guard's blind spots and its exemptions are the same surface. **Only one of them
-is written down.** An exemption gets a comment and a reviewer; a blind spot gets
-nothing, because there is no line of code to review. That is why the trigger-path
+is written down.** An exemption is a line of code, so it gets a comment, a diff
+and a reviewer. A blind spot is the *absence* of a line, so it gets none of the
+three — and every mechanism we have for catching a bad decision operates on
+things that were written down. That is why the trigger-path
 half of a missed-trees guard mattered more than the scan half — a narrow scan
 leaves a number someone can question, a trigger that never fires leaves no row at
 all.
@@ -278,9 +280,22 @@ and a failure explainer must distinguish *this failed* from *I cannot tell which
 of these failed*.
 
 **A failure explainer that guesses is worse than one that says it does not know.**
-One that asserted a threshold breach on any job failure printed a confident wrong
-number to change, on top of a real failure — manufacturing a false cause is worse
-than reporting none, because the false one gets acted on.
+One that asserted a threshold breach on *any* job failure printed a confident
+wrong number to change, on top of a real failure. Manufacturing a false cause is
+worse than reporting none, because **a guess laundered through an explainer stops
+being a hypothesis and becomes an instruction.**
+
+The escalation is what a reader then does with it. That explainer printed a wrong
+number and was caught on the same run. A worse instance the same day: a check's
+*name* was read as its cause — `Check same-scope batching` failing was diagnosed
+as a missing rationale section, without reading the parser — and relayed to the
+author as a fix. The section was already present; the parser was reading `#15961`
+as a markdown heading. The advice would have produced a no-op commit and sent its
+recipient hunting through their own prose for a defect that was in the gate.
+
+One printed a wrong number. The other would have produced a wrong commit. **The
+manufactured cause survived contact with a reader and directed real work**, which
+is the property that makes this worth a section rather than a footnote.
 
 ## Checklist
 
