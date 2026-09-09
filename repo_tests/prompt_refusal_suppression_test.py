@@ -45,7 +45,6 @@ three. This guard has no silent exemptions.
 from __future__ import annotations
 
 import re
-import subprocess  # nosec B404
 import sys
 from pathlib import Path
 
@@ -58,7 +57,7 @@ from repo_tests.prompt_refusal_suppression_corpus import (  # noqa: E402
     UNSEEN_SUPPRESSION,
 )
 
-from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+from tools.lint._scan_helpers import tracked_paths  # noqa: E402
 
 PROMPTS = "autobot-backend/resources/prompts"
 
@@ -113,11 +112,14 @@ def suppresses_refusal(line: str) -> bool:
 
 
 def _prompt_files() -> list[Path]:
+    """Enumerated through the canonical helper (#15926), not a direct git call.
+
+    `tracked_paths` lets git do the pathspec matching, so the filter and the
+    paths it returns cannot disagree -- and it keeps this guard out of the
+    direct-invocation ratchet, which only shrinks.
+    """
     root = repo_root()
-    result = subprocess.run(  # nosec B603 B607
-        ["git", "ls-files", PROMPTS], cwd=root, capture_output=True, text=True, check=False, env=scrubbed_git_env()
-    )
-    return [root / line for line in result.stdout.splitlines() if line]
+    return [root / rel for rel in tracked_paths(root, PROMPTS)]
 
 
 def _flagged_lines() -> list[tuple[str, int, str]]:
