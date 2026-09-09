@@ -50,23 +50,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 
 from check_run_status import (  # noqa: E402
     ACCEPTABLE,
-    INCONCLUSIVE,
     RUNNING,
-    SEVERITY,
     all_pages,
     latest_per_name,
-    rank,
 )
 
-#: States a required context may hold and still not block a merge. `skipped` is a
 #: Local aliases onto the shared vocabulary, so the rest of this module reads
 #: unchanged. The definitions live in scripts/lib/check_run_status.py -- one
-#: place where "what counts as green" is decided.
+#: place where "what counts as green" is decided. Only the two this module still
+#: reads are aliased; the rest were used solely by the grouping logic that moved.
 _ACCEPTABLE = ACCEPTABLE
 _RUNNING = RUNNING
-_INCONCLUSIVE = INCONCLUSIVE
-_SEVERITY = SEVERITY
-_rank = rank
 
 
 def _split_required(

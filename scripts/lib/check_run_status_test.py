@@ -21,6 +21,7 @@ from check_run_status import (  # noqa: E402
     all_pages,
     check_run_status,
     latest_per_name,
+    latest_runs,
     rank,
     split_by_state,
 )
@@ -202,3 +203,86 @@ def test_rank_classifies_every_state_this_repo_sees(state: str, expected: str) -
     exists to surface.
     """
     assert rank(state) == expected
+
+
+def _named(name: str, started: str, conclusion: str, marker: str) -> dict:
+    """A run carrying an identifying marker, so the WINNING OBJECT is checkable."""
+    return {"name": name, "started_at": started, "conclusion": conclusion, "marker": marker}
+
+
+def test_latest_runs_returns_the_winning_object_not_just_its_state() -> None:
+    """`latest_runs` exists because a caller that must INSPECT the run needs it.
+
+    `latest_per_name` answers "what is the state", which is enough for a gate.
+    `ci_red_cause.classify_commit` then reads the run's job id and steps, so it
+    needs the object that won. Returning the conclusion and making the caller
+    re-find its run is how a caller ends up re-deriving the grouping, or skipping
+    it — which is exactly what happened before #16120 wired this in.
+    """
+    old = _named("ci", "2026-09-09T07:54:14Z", "failure", "stale")
+    new = _named("ci", "2026-09-09T09:10:02Z", "success", "current")
+
+    winners = latest_runs([old, new])
+
+    assert len(winners) == 1
+    assert winners[0]["marker"] == "current"
+
+
+def test_latest_runs_agrees_with_latest_per_name_on_the_cases_that_differ() -> None:
+    """The two implement one rule and must never disagree about the winner.
+
+    They are separate functions because one returns states and one returns
+    objects, which is a real duplication — so it is pinned rather than trusted.
+    Each case below is a branch where a naive implementation of one would drift
+    from the other.
+    """
+    cases = {
+        "supersession": [
+            _named("a", "2026-09-09T07:00:00Z", "failure", "x"),
+            _named("a", "2026-09-09T08:00:00Z", "success", "y"),
+        ],
+        "skip after failure": [
+            _named("a", "2026-09-09T07:00:00Z", "failure", "x"),
+            _named("a", "2026-09-09T08:00:00Z", "skipped", "y"),
+        ],
+        "failure after skip": [
+            _named("a", "2026-09-09T07:00:00Z", "skipped", "x"),
+            _named("a", "2026-09-09T08:00:00Z", "failure", "y"),
+        ],
+        "equal timestamps": [
+            _named("a", "2026-09-09T08:00:00Z", "failure", "x"),
+            _named("a", "2026-09-09T08:00:00Z", "success", "y"),
+        ],
+        "both inconclusive": [
+            _named("a", "2026-09-09T07:00:00Z", "skipped", "x"),
+            _named("a", "2026-09-09T08:00:00Z", "neutral", "y"),
+        ],
+        "missing timestamps": [
+            {"name": "a", "conclusion": "failure", "marker": "x"},
+            {"name": "a", "conclusion": "success", "marker": "y"},
+        ],
+    }
+    for label, runs in cases.items():
+        by_state = latest_per_name(runs)
+        by_object = {r["name"]: r.get("conclusion") for r in latest_runs(runs)}
+        assert by_state == by_object, f"{label}: {by_state} != {by_object}"
+
+
+def test_latest_runs_accepts_the_context_key_as_well_as_name() -> None:
+    """Legacy commit statuses key on `context`, check runs on `name`.
+
+    A grouping that reads only one silently drops the other entirely — not a
+    wrong winner, an absent one, which reads as "never reported".
+    """
+    runs = [
+        {"context": "legacy", "created_at": "2026-09-09T07:00:00Z", "state": "failure"},
+        {"context": "legacy", "created_at": "2026-09-09T08:00:00Z", "state": "success"},
+    ]
+    winners = latest_runs(runs)
+    assert len(winners) == 1
+    assert winners[0]["state"] == "success"
+
+
+def test_latest_runs_drops_an_entry_with_no_identifying_key() -> None:
+    """An unnamed run cannot be grouped, and must not become a nameless winner."""
+    assert latest_runs([{"conclusion": "failure"}]) == []
