@@ -803,6 +803,65 @@ The corollary is uncomfortable and worth stating: *you cannot validate a detecto
 using only cases you thought of while writing it.* The gap has to be closed by
 reading the domain, not by adding more of the same tests.
 
+## The report and the thing reported have separate sources
+
+A measurement has two halves: the read, and the sentence about the read. When
+the sentence is not **derived from** the read, it can be right while the read is
+wrong, or print unchanged while the read says the opposite. Nothing in the
+output distinguishes the two — a label that never consults its data looks
+exactly like one that did.
+
+**Worked instance (2026-09-10) — a legend composed before the data existed.**
+A session checked whether a service imported a shared package, in one command:
+
+```bash
+git grep -lE '...' -- 'autobot-slm-backend/**' | head -5
+echo "   (empty = it does not)"
+```
+
+The grep returned **six** hits. The legend printed anyway, because it is a
+constant. The session read its own legend as the result, concluded "zero
+modules import it", and wrote that premise into a PR as the reason for
+hand-rolling a reader that already existed in the shared package. The true
+count was 131.
+
+**The tell is that the interpretation was written before the data was seen.**
+`(empty = it does not)` is a claim about a result that had not been produced
+yet, placed where the result would appear. It is not carelessness — the two
+sentences came from different sources, and only one of them was measuring.
+
+**Worked instance (2026-09-10) — a gate reporting on the wrong artefact.**
+`[pre-push OK]` describes the **working tree**; the thing being pushed is the
+**commit set**. A `--amend` aborted by the formatting hook leaves edits staged
+but uncommitted, so pre-push ran the suite against the correct files on disk,
+reported all-pass, and pushed a commit that did not contain them — the same
+test had failed on that exact committed content minutes earlier (#16195).
+
+Worse than a missing gate: a gate that runs, passes, and describes a different
+artefact is **evidence-shaped**. And the repo's own formatting hook manufactures
+the staged-but-uncommitted state, so the mechanism that creates the hazard is
+the one that also makes the report look earned.
+
+**A third instance is the section below** — a parenthetical whose source is the
+reader's environment rather than the measured value, so it prints in one process
+and not another while the number it annotates is identical.
+
+**How to apply:**
+
+- **Make the label a function of the data.** Print the count, not a word for the
+  count — `echo "hits: $(printf '%s\n' "$out" | grep -c .)"` cannot disagree
+  with `$out`. A legend that is a string literal is not a finding, it is
+  decoration.
+- Never compose the interpretation in the same breath as the query. If the
+  sentence would be identical whatever the query returned, it is not reporting.
+- For any gate, ask **which artefact its verdict was computed from**, and
+  whether that is the artefact the verdict will be read as being about. Working
+  tree vs commit, latest run vs required context, resolved version vs declared
+  range, process environment vs subject.
+- Where a report cannot be derived from the read, say what it was derived from
+  in the report itself. `[pre-push OK]` costs nothing to make honest:
+  `[pre-push OK — working tree, not HEAD]`.
+
 ## A measurement can be true of the process that took it and false elsewhere
 
 When an input is **environmental**, a number describes the reader as much as the
