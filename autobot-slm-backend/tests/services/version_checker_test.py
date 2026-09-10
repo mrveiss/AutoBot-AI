@@ -7,11 +7,13 @@ Tests for Background Version Checker (Issue #741).
 """
 
 import asyncio
+import contextlib
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.eventually import eventually
 from autobot_shared.time_utils import utc_timestamp
 
 # Import git_tracker module directly
@@ -19,6 +21,25 @@ git_tracker_path = Path(__file__).parent.parent.parent / "services" / "git_track
 spec = __import__("importlib.util").util.spec_from_file_location("git_tracker", git_tracker_path)
 git_tracker_module = __import__("importlib.util").util.module_from_spec(spec)
 spec.loader.exec_module(git_tracker_module)
+
+
+async def _run_loop_until(condition, loop=None) -> None:
+    """Run the version-check loop until *condition()* holds, then stop it (#16009).
+
+    Waits on what each test asserts instead of sleeping a fixed 0.2-0.3 s: a busy
+    runner makes this slower, never red, and a loop that dies surfaces its own
+    exception through ``eventually(watch=...)`` instead of a short call count.
+    """
+    task = asyncio.create_task((loop or git_tracker_module.version_check_task)(interval=0.1))
+    try:
+        await eventually(condition, watch=task)
+    finally:
+        # Await only a task this block actually cancelled. A task that already
+        # died has had its error re-raised by eventually(); awaiting it again
+        # would raise the same exception a second time mid-propagation.
+        if task.cancel():
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 class TestUpdateLatestVersionSetting:
@@ -112,14 +133,7 @@ class TestVersionCheckTask:
                     mock_session_ctx.__aexit__.return_value = None
                     mock_db_service.session.return_value = mock_session_ctx
 
-                    # Run task once
-                    task = asyncio.create_task(git_tracker_module.version_check_task(interval=0.1))
-                    await asyncio.sleep(0.2)
-                    task.cancel()
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
+                    await _run_loop_until(lambda: mock_tracker.check_for_updates.await_count >= 1)
 
                     # Verify check_for_updates was called
                     mock_tracker.check_for_updates.assert_called()
@@ -148,14 +162,7 @@ class TestVersionCheckTask:
                     mock_session_ctx.__aexit__.return_value = None
                     mock_db_service.session.return_value = mock_session_ctx
 
-                    # Run task once
-                    task = asyncio.create_task(git_tracker_module.version_check_task(interval=0.1))
-                    await asyncio.sleep(0.2)
-                    task.cancel()
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
+                    await _run_loop_until(lambda: mock_update.called)
 
                     # Verify update_latest_version_setting was called
                     mock_update.assert_called_with(mock_db_session, "abc123")
@@ -176,14 +183,9 @@ class TestVersionCheckTask:
                 )
                 mock_get_tracker.return_value = mock_tracker
 
-                # Run task once
-                task = asyncio.create_task(git_tracker_module.version_check_task(interval=0.1))
-                await asyncio.sleep(0.2)
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+                # Two checks: the first iteration ran to completion, so the no-update
+                # assertion below is about a finished branch, not an interrupted one.
+                await _run_loop_until(lambda: mock_tracker.check_for_updates.await_count >= 2)
 
                 # Verify check_for_updates was called
                 mock_tracker.check_for_updates.assert_called()
@@ -209,17 +211,25 @@ class TestVersionCheckTask:
             )
             mock_get_tracker.return_value = mock_tracker
 
-            # Run task for a bit
-            task = asyncio.create_task(git_tracker_module.version_check_task(interval=0.1))
-            await asyncio.sleep(0.3)
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+            await _run_loop_until(lambda: mock_tracker.check_for_updates.await_count >= 2)
 
             # Verify it tried multiple times despite exception
             assert mock_tracker.check_for_updates.call_count >= 2
+
+    @pytest.mark.asyncio
+    async def test_a_loop_that_lets_the_exception_escape_fails_the_wait(self):
+        """#16009 AC2 stand-in: were the loop's ``except`` to re-raise, the first
+        ``check_for_updates`` failure would end the task. The wait must then fail
+        with that failure -- not pass on a short count, and not merely time out."""
+        check = AsyncMock(side_effect=Exception("Git fetch failed"))
+
+        async def loop_without_except(interval: float) -> None:
+            while True:
+                await check()
+                await asyncio.sleep(interval)
+
+        with pytest.raises(Exception, match="Git fetch failed"):
+            await _run_loop_until(lambda: check.await_count >= 2, loop=loop_without_except)
 
     @pytest.mark.asyncio
     async def test_task_logs_update_available(self):
@@ -246,14 +256,9 @@ class TestVersionCheckTask:
                         mock_session_ctx.__aexit__.return_value = None
                         mock_db_service.session.return_value = mock_session_ctx
 
-                        # Run task once
-                        task = asyncio.create_task(git_tracker_module.version_check_task(interval=0.1))
-                        await asyncio.sleep(0.2)
-                        task.cancel()
-                        try:
-                            await task
-                        except asyncio.CancelledError:
-                            pass
+                        await _run_loop_until(
+                            lambda: any("Update available" in str(c) for c in mock_logger.info.call_args_list)
+                        )
 
                         # Verify info log was called about update
                         info_calls = [str(call) for call in mock_logger.info.call_args_list]
