@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
+from autobot_shared.git_probe import run_git
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.time_utils import utc_timestamp
@@ -369,45 +370,27 @@ def _fetched_base_ref(root: Path) -> str | None:
     does not. Collapsing the two would either break every local-only repository
     or silently restore the defect for real ones.
     """
-    probe = subprocess.run(  # nosec B603 B607  # fixed git argv
-        ["git", "remote"],
-        cwd=str(root),
-        check=False,
-        capture_output=True,
-        text=True,
-        env=scrubbed_git_env(),
-    )
+    probe = run_git(["remote"], cwd=root)
     if probe.returncode != 0:
-        # A `git remote` that FAILS is not "no remotes". Both produce empty
-        # stdout, so testing output alone made a corrupt repo, a permissions
-        # problem or a scrubbed-away git directory indistinguishable from a
-        # local-only checkout -- and both then skipped the fetch and the ref
-        # verification silently, which is the fallback this function's own
-        # docstring says must never look like success (#16128 review).
-        raise RuntimeError(
-            f"cannot enumerate remotes in {root}: " f"{probe.stderr.strip() or 'git remote failed with no output'}"
-        )
+        # A `git remote` that FAILS is not "no remotes": both give empty stdout,
+        # so reading output alone let a broken checkout take the local-only
+        # path and skip the ref check in silence (#16128 review).
+        detail = probe.stderr.strip() or "git remote failed with no output"
+        raise RuntimeError(f"cannot enumerate remotes in {root}: {detail}")
     if not probe.stdout.strip():
         return None
 
     remote, _, ref = _WORKSPACE_BASE_REF.partition("/")
     if remote and ref:
-        subprocess.run(  # nosec B603 B607  # fixed git argv; values come from a module constant
-            ["git", "fetch", "--quiet", remote, ref],
-            cwd=str(root),
-            check=False,
-            capture_output=True,
-            text=True,
-            env=scrubbed_git_env(),  # #15246: an inherited GIT_DIR overrides cwd here too
-        )
-    resolved = subprocess.run(  # nosec B603 B607  # fixed git argv
-        ["git", "rev-parse", "--verify", "--quiet", f"{_WORKSPACE_BASE_REF}^{{commit}}"],
-        cwd=str(root),
-        check=False,
-        capture_output=True,
-        text=True,
-        env=scrubbed_git_env(),
-    )
+        # run_git's strict env, not the ambient scrub: a fetch crosses a
+        # transport, where GIT_CONFIG_* could set core.sshCommand (#15783, CWE-15).
+        try:
+            fetched = run_git(["fetch", "--quiet", remote, ref], cwd=root)
+            if fetched.returncode != 0:
+                logger.warning("fetch of %s failed in %s: %s", _WORKSPACE_BASE_REF, root, fetched.stderr.strip())
+        except subprocess.TimeoutExpired:
+            logger.warning("fetch of %s timed out in %s; using the last-known base", _WORKSPACE_BASE_REF, root)
+    resolved = run_git(["rev-parse", "--verify", "--quiet", f"{_WORKSPACE_BASE_REF}^{{commit}}"], cwd=root)
     if resolved.returncode != 0:
         raise RuntimeError(
             f"cannot resolve workspace base ref {_WORKSPACE_BASE_REF!r} in {root}; "
