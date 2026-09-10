@@ -154,12 +154,20 @@ def main() -> int:
         logger.error("Regressions detected — failing (gated mode).")
         return 1
 
-    if report.total_unmeasured:
+    if report.total_unmeasured and (args.fail_on_regression or args.require_real_candidate):
         # Exit 2, not 1: "a golden regressed" and "the harness could not judge
         # one" want opposite responses, and a single failure code makes an
         # evaluator outage indistinguishable from quality drift. Same split as
         # the SPDX gate (#15817) — 1 is a claim about the tree, 2 is being
         # unable to examine it.
+        #
+        # Only in a gated mode. Advisory runs report the state and exit 0,
+        # because an unmeasured corpus is a property of this repository's eval
+        # setup, not of the pull request being tested — failing every PR for a
+        # standing gap misattributes it to whoever pushed, and teaches readers
+        # that this check's red means nothing. In gated mode the opposite holds:
+        # the gate is claiming to protect something, so "could not measure"
+        # must not pass.
         logger.error(
             "%d trajectory/ies could not be scored (evaluator returned no verdict). "
             "This is not a pass and not a regression — the run could not judge them.",

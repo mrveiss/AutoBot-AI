@@ -265,7 +265,8 @@ def _report(unmeasured: bool) -> RegressionReport:
     ("real_candidate", "unmeasured", "argv"),
     [
         pytest.param(False, False, ["--require-real-candidate"], id="no-real-candidate"),
-        pytest.param(True, True, [], id="scorer-gave-no-verdict"),
+        pytest.param(True, True, ["--fail-on-regression"], id="scorer-gave-no-verdict-gated"),
+        pytest.param(True, True, ["--require-real-candidate"], id="scorer-gave-no-verdict-required"),
     ],
 )
 def test_being_unable_to_judge_exits_two_not_one(monkeypatch, real_candidate, unmeasured, argv) -> None:
@@ -287,3 +288,24 @@ def test_being_unable_to_judge_exits_two_not_one(monkeypatch, real_candidate, un
     monkeypatch.setattr(run_module, "run_eval", lambda **_kw: None)
 
     assert run_module.main() == 2
+
+
+def test_an_advisory_run_does_not_redden_a_pr_for_an_unmeasured_corpus(monkeypatch) -> None:
+    """Ungated, an unjudgeable corpus reports and exits 0.
+
+    Whether the eval setup can judge anything is a property of this repository,
+    not of the pull request under test. Failing every PR for a standing gap
+    misattributes it to whoever pushed and teaches readers that this check's red
+    means nothing -- which spends the signal before it is worth anything. In a
+    gated mode the opposite holds, and the parametrised test above pins that.
+    """
+    import sys
+
+    from eval import run as run_module
+
+    monkeypatch.setattr(sys, "argv", ["eval.run"])
+    monkeypatch.setattr(run_module, "resolve_candidate", lambda _dir: (baseline_candidate, False))
+    monkeypatch.setattr(run_module, "run_or_schedule", lambda _coro: _report(True))
+    monkeypatch.setattr(run_module, "run_eval", lambda **_kw: None)
+
+    assert run_module.main() == 0

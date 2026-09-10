@@ -12,8 +12,10 @@
 # Without recorded runs to replay against, eval.run falls through to the
 # self-consistency baseline, which answers with each golden's own expectations;
 # every comparison is then a file against itself and nothing can turn it red
-# (#16157). --require-real-candidate makes that state visible as UNMEASURED
-# rather than as a pass.
+# (#16157). The report names that state UNMEASURED rather than reporting a
+# pass, and is written to the run summary so it is visible without opening the
+# log. The step stays green because the gap belongs to this repository's eval
+# setup rather than to the pull request being tested.
 #
 # Promotion to a gate needs three things, not one: recorded runs so the
 # comparison has two sides (#16157), trigger paths that include the behaviour
@@ -81,14 +83,17 @@ jobs:
           # #11062: keep pipefail but drop `|| true` so a harness crash surfaces
           # as a red step; continue-on-error on the step keeps it non-blocking.
           set -o pipefail
-          # --require-real-candidate: refuse to report a pass when the replay fell
-          # through to the self-consistency baseline, which answers with each
-          # golden's own expectations and therefore cannot go red (#16157). Until
-          # recordings exist this step is UNMEASURED rather than green -- a true
-          # red that says nothing was compared, instead of a green that reads as
-          # drift detection. continue-on-error keeps it non-blocking either way.
-          python -m eval.run --require-real-candidate --json trajectory-eval-report.json \
-            | tee trajectory-eval-report.md
+          # Advisory mode: no --fail-on-regression and no --require-real-candidate,
+          # so a corpus that could not be judged reports UNMEASURED and exits 0
+          # rather than reddening a PR for a gap that is not the PR's (#16157).
+          python -m eval.run --json trajectory-eval-report.json | tee trajectory-eval-report.md
+          # Surface the state on the run page rather than only in the log. The
+          # step stays green: an unmeasured corpus is a property of this repo's
+          # eval setup, not of the PR under test, and failing every PR for a
+          # standing gap teaches readers that this check's red means nothing.
+          # --require-real-candidate / --fail-on-regression make it exit 2 when
+          # the gate is actually claiming to protect something.
+          cat trajectory-eval-report.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload eval report
         if: always()
