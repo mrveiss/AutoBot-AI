@@ -57,6 +57,10 @@ class Finding:
     severity: str
     identifier: str
     location: str
+    #: Other names the scanner gives the same advisory. An advisory database can
+    #: re-key an advisory (CVE -> PYSEC) with no new vulnerability behind it, so an
+    #: allowance has to match any of its names, not only the current primary one (#16222).
+    aliases: tuple[str, ...] = ()
 
 
 def _normalise(raw: str) -> str:
@@ -118,6 +122,7 @@ def parse_pip_audit(payload: str) -> list[Finding]:
             severity="unknown",
             identifier=str(vuln.get("id", "?")),
             location=f"{dependency.get('name', '?')}=={dependency.get('version', '?')}",
+            aliases=tuple(str(alias) for alias in vuln.get("aliases") or ()),
         )
         for dependency in dependencies
         for vuln in dependency.get("vulns", [])
@@ -210,9 +215,14 @@ def at_or_above(findings: list[Finding], threshold: str) -> list[Finding]:
     return [f for f in findings if SEVERITIES.index(f.severity) <= ceiling]
 
 
+def _names(finding: Finding) -> set[str]:
+    """Every identifier a finding answers to: its primary id and its aliases (#16222)."""
+    return {finding.identifier, *finding.aliases}
+
+
 def not_allowed(findings: list[Finding], allowed_ids: set[str]) -> list[Finding]:
     """The findings the gate still judges after the recorded allowance is applied."""
-    return [finding for finding in findings if finding.identifier not in allowed_ids]
+    return [finding for finding in findings if not _names(finding) & allowed_ids]
 
 
 def stale_allowances(findings: list[Finding], allowed_ids: set[str]) -> list[str]:
@@ -223,7 +233,7 @@ def stale_allowances(findings: list[Finding], allowed_ids: set[str]) -> list[str
     removes that, but only if the list is forced to shrink: an entry the scanner
     has stopped reporting is a failure here, not a harmless leftover.
     """
-    return sorted(allowed_ids - {finding.identifier for finding in findings})
+    return sorted(allowed_ids - set().union(*(_names(finding) for finding in findings)))
 
 
 def _verdict_line(threshold: str, judged: int, allowed_ids: set[str]) -> str:
