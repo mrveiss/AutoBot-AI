@@ -322,7 +322,7 @@ jobs:
             --format npm-audit \
             --report "$ws/npm-audit.json" \
             --title "Dependency audit — $ws (reporting)" \
-            --fail-on never || true
+            --fail-on never
           echo "::endgroup::"
         done
 
