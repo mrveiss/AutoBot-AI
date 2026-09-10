@@ -229,20 +229,38 @@ def alias_pairs() -> Dict[str, str]:
     return pairs
 
 
-_ALIASES = alias_pairs()
-_TABLES = discover_pricing_tables()
-_BY_MODEL: Dict[str, Dict[str, Price]] = {}
-for _table, _prices in _TABLES.items():
-    for _raw, _price in _prices.items():
-        _BY_MODEL.setdefault(_normalised_key(_raw), {})[_table] = _price
-_SHARED = {m: t for m, t in _BY_MODEL.items() if len(t) > 1}
+#: Lazy: discovering and cross-indexing the pricing tables cost ~11s at import
+#: (#16188), paid by every importer whether or not it reads a price.
+_CACHE: dict[str, object] = {}
+
+
+def _aliases():
+    if "aliases" not in _CACHE:
+        _CACHE["aliases"] = alias_pairs()
+    return _CACHE["aliases"]
+
+
+def _tables():
+    if "tables" not in _CACHE:
+        _CACHE["tables"] = discover_pricing_tables()
+    return _CACHE["tables"]
+
+
+def _shared():
+    if "shared" not in _CACHE:
+        by_model: Dict[str, Dict[str, Price]] = {}
+        for table, prices in _tables().items():
+            for raw, price in prices.items():
+                by_model.setdefault(_normalised_key(raw), {})[table] = price
+        _CACHE["shared"] = {m: t for m, t in by_model.items() if len(t) > 1}
+    return _CACHE["shared"]
 
 
 def test_the_sweep_found_the_pricing_tables() -> None:
     """Runs first: every assertion below passes vacuously over an empty sweep."""
-    assert len(_TABLES) >= _MIN_TABLES, (
-        f"discovered {len(_TABLES)} pricing table(s), floor {_MIN_TABLES}. FIX THE SWEEP — "
-        f"a clean result below this floor asserts nothing.\nFound: {sorted(_TABLES)}"
+    assert len(_tables()) >= _MIN_TABLES, (
+        f"discovered {len(_tables())} pricing table(s), floor {_MIN_TABLES}. FIX THE SWEEP — "
+        f"a clean result below this floor asserts nothing.\nFound: {sorted(_tables())}"
     )
 
 
@@ -253,24 +271,24 @@ def test_the_sweep_compared_models_across_tables() -> None:
     is shared, and the disagreement check passes over an empty set — which reads
     exactly like agreement.
     """
-    assert len(_SHARED) >= _MIN_SHARED_MODELS, (
-        f"only {len(_SHARED)} model(s) are priced by more than one table (floor "
-        f"{_MIN_SHARED_MODELS}) across {len(_TABLES)} tables. Key normalisation has "
+    assert len(_shared()) >= _MIN_SHARED_MODELS, (
+        f"only {len(_shared())} model(s) are priced by more than one table (floor "
+        f"{_MIN_SHARED_MODELS}) across {len(_tables())} tables. Key normalisation has "
         "broken; the check below is comparing almost nothing."
     )
 
 
 def test_no_two_tables_price_one_model_differently() -> None:
     problems = []
-    for model, per_table in sorted(_SHARED.items()):
+    for model, per_table in sorted(_shared().items()):
         if model in _ALLOWED:
             continue
         if len({(round(lo, 6), round(hi, 6)) for lo, hi in per_table.values()}) > 1:
             rows = "\n".join(f"      {lo:>9} / {hi:<9}  {t}" for t, (lo, hi) in sorted(per_table.items()))
             problems.append(f"  {model}\n{rows}")
     assert not problems, (
-        f"model(s) priced differently by two tables ({len(_TABLES)} tables, "
-        f"{len(_SHARED)} shared models):\n" + "\n".join(problems) + "\n\n"
+        f"model(s) priced differently by two tables ({len(_tables())} tables, "
+        f"{len(_shared())} shared models):\n" + "\n".join(problems) + "\n\n"
         "Prices are normalised to per-1M before comparison, so a unit difference is "
         "not what this reports. Derive the second table from the first rather than "
         "correcting both by hand (#15912)."
@@ -344,9 +362,9 @@ def test_the_alias_pairing_found_the_known_aliases() -> None:
     An empty map makes the assertion below pass over nothing — which is exactly
     how the adjacency "mitigation" it replaces behaved.
     """
-    assert len(_ALIASES) >= 4, (
-        f"derived only {len(_ALIASES)} alias pair(s) from the `_DATED`/`_SHORT` naming "
-        f"convention: {_ALIASES}. The convention changed, or the sweep broke."
+    assert len(_aliases()) >= 4, (
+        f"derived only {len(_aliases())} alias pair(s) from the `_DATED`/`_SHORT` naming "
+        f"convention: {_aliases()}. The convention changed, or the sweep broke."
     )
 
 
@@ -358,8 +376,8 @@ def test_an_alias_is_priced_the_same_as_the_model_it_aliases() -> None:
     would never be compared to each other, in any number of tables.
     """
     problems = []
-    for alias, canonical in sorted(_ALIASES.items()):
-        for table, prices in sorted(_TABLES.items()):
+    for alias, canonical in sorted(_aliases().items()):
+        for table, prices in sorted(_tables().items()):
             resolved = {_normalised_key(raw): price for raw, price in prices.items()}
             if alias in resolved and canonical in resolved and resolved[alias] != resolved[canonical]:
                 problems.append(
@@ -367,15 +385,13 @@ def test_an_alias_is_priced_the_same_as_the_model_it_aliases() -> None:
                     f"      {resolved[alias][0]:>9} / {resolved[alias][1]:<9}  {alias}\n"
                     f"      {resolved[canonical][0]:>9} / {resolved[canonical][1]:<9}  {canonical}"
                 )
-    assert not problems, (
-        "one model priced differently under two of its own ids:\n" + "\n".join(problems)
-    )
+    assert not problems, "one model priced differently under two of its own ids:\n" + "\n".join(problems)
 
 
 def test_the_alias_check_would_catch_a_divergence() -> None:
     """The fixture. The tree agrees today, so a check that compared nothing
     would pass every assertion above — the population is four."""
-    assert _ALIASES, "no alias pairs derived; the check below proves nothing"
-    alias, canonical = next(iter(sorted(_ALIASES.items())))
+    assert _aliases(), "no alias pairs derived; the check below proves nothing"
+    alias, canonical = next(iter(sorted(_aliases().items())))
     resolved = {alias: (1.0, 2.0), canonical: (9.0, 2.0)}
     assert resolved[alias] != resolved[canonical]
