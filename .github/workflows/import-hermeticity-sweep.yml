@@ -20,6 +20,12 @@ jobs:
   sweep:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # issues: write so a red sweep reaches a reader. A schedule-only job has no PR
+    # and no author to notify, so without it a regression merges green and the
+    # 04:00 run goes red with nobody told (#16199 review).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
@@ -50,12 +56,24 @@ jobs:
           python -m pip install -e autobot_shared
 
       - name: Sweep every module under api/ and autobot_shared/
+        id: sweep
         env:
           AUTOBOT_IMPORT_HERMETICITY_SWEEP: "1"
         run: |
-          set -o pipefail
+          set -uo pipefail
+          # rc is captured rather than allowed to abort the job, because the
+          # reporting steps below have to run on exactly the failing path
+          # (same shape as ratchet-base-guard.yml).
           python -m pytest repo_tests/import_hermeticity_test.py -p no:cacheprovider -q \
             2>&1 | tee sweep-output.txt
+          rc=${PIPESTATUS[0]}
+          echo "rc=${rc}" >>"$GITHUB_OUTPUT"
+          {
+            echo 'report<<SWEEP_EOF'
+            tail -c 60000 sweep-output.txt
+            echo
+            echo SWEEP_EOF
+          } >>"$GITHUB_OUTPUT"
 
       # Always, so a failing sweep still hands over its enumeration -- the offender
       # list IS the deliverable of #16198, and a red job that discards it would make
@@ -78,3 +96,104 @@ jobs:
           name: import-hermeticity-sweep
           path: sweep-output.txt
           retention-days: 14
+
+      - name: Open or update the sweep-failure issue
+        # `success() &&` is load-bearing: a custom `if:` REPLACES the implicit
+        # success(), so without it a failed install would leave rc unset, compare
+        # unequal to '0', and file an offender report for a sweep that never ran.
+        if: success() && steps.sweep.outputs.rc != '0'
+        uses: actions/github-script@v9
+        env:
+          # Through the environment, never interpolated into the script body: the
+          # sweep output would otherwise be parsed as JavaScript.
+          SWEEP_REPORT: ${{ steps.sweep.outputs.report }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = 'ci: the import-hermeticity sweep found modules that are not import-hermetic';
+            const body = [
+              'The nightly sweep (`repo_tests/import_hermeticity_test.py`) failed on `' + context.sha + '`.',
+              'Run: ' + context.serverUrl + '/' + context.repo.owner + '/' + context.repo.repo +
+                '/actions/runs/' + context.runId,
+              '',
+              '```',
+              process.env.SWEEP_REPORT || '(the sweep produced no output)',
+              '```',
+              '',
+              'The sweep runs on a schedule, not per PR (#16203), so the change that caused this',
+              'has already merged. This issue is its only reader; a clean run closes it.',
+              '',
+              'Filed automatically by `.github/workflows/import-hermeticity-sweep.yml` (#16198).',
+            ].join('\n');
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo, state: 'open', labels: 'automation', per_page: 100,
+            });
+            const open = existing.find((issue) => issue.title === title && !issue.pull_request);
+            if (open) {
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: open.number, body,
+              });
+              core.notice('Updated sweep-failure issue #' + open.number);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo, title, body,
+                labels: ['bug', 'testing', 'automation'],
+              });
+              core.notice('Opened sweep-failure issue #' + created.data.number);
+            }
+
+      - name: Close the sweep-failure issue once the sweep is clean again
+        if: success() && steps.sweep.outputs.rc == '0'
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = 'ci: the import-hermeticity sweep found modules that are not import-hermetic';
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo, state: 'open', labels: 'automation', per_page: 100,
+            });
+            const open = existing.find((issue) => issue.title === title && !issue.pull_request);
+            if (!open) {
+              return;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo, issue_number: open.number,
+              body: 'The import-hermeticity sweep is clean again as of `' + context.sha + '`. Closing.',
+            });
+            await github.rest.issues.update({
+              owner: context.repo.owner, repo: context.repo.repo, issue_number: open.number, state: 'closed',
+            });
+
+      - name: Open or update the could-not-run issue
+        # The sweep step never fails (it captures rc), so failure() here means an
+        # earlier step did -- checkout, setup or the dependency install. That is a
+        # sweep that never looked, and it must not read as a clean night either.
+        if: failure()
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = 'ci: the import-hermeticity sweep could not run';
+            const body = 'The nightly sweep failed before it examined anything, on `' + context.sha + '`.\nRun: ' +
+              context.serverUrl + '/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId +
+              '\n\nFiled automatically by `.github/workflows/import-hermeticity-sweep.yml` (#16198).';
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo, state: 'open', labels: 'automation', per_page: 100,
+            });
+            const open = existing.find((issue) => issue.title === title && !issue.pull_request);
+            if (open) {
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: open.number, body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo, title, body,
+                labels: ['bug', 'infrastructure', 'automation'],
+              });
+            }
+
+      - name: Fail the run when the sweep found offenders
+        if: success() && steps.sweep.outputs.rc != '0'
+        run: |
+          echo "::error::the import-hermeticity sweep found offenders -- see the issue this run just filed or updated"
+          exit 1
