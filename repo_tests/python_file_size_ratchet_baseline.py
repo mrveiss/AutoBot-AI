@@ -31,7 +31,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/agents/agent_orchestration/distributed_management.py": 649,
     "autobot-backend/agents/agent_orchestration/distributed_management_test.py": 731,
     "autobot-backend/agents/agent_orchestration/routing.py": 681,
-    "autobot-backend/agents/base_agent.py": 675,
     "autobot-backend/agents/browser/captcha_solver.py": 765,
     "autobot-backend/agents/development_speedup_agent.py": 831,
     "autobot-backend/agents/graph_entity_extractor.py": 818,
@@ -80,7 +79,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/analytics_quality.py": 1730,
     "autobot-backend/api/analytics_root_cause_test.py": 628,
     "autobot-backend/api/api_endpoint_migrations_test.py": 31040,
-    "autobot-backend/api/auth.py": 777,
+    "autobot-backend/api/auth.py": 770,
     "autobot-backend/api/batch_jobs.py": 964,
     "autobot-backend/api/browser_mcp.py": 1340,
     "autobot-backend/api/cache_management.py": 779,
@@ -425,7 +424,8 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/tests/unit/knowledge/connectors/test_web_crawler.py": 655,
     "autobot-backend/tests/utils/gpu_optimization/test_gpu_detection.py": 763,
     "autobot-backend/tools/tool_registry.py": 959,
-    "autobot-backend/user_management/services/user_service.py": 900,  # #15772: SAVEPOINT insert call, race handled in user_service_conflict.py
+    # #15772: SAVEPOINT insert call, race handled in user_service_conflict.py
+    "autobot-backend/user_management/services/user_service.py": 900,
     "autobot-backend/utils/advanced_cache_manager.py": 1213,
     "autobot-backend/utils/claude_api_integration.py": 917,
     "autobot-backend/utils/distributed_service_discovery.py": 684,
