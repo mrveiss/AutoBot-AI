@@ -38,6 +38,16 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 
+class ReachDiscoveryError(AssertionError):
+    """`discover` raised instead of returning — the sweep is broken, not the tree.
+
+    Kept distinct from :class:`ReachFloorError` because they call for opposite
+    responses. A floor error says the tree shrank or the sweep narrowed; a
+    discovery error says the enumeration could not run at all. Collapsing them
+    into one type is how "the guard is broken" gets read as "the tree is small".
+    """
+
+
 class ReachFloorError(AssertionError):
     """Raised only by :meth:`Reach._require` — the floor rejecting a sweep.
 
@@ -111,7 +121,23 @@ class Reach:
         clears this and still speaks for a tree it never read. Pair it with
         :meth:`completed`.
         """
-        found = self.discover(root)
+        try:
+            found = self.discover(root)
+        except ReachFloorError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - re-raised with the cause named
+            raise ReachDiscoveryError(
+                f"[{self.name}] discover() raised {type(exc).__name__} instead of returning a "
+                f"result: {exc}\n"
+                "On an EMPTY tree `discover` must return an empty sequence, not raise. "
+                "`reach_declarations_test` hands every declaration an empty repository on "
+                "purpose and needs an empty RESULT to compare against the live one — an "
+                "exception ends that test early and proves nothing.\n"
+                "See repo_tests/excluded_tree_size_debt_test.py:76-92 for the handling this "
+                "expects: catch `EmptyEnumeration`, return [], and let the floor below raise "
+                "`ReachFloorError`. That does not weaken the refusal, it relocates it to the "
+                "typed one this mechanism is built around."
+            ) from exc
         self._require(len(found), "reached", self.what)
         return found
 
@@ -154,6 +180,17 @@ def declare(
     rather than here (#15928). Validating at declaration time would walk the
     tree once per imported guard, and the meta-test already enumerates every
     declaration — so the guarantee is the same and the cost is paid once.
+
+    **``discover`` must return an empty sequence on an empty tree, never raise**
+    (#16154). ``reach_declarations_test`` hands every declaration an empty
+    repository to prove the floor can actually fire, and needs an empty *result*
+    to compare against the live one — an exception ends that test early and
+    proves nothing. `tracked_paths` raises `EmptyEnumeration` for good reasons of
+    its own, so a guard using it must catch that and return ``[]``; the floor
+    below then raises `ReachFloorError`, which is the typed refusal this
+    mechanism is built around. See ``excluded_tree_size_debt_test:76-92``, which
+    does this correctly and explains why relocating the refusal does not weaken
+    it.
 
     Adoption alone does not make a floor tight. Both guards that adopted this
     module first passed a number chosen by feel, an order of magnitude below
