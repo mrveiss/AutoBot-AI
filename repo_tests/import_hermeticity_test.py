@@ -72,10 +72,26 @@ import sys, os
 _TREE = {tree!r}
 
 def _outside_tree(path):
+    # Separator-boundary, not a bare prefix: "<tree>-malicious/evil" starts with
+    # "<tree>" and is NOT in it. This repo names worktrees "<repo>-<slug>", so the
+    # sibling that defeats a prefix check is a shape it actually produces.
     try:
-        return not os.path.abspath(path).startswith(_TREE)
+        p = os.path.abspath(path)
     except Exception:
         return False
+    return p != _TREE and not p.startswith(_TREE + os.sep)
+
+
+def _is_write(mode, flags):
+    # `open()` reports a mode string; `os.open()` reports mode=None and puts the
+    # intent in flags. Checking only mode lets every os.open write through.
+    if mode:
+        return any(c in str(mode) for c in "wxa+")
+    try:
+        f = int(flags)
+    except (TypeError, ValueError):
+        return False
+    return bool(f & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC))
 
 def _hook(event, args):
     if event == "socket.connect":
@@ -84,7 +100,8 @@ def _hook(event, args):
         raise RuntimeError("HERMETIC_VIOLATION " + event)
     if event == "open" and len(args) >= 2:
         path, mode = args[0], args[1]
-        if mode and any(c in str(mode) for c in "wxa+") and _outside_tree(path):
+        flags = args[2] if len(args) > 2 else None
+        if _is_write(mode, flags) and _outside_tree(path):
             raise RuntimeError("HERMETIC_VIOLATION write outside tree: %s" % (path,))
 
 sys.addaudithook(_hook)
@@ -196,13 +213,49 @@ def test_the_sandbox_catches_a_planted_side_effect() -> None:
     ), f"caught it, but not as a hermeticity violation: {detail}"
 
 
-def test_an_inert_module_passes(tmp_path: Path) -> None:
+def test_an_inert_module_passes() -> None:
     """The contrast: the detector must not fail everything it is shown."""
     with tempfile.TemporaryDirectory() as tmp:
         sandbox = _sandbox(tmp)
         Path(tmp, "planted_inert.py").write_text("VALUE = 1\n", encoding="utf-8")
         ok, detail = _probe(tmp, "planted_inert", sandbox_dir=sandbox)
     assert ok, f"an inert module was reported as a violation: {detail}"
+
+
+def test_a_write_through_os_open_is_caught() -> None:
+    """`os.open` reports mode=None, so a mode-only check lets every one of them through.
+
+    Found by review: `os.open(path, O_WRONLY|O_CREAT)` outside the tree exited 0 while
+    the equivalent `open(path, "w")` raised. Two spellings of the same act, one caught.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        sandbox = _sandbox(tmp)
+        target = str(Path(tempfile.gettempdir(), "hermeticity_probe_os_open.tmp"))
+        Path(tmp, "planted_os_open.py").write_text(
+            "import os\n" f"os.open({target!r}, os.O_WRONLY | os.O_CREAT)\n", encoding="utf-8"
+        )
+        ok, detail = _probe(tmp, "planted_os_open", sandbox_dir=sandbox)
+    assert not ok, "a write via os.open outside the tree was reported hermetic"
+    assert "HERMETIC_VIOLATION" in detail, f"caught, but not as a hermeticity violation: {detail}"
+
+
+def test_a_sibling_directory_is_outside_the_tree() -> None:
+    """A bare prefix check calls `<tree>-malicious/` inside the tree, because it is a prefix.
+
+    Not hypothetical here: this repository names worktrees `<repo>-<slug>`, so the
+    sibling that defeats a prefix check is a path shape it actually produces.
+    """
+    sibling = str(_REPO_ROOT) + "-sibling"
+    assert not str(_REPO_ROOT).endswith(os.sep), "repo root should not carry a trailing separator"
+    assert sibling.startswith(str(_REPO_ROOT)), "the fixture must be a prefix, or it tests nothing"
+    with tempfile.TemporaryDirectory() as tmp:
+        sandbox = _sandbox(tmp)
+        Path(tmp, "planted_sibling.py").write_text(
+            "import os\n" f"open(os.path.join({sibling!r}, 'x.tmp'), 'w')\n", encoding="utf-8"
+        )
+        ok, detail = _probe(tmp, "planted_sibling", sandbox_dir=sandbox)
+    assert not ok, "a write to a prefix-sibling of the tree was reported hermetic"
+    assert "HERMETIC_VIOLATION" in detail, f"caught, but not as a hermeticity violation: {detail}"
 
 
 def test_an_unimportable_module_fails_loudly_rather_than_reading_as_clean() -> None:
