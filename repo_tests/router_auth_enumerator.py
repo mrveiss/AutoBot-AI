@@ -150,10 +150,20 @@ def registered_routers(root: Path) -> list[tuple[str, str]]:
         return []
     found = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            for alias in node.names:
-                if alias.name == "router":
-                    found.append((alias.asname or alias.name, node.module))
+        if not isinstance(node, ast.ImportFrom) or not node.module:
+            continue
+        for alias in node.names:
+            # ANY imported name ending in `router`, not only the literal `router`.
+            # A module exporting two APIRouter objects names at most one of them
+            # `router`: api/jwks.py exports `auth_router`, api/voice.py exports
+            # `realtime_router` ALONGSIDE `router`, and api/voice_bundle_admin.py
+            # exports `bundle_admin_router` and `bundle_me_router`. Matching the
+            # literal name dropped all four from EVERY bucket -- not gated, not
+            # ungated, not documented, not unreadable, simply absent. An
+            # enumerator that silently omits its subject is the defect this
+            # module exists to detect, in the module itself (#15745).
+            if alias.name == "router" or alias.name.endswith("_router"):
+                found.append((alias.asname or alias.name, node.module))
     return sorted(set(found))
 
 
@@ -170,6 +180,75 @@ def _calls_named(node: ast.AST, vocabulary: set[str]) -> set[str]:
         elif isinstance(inner, ast.Attribute) and inner.attr in vocabulary:
             hit.add(inner.attr)
     return hit
+
+
+#: Auth-module names that FETCH something rather than DECIDE anything. Reaching
+#: one of these does not make a function a gate.
+#:
+#: `api/jwks.py:_build_jwks` calls `get_auth_middleware()` to obtain the signing
+#: key and publishes a public key set -- it authenticates nobody. One-hop
+#: resolution without this exclusion reported `api.jwks` GATED, which is the
+#: dangerous direction: a false GATED hides a hole, where a false UNGATED only
+#: wastes an investigation.
+#:
+#: Measured before excluding: `_check_admin` reaches
+#: {get_auth_middleware, is_admin_role} and stays a gate on `is_admin_role`;
+#: `_build_jwks` reaches {get_auth_middleware} alone and correctly stops being one.
+ACCESSOR_NOT_DECISION: frozenset[str] = frozenset({"get_auth_middleware"})
+
+
+def _local_gates(tree: ast.Module, vocabulary: set[str]) -> set[str]:
+    """Names defined IN THIS MODULE whose body reaches a known auth primitive.
+
+    The vocabulary is derived from what auth-ish MODULES export, which misses a
+    gate defined where it is used: `api/service_messages.py` defines
+    `_check_admin`, calls `get_auth_middleware().get_user_from_request()` and
+    `is_admin_role()` inside it, and gates all three of its routes with
+    `Depends(_check_admin)`. Deriving by import path cannot see that, and the
+    first version of this module reported the file UNGATED -- a FALSE finding
+    published against a real security surface.
+
+    One hop only, and deliberately: a dependency whose own body calls a
+    vocabulary name is a gate. A dependency two modules away is not resolved
+    here, and that limit is stated rather than left to be discovered.
+    """
+    gates = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if _calls_named(node, vocabulary) - ACCESSOR_NOT_DECISION:
+            gates.add(node.name)
+    return gates
+
+
+def _imported_gates(tree: ast.Module, root: Path, vocabulary: set[str]) -> set[str]:
+    """Names imported from ANY module whose definition there reaches a primitive.
+
+    `api/user_provider_credentials.py` gates every route with
+    `Depends(get_current_user_id)`, imported from `api.user_management.dependencies`
+    -- a path containing none of auth/security/permission/rbac. That function's own
+    signature is `Depends(get_current_user)` and it raises 401. Reported UNGATED by
+    the first version, and singled out in the issue as wanting attention first,
+    because the import PATH was the filter rather than the behaviour.
+    """
+    gates = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or not node.module:
+            continue
+        candidate = root / BACKEND / (node.module.replace(".", "/") + ".py")
+        if not candidate.is_file():
+            continue
+        try:
+            source = ast.parse(candidate.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+        wanted = {a.asname or a.name for a in node.names}
+        for defined in ast.walk(source):
+            if not isinstance(defined, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if defined.name in wanted and (_calls_named(defined, vocabulary) - ACCESSOR_NOT_DECISION):
+                gates.add(defined.name)
+    return gates
 
 
 def _router_level(tree: ast.Module, vocabulary: set[str]) -> set[str]:
@@ -257,10 +336,15 @@ def classify(root: Path, alias: str, module: str, vocabulary: set[str]) -> Verdi
         return verdict
 
     verdict.intentional = bool(_INTENTIONAL.search(source))
+    # Widen the vocabulary with gates this module DEFINES or IMPORTS whose bodies
+    # reach a known primitive, before asking which mechanism gates the routes.
+    # Without this, a gate is invisible whenever it is spelled locally or lives
+    # behind an import path that does not contain an auth-ish word (#15745).
+    local = vocabulary | _local_gates(tree, vocabulary) | _imported_gates(tree, root, vocabulary)
     for label, found in (
-        ("router-level", _router_level(tree, vocabulary)),
-        ("per-route", _per_route(tree, vocabulary)),
-        ("inline", _inline(tree, vocabulary)),
+        ("router-level", _router_level(tree, local)),
+        ("per-route", _per_route(tree, local)),
+        ("inline", _inline(tree, local)),
     ):
         if found:
             verdict.mechanisms.append(label)

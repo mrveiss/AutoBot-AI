@@ -30,36 +30,38 @@ from repo_tests.router_auth_enumerator import (
 #: rather than the fixes waiting on a guard that does not exist yet.
 KNOWN_UNGATED: frozenset[str] = frozenset(
     {
-        # The five confirmed by hand on #15745, with file:line evidence there.
         "api.developer",
-        "api.knowledge_suggestions",
-        "api.redis",
-        "api.wake_word",
-        "services.knowledge_sync_service",
-        # Seven MORE the enumerator found that hand-inspection had not reached.
-        # Two of them are the subjects of open issues, which is independent
-        # corroboration rather than new information:
-        #   api.transcriber          -- #15758 ("routes authenticate no one")
-        #   api.user_management      -- #15738 ("no admin or ownership gate")
-        # api.frontend_config is the #15737 legibility case: it documents nothing,
-        # where api/chat_embed.py documents its open posture and is classified
-        # UNGATED-BY-DESIGN on that basis.
-        # api.user_provider_credentials handles provider credentials and wants
-        # looking at first.
         "api.frontend_config",
         "api.knowledge_search",
         "api.knowledge_search_aggregator",
-        "api.service_messages",
+        "api.knowledge_suggestions",
+        "api.redis",
         "api.transcriber",
         "api.user_management.router",
-        "api.user_provider_credentials",
+        "api.wake_word",
+        "services.knowledge_sync_service",
     }
 )
+
+#: TWO ENTRIES WERE REMOVED FROM THIS LIST AS FALSE FINDINGS, and how they got
+#: here matters more than that they left.
+#:
+#: `api.service_messages` gates all three routes with `Depends(_check_admin)`, a
+#: check DEFINED IN THAT FILE. `api.user_provider_credentials` gates all three
+#: with `Depends(get_current_user_id)`, imported from
+#: `api.user_management.dependencies` -- a path containing none of
+#: auth/security/permission/rbac.
+#:
+#: Both were reported UNGATED because the vocabulary was derived from the IMPORT
+#: PATH rather than from whether the name performs a check. That is the same
+#: defect as the hand-written regex missing `check_admin_permission`, in a new
+#: spelling -- and it was published as a finding against a credentials surface
+#: before review caught it. One-hop resolution now reaches both.
 
 REACH = declare(
     "router-auth-coverage",
     discover=registered_routers,
-    floor=80,
+    floor=90,
     what="routers registered in core_routers.py",
     growth=20,
 )
@@ -69,7 +71,7 @@ def test_the_sweep_reaches_every_registered_router() -> None:
     """Non-vacuity, bound to routers EXAMINED rather than routers found wanting."""
     routers = REACH.examined(repo_root())
     REACH.completed(len(routers))
-    assert len(routers) >= 80
+    assert len(routers) >= 90
 
 
 def test_the_vocabulary_is_derived_and_contains_the_name_that_was_missed() -> None:
@@ -177,3 +179,56 @@ def test_every_registered_router_resolves_to_a_module_on_disk() -> None:
     assert not new, "registered router(s) whose module cannot be read:\n  " + "\n  ".join(
         f"{m}: {unreadable[m]}" for m in new
     )
+
+
+def test_a_gated_file_cannot_hide_behind_an_incidental_public_marker() -> None:
+    """`intentional` is FILE-scoped; gating is ROUTE-scoped (#15745 review).
+
+    `api/system.py` carries both properties at once: one genuinely public health
+    check documented as such, and the rest of the file gated by
+    `check_admin_permission`. Because `intentional` is computed over the whole
+    source independently of `gated`, a file like that would flip straight to
+    UNGATED-BY-DESIGN if its real gates ever regressed -- never to UNGATED, so
+    `test_no_new_router_is_ungated_and_undocumented` would pass silently.
+
+    This pins the pair that makes that reachable, so the structural mismatch is
+    recorded against a real file rather than described in a comment. Making the
+    marker route-scoped is the fuller fix and is NOT this change.
+    """
+    verdicts = {v.module: v for v in enumerate_routers(repo_root())}
+    system = verdicts.get("api.system")
+    assert system is not None, "api.system is no longer registered -- update this test"
+
+    assert system.gated and system.intentional, (
+        "api/system.py no longer carries both a public marker and real gates. If its "
+        "gates were removed, this guard would report UNGATED-BY-DESIGN rather than "
+        "UNGATED and pass silently -- which is the hole this test exists to record."
+    )
+
+
+def test_gated_does_not_claim_identity_verification() -> None:
+    """GATED means "a gate runs", NOT "the caller was identified" (#15745 AC3).
+
+    `api/voice_stream` checks WS ORIGIN; `api/websockets` authenticates the USER.
+    Both report GATED, because this sweep has no notion of origin-check versus
+    identity-check. AC3 is exactly about that inconsistency, so a reader using
+    this table to judge AC3 would be misled by its own output.
+
+    Asserted rather than documented, so the day someone teaches the model to tell
+    them apart, this test fails and forces the docstring and the PR claim to be
+    updated with it.
+    """
+    verdicts = {v.module: v for v in enumerate_routers(repo_root())}
+    for module in ("api.voice_stream", "api.websockets"):
+        verdict = verdicts.get(module)
+        if verdict is None:
+            continue
+        assert verdict.gated, f"{module} lost its gate"
+
+    origin_only = verdicts.get("api.voice_stream")
+    identity = verdicts.get("api.websockets")
+    if origin_only and identity:
+        assert "enforce_ws_origin" in "; ".join(origin_only.evidence), (
+            "api.voice_stream's evidence no longer names an origin check -- the AC3 "
+            "distinction may now be modelled; if so, update this test and the docstring"
+        )
