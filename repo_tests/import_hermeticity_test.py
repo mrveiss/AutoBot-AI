@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess  # nosec B404 - the sandboxed probe IS the subject of this guard
+import subprocess  # nosec B404  # the sandboxed probe IS the subject of this guard
 import sys
 import tempfile
 from pathlib import Path
@@ -143,7 +143,7 @@ def _probe(path_entry: str, module: str, *, sandbox_dir: str) -> tuple[bool, str
     env["PYTHONPATH"] = os.pathsep.join([sandbox_dir, path_entry, str(_REPO_ROOT)])
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     try:
-        done = subprocess.run(  # nosec B603 - fixed argv, no shell
+        done = subprocess.run(  # nosec B603  # fixed argv, no shell
             [sys.executable, "-c", f"import {module}"],
             cwd=str(_REPO_ROOT),
             env=env,
