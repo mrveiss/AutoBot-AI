@@ -12,9 +12,9 @@ Delegates to the shared ``autobot_shared.rate_limiter.RateLimiter`` for the
 core sliding-window logic (Issue #4460).
 """
 
-import os
 import uuid
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.redis_client import get_async_redis_client
@@ -39,8 +39,8 @@ class RateLimitExceeded(Exception):
 #: in one module (#15757). api/auth.py imports these rather than defining its own:
 #: two files each holding half the policy is how the surfaces drifted apart while
 #: sharing a class name.
-SESSION_MAX_ATTEMPTS = int(os.environ.get("AUTOBOT_PASSWORD_CHANGE_SESSION_MAX_ATTEMPTS", "5"))
-SESSION_WINDOW_SECONDS = int(os.environ.get("AUTOBOT_PASSWORD_CHANGE_SESSION_WINDOW_SECONDS", "300"))
+SESSION_MAX_ATTEMPTS = env_int("AUTOBOT_PASSWORD_CHANGE_SESSION_MAX_ATTEMPTS", 5)
+SESSION_WINDOW_SECONDS = env_int("AUTOBOT_PASSWORD_CHANGE_SESSION_WINDOW_SECONDS", 300)
 
 
 class TargetedPasswordChangeRateLimiter:
@@ -62,8 +62,8 @@ class TargetedPasswordChangeRateLimiter:
     #:
     #: The difference between the two policies is a DECISION, recorded here rather
     #: than left implicit in two files that used to share a class name.
-    MAX_ATTEMPTS = int(os.environ.get("AUTOBOT_PASSWORD_CHANGE_TARGETED_MAX_ATTEMPTS", "3"))
-    WINDOW_SECONDS = int(os.environ.get("AUTOBOT_PASSWORD_CHANGE_TARGETED_WINDOW_SECONDS", "1800"))
+    MAX_ATTEMPTS = env_int("AUTOBOT_PASSWORD_CHANGE_TARGETED_MAX_ATTEMPTS", 3)
+    WINDOW_SECONDS = env_int("AUTOBOT_PASSWORD_CHANGE_TARGETED_WINDOW_SECONDS", 1800)
 
     def _keys(self, user_id: uuid.UUID, actor_id: uuid.UUID | None) -> list[str]:
         """Redis keys to enforce for this attempt (#15743)."""
