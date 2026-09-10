@@ -50,12 +50,15 @@ jobs:
           # The depth is a guess about the future, so the scan refuses to run rather
           # than trust it: the reachability check below turns "too shallow" into a
           # loud failure instead of an empty range that reports clean.
-          fetch-depth: 100
+          fetch-depth: ${{ github.event_name == 'merge_group' && '0' || '100' }}
 
       - name: Scan PR commits for banned trailers
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          # The TRUE number of commits in the PR, from GitHub rather than from the
+          # clone. This is what makes truncation detectable (#16210 review).
+          EXPECTED_COMMITS: ${{ github.event.pull_request.commits || '' }}
         run: |
           set -euo pipefail
           echo "Scanning commits ${BASE_SHA}..${HEAD_SHA}"
@@ -70,6 +73,19 @@ jobs:
               exit 1
             fi
           done
+          # Endpoint presence is NOT enough. A PR with more of its own commits than
+          # the fetch depth leaves BOTH endpoints present while `git rev-list` returns
+          # a TRUNCATED, non-empty range -- no error, no warning, errexit untripped,
+          # and the oldest commits are never scanned. Reproduced at depth 100: a
+          # 150-commit branch yielded 99. The guard checked the endpoints; the risk
+          # was the range (#16210 review).
+          _scanned="$(git rev-list --count "${BASE_SHA}..${HEAD_SHA}")"
+          if [ -n "${EXPECTED_COMMITS}" ] && [ "${_scanned}" != "${EXPECTED_COMMITS}" ]; then
+            echo "::error::scanned ${_scanned} commits but GitHub reports ${EXPECTED_COMMITS}"
+            echo "::error::for this PR -- the checkout is too shallow and the oldest"
+            echo "::error::commits would go unexamined. Raise fetch-depth (#16207)."
+            exit 1
+          fi
           # Agent/tooling trailers are never allowed, for any author (#13654).
           #
           # #15848: ALL THREE ARMS ARE NOW ANCHORED to a trailer position. The
