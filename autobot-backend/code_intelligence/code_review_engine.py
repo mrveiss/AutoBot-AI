@@ -26,13 +26,13 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 """
 
 import re
-import subprocess  # nosec B404  # code review tools require subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.git_probe import run_git
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from utils.line_index import LineIndex  # #12884
@@ -875,13 +875,11 @@ class CodeReviewEngine(_BaseClass):
                 if not _VALID_GIT_DIFF_ARG_RE.match(arg):
                     logger.warning("Rejected invalid git diff argument: %s", arg)
                     return ""
-            cmd = ["git", "diff"] + split_args
-            result = subprocess.run(  # nosec B603  # argv validated by _VALID_GIT_DIFF_ARG_RE above
-                cmd,
-                capture_output=True,
-                text=True,
+            # run_git scrubs the ambient git environment (#16179) and defaults
+            # capture_output/text/encoding, so this is both the fix and smaller.
+            result = run_git(
+                ["diff", *split_args],
                 timeout=TimingConstants.SHORT_TIMEOUT,
-                encoding="utf-8",
                 cwd=self.project_root,
             )
             return result.stdout if result.returncode == 0 else ""
