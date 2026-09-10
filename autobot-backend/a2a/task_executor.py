@@ -144,13 +144,13 @@ def _scrub_inbound(task_id: str, input_text: str, peer_id: str | None, manager) 
     # into downstream RAG retrieval, agent prompts, or external API calls.
     try:
         scrub_result = scrub_outbound(input_text, peer_id=task_id, message_id=task_id)
-        input_text = scrub_result.text
         if scrub_result.redaction_count > 0:
             logger.info(
                 "A2A task %s: scrubbed %d PII item(s) from inbound payload",
                 task_id,
                 scrub_result.redaction_count,
             )
+        return scrub_result.text
     except PIIBlocked as exc:
         logger.warning("A2A task %s: inbound payload blocked by PII pipeline: %s", task_id, exc)
         # Issue #7358 phase 2: inbound PII block is a threat event.
@@ -254,7 +254,9 @@ def _apply_eval_gate(task_id: str, eval_result, eval_threshold: float, peer_id: 
         _fail_on_eval(task_id, eval_result, eval_threshold, peer_id, manager)
 
 
-def _store_response_artifacts(task_id: str, result: dict, peer_id: str | None, manager) -> tuple[str, dict | None]:
+def _store_response_artifacts(
+    task_id: str, result: dict, peer_id: str | None, manager
+) -> tuple[str, dict | None] | None:
     """Store the text and routing-metadata artifacts; return what the gate needs.
 
     Outbound scrubbing happens here so artifacts returned to remote peers are
@@ -289,7 +291,7 @@ def _store_response_artifacts(task_id: str, result: dict, peer_id: str | None, m
                 "message": "pii_blocked_response",
             },
         )
-        return
+        return None
     artifact_text = TaskArtifact(artifact_type="text", content=response_text)
     manager.add_artifact(task_id, artifact_text)
     manager.publish_event(
@@ -334,7 +336,10 @@ async def _execute_claimed(
             context=context,
         )
 
-        response_text, metadata = _store_response_artifacts(task_id, result, peer_id, manager)
+        artifacts = _store_response_artifacts(task_id, result, peer_id, manager)
+        if artifacts is None:
+            return
+        response_text, metadata = artifacts
 
         # Issue #4687: self-evaluation quality gate before COMPLETED transition.
         eval_result = await evaluate_task_output(
