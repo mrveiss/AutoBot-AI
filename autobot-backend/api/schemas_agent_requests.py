@@ -91,3 +91,18 @@ class ResearchTaskRequest(BaseModel):
     include_web: bool = Field(True, description="Include web research")
     include_code_search: bool = Field(False, description="Include code search")
     sources: List[str] | None = Field(None, description="Specific sources")
+
+
+class RS256RevokeRequest(BaseModel):
+    """Request body for RS256 authority token revocation (#10278).
+
+    Moved out of api/auth.py by #15757. The no-local-schemas hook reads each
+    changed file whole, so this pre-existing violation surfaced on an unrelated
+    edit -- fixed rather than left for whoever touches auth.py next.
+
+    It lands here rather than in schemas_agent.py because that module is at its
+    grandfathered ceiling with zero headroom, as are every other frozen domain
+    module the hook names. See #15757 for the conflict that creates.
+    """
+
+    token: str

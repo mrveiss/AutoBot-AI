@@ -31,7 +31,6 @@ conflict must not be filed as one.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from tools.lint._scan_helpers import tracked_paths
 
@@ -104,9 +103,7 @@ def test_the_parked_branch_job_distinguishes_a_conflict_from_a_failure() -> None
         f"{WORKFLOW} must keep non-conflict failures in their own bucket; folding "
         "them into `conflicted` is the defect, not the reporting of it."
     )
-    assert re.search(
-        r"\$\{#errored\[@\]\} -gt 0 \]; then\s*\n\s+echo \"::error::", text
-    ), (
+    assert re.search(r"\$\{#errored\[@\]\} -gt 0 \]; then\s*\n\s+echo \"::error::", text), (
         f"{WORKFLOW} must FAIL when a merge fails without a conflict. A conflict is "
         "information about a branch; a non-conflict failure is a defect in the job, "
         "and a job that cannot fail cannot report one."
@@ -150,14 +147,22 @@ def test_a_new_workspace_branches_from_a_fetched_base() -> None:
         f"{WORKSPACE} must resolve its base ref through a helper that fetches first; "
         "branching from the main tree's HEAD inherits that tree's staleness."
     )
-    assert '"git", "worktree", "add", "-b", branch, str(workspace_dir), base_ref' in text, (
+    assert "add_argv.append(base_ref)" in text, (
         f"{WORKSPACE} must pass an explicit start point to `git worktree add`. "
         "Without one git uses HEAD, which is the defect: the call looks correct and "
         "the branch point is whatever the shared tree happened to be on."
     )
+    # The start point is conditional, and the condition is the whole design: a
+    # repository with NO remotes has no base to be stale against, so HEAD is the
+    # only base there is. A remote configured with the ref missing still raises.
+    # Collapsing the two either breaks every local-only checkout or silently
+    # restores the defect for real ones.
+    assert "if not probe.stdout.strip():" in text and "return None" in text, (
+        f"{WORKSPACE} must treat 'no remotes' as a real answer rather than an error; "
+        "raising there breaks every throwaway repository, which is how this was found."
+    )
     assert "AUTOBOT_WORKSPACE_BASE_REF" in text, (
-        f"{WORKSPACE} must take the base ref from an env-var-backed constant, not a "
-        "literal at the call site."
+        f"{WORKSPACE} must take the base ref from an env-var-backed constant, not a " "literal at the call site."
     )
 
 

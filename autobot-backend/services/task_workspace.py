@@ -352,15 +352,34 @@ async def release_for_task(
 # ---------------------------------------------------------------------------
 
 
-def _fetched_base_ref(root: Path) -> str:
-    """Refresh and return the ref new workspaces branch from (#15938).
+def _fetched_base_ref(root: Path) -> str | None:
+    """Refresh and return the ref new workspaces branch from, or None (#15938).
 
     The fetch is best effort: offline, the last-known base is still far better
     than the main tree's HEAD, which is what an absent start point uses. A
     missing ref is different and raises -- branching from an unknown base is the
     defect, and silently falling back to HEAD would restore it while looking
     like success.
+
+    **A repository with no remotes is not that case.** Returning None there is a
+    real answer, not a fallback: with no remote there is no base to be stale
+    against, so HEAD is the only base that exists. The distinction is what keeps
+    the guard meaningful -- a remote that IS configured with the ref missing is
+    still an error, because that is a checkout that should know its base and
+    does not. Collapsing the two would either break every local-only repository
+    or silently restore the defect for real ones.
     """
+    probe = subprocess.run(  # nosec B603 B607  # fixed git argv
+        ["git", "remote"],
+        cwd=str(root),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=scrubbed_git_env(),
+    )
+    if not probe.stdout.strip():
+        return None
+
     remote, _, ref = _WORKSPACE_BASE_REF.partition("/")
     if remote and ref:
         subprocess.run(  # nosec B603 B607  # fixed git argv; values come from a module constant
@@ -391,9 +410,12 @@ def _fetched_base_ref(root: Path) -> str:
 def _git_add_worktree(root: Path, workspace_dir: Path, branch: str) -> None:
     """Run git worktree add, handling pre-existing branch/directory gracefully."""
     base_ref = _fetched_base_ref(root)
+    add_argv = ["git", "worktree", "add", "-b", branch, str(workspace_dir)]
+    if base_ref is not None:
+        add_argv.append(base_ref)
     try:
         subprocess.run(  # nosec B603 B607  # fixed git argv; branch and workspace_dir are validated Path/str values
-            ["git", "worktree", "add", "-b", branch, str(workspace_dir), base_ref],
+            add_argv,
             cwd=str(root),
             check=True,
             capture_output=True,
