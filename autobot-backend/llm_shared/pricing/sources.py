@@ -7,7 +7,7 @@
 Adding a new provider:
 1. Create a subclass of PricingSource in a new `<provider>_source.py` file.
 2. Implement `async def fetch(self) -> dict[str, ModelPricing]`.
-3. Register the instance in `services/pricing_refresh.py:PRICING_SOURCES`.
+3. Return it from `services/pricing_refresh.py:_build_sources`.
 """
 
 from __future__ import annotations
@@ -21,17 +21,29 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 
+def _optional_float(value: object) -> float | None:
+    """A stored price, or None when the source never stated one."""
+    return None if value is None else float(value)  # type: ignore[arg-type]
+
+
 @dataclass
 class ModelPricing:
-    """Pricing for a single model, all values in USD per 1 million tokens."""
+    """Pricing for a single model, all values in USD per 1 million tokens.
+
+    A cache price the source does not state is None -- unknown, never free (#16229).
+    """
 
     provider: str
     model_id: str
     input_per_1m: float
     output_per_1m: float
-    cache_read_per_1m: float = 0.0
-    cache_write_per_1m: float = 0.0
+    cache_read_per_1m: float | None = None
+    cache_write_per_1m: float | None = None
     updated_at: datetime | None = None
+    #: Catalogue the price came from: "litellm", "openrouter", or "" for a legacy baseline (#16229).
+    source: str = ""
+    #: Cross-check verdict: "agree", "disagree", "single" (one catalogue only), "unchecked", or "".
+    crosscheck: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -42,6 +54,8 @@ class ModelPricing:
             "cache_read_per_1m": self.cache_read_per_1m,
             "cache_write_per_1m": self.cache_write_per_1m,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "source": self.source,
+            "crosscheck": self.crosscheck,
         }
 
     @classmethod
@@ -57,9 +71,11 @@ class ModelPricing:
             model_id=data["model_id"],
             input_per_1m=float(data["input_per_1m"]),
             output_per_1m=float(data["output_per_1m"]),
-            cache_read_per_1m=float(data.get("cache_read_per_1m", 0.0)),
-            cache_write_per_1m=float(data.get("cache_write_per_1m", 0.0)),
+            cache_read_per_1m=_optional_float(data.get("cache_read_per_1m")),
+            cache_write_per_1m=_optional_float(data.get("cache_write_per_1m")),
             updated_at=updated_at,
+            source=str(data.get("source") or ""),
+            crosscheck=str(data.get("crosscheck") or ""),
         )
 
     def as_legacy_dict(self) -> dict[str, float]:

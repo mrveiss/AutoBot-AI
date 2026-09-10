@@ -579,6 +579,10 @@ To add a new variable:
 | `AUTOBOT_POSTGRES_PASSWORD` | postgres | str | `""` | PostgreSQL user password. |
 | `AUTOBOT_POSTGRES_PORT` | postgres | str | `'5432'` | PostgreSQL server port. |
 | `AUTOBOT_POSTGRES_USER` | postgres | str | `'slm_app'` | PostgreSQL login role. |
+| `AUTOBOT_PRICING_CROSSCHECK_TOLERANCE_PERCENT` | pricing | float | `10.0` | Percent difference between LiteLLM's and OpenRouter's price for one model above which the pricing refresh flags a disagreement. Flagged, never resolved silently (#16229). |
+| `AUTOBOT_PRICING_FETCH_TIMEOUT_SECONDS` | pricing | float | `30.0` | Total timeout, in seconds, for one live pricing catalogue fetch. A timed-out fetch is a failed refresh and leaves stored prices to age, never looking fresh (#16229). |
+| `AUTOBOT_PRICING_LITELLM_URL` | pricing | str | `'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json'` | URL of LiteLLM's model price map, the primary live pricing catalogue. Fetched public-only through the egress guard (#16229). |
+| `AUTOBOT_PRICING_OPENROUTER_URL` | pricing | str | `'https://openrouter.ai/api/v1/models'` | URL of OpenRouter's public models API, the cross-check pricing catalogue. Fetched public-only through the egress guard (#16229). |
 | `AUTOBOT_PROMETHEUS_PORT` | monitoring | str | `'9090'` | TCP port of the Prometheus instance. Also declared in ssot_config.py. |
 | `AUTOBOT_PROMETHEUS_URL` | monitoring | str | `'http://10.0.0.4:9090'` | Base URL of the Prometheus metrics server. |
 | `AUTOBOT_PROVIDER_DEGRADATION_TTL_SECONDS` | ai | int | `300` | Seconds a provider stays marked degraded after a failure before traffic is offered to it again. |
@@ -667,5 +671,5 @@ To add a new variable:
 | `AUTOBOT_WORK_CLAIM_WAIT_TTL_S` | orchestration | int | `900` | How long an agent keeps its place in a work-claim queue without renewing (#15948). Deliberately longer than AUTOBOT_WORK_CLAIM_TTL_S: a waiter that expired before the holder it is queued behind would never be promoted, and would look to an operator like a queue that silently drops people. The ceiling bounds how long a dead waiter occupies a position before it is pruned on the next read. Range: 30–7200. |
 | `AUTOBOT_WORK_CLAIM_YIELD_TIMEOUT_S` | orchestration | int | `30` | How long a requester waits for a claim holder to answer a yield request before treating the silence as a refusal (#15948). Short on purpose: the requester is blocked while it waits, and a holder that has not answered in this long is busy working, which is itself the answer. Raising it does not make a yield more likely, it only makes the requester wait longer to be told no. Range: 1–600. |
 
-*221 variables registered as of last generation.*
+*225 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->
