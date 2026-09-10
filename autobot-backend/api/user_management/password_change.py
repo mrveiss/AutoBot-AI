@@ -28,8 +28,8 @@ from api.user_management.dependencies import (
 )
 from autobot_shared.logging_manager import get_logger
 from user_management.middleware.rate_limit import (
-    PasswordChangeRateLimiter,
     RateLimitExceeded,
+    TargetedPasswordChangeRateLimiter,
 )
 from user_management.schemas import PasswordChange
 from user_management.services import TenantContext, UserService
@@ -95,7 +95,7 @@ async def change_password(
 ):
     """Change a password: self-service with the current one, or an actual
     platform admin resetting another user's without it (#15743)."""
-    rate_limiter = PasswordChangeRateLimiter()
+    rate_limiter = TargetedPasswordChangeRateLimiter()
 
     # Check rate limit before attempting password change.
     # The limiter's message carries the caller-facing retry window ("Too many
