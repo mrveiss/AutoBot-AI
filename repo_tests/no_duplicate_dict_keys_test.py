@@ -159,8 +159,30 @@ def _sweep() -> Tuple[List[Duplicate], int, int, Dict[str, int]]:
     return duplicates, files_parsed, dicts_parsed, parsed_per_tree
 
 
-_DUPLICATES, _FILES_PARSED, _DICTS_PARSED, _PARSED_PER_TREE = _sweep()
-_TREES_HOLDING_PYTHON = _trees_holding_python()
+#: The sweep runs on FIRST USE, not at import (#16188).
+#:
+#: It parses 36,000+ dict literals across the tree and walks every top-level
+#: directory -- measured at 19.5s. At module scope that was paid by every importer,
+#: including `reach_declarations_test`, which imports every guard module to
+#: enumerate `declare()` calls. So any change to `repo_tests/_reach.py` paid this
+#: sweep before running one assertion, and three such pushes timed out against a
+#: 128s budget.
+#:
+#: Import time is a cost every consumer pays whether or not it uses the result.
+#: Tests below are unchanged -- they read through the accessors.
+_CACHE: dict[str, object] = {}
+
+
+def _swept() -> tuple:
+    if "sweep" not in _CACHE:
+        _CACHE["sweep"] = _sweep()
+    return _CACHE["sweep"]  # type: ignore[return-value]
+
+
+def _trees() -> set:
+    if "trees" not in _CACHE:
+        _CACHE["trees"] = _trees_holding_python()
+    return _CACHE["trees"]  # type: ignore[return-value]
 
 
 def test_the_sweep_parsed_a_plausible_number_of_dicts() -> None:
@@ -170,8 +192,8 @@ def test_the_sweep_parsed_a_plausible_number_of_dicts() -> None:
     as well as failure, so a pass reading `0 dicts` is legible as broken rather
     than clean.
     """
-    assert _DICTS_PARSED >= _MIN_DICTS_PARSED, (
-        f"parsed only {_DICTS_PARSED} dict literal(s) across {_FILES_PARSED} file(s), "
+    assert _swept()[2] >= _MIN_DICTS_PARSED, (
+        f"parsed only {_swept()[2]} dict literal(s) across {_swept()[1]} file(s), "
         f"floor is {_MIN_DICTS_PARSED}. FIX THE SWEEP — a clean result below this "
         "floor asserts nothing."
     )
@@ -195,18 +217,18 @@ def test_every_tree_holding_python_was_actually_swept() -> None:
     a tree it is not guarding. A tree holding only untracked `.py` files lands
     here too, which is the same statement — this guard sweeps tracked files.
     """
-    unswept = sorted(tree for tree in _TREES_HOLDING_PYTHON if _PARSED_PER_TREE.get(tree, 0) == 0)
+    unswept = sorted(tree for tree in _trees() if _swept()[3].get(tree, 0) == 0)
     assert not unswept, (
         f"tracked Python files exist under {unswept} but the sweep parsed none of them. "
-        f"Swept {_FILES_PARSED} file(s) across {len(_PARSED_PER_TREE)} tree(s). "
+        f"Swept {_swept()[1]} file(s) across {len(_swept()[3])} tree(s). "
         "FIX THE SWEEP — a clean result says nothing about an unswept tree."
     )
 
 
 def test_no_dict_literal_repeats_a_key() -> None:
-    assert not _DUPLICATES, (
-        f"dict literals with a repeated key ({_DICTS_PARSED} literals swept):\n"
-        + "\n".join(f"  {name}:{line}  {key}" for name, line, key in _DUPLICATES)
+    assert not _swept()[0], (
+        f"dict literals with a repeated key ({_swept()[2]} literals swept):\n"
+        + "\n".join(f"  {name}:{line}  {key}" for name, line, key in _swept()[0])
         + "\n\nPython takes last-wins silently: the earlier value is discarded and "
         "nothing reports it. In a pricing or config table that is a wrong value with "
         "no failure mode (#15908)."
