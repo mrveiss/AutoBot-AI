@@ -219,6 +219,12 @@ def _calls_named(node: ast.AST, vocabulary: set[str]) -> set[str]:
     return hit - ACCESSOR_NOT_DECISION
 
 
+#: MATCHED BY NAME ONLY: `_calls_named` reads `Attribute.attr` without resolving
+#: what object it hangs off. Safe today -- each name has exactly one definition in
+#: the tree, all in `auth_middleware.py`. It begins producing FALSE GATED, the
+#: direction that hides a hole, the day an unrelated class defines one of these.
+#: Fix that by resolving the base object, not by dropping the name: the name is
+#: what makes `check_admin_permission` resolvable at all.
 ACCESSOR_DECISION_METHODS: frozenset[str] = frozenset(
     {"get_user_from_request", "check_file_permissions", "verify_jwt_token", "_extract_user_from_device_jwt"}
 )
@@ -257,7 +263,7 @@ def _local_gates(tree: ast.Module, vocabulary: set[str]) -> set[str]:
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        if _calls_named(node, vocabulary) - ACCESSOR_NOT_DECISION:
+        if _calls_named(node, vocabulary):
             gates.add(node.name)
     return gates
 
@@ -325,7 +331,7 @@ def _resolve_gate_chain(
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.name != name:
                 continue
-            reached = _calls_named(node, vocabulary) - ACCESSOR_NOT_DECISION
+            reached = _calls_named(node, vocabulary)
             if reached:
                 return True
             # Not a gate itself -- follow what IT depends on, one level further.
