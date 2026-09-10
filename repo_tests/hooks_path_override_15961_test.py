@@ -156,7 +156,10 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: passing having read a fraction of its population. A floor below the population
 #: catches only the collapse; partial loss is the failure that actually happens.
 #:
-#: `skips=0` is **measured, not estimated**: every one of the 6,407 discovered files
+#: `skips=1` is **measured, not estimated**: one of the 6,413 discovered files
+#: cannot be completed, so `completed()` reports 6412. The floor sits at what the
+#: guard FINISHES, not at what it finds -- the number that would have been wrong
+#: here, and the reason the first ratchet attempt raised ReachFloorError. Every other
 #: reads cleanly as UTF-8, so the `except (OSError, UnicodeDecodeError)` branch is
 #: currently dead and nothing legitimately goes unread. If that stops being true the
 #: number has to move, and saying it is zero is what makes that visible.
@@ -165,9 +168,9 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 REACH = declare(
     "hooks-path-override",
     discover=_scanned_files,
-    floor=6027,
+    floor=6412,
     growth=400,
-    skips=0,
+    skips=1,
     what="tracked shell, python and YAML files, plus extensionless shell scripts",
 )
 
@@ -209,7 +212,7 @@ def test_no_tracked_script_overrides_the_hooks_path() -> None:
         offenders += [(rel, n, line) for n, line in _offending_lines(text)]
 
     # Candidates are not coverage: `examined` bounds what was listed, this bounds
-    # what was actually opened. Without it a sweep could list 6,407 files, fail to
+    # what was actually opened. Without it a sweep could list 6,413 files, fail to
     # read 6,300 of them, and still report the same green as a clean tree.
     REACH.completed(read)
 
@@ -360,7 +363,7 @@ def test_the_sweep_reaches_the_hooks_it_exists_to_police() -> None:
     """#16139: extension-based discovery reached zero git hooks.
 
     `REACH` bounds the population by COUNT, which is necessary and not
-    sufficient here: 6,407 files can be discovered with every hook missing, and
+    sufficient here: 6,413 files can be discovered with every hook missing, and
     the number would look healthy. `core.hooksPath` is a hook setting, so the
     files most likely to carry an override are exactly the ones a suffix filter
     cannot see -- the count stays large while the subject is absent.
