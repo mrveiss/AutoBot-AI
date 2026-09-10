@@ -109,8 +109,8 @@ case "$MODE" in
     LIST=$(git diff --cached --name-only --diff-filter=ACMR) \
       || die "git diff --cached failed — cannot determine scope, refusing to report clean" ;;
   --all)
-    LIST=$(git ls-files) \
-      || die "git ls-files failed — cannot determine scope, refusing to report clean" ;;
+    LIST=$(git_tracked_files .) \
+      || die "git_tracked_files failed — cannot determine scope, refusing to report clean" ;;
   --range)
     [ -n "$RANGE" ] || die "--range needs A..B"
     # Range splitting and ref validation come from scripts/lib/git-scope.sh
