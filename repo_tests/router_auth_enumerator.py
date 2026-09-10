@@ -213,10 +213,15 @@ def _calls_named(node: ast.AST, vocabulary: set[str]) -> set[str]:
     for inner in ast.walk(node):
         if isinstance(inner, ast.Name) and inner.id in vocabulary:
             hit.add(inner.id)
-        elif isinstance(inner, ast.Attribute) and inner.attr in vocabulary:
-            hit.add(inner.attr)
-    return hit
+        elif isinstance(inner, ast.Attribute):
+            if inner.attr in vocabulary or inner.attr in ACCESSOR_DECISION_METHODS:
+                hit.add(inner.attr)
+    return hit - ACCESSOR_NOT_DECISION
 
+
+ACCESSOR_DECISION_METHODS: frozenset[str] = frozenset(
+    {"get_user_from_request", "check_file_permissions", "verify_jwt_token", "_extract_user_from_device_jwt"}
+)
 
 #: Auth-module names that FETCH something rather than DECIDE anything. Reaching
 #: one of these does not make a function a gate.
