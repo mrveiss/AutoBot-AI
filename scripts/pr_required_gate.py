@@ -39,109 +39,28 @@ import argparse
 import json
 import subprocess
 import sys
+from pathlib import Path
 from typing import Iterable
 
-#: States a required context may hold and still not block a merge. `skipped` is a
-#: real conclusion here: several contexts are published by path-filtered shims.
-_ACCEPTABLE = frozenset({"success", "skipped", "neutral"})
+# The grouping and pagination rules live in scripts/lib/check_run_status.py
+# (#16120). They were proven here first; keeping a second copy means two
+# implementations that must be kept in sync by hand, which is how the naive
+# query gets written again by whoever reads only one of them.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 
-#: Not a verdict -- the check is still running. Kept apart from `not_green` for the
-#: same reason `never_reported` is: **a PR that needs waiting and a PR that needs
-#: work are different problems**, and a reader who cannot tell them apart treats
-#: both as "come back later" or both as "something is broken". The first version of
-#: this tool put `pending` in `not_green`, committing the exact conflation it exists
-#: to prevent, and it was caught by running it rather than by reading it.
-_RUNNING = frozenset({"pending", "in_progress", "queued", "waiting", "requested"})
+from check_run_status import (  # noqa: E402
+    ACCEPTABLE,
+    RUNNING,
+    all_pages,
+    latest_per_name,
+)
 
-
-#: Precedence when two SOURCES report the same context name. GitHub evaluates a
-#: check run and a legacy commit status separately, so a green one must never
-#: stand in for a red one -- the tool's own defect, in the direction it exists to
-#: prevent. Lower is worse; the worst observation wins.
-_SEVERITY = {"failing": 0, "running": 1, "acceptable": 2}
-
-
-def _rank(state: str) -> str:
-    if state in _ACCEPTABLE:
-        return "acceptable"
-    return "running" if state in _RUNNING else "failing"
-
-
-#: States that say "this publisher declined to run", not "this publisher passed".
-#: They are acceptable as a FINAL answer for a context nothing else reported, and
-#: never as an override of one that did.
-_INCONCLUSIVE = frozenset({"skipped", "neutral"})
-
-
-def _latest_within(observations: Iterable[dict]) -> dict[str, str]:
-    """Conclusion of the most recently *started* observation for each name.
-
-    A superseded run is a real state, just not the current one: re-pushing leaves
-    `cancelled` entries behind a later `success` for the same name, and taking the
-    last element of an unordered API response reports a green context as failed.
-    Sorting by `started_at` is what makes the answer current rather than arbitrary.
-    """
-    newest: dict[str, tuple[str, str]] = {}
-    for run in observations:
-        name = run.get("name") or run.get("context")
-        if not name:
-            continue
-        started = run.get("started_at") or run.get("created_at") or ""
-        state = run.get("conclusion") or run.get("state") or "pending"
-        previous = newest.get(name)
-        if previous is None:
-            newest[name] = (started, state)
-            continue
-        # A SKIP NEVER OVERRIDES A CONCLUSIVE RESULT (#16040). Newest-wins is
-        # right for supersession -- one workflow re-run, `cancelled` then
-        # `success` -- and wrong for two workflows publishing one context name,
-        # where a path-filtered shim can land `skipped` AFTER a real `failure` on
-        # the same commit. Newest-wins then reported green while the merge button
-        # stayed red, which is GitHub disagreeing with the tool built to predict
-        # it.
-        #
-        # A skip means "this publisher declined to run here". It cannot
-        # invalidate a failure that already happened on the same commit, and the
-        # ordering carries no information about which publisher is authoritative.
-        # Among CONCLUSIVE observations newest still wins, so `failure` then
-        # `success` from a genuine re-run is unaffected.
-        if state in _INCONCLUSIVE and previous[1] not in _INCONCLUSIVE:
-            continue
-        if previous[1] in _INCONCLUSIVE and state not in _INCONCLUSIVE:
-            newest[name] = (started, state)
-            continue
-        if started >= previous[0]:
-            newest[name] = (started, state)
-    return {name: state for name, (_started, state) in newest.items()}
-
-
-def latest_per_name(*sources: Iterable[dict]) -> dict[str, str]:
-    """Current state per context name: newest WITHIN a source, worst ACROSS sources.
-
-    The two rules answer different failures and neither substitutes for the other.
-
-    *Newest within* handles supersession -- a re-push leaves `cancelled` behind a
-    later `success`, and the arbitrary element of an unordered response inverts
-    the verdict.
-
-    *Worst across* handles masking. GitHub evaluates check runs and legacy commit
-    statuses as separate requirements, so one dict keyed by name alone lets a
-    passing observation of one kind hide a failing observation of the other, and
-    the gate prints CONTEXTS-GREEN while the merge button stays red. Collapsing
-    two independent verdicts into one key is the same error as a histogram
-    collapsing three states into `pending=0, fail=0`, which is why this tool
-    exists at all.
-
-    Called with one source it behaves exactly as before, so a caller that has
-    only check runs does not have to know about any of this.
-    """
-    merged: dict[str, str] = {}
-    for observations in sources:
-        for name, state in _latest_within(observations).items():
-            current = merged.get(name)
-            if current is None or _SEVERITY[_rank(state)] < _SEVERITY[_rank(current)]:
-                merged[name] = state
-    return merged
+#: Local aliases onto the shared vocabulary, so the rest of this module reads
+#: unchanged. The definitions live in scripts/lib/check_run_status.py -- one
+#: place where "what counts as green" is decided. Only the two this module still
+#: reads are aliased; the rest were used solely by the grouping logic that moved.
+_ACCEPTABLE = ACCEPTABLE
+_RUNNING = RUNNING
 
 
 def _split_required(
@@ -256,17 +175,8 @@ def _gh(*args: str) -> str:
 
 
 def _all_pages(endpoint: str, key: str | None = None) -> list[dict]:
-    """Every page of a paginated endpoint, flattened.
-
-    `--paginate` alone concatenates one JSON document PER PAGE, which
-    `json.loads` rejects outright -- so the tool worked only while every list fit
-    in one page and would have died, not degraded, the day it did not. `--slurp`
-    makes the pages one array. `per_page=100` is set by the caller.
-    """
-    pages = json.loads(_gh("api", "--paginate", "--slurp", endpoint))
-    if key is None:
-        return [item for page in pages for item in page]
-    return [item for page in pages for item in page.get(key, [])]
+    """Shim onto the shared paginator (#16120), kept so callers here read the same."""
+    return all_pages(endpoint, key)
 
 
 def _required_contexts(protection: dict) -> tuple[list[str], list[str]]:
