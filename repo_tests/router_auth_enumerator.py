@@ -8,7 +8,7 @@ cause was not carelessness: **this codebase gates four different ways**, and a
 detector that models three of them reports the fourth as a hole.
 
   1. router-level   `APIRouter(dependencies=[Depends(X)])` -- gates every route
-                    in the file at once. `api/agent_org.py:53`.
+                    in the file at once, as `api/agent_org.py` does.
   2. per-route      `Depends(X)` in a handler signature, or in the decorator's
                     own `dependencies=[...]`.
   3. inline         called in the handler BODY, never through `Depends`.
@@ -228,7 +228,7 @@ def _inline(tree: ast.Module, vocabulary: set[str]) -> set[str]:
 
 #: Mechanism 4 is NOT implemented, and saying so is the point.
 #:
-#: `initialization/middleware.py:287` comments that the audit middleware assumes
+#: `initialization/middleware.py`'s audit middleware comments that it assumes
 #: `request.state.user` "is already populated" by something upstream -- and
 #: #15758 found there is no upstream for the transcriber routes. So middleware
 #: may cover nothing, cover some routers, or cover all of them, and this sweep
