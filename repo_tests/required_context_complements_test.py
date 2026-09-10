@@ -76,6 +76,32 @@ def test_the_filter_covers_its_own_inputs():
     assert "**/*.py" in patterns
 
 
+def test_the_shim_triggers_only_on_pull_request():
+    """The shim's trigger set, pinned so #15937's decision cannot drift (#16098).
+
+    This file checked conditions, job names, runners and the shared filter -- and
+    NOT triggers. A complement only holds while both workflows run, so "which
+    events run this" is half of the property the file exists to protect, and it
+    was the half blind to the axis #16098 changed.
+
+    The shim must not gain `merge_group`. Inside a queue `ci.yml` always triggers
+    and publishes `python-suite` on its own -- running when the group touches
+    Python, reporting skipped when it does not -- so a shim that also triggered
+    would publish a second, competing report of the same context. #15937 records
+    that as an acceptance criterion; this asserts it.
+
+    Stated as an exact set rather than an absence: `assert "merge_group" not in
+    on` would still pass if the shim quietly gained `push` or `schedule`, which
+    is the same silent-widening this file exists to prevent.
+    """
+    doc = yaml.safe_load(SHIM.read_text(encoding="utf-8"))
+    on = doc.get(True) or doc.get("on") or {}
+    assert set(on) == {"pull_request"}, (
+        f"the shim's triggers are {sorted(on)}; #15937 fixes them at pull_request alone. "
+        "Adding merge_group would double-publish python-suite inside a queue."
+    )
+
+
 def test_the_shim_declares_no_concurrency_group():
     """A shared concurrency group is what made the frontend shim useless (#13405).
 
@@ -152,6 +178,70 @@ def test_the_scan_actually_finds_workflows():
         f"only {len(found)} workflow(s) matched a required context - the scan is "
         "no longer bound to the workflows it is meant to guard"
     )
+
+
+def test_ci_triggers_on_stacked_pull_requests_and_on_merge_group():
+    """`ci.yml` is the only publisher of `python-suite`, so both triggers are its own.
+
+    Scoped to this one file deliberately. The generalised versions of both rules
+    are wrong, and measuring said so before they shipped:
+
+    * **`branches:` is the norm, not the defect.** Thirteen workflows publishing
+      a required context carry `pull_request.branches`. Forbidding it repo-wide
+      would fail all of them, and that is a far larger change than this issue.
+      What makes it load-bearing *here* is that `python-suite` is the context
+      #14353 is about to require, and a stacked pull request -- base is another
+      feature branch -- matches neither `main` nor `Dev_new_gui`. Measured on PR
+      #14641: **zero** CI/CD runs, with the page showing green from the workflows
+      that do trigger. The shim cannot rescue it: on a stacked PR *with* Python
+      changes it correctly skips, so neither side publishes (#14747).
+
+    * **The four shims lack `merge_group` on purpose** -- #15937 states it as an
+      acceptance criterion, and this file's own note at the complement pairs says
+      the shim "cannot see" merge_group because it is not one of its triggers.
+      Inside a queue `ci.yml` always triggers and its `python-suite` job skips on
+      a Python-free group, which reports the context; the shim is not needed and
+      must not gain the trigger.
+
+    So the invariant is about this file, and the reason is that it publishes the
+    eleventh context.
+    """
+    doc = yaml.safe_load((WORKFLOW_DIR / "ci.yml").read_text(encoding="utf-8"))
+    on = doc.get(True) or doc.get("on") or {}
+
+    assert "merge_group" in on, (
+        "ci.yml has no `merge_group:` trigger, so `python-suite` can never report "
+        "inside a merge queue and every queue entry would block on it once #14353 "
+        "makes it required (#15937 / #14054)."
+    )
+
+    pull_request = on.get("pull_request") or {}
+    assert isinstance(pull_request, dict) and "branches" not in pull_request, (
+        "ci.yml filters `pull_request.branches`, so a STACKED pull request never "
+        "triggers it and `python-suite` never runs -- measured on #14641 as zero "
+        "CI/CD runs. Harmless while the context is unrequired; a permanent hard "
+        "block the moment #14353 lands (#14747)."
+    )
+
+
+def test_the_shims_have_not_gained_a_merge_group_trigger():
+    """The counterpart, because the fix above is one edit away from breaking it.
+
+    #15937's acceptance criteria require the shims to stay `pull_request`-only.
+    An earlier draft of this change added `merge_group:` to
+    `python-required-context.yml` on the reasoning that both publishers should
+    match -- which is wrong, and only a direct scan of all fourteen workflows
+    showed it. Pinning it so the next person reasoning the same way is stopped by
+    a test rather than by review.
+    """
+    for _, _, _, shim_wf, _, _ in _COMPLEMENT_PAIRS:
+        on_block = yaml.safe_load((WORKFLOW_DIR / shim_wf).read_text(encoding="utf-8"))
+        triggers = on_block.get(True) or on_block.get("on") or {}
+        assert "merge_group" not in triggers, (
+            f"{shim_wf} gained a `merge_group:` trigger. Shims are pull_request-only "
+            "by design (#15937): inside a queue the real workflow always triggers and "
+            "its job skips, which reports the context."
+        )
 
 
 @pytest.mark.parametrize(

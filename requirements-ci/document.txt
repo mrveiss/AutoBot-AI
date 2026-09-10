@@ -1,6 +1,6 @@
 # Document processing and text extraction
 python-docx==1.2.0
-pypdf==6.16.2
+pypdf==6.17.0
 reportlab>=5.0.1            # MVA-2174: PDF export for transcripts
 # #15600: `markdown` was declared here and required by nothing. It is the
 # mirror image of the nltk entry below, and the same instrument settled both:

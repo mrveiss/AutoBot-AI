@@ -41,8 +41,7 @@ _ONE_REF = r"(?:#?\d+|MVA-\d+)"
 # `, and` (Oxford) must read as ONE separator, not a comma followed by a non-ref.
 _SEP_RE = r"\s*(?:,\s*(?:and\s+)?|and\s+)"
 _REFERENCE = re.compile(
-    r"(?:resolves|closes|fixes|refs|references|part of)\s+"
-    rf"({_ONE_REF}(?:{_SEP_RE}{_ONE_REF})*)",
+    r"(?:resolves|closes|fixes|refs|references|part of)\s+" rf"({_ONE_REF}(?:{_SEP_RE}{_ONE_REF})*)",
     re.IGNORECASE,
 )
 _SPLIT = re.compile(_SEP_RE, re.IGNORECASE)
@@ -92,26 +91,65 @@ def referenced_issues(body: str) -> set[str]:
     return found
 
 
-def _rationale_under_heading(body: str) -> str | None:
-    """Prose following a `## Single-issue rationale` heading, or None (#16050).
+# #16104: an ATX heading is 1-6 `#` followed by a space, a tab, or end of line.
+# `#15961` is an ISSUE REFERENCE. Treating any leading `#` as a heading made a
+# section that WAS filled in read as empty -- and opening the rationale with the
+# issue it is about is the natural way to write it, so the gate rejected the
+# form it teaches. The hint then said "add a section" to an author who had added
+# one, whose only available fix was to reword until green. A reword leaves no
+# trace, which is why this survived #16050 and recurred.
+_ATX_HEADING = re.compile(r"^#{1,6}(?:[ \t]|$)")
 
-    Scans forward past blank lines to the first non-empty, non-heading line, so
-    a reason two paragraphs down still counts. Stops at the next heading: an
-    empty section must NOT borrow the next section's text as its rationale --
-    that is how a heading-only body would pass a check about whether a human
-    justified something.
+
+def _heading_rationale(body: str) -> tuple[bool, str | None, str | None]:
+    """(heading found, the prose beneath it, the line that ended the section).
+
+    Scans forward past blank lines to the first non-empty line, so a reason two
+    paragraphs down still counts. Stops at the next heading: an empty section
+    must NOT borrow the next section's text as its rationale -- that is how a
+    heading-only body would pass a check about whether a human justified
+    something.
     """
     match = _RATIONALE_HEADING.search(body or "")
     if match is None:
-        return None
+        return False, None, None
     for line in body[match.end() :].splitlines():
         stripped = line.strip()
         if not stripped:
             continue
-        if stripped.startswith("#"):
-            return None
-        return stripped or None
-    return None
+        if _ATX_HEADING.match(stripped):
+            return True, None, stripped
+        return True, stripped, None
+    return True, None, None
+
+
+def _rationale_under_heading(body: str) -> str | None:
+    """Prose following a `## Single-issue rationale` heading, or None (#16050)."""
+    return _heading_rationale(body)[1]
+
+
+def _rationale_failure(body: str) -> str:
+    """The hint, naming WHICH of the two failures happened (#16104).
+
+    "No section found" and "section found but empty" want opposite fixes, and a
+    gate that reports the first when it means the second sends the author to add
+    something already present. A red only self-corrects when it names its real
+    cause.
+    """
+    found, _, terminator = _heading_rationale(body)
+    if not found:
+        return RATIONALE_HINT
+    if terminator is not None:
+        return (
+            "The `## Single-issue rationale` section is present but reads as empty. "
+            f"The first line under it is `{terminator}`, which parsed as the next "
+            "heading, so the section ended before any prose was found. Put the "
+            "reason on a line that does not begin with a `#` followed by a space."
+        )
+    return (
+        "The `## Single-issue rationale` section is present but has no prose "
+        "beneath it. Add the reason under the heading."
+    )
 
 
 def single_issue_rationale(body: str) -> str | None:
@@ -155,7 +193,7 @@ def check(body: str, actor: str = "", branch: str = "", title: str = "") -> tupl
     rationale = single_issue_rationale(body)
     if rationale:
         return True, f"Single issue ({_render(issues)}), rationale given: {rationale}"
-    return False, RATIONALE_HINT
+    return False, _rationale_failure(body)
 
 
 def _render(issues: set[str]) -> str:

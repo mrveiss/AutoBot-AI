@@ -21,6 +21,13 @@ nothing, and the nothing is indistinguishable from a true negative.
 
 ## Six families, six different remedies
 
+Instances carry the issue they came from where one was filed. Some did not get
+one — they were caught inside a single session's own work and fixed in the same
+change, so there is nothing to link. **That absence is itself worth reading: an
+instance with no issue number was found and fixed by the person who caused it,
+which is the rarest outcome on this page and never the one to plan for.**
+
+
 Sorting the instances showed these are not one law. Conflating them produces the
 wrong fix.
 
@@ -38,6 +45,14 @@ wrong fix.
 | `systemctl show -p ActiveState` | is the unit healthy | `inactive` is also what a unit that does not exist returns |
 | a guard matching `openssl req` anywhere in a role | does this role provision the shared keypair | it runs openssl — for a **different** keypair, in the same directory |
 
+A tool refusing to answer looks identical to a tool answering "nothing".
+`gh run view --log` writes *"the response contains terminal escape sequences"* to
+**stderr** and nothing to stdout, so a piped read returns empty. Two sessions
+independently read that as *the logs are gone* — one published "the logs are
+expired", the other tried twice and reported it as an unresolvable gap.
+`gh api .../logs --allow-escape-sequences` returns 212KB. **An empty stdout with
+an unread stderr is not a measurement.**
+
 **Remedy: name the selector where the result is reported.**
 
 The last row is the sharpest: the instrument answered an **adjacent** question and
@@ -49,8 +64,8 @@ something else, and it looked identical.
 Nothing is narrowed. Authored prose describing what code does is taken as proof
 that it does it.
 
-- An acceptance criterion ticked against `test_the_second_agent_learns_before_editing_not_at_merge`. Read in full, the body used intent `"x"` for the second edit, so nothing expressed *non-overlapping* — and `_, found = await acquire_aware(...)` discarded the half that proves the claim is granted. **An implementation that refused the claim passed it unchanged.**
-- A criterion nearly ticked on `grep -cE "class Interest|branch|intent"` returning **66** — word frequency in a 300-line file.
+- An acceptance criterion ticked against `test_the_second_agent_learns_before_editing_not_at_merge`. Read in full, the body used intent `"x"` for the second edit, so nothing expressed *non-overlapping* — and `_, found = await acquire_aware(...)` discarded the half that proves the claim is granted (#15987). **An implementation that refused the claim passed it unchanged.**
+- A criterion nearly ticked on `grep -cE "class Interest|branch|intent"` returning **66** — word frequency in a 300-line file (#15987).
 - An acceptance list written from a two-hook symptom while a third hook carried the same defect.
 
 **Remedy: read the behaviour, not the label.**
@@ -94,7 +109,23 @@ A verdict that stops you acting feels safe in a way one telling you to act does
 not. A gate saying WAIT is indistinguishable from a healthy queue, so it receives
 less scrutiny than one saying MERGE.
 
+Worked example, from the gate's own author. A merge gate reported `STALE PR
+OBJECT` — **truthfully, for an hour** — while the reviewer reading it supplied a
+cause the gate had never reported. The output was correct and the explanation was
+invented on top of it, and went unexamined because **a refusal feels like it has
+already been investigated.** Nobody audits a "no".
+
+That is also what separates D from the guard ladder's second rung. Rung 2 is a
+*guard* answering an adjacent question; D is a *person* answering one on the
+guard's behalf.
+
 ### F. The output is correct, complete, and about a different question
+
+*(E is the sixth family and is introduced further down, with the gate ladder its
+evidence belongs to. The letters are out of sequence because E was written first
+and is cited by number on #16100 and #13148; renaming it would break those. The
+sequence is stated here rather than left for a reader to trip over — on this page
+above all, a label that does not match what it labels is the subject.)*
 
 Nothing is narrowed and nothing is stale. The instrument answers perfectly — a
 question next to the one being asked.
@@ -103,9 +134,19 @@ question next to the one being asked.
 the instrument saw a subset of the truth. If no, it is F, and no amount of
 additional data will help, because the output was never about the thing.
 
-- `js-yaml [high] 4.0.0 - 4.3.1` read as *no fix exists*, and an allowance written on it. That line is an exact answer to **which versions are vulnerable**. It answers **which versions exist** not at all — 4.3.1 is the last *affected* release, 4.3.2 was already shipping, and dependabot was already carrying the bump.
+- `js-yaml [high] 4.0.0 - 4.3.1` read as *no fix exists*, and an allowance written on it (#16089). That line is an exact answer to **which versions are vulnerable**. It answers **which versions exist** not at all — 4.3.1 is the last *affected* release, 4.3.2 was already shipping, and dependabot was already carrying the bump.
 - `git cherry` reporting 5, 3 and 2 commits "not in base" for three worktrees whose work had landed. Accurate about patch-id divergence under squash merges; silent about landedness.
-- `gh pr list --author @me` returning six sessions' PRs. Every branch here is authored `mrveiss`, so it is a correct answer to *which PRs did this account author*, read as *which PRs are mine*.
+- `gh pr list --author @me` returning six sessions' PRs. Every branch here is authored `mrveiss`, so it is a correct answer to *which PRs did this account author*, read as *which PRs are mine* (#16124).
+
+Provenance claims are the same trap, and the tell is that they describe a
+*gesture* rather than an *artefact*. "I took the files wholesale, so there is no
+difference to miss" is a true statement about what someone did. It is not a
+statement about what the files contain — a formatter is a third party that edits
+between the copy and the commit, and `black` reflowed five regions on the way in.
+The reviewer hashed both copies, found they differ, read every difference, and
+confirmed the load-bearing part was byte-identical anyway. **The conclusion
+survived; the claim did not, and the claim was the thing offered as a reason not
+to check.**
 
 **Remedy: name the field's actual question before building on it.**
 
@@ -245,6 +286,21 @@ after a narrowing is a count of "things in the forms I thought of".
 **sets, not counts**: two implementations can agree on a total and disagree on
 membership.
 
+**And a count mismatch is a prompt to compare definitions — not proof that the
+lower one is blind.** This is the counterweight to everything else on this page,
+which otherwise trains a reflex that is wrong often enough to cause work.
+
+`grep "self.config = config"` finds **7**; `flake8 --select=F821` finds **5**.
+Neither is blind. One counts assignments and the other counts undefined names,
+and the two they differ on are exactly the two files that bind the name — so
+both are right, about different questions. Reaching for "the lower number is the
+broken instrument" would have sent someone fixing two files that were already
+correct.
+
+The rule is symmetric with the rest: when two instruments disagree, the finding
+is in the **gap between their definitions**, and either one of them may be the
+one telling the truth.
+
 ## Why care is not the remedy
 
 Every instance on this page was found by someone actively hunting this class of
@@ -252,7 +308,7 @@ error — usually in someone else's work, in the same hour they committed it in
 their own. Three examples from one night:
 
 - A session wrote up the "produced and consumed by nothing" rule, then an hour later shipped a sweep printing `MERGEABLE` beside `shards={'queued': 12}` on one line.
-- Two sessions reasoned all evening from *"the required context is `python-suite`"*. Neither listed the required contexts. It was load-bearing for every conclusion and one API call away. **An unexamined premise shared by everyone stops looking like a premise** — agreement converts it into the ground the argument stands on.
+- Two sessions reasoned all evening from *"the required context is `python-suite`"*. Neither listed the required contexts (#16087). It was load-bearing for every conclusion and one API call away. **An unexamined premise shared by everyone stops looking like a premise** — agreement converts it into the ground the argument stands on.
 - Two sessions produced wrong figures, both inside comments that carefully enumerated *other* unmeasured quantities. **The scrutiny went to the numbers each author already doubted; the number they were confident about got none** — which is anti-correlated with where the error was, because confidence is what buys the exemption from checking.
 
 So the remedy is mechanical, not attitudinal: name the selector, read the
@@ -304,6 +360,346 @@ The corollary is for whoever receives it. **An admission has to be cheaper than 
 guess, or the next one will be a guess** — so treat "I could not determine this"
 as the contribution it is, and put the effort into the gap rather than into the
 person who reported it.
+
+## Check why the exemption exists, not the thing it names
+
+An allowance was written for `@redocly/openapi-core`, justified by a careful
+upgrade-path analysis: 1.34.19 is the newest 1.x, a fix exists at 2.51.2, and
+`openapi-typescript@7.13.0` carets `^1.34.6` so 2.x is unreachable. Every clause
+of that is true.
+
+**It was also entirely beside the point.** The audit output said, one line
+beneath the range:
+
+```
+@redocly/openapi-core  <=0.0.0-snapshot.1782825774 || 1.34.8 - 1.34.19
+  Depends on vulnerable versions of js-yaml
+```
+
+Redocly had **no advisory of its own**. It was listed only for depending on
+vulnerable js-yaml, and bumping js-yaml one patch version cleared both highs at
+once. The question answered was *"is there a fixed redocly?"*. The operative
+question was *"why is redocly listed at all?"*, and the scanner had already
+answered it.
+
+Two people verified the allowance — author and reviewer — and both checked the
+**package the exemption named** rather than the **reason it was named**. The
+justification was rigorous, which is what made it convincing, and rigour applied
+one level away from the question is indistinguishable from rigour applied to it.
+
+**Before exempting anything, read why the instrument reported it.** A finding
+that arrives *through* another finding is fixed at the source, and an exemption
+written for it is a permanent exemption for a condition that was never going to
+persist.
+
+## A wrong reference that resolves
+
+Two sessions wrote an issue number before filing the issue, on the same day.
+
+One predicted `#16135` for a follow-up and filed it as `#16139`. `#16135` exists —
+it is an unrelated open issue about a 404ing landing page. A reader following that
+citation arrives somewhere real, plausible and wrong.
+
+The other — this author — wrote `(#16135)` into a commit message before filing,
+then filed and **happened to get #16135.** Same act, opposite outcome, and the
+difference was availability of the next id rather than anything either of us did.
+
+**A broken reference announces itself. A valid reference to the wrong thing does
+not.** It renders normally, carries a plausible title, and gets believed —
+so it is the more expensive of the two by a wide margin, and it is the one that
+looks fine in review.
+
+**File first, cite second.** Never write an identifier that has not been read back
+from the system that issues it. This is the same rule as the rest of this page,
+applied to a number you produced rather than one you measured: a predicted id is
+a claim about the world, and the world assigns ids without consulting you.
+
+The lucky case is the instructive one. Getting away with it produced no signal at
+all — no error, no correction, nothing to learn from — which is exactly why the
+habit survives until the day the number is taken.
+
+**And stating the rule does not install it.** One of those two sessions wrote
+*"file first, cite second — never write an issue number I have not read back from
+the API"*, and then, **in the next artefact it produced**, wrote *"Filed as
+#16140"* before filing. It filed as #16140. Correct again, and correct is the
+worst available outcome: a wrong number gets caught, a lucky one leaves a
+citation that resolves, a closure that reads as rigorous, and a habit with fresh
+evidence that it works.
+
+The diagnosis is better than the rule it corrects. **The rule was not forgotten —
+it failed where it costs something.** A citation gets written *while composing the
+reasoning that needs it*, so obeying means breaking off mid-argument to go and
+file. **A rule whose price is highest exactly when it applies gets skipped exactly
+when it applies**, and no amount of agreeing with it beforehand changes that.
+
+So the version that survives contact is not a stronger commitment, it is a
+cheaper action: **write a placeholder, finish the argument, fill it in after
+filing.** The habit has to cost less than the thing it prevents, or good intentions
+are all it will ever be made of.
+
+## A zero is a sample, not a state
+
+`gh run list --status in_progress` returned **0** while 47 runs sat queued. Read as
+a condition, that is a fleet-wide Actions stall — nothing is executing. It was not
+one. `in_progress` is a short-lived state, the query caught an instant between
+hand-offs, and a count taken minutes later showed **5**.
+
+The value was correct. It was correct *about the moment it was taken*, and the
+conclusion was about the system.
+
+**Any instantaneous count of a transient state is a sample**, and a zero sample is
+the one most likely to be read as a fact — because "none" sounds like a property
+of the system whereas "five" obviously invites "right now?". The reading is
+seductive exactly when the number is alarming.
+
+Two cheap defences, and neither requires understanding the system:
+
+- **sample twice, separated in time.** One zero is an instant; two zeroes minutes apart is closer to a claim
+- **check the complement.** Runs *completing* proves the pool is working far better than runs in-flight proves it — and completions are durable where in-flight is not
+
+The general form, which covers the whole of this page: **prefer the durable
+signal to the momentary one.** A completed run, a merged commit, a file on disk —
+these are still true when you look again. A queue position, an `in_progress`
+count, a build's `latest` pointer are all photographs of something moving, and a
+conclusion about the system drawn from one is a conclusion about a moment.
+
+## A sample from the head confirms only the head
+
+GitHub reported `NOASSERTION` for two repositories whose `LICENSE` files are
+Apache-2.0. The first reading was *"the classifier is wrong, the files are
+fine"* — reached by running `head -3` on a LICENSE, seeing
+
+```
+                                 Apache License
+                           Version 2.0, January 2004
+```
+
+and generalising to the file.
+
+Both files are **736 bytes**. That is the Apache-2.0 *notice boilerplate*, not the
+licence text; the same project's main `LICENSE` is 11,343 bytes and classifies
+without trouble. GitHub matches against full licence texts, so **`NOASSERTION` was
+the correct output for a stub.** The instrument was right and the files are
+incomplete — the exact inverse of the conclusion drawn.
+
+**A truncated read answers a question about the truncation.** `head -3` establishes
+what the first three lines say, and nothing whatever about line four onward. Its
+danger is that on a file whose opening looks canonical it returns something
+shaped exactly like confirmation, so the reader stops — and stopping is the
+failure, not the command.
+
+Two properties would have settled it in one call and neither requires reading the
+file: **its size**, against a known-good example of the same kind, and **what the
+consuming instrument actually matches on**. The second is the general form of
+asking why an instrument reported what it did rather than checking the thing it
+named.
+
+Recorded because of when it happened: this was committed **while writing up a
+finding about instruments answering narrower questions than intended**, by the
+session that had spent the day finding that failure in other people's guards.
+Knowing the pattern by name does not exempt the next command you type.
+
+## A slow queue and a hung job are the same status field
+
+Three deploys of one page produced no live site, and not one of them failed on
+content:
+
+```
+a8fad32   queued ~17 min for a runner, then marked errored
+            -- at the exact second the next push arrived
+e1cc415   build SUCCEEDED, deploy job CANCELLED two minutes later
+            -- by a POST asking for a build, sent because the row looked stuck
+```
+
+Deploys run one at a time, so **each attempt to help cancelled the work already
+in flight.** The API reported every cancellation as `Page build failed.`, duration
+`0`, error detail `null` — indistinguishable from a genuine failure, and it sent
+two sessions looking for a defect in a page that had built cleanly.
+
+**The status field cannot tell a slow queue from a stuck job.** Both show a row
+that has not moved. And the intuitive response to "not moving" — retry, re-request,
+re-push — is precisely the action that destroys the in-progress attempt. The
+instinct is not merely useless here; it is the mechanism of the failure.
+
+So the question is not *"has this stopped moving?"* but **"is anything working on
+it right now?"** — a question about a *runner*, which a status field does not
+answer and a queue-aware view does:
+
+| reads | answers |
+|---|---|
+| `pages/builds` status | what someone recorded, including cancellations, as "failed" |
+| `gh run list` | whether a runner has actually picked the job up |
+| the live URL | whether it landed |
+
+**Where an operation is exclusive, the cost of a wrong nudge is not a wasted call
+— it is the destruction of the attempt that was about to succeed.** Push once,
+then leave it alone long enough for the queue to be the explanation.
+
+## "Latest" is not a fixed referent
+
+A watcher polled `/pages/builds/latest` waiting for one build and reported
+**"still building"** for its whole lifetime. The build it was waiting on had
+**errored**. A second push arrived, `latest` re-pointed to the new build, and the
+watcher — which had never held a SHA — saw an unbroken run of `building`: first
+one build, then a different one.
+
+```
+12:13:36  a8fad32   errored     <- never observed
+12:22:01  e1cc415   building    <- what "latest" became
+watcher:  building, building, building, ... TIMEOUT
+```
+
+**The failure was not missed through inattention. It was overwritten.** The
+watcher was reading a pointer, not a thing, and nothing in the response says
+which build the status belongs to unless you compare `.commit` yourself.
+
+Related to the endpoint returning a *superset* of what you meant, and worse in
+one respect: there the extra rows are visible and you can filter them. Here the
+row you wanted is simply gone from the answer, replaced by one that looks the
+same. And the direction is the dangerous one — a superseded failure reads as
+**still working**, which prompts waiting rather than investigating.
+
+**Key a watch to the identity you care about, never to a positional alias.** Match
+the build by `.commit`, the check-run by `name` plus `started_at`, the PR by SHA.
+Any endpoint whose name is a superlative — `latest`, `head`, `current` — answers
+*"what is at this position now"*, and the position is not what you were asking
+about.
+
+## Compression drops the qualifier, with or without a relay
+
+An issue reported, correctly and in these words, *"a scoped absence"*: within
+`autobot-backend/judges/`, nothing imports `ResponseQualityEvaluator`. Its author
+anticipated the misreading and named two real importers in the body.
+
+Relayed to a second session, the path fell out — *"six judge modules and not one
+importing it"*. Relayed again to a third, it arrived as **nothing imports it**.
+Measured on base: **eight importers**, including the production KB compaction
+path the neighbouring issues are about. Zero within `judges/`, exactly as filed.
+
+**The remedies are opposite.** *Nothing imports it* is dead code: revive or
+delete. *The judge modules reimplement it* is duplicated live code: converge onto
+the one that works. So the relay did not merely lose precision — it substituted
+the weaker argument while making it sound more dramatic.
+
+The drift has a direction, and it is not symmetric:
+
+| | |
+|---|---|
+| the scoped claim | longer, needs a qualifier, invites "which directory?" |
+| the absolute claim | shorter, more striking, self-contained |
+
+Everything that makes a sentence survive retelling also strips its scope. Nobody
+adds a path back in.
+
+**And it is not a transmission defect.** The tidiest instance had no relay at all:
+a research document stated its claim bounded — *"nothing in the source's loop
+design is ahead of ours"*, six named axes, `file:line` evidence — and the index
+row summarising it said *"our loop design is ahead on every axis"*. Same session,
+same document, same sitting. Nothing was retold and the bound was still lost.
+
+So the mechanism is **compression**, and a relay is only the case where it happens
+repeatedly. Any act of shortening selects for the version without the qualifier,
+because the qualifier is the part that costs words and invites a question.
+
+Two places this bites hardest, both being *summaries of something more careful*:
+
+- **an index row**, which is the surface people scan to decide whether to open the document — so the scoping ends up in the file they then do not read
+- **a message forwarding a finding**, where each hop can shed the qualifier and none can recover it
+
+The remedy is the same in both: **the summary carries the bound, or it is not a
+summary of that claim.** Where a shortened form cannot hold the qualifier, the
+honest move is to quote the original sentence rather than compress it — a longer
+row is cheaper than an unbounded claim on the surface most likely to be read
+alone.
+
+## A number that keeps being wrong and never changes a conclusion
+
+One count was stated four times by three sessions and was wrong three of them:
+
+```
+ 6   counted from the top-level layout by eye
+11   partial count
+14   glob `*package.json` matched `browser-package.json` -- a name that ENDS with it
+13   measured
+```
+
+Four different causes, each produced by someone looking straight at the number,
+**immediately after watching the previous count fail.** Care was not the variable;
+it was maximal every time. Enumeration is where attention goes and transcription
+is where it breaks.
+
+**The tell is that being wrong never changed a conclusion.** The total was never
+the relevant denominator — three of those workspaces have no lockfile, so the
+audit could not run in them whatever the total said. The load-bearing figures,
+*seven auditable, one audited*, were correct in every version.
+
+So the remedy is not to count more carefully. **It is to delete the number.** A
+figure that cannot change the decision does not earn its place beside one that
+can, and its presence is not neutral: it is the part a reader checks, and getting
+it right feels like having checked the claim.
+
+Before publishing a count, ask which decision moves if it is wrong. If none does,
+it is decoration with the texture of evidence.
+
+## A detector built from what was found inherits its vocabulary
+
+Naming the selector governs an **empty** result. This governs a **positive** one,
+and they are mirrors: a detector written from the instances someone already found
+will match those instances and nothing else, then report a confident zero over
+everything phrased differently.
+
+A guard forbidding refusal-suppression in shipped prompts was written from the six
+strings in the tree. Probed by a session that had not seen the pattern, against
+fourteen phrasings absent from it:
+
+```
+live strings      6/6   found
+unseen phrasings  0/14  found
+```
+
+Every branch was anchored on the lemma `refuse`/`refus`. The fourteenth was the
+shipped line **with one word changed**, and it passed clean. After rewriting to
+two factors in proximity — a suppression marker near an obligation verb, or near
+a safety noun — the same corpus scored **17/17**.
+
+**So measure recall against phrasings that are not in the tree yet**, and keep the
+corpus in a **separate file from the pattern**. A detector holding its own exam
+invites the fix that makes the test pass; split, editing the detector and editing
+what it must catch are two files in the diff.
+
+The general form: *"broader than the strings I found"* is not the same as
+*"broad enough"*. The first is measured against a population the instrument
+already saw.
+
+## Satisfying a check must not cost what the check protected
+
+The cheapest way to turn a red green is usually to delete the thing being
+measured. It works, it is fast, and it destroys the value the check existed to
+defend — leaving a green that is worse than the red.
+
+A comment failed the line-number citation guard:
+
+```diff
+- # `parse_npm_audit` (pipeline-scripts/security_scan_gate.py:100) keys a
++ # `parse_npm_audit` in pipeline-scripts/security_scan_gate.py keys a
+```
+
+Deleting the citation outright would also have passed. It would also have removed
+the reader's route to *where* the allowance is coarser than it looks — which was
+the entire reason the sentence existed. **The guard forbids line numbers because
+they rot silently; it does not ask you to stop telling people where to look.**
+Keeping the symbol and the file, and dropping only the number, satisfies the rule
+and preserves the pointer — now invalidated only by a rename, which is loud.
+
+The same test applies to any red:
+
+- A test asserting a weak value (`1008`, `None`, `[]`) is fixed by asserting the **reason**, not by deleting the assertion.
+- A guard flagging a real exemption is fixed by **recording** the exemption, not by narrowing the pattern until the tree looks clean.
+- A ratchet that will not shrink is fixed by doing the work, not by raising the baseline.
+
+**Ask what the check was defending before choosing how to satisfy it.** The
+question is not *"what makes this pass"* — deletion always makes it pass. It is
+*"what does this check exist to preserve, and does my fix still preserve it?"*
 
 ## An exemption is a blind spot you can read
 

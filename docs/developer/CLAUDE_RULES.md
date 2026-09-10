@@ -237,6 +237,14 @@ Wait for user confirmation before writing code.
 - Never mix unrelated staged files — stage and commit in focused batches
 - Bulk operations: commit in batches of 10–15 files max
 - **NEVER** use `git commit --no-verify`
+- **NEVER** pass `-c core.hooksPath=…` to a git command either — it is the same rule wearing
+  different clothes (#15961). Inside a worktree `.git` is a *file*, so a relative value resolves
+  to nothing: git finds no hooks, runs none, and the commit succeeds looking **exactly** like one
+  where every hook passed. It is the more dangerous of the two, because the flag reads as
+  configuration hygiene and the resulting commit carries no trace, where the other at least names
+  itself. Git already shares hooks with every worktree through `$GIT_COMMON_DIR/hooks`, so the
+  override can only ever remove them — delete it rather than correcting its value. Guarded by
+  `repo_tests/hooks_path_override_15961_test.py`.
 
 **Bulk File Changes:**
 

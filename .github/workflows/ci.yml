@@ -5,12 +5,30 @@ name: AutoBot CI/CD Pipeline
 on:
   push:
     branches: [ main, Dev_new_gui ]
+  merge_group:
+    # #14353: every one of the ten required contexts already carries this. The
+    # two workflows that publish `python-suite` -- this one and
+    # python-required-context.yml -- were the only ones without it, so the
+    # context could never report inside a merge queue. A required context that
+    # never reports blocks forever, which is why the queue (#15937 / #14054)
+    # could not be enabled while this was missing.
   pull_request:
-    # Dev_new_gui is the integration branch every PR targets; without it the
-    # backend suite below only ran post-merge on the push trigger, so backend
+    # #14747: NO `branches:` FILTER, DELIBERATE. It used to read
+    # `[ main, Dev_new_gui ]`, which excluded STACKED pull requests -- one whose
+    # base is another feature branch. Those never triggered this workflow, so
+    # `python-suite` never ran and the Python tests for that change never
+    # executed, while the PR still showed a set of green checks from the
+    # workflows that did run. Measured on PR #14641: zero CI/CD runs.
+    #
+    # The complement shim has no `branches:` filter, so on a stacked PR WITH
+    # Python changes it correctly skips -- and with this workflow not triggering
+    # either, the context went unreported. Harmless while `python-suite` is not
+    # required; a permanent hard block the moment it is.
+    #
+    # Dev_new_gui is the integration branch every PR targets; without a trigger
+    # here the backend suite below only ran post-merge on push, so backend
     # regressions were only discovered once already on the shared branch
-    # (#10691). main kept for promotion PRs.
-    branches: [ main, Dev_new_gui ]
+    # (#10691).
     #
     # NO `pull_request.paths` FILTER — REMOVED BY #14353, DELIBERATE.
     #
