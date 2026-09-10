@@ -17,6 +17,7 @@ from typing import Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.paths import scrubbed_git_env
 from models.database import CodeSource, Setting
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,7 @@ class GitTracker:
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=scrubbed_git_env(),  # #16179
             )
             stdout, stderr = await proc.communicate()
 

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 
@@ -69,6 +70,7 @@ class BranchMetricsCollector:
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=scrubbed_git_env(),  # #16179
             )
             stdout, stderr = await proc.communicate()
             return stdout.decode(encoding="utf-8").strip(), proc.returncode
