@@ -40,15 +40,41 @@ class TrajectoryOutcome:
     task_class: str
     baseline_score: float
     candidate_score: float
-    tools_ok: bool
-    status_ok: bool
+    #: True/False are comparison results; None means the comparison never
+    #: happened, because the candidate supplied no actual side for it. The
+    #: third state is load-bearing: recording a not-compared field as True
+    #: writes a pass into the artifact for something nothing measured.
+    tools_ok: bool | None
+    status_ok: bool | None
     candidate_tools: List[str] = field(default_factory=list)
     detail: str = ""
+    #: The scorer could not produce a verdict (evaluator infrastructure failure,
+    #: `ReflectionVerdict.INDETERMINATE`). Its `candidate_score` is a
+    #: pass-through default, not a measurement of this trajectory.
+    score_indeterminate: bool = False
 
     def classify(self, epsilon: float = DEFAULT_SCORE_EPSILON) -> str:
-        """Return 'regression', 'improvement', or 'unchanged'."""
-        if not self.tools_ok or not self.status_ok:
+        """Return 'regression', 'improvement', 'unchanged', or 'unmeasured'.
+
+        `unmeasured` exists because the evaluator returns a default score when
+        its infrastructure is unavailable, and 0.7 against a 0.9 baseline is
+        arithmetically a regression while saying nothing about the candidate.
+        Reporting that as drift means a Redis outage reads as a quality failure
+        — and once one red means that, every red is discounted.
+
+        The tool and status comparisons do NOT need the scorer, so they are
+        checked first and still stand on their own during an outage. Only the
+        score half becomes unmeasured.
+
+        A tool/status value of None is not a failed comparison but an absent
+        one, so it must be tested with ``is False`` rather than falsily: under
+        ``not self.tools_ok`` a never-compared trajectory reported a regression,
+        which is a claim about the candidate drawn from never having looked.
+        """
+        if self.tools_ok is False or self.status_ok is False:
             return "regression"
+        if self.tools_ok is None or self.status_ok is None or self.score_indeterminate:
+            return "unmeasured"
         delta = self.candidate_score - self.baseline_score
         if delta < -epsilon:
             return "regression"
@@ -65,10 +91,11 @@ class TaskClassDelta:
     regressions: int = 0
     improvements: int = 0
     unchanged: int = 0
+    unmeasured: int = 0
 
     @property
     def total(self) -> int:
-        return self.regressions + self.improvements + self.unchanged
+        return self.regressions + self.improvements + self.unchanged + self.unmeasured
 
 
 @dataclass
@@ -90,6 +117,11 @@ class RegressionReport:
     def total_improvements(self) -> int:
         return sum(1 for o in self.outcomes if o.classify(self.epsilon) == "improvement")
 
+    @property
+    def total_unmeasured(self) -> int:
+        """Trajectories the scorer could not judge — neither pass nor regression."""
+        return sum(1 for o in self.outcomes if o.classify(self.epsilon) == "unmeasured")
+
     def per_class(self) -> Dict[str, TaskClassDelta]:
         """Group outcomes into per-task-class regression/improvement counts."""
         deltas: Dict[str, TaskClassDelta] = {}
@@ -100,6 +132,8 @@ class RegressionReport:
                 delta.regressions += 1
             elif verdict == "improvement":
                 delta.improvements += 1
+            elif verdict == "unmeasured":
+                delta.unmeasured += 1
             else:
                 delta.unchanged += 1
         return deltas
@@ -111,6 +145,7 @@ class RegressionReport:
                 "trajectories": len(self.outcomes),
                 "regressions": self.total_regressions,
                 "improvements": self.total_improvements,
+                "unmeasured": self.total_unmeasured,
                 "has_regressions": self.has_regressions,
             },
             "per_task_class": {
@@ -118,6 +153,7 @@ class RegressionReport:
                     "regressions": d.regressions,
                     "improvements": d.improvements,
                     "unchanged": d.unchanged,
+                    "unmeasured": d.unmeasured,
                 }
                 for name, d in self.per_class().items()
             },
@@ -140,12 +176,26 @@ class RegressionReport:
         """Render a human-readable pass/regress report."""
         lines = ["# Trajectory eval — candidate vs baseline", ""]
         head = "REGRESSIONS FOUND" if self.has_regressions else "no regressions"
-        lines.append(f"**{self.total_regressions} regressions, {self.total_improvements} improvements** ({head})")
+        lines.append(
+            f"**{self.total_regressions} regressions, {self.total_improvements} improvements, "
+            f"{self.total_unmeasured} unmeasured** ({head})"
+        )
+        if self.total_unmeasured:
+            # Stated up front rather than inferred from a table: an unmeasured
+            # trajectory is not a passing one, and "no regressions" above is a
+            # claim about the ones that could be judged.
+            lines.append("")
+            lines.append(
+                f"> {self.total_unmeasured} trajectory/ies could not be scored — the evaluator returned "
+                "no verdict. Their tool and status checks still count; their quality scores assert nothing."
+            )
         lines.append("")
-        lines.append("| Task class | Regressions | Improvements | Unchanged |")
-        lines.append("| --- | --- | --- | --- |")
+        lines.append("| Task class | Regressions | Improvements | Unchanged | Unmeasured |")
+        lines.append("| --- | --- | --- | --- | --- |")
         for name, d in sorted(self.per_class().items()):
-            lines.append(f"| {_md_escape(name)} | {d.regressions} | {d.improvements} | {d.unchanged} |")
+            lines.append(
+                f"| {_md_escape(name)} | {d.regressions} | {d.improvements} | {d.unchanged} | {d.unmeasured} |"
+            )
         lines.append("")
         for outcome in self.outcomes:
             verdict = outcome.classify(self.epsilon).upper()
