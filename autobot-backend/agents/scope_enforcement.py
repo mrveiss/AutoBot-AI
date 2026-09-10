@@ -32,6 +32,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
+import re
 from dataclasses import dataclass
 from typing import AsyncIterator, Sequence
 
@@ -50,6 +52,10 @@ logger = get_logger(__name__)
 #: full third of the window to recover before the claim lapses. Renewing at the
 #: TTL itself would mean the first missed renew loses the scope mid-run.
 _RENEW_DIVISOR = 3
+
+#: Long enough to stay readable in a claim table, short enough that a Redis key
+#: built from several of them stays sane.
+_MAX_SEGMENT = 80
 
 
 @dataclass(frozen=True)
@@ -106,6 +112,29 @@ async def _acquire_all(scopes: Sequence[str], *, agent_id: str, task_id: str, in
             return ScopesHeld(claims=(), conflict=outcome)
         taken.append(outcome)
     return ScopesHeld(claims=tuple(taken))
+
+
+def scope_segment(text: str) -> str:
+    """Turn arbitrary text into one scope segment the grammar will accept.
+
+    Scopes are `<kind>:<segment>/<segment>` with segments matching
+    `[A-Za-z0-9._@+-]+`, but the things agents write are named by humans -- a
+    knowledge-base title, a topic, a filename with spaces. Declaring a scope
+    therefore needs a normalisation step, and it needs one that CANNOT fail:
+    an agent whose declaration raises would be an agent that stops working
+    because someone used an apostrophe.
+
+    So the fallback is a hash rather than an exception or an empty string.
+    Empty would mean "declared nothing", which is silently no protection at
+    exactly the inputs that are strangest -- the failure mode this module
+    exists to remove. A hash is opaque to a human reading the claim table, but
+    it is stable, unique, and it still collides for two agents writing the same
+    title, which is the collision that matters.
+    """
+    cleaned = re.sub(r"[^A-Za-z0-9._@+-]+", "-", text).strip("-")
+    if cleaned:
+        return cleaned[:_MAX_SEGMENT]
+    return "x-" + hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
 def refused_response(request, conflict: ClaimConflict, *, agent_type: str):
