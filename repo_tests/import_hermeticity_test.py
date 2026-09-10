@@ -247,7 +247,13 @@ def test_a_sibling_directory_is_outside_the_tree() -> None:
     """
     sibling = str(_REPO_ROOT) + "-sibling"
     assert not str(_REPO_ROOT).endswith(os.sep), "repo root should not carry a trailing separator"
-    assert sibling.startswith(str(_REPO_ROOT)), "the fixture must be a prefix, or it tests nothing"
+    # NOT `sibling.startswith(_REPO_ROOT)` -- true by construction, so it asserts
+    # nothing. The property that makes this fixture discriminating is the opposite:
+    # a string prefix that is NOT a child. If it ever became a child, the test would
+    # pass for the wrong reason.
+    assert not sibling.startswith(
+        str(_REPO_ROOT) + os.sep
+    ), "the fixture must be a sibling, not a child, or it does not test the prefix case"
     with tempfile.TemporaryDirectory() as tmp:
         sandbox = _sandbox(tmp)
         Path(tmp, "planted_sibling.py").write_text(
