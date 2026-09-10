@@ -37,7 +37,6 @@ KNOWN_UNGATED: frozenset[str] = frozenset(
         "api.knowledge_suggestions",
         "api.redis",
         "api.transcriber",
-        "api.user_management.router",
         "api.wake_word",
         "services.knowledge_sync_service",
     }
@@ -232,3 +231,47 @@ def test_gated_does_not_claim_identity_verification() -> None:
             "api.voice_stream's evidence no longer names an origin check -- the AC3 "
             "distinction may now be modelled; if so, update this test and the docstring"
         )
+
+
+def test_an_aggregator_is_judged_by_what_it_mounts() -> None:
+    """A router that defines no routes must not be reported UNGATED (#16187).
+
+    `api/user_management/router.py` is 24 lines that mount four sub-routers and
+    declare nothing of their own. Reading it alone finds no gates -- correctly,
+    since there is nothing there to gate -- and the sweep reported UNGATED for a
+    module with zero routes.
+
+    That is the fourth distinct way a gate escaped this sweep, and the only one
+    where the verdict was about the wrong FILE rather than the wrong depth.
+    """
+    verdicts = {v.module: v for v in enumerate_routers(repo_root())}
+    aggregator = verdicts.get("api.user_management.router")
+    assert aggregator is not None, "api.user_management.router is no longer registered"
+
+    assert aggregator.gated, (
+        "the aggregator reports ungated. Its four mounted routers "
+        "(users, teams, organizations, password_change) each gate on "
+        "Depends(get_user_service) -> get_tenant_context -> get_current_user."
+    )
+    assert any(
+        "aggregator" in e for e in aggregator.evidence
+    ), f"evidence should name the mounted routers, got: {aggregator.evidence}"
+
+
+def test_the_resolution_depth_is_declared_not_merely_chosen() -> None:
+    """An UNGATED verdict is a claim about the SWEEP's reach, not about the tree.
+
+    Four misses, each because a gate sat further away than the resolver reached:
+    locally defined (0 hops), non-auth import path (1), service chain (2),
+    aggregator (a different file entirely). Raising the number each time treats
+    the symptom; the number being VISIBLE is what stops the next reader mistaking
+    "not gated within N hops" for "not gated".
+    """
+    from repo_tests.router_auth_enumerator import MAX_DEPENDENCY_HOPS
+
+    assert MAX_DEPENDENCY_HOPS >= 3, "the measured chain needs 2 hops; 3 leaves one spare"
+    source = (repo_root() / "repo_tests" / "router_auth_enumerator.py").read_text(encoding="utf-8")
+    assert "MAX_DEPENDENCY_HOPS" in source.split('"""')[1], (
+        "the module docstring must state the depth limit -- a reach nobody can read "
+        "is the defect this module exists to detect"
+    )
