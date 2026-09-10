@@ -144,9 +144,15 @@ def _discover(root: Path) -> list[tuple[str, str]]:
 REACH = declare(
     "import-hermeticity",
     discover=_discover,
-    floor=590,
+    # Measured, not felt (#16199 review): this population grows with ordinary work --
+    # 504 modules at e47e4eb02 (~12 Jul), 556 at eef2b3a3e (~11 Aug), 608 on 10 Sep,
+    # about 52 per 30 days. A band of 20 would fail an unrelated PR within days, so
+    # growth covers a little over a month of that rate; the floor sits just under
+    # today's count. Losing a whole root is caught separately: the population test
+    # requires every root to contribute.
+    floor=600,
     what="non-test modules under api/ and autobot_shared/, both backends",
-    growth=20,
+    growth=60,
 )
 
 
