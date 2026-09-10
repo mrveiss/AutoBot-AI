@@ -28,6 +28,11 @@ python:
   - 'pyproject.toml'
   - 'autobot_shared/pyproject.toml'
   - '.github/workflows/ci.yml'
+  # Read by repo_tests/duplication_guard_names_the_failing_scope_test.py.
+  # Without this the regression test for the attribution fix can itself be
+  # bypassed: a PR touching only this workflow computes `python != true`,
+  # python-suite reports green, and the test guarding it never runs.
+  - '.github/workflows/duplication-guard.yml'
   # The shim gates a required context, so editing it must run the real suite for
   # the same reason editing ci.yml does.
   - '.github/workflows/python-required-context.yml'
