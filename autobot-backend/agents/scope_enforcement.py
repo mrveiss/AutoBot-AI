@@ -125,12 +125,21 @@ async def _acquire_all(scopes: Sequence[str], *, agent_id: str, task_id: str, in
     from autobot_shared.coordination.work_claims import try_acquire
 
     taken: list[Claim] = []
-    for scope in scopes:
-        outcome = await try_acquire(scope, agent_id=agent_id, task_id=task_id, mode=ClaimMode.EXCLUSIVE, intent=intent)
-        if isinstance(outcome, ClaimConflict):
-            await _release_all([c.scope for c in taken], agent_id=agent_id, task_id=task_id)
-            return ScopesHeld(claims=(), conflict=outcome)
-        taken.append(outcome)
+    try:
+        for scope in scopes:
+            outcome = await try_acquire(
+                scope, agent_id=agent_id, task_id=task_id, mode=ClaimMode.EXCLUSIVE, intent=intent
+            )
+            if isinstance(outcome, ClaimConflict):
+                await _release_all([c.scope for c in taken], agent_id=agent_id, task_id=task_id)
+                return ScopesHeld(claims=(), conflict=outcome)
+            taken.append(outcome)
+    except BaseException:
+        # A raise mid-loop -- a malformed later scope (ScopeError from Scope.parse)
+        # or a store error -- must not strand the scopes already taken until their
+        # TTL: "every scope or none" holds on the raising path too (#16213 review).
+        await _release_all([c.scope for c in taken], agent_id=agent_id, task_id=task_id)
+        raise
     return ScopesHeld(claims=tuple(taken))
 
 
