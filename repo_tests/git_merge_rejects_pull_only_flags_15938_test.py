@@ -174,7 +174,29 @@ def test_the_base_ref_is_registered_and_distinct_from_the_build_branch() -> None
     for the second would be correct today and wrong the moment a deployment runs
     from anything but the base -- the reuse itself is the defect, not the value.
     """
-    registry = (repo_root() / "autobot_shared" / "env_registry.py").read_text(encoding="utf-8")
+    # Follows the core module's IMPORTS rather than globbing the directory, and
+    # that is the stronger check as well as the one that does not need a reach
+    # floor: it proves the sibling holding the variable is actually imported, so
+    # the registration executes. A glob would pass on a module nobody loads.
+    #
+    # The first version asserted against `env_registry.py` alone and broke the
+    # moment the variable moved to its domain sibling -- which is where that
+    # file's own docstring says a new one belongs, since it is at its ceiling and
+    # may not grow (#14236). The guard had encoded a LOCATION where the contract
+    # is "registered in a module the registry imports".
+    core_path = repo_root() / "autobot_shared" / "env_registry.py"
+    core = core_path.read_text(encoding="utf-8")
+    sources = [core]
+    for module in re.findall(r"from autobot_shared import (env_registry_\w+)", core):
+        sibling = core_path.with_name(f"{module}.py")
+        if sibling.exists():
+            sources.append(sibling.read_text(encoding="utf-8"))
+    assert len(sources) > 1, (
+        "env_registry.py imports no env_registry_* siblings — either the split was "
+        "undone or this parse stopped matching, and a scan that reaches only the core "
+        "file cannot tell those apart from a variable that is genuinely missing."
+    )
+    registry = "\n".join(sources)
     assert 'name="AUTOBOT_WORKSPACE_BASE_REF"' in registry, (
         "AUTOBOT_WORKSPACE_BASE_REF must be declared in the env registry — an env var "
         "read but never registered is invisible to every tool that enumerates config."
