@@ -84,6 +84,36 @@ CLAIM_TTL_S = env_int_clamped("AUTOBOT_WORK_CLAIM_TTL_S", 300, min_v=10, max_v=3
 #: Namespaces a scope can name. A claim never spans two of them.
 VALID_KINDS = frozenset({"path", "kb", "device", "project", "config"})
 
+#: Kinds this module deliberately refuses, and where each belongs instead.
+#:
+#: Being absent from :data:`VALID_KINDS` is not the same as being reserved.
+#: Absent produces "unknown scope kind", which is what a typo produces, so a
+#: caller reaching for ``task:`` here was told only that it had not been heard
+#: of -- and could not tell a decision from a gap. The owner ruling on #15957
+#: made the split permanent, so the refusal now names the reason and the
+#: destination.
+RESERVED_KINDS = {
+    "task": "task identity belongs to services.task_claim, not to work_claims: "
+    "a claim on the task is not a claim on the work the task touches, and one "
+    "agent can hold a task while touching scopes it never claimed (#15957)",
+}
+
+
+def _require_kind(kind: str) -> None:
+    """Refuse a kind reserved for another module, or one that is not a kind.
+
+    One function for every entry point that names a kind, so ``Scope.parse``
+    and :func:`list_claims` cannot drift into giving ``task`` two different
+    answers. Reserved is checked first: reaching that arm means the caller had
+    a real concept in mind, and "unknown kind" would answer a question they did
+    not ask.
+    """
+    if kind in RESERVED_KINDS:
+        raise ScopeError(f"scope kind {kind!r} is reserved: {RESERVED_KINDS[kind]}")
+    if kind not in VALID_KINDS:
+        raise ScopeError(f"unknown scope kind {kind!r}; kinds are {sorted(VALID_KINDS)}")
+
+
 _SEGMENT = re.compile(r"^[A-Za-z0-9._@+-]+$")
 _CLAIM_PREFIX = "work_claims:c:{kind}:"
 _INDEX_KEY = "work_claims:idx:{kind}"
@@ -132,16 +162,17 @@ class Scope:
         """Parse *raw*, rejecting anything the overlap rule could not compare.
 
         Raises:
-            ScopeError: unknown kind, empty or malformed path, ``.``/``..`` or
-                empty segments, or characters outside ``[A-Za-z0-9._@+-]``.
+            ScopeError: a kind reserved for another module (see
+                :data:`RESERVED_KINDS`), an unknown kind, empty or malformed
+                path, ``.``/``..`` or empty segments, or characters outside
+                ``[A-Za-z0-9._@+-]``.
         """
         if isinstance(raw, Scope):
             return raw
         kind, sep, path = raw.partition(":")
         if not sep:
             raise ScopeError(f"scope {raw!r} has no '<kind>:' prefix; kinds are {sorted(VALID_KINDS)}")
-        if kind not in VALID_KINDS:
-            raise ScopeError(f"unknown scope kind {kind!r}; kinds are {sorted(VALID_KINDS)}")
+        _require_kind(kind)
         segments = path.split("/")
         if not path or any(not s for s in segments):
             raise ScopeError(f"scope {raw!r} has an empty path segment")
@@ -443,8 +474,7 @@ async def list_claims(kind: str | None = None) -> list[Claim]:
     kinds = sorted(VALID_KINDS) if kind is None else [kind]
     claims: list[Claim] = []
     for k in kinds:
-        if k not in VALID_KINDS:
-            raise ScopeError(f"unknown scope kind {k!r}; kinds are {sorted(VALID_KINDS)}")
+        _require_kind(k)
         index, prefix = _INDEX_KEY.format(kind=k), _CLAIM_PREFIX.format(kind=k)
         members = [m.decode() if isinstance(m, bytes) else m for m in await client.smembers(index)]
         if not members:

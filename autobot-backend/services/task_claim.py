@@ -18,6 +18,26 @@ Claim lifecycle:
 
 The in-memory dicts in DistributedAgentManager remain as an observability
 cache, not the source of truth for claim ownership.
+
+Not to be merged into ``autobot_shared.coordination.work_claims`` (#15957,
+owner ruling 2026-09-10). The two look like duplication and are not:
+
+* **This module claims the task itself.** ``work_claims`` claims the *work a
+  task touches* -- paths, kb, devices. Two agents can hold claims on different
+  scopes while working the same task, and one agent can hold a task while
+  touching scopes it never claimed. ``task`` is therefore a reserved kind in
+  that module rather than a valid one, and asking it for a ``task:`` scope
+  raises with a pointer back here.
+* **This module emits audit; that one cannot.** Every outcome here reaches
+  ``services.audit.audit`` -- including ``redis_unavailable`` and
+  ``redis_error``. ``autobot_shared`` must not import from ``autobot-backend``,
+  so an adapter could not move that emission down; it would leave a backend-side
+  wrapper still owning audit, signatures and tests. The same constraint already
+  put ``services/claim_yield.py`` (#15948) in this package rather than beside
+  the primitive it extends.
+
+The shared half is roughly 40 lines of Lua, which is not worth a migration
+across a live double-pickup guard.
 """
 
 from __future__ import annotations

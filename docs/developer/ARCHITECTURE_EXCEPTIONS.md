@@ -301,3 +301,48 @@ above.
 **Grep check:** `grep -c '<script' autobot-slm-backend/static/recovery.html`
 should show the page has no `<script src=` — everything it loads is inline
 in the same file, never fetched from a bundler-produced path.
+
+---
+
+## `task_claim` / `work_claims` — Two Redis Claim Primitives, Kept Separate
+
+**Files:** `autobot-backend/services/task_claim.py`, `autobot_shared/coordination/work_claims.py`
+**Issue:** #15957 (owner ruling, 2026-09-10)
+
+**Pattern bypassed:** "Reuse from `autobot_shared/` — one canonical
+implementation per concept; consolidate, never fork."
+
+**Reason:** They look like one concept implemented twice — both are
+owner-checked, TTL-bounded Redis claims — and they are two concepts.
+`task_claim` claims **the task itself**; `work_claims` claims **the work a task
+touches** (paths, kb entries, devices, projects, config). Two agents can hold
+claims on different scopes while working the same task, and one agent can hold
+a task while touching scopes it never claimed. Collapsing them would make the
+answer to one question read as the answer to the other.
+
+The structural reason makes an adapter worse, not merely unnecessary.
+`task_claim` emits audit on every outcome, including `redis_unavailable` and
+`redis_error`. `work_claims` emits none and cannot: `autobot_shared` must not
+import from `autobot-backend`. An adapter could not move emission down, so it
+would leave a backend-side wrapper still owning audit, signatures and tests —
+the same constraint that already put `services/claim_yield.py` (#15948) in the
+backend package rather than beside the primitive it extends. The code actually
+shared is roughly 40 lines of Lua, not worth a migration across a live
+double-pickup guard.
+
+**How the split is enforced:** `task` is a **reserved** kind in `work_claims`,
+not merely an absent one. Absent produced "unknown scope kind" — the same
+answer a typo gets — so a caller reaching for `task:` could not tell a decision
+from a gap. `RESERVED_KINDS` now refuses it with the reason and the destination,
+through `_require_kind`, which both `Scope.parse` and `list_claims` call so the
+two entry points cannot drift apart. Both module docstrings state the split.
+
+**Revisit when:** `autobot_shared` gains an audit sink that does not import
+from `autobot-backend`. That removes the structural half of this reason; the
+conceptual half (task identity vs work scope) would still need arguing on its
+own merits.
+
+**Grep check:** `grep -n '"task"' autobot_shared/coordination/work_claims.py`
+should show `task` only as a `RESERVED_KINDS` key, never inside `VALID_KINDS`;
+`grep -c 'from services' autobot_shared/coordination/work_claims.py` should be
+`0`.
