@@ -51,9 +51,13 @@ ALLOWLIST = {
     # asserting that the six sites survive it; scrubbing there would make the
     # suite assert nothing and pass.
     "repo_tests/git_repo_root_scrub_test.py",
-    # scripts/lib/git-root.sh IS the scrub -- its one raw call is the
-    # implementation `git_repo_root` wraps, run inside a subshell with
-    # GIT_ROOT_AMBIENT_VARS unset (#15245).
+    # scripts/lib/git-root.sh IS the scrub -- its raw calls ARE the
+    # implementations the helpers wrap, each run inside a subshell with
+    # GIT_ROOT_AMBIENT_VARS unset: `rev-parse --show-toplevel` under
+    # `git_repo_root` (#15245) and `ls-files` under `git_tracked_files`
+    # (#15506). Said as a count until the second one arrived, which is the
+    # kind of comment that goes quietly wrong -- it is now phrased so adding
+    # a third helper does not falsify it.
     "scripts/lib/git-root.sh",
     # #15246 already scrubbed this file's entire process environment
     # (`unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE` up front,
