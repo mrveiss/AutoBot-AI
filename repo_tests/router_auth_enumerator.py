@@ -20,6 +20,15 @@ detector that models three of them reports the fourth as a hole.
 (140 imports), and that one omission produced fifteen false findings. So the
 names come from what the auth modules export, measured from the tree.
 
+RESOLUTION DEPTH IS ``MAX_DEPENDENCY_HOPS`` (3), AND THE VERDICT SAYS SO.
+An ``UNGATED`` verdict means *not gated within that many dependency hops* -- it is
+a claim about this sweep's reach, not a fact about the tree. The sweep has been
+wrong four times, each because a gate sat further away than the resolver reached:
+defined locally (0 hops), imported from a non-auth path (1), behind a service
+chain (2), and mounted in an aggregator that declares no routes at all. Raising
+the number treats the symptom; stating it is what stops the next reader mistaking
+the two.
+
 This module answers *which routers are gated and how*. It deliberately does not
 report a bare count: three counts that disagree are worth less than one table a
 reader can check a row of.
@@ -109,6 +118,33 @@ class Verdict:
     @property
     def gated(self) -> bool:
         return bool(self.mechanisms)
+
+
+#: Parsed modules, keyed on resolved path. Chain resolution revisits the same
+#: dependency modules for many routers -- `dependencies.py` alone is reached from
+#: most of `api/user_management/*` -- so without this the sweep re-parses the same
+#: files dozens of times.
+#:
+#: Measured before adding it: 21.7s for one `enumerate_routers`, and SIX tests call
+#: it, which is 130s of identical work against a 128s pre-push budget. The guard
+#: was not slow because it does a lot; it was slow because it did the same thing
+#: repeatedly (#16182, #16187).
+_PARSED: dict[str, ast.Module | None] = {}
+
+#: One enumeration per root, for the same reason: the tests below ask the same
+#: question and were each paying for the answer.
+_ENUMERATED: dict[str, list["Verdict"]] = {}
+
+
+def _parse_cached(path: Path) -> ast.Module | None:
+    """Parse *path* once per process, returning None if it cannot be read."""
+    key = str(path.resolve())
+    if key not in _PARSED:
+        try:
+            _PARSED[key] = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            _PARSED[key] = None
+    return _PARSED[key]
 
 
 def auth_vocabulary(root: Path) -> set[str]:
@@ -221,33 +257,113 @@ def _local_gates(tree: ast.Module, vocabulary: set[str]) -> set[str]:
     return gates
 
 
-def _imported_gates(tree: ast.Module, root: Path, vocabulary: set[str]) -> set[str]:
-    """Names imported from ANY module whose definition there reaches a primitive.
+#: How many dependency hops resolution follows, and why the number is declared
+#: rather than merely chosen.
+#:
+#: The sweep has been wrong THREE times in the same direction, each time because a
+#: gate sat further away than the resolver reached:
+#:
+#:   0 hops  api/service_messages.py           `_check_admin` defined locally
+#:   1 hop   api/user_provider_credentials.py  imported from a non-auth path
+#:   2 hops  api/user_management/users.py      route -> get_user_service
+#:                                                   -> get_tenant_context
+#:                                                   -> get_current_user
+#:
+#: The first two were caught in review; the third by following up on that fix. So
+#: the lesson is not "the number should be bigger" -- it is that an UNGATED verdict
+#: must SAY what its reach was, or it reads as a fact about the tree rather than a
+#: fact about the sweep. `Verdict.depth_limit` carries it into every report (#16187).
+MAX_DEPENDENCY_HOPS = 3
 
-    `api/user_provider_credentials.py` gates every route with
-    `Depends(get_current_user_id)`, imported from `api.user_management.dependencies`
-    -- a path containing none of auth/security/permission/rbac. That function's own
-    signature is `Depends(get_current_user)` and it raises 401. Reported UNGATED by
-    the first version, and singled out in the issue as wanting attention first,
-    because the import PATH was the filter rather than the behaviour.
+
+def _resolve_gate_chain(
+    name: str,
+    module: str | None,
+    root: Path,
+    vocabulary: set[str],
+    seen: set[tuple[str, str]],
+    depth: int,
+) -> bool:
+    """Whether *name* reaches an auth primitive within the remaining depth.
+
+    Follows `Depends(X)` from a route into X's own signature and body, then into
+    whatever X depends on, to `MAX_DEPENDENCY_HOPS`.
+
+    `seen` is a cycle guard, and it is not optional: dependency graphs here are
+    recursive in practice, and an unbounded walk would HANG the guard rather than
+    fail it -- a guard that never returns is worse than one that returns wrong,
+    because nothing reports it.
+    """
+    if depth <= 0:
+        return False
+    key = (module or "", name)
+    if key in seen:
+        return False
+    seen.add(key)
+
+    candidates: list[Path] = []
+    if module:
+        candidate = root / BACKEND / (module.replace(".", "/") + ".py")
+        if candidate.is_file():
+            candidates.append(candidate)
+
+    for path in candidates:
+        tree = _parse_cached(path)
+        if tree is None:
+            continue
+        imports = {
+            alias.asname or alias.name: node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module
+            for alias in node.names
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.name != name:
+                continue
+            reached = _calls_named(node, vocabulary) - ACCESSOR_NOT_DECISION
+            if reached:
+                return True
+            # Not a gate itself -- follow what IT depends on, one level further.
+            for referenced in _depends_names(node):
+                if _resolve_gate_chain(referenced, imports.get(referenced, module), root, vocabulary, seen, depth - 1):
+                    return True
+    return False
+
+
+def _depends_names(node: ast.AST) -> set[str]:
+    """Names appearing inside a `Depends(...)` anywhere under *node*."""
+    found = set()
+    for inner in ast.walk(node):
+        if not isinstance(inner, ast.Call):
+            continue
+        if (getattr(inner.func, "id", "") or getattr(inner.func, "attr", "")) != "Depends":
+            continue
+        for arg in inner.args:
+            ident = getattr(arg, "id", "") or getattr(arg, "attr", "")
+            if ident:
+                found.add(ident)
+    return found
+
+
+def _imported_gates(tree: ast.Module, root: Path, vocabulary: set[str]) -> set[str]:
+    """Names this module imports that reach a primitive within MAX_DEPENDENCY_HOPS.
+
+    `api/user_provider_credentials.py` gates on `get_current_user_id`, imported
+    from `api.user_management.dependencies` -- a path containing none of
+    auth/security/permission/rbac, so path-based derivation never saw it.
+
+    `api/user_management/users.py` needs TWO hops: the route depends on
+    `get_user_service`, which depends on `get_tenant_context`, which depends on
+    `get_current_user`. One-hop resolution reported it ungated, and it is not.
     """
     gates = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.ImportFrom) or not node.module:
             continue
-        candidate = root / BACKEND / (node.module.replace(".", "/") + ".py")
-        if not candidate.is_file():
-            continue
-        try:
-            source = ast.parse(candidate.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, SyntaxError):
-            continue
-        wanted = {a.asname or a.name for a in node.names}
-        for defined in ast.walk(source):
-            if not isinstance(defined, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            if defined.name in wanted and (_calls_named(defined, vocabulary) - ACCESSOR_NOT_DECISION):
-                gates.add(defined.name)
+        for alias in node.names:
+            name = alias.asname or alias.name
+            if _resolve_gate_chain(name, node.module, root, vocabulary, set(), MAX_DEPENDENCY_HOPS):
+                gates.add(name)
     return gates
 
 
@@ -320,6 +436,37 @@ def _inline(tree: ast.Module, vocabulary: set[str]) -> set[str]:
 MIDDLEWARE_UNKNOWN = True
 
 
+def _included_modules(tree: ast.Module) -> set[str]:
+    """Modules whose routers this one mounts via `include_router`.
+
+    `api/user_management/router.py` is 24 lines that mount four sub-routers and
+    define NO routes of their own. Classifying it alone finds no gates -- correctly,
+    since it has nothing to gate -- and the sweep reported UNGATED for a module with
+    zero routes.
+
+    That is the fourth distinct way a gate has escaped this sweep, and the most
+    misleading: the others missed a gate that existed, this one reported on a file
+    where neither routes nor gates live (#16187).
+    """
+    mounted = set()
+    imports = {
+        alias.asname or alias.name: node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module
+        for alias in node.names
+    }
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if (getattr(node.func, "attr", "") or getattr(node.func, "id", "")) != "include_router":
+            continue
+        for arg in node.args:
+            ident = getattr(arg, "id", "") or getattr(arg, "attr", "")
+            if ident in imports:
+                mounted.add(imports[ident])
+    return mounted
+
+
 def classify(root: Path, alias: str, module: str, vocabulary: set[str]) -> Verdict:
     """Decide one router, recording which mechanism produced the verdict."""
     relative = f"{BACKEND}/{module.replace('.', '/')}.py"
@@ -341,6 +488,26 @@ def classify(root: Path, alias: str, module: str, vocabulary: set[str]) -> Verdi
     # Without this, a gate is invisible whenever it is spelled locally or lives
     # behind an import path that does not contain an auth-ish word (#15745).
     local = vocabulary | _local_gates(tree, vocabulary) | _imported_gates(tree, root, vocabulary)
+
+    # An aggregator defines no routes: classify what it MOUNTS instead, or the
+    # verdict describes a file where neither routes nor gates live (#16187).
+    included = _included_modules(tree)
+    if included and not _per_route(tree, local) and not _router_level(tree, local):
+        sub = [classify(root, alias, name, vocabulary) for name in sorted(included)]
+        readable = [v for v in sub if not v.unreadable]
+        if readable:
+            verdict.mechanisms = ["aggregator"]
+            gated = [v for v in readable if v.gated]
+            verdict.evidence = [
+                f"aggregator: {len(gated)}/{len(readable)} mounted routers gated "
+                f"({', '.join(v.module.rsplit('.', 1)[-1] for v in readable)})"
+            ]
+            if len(gated) != len(readable):
+                verdict.mechanisms = []
+                ungated = [v.module for v in readable if not v.gated]
+                verdict.evidence = [f"aggregator: mounted router(s) UNGATED -- {', '.join(ungated)}"]
+            return verdict
+
     for label, found in (
         ("router-level", _router_level(tree, local)),
         ("per-route", _per_route(tree, local)),
@@ -353,6 +520,13 @@ def classify(root: Path, alias: str, module: str, vocabulary: set[str]) -> Verdi
 
 
 def enumerate_routers(root: Path) -> list[Verdict]:
-    """Every registered router, classified. The table, not a count."""
-    vocabulary = auth_vocabulary(root)
-    return [classify(root, alias, module, vocabulary) for alias, module in registered_routers(root)]
+    """Every registered router, classified. The table, not a count.
+
+    Memoised per root: six tests ask this question and each was paying 21.7s for
+    the same answer, which alone exceeded the pre-push budget (#16182).
+    """
+    key = str(root.resolve())
+    if key not in _ENUMERATED:
+        vocabulary = auth_vocabulary(root)
+        _ENUMERATED[key] = [classify(root, alias, module, vocabulary) for alias, module in registered_routers(root)]
+    return _ENUMERATED[key]
