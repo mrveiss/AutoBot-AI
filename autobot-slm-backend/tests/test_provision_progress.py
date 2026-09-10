@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.eventually import eventually
+
 # Ensure autobot-slm-backend is on sys.path for direct test runs.
 _slm_root = Path(__file__).parent.parent
 if str(_slm_root) not in sys.path:
@@ -229,9 +231,10 @@ class TestTaskProgressTracker:
 
         tracker = TaskProgressTracker("pip install torch", bad_callback, heartbeat_interval=1)
         async with tracker:
-            await asyncio.sleep(2.5)
+            # Wait on the count, not a 2.5 s window a busy runner can fill with one beat (#16009).
+            await eventually(lambda: call_count >= 2)
 
-        # Should have attempted at least 2 heartbeats without crashing
+        # Attempted at least 2 heartbeats without crashing
         assert call_count >= 2
 
     @pytest.mark.asyncio
@@ -244,6 +247,6 @@ class TestTaskProgressTracker:
 
         tracker = TaskProgressTracker("docker pull ubuntu", callback, heartbeat_interval=1)
         async with tracker:
-            await asyncio.sleep(3.5)
+            await eventually(lambda: len(received) >= 3)  # not a fixed 3.5 s window (#16009)
 
         assert len(received) >= 3, f"Expected at least 3 heartbeats, got {len(received)}"
