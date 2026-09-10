@@ -24,7 +24,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
-from autobot_shared.ssot_config import config
 from api.node_ssh_helpers import (  # noqa: F401  # used by test-connection below
     _build_key_ssh_command,
     _build_password_ssh_command,
@@ -32,6 +31,7 @@ from api.node_ssh_helpers import (  # noqa: F401  # used by test-connection belo
     _build_ssh_success_response,
     _handle_file_not_found_error,
 )
+from autobot_shared.ssot_config import config
 from models.database import (
     Certificate,
     CodeStatus,
