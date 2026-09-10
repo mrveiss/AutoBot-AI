@@ -156,8 +156,13 @@ def _shell_scripts_without_an_extension(root: Path) -> list[str]:
 #: passing having read a fraction of its population. A floor below the population
 #: catches only the collapse; partial loss is the failure that actually happens.
 #:
-#: `skips=1` is **measured, not estimated**: one of the 6,413 discovered files
-#: cannot be completed, so `completed()` reports 6412. The floor sits at what the
+#: `skips=1` is **measured, not named by inference**: the one skip is THIS FILE,
+#: which exempts itself at `EXEMPT` below so its own fixtures do not read as
+#: offenders. It is an exclusion BY DESIGN, not a read failure -- 0 of the
+#: other 6412 raise OSError or UnicodeDecodeError, so that branch is currently
+#: dead. Saying "cannot be completed" would describe incapacity where the
+#: mechanism is a deliberate exemption, and a skip nobody can name is a guess
+#: wearing a measurement's clothes. `completed()` therefore reports 6412. The floor sits at what the
 #: guard FINISHES, not at what it finds -- the number that would have been wrong
 #: here, and the reason the first ratchet attempt raised ReachFloorError. Every other
 #: reads cleanly as UTF-8, so the `except (OSError, UnicodeDecodeError)` branch is
