@@ -436,6 +436,39 @@ def _inline(tree: ast.Module, vocabulary: set[str]) -> set[str]:
 MIDDLEWARE_UNKNOWN = True
 
 
+#: Names that REGISTER a route when used as a decorator. Only decorator position
+#: counts: `.get` is also how every dict in the tree is read, so a bare call scan
+#: would report routes in files that have none.
+ROUTE_DECORATORS: frozenset[str] = frozenset(
+    {"get", "post", "put", "patch", "delete", "head", "options", "trace", "websocket", "api_route"}
+)
+
+#: The same registration done as a plain call rather than a decorator. These are
+#: unambiguous, so they count wherever they appear.
+ROUTE_ADDERS: frozenset[str] = frozenset({"add_api_route", "add_websocket_route"})
+
+
+def _defines_routes(tree: ast.Module) -> bool:
+    """Whether this module registers any route of its OWN.
+
+    A separate question from "does a gate appear here", and the aggregator branch
+    used to answer the second and act on the first. A module that mounts sub-routers
+    and also registers an ungated route of its own looked exactly like a pure
+    aggregator, was judged by what it mounts, and reported GATED with its own route
+    standing open -- and false GATED hides a hole (#16189 review).
+    """
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for decorator in node.decorator_list:
+                target = decorator.func if isinstance(decorator, ast.Call) else decorator
+                if isinstance(target, ast.Attribute) and target.attr in ROUTE_DECORATORS:
+                    return True
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute) and node.func.attr in ROUTE_ADDERS:
+                return True
+    return False
+
+
 def _included_modules(tree: ast.Module) -> set[str]:
     """Modules whose routers this one mounts via `include_router`.
 
@@ -467,7 +500,7 @@ def _included_modules(tree: ast.Module) -> set[str]:
     return mounted
 
 
-def classify(root: Path, alias: str, module: str, vocabulary: set[str]) -> Verdict:
+def classify(root: Path, alias: str, module: str, vocabulary: set[str], seen: frozenset[str] = frozenset()) -> Verdict:
     """Decide one router, recording which mechanism produced the verdict."""
     relative = f"{BACKEND}/{module.replace('.', '/')}.py"
     verdict = Verdict(alias=alias, module=module, path=relative)
@@ -489,24 +522,47 @@ def classify(root: Path, alias: str, module: str, vocabulary: set[str]) -> Verdi
     # behind an import path that does not contain an auth-ish word (#15745).
     local = vocabulary | _local_gates(tree, vocabulary) | _imported_gates(tree, root, vocabulary)
 
-    # An aggregator defines no routes: classify what it MOUNTS instead, or the
-    # verdict describes a file where neither routes nor gates live (#16187).
+    # What this module MOUNTS, and whether it also registers routes itself. Both
+    # are asked, because a module can do both and the two need different verdicts
+    # (#16187 found the aggregator case; #16189 review found the mixed one).
     included = _included_modules(tree)
-    if included and not _per_route(tree, local) and not _router_level(tree, local):
-        sub = [classify(root, alias, name, vocabulary) for name in sorted(included)]
+    if included:
+        # `seen` bounds the mount graph. `_resolve_gate_chain` documents why an
+        # unbounded walk HANGS the guard rather than failing it; the same applies
+        # here, and this recursion had no guard at all (#16189 review).
+        sub = [
+            classify(root, alias, name, vocabulary, seen | {module}) for name in sorted(included) if name not in seen
+        ]
         readable = [v for v in sub if not v.unreadable]
-        if readable:
-            verdict.mechanisms = ["aggregator"]
-            gated = [v for v in readable if v.gated]
-            verdict.evidence = [
-                f"aggregator: {len(gated)}/{len(readable)} mounted routers gated "
-                f"({', '.join(v.module.rsplit('.', 1)[-1] for v in readable)})"
-            ]
-            if len(gated) != len(readable):
-                verdict.mechanisms = []
-                ungated = [v.module for v in readable if not v.gated]
-                verdict.evidence = [f"aggregator: mounted router(s) UNGATED -- {', '.join(ungated)}"]
-            return verdict
+        ungated = [v.module for v in readable if not v.gated]
+        if not _defines_routes(tree):
+            # A pure aggregator IS its mounts: it has nothing else to gate.
+            if readable:
+                if ungated:
+                    verdict.mechanisms = []
+                    verdict.evidence = [f"aggregator: mounted router(s) UNGATED -- {', '.join(ungated)}"]
+                else:
+                    verdict.mechanisms = ["aggregator"]
+                    verdict.evidence = [
+                        f"aggregator: {len(readable)}/{len(readable)} mounted routers gated "
+                        f"({', '.join(v.module.rsplit('.', 1)[-1] for v in readable)})"
+                    ]
+                return verdict
+        elif ungated:
+            # Mounts AND registers its own routes. RECORDED, NOT COLLAPSED into this
+            # module's verdict, and the distinction is deliberate: `api/knowledge.py`
+            # gates its own 40 routes and mounts six sub-routers, two of which
+            # (`knowledge_vectorization`, `knowledge_maintenance`, 37 routes between
+            # them) `core_routers.py` never registers -- so the sweep has never
+            # examined them. Reporting the PARENT ungated would put a well-gated
+            # module on a list that means "no gate of any detectable kind", and would
+            # still not say which mount is open.
+            #
+            # How the sweep should represent a router reachable only through a mount
+            # is a design question this PR cannot settle, so the gap is STATED here
+            # and filed rather than answered with a verdict that reads clean about
+            # the wrong subject (#16194).
+            verdict.evidence.append(f"mounts UNGATED router(s), not separately swept -- {', '.join(ungated)}")
 
     for label, found in (
         ("router-level", _router_level(tree, local)),

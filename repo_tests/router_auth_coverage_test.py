@@ -14,11 +14,15 @@ own model tests the model against itself.
 
 from __future__ import annotations
 
+import ast
+
 import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.router_auth_enumerator import (
     MIDDLEWARE_UNKNOWN,
+    _defines_routes,
+    _included_modules,
     auth_vocabulary,
     enumerate_routers,
     registered_routers,
@@ -256,6 +260,60 @@ def test_an_aggregator_is_judged_by_what_it_mounts() -> None:
     assert any(
         "aggregator" in e for e in aggregator.evidence
     ), f"evidence should name the mounted routers, got: {aggregator.evidence}"
+
+
+def test_mounting_and_defining_routes_are_asked_separately() -> None:
+    """ "No gate found here" was standing in for "defines no routes" (#16189 review).
+
+    The aggregator branch used to trigger on `not _per_route and not _router_level`.
+    That is a question about GATES, used to answer a question about ROUTES, and the
+    two come apart in both directions:
+
+    * mounts + its own UNGATED route -> looked like a pure aggregator, got judged by
+      what it mounts, and reported GATED with its own route standing open. False
+      GATED is the direction that hides a hole.
+    * mounts + its own GATED route -> skipped the aggregator branch entirely and the
+      mounted set was computed and discarded, so a sub-router reachable ONLY through
+      the mount became invisible to the sweep.
+
+    Asserted on parsed source rather than on a live module: the tree happens to
+    contain no mixed module today, and a guard that can only fail once one appears
+    is a guard that reports clean about a case it never examined.
+    """
+    mounts_only = ast.parse(
+        "from api.user_management.users import router as users_router\n"
+        "router = APIRouter()\n"
+        "router.include_router(users_router)\n"
+    )
+    mounts_and_defines = ast.parse(
+        "from api.user_management.users import router as users_router\n"
+        "router = APIRouter()\n"
+        "router.include_router(users_router)\n"
+        "@router.get('/health')\n"
+        "async def health():\n"
+        "    return {}\n"
+    )
+
+    assert not _defines_routes(mounts_only), "a pure aggregator must not read as defining routes"
+    assert _defines_routes(mounts_and_defines), (
+        "a module that mounts AND registers its own route must be distinguishable "
+        "from a pure aggregator -- otherwise its own route is never classified"
+    )
+    assert _included_modules(mounts_and_defines), "the mounted set must survive the mixed case"
+
+
+def test_a_dict_read_is_not_a_route() -> None:
+    """`.get` registers a route as a DECORATOR and reads a dict everywhere else.
+
+    A route detector that scans calls rather than decorator position reports routes
+    in every file that reads a dictionary -- which would make `_defines_routes` true
+    almost everywhere and silently disable the aggregator branch it gates.
+    """
+    reads_a_dict = ast.parse("config = {}\nvalue = config.get('key')\nrows = payload.get('items', [])\n")
+    assert not _defines_routes(reads_a_dict), "a dict read must not be counted as a route registration"
+
+    adds_explicitly = ast.parse("router.add_api_route('/x', handler)\n")
+    assert _defines_routes(adds_explicitly), "an explicit add_api_route call registers a route"
 
 
 def test_the_resolution_depth_is_declared_not_merely_chosen() -> None:
