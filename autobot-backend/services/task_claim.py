@@ -28,15 +28,19 @@ owner ruling 2026-09-10). The two look like duplication and are not:
   touching scopes it never claimed. ``task`` is therefore a reserved kind in
   that module rather than a valid one, and asking it for a ``task:`` scope
   raises with a pointer back here.
-* **This module emits audit; that one cannot.** Every outcome here reaches
-  ``services.audit.audit`` -- including ``redis_unavailable`` and
-  ``redis_error``. ``autobot_shared`` must not import from ``autobot-backend``,
-  so an adapter could not move that emission down; it would leave a backend-side
-  wrapper still owning audit, signatures and tests. The same constraint already
-  put ``services/claim_yield.py`` (#15948) in this package rather than beside
-  the primitive it extends.
+* **This module emits audit; that one cannot.** ``claim_task`` reaches
+  ``services.audit.audit`` on every outcome, including ``redis_unavailable``
+  and ``redis_error``. ``renew_claim`` and ``release_claim`` audit only the
+  outcomes where Redis answered -- their fail-open branches emit nothing today
+  (#16217). ``autobot_shared`` must not import from ``autobot-backend``, so an
+  adapter could not move emission down; it would leave a backend-side wrapper
+  still owning audit, signatures and tests. The same constraint already put
+  ``services/claim_yield.py`` (#15948) in this package rather than beside the
+  primitive it extends.
 
-The shared half is roughly 40 lines of Lua, which is not worth a migration
+The Lua an adapter could actually unify is only the release and renew scripts,
+a few lines each. ``work_claims``' acquire script has no counterpart here,
+because ``claim_task`` uses a plain ``SET NX EX``. That is not worth a migration
 across a live double-pickup guard.
 """
 

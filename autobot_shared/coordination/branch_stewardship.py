@@ -294,8 +294,12 @@ async def prune(
             "prune() received no live branches. If nothing is genuinely open, pass "
             "allow_empty=True; if the branch listing failed, do not prune on its result."
         )
-    from autobot_shared.coordination.work_claims import VALID_KINDS
+    from autobot_shared.coordination.work_claims import VALID_KINDS, _require_kind
 
+    if kind is not None:
+        # Same check as Scope.parse and list_claims. Unchecked, a reserved or
+        # misspelled kind read an index nothing writes to and returned [] (#15957).
+        _require_kind(kind)
     kinds = sorted(VALID_KINDS) if kind is None else [kind]
     client = await _redis()
     dropped: list[Interest] = []

@@ -66,6 +66,7 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 from datetime import timedelta
 from enum import Enum
+from types import MappingProxyType
 from typing import Any
 
 from autobot_shared.env_utils import env_int_clamped
@@ -92,11 +93,16 @@ VALID_KINDS = frozenset({"path", "kb", "device", "project", "config"})
 #: of -- and could not tell a decision from a gap. The owner ruling on #15957
 #: made the split permanent, so the refusal now names the reason and the
 #: destination.
-RESERVED_KINDS = {
-    "task": "task identity belongs to services.task_claim, not to work_claims: "
-    "a claim on the task is not a claim on the work the task touches, and one "
-    "agent can hold a task while touching scopes it never claimed (#15957)",
-}
+#:
+#: Read-only, as :data:`VALID_KINDS` is a frozenset: a plain dict would let any
+#: caller ``pop("task")`` and silently un-reserve it at runtime.
+RESERVED_KINDS = MappingProxyType(
+    {
+        "task": "task identity belongs to services.task_claim, not to work_claims: "
+        "a claim on the task is not a claim on the work the task touches, and one "
+        "agent can hold a task while touching scopes it never claimed (#15957)",
+    }
+)
 
 
 def _require_kind(kind: str) -> None:
