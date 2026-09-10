@@ -137,7 +137,17 @@ def auth_vocabulary(root: Path) -> set[str]:
 def registered_routers(root: Path) -> list[tuple[str, str]]:
     """`(alias, module)` for every router the registry imports."""
     registry = root / REGISTRY
-    tree = ast.parse(registry.read_text(encoding="utf-8"))
+    try:
+        source = registry.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+    except (OSError, UnicodeDecodeError, SyntaxError):
+        # Absent or unreadable registry -> reached nothing, NOT broken.
+        # reach_declarations_test runs every discover() against a scratch
+        # directory and requires a TYPED failure -- ReachFloorError from the
+        # floor below -- not a FileNotFoundError from discovery itself. A guard
+        # that crashes reports "broken" where it should report "reached
+        # nothing", and those are different findings (#15745).
+        return []
     found = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module:

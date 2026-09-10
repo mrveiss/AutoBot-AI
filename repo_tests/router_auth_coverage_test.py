@@ -58,7 +58,7 @@ KNOWN_UNGATED: frozenset[str] = frozenset(
 
 REACH = declare(
     "router-auth-coverage",
-    discover=lambda root: registered_routers(root),
+    discover=registered_routers,
     floor=80,
     what="routers registered in core_routers.py",
     growth=20,
