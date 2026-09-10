@@ -83,7 +83,6 @@ on:
       - 'pyproject.toml'
       - 'autobot_shared/pyproject.toml'
       - '**/package*.json'
-      - '**/package-lock.json'
       - '.github/workflows/security.yml'
   schedule:
     # Run security scans daily at 2 AM UTC
@@ -273,10 +272,14 @@ jobs:
         # repo_tests/npm_audit_covers_its_workspaces_test.py asserts this set
         # against the tracked tree, so a new workspace fails there rather than
         # sitting silently outside the scan.
-        for lock in $(git ls-files '*package-lock.json' | grep -v node_modules); do
+        # NUL-delimited: an unquoted $(...) word-splits on IFS, so a workspace
+        # whose path contains a space would be torn into fragments, `dirname`
+        # would name a directory that does not exist, and the workspace would
+        # drop out of the audit with no error (#16190).
+        while IFS= read -r -d '' lock; do
           ws="$(dirname "$lock")"
           ( cd "$ws" && npm audit --audit-level=moderate --json > npm-audit.json ) || true
-        done
+        done < <(git ls-files -z '*package-lock.json' | grep -zv node_modules)
         # NO ALLOWANCES, AND THAT IS THE LIST DOING ITS JOB (#16089).
         #
         # This step carried `--allow-id @redocly/openapi-core` for one advisory
@@ -312,7 +315,7 @@ jobs:
           --title "Frontend dependency audit (npm audit)" \
           --fail-on high
 
-        for lock in $(git ls-files '*package-lock.json' | grep -v node_modules); do
+        while IFS= read -r -d '' lock; do
           ws="$(dirname "$lock")"
           [ "$ws" = "autobot-frontend" ] && continue
           [ -f "$ws/npm-audit.json" ] || continue
@@ -328,7 +331,7 @@ jobs:
             echo "::warning::$ws — the audit report is missing or unreadable, so this workspace was NOT scanned. Not blocking (untriaged), but it is not clean either."
           fi
           echo "::endgroup::"
-        done
+        done < <(git ls-files -z '*package-lock.json' | grep -zv node_modules)
 
     - name: Upload Security Reports
       uses: actions/upload-artifact@v7

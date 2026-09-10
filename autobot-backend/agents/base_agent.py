@@ -31,9 +31,6 @@ from protocols.agent_communication import (
 
 logger = get_logger(__name__)
 
-# The exchanged data types live in `base_agent_types` (#15950): this module was
-# at its size ceiling, and they were the part of it that never referenced
-# `BaseAgent`. Re-exported here so the existing import sites keep working.
 from agents.base_agent_types import (  # noqa: F401
     AVAILABLE_AGENT_STATUSES,
     AgentHealth,
@@ -46,6 +43,11 @@ from agents.base_agent_types import (  # noqa: F401
     serialize_agent_request,
     serialize_agent_response,
 )
+
+# The exchanged data types live in `base_agent_types` (#15950): this module was
+# at its size ceiling, and they were the part of it that never referenced
+# `BaseAgent`. Re-exported here so the existing import sites keep working.
+from agents.scope_enforcement import hold_scopes, refused_response
 
 
 class BaseAgent(ABC):
@@ -187,6 +189,22 @@ class BaseAgent(ABC):
             logger.warning("Could not get resource usage: %s", e)
             return {"error": "Resource usage unavailable"}
 
+    def declared_scopes(self, request: AgentRequest) -> List[str]:
+        """The work scopes this run will touch, as `<kind>:<path>` strings.
+
+        Default is empty, and that is deliberate: an agent that declares nothing
+        keeps today's behaviour exactly, so adding enforcement cannot break an
+        agent nobody has revisited. Agents that write -- files, knowledge base
+        entries, device state -- override this, and #15950's guard test is what
+        stops a new writing agent quietly keeping the default.
+
+        Scopes are declared per REQUEST rather than per agent because the same
+        agent touches different paths on different runs; a class-level
+        declaration would have to name the union of everything it might ever
+        touch, which is a lock on the whole tree.
+        """
+        return []
+
     async def execute_with_tracking(self, request: AgentRequest) -> AgentResponse:
         """
         Wrapper that adds performance tracking to request processing.
@@ -204,7 +222,7 @@ class BaseAgent(ABC):
 
         # Record invocation start in Redis analytics
         try:
-            from services.agent_analytics import TaskStatus, get_agent_analytics
+            from services.agent_analytics import get_agent_analytics
 
             analytics = get_agent_analytics()
             await analytics.track_task_start(
@@ -221,6 +239,18 @@ class BaseAgent(ABC):
             logger.debug("Analytics track_task_start failed: %s", analytics_err)
             analytics = None
 
+        scopes = self.declared_scopes(request)
+        async with hold_scopes(
+            scopes, agent_id=self.agent_type, task_id=task_id, intent=request.action or "process_request"
+        ) as held:
+            if not held.granted:
+                with self._stats_lock:
+                    self.error_count += 1
+                return refused_response(request, held.conflict, agent_type=self.agent_type)
+            return await self._tracked_process(request, task_id, start_time, analytics)
+
+    async def _tracked_process(self, request, task_id, start_time, analytics) -> AgentResponse:
+        """The original tracked execution, unchanged, now inside the claim."""
         try:
             response = await self.process_request(request)
 
@@ -253,6 +283,8 @@ class BaseAgent(ABC):
             # Record completion in Redis analytics
             if analytics is not None:
                 try:
+                    from services.agent_analytics import TaskStatus
+
                     outcome = TaskStatus.COMPLETED if response.status == "success" else TaskStatus.FAILED
                     tokens = response.metadata.get("token_usage") if response.metadata else None
                     await analytics.track_task_complete(
