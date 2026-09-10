@@ -53,6 +53,7 @@ stale_allowances = _gate.stale_allowances
 counts_by_severity = _gate.counts_by_severity
 main = _gate.main
 read_report = _gate.read_report
+PARSERS = _gate.PARSERS
 render = _gate.render
 
 
@@ -397,3 +398,52 @@ class TestWorkflowWiring:
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__]))
+
+
+#: Real error documents, not synthetic ones. `npm audit` emits these verbatim on a
+#: corrupt lockfile and an unreachable registry; the shapes were captured rather
+#: than imagined, because a hand-written fixture would have matched the parser's
+#: assumptions instead of the tool's behaviour (#16185).
+_FAILED_SCANS = [
+    ("npm-audit", '{"error":{"code":"ENOLOCK","summary":"npm ci can only install with a lockfile"}}'),
+    ("npm-audit", '{"message":"request to registry failed, reason: ECONNREFUSED","error":{"code":"ECONNREFUSED"}}'),
+    ("bandit", '{"errors":[{"filename":"x.py","reason":"syntax error while parsing"}]}'),
+    ("pip-audit", '{"error":"could not resolve dependencies"}'),
+]
+
+_CLEAN_SCANS = [
+    ("npm-audit", '{"vulnerabilities":{}}'),
+    ("bandit", '{"results":[]}'),
+    ("pip-audit", '{"dependencies":[]}'),
+    ("pip-audit", "[]"),
+]
+
+
+@pytest.mark.parametrize(("fmt", "payload"), _FAILED_SCANS)
+def test_a_failed_scan_is_not_a_clean_scan(fmt: str, payload: str) -> None:
+    """Every scanner here emits well-formed JSON when it FAILS (#16185).
+
+    Read with `.get(key, [])` that produced zero findings and a PASS — a scan that
+    never ran, reported as a scan that found nothing. This module's own docstring
+    forbids exactly that: "a report that is absent or unparseable is a HARD
+    FAILURE, never zero findings." `read_report` enforces it for an absent or
+    empty file and cannot for valid JSON that is not a report.
+
+    pip-audit is the sharpest: the gate runs it at `--fail-on any` precisely
+    because it emits no severity, so a silent pass there means nothing was checked
+    at any setting.
+    """
+    with pytest.raises(ReportError):
+        PARSERS[fmt](payload)
+
+
+@pytest.mark.parametrize(("fmt", "payload"), _CLEAN_SCANS)
+def test_a_genuinely_empty_scan_still_passes(fmt: str, payload: str) -> None:
+    """The other direction, and the one that makes the check above safe.
+
+    A guard that rejected empty results would fail every clean repository. The
+    bare-list case is included because it exposed a PRE-EXISTING bug: the fallback
+    for pip-audit's list form lived inside `document.get(...)`, so a bare list
+    raised AttributeError and that shape had never worked.
+    """
+    assert PARSERS[fmt](payload) == []
