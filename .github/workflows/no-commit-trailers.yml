@@ -42,7 +42,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          # NOT fetch-depth: 0 (#16207). This gate reads one regex over the PR's own
+          # commits, and a full clone is 12,874 commits on Dev_new_gui -- measured at
+          # 13s of git for 1s of work, 93% of the job, paid on every PR. Deepest PR in
+          # the last 40 merged was 30 commits, so 100 is >3x the observed maximum.
+          #
+          # The depth is a guess about the future, so the scan refuses to run rather
+          # than trust it: the reachability check below turns "too shallow" into a
+          # loud failure instead of an empty range that reports clean.
+          fetch-depth: 100
 
       - name: Scan PR commits for banned trailers
         env:
@@ -51,6 +59,17 @@ jobs:
         run: |
           set -euo pipefail
           echo "Scanning commits ${BASE_SHA}..${HEAD_SHA}"
+          # An unreachable endpoint makes `git rev-list BASE..HEAD` scan nothing, and
+          # a gate that scans zero commits reports clean. That is worse than the
+          # seconds the shallow fetch saves, so it is checked explicitly (#16207).
+          for _endpoint in "${BASE_SHA}" "${HEAD_SHA}"; do
+            if ! git cat-file -e "${_endpoint}^{commit}" 2>/dev/null; then
+              echo "::error::${_endpoint} is not present at fetch-depth 100 -- this PR is"
+              echo "::error::deeper than the checkout. Raise fetch-depth in this workflow;"
+              echo "::error::do NOT widen it back to 0 without re-measuring (#16207)."
+              exit 1
+            fi
+          done
           # Agent/tooling trailers are never allowed, for any author (#13654).
           #
           # #15848: ALL THREE ARMS ARE NOW ANCHORED to a trailer position. The
