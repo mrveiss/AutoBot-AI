@@ -961,11 +961,11 @@ def _verify_claim(claim: dict, repo_root: Path) -> bool:
     try:
         result = run_git(["grep", "-rl", "--", token, "autobot-backend/"], cwd=str(repo_root))
     except Exception as exc:
-        # Same policy as the unresolvable-token paths above: a probe that could not
-        # run has not disproved the claim. Logged, because "did not look" must not
-        # read as "looked and found nothing" (#16179 review).
-        logger.warning("claim probe failed for %s, not counted as unverified: %s", token, exc)
-        return True
+        # False, not True: the caller has TWO buckets, so True files an unchecked
+        # claim as VERIFIED. Base returned (1, "", err) here and took this path to
+        # False, so True was a behaviour change, not a preserved contract (#16184 review).
+        logger.warning("claim probe failed for %s, recording unverified: %s", token, exc)
+        return False
     return result.returncode == 0 and bool(result.stdout.strip())
 
 
