@@ -179,6 +179,19 @@ class TestParsers:
         assert [f.identifier for f in findings] == ["GHSA-x", "GHSA-y"]
         assert all(f.severity == "unknown" for f in findings)
 
+    def test_pip_audit_keeps_each_vulnerability_aliases(self, tmp_path):
+        """#16222: the aliases are what lets an allowance survive a re-keyed advisory."""
+        report = _write(
+            tmp_path / "pip.json",
+            {
+                "dependencies": [
+                    {"name": "x", "version": "1", "vulns": [{"id": "PYSEC-1", "aliases": ["CVE-1"]}, {"id": "G"}]}
+                ]
+            },
+        )
+
+        assert [f.aliases for f in read_report(report, "pip-audit")] == [("CVE-1",), ()]
+
     def test_npm_audit_keeps_each_advisory_severity(self, tmp_path):
         report = _write(
             tmp_path / "npm.json",
@@ -285,6 +298,28 @@ class TestNamedAllowances:
 
     def test_stale_allowances_are_named(self):
         assert stale_allowances([Finding("low", "A", "x")], {"A", "GONE"}) == ["GONE"]
+
+    def test_a_rekeyed_advisory_stays_allowed_by_its_alias(self, tmp_path, monkeypatch):
+        """#16222: three allowed chromadb CVEs came back as PYSEC ids, and base went red
+        with no new vulnerability. The allowance names the advisory, not its current key."""
+        monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+        report = _write(
+            tmp_path / "pip.json",
+            {"dependencies": [{"name": "x", "version": "1", "vulns": [{"id": "PYSEC-NEW", "aliases": ["CVE-OLD"]}]}]},
+        )
+
+        assert main([*self._argv(report), "--allow-id", "CVE-OLD"]) == 0
+
+    def test_an_allowance_matched_only_by_alias_is_not_stale(self):
+        rekeyed = Finding("unknown", "PYSEC-NEW", "x", ("CVE-OLD",))
+
+        assert stale_allowances([rekeyed], {"CVE-OLD", "GONE"}) == ["GONE"]
+
+    def test_an_alias_absorbs_nothing_it_is_not_allowed_for(self):
+        """Matching by alias must not widen the allowance: an unallowed alias is still judged."""
+        judged = not_allowed([Finding("unknown", "PYSEC-NEW", "x", ("CVE-OTHER",))], {"CVE-OLD"})
+
+        assert [f.identifier for f in judged] == ["PYSEC-NEW"]
 
     def test_the_summary_lists_the_recorded_allowances(self):
         text = render("t", [Finding("high", "H", "x")], "high", {"H"})
