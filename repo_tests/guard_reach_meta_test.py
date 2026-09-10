@@ -128,6 +128,21 @@ GRANDFATHERED = frozenset(
     }
 )
 
+#: GRANDFATHERED as last recorded -- a mirrored second copy (#16147 AC4), the
+#: same two-copy shape as the file-size ratchet's RATCHET_BASELINE. The staleness
+#: test forces removals; without this copy, ADDING an entry to GRANDFATHERED
+#: silences a new unfloored guard and no test fails. Growing the list now takes
+#: editing both sets -- a recorded decision a reviewer sees -- and a shrink is
+#: mirrored here too, so a removed entry cannot quietly come back.
+_GRANDFATHERED_BASELINE = frozenset(
+    {
+        "repo_tests/background_task_retention_ratchet_test.py",
+        "repo_tests/fixture_fixed_path_teardown_guard_gating_test.py",
+        "repo_tests/promtool_rules_test.py",
+        "repo_tests/workflow_planner_deprecation_test.py",
+    }
+)
+
 
 def has_floor(source: str) -> bool:
     """Does this source bind an assertion to how much it examined?
@@ -260,6 +275,35 @@ def test_the_grandfathered_list_has_not_gone_stale() -> None:
     assert (
         not stale
     ), "GRANDFATHERED entries that now have a floor -- remove them, the list only shrinks:\n  " + "\n  ".join(stale)
+
+
+def _grown(current: frozenset[str]) -> list[str]:
+    return sorted(current - _GRANDFATHERED_BASELINE)
+
+
+def test_the_grandfathered_list_never_grows_silently() -> None:
+    """#16147 AC4: the list only shrinks, and it is compared as a SET.
+
+    A count would pass one entry swapped for another; the set difference in each
+    direction is the assertion worth making (RATCHET_BASELINES.md, rule 4).
+    """
+    grown = _grown(GRANDFATHERED)
+    assert not grown, (
+        "GRANDFATHERED gained entries missing from _GRANDFATHERED_BASELINE -- a new "
+        "tree-scanning guard needs a floor, not an exemption:\n  " + "\n  ".join(grown)
+    )
+    unmirrored = sorted(_GRANDFATHERED_BASELINE - GRANDFATHERED)
+    assert not unmirrored, (
+        "entries removed from GRANDFATHERED but not from _GRANDFATHERED_BASELINE -- mirror "
+        "the shrink, or a removed exemption can quietly return:\n  " + "\n  ".join(unmirrored)
+    )
+
+
+def test_the_growth_check_finds_an_added_entry() -> None:
+    """Known positive (rule 6): the check must see an addition before its silence means anything."""
+    assert _grown(GRANDFATHERED | {"repo_tests/planted_unfloored_guard_test.py"}) == [
+        "repo_tests/planted_unfloored_guard_test.py"
+    ]
 
 
 def _examined_with(pattern: re.Pattern[str]) -> set[str]:
