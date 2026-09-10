@@ -91,13 +91,13 @@ Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-back
 - A plugin route without `Depends(check_admin_permission)` is remote code execution.
   This is the single highest-severity shape in this subsystem — check it first.
 - Extraction goes through `archive_safety`; [`plugin_install.py`](../../autobot-backend/plugin_install.py)
-  only re-exports `_validate_zip_metadata` (:125) and `_safe_extract` (:126).
+  only re-exports `_validate_zip_metadata` and `_safe_extract`.
   A local `zf.extractall` reintroduces zip-slip and symlink escape.
-- Names match `_NAME_PATTERN` (:35) before any filesystem touch; the target is claimed by
-  `_claim_install_target` (:106) via `mkdir(exist_ok=False)`, which — with the per-name
+- Names match `_NAME_PATTERN` (:36) before any filesystem touch; the target is claimed by
+  `_claim_install_target` (:107) via `mkdir(exist_ok=False)`, which — with the per-name
   `_install_locks` — is what makes the collision check TOCTOU-free.
 - Git installs: scheme restricted to http(s), `--` before the URL, `protocol.file.allow=never`,
-  no submodule recursion, ref matched against `_GIT_REF_PATTERN` (:38), which rejects a leading `-` and any `..`.
+  no submodule recursion, ref matched against `_GIT_REF_PATTERN` (:39), which rejects a leading `-` and any `..`.
   Dropping any one of these is a finding on its own.
 - `PluginRegistry._plugins` and `HookRegistry` are process-wide singletons that do not dedupe —
   a load path re-initialising a live plugin double-registers its callbacks (#14000).
