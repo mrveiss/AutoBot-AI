@@ -9,6 +9,14 @@ Loads, validates, and caches role manifests from
 autobot-infrastructure/autobot-<role>/manifest.yml.
 Single source of truth reader for deployment, health, conflict, and
 policy decisions.
+
+Environment:
+    ``SLM_MANIFEST_CACHE_TTL`` -- seconds a parsed manifest is served from
+    cache, default 300. ``0`` or negative disables caching, which is the
+    dev-mode bypass for editing a manifest on the SLM host (#16026).
+    Documented here rather than in ``autobot_shared/env_registry.py``: that
+    registry holds ``AUTOBOT_*`` names and carries no ``SLM_*`` entry, so an
+    entry there would be the only one of its kind.
 """
 
 import logging
@@ -27,8 +35,31 @@ logger = logging.getLogger(__name__)
 _AUTOBOT_BASE = Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
 _INFRA_BASE = _AUTOBOT_BASE / "autobot-infrastructure"
 
-# Cache TTL in seconds (5 minutes)
-_CACHE_TTL = 300
+# Cache TTL in seconds. Env-var backed rather than a bare literal (#16026):
+# a manifest is an operator-edited file, so the staleness window has to be
+# tunable on the host that edits it. `int()` bare would crash the import on a
+# typo, so a bad value warns and falls back instead of taking the service down
+# over a knob nobody meant to set.
+_CACHE_TTL_DEFAULT = 300
+
+
+def _resolve_manifest_cache_ttl() -> int:
+    """Seconds a parsed manifest stays cached; <= 0 disables caching."""
+    raw = os.environ.get("SLM_MANIFEST_CACHE_TTL")
+    if raw is None or raw == "":
+        return _CACHE_TTL_DEFAULT
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning(
+            "SLM_MANIFEST_CACHE_TTL=%r is not an integer; falling back to %ds",
+            raw,
+            _CACHE_TTL_DEFAULT,
+        )
+        return _CACHE_TTL_DEFAULT
+
+
+_CACHE_TTL = _resolve_manifest_cache_ttl()
 
 
 class ManifestLoader:
@@ -63,7 +94,7 @@ class ManifestLoader:
     def load(self, role_name: str, *, force_reload: bool = False) -> RoleManifest | None:
         """Return the RoleManifest for role_name, using cache if fresh."""
         cached = self._cache.get(role_name)
-        if cached and not force_reload:
+        if cached and not force_reload and _CACHE_TTL > 0:
             manifest, loaded_at = cached
             if time.monotonic() - loaded_at < _CACHE_TTL:
                 return manifest
@@ -73,15 +104,21 @@ class ManifestLoader:
             self._cache[role_name] = (manifest, time.monotonic())
         return manifest
 
-    def load_all(self) -> Dict[str, RoleManifest]:
-        """Load manifests for all roles found under infra_base."""
+    def load_all(self, *, force_reload: bool = False) -> Dict[str, RoleManifest]:
+        """Load manifests for all roles found under infra_base.
+
+        ``force_reload`` is threaded through to :meth:`load` because
+        ``services/reconciler.py`` reads the whole set through this method and
+        had no way to reach the per-role bypass (#16026) -- an override that a
+        caller cannot get at is not an override.
+        """
         result: Dict[str, RoleManifest] = {}
         if not self._infra_base.exists():
             logger.warning("Infrastructure base dir not found: %s", self._infra_base)
             return result
         for child in sorted(self._infra_base.iterdir()):
             if child.is_dir() and child.name.startswith("autobot-"):
-                manifest = self.load(child.name)
+                manifest = self.load(child.name, force_reload=force_reload)
                 if manifest:
                     result[child.name] = manifest
         return result
