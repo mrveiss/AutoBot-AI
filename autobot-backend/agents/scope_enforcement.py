@@ -110,7 +110,11 @@ async def _renew_forever(scopes: Sequence[str], *, agent_id: str, task_id: str, 
 
 
 async def _release_all(scopes: Sequence[str], *, agent_id: str, task_id: str) -> None:
-    """Release every scope, surviving individual failures. Never raises."""
+    """Release every scope, surviving individual failures.
+
+    An ordinary exception from one release is logged and never raised; the TTL
+    expires that claim. Cancellation still propagates.
+    """
     from autobot_shared.coordination.work_claims import release
 
     for scope in scopes:
@@ -121,7 +125,11 @@ async def _release_all(scopes: Sequence[str], *, agent_id: str, task_id: str) ->
 
 
 async def _acquire_all(scopes: Sequence[str], *, agent_id: str, task_id: str, intent: str) -> ScopesHeld:
-    """Take every scope or none, reporting the first refusal with its holder."""
+    """Take every scope or none, reporting the first refusal with its holder.
+
+    A raise part-way through releases the scopes already taken before it
+    propagates, so a malformed later declaration strands nothing (#16213).
+    """
     from autobot_shared.coordination.work_claims import try_acquire
 
     taken: list[Claim] = []
