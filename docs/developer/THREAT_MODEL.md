@@ -91,7 +91,7 @@ Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-back
 - A plugin route without `Depends(check_admin_permission)` is remote code execution.
   This is the single highest-severity shape in this subsystem — check it first.
 - Extraction goes through `archive_safety`; [`plugin_install.py`](../../autobot-backend/plugin_install.py)
-  only re-exports `_validate_zip_metadata` (:125) and `_safe_extract` (:126).
+  only re-exports `_validate_zip_metadata` and `_safe_extract`.
   A local `zf.extractall` reintroduces zip-slip and symlink escape.
 - Names match `_NAME_PATTERN` (:35) before any filesystem touch; the target is claimed by
   `_claim_install_target` (:106) via `mkdir(exist_ok=False)`, which — with the per-name
