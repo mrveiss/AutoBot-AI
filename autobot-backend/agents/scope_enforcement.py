@@ -74,13 +74,33 @@ class ScopesHeld:
         return self.conflict is None
 
 
-async def _renew_forever(scopes: Sequence[str], *, agent_id: str, task_id: str) -> None:
-    """Keep *scopes* alive until cancelled. Cancellation is the normal exit."""
+async def _renew_forever(scopes: Sequence[str], *, agent_id: str, task_id: str, stop=None) -> None:
+    """Keep *scopes* alive until cancelled, or until *stop* says the run is over.
+
+    *stop* exists for cancellation. A cancelled task here does not interrupt its
+    executor -- `cancel_task` flips a state in Redis and returns -- so the work
+    keeps running, and releasing its scope immediately would free a path that is
+    still being written. Stopping the RENEWAL instead lets the claim lapse at its
+    TTL, which bounds a cancelled task's hold without ever unlocking a scope
+    while work continues.
+
+    That is a bound, not a release, and #15950's cancellation criterion is left
+    unticked because of it. Cooperative cancellation in the executor is the real
+    fix (#16174); this path stays afterwards as the backstop for an executor
+    wedged before it reaches any checkpoint.
+    """
     from autobot_shared.coordination.work_claims import renew
 
     interval = max(1, CLAIM_TTL_S // _RENEW_DIVISOR)
     while True:
         await asyncio.sleep(interval)
+        if stop is not None:
+            try:
+                if await stop():
+                    logger.info("run %s/%s is over; letting %s lapse at TTL", agent_id, task_id, list(scopes))
+                    return
+            except Exception as exc:  # noqa: BLE001 -- an unreadable state is no reason to stop renewing
+                logger.warning("cancellation check failed for %s/%s: %s", agent_id, task_id, exc)
         for scope in scopes:
             try:
                 if not await renew(scope, agent_id=agent_id, task_id=task_id):
