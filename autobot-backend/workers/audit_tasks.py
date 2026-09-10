@@ -19,7 +19,7 @@ Beat pidfile MUST NOT reside on tmpfs (/run/autobot/ is wiped on reboot).
 import json
 import os
 import re
-import subprocess  # nosec B404  # internal git/gh CLI calls only
+import subprocess  # nosec B404  # internal gh CLI calls only; git goes through run_git
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -712,31 +712,25 @@ def _changed_python_modules(since_iso: str | None, repo_root: Path) -> list[Path
 
     Falls back to the last 6 hours when *since_iso* is None.
     """
-    if since_iso:
-        cmd = [
-            "git",
-            "log",
-            "origin/Dev_new_gui",
-            f"--since={since_iso}",
-            "--name-only",
-            "--pretty=format:",
-            "--diff-filter=ACMR",
-        ]
-    else:
-        cmd = [
-            "git",
-            "log",
-            "origin/Dev_new_gui",
-            "--since=6 hours ago",
-            "--name-only",
-            "--pretty=format:",
-            "--diff-filter=ACMR",
-        ]
-
-    result = run_git(cmd[1:], cwd=str(repo_root))  # #16179
-    code, out = result.returncode, result.stdout
-    if code != 0:
+    argv = [
+        "log",
+        "origin/Dev_new_gui",
+        f"--since={since_iso}" if since_iso else "--since=6 hours ago",
+        "--name-only",
+        "--pretty=format:",
+        "--diff-filter=ACMR",
+    ]
+    # `_run` never raised; `run_git` propagates TimeoutExpired. This runs inside a
+    # Celery task with no handler above it, so an unhandled timeout would abort the
+    # whole audit rather than degrading to "no modules changed" (#16179 review).
+    try:
+        result = run_git(argv, cwd=str(repo_root))  # #16179
+    except Exception as exc:
+        logger.warning("changed-module probe failed, treating as no data: %s", exc)
         return []
+    if result.returncode != 0:
+        return []
+    out = result.stdout
 
     paths = []
     for line in out.splitlines():
@@ -964,9 +958,15 @@ def _verify_claim(claim: dict, repo_root: Path) -> bool:
 
     token = token_match.group(1).replace("-", "_")
     # Search for the token in Python source files
-    result = run_git(["grep", "-rl", "--", token, "autobot-backend/"], cwd=str(repo_root))
-    code, out = result.returncode, result.stdout
-    return code == 0 and bool(out.strip())
+    try:
+        result = run_git(["grep", "-rl", "--", token, "autobot-backend/"], cwd=str(repo_root))
+    except Exception as exc:
+        # Same policy as the unresolvable-token paths above: a probe that could not
+        # run has not disproved the claim. Logged, because "did not look" must not
+        # read as "looked and found nothing" (#16179 review).
+        logger.warning("claim probe failed for %s, not counted as unverified: %s", token, exc)
+        return True
+    return result.returncode == 0 and bool(result.stdout.strip())
 
 
 def _write_verification_doc(repo_root: Path, verified: list, unverified: list) -> Path:
