@@ -49,10 +49,40 @@ EXEMPT = {"repo_tests/git_merge_rejects_pull_only_flags_15938_test.py"}
 WORKFLOW = ".github/workflows/auto-merge-base-into-parked-branches.yml"
 
 
+def _logical_lines(text: str) -> list[tuple[int, str]]:
+    """`(first line number, joined line)` with shell continuations folded in.
+
+    A matcher that reads physical lines misses the shape a reintroduction most
+    plausibly takes, because that is how a long git invocation is written::
+
+        git merge \\
+          --no-rebase --no-edit "origin/$BASE"
+
+    Splitting on newlines captures only `` \\ `` as the argument text, the flag
+    lands on a line with no `git merge` on it, and the guard passes having
+    inspected nothing (#16128 review). The line number reported is the FIRST
+    physical line, so the message still points at the invocation.
+    """
+    out: list[tuple[int, str]] = []
+    buffer, start = "", 0
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not buffer:
+            start = number
+        stripped = line.rstrip()
+        if stripped.endswith("\\"):
+            buffer += stripped[:-1] + " "
+            continue
+        out.append((start, buffer + line))
+        buffer = ""
+    if buffer:
+        out.append((start, buffer))
+    return out
+
+
 def offending_lines(text: str) -> list[tuple[int, str]]:
     """`git merge` invocations carrying a pull-only flag, ignoring comments."""
     out = []
-    for number, line in enumerate(text.splitlines(), start=1):
+    for number, line in _logical_lines(text):
         if line.lstrip().startswith("#"):
             continue
         for match in MERGE_CALL.finditer(line):
@@ -161,6 +191,16 @@ def test_a_new_workspace_branches_from_a_fetched_base() -> None:
         f"{WORKSPACE} must treat 'no remotes' as a real answer rather than an error; "
         "raising there breaks every throwaway repository, which is how this was found."
     )
+    # And it must NOT treat a FAILED probe as 'no remotes'. Both produce empty
+    # stdout, so a rule keyed on output alone lets a corrupt repo or a
+    # permissions error take the local-only path and skip the ref check in
+    # silence. Raised in review of #16128, where the assertion above pinned the
+    # shape of the gap rather than the shape of the contract.
+    assert "if probe.returncode != 0:" in text, (
+        f"{WORKSPACE} must distinguish a FAILED `git remote` from a repository that "
+        "genuinely has none — testing stdout alone makes those identical, and one of "
+        "them is a broken checkout quietly branching from HEAD."
+    )
     assert "AUTOBOT_WORKSPACE_BASE_REF" in text, (
         f"{WORKSPACE} must take the base ref from an env-var-backed constant, not a " "literal at the call site."
     )
@@ -201,3 +241,22 @@ def test_the_base_ref_is_registered_and_distinct_from_the_build_branch() -> None
         "AUTOBOT_WORKSPACE_BASE_REF must be declared in the env registry — an env var "
         "read but never registered is invisible to every tool that enumerates config."
     )
+
+
+def test_a_continuation_does_not_hide_the_flag() -> None:
+    """The shape a reintroduction actually takes (#16128 review).
+
+    A long git invocation is written across a continuation, and a matcher that
+    reads physical lines sees `git merge \\` with no flag and a flag with no
+    `git merge`. It then passes having inspected nothing — the vacuous green
+    this whole file exists to refuse.
+    """
+    found = offending_lines('git merge \\\n  --no-rebase --no-edit "origin/$BASE"\n')
+    assert found, "a line-continuation invocation escaped the matcher"
+    assert found[0][0] == 1, "the finding must point at the `git merge` line, not the flag's"
+
+
+def test_a_continuation_in_valid_usage_is_still_left_alone() -> None:
+    """Folding continuations must not create false positives."""
+    assert not offending_lines('git merge \\\n  --no-edit "origin/$BASE"\n')
+    assert not offending_lines("git pull \\\n  --no-rebase origin main\n")

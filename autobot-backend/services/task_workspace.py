@@ -377,6 +377,16 @@ def _fetched_base_ref(root: Path) -> str | None:
         text=True,
         env=scrubbed_git_env(),
     )
+    if probe.returncode != 0:
+        # A `git remote` that FAILS is not "no remotes". Both produce empty
+        # stdout, so testing output alone made a corrupt repo, a permissions
+        # problem or a scrubbed-away git directory indistinguishable from a
+        # local-only checkout -- and both then skipped the fetch and the ref
+        # verification silently, which is the fallback this function's own
+        # docstring says must never look like success (#16128 review).
+        raise RuntimeError(
+            f"cannot enumerate remotes in {root}: " f"{probe.stderr.strip() or 'git remote failed with no output'}"
+        )
     if not probe.stdout.strip():
         return None
 

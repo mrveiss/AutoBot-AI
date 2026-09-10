@@ -210,8 +210,19 @@ if git rev-parse --verify --quiet "$BASE" >/dev/null; then
         || behind_basis="the LAST FETCH (origin unreachable) -- treat as a lower bound" ;;
     *) behind_basis="$BASE as it stands locally" ;;
   esac
+  # A non-numeric override must not read as a pass. `[ "$behind" -gt "$MAX_BEHIND" ]`
+  # errors on a non-integer and the `else` branch then prints `ok` -- a
+  # misconfigured limit reporting the same success as a branch genuinely in
+  # range (#16128 review).
+  case "$MAX_BEHIND" in
+    ''|*[!0-9]*)
+      fail "PREFLIGHT_MAX_BEHIND is not a number: '$MAX_BEHIND' — refusing to report a limit that cannot be applied"
+      MAX_BEHIND="" ;;
+  esac
   behind=$(git rev-list --count "HEAD..$BASE" 2>/dev/null || echo "")
-  if [ -z "$behind" ]; then
+  if [ -z "$MAX_BEHIND" ]; then
+    skip_check "behind-base check" "PREFLIGHT_MAX_BEHIND is not usable"
+  elif [ -z "$behind" ]; then
     skip_check "behind-base check" "cannot count commits between HEAD and $BASE"
   elif [ "$behind" -gt "$MAX_BEHIND" ]; then
     fail "branch is $behind commits behind $BASE (limit $MAX_BEHIND), measured against $behind_basis"
