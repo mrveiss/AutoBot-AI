@@ -65,8 +65,19 @@ def _normalise(raw: str) -> str:
 
 
 def parse_bandit(payload: str) -> list[Finding]:
-    """bandit ``-f json``: ``results[]`` with ``issue_severity`` HIGH/MEDIUM/LOW."""
+    """bandit ``-f json``: ``results[]`` with ``issue_severity`` HIGH/MEDIUM/LOW.
+
+    A document without ``results`` is an ERROR, not a clean scan (#16185). Same
+    shape as the npm defect: bandit emits well-formed JSON when it fails, and
+    ``.get("results", [])`` turned that into zero findings and a PASS.
+    """
     document = json.loads(payload)
+    if not isinstance(document, dict) or "results" not in document:
+        raise ReportError(
+            "bandit produced no `results` key"
+            + (f" ({document.get('errors') or 'unrecognised document'})" if isinstance(document, dict) else "")
+            + ". A scan that did not run is not a scan that found nothing."
+        )
     return [
         Finding(
             severity=_normalise(result.get("issue_severity", "")),
@@ -85,7 +96,23 @@ def parse_pip_audit(payload: str) -> list[Finding]:
     severity the tool never emits would silently pass everything.
     """
     document = json.loads(payload)
-    dependencies = document.get("dependencies", document if isinstance(document, list) else [])
+    # A MAPPING with no `dependencies` is an error document, not an empty scan
+    # (#16185). The bare-list form is pip-audit's real alternative shape and stays
+    # valid. This matters more here than anywhere else in this module: the gate
+    # runs pip-audit at `--fail-on any` precisely because the tool emits no
+    # severity, and a FAILED scan cleared that gate at every setting.
+    if isinstance(document, dict) and "dependencies" not in document:
+        raise ReportError(
+            f"pip-audit produced no `dependencies` key ({document.get('error') or 'unrecognised document'}). "
+            "A scan that did not run is not a scan that found nothing -- and this gate runs at "
+            "--fail-on any, so a silent pass here means nothing was checked at all."
+        )
+    # PRE-EXISTING BUG, found by testing the branch this line claims to support:
+    # `document.get(...)` is called on `document`, so a BARE LIST -- the alternative
+    # shape the default is written for -- raised AttributeError instead of being
+    # used. The fallback lived inside the call it was meant to protect, so the list
+    # form has never worked.
+    dependencies = document if isinstance(document, list) else document.get("dependencies", [])
     return [
         Finding(
             severity="unknown",
