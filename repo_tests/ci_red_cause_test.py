@@ -325,3 +325,144 @@ def test_timed_out_step_counts_as_a_failing_step(rc):
     """exit 124 surfaces as `timed_out` on some runners — the apt case (#15139)."""
     steps = [_step(4, "Run ./.github/actions/setup-python-suite", "timed_out")]
     assert rc.classify_steps(steps)[0] == rc.CAUSE_PROVISIONING
+
+
+class _PagedApi:
+    """An API whose check-run listing spans more than one page.
+
+    The plain `_FakeApi` returns one response for every path containing
+    `check-runs`, which cannot express pagination -- and would hang a paginating
+    caller if it returned a full page. Keying on `page=` is what makes the second
+    page reachable and the walk terminable.
+    """
+
+    def __init__(self, pages: List[List[Dict[str, Any]]]):
+        self.pages = pages
+        self.repository = REPO
+        self.calls: List[str] = []
+
+    def request(self, method: str, path: str):
+        self.calls.append(path)
+        if "check-runs" not in path:
+            return 404, None
+        number = 1
+        for fragment in path.split("&"):
+            if fragment.startswith("page="):
+                number = int(fragment.split("=", 1)[1])
+        total = sum(len(p) for p in self.pages)
+        if number > len(self.pages):
+            return 200, {"total_count": total, "check_runs": []}
+        return 200, {"total_count": total, "check_runs": self.pages[number - 1]}
+
+
+def test_a_red_check_on_the_second_page_is_not_missed(rc) -> None:
+    """#16120: `per_page=100` without a page walk truncates SILENTLY.
+
+    Measured on one real PR -- 100 runs on a single page, 111 paginated, and the
+    eleven dropped were hiding a not-green required context. This fixture puts
+    the ONLY red on page two, so a single-page read reports the commit clean.
+
+    Delete the page loop in `list_check_runs` and this fails.
+    """
+    green = [_check(name=f"shard {i}", conclusion="success") for i in range(100)]
+    red = [_check(name="startup-import-smoke", conclusion="cancelled")]
+    api = _PagedApi([green, red])
+
+    runs, error = rc.list_check_runs(api, SHA)
+
+    assert error == ""
+    assert len(runs) == 101
+    assert any(r.get("name") == "startup-import-smoke" for r in runs)
+
+
+def test_a_short_walk_is_reported_rather_than_returned_as_complete(rc) -> None:
+    """`total_count` is the endpoint's own statement of the population.
+
+    A walk that ends below it has not seen everything, and returning that list
+    silently is how "no red checks" becomes a verdict nobody earned. The honest
+    response is to hand back what was read AND say it is short.
+    """
+
+    class _ShortApi(_PagedApi):
+        def request(self, method: str, path: str):
+            status, body = super().request(method, path)
+            if isinstance(body, dict):
+                body = dict(body)
+                body["total_count"] = 500
+            return status, body
+
+    api = _ShortApi([[_check(name="only", conclusion="success")]])
+
+    runs, error = rc.list_check_runs(api, SHA)
+
+    assert len(runs) == 1
+    assert "reached 1 of 500" in error
+    assert "unearned" in error
+
+
+def test_a_superseded_failure_is_not_reported_as_a_current_red(rc, monkeypatch) -> None:
+    """#16120's headline defect, at the call site rather than in the helper.
+
+    This is the exact shape from the issue: `code-quality` failing at 07:54 and
+    succeeding at 09:10 on the SAME commit. `/check-runs` returns both. Before
+    the grouping fix, `classify_commit` classified every returned run, so the
+    dead 07:54 failure was reported as a current red -- and a phantom red costs
+    the same investigation as a real one.
+
+    The previous version of this PR fixed pagination here and left the grouping
+    in an unwired module, so this exact scenario still failed. Remove the
+    `latest_runs(...)` call in `classify_commit` and this test fails.
+    """
+    superseded = _check(name="code-quality", conclusion="failure")
+    superseded["started_at"] = "2026-09-09T07:54:14Z"
+    current = _check(name="code-quality", conclusion="success")
+    current["started_at"] = "2026-09-09T09:10:02Z"
+
+    api = _FakeApi({"check-runs": _checks_response([superseded, current])})
+    report = rc.classify_commit(api, SHA)
+
+    assert report.reds == [], f"reported a superseded failure as red: {report.message}"
+    assert report.checks_seen == 1, "grouping must collapse the two runs of one name into one"
+
+
+def test_a_failure_with_no_later_run_is_still_reported(rc) -> None:
+    """The control, in the direction that matters.
+
+    Grouping that suppressed everything would pass the test above. A failure
+    that was never superseded must survive it.
+    """
+    only = _check(name="python-suite", conclusion="failure")
+    only["started_at"] = "2026-09-09T07:54:14Z"
+
+    api = _FakeApi({"check-runs": _checks_response([only]), "actions/jobs/": (404, None)})
+    report = rc.classify_commit(api, SHA)
+
+    assert len(report.reds) == 1, "a live failure was swallowed by the grouping"
+
+
+def test_the_page_walk_is_bounded_rather_than_infinite(rc) -> None:
+    """The one branch whose entire job is preventing a hang.
+
+    An endpoint that keeps returning full pages -- a bug, a loop, a lying
+    `total_count` -- must terminate. Asserted rather than traced by hand,
+    because a bound nobody exercises is a bound nobody knows works.
+    """
+
+    class _EndlessApi:
+        def __init__(self):
+            self.repository = REPO
+            self.requests = 0
+
+        def request(self, method: str, path: str):
+            if "check-runs" not in path:
+                return 404, None
+            self.requests += 1
+            full = [_check(name=f"c{i}", conclusion="success") for i in range(rc.MAX_CHECKS_PER_PAGE)]
+            return 200, {"total_count": 10**9, "check_runs": full}
+
+    api = _EndlessApi()
+    runs, error = rc.list_check_runs(api, SHA)
+
+    assert api.requests <= rc.MAX_CHECK_PAGES + 1, f"walked {api.requests} pages, bound is {rc.MAX_CHECK_PAGES}"
+    assert "exceeded" in error and "pages" in error
+    assert runs, "the bound must hand back what it read, not discard it"

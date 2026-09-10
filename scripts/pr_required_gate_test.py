@@ -276,11 +276,22 @@ def test_multiple_pages_are_flattened_rather_than_rejected(monkeypatch):
     The failure is a crash, not a wrong answer, which is why it never showed: every
     list so far fit in one page. A fixture with two pages is the only way to see it
     before the day the tree grows past 100 checks.
+
+    The seam moved in #16120: pagination now lives in
+    `scripts/lib/check_run_status.all_pages`, so this stubs the subprocess call
+    inside that module rather than this one's `_gh`. Patching the old seam left
+    the test issuing a REAL `gh` call, which is how the migration was caught --
+    a stub that no longer intercepts fails loudly here and would have been an
+    unnoticed live network call in a less careful test.
     """
-    import pr_required_gate
+    import check_run_status
 
     pages = '[{"check_runs": [{"name": "a"}]}, {"check_runs": [{"name": "b"}]}]'
-    monkeypatch.setattr(pr_required_gate, "_gh", lambda *args: pages)
+
+    class _Result:
+        stdout = pages
+
+    monkeypatch.setattr(check_run_status.subprocess, "run", lambda *a, **k: _Result())
     assert _all_pages("ignored", "check_runs") == [{"name": "a"}, {"name": "b"}]
 
 

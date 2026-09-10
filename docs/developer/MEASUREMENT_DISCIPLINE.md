@@ -776,6 +776,80 @@ One printed a wrong number. The other would have produced a wrong commit. **The
 manufactured cause survived contact with a reader and directed real work**, which
 is the property that makes this worth a section rather than a footnote.
 
+## A control drawn from the detector's own model tests the model against itself
+
+"Add a positive control" is standard advice here and it is **not sufficient**.
+A control proves the detector fires on a case *the author already imagined*. If
+both controls come from the same mental model as the detector, they can only
+confirm it.
+
+**Worked instance (2026-09-10).** A router-auth sweep reported 30 ungated routes,
+then 15, then fewer — wrong every time, always in the same direction. Two
+controls were run, one gated and one ungated, and **both passed while the sweep
+was wrong**, because both were shapes the regex already matched.
+
+The cause: this codebase gates four ways — router-level
+`APIRouter(dependencies=[...])`, per-route `Depends`, **inline in the handler
+body** (`authenticate_websocket` called directly at `api/websockets.py:694`), and
+middleware. Each detector modelled fewer mechanisms than exist, and each set of
+controls was drawn from the same list.
+
+So the rule is **a control per mechanism, not a control per direction**. Before
+writing controls, enumerate the ways the thing being detected can appear —
+independently of how the detector looks for it. A mechanism nobody listed is a
+mechanism no control covers, and the sweep reports clean over it.
+
+The corollary is uncomfortable and worth stating: *you cannot validate a detector
+using only cases you thought of while writing it.* The gap has to be closed by
+reading the domain, not by adding more of the same tests.
+
+## A measurement can be true of the process that took it and false elsewhere
+
+When an input is **environmental**, a number describes the reader as much as the
+subject — and two correct readings can disagree without either being wrong.
+
+**Worked instance (2026-09-10).** Two sessions read the same worktree ceiling.
+One saw `ceiling: 19 (floor 8, pinned by WORKTREE_CAP)`; the other's deny said
+`19 live, ceiling 8`. The parenthetical is
+`${OVERRIDE:+, pinned by WORKTREE_CAP}` — **it prints only when the variable is
+set in the reading process**. One session held the override and the other did
+not. Both numbers were accurate; neither described the other's session.
+
+Acting on it caused real loss: the session with the *lower* ceiling was told its
+gate had cleared, and had already given up a working tree on the strength of it.
+The gate is `count >= ceiling` — a **global** count against a **local** ceiling —
+so retiring a tree could never have helped it.
+
+**How to apply:** when passing a measured number to someone else, say where it
+was measured, not just what it says. When receiving one, ask what in the reader's
+environment could change it. Environment variables, tool versions, auth scope,
+working directory and shell state all qualify. This is family F with a twist —
+both readings are right, and it is the *scope* that differs, so neither party has
+an error to find by re-checking their own work.
+
+## Green CI is not a met acceptance criterion
+
+They answer different questions. CI asks *do the tests pass*. An acceptance
+criterion asks *is the thing it describes true of the merged tree*. A change can
+satisfy the first completely while leaving the second untouched.
+
+**Worked instance (2026-09-09).** A PR extracted check-run grouping and
+pagination into a shared helper, shipped **43/43 green**, and said
+`Closes #16120`. That issue's second criterion is *"every sweep, gate and status
+reader calls it — no direct `check-runs` query remains outside it"*. The module
+had **zero production callers**. The tests were green because the new unit tests
+passed in isolation; nothing proved the extraction had replaced anything.
+
+The defect the PR opened with as its own motivating evidence — a `failure` at
+07:54 superseded by a `success` at 09:10 being reported as a current red —
+**survived the merge**, because the grouping fix sat in a module nothing
+imported. Only the pagination half had reached the call site.
+
+**How to apply:** for any criterion of the form "X calls Y" or "no Z remains",
+the evidence is a **grep over the merged tree**, not a green check. Write the
+grep into the criterion when filing, so the closing comment can paste its output.
+A test suite that only exercises new code cannot tell you the old path is gone.
+
 ## Checklist
 
 - [ ] The sentence reporting a result names the selector that produced it
