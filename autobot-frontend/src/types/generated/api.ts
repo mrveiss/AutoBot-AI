@@ -88973,6 +88973,24 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * RS256RevokeRequest
+         * @description Request body for RS256 authority token revocation (#10278).
+         *
+         *     Moved out of api/auth.py by #15757. The no-local-schemas hook reads each
+         *     changed file whole, so this pre-existing violation surfaced on an unrelated
+         *     edit -- fixed rather than left for whoever touches auth.py next.
+         *
+         *     It lands here rather than in schemas_agent.py because that module is at its
+         *     grandfathered ceiling with zero headroom, as are every other frozen domain
+         *     module the hook names. See #15757 for the conflict that creates.
+         */
+        RS256RevokeRequest: {
+            /** Token */
+            token: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * RUMClearResponse
          * @description Response for POST /rum/clear.
          */
@@ -102696,16 +102714,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * _RS256RevokeRequest
-         * @description Request body for RS256 authority token revocation (#10278).
-         */
-        _RS256RevokeRequest: {
-            /** Token */
-            token: string;
-        } & {
-            [key: string]: unknown;
-        };
         /** _RealtimeToolCallRequest */
         _RealtimeToolCallRequest: {
             /** Name */
@@ -104492,7 +104500,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["_RS256RevokeRequest"];
+                "application/json": components["schemas"]["RS256RevokeRequest"];
             };
         };
         responses: {
