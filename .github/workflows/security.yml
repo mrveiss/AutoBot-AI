@@ -21,9 +21,8 @@
 #   | npm audit | scans EVERY workspace with a lockfile (#16131). Blocking
 #   |           | for autobot-frontend; reporting-only for the rest until
 #   |           | each is triaged. Previously autobot-frontend ONLY (#13400),
-#   |           | while reporting a repository-wide figure. SEVEN have a
-#   |           | lockfile and can be audited; ONE is (#16131) -- so this
-#   |           | number is one workspace's, not the repository's.
+#   |           | while reporting a repository-wide figure. All SEVEN with a
+#   |           | lockfile are now scanned; one blocks, six report (#16131).
 #   |           | re-confirmed by the same run
 #   |           |                         | GATES at `high`, no allowance       |
 #   | safety    | not measurable in CI — unauthenticated `safety check` is
@@ -318,11 +317,16 @@ jobs:
           [ "$ws" = "autobot-frontend" ] && continue
           [ -f "$ws/npm-audit.json" ] || continue
           echo "::group::npm audit — $ws (reporting only, not yet triaged)"
-          python3 pipeline-scripts/security_scan_gate.py \
-            --format npm-audit \
-            --report "$ws/npm-audit.json" \
-            --title "Dependency audit — $ws (reporting)" \
-            --fail-on never
+          # `if !` rather than `|| true`: the gate is BLOCKED from being neutralised
+          # by a shell `||` (security_scan_gate_test), and rightly so. But
+          # `--fail-on never` does NOT make this call safe on its own -- read_report
+          # raises on an absent or empty report BEFORE --fail-on is read, and a
+          # failed `npm audit` in one untriaged workspace would then abort the whole
+          # step under `set -euo pipefail`, failing the job over a workspace that is
+          # explicitly meant not to block. Reported loudly, and not fatal.
+          if ! python3 pipeline-scripts/security_scan_gate.py --format npm-audit --report "$ws/npm-audit.json" --title "Dependency audit — $ws (reporting)" --fail-on never; then
+            echo "::warning::$ws — the audit report is missing or unreadable, so this workspace was NOT scanned. Not blocking (untriaged), but it is not clean either."
+          fi
           echo "::endgroup::"
         done
 

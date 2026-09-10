@@ -98,8 +98,33 @@ def parse_pip_audit(payload: str) -> list[Finding]:
 
 
 def parse_npm_audit(payload: str) -> list[Finding]:
-    """npm ``audit --json`` (npm 7+): the ``vulnerabilities`` map, one per package."""
+    """npm ``audit --json`` (npm 7+): the ``vulnerabilities`` map, one per package.
+
+    A DOCUMENT WITHOUT THAT MAP IS AN ERROR, NOT A CLEAN RESULT (#16131 review).
+    ``npm audit`` emits valid JSON on failure -- ``{"error": {"code": "ENOLOCK"}}``
+    for a corrupt lockfile, ``{"message": "...ECONNREFUSED...", "error": {...}}``
+    for an unreachable registry. Neither carries ``vulnerabilities``, so reading
+    it with ``.get("vulnerabilities") or {}`` returned an empty list and the gate
+    reported **PASS - 0 findings**.
+
+    That is this module's own docstring being contradicted four lines down: it
+    says an absent or unparseable report is a hard failure, and this made a
+    *failed scan* indistinguishable from a *clean scan*. It applies to the
+    blocking frontend gate too, not only the reporting ones -- a transient
+    registry error there passed silently on a step whose header says security
+    checks are blocking.
+    """
     document = json.loads(payload)
+    if not isinstance(document, dict) or "vulnerabilities" not in document:
+        detail = ""
+        if isinstance(document, dict):
+            error = document.get("error")
+            code = error.get("code") if isinstance(error, dict) else None
+            detail = f" (npm reported {code or document.get('message') or 'no vulnerabilities key'})"
+        raise ReportError(
+            "npm audit produced no `vulnerabilities` map" + detail + ". A scan that did not "
+            "run is not a scan that found nothing -- fix the audit, do not read this as clean."
+        )
     return [
         Finding(
             severity=_normalise(entry.get("severity", "")),

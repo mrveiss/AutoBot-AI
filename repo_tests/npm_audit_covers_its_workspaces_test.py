@@ -219,3 +219,29 @@ def test_js_yaml_is_off_the_advisory_range_in_every_lockfile() -> None:
                 offenders.append(f"{relative}: js-yaml {version}")
 
     assert not offenders, "js-yaml inside GHSA-2883's affected range:\n  " + "\n  ".join(offenders)
+
+
+def test_every_auditable_workspace_is_either_blocking_or_staged() -> None:
+    """The direction the other two tests do not assert (#16131 review).
+
+    `test_the_untriaged_list_only_shrinks` and
+    `test_no_workspace_is_both_audited_and_declared_untriaged_forever` both check
+    `UNTRIAGED subseteq auditable` -- the same direction twice. Neither checks the
+    converse, so a NEW workspace with a lockfile would be scanned and reported by
+    the workflow's dynamic loop (coverage is fine) while silently never entering
+    the triage list.
+
+    That is how a staging area becomes the place workspaces go to be ignored,
+    which is the outcome the list was introduced to prevent.
+    """
+    auditable = set(_auditable_workspaces(repo_root()))
+    blocking = {"autobot-frontend"}
+    unstaged = sorted(auditable - blocking - UNTRIAGED)
+
+    assert not unstaged, (
+        "auditable workspace(s) that neither block nor appear in UNTRIAGED:\n  "
+        + "\n  ".join(unstaged)
+        + "\n\nThe audit loop will scan them, so coverage is not the gap -- the triage "
+        "bookkeeping is. Add them to UNTRIAGED, or make them blocking once their "
+        "findings are triaged."
+    )
