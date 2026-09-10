@@ -168,10 +168,12 @@ jobs:
           # LINES below, because "over by 0.7 lines" is actionable where
           # "1.8% vs 1.8%" is not.
           report() {
-            local label="$1" log="$2" threshold="$3" scope="$4"
+            local label="$1" log="$2" threshold="$3" scope="$4" var="$5"
             echo "::error::${label} exceeded its baseline."
             echo "  scope:     ${scope}"
-            echo "  threshold: ${threshold}%"
+            # Name the env var as well as its value (#16163): the value says how
+            # far over, the name says which knob a maintainer would have to turn.
+            echo "  threshold: ${threshold}%  (env ${var})"
             [ -f "${log}" ] || { echo "  (no captured log at ${log})"; return; }
             local totals dup total pct allowed over
             # jscpd draws its table with UNICODE box characters (U+2502) wrapped in
@@ -214,12 +216,12 @@ jobs:
           if [ "${MAIN_OUTCOME}" = "failure" ]; then
             failed=1
             report "The backend/frontend duplication scope" /tmp/main-dup.log "${THRESHOLD}" \
-              "autobot-backend + autobot-frontend/src"
+              "autobot-backend + autobot-frontend/src" THRESHOLD
           fi
           if [ "${SLM_OUTCOME}" = "failure" ]; then
             failed=1
             report "The shared/SLM duplication scope" /tmp/slm-gate.log "${SLM_THRESHOLD}" \
-              "autobot_shared + autobot-slm-backend + autobot-slm-frontend/src"
+              "autobot_shared + autobot-slm-backend + autobot-slm-frontend/src" SLM_THRESHOLD
           fi
           if [ "${failed}" = "0" ]; then
             echo "::error::This job failed outside both duplication gates."
