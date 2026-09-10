@@ -174,9 +174,30 @@ jobs:
             echo "  threshold: ${threshold}%"
             [ -f "${log}" ] || { echo "  (no captured log at ${log})"; return; }
             local totals dup total pct allowed over
-            totals=$(grep -oE 'Total:[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*' "${log}" | tail -1)
-            dup=$(printf '%s' "${totals}" | grep -oE '[0-9]+ \([0-9.]+%\)' | head -1 | grep -oE '^[0-9]+')
-            total=$(printf '%s' "${totals}" | grep -oE '\| *[0-9]+ *\|' | sed -n '2p' | tr -dc '0-9')
+            # jscpd draws its table with UNICODE box characters (U+2502) wrapped in
+            # ANSI colour codes -- there is not one ASCII pipe in real output.
+            # Verified against run 34414434867: 0 x '|', 8 x '\u2502' on the Total
+            # row. The first version of this parser required '|' and therefore fell
+            # to the cannot-parse branch on EVERY real failure, which is the branch
+            # this whole step exists to eliminate. Normalise before matching.
+            local flat
+            flat=$(sed -e 's/\x1b\[[0-9;]*m//g' -e 's/\xe2\x94\x82/|/g' "${log}")
+            # Split on the column separator rather than matching pipes with a
+            # regex: `grep -oE '\| *[0-9]+ *\|'` consumes the closing pipe of one
+            # field as the opening pipe of the next, so it silently returns every
+            # OTHER column. That read 1,227,700 (tokens) as the line count and
+            # produced 0.3852% instead of 1.8203% -- a wrong number, formatted
+            # to four decimal places, which is worse than the missing one it
+            # replaced. jscpd's Total row is:
+            #   Total: | files | total lines | total tokens | clones | dup lines (pct)
+            totals=$(printf '%s' "${flat}" | grep -a 'Total:' | tail -1)
+            # Field map, verified against run 34414434867's real Total row:
+            #   $1 empty (leading separator) · $2 "Total:" · $3 files
+            #   $4 total lines · $5 total tokens · $6 clones · $7 "N (P%)"
+            # The leading separator makes $1 empty, which is the off-by-one that
+            # read `files` as `total lines` on the previous attempt.
+            total=$(printf '%s' "${totals}" | awk -F'|' '{gsub(/[^0-9]/,"",$4); print $4}')
+            dup=$(printf '%s' "${totals}" | awk -F'|' '{print $7}' | grep -oE '^[^(]*' | tr -dc '0-9')
             if [ -n "${dup}" ] && [ -n "${total}" ] && [ "${total}" -gt 0 ]; then
               pct=$(awk -v d="${dup}" -v t="${total}" 'BEGIN{printf "%.4f", d/t*100}')
               allowed=$(awk -v t="${total}" -v x="${threshold}" 'BEGIN{printf "%.1f", t*x/100}')

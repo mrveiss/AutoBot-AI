@@ -126,3 +126,50 @@ def test_a_missing_log_reports_no_figure_rather_than_a_guessed_one() -> None:
     output = _run_explain(main_outcome="failure", slm_outcome="success")
     assert "no captured log" in output or "could not parse" in output
     assert "OVER BY" not in output, "reported an overage with no log to measure from"
+
+
+#: One real jscpd Total row, captured verbatim from run 34414434867 -- the run
+#: whose 4729/259798 figures #16163 is written about. ANSI codes and U+2502 box
+#: characters intact, because those are exactly what the first parser could not
+#: read: it required an ASCII pipe, and real output contains none.
+_REAL_JSCPD_TOTAL_ROW = (
+    "\x1b[90m\u2502\x1b[39m \x1b[1mTotal:\x1b[22m     \x1b[90m\u2502\x1b[39m 759            "
+    "\x1b[90m\u2502\x1b[39m 259798      \x1b[90m\u2502\x1b[39m 1227700      "
+    "\x1b[90m\u2502\x1b[39m 135           \x1b[90m\u2502\x1b[39m 4729 (1.82%)   \x1b[90m\u2502\x1b[39m"
+)
+
+
+def test_the_parser_reads_a_real_jscpd_row_not_a_synthetic_one(tmp_path) -> None:
+    """#16163: the first parser passed its own fixtures and failed every real log.
+
+    It matched on ASCII `|`. jscpd draws with U+2502 wrapped in ANSI colour, so
+    there is not one ASCII pipe in real output -- and the step fell to its
+    cannot-parse branch on every actual failure, which is the branch this work
+    exists to eliminate. A synthetic fixture using `|` would still pass today and
+    prove nothing, so the fixture is a captured production row.
+
+    Asserts the FIGURES, not that parsing succeeded: an off-by-one in the field
+    split read 1,227,700 tokens as the line count and reported 0.3852% -- a wrong
+    number formatted to four decimal places, which is worse than no number.
+    """
+    log = tmp_path / "jscpd.log"
+    log.write_text(_REAL_JSCPD_TOTAL_ROW + "\n", encoding="utf-8")
+
+    flat = _strip_decoration(log.read_text(encoding="utf-8"))
+    row = [line for line in flat.splitlines() if "Total:" in line][-1]
+    fields = row.split("|")
+
+    total = int("".join(c for c in fields[3] if c.isdigit()))
+    dup = int("".join(c for c in fields[6].split("(")[0] if c.isdigit()))
+
+    assert (dup, total) == (4729, 259798), f"parsed {dup}/{total}, expected 4729/259798"
+    assert round(dup / total * 100, 4) == 1.8203
+    assert round(total * 1.82 / 100, 1) == 4728.3
+    assert round(dup - total * 1.82 / 100, 1) == 0.7
+
+
+def _strip_decoration(text: str) -> str:
+    """ANSI escapes out, box separators normalised -- what the workflow's sed does."""
+    import re as _re
+
+    return _re.sub(r"\x1b\[[0-9;]*m", "", text).replace("\u2502", "|")

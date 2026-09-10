@@ -95,8 +95,12 @@ MIN_GUARDS_EXAMINED = 95
 #: is a different question, answered by `reach_declarations_test`, which hands
 #: every declaration an empty repository and requires it to raise.
 #:
-#: The two run at different times. This module is in the pre-push set;
-#: `reach_declarations_test` is not. So a floor that exists but cannot fire --
+#: The two ask different questions, and NEITHER is reliably in the pre-push set:
+#: `tools/git-hooks/pre-push` selects tests by changed-file match and directory
+#: sibling, so a meta-test runs only when it is itself in the diff. An earlier
+#: version of this comment claimed this module was always in that set; the hook
+#: does not say so, and the claim was removed rather than left to be trusted.
+#: So a floor that exists but cannot fire --
 #: because its `discover` raises on an empty tree instead of returning [] --
 #: passes pre-push and fails in CI, which is the slowest possible place to learn
 #: it. Stating the gap here rather than implying full coverage: an author who
