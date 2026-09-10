@@ -15,8 +15,6 @@ the factory and serde over them.
 should import from this module directly.
 """
 
-from __future__ import annotations
-
 import json
 import uuid
 from dataclasses import dataclass

@@ -14,11 +14,12 @@ so peer trust levels evolve continuously from real interaction history.
 
 from typing import Any, Dict
 
+from agents.scope_enforcement import hold_scopes
 from autobot_shared.logging_manager import get_logger
 
 from .pii_pipeline import PIIBlocked, scrub_outbound
 from .self_evaluator import DEFAULT_EVAL_THRESHOLD, evaluate_task_output
-from .task_manager import get_task_manager
+from .task_manager import _TERMINAL_STATES, get_task_manager
 from .trust_score import get_trust_manager
 from .types import TaskArtifact, TaskState
 
@@ -75,39 +76,256 @@ async def execute_a2a_task(
     manager.update_state(task_id, TaskState.WORKING)
     manager.publish_event(task_id, {"event": "state_change", "state": "working", "task_id": task_id})
 
-    try:
-        # Issue #7355: Scrub inbound payload before forwarding to orchestrator.
-        # Prevents PII/credentials that arrived in the A2A request from leaking
-        # into downstream RAG retrieval, agent prompts, or external API calls.
-        try:
-            scrub_result = scrub_outbound(input_text, peer_id=task_id, message_id=task_id)
-            input_text = scrub_result.text
-            if scrub_result.redaction_count > 0:
-                logger.info(
-                    "A2A task %s: scrubbed %d PII item(s) from inbound payload",
-                    task_id,
-                    scrub_result.redaction_count,
-                )
-        except PIIBlocked as exc:
-            logger.warning("A2A task %s: inbound payload blocked by PII pipeline: %s", task_id, exc)
-            # Issue #7358 phase 2: inbound PII block is a threat event.
-            if peer_id:
-                try:
-                    get_trust_manager().record_threat_event(peer_id)
-                except Exception as trust_exc:
-                    logger.warning("trust_score: threat_event record failed peer=%s: %s", peer_id, trust_exc)
-            manager.update_state(task_id, TaskState.FAILED, message="Blocked: PII detected in request")
-            manager.publish_event(
-                task_id,
-                {
-                    "event": "state_change",
-                    "state": "failed",
-                    "terminal": True,
-                    "task_id": task_id,
-                    "message": "pii_blocked",
-                },
-            )
+    # #15950: the scopes this task will touch, declared by the submitter. The
+    # executor cannot ask an agent for them -- it calls the orchestrator, which
+    # routes internally, so no specific agent is known here. Agent-level claims
+    # are taken separately in `BaseAgent.execute_with_tracking`; these are the
+    # task-level ones, and an empty declaration keeps today's behaviour exactly.
+    declared = list((context or {}).get("declared_scopes") or [])
+
+    async def _task_is_over() -> bool:
+        task = manager.get_task(task_id)
+        return task is None or task.status.state in _TERMINAL_STATES
+
+    async with hold_scopes(
+        declared, agent_id="a2a-executor", task_id=task_id, intent=input_text[:120], stop=_task_is_over
+    ) as held:
+        if not held.granted:
+            _report_refusal(manager, task_id, held.conflict)
             return
+        await _execute_claimed(task_id, input_text, context, eval_threshold, peer_id, manager)
+
+
+def _report_refusal(manager, task_id: str, conflict) -> None:
+    """Fail the task with the holder named, not with a bare error.
+
+    The operator's next question is "blocked by what?" -- a refusal that does not
+    answer it turns a coordination event into a mystery, and the conflict object
+    already renders holder, task, mode, expiry and intent.
+    """
+    manager.add_artifact(
+        task_id,
+        TaskArtifact(
+            artifact_type="json",
+            content={
+                "refused_scope": conflict.requested,
+                "held_by_agent": conflict.holder.agent_id,
+                "held_by_task": conflict.holder.task_id,
+                "holder_intent": conflict.holder.intent,
+                "holder_expires_at": conflict.holder.expires_at,
+                "reason": str(conflict),
+            },
+        ),
+    )
+    manager.update_state(task_id, TaskState.FAILED, message="scope_conflict")
+    manager.publish_event(
+        task_id,
+        {
+            "event": "state_change",
+            "state": "failed",
+            "terminal": True,
+            "message": "scope_conflict",
+            "task_id": task_id,
+        },
+    )
+    logger.info("A2A task %s refused: %s", task_id, conflict)
+
+
+def _scrub_inbound(task_id: str, input_text: str, peer_id: str | None, manager) -> str | None:
+    """Scrub the inbound payload; None means the PII pipeline blocked it (#7355).
+
+    None means "already reported" -- the task is failed and its event published
+    here, so the caller returns rather than deciding again. Returning the text
+    with a separate flag would let a caller keep using it after a block, which
+    is the one thing this must not permit.
+    """
+    # Issue #7355: Scrub inbound payload before forwarding to orchestrator.
+    # Prevents PII/credentials that arrived in the A2A request from leaking
+    # into downstream RAG retrieval, agent prompts, or external API calls.
+    try:
+        scrub_result = scrub_outbound(input_text, peer_id=task_id, message_id=task_id)
+        if scrub_result.redaction_count > 0:
+            logger.info(
+                "A2A task %s: scrubbed %d PII item(s) from inbound payload",
+                task_id,
+                scrub_result.redaction_count,
+            )
+        return scrub_result.text
+    except PIIBlocked as exc:
+        logger.warning("A2A task %s: inbound payload blocked by PII pipeline: %s", task_id, exc)
+        # Issue #7358 phase 2: inbound PII block is a threat event.
+        if peer_id:
+            try:
+                get_trust_manager().record_threat_event(peer_id)
+            except Exception as trust_exc:
+                logger.warning("trust_score: threat_event record failed peer=%s: %s", peer_id, trust_exc)
+        manager.update_state(task_id, TaskState.FAILED, message="Blocked: PII detected in request")
+        manager.publish_event(
+            task_id,
+            {
+                "event": "state_change",
+                "state": "failed",
+                "terminal": True,
+                "task_id": task_id,
+                "message": "pii_blocked",
+            },
+        )
+        return None
+
+
+def _fail_on_eval(task_id: str, eval_result, eval_threshold: float, peer_id: str | None, manager) -> None:
+    """The self-eval verdict said no: record why, then fail the task.
+
+    Split from `_apply_eval_gate` only for length (#620). The confidence and
+    threshold are both recorded because a failure that reports one without the
+    other cannot be judged -- 0.55 is a pass or a fail depending on the bar.
+    """
+    eval_artifact = TaskArtifact(
+        artifact_type="json",
+        content={
+            "eval_reason": eval_result.eval_reason,
+            "eval_confidence": eval_result.confidence,
+            "eval_threshold": eval_threshold,
+        },
+    )
+    manager.add_artifact(task_id, eval_artifact)
+    manager.update_state(
+        task_id,
+        TaskState.FAILED,
+        message=eval_result.eval_reason,
+    )
+    manager.publish_event(
+        task_id,
+        {
+            "event": "state_change",
+            "state": "failed",
+            "terminal": True,
+            "task_id": task_id,
+            "eval_confidence": eval_result.confidence,
+            "eval_reason": eval_result.eval_reason,
+        },
+    )
+    logger.warning(
+        "A2A task %s failed self-eval (confidence=%.4f): %s",
+        task_id,
+        eval_result.confidence,
+        eval_result.eval_reason,
+    )
+    # Issue #7358 phase 2: self-eval failure → negative trust signal.
+    if peer_id:
+        try:
+            get_trust_manager().record_failure(peer_id)
+        except Exception as trust_exc:
+            logger.warning("trust_score: record_failure failed peer=%s: %s", peer_id, trust_exc)
+
+
+def _apply_eval_gate(task_id: str, eval_result, eval_threshold: float, peer_id: str | None, manager) -> None:
+    """Move the task to its terminal state on the self-eval verdict (#4687).
+
+    Extracted for length, not reuse: `_execute_claimed` inherited the whole of
+    the original `execute_a2a_task` body when the claim wrapper was added, and
+    at 159 lines it failed the function-length guard (#620). The split follows
+    the seam the original comments already drew.
+    """
+    if eval_result.passed:
+        manager.update_state(task_id, TaskState.COMPLETED)
+        manager.publish_event(
+            task_id,
+            {
+                "event": "state_change",
+                "state": "completed",
+                "terminal": True,
+                "task_id": task_id,
+                "eval_confidence": eval_result.confidence,
+            },
+        )
+        logger.info(
+            "A2A task %s completed (confidence=%.4f)",
+            task_id,
+            eval_result.confidence,
+        )
+        # Issue #7358 phase 2: successful task → positive trust signal.
+        if peer_id:
+            try:
+                get_trust_manager().record_success(peer_id)
+            except Exception as trust_exc:
+                logger.warning("trust_score: record_success failed peer=%s: %s", peer_id, trust_exc)
+    else:
+        _fail_on_eval(task_id, eval_result, eval_threshold, peer_id, manager)
+
+
+def _store_response_artifacts(
+    task_id: str, result: dict, peer_id: str | None, manager
+) -> tuple[str, dict | None] | None:
+    """Store the text and routing-metadata artifacts; return what the gate needs.
+
+    Outbound scrubbing happens here so artifacts returned to remote peers are
+    clean, and it returns the SCRUBBED text: handing back the raw response and
+    scrubbing only what is stored would leave the caller holding the unscrubbed
+    copy that the self-eval then reads.
+    """
+    # Artifact 1: primary text response — scrub before storing artifact
+    # so response artifacts returned to remote callers are clean.
+    response_text = _extract_response_text(result)
+    try:
+        out_scrub = scrub_outbound(response_text, peer_id=task_id, message_id=task_id)
+        response_text = out_scrub.text
+    except PIIBlocked:
+        # Response itself blocked — surface as failed rather than leaking
+        logger.warning("A2A task %s: response blocked by PII pipeline", task_id)
+        # Issue #7358 phase 2: outbound PII in response is also a threat event
+        # (indicates the orchestrator produced sensitive data for an external peer).
+        if peer_id:
+            try:
+                get_trust_manager().record_threat_event(peer_id)
+            except Exception as trust_exc:
+                logger.warning("trust_score: threat_event record failed peer=%s: %s", peer_id, trust_exc)
+        manager.update_state(task_id, TaskState.FAILED, message="Blocked: PII detected in response")
+        manager.publish_event(
+            task_id,
+            {
+                "event": "state_change",
+                "state": "failed",
+                "terminal": True,
+                "task_id": task_id,
+                "message": "pii_blocked_response",
+            },
+        )
+        return None
+    artifact_text = TaskArtifact(artifact_type="text", content=response_text)
+    manager.add_artifact(task_id, artifact_text)
+    manager.publish_event(
+        task_id,
+        {"event": "artifact_added", "artifact_type": "text", "task_id": task_id},
+    )
+
+    # Artifact 2: routing metadata (agent used, model, timing, etc.)
+    metadata = _extract_routing_metadata(result)
+    if metadata:
+        artifact_meta = TaskArtifact(artifact_type="json", content=metadata)
+        manager.add_artifact(task_id, artifact_meta)
+        manager.publish_event(
+            task_id,
+            {"event": "artifact_added", "artifact_type": "json", "task_id": task_id},
+        )
+
+    return response_text, metadata
+
+
+async def _execute_claimed(
+    task_id: str,
+    input_text: str,
+    context: Dict[str, Any] | None,
+    eval_threshold: float,
+    peer_id: str | None,
+    manager,
+) -> None:
+    """The original execution body, unchanged, now inside the task's claims."""
+    try:
+        scrubbed = _scrub_inbound(task_id, input_text, peer_id, manager)
+        if scrubbed is None:
+            return
+        input_text = scrubbed
 
         # Late import to avoid circular deps at module load time
         from agents.agent_orchestration import get_distributed_agent_coordinator
@@ -118,50 +336,10 @@ async def execute_a2a_task(
             context=context,
         )
 
-        # Artifact 1: primary text response — scrub before storing artifact
-        # so response artifacts returned to remote callers are clean.
-        response_text = _extract_response_text(result)
-        try:
-            out_scrub = scrub_outbound(response_text, peer_id=task_id, message_id=task_id)
-            response_text = out_scrub.text
-        except PIIBlocked:
-            # Response itself blocked — surface as failed rather than leaking
-            logger.warning("A2A task %s: response blocked by PII pipeline", task_id)
-            # Issue #7358 phase 2: outbound PII in response is also a threat event
-            # (indicates the orchestrator produced sensitive data for an external peer).
-            if peer_id:
-                try:
-                    get_trust_manager().record_threat_event(peer_id)
-                except Exception as trust_exc:
-                    logger.warning("trust_score: threat_event record failed peer=%s: %s", peer_id, trust_exc)
-            manager.update_state(task_id, TaskState.FAILED, message="Blocked: PII detected in response")
-            manager.publish_event(
-                task_id,
-                {
-                    "event": "state_change",
-                    "state": "failed",
-                    "terminal": True,
-                    "task_id": task_id,
-                    "message": "pii_blocked_response",
-                },
-            )
+        artifacts = _store_response_artifacts(task_id, result, peer_id, manager)
+        if artifacts is None:
             return
-        artifact_text = TaskArtifact(artifact_type="text", content=response_text)
-        manager.add_artifact(task_id, artifact_text)
-        manager.publish_event(
-            task_id,
-            {"event": "artifact_added", "artifact_type": "text", "task_id": task_id},
-        )
-
-        # Artifact 2: routing metadata (agent used, model, timing, etc.)
-        metadata = _extract_routing_metadata(result)
-        if metadata:
-            artifact_meta = TaskArtifact(artifact_type="json", content=metadata)
-            manager.add_artifact(task_id, artifact_meta)
-            manager.publish_event(
-                task_id,
-                {"event": "artifact_added", "artifact_type": "json", "task_id": task_id},
-            )
+        response_text, metadata = artifacts
 
         # Issue #4687: self-evaluation quality gate before COMPLETED transition.
         eval_result = await evaluate_task_output(
@@ -171,67 +349,7 @@ async def execute_a2a_task(
             threshold=eval_threshold,
         )
 
-        if eval_result.passed:
-            manager.update_state(task_id, TaskState.COMPLETED)
-            manager.publish_event(
-                task_id,
-                {
-                    "event": "state_change",
-                    "state": "completed",
-                    "terminal": True,
-                    "task_id": task_id,
-                    "eval_confidence": eval_result.confidence,
-                },
-            )
-            logger.info(
-                "A2A task %s completed (confidence=%.4f)",
-                task_id,
-                eval_result.confidence,
-            )
-            # Issue #7358 phase 2: successful task → positive trust signal.
-            if peer_id:
-                try:
-                    get_trust_manager().record_success(peer_id)
-                except Exception as trust_exc:
-                    logger.warning("trust_score: record_success failed peer=%s: %s", peer_id, trust_exc)
-        else:
-            eval_artifact = TaskArtifact(
-                artifact_type="json",
-                content={
-                    "eval_reason": eval_result.eval_reason,
-                    "eval_confidence": eval_result.confidence,
-                    "eval_threshold": eval_threshold,
-                },
-            )
-            manager.add_artifact(task_id, eval_artifact)
-            manager.update_state(
-                task_id,
-                TaskState.FAILED,
-                message=eval_result.eval_reason,
-            )
-            manager.publish_event(
-                task_id,
-                {
-                    "event": "state_change",
-                    "state": "failed",
-                    "terminal": True,
-                    "task_id": task_id,
-                    "eval_confidence": eval_result.confidence,
-                    "eval_reason": eval_result.eval_reason,
-                },
-            )
-            logger.warning(
-                "A2A task %s failed self-eval (confidence=%.4f): %s",
-                task_id,
-                eval_result.confidence,
-                eval_result.eval_reason,
-            )
-            # Issue #7358 phase 2: self-eval failure → negative trust signal.
-            if peer_id:
-                try:
-                    get_trust_manager().record_failure(peer_id)
-                except Exception as trust_exc:
-                    logger.warning("trust_score: record_failure failed peer=%s: %s", peer_id, trust_exc)
+        _apply_eval_gate(task_id, eval_result, eval_threshold, peer_id, manager)
 
     except Exception as exc:
         logger.error("A2A task %s failed: %s", task_id, exc)
