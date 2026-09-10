@@ -26,6 +26,7 @@ from check_git_toplevel_env_scrubbed import (  # noqa: E402
     GIT_CALL_FLOOR,
     main,
     scan,
+    scan_shell,
     scan_with_counts,
     subprocess_names,
 )
@@ -518,3 +519,47 @@ def test_a_git_failure_still_propagates(tmp_path, monkeypatch):
     monkeypatch.setattr(checker, "tracked_paths", _broken)
     with pytest.raises(RuntimeError, match="failed"):
         list(checker.iter_shell_files([], tmp_path))
+
+
+# --------------------------------------------------------------------------
+# scan_shell: `git ls-files` in verb position (#15506)
+# --------------------------------------------------------------------------
+
+
+def _shell_findings(tmp_path: Path, body: str) -> list[str]:
+    path = tmp_path / "probe.sh"
+    path.write_text(body, encoding="utf-8")
+    return [message for _line, message in scan_shell(path, tmp_path)]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "files=$(git ls-files)\n",
+        # The `-C` form: a literal `git ls-files` match misses this, and it is
+        # the shape that was live in scripts/verify-done.sh.
+        'files=$(git -C "$d" ls-files -v)\n',
+        # THE ONE THAT MATTERED. The first version exempted any line containing
+        # the helper's NAME, so a raw call wearing an approving comment passed
+        # the guard while doing the exact thing it forbids. Caught in review of
+        # #16118, and the reason the match is anchored on the verb instead.
+        'x=$(git -C "$d" ls-files -v)  # git_tracked_files would be better\n',
+    ],
+)
+def test_scan_shell_reports_a_raw_ls_files_call(tmp_path: Path, body: str) -> None:
+    assert any("ls-files" in m for m in _shell_findings(tmp_path, body))
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # A comment discussing the call is documentation, not an invocation.
+        "# git ls-files is what this guard refuses\n",
+        # The helper itself: `\bgit\b` cannot match inside `git_tracked_files`,
+        # so this is clean on its own terms rather than by being exempted.
+        'files=$(git_tracked_files "$d" -- "*.sh")\n',
+    ],
+)
+def test_scan_shell_leaves_comments_and_helper_calls_alone(tmp_path: Path, body: str) -> None:
+    """A false positive here would refuse the remedy along with the defect."""
+    assert not [m for m in _shell_findings(tmp_path, body) if "ls-files" in m]
