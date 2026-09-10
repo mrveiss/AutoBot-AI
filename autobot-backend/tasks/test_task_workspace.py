@@ -400,6 +400,38 @@ class TestCleanupTOCTOU:
         assert not _branch_exists(git_repo, f"task-{task_id}")
 
 
+_BASE = "origin/Dev_new_gui"
+
+
+def _git(repo: Path, *argv: str) -> None:
+    subprocess.run(["git", "-C", str(repo), *argv], check=True, capture_output=True, env=_test_git_env())
+
+
+def _recorded_warnings(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
+    """Pin the base ref and record what `_fetched_base_ref` warns, without relying on log propagation."""
+    monkeypatch.setattr(_tw, "_WORKSPACE_BASE_REF", _BASE)
+    warnings: list[tuple] = []
+    monkeypatch.setattr(_tw.logger, "warning", lambda *args, **kwargs: warnings.append(args))
+    return warnings
+
+
+def _fetch_times_out(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
+    """Make only the fetch hang; `remote` and `rev-parse` still run for real.
+
+    Patched on the module under test, not on git_probe: task_workspace binds
+    `run_git` by name at import, so `_tw.run_git` is the name its calls resolve.
+    """
+    real_run_git = _tw.run_git
+
+    def run_git(argv: list[str], **kwargs):
+        if argv[0] == "fetch":
+            raise subprocess.TimeoutExpired(cmd=["git", *argv], timeout=1)
+        return real_run_git(argv, **kwargs)
+
+    monkeypatch.setattr(_tw, "run_git", run_git)
+    return _recorded_warnings(monkeypatch)
+
+
 class TestFetchedBaseRef:
     """`_fetched_base_ref` has a three-way contract, so it gets three-way tests.
 
@@ -440,3 +472,41 @@ class TestFetchedBaseRef:
         )
         with pytest.raises(RuntimeError, match="cannot resolve workspace base ref"):
             _tw._fetched_base_ref(git_repo)
+
+    def test_a_timed_out_fetch_is_logged_and_the_last_known_base_is_used(
+        self, git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The control-flow path the move to `run_git` added (#16128 delta review).
+
+        `subprocess.run(timeout=)` raises TimeoutExpired whatever `check=` is, so
+        the except branch is live. A hung transport must neither block allocation
+        nor pass in silence: the refresh that did not happen is logged, and the
+        base that already resolves is still the answer.
+        """
+        _git(git_repo, "remote", "add", "origin", str(git_repo))
+        _git(git_repo, "update-ref", f"refs/remotes/{_BASE}", "HEAD")
+        warnings = _fetch_times_out(monkeypatch)
+        assert _tw._fetched_base_ref(git_repo) == _BASE
+        assert len(warnings) == 1 and "timed out" in warnings[0][0]
+
+    def test_a_timed_out_fetch_with_no_last_known_base_still_raises(
+        self, git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Best effort covers the refresh, never the resolve: a timeout must not
+        become a route around the missing-ref error."""
+        _git(git_repo, "remote", "add", "origin", str(git_repo))
+        warnings = _fetch_times_out(monkeypatch)
+        with pytest.raises(RuntimeError, match="cannot resolve workspace base ref"):
+            _tw._fetched_base_ref(git_repo)
+        assert len(warnings) == 1
+
+    def test_a_successful_fetch_resolves_the_ref_it_fetched(
+        self, git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The success arm, executed rather than read: the remote has the branch,
+        the fetch creates the tracking ref, and nothing is warned."""
+        _git(git_repo, "branch", _BASE.partition("/")[2])
+        _git(git_repo, "remote", "add", "origin", str(git_repo))
+        warnings = _recorded_warnings(monkeypatch)
+        assert _tw._fetched_base_ref(git_repo) == _BASE
+        assert warnings == []
