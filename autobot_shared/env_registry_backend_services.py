@@ -360,3 +360,58 @@ register_env_var(
         component="paperclip",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PASSWORD_CHANGE_SESSION_MAX_ATTEMPTS",
+        type=int,
+        default=5,
+        description=(
+            "Password-change attempts allowed per CLIENT on the session auth surface before a 429 "
+            "(autobot-backend/api/auth.py). Deliberately looser than the targeted limiter below: this "
+            "one keys on the caller's client id and guards a self-service form, where a legitimate "
+            "user mistyping their current password is the common case (#15757)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PASSWORD_CHANGE_SESSION_WINDOW_SECONDS",
+        type=int,
+        default=300,
+        description=("Sliding window for AUTOBOT_PASSWORD_CHANGE_SESSION_MAX_ATTEMPTS, in seconds (#15757)."),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PASSWORD_CHANGE_TARGETED_MAX_ATTEMPTS",
+        type=int,
+        default=3,
+        description=(
+            "Password-change attempts allowed per TARGET USER, and per calling actor when the actor "
+            "differs from the target, on the user-management surface "
+            "(autobot-backend/user_management/middleware/rate_limit.py). Stricter than the session "
+            "limiter because this path includes admin reset of another user's password, where "
+            "repeated attempts against one victim -- or one caller walking many target ids -- is the "
+            "threat rather than a typo (#15743, #15757)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PASSWORD_CHANGE_TARGETED_WINDOW_SECONDS",
+        type=int,
+        default=1800,
+        description=(
+            "Sliding window for AUTOBOT_PASSWORD_CHANGE_TARGETED_MAX_ATTEMPTS, in seconds. Six times "
+            "the session window: a slower, stricter limit for the higher-value surface (#15757)."
+        ),
+        component="backend",
+    )
+)
