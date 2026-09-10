@@ -41,9 +41,9 @@ import re
 from pathlib import Path
 
 import pytest
-
 from repo_tests._paths import repo_root
 from repo_tests.python_filter_covers_its_guards_test import _filter_patterns, _is_covered
+
 from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
@@ -196,8 +196,16 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "root-relative `*_test.sh` sweep; the matching files live outside the python filter's trees",
     ),
     "*package.json": (
-        {"repo_tests/npm_test_scripts_run_in_ci_test.py"},
+        {
+            "repo_tests/npm_audit_covers_its_workspaces_test.py",
+            "repo_tests/npm_test_scripts_run_in_ci_test.py",
+        },
         "root-relative `*package.json` sweep; the matching files live outside the python filter's trees",
+    ),
+    "*package-lock.json": (
+        {"repo_tests/npm_audit_covers_its_workspaces_test.py"},
+        "root-relative `*package-lock.json` sweep (#16131): a lockfile is what makes a workspace "
+        "auditable, and they live outside the python filter's trees",
     ),
     "*requirements*.txt": (
         {"repo_tests/declared_distributions_test.py", "repo_tests/dependabot_requirements_coverage_test.py"},
