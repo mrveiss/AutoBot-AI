@@ -96,6 +96,24 @@ def test_only_the_failing_scope_is_named_when_slm_fails() -> None:
     assert MAIN_SCOPE not in output, "named the passing scope -- the reader cannot tell which to fix"
 
 
+@pytest.mark.parametrize(
+    ("main_outcome", "slm_outcome", "named", "unnamed"),
+    [
+        ("failure", "success", "(env THRESHOLD)", "(env SLM_THRESHOLD)"),
+        ("success", "failure", "(env SLM_THRESHOLD)", "(env THRESHOLD)"),
+    ],
+)
+def test_the_failing_scope_names_its_own_env_var(main_outcome, slm_outcome, named, unnamed) -> None:
+    """#16163 AC1: the value says how far over; the env var name says which knob.
+
+    Matched as the whole `(env NAME)` token, because `THRESHOLD` is a substring
+    of `SLM_THRESHOLD` and a bare substring check would pass either way.
+    """
+    output = _run_explain(main_outcome=main_outcome, slm_outcome=slm_outcome)
+    assert named in output, f"the failing scope did not name {named}"
+    assert unnamed not in output, f"named {unnamed}, the passing scope's knob"
+
+
 def test_both_are_named_when_both_fail() -> None:
     """Neither may be dropped when both exceeded."""
     output = _run_explain(main_outcome="failure", slm_outcome="failure")
