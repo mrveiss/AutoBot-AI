@@ -108,11 +108,12 @@ RESERVED_KINDS = MappingProxyType(
 def _require_kind(kind: str) -> None:
     """Refuse a kind reserved for another module, or one that is not a kind.
 
-    One function for every entry point that names a kind, so ``Scope.parse``
-    and :func:`list_claims` cannot drift into giving ``task`` two different
-    answers. Reserved is checked first: reaching that arm means the caller had
-    a real concept in mind, and "unknown kind" would answer a question they did
-    not ask.
+    One function for every entry point that names a kind, so no two of them can
+    drift into giving ``task`` different answers. It deliberately does not list
+    its callers: such a list goes stale the moment one is added, which is how
+    ``branch_stewardship.prune`` came to be missing from it (#15957). Reserved
+    is checked first: reaching that arm means the caller had a real concept in
+    mind, and "unknown kind" would answer a question they did not ask.
     """
     if kind in RESERVED_KINDS:
         raise ScopeError(f"scope kind {kind!r} is reserved: {RESERVED_KINDS[kind]}")
