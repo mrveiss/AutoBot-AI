@@ -109,45 +109,64 @@ class TrajectoryReplayer:
             score_indeterminate=indeterminate,
         )
 
+    @staticmethod
+    def _timed_out(golden: GoldenTrajectory) -> TrajectoryOutcome:
+        """A replay that ran out of time, recorded as a failure per #11062.
+
+        Filed as a regression rather than unmeasured because that was #11062's
+        recorded decision, not this module's. #16192 argues it belongs with the
+        unmeasured states and must not be changed here unannounced.
+        """
+        logger.error(
+            "replay of %s timed out after %.0fs — recording as failure (#11062)",
+            golden.trajectory_id,
+            _REPLAY_TIMEOUT_S,
+        )
+        return TrajectoryOutcome(
+            trajectory_id=golden.trajectory_id,
+            task_class=golden.task_class,
+            baseline_score=golden.baseline_score,
+            candidate_score=0.0,
+            tools_ok=False,
+            status_ok=False,
+            detail=f"replay timed out after {_REPLAY_TIMEOUT_S:.0f}s",
+        )
+
+    @staticmethod
+    def _unmeasured(golden: GoldenTrajectory, exc: RecordingUnusable) -> TrajectoryOutcome:
+        """A golden the candidate could supply no actual side for.
+
+        `tools_ok` and `status_ok` are None rather than False: no comparison
+        happened, and writing False would report a regression drawn from never
+        having looked.
+        """
+        logger.warning("replay of %s is unmeasured: %s", golden.trajectory_id, exc)
+        return TrajectoryOutcome(
+            trajectory_id=golden.trajectory_id,
+            task_class=golden.task_class,
+            baseline_score=golden.baseline_score,
+            candidate_score=0.0,
+            tools_ok=None,
+            status_ok=None,
+            detail=f"not measured: {exc}",
+            score_indeterminate=True,
+        )
+
     async def run(self, goldens: List[GoldenTrajectory], candidate: CandidateRunner) -> RegressionReport:
-        """Replay every golden against *candidate* and build the report."""
+        """Replay every golden against *candidate* and build the report.
+
+        No exception from one golden may end the loop: a run that stops early
+        emits no report at all, and an absent report exits under the code
+        reserved for "a golden regressed" (#16157).
+        """
         outcomes: List[TrajectoryOutcome] = []
         for golden in goldens:
             try:
                 outcome = await asyncio.wait_for(self.replay_one(golden, candidate), timeout=_REPLAY_TIMEOUT_S)
             except asyncio.TimeoutError:
-                logger.error(
-                    "replay of %s timed out after %.0fs — recording as failure (#11062)",
-                    golden.trajectory_id,
-                    _REPLAY_TIMEOUT_S,
-                )
-                outcome = TrajectoryOutcome(
-                    trajectory_id=golden.trajectory_id,
-                    task_class=golden.task_class,
-                    baseline_score=golden.baseline_score,
-                    candidate_score=0.0,
-                    tools_ok=False,
-                    status_ok=False,
-                    detail=f"replay timed out after {_REPLAY_TIMEOUT_S:.0f}s",
-                )
+                outcome = self._timed_out(golden)
             except RecordingUnusable as exc:
-                # One trajectory the candidate cannot answer for must not end
-                # the run. Raising through here aborts before the report is
-                # emitted, so a single absent or corrupt recording suppresses
-                # every other trajectory's verdict and leaves the process
-                # exiting 1 -- the code reserved for "a golden regressed",
-                # asserted about a corpus that was never examined.
-                logger.warning("replay of %s is unmeasured: %s", golden.trajectory_id, exc)
-                outcome = TrajectoryOutcome(
-                    trajectory_id=golden.trajectory_id,
-                    task_class=golden.task_class,
-                    baseline_score=golden.baseline_score,
-                    candidate_score=0.0,
-                    tools_ok=None,
-                    status_ok=None,
-                    detail=f"not measured: {exc}",
-                    score_indeterminate=True,
-                )
+                outcome = self._unmeasured(golden, exc)
             logger.info(
                 "replayed %s [%s] verdict=%s baseline=%.2f candidate=%.2f",
                 outcome.trajectory_id,
