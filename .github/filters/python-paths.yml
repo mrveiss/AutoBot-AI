@@ -33,6 +33,11 @@ python:
   # bypassed: a PR touching only this workflow computes `python != true`,
   # python-suite reports green, and the test guarding it never runs.
   - '.github/workflows/duplication-guard.yml'
+  # Read by repo_tests/npm_audit_covers_its_workspaces_test.py, which asserts the
+  # audit's workspace set against the tracked tree (#16131). Without this, a change
+  # confined to security.yml takes the required-context shim's green while the guard
+  # that reads it never runs.
+  - '.github/workflows/security.yml'
   # The shim gates a required context, so editing it must run the real suite for
   # the same reason editing ci.yml does.
   - '.github/workflows/python-required-context.yml'
@@ -108,6 +113,11 @@ python:
   - '.github/workflows/no-commit-trailers.yml'
   - '.github/workflows/pr-issue-validation.yml'
   - '.github/workflows/release.yml'
+  # #15495: `by_path_loaded_modules_are_package_free_test.py` derives its targets
+  # from this workflow's `spec_from_file_location` calls. Without an entry here,
+  # adding a fourth by-path load is exactly the change that skips the guard
+  # asserting those loads stay package-free.
+  - '.github/workflows/slm-migration-gate.yml'
   - 'autobot-frontend/package.json'
   - 'install.sh'
   # #15983: `ansible_core_pin_frozen_15983_test.py` reads this pin to assert the

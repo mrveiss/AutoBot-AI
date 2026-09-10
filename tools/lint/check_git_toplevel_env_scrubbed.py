@@ -70,20 +70,17 @@ SCOPE, AND WHAT IS DELIBERATELY NOT SCOPED
   needs no allowlist entry. The name ``subprocess`` is bound to is resolved
   from the file's own imports, so ``import subprocess as sp`` and
   ``from subprocess import run`` are both caught.
-* **``git ls-files`` IS gated too, since #14896.** It was left out when this
-  hook landed on the reasoning that every call site passed ``cwd=<root>`` from
-  a root the hook already protected. That reasoning was wrong: ``cwd=`` loses
-  to an inherited ``GIT_DIR``, which names a git directory outright, so a
-  correct ``cwd`` enumerates the *other* checkout's index and answers without
-  erroring. #14896 found unscrubbed ``ls-files`` call sites still standing on
-  that argument, so the subcommand joins :data:`TOPLEVEL_FLAG` in
-  :data:`GATED_TOKENS`.
-* **Shell ``git ls-files`` is NOT gated.** :func:`scan_shell` matches
-  ``rev-parse`` + ``--show-toplevel`` as a pair; ``ls-files`` has no such
-  second token, and shell has no scrub helper for it the way
-  ``scripts/lib/git-root.sh`` provides one for the root. Three ``.sh`` call
-  sites carry the defect and are tracked separately rather than half-fixed
-  behind a text match here.
+* **``git ls-files`` IS gated too, since #14896.** It was left out on the
+  reasoning that every call site passed ``cwd=<root>``. That was wrong: ``cwd=``
+  loses to an inherited ``GIT_DIR``, so a correct ``cwd`` enumerates the *other*
+  checkout's index and answers without erroring. The subcommand therefore joins
+  :data:`TOPLEVEL_FLAG` in :data:`GATED_TOKENS`.
+* **Shell ``git ls-files`` IS gated, since #15506.** It waited on a remedy to
+  name — ``git_tracked_files`` in ``scripts/lib/git-root.sh`` — because a guard
+  landing before its remedy only teaches people to silence it.
+  :data:`SHELL_LS_FILES_CALL` anchors on ``git`` in verb position, catching
+  ``git -C "$d" ls-files`` but not a helper call. Known cost: the same text in a
+  quoted string reads as a call, hence the reworded ``die``s.
 
 KNOWN GAPS — WHAT THIS DOES **NOT** CATCH
 -----------------------------------------
@@ -130,6 +127,7 @@ Exit code:
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 from typing import Iterable, List, Set, Tuple
@@ -163,6 +161,11 @@ SCRUB_HELPERS = frozenset({SCRUB_HELPER, STRICT_SCRUB_HELPER})
 #: though ``scan_shell`` cannot verify the source line was actually reached —
 #: same trust boundary as ``_scrubs`` below for the shadowed-helper gap.
 SHELL_HELPER = "git_repo_root"
+
+#: `git … ls-files`, anchored on `git` in VERB position: `\bgit\b` cannot match
+#: inside `git_tracked_files`, so no exemption is needed and an approving comment
+#: can no longer excuse a raw call, which the old substring test allowed (#15506).
+SHELL_LS_FILES_CALL = re.compile(r"\bgit\b[^\n;|&]*\bls-files\b")
 
 #: Name this guard reports under.
 HOOK_ID = "git-toplevel-env-scrubbed"
@@ -516,6 +519,18 @@ def scan_shell(path: Path, repo_root: Path) -> List[Tuple[int, str]]:
     findings: List[Tuple[int, str]] = []
     for line_no, line in enumerate(lines, start=1):
         if line.strip().startswith("#"):
+            continue
+        if SHELL_LS_FILES_CALL.search(line):
+            findings.append(
+                (
+                    line_no,
+                    f"`git {LS_FILES_VERB}` without a scrubbed git environment. An "
+                    "inherited GIT_DIR outranks the directory passed, so this "
+                    "enumerates the other checkout's index and answers without "
+                    "erroring. Source scripts/lib/git-root.sh and call "
+                    "git_tracked_files() (#15506).",
+                )
+            )
             continue
         if "rev-parse" not in line or TOPLEVEL_FLAG not in line:
             continue
