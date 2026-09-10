@@ -34,9 +34,12 @@ async def _run_loop_until(condition, loop=None) -> None:
     try:
         await eventually(condition, watch=task)
     finally:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+        # Await only a task this block actually cancelled. A task that already
+        # died has had its error re-raised by eventually(); awaiting it again
+        # would raise the same exception a second time mid-propagation.
+        if task.cancel():
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 class TestUpdateLatestVersionSetting:
