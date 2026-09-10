@@ -398,3 +398,45 @@ class TestCleanupTOCTOU:
 
         assert not workspace_dir.exists()
         assert not _branch_exists(git_repo, f"task-{task_id}")
+
+
+class TestFetchedBaseRef:
+    """`_fetched_base_ref` has a three-way contract, so it gets three-way tests.
+
+    #16128 review: the guard covering this asserted that literal substrings
+    appeared in the source — `if probe.returncode != 0:` and friends. That
+    confirms the code was WRITTEN, not that it works: it passes unchanged if the
+    branches are reordered, inverted, or made unreachable. The three-way split is
+    exactly what stops "could not look" collapsing into "looked and found
+    nothing", so it is the branch most worth executing rather than reading.
+    """
+
+    def test_a_repo_with_no_remotes_returns_none(self, git_repo: Path) -> None:
+        """Not a fallback — a real answer. With no remote there is no base to be
+        stale against, so HEAD is the only base there is. This is the case that
+        broke every throwaway repo in this suite when the rule was one-way."""
+        assert _tw._fetched_base_ref(git_repo) is None
+
+    def test_a_failing_git_remote_raises_rather_than_looking_local(self, tmp_path: Path) -> None:
+        """The distinction the string-presence guard could not make.
+
+        A `git remote` that FAILS produces empty stdout exactly as a repo with no
+        remotes does. Testing output alone let a broken checkout take the
+        local-only path and branch from HEAD in silence.
+        """
+        not_a_repo = tmp_path / "not-a-repo"
+        not_a_repo.mkdir()
+        with pytest.raises(RuntimeError, match="cannot enumerate remotes"):
+            _tw._fetched_base_ref(not_a_repo)
+
+    def test_a_configured_remote_with_a_missing_ref_raises(self, git_repo: Path) -> None:
+        """A checkout that should know its base and does not is still an error —
+        widening the no-remote case must not widen this one."""
+        subprocess.run(
+            ["git", "-C", str(git_repo), "remote", "add", "origin", str(git_repo)],
+            check=True,
+            capture_output=True,
+            env=_test_git_env(),
+        )
+        with pytest.raises(RuntimeError, match="cannot resolve workspace base ref"):
+            _tw._fetched_base_ref(git_repo)

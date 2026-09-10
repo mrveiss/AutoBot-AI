@@ -172,6 +172,18 @@ WORKSPACE = "autobot-backend/services/task_workspace.py"
 
 
 def test_a_new_workspace_branches_from_a_fetched_base() -> None:
+    """STRUCTURAL only, and that limit is the point of saying it here.
+
+    Everything below is a substring search over the source. It proves the code
+    was WRITTEN and would pass unchanged if the branches were reordered,
+    inverted or made unreachable (#16128 review). The behaviour is verified by
+    execution in `autobot-backend/tasks/test_task_workspace.py::TestFetchedBaseRef`,
+    which calls `_fetched_base_ref` for all three arms of its contract.
+
+    Kept rather than deleted because it guards a different thing: that the
+    start-point argument and the no-remote branch are not quietly dropped from a
+    file whose behavioural tests live in another suite and another shard.
+    """
     text = (repo_root() / WORKSPACE).read_text(encoding="utf-8")
     assert "def _fetched_base_ref(" in text, (
         f"{WORKSPACE} must resolve its base ref through a helper that fetches first; "

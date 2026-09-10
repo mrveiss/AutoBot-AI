@@ -116,7 +116,7 @@ jobs:
           printf '%s\n' "$pr_heads" > /tmp/pr_heads.txt
           echo "open PR head branches: $(grep -c . /tmp/pr_heads.txt || echo 0)"
 
-          updated=(); conflicted=(); current=(); skipped=(); pushfail=(); errored=()
+          updated=(); conflicted=(); current=(); skipped=(); pushfail=(); errored=(); unreachable=()
 
           # Read the branch list into an array BEFORE looping, rather than
           # feeding the loop from a process substitution. A `while read` loop
@@ -142,8 +142,13 @@ jobs:
 
               behind=$(git rev-list --count "origin/$branch..origin/$BASE" 2>/dev/null || echo "")
               if [ -z "$behind" ]; then
-                  echo "::warning::cannot compute behind-count for $branch; skipping"
-                  skipped+=("$branch")
+                  # NOT `skipped`: that bucket means "policy said do not touch it",
+                  # and it is excluded from `considered` below because nothing was
+                  # attempted. This branch WAS attempted and the attempt failed, so
+                  # folding it into `skipped` let a run where every branch failed
+                  # here exit 0 reporting a clean sweep (#16128 review).
+                  echo "::warning::cannot compute behind-count for $branch"
+                  unreachable+=("$branch (behind-count failed)")
                   continue
               fi
               if [ "$behind" = "0" ]; then current+=("$branch"); continue; fi
@@ -153,8 +158,8 @@ jobs:
               # A detached working branch per iteration. `-B` resets it each
               # time, so a failed merge never leaks into the next branch.
               if ! git checkout -B __drift_work "origin/$branch" >/dev/null 2>&1; then
-                  echo "::warning::cannot check out $branch; skipping"
-                  skipped+=("$branch")
+                  echo "::warning::cannot check out $branch"
+                  unreachable+=("$branch (checkout failed)")
                   continue
               fi
 
@@ -216,12 +221,19 @@ jobs:
                   "| skipped for conflict | ${#conflicted[@]} |" \
                   "| push rejected | ${#pushfail[@]} |" \
                   "| FAILED (not a conflict) | ${#errored[@]} |" \
+                  "| could not be attempted | ${#unreachable[@]} |" \
                   "| excluded by policy | ${#skipped[@]} |" ""
           if [ ${#conflicted[@]} -gt 0 ]; then
               summary "### Skipped for conflict — these need a person" ""
               summary "These will not merge cleanly. That is information about" \
                       "unfinished work, not garbage: land it or decide against it." ""
               for b in "${conflicted[@]}"; do summary "- \`$b\` commits behind"; done
+              summary ""
+          fi
+          if [ ${#unreachable[@]} -gt 0 ]; then
+              summary "### Could not be attempted — not the same as nothing to do" ""
+              summary "These were listed and then failed before any merge was tried." ""
+              for b in "${unreachable[@]}"; do summary "- \`$b\`"; done
               summary ""
           fi
           if [ ${#errored[@]} -gt 0 ]; then
@@ -243,7 +255,8 @@ jobs:
           fi
 
           echo "updated=${#updated[@]} current=${#current[@]} conflicted=${#conflicted[@]}" \
-               "pushfail=${#pushfail[@]} errored=${#errored[@]} excluded=${#skipped[@]}"
+               "pushfail=${#pushfail[@]} errored=${#errored[@]}" \
+               "unreachable=${#unreachable[@]} excluded=${#skipped[@]}"
 
           # A conflict is a reportable outcome, not a job failure: failing here
           # would make the run red every time until a human resolved 18 parked
@@ -262,7 +275,13 @@ jobs:
           # considered and none of it moved. A conflict-only outcome across every
           # eligible branch is possible in principle and has never once been the
           # explanation -- so it is reported as suspicious rather than accepted.
-          considered=$(( ${#updated[@]} + ${#current[@]} + ${#conflicted[@]} + ${#pushfail[@]} + ${#errored[@]} ))
+          # `unreachable` is counted: those are branches this job TRIED and could
+          # not process. Only `skipped` — the policy exclusions — stays out, because
+          # nothing was attempted there. Excluding both let "did not try" share its
+          # outcome with "nothing to merge", which is this workflow's own defect one
+          # level in from where the PR removes it.
+          considered=$(( ${#updated[@]} + ${#current[@]} + ${#conflicted[@]} \
+                       + ${#pushfail[@]} + ${#errored[@]} + ${#unreachable[@]} ))
           if [ "$considered" -gt 0 ] && [ ${#updated[@]} -eq 0 ] && [ ${#current[@]} -eq 0 ]; then
               echo "::warning::considered $considered branch(es) and neither merged nor found " \
                    "any already current. That is the shape of a broken merge step (#15938), " \
