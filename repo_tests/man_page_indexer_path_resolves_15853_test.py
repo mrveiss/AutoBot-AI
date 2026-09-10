@@ -52,7 +52,6 @@ nothing, which is how a floor stops being a reach check.
 
 import ast
 import re
-import subprocess
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -118,7 +117,11 @@ def executable_source(text: str) -> Optional[str]:
         body = getattr(node, "body", None)
         if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and body:
             first = body[0]
-            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
+            if (
+                isinstance(first, ast.Expr)
+                and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)
+            ):
                 first.value.value = ""
         # `orelse`, `handlers` and `finalbody` as well as `body`: a bare string
         # in an `else:` or `except:` block is the same comment-shaped statement,
@@ -161,7 +164,16 @@ def files_naming_the_indexer() -> Tuple[List[str], int]:
     return sorted(found), swept
 
 
-_FOUND, _SWEPT = files_naming_the_indexer()
+#: Lazy: this sweep cost ~24s at import, paid by every importer including
+#: `reach_declarations_test`, which imports every guard to enumerate declarations
+#: (#16188). Import time is charged to consumers that may never use the result.
+_CACHE: dict[str, object] = {}
+
+
+def _found_and_swept() -> tuple:
+    if "sweep" not in _CACHE:
+        _CACHE["sweep"] = files_naming_the_indexer()
+    return _CACHE["sweep"]  # type: ignore[return-value]
 
 
 def _module_source() -> str:
@@ -274,8 +286,8 @@ def test_the_sweep_examined_the_repository() -> None:
     nothing reports "only the expected executor names the indexer", which is
     exactly what a clean tree reports.
     """
-    assert _SWEPT >= _MIN_FILES_SWEPT, (
-        f"swept only {_SWEPT} Python file(s), floor {_MIN_FILES_SWEPT}. FIX THE SWEEP — "
+    assert _found_and_swept()[1] >= _MIN_FILES_SWEPT, (
+        f"swept only {_found_and_swept()[1]} Python file(s), floor {_MIN_FILES_SWEPT}. FIX THE SWEEP — "
         "a clean result below this floor asserts nothing."
     )
 
@@ -287,10 +299,10 @@ def test_only_the_expected_module_invokes_the_indexer() -> None:
     third file naming the indexer passed by not being on the list — and the
     guard's silence would have read as coverage of a caller it had never seen.
     """
-    unexpected = [name for name in _FOUND if name not in _EXPECTED_EXECUTORS and name not in _ALLOWED]
+    unexpected = [name for name in _found_and_swept()[0] if name not in _EXPECTED_EXECUTORS and name not in _ALLOWED]
     assert not unexpected, (
         f"{len(unexpected)} file(s) name {_INDEXER_NAME} in executable code but are neither the "
-        f"expected executor nor allowed ({_SWEPT} files swept):\n"
+        f"expected executor nor allowed ({_found_and_swept()[1]} files swept):\n"
         + "\n".join(f"  {name}" for name in unexpected)
         + f"\n\nThe invocation belongs in {sorted(_EXPECTED_EXECUTORS)[0]}, which anchors it to the "
         "project root and reports absence by path. A second copy is the drift #15853 fixed, "
@@ -305,7 +317,7 @@ def test_the_expected_executor_is_still_there() -> None:
     invokes the indexer — a repository that had deleted the caller entirely
     would look clean. This is what makes the expectation two-sided.
     """
-    missing = sorted(_EXPECTED_EXECUTORS - set(_FOUND))
+    missing = sorted(_EXPECTED_EXECUTORS - set(_found_and_swept()[0]))
     assert not missing, (
         f"{missing} no longer names {_INDEXER_NAME} in executable code. Either the invocation "
         "moved — in which case `_EXPECTED_EXECUTORS` should say where — or nothing indexes man "
@@ -348,7 +360,7 @@ def test_every_allowlist_entry_still_names_the_indexer() -> None:
     for a condition that no longer exists — and the next file at that path
     inherits it silently.
     """
-    stale = stale_allowlist_entries(_ALLOWED, _FOUND)
+    stale = stale_allowlist_entries(_ALLOWED, _found_and_swept()[0])
     assert not stale, (
         f"`_ALLOWED` exempts {stale}, which no longer name {_INDEXER_NAME} in executable code. "
         "Remove the entry: an exemption nothing needs is one the next file at that path inherits."
@@ -373,7 +385,7 @@ def test_a_comment_or_docstring_mention_is_not_a_caller() -> None:
     Both forms matter here: this module's own comment quotes the old
     cwd-relative literal directly above the constant that replaced it.
     """
-    commented = f'# the indexer lives at scripts/utilities/{_INDEXER_NAME}\nx = 1\n'
+    commented = f"# the indexer lives at scripts/utilities/{_INDEXER_NAME}\nx = 1\n"
     documented = f'"""Refreshes man pages via {_INDEXER_NAME}."""\nx = 1\n'
 
     assert _INDEXER_NAME not in executable_source(commented)
