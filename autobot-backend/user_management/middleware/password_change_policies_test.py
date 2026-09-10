@@ -85,10 +85,19 @@ def test_the_targeted_surface_is_stricter_than_the_session_surface() -> None:
     higher-value path has become the easier one to brute-force -- so this asserts
     the ORDERING, not the literals, and keeps failing however the values are tuned.
     """
-    from user_management.middleware.rate_limit import TargetedPasswordChangeRateLimiter
+    # IMPORTED, not re-derived. An earlier version read the env vars here with its
+    # own "5"/"300" fallback strings -- a second copy of the default, which is the
+    # exact two-sources-of-truth defect this PR exists to remove. If the production
+    # default changed and this fallback did not, the test would compare against a
+    # number nothing uses.
+    from user_management.middleware.rate_limit import (
+        SESSION_MAX_ATTEMPTS,
+        SESSION_WINDOW_SECONDS,
+        TargetedPasswordChangeRateLimiter,
+    )
 
-    session_attempts = int(os.environ.get("AUTOBOT_PASSWORD_CHANGE_SESSION_MAX_ATTEMPTS", "5"))
-    session_window = int(os.environ.get("AUTOBOT_PASSWORD_CHANGE_SESSION_WINDOW_SECONDS", "300"))
+    session_attempts = SESSION_MAX_ATTEMPTS
+    session_window = SESSION_WINDOW_SECONDS
 
     assert TargetedPasswordChangeRateLimiter.MAX_ATTEMPTS <= session_attempts, (
         f"the targeted surface now allows {TargetedPasswordChangeRateLimiter.MAX_ATTEMPTS} attempts against the "
@@ -118,3 +127,36 @@ def test_the_targeted_policy_is_env_backed_not_a_literal(env_var: str, attribute
     assert _import_with_env(env_var, value, attribute) == int(
         value
     ), f"{attribute} ignored {env_var} -- the value is still effectively a literal"
+
+
+@pytest.mark.parametrize(
+    ("env_var", "constant", "value"),
+    [
+        ("AUTOBOT_PASSWORD_CHANGE_SESSION_MAX_ATTEMPTS", "SESSION_MAX_ATTEMPTS", "11"),
+        ("AUTOBOT_PASSWORD_CHANGE_SESSION_WINDOW_SECONDS", "SESSION_WINDOW_SECONDS", "600"),
+    ],
+)
+def test_the_session_policy_is_env_backed_too(env_var: str, constant: str, value: str) -> None:
+    """AC3 for the OTHER surface, which the first version of this file left unproven.
+
+    The targeted constants got a subprocess round-trip and the session ones did
+    not -- so half of "both policies are env-backed" rested on reading the source.
+    That is the weaker evidence this PR argues against everywhere else.
+    """
+    source = (
+        "import sys; sys.path[:0] = [%r, %r]\n"
+        "import user_management.middleware.rate_limit as m\n"
+        "print(getattr(m, %r))" % (str(BACKEND), str(REPO_ROOT), constant)
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", source],
+        capture_output=True,
+        text=True,
+        env={**os.environ, env_var: value},
+        cwd=str(BACKEND),
+        timeout=60,
+    )
+    assert result.returncode == 0, f"import failed: {result.stderr[-400:]}"
+    assert int(result.stdout.strip()) == int(
+        value
+    ), f"{constant} ignored {env_var} -- the value is still effectively a literal"
