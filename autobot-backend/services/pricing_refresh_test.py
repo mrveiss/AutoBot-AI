@@ -169,33 +169,137 @@ async def test_redis_store_set():
 # ---------------------------------------------------------------------------
 
 
+def _source(provider, pricings=None, raises=None):
+    """A stand-in catalogue whose fetch returns *pricings* (or raises)."""
+    src = MagicMock()
+    src.provider = provider
+    src.fetch = AsyncMock(side_effect=raises) if raises else AsyncMock(return_value=pricings or {})
+    return src
+
+
+def _store():
+    store = MagicMock()
+    for name in ("set_refresh_status", "retain_refresh_status", "set_crosscheck"):
+        setattr(store, name, AsyncMock())
+    store.set_many = AsyncMock(side_effect=lambda merged: len(merged))
+    store.set_model_index = AsyncMock(side_effect=lambda merged: len(merged))
+    return store
+
+
+def _mp(provider, model_id, inp, out, source):
+    return ModelPricing(provider=provider, model_id=model_id, input_per_1m=inp, output_per_1m=out, source=source)
+
+
 @pytest.mark.asyncio
-async def test_refresh_writes_new_pricing_to_redis():
-    """Simulates: provider price change → next read reflects new value."""
+async def test_refresh_writes_crosschecked_prices_and_keeps_its_denominator():
+    """#16229: prices come from the live catalogues, each labelled with its cross-check verdict."""
     from services.pricing_refresh import _refresh_all
 
-    captured_writes: dict[str, ModelPricing] = {}
-
-    async def fake_set_many(pricings):
-        captured_writes.update(pricings)
-        return len(pricings)
-
-    async def fake_set_status(provider, success, model_count):
-        pass
-
-    mock_store = AsyncMock()
-    mock_store.set_many = fake_set_many
-    mock_store.set_refresh_status = fake_set_status
-
-    with patch("llm_shared.pricing.redis_store.PricingRedisStore", return_value=mock_store):
+    primary = {
+        "claude-haiku-4-5": _mp("anthropic", "claude-haiku-4-5", 1.0, 5.0, "litellm"),
+        "gpt-4o": _mp("openai", "gpt-4o", 2.5, 10.0, "litellm"),
+    }
+    secondary = {
+        "anthropic/claude-haiku-4.5": _mp("anthropic", "claude-haiku-4.5", 1.0, 5.0, "openrouter"),
+        "x-ai/grok-9": _mp("x-ai", "grok-9", 3.0, 15.0, "openrouter"),
+    }
+    store = _store()
+    with (
+        patch(
+            "services.pricing_refresh._build_sources",
+            return_value=(_source("litellm", primary), _source("openrouter", secondary)),
+        ),
+        patch("llm_shared.pricing.redis_store.PricingRedisStore", return_value=store),
+    ):
         summary = await _refresh_all()
 
-    assert "anthropic" in summary
-    assert "deepseek" in summary
-    assert "google" in summary
-    assert "openai" in summary
-    assert all(summary[p]["success"] is True for p in ["anthropic", "deepseek", "google", "openai"])
-    assert len(captured_writes) > 0
+    [merged] = store.set_many.call_args.args
+    verdicts = {p.model_id: p.crosscheck for p in merged.values()}
+    assert verdicts == {"claude-haiku-4-5": "agree", "gpt-4o": "single", "grok-9": "single"}
+    assert summary["crosscheck"]["compared"] == 1, "the report must say how many it actually compared"
+    assert (summary["crosscheck"]["only_primary"], summary["crosscheck"]["only_secondary"]) == (1, 1)
+    assert summary["sources"] == {
+        "litellm": {"success": True, "model_count": 2},
+        "openrouter": {"success": True, "model_count": 2},
+    }
+    store.retain_refresh_status.assert_awaited_once_with({"litellm", "openrouter"})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "failed_primary", [_source("litellm", {}), _source("litellm", raises=RuntimeError("down"))], ids=["empty", "raises"]
+)
+async def test_a_failed_primary_writes_nothing_and_is_recorded_as_failed(failed_primary):
+    """A failed catalogue must not refresh anything -- stored prices keep their real age."""
+    from services.pricing_refresh import _refresh_all
+
+    store = _store()
+    secondary = _source("openrouter", {"x/y": _mp("x", "y", 1.0, 1.0, "openrouter")})
+    with (
+        patch("services.pricing_refresh._build_sources", return_value=(failed_primary, secondary)),
+        patch("llm_shared.pricing.redis_store.PricingRedisStore", return_value=store),
+    ):
+        summary = await _refresh_all()
+
+    store.set_many.assert_not_called()
+    store.set_model_index.assert_not_called()
+    assert summary["sources"]["litellm"] == {"success": False, "model_count": 0}
+    store.set_refresh_status.assert_any_await("litellm", success=False, model_count=0)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_attempt_keeps_the_last_successful_refresh_time():
+    """#16229: re-stamping last_refresh_at on failure is what made stale pricing look fresh."""
+    from llm_shared.pricing.redis_store import PricingRedisStore
+
+    earlier = "2026-09-01T02:15:00+00:00"
+    redis_mock = AsyncMock()
+    redis_mock.get = AsyncMock(return_value=json.dumps({"litellm": {"success": True, "last_refresh_at": earlier}}))
+    store = PricingRedisStore()
+    with patch("llm_shared.pricing.redis_store.get_async_redis_client", AsyncMock(return_value=redis_mock)):
+        await store.set_refresh_status("litellm", success=False, model_count=0)
+
+    written = json.loads(redis_mock.setex.call_args.args[2])["litellm"]
+    assert written["last_refresh_at"] == earlier, "a failed attempt must not look like a fresh refresh"
+    assert written["success"] is False and written["last_attempt_at"] != earlier
+
+
+@pytest.mark.asyncio
+async def test_the_model_index_skips_reseller_routes_and_variants():
+    from llm_shared.pricing.redis_store import PricingRedisStore
+
+    store = PricingRedisStore()
+    captured = {}
+
+    async def fake_setex_many(items):
+        captured.update(items)
+        return len(items)
+
+    store._setex_many = fake_setex_many
+    await store.set_model_index(
+        {
+            "a": _mp("anthropic", "Claude-Haiku-4-5", 1.0, 5.0, "litellm"),
+            "b": _mp("bedrock", "bedrock/anthropic.claude", 9.0, 9.0, "litellm"),
+            "c": _mp("vendor", "model:free", 0.0, 0.0, "openrouter"),
+            "d": _mp("openai", "claude-haiku-4-5", 7.0, 7.0, "openrouter"),
+        }
+    )
+    assert list(captured) == ["model_pricing:by_model:claude-haiku-4-5"]
+    assert captured["model_pricing:by_model:claude-haiku-4-5"]["input_per_1m"] == 1.0, "first entry wins"
+
+
+@pytest.mark.asyncio
+async def test_cost_tracker_finds_a_live_price_by_model_name():
+    """#16229: LiteLLM files Gemini under "gemini"; the by-model index finds it without a provider key."""
+    from services.llm_cost_tracker import LLMCostTracker
+
+    store = MagicMock()
+    store.get_by_model = AsyncMock(return_value=_mp("gemini", "gemini-2.5-pro", 1.25, 10.0, "litellm"))
+    store.get = AsyncMock(return_value=None)
+    with patch("llm_shared.pricing.redis_store.PricingRedisStore", return_value=store):
+        legacy = await LLMCostTracker()._redis_pricing_lookup("gemini-2.5-pro")
+    assert legacy == {"input": 1.25, "output": 10.0}
+    store.get.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
