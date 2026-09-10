@@ -1,0 +1,80 @@
+name: import-hermeticity-sweep
+
+# Deliberately NOT on pull_request. The sweep starts 606 interpreters, one per
+# module, and a base merge already multiplies every workflow by the number of open
+# PRs (#16203). This asks a question about the tree, not about a diff, so it runs on
+# a schedule and on demand.
+on:
+  schedule:
+    - cron: "0 4 * * *"  # daily 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: import-hermeticity-sweep-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          fetch-depth: 1
+
+      - uses: ./.github/actions/setup-python-ci
+        with:
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+
+      # The declared dependency set is the whole point of running here rather than
+      # locally: a module importing an unsatisfied requirement is indistinguishable
+      # from one with an import-time side effect, and a developer machine has dozens
+      # unsatisfied.
+      #
+      # requirements-ci.txt, not autobot-backend/requirements.txt -- the latter pulls
+      # torch>=2.11.0 plus transitive vllm 0.19.x (which requires torch==2.10.0), an
+      # unsatisfiable resolver state (#7018). Same install as startup-import-smoke,
+      # which asks the closest question to this one.
+      - name: Install declared dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip >/dev/null
+          python -m pip install pytest >/dev/null
+          python -m pip install -r requirements-ci.txt --prefer-binary
+          python -m pip install -e autobot_shared
+
+      - name: Sweep every module under api/ and autobot_shared/
+        env:
+          AUTOBOT_IMPORT_HERMETICITY_SWEEP: "1"
+        run: |
+          set -o pipefail
+          python -m pytest repo_tests/import_hermeticity_test.py -p no:cacheprovider -q \
+            2>&1 | tee sweep-output.txt
+
+      # Always, so a failing sweep still hands over its enumeration -- the offender
+      # list IS the deliverable of #16198, and a red job that discards it would make
+      # the run worth nothing.
+      - name: Publish the offender list
+        if: always()
+        run: |
+          {
+            echo "## Import-hermeticity sweep"
+            echo
+            echo '```'
+            tail -60 sweep-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the raw output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: import-hermeticity-sweep
+          path: sweep-output.txt
+          retention-days: 14
