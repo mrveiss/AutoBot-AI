@@ -40,8 +40,12 @@ class TrajectoryOutcome:
     task_class: str
     baseline_score: float
     candidate_score: float
-    tools_ok: bool
-    status_ok: bool
+    #: True/False are comparison results; None means the comparison never
+    #: happened, because the candidate supplied no actual side for it. The
+    #: third state is load-bearing: recording a not-compared field as True
+    #: writes a pass into the artifact for something nothing measured.
+    tools_ok: bool | None
+    status_ok: bool | None
     candidate_tools: List[str] = field(default_factory=list)
     detail: str = ""
     #: The scorer could not produce a verdict (evaluator infrastructure failure,
@@ -61,10 +65,15 @@ class TrajectoryOutcome:
         The tool and status comparisons do NOT need the scorer, so they are
         checked first and still stand on their own during an outage. Only the
         score half becomes unmeasured.
+
+        A tool/status value of None is not a failed comparison but an absent
+        one, so it must be tested with ``is False`` rather than falsily: under
+        ``not self.tools_ok`` a never-compared trajectory reported a regression,
+        which is a claim about the candidate drawn from never having looked.
         """
-        if not self.tools_ok or not self.status_ok:
+        if self.tools_ok is False or self.status_ok is False:
             return "regression"
-        if self.score_indeterminate:
+        if self.tools_ok is None or self.status_ok is None or self.score_indeterminate:
             return "unmeasured"
         delta = self.candidate_score - self.baseline_score
         if delta < -epsilon:

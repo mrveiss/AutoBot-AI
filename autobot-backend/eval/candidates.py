@@ -32,15 +32,40 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
-from eval.runner import CandidateResult, CandidateRunner
+from autobot_shared.logging_manager import get_logger
+from eval.runner import CandidateResult, CandidateRunner, RecordingUnusable
 from eval.store import GoldenTrajectory
 
+logger = get_logger(__name__)
 
-class RecordingMissing(RuntimeError):
+
+class RecordingMissing(RecordingUnusable):
     """No recorded run exists for a golden, so nothing can be compared.
 
     Distinct from an empty or failing run: absence of evidence is not a
     passing trajectory, and the caller must be able to tell the two apart.
+    """
+
+
+class RecordingUnreadable(RecordingUnusable):
+    """A recording exists but could not be parsed into an object.
+
+    Raised at replay time rather than at load time. Loading eagerly is still
+    right (#7444 forbids sync I/O in the async replay path), but *raising*
+    eagerly meant one corrupt file aborted the whole run before the report was
+    written -- turning "one trajectory is unreadable" into "no trajectory was
+    reported", and exiting with the code reserved for a regression.
+    """
+
+
+class RecordingIncomplete(RecordingUnusable):
+    """A recording omits a field the comparison depends on.
+
+    Defaulting the field is the trap this exists to close: ``final_status``
+    defaulted to ``"completed"`` and ``GoldenTrajectory.expected_status``
+    defaults to the same string, so a status that was never recorded compared
+    equal to the expected one and reported a pass for something never
+    measured.
     """
 
 
@@ -65,17 +90,41 @@ def _tools_from_events(events: List[dict]) -> List[str]:
     return tools
 
 
-def load_recordings(recorded_dir: Path) -> Dict[str, dict]:
+def _parse_recording(path: Path) -> dict | None:
+    """Parse one recording, or return None if it cannot supply an actual side.
+
+    A file that is not valid JSON, or whose payload is not a JSON object, has
+    no fields to compare and is reported as unmeasured for its trajectory. It
+    is deliberately not raised here: see ``RecordingUnreadable``.
+    """
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+        logger.warning("recording %s could not be read: %s", path.name, exc)
+        return None
+    if not isinstance(payload, dict):
+        logger.warning("recording %s is %s, not an object", path.name, type(payload).__name__)
+        return None
+    return payload
+
+
+def load_recordings(recorded_dir: Path) -> Dict[str, dict | None]:
     """Read recorded runs keyed by trajectory id.
 
     Eager and synchronous on purpose: the replay path is async, so reading
-    files inside it would be sync I/O in a coroutine (#7444), and loading up
-    front turns a malformed recording into an immediate error rather than one
-    surfacing mid-replay.
+    files inside it would be sync I/O in a coroutine (#7444).
+
+    An unreadable recording maps to ``None`` rather than propagating. The
+    distinction it preserves is the one this module exists for: a key present
+    with a ``None`` value means "this trajectory was recorded and the record is
+    unusable", while an absent key means "never recorded". Both are unmeasured,
+    and neither may abort the run -- a raise here happens before the report is
+    emitted, so one corrupt file would suppress the verdicts on every other
+    trajectory and exit under the code reserved for a regression.
     """
     if not recorded_dir.is_dir():
         return {}
-    return {path.stem: json.loads(path.read_text(encoding="utf-8")) for path in sorted(recorded_dir.glob("*.json"))}
+    return {path.stem: _parse_recording(path) for path in sorted(recorded_dir.glob("*.json"))}
 
 
 def recorded_replay_candidate(recorded_dir: Path) -> CandidateRunner:
@@ -95,16 +144,30 @@ def recorded_replay_candidate(recorded_dir: Path) -> CandidateRunner:
     recordings = load_recordings(recorded_dir)
 
     async def _candidate(golden: GoldenTrajectory) -> CandidateResult:
-        record = recordings.get(golden.trajectory_id)
-        if record is None:
+        if golden.trajectory_id not in recordings:
             raise RecordingMissing(
-                f"no recorded run for {golden.trajectory_id!r} in {recorded_dir}; "
+                f"no recorded run for {golden.trajectory_id!r}; "
                 "this trajectory was not measured, which is not the same as passing"
+            )
+        record = recordings[golden.trajectory_id]
+        if record is None:
+            raise RecordingUnreadable(
+                f"the recorded run for {golden.trajectory_id!r} could not be parsed; "
+                "this trajectory was not measured, which is not the same as passing"
+            )
+        if "final_status" not in record:
+            # No default here, deliberately. `GoldenTrajectory.expected_status`
+            # defaults to "completed", so defaulting this side to the same
+            # string made an unrecorded status compare equal to the expected
+            # one -- a pass asserted about a field nothing ever measured.
+            raise RecordingIncomplete(
+                f"the recorded run for {golden.trajectory_id!r} has no 'final_status'; "
+                "defaulting it would compare equal to the golden's own default"
             )
         return CandidateResult(
             response_text=str(record.get("output_text", "")),
             tool_sequence=_tools_from_events(record.get("events") or []),
-            final_status=str(record.get("final_status", "completed")),
+            final_status=str(record["final_status"]),
         )
 
     return _candidate

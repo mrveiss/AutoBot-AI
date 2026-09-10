@@ -53,6 +53,15 @@ class CandidateResult:
 CandidateRunner = Callable[[GoldenTrajectory], Awaitable[CandidateResult]]
 
 
+class RecordingUnusable(RuntimeError):
+    """A candidate cannot supply an actual side for one golden.
+
+    Declared here rather than in ``eval.candidates`` because that module
+    imports this one, and the layer that must *handle* the failure is this
+    one. Concrete reasons (absent, unparseable, incomplete) subclass it there.
+    """
+
+
 def _check_tools(expected: List[str], actual: List[str]) -> bool:
     """Exact ordered tool-sequence match (deterministic check)."""
     return expected == actual
@@ -120,6 +129,24 @@ class TrajectoryReplayer:
                     tools_ok=False,
                     status_ok=False,
                     detail=f"replay timed out after {_REPLAY_TIMEOUT_S:.0f}s",
+                )
+            except RecordingUnusable as exc:
+                # One trajectory the candidate cannot answer for must not end
+                # the run. Raising through here aborts before the report is
+                # emitted, so a single absent or corrupt recording suppresses
+                # every other trajectory's verdict and leaves the process
+                # exiting 1 -- the code reserved for "a golden regressed",
+                # asserted about a corpus that was never examined.
+                logger.warning("replay of %s is unmeasured: %s", golden.trajectory_id, exc)
+                outcome = TrajectoryOutcome(
+                    trajectory_id=golden.trajectory_id,
+                    task_class=golden.task_class,
+                    baseline_score=golden.baseline_score,
+                    candidate_score=0.0,
+                    tools_ok=None,
+                    status_ok=None,
+                    detail=f"not measured: {exc}",
+                    score_indeterminate=True,
                 )
             logger.info(
                 "replayed %s [%s] verdict=%s baseline=%.2f candidate=%.2f",

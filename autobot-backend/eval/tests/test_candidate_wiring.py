@@ -309,3 +309,129 @@ def test_an_advisory_run_does_not_redden_a_pr_for_an_unmeasured_corpus(monkeypat
     monkeypatch.setattr(run_module, "run_eval", lambda **_kw: None)
 
     assert run_module.main() == 0
+
+
+# ---------------------------------------------------------------------------
+# One unusable recording must not decide the fate of the whole corpus
+#
+# The tests above prove `RecordingMissing` is raised when the candidate is
+# awaited directly. That is the raise site, not the consequence. Nothing
+# exercised what a real corpus does when one golden lacks a recording, so the
+# suite passed while the exception propagated out of the replayer, out of
+# `main()`, and exited 1 -- the code reserved for "a golden regressed" --
+# without emitting a report at all. Absence of evidence has to be
+# distinguishable from a clean trajectory *in the report*, not only at a raise.
+# ---------------------------------------------------------------------------
+
+
+def _write_corrupt_recording(directory: Path, tid: str) -> None:
+    """A file that exists and is not JSON.
+
+    Written from a sync helper rather than inline in the async test: #7444
+    forbids blocking I/O inside an ``async def`` body, and the point of the
+    test is the replay path, not the write.
+    """
+    (directory / f"{tid}.json").write_text("{not json at all", encoding="utf-8")
+
+
+def _write_partial_recording(directory: Path, tid: str, **omit: bool) -> None:
+    """A recording missing one field the comparison depends on."""
+    payload = {
+        "events": [{"type": "tool_call", "tool": name} for name in EXPECTED_TOOLS],
+        "output_text": "Added guard; tests pass.",
+        "final_status": "completed",
+    }
+    for key in omit:
+        payload.pop(key, None)
+    (directory / f"{tid}.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_one_missing_recording_does_not_suppress_the_others(tmp_path: Path) -> None:
+    """A partially populated corpus reports every golden, not none of them."""
+    _write_recording(tmp_path, "recorded", EXPECTED_TOOLS)
+    candidate, is_real = resolve_candidate(tmp_path)
+    assert is_real
+
+    replayer = TrajectoryReplayer(evaluator=_scorer(0.95))
+    report = await replayer.run([_golden("recorded"), _golden("never-recorded")], candidate)
+
+    assert len(report.outcomes) == 2, "the unrecorded golden must still appear in the report"
+    verdicts = {o.trajectory_id: o.classify() for o in report.outcomes}
+    assert verdicts["recorded"] == "unchanged"
+    assert verdicts["never-recorded"] == "unmeasured"
+    assert not report.has_regressions, "never measured is not the same as regressed"
+
+
+@pytest.mark.asyncio
+async def test_a_corrupt_recording_is_unmeasured_not_a_crash(tmp_path: Path) -> None:
+    """A file that is not JSON costs its own trajectory, not the whole run."""
+    _write_recording(tmp_path, "good", EXPECTED_TOOLS)
+    _write_corrupt_recording(tmp_path, "corrupt")
+    candidate, _ = resolve_candidate(tmp_path)
+
+    replayer = TrajectoryReplayer(evaluator=_scorer(0.95))
+    report = await replayer.run([_golden("good"), _golden("corrupt")], candidate)
+
+    assert {o.classify() for o in report.outcomes} == {"unchanged", "unmeasured"}
+    assert report.total_unmeasured == 1
+
+
+@pytest.mark.asyncio
+async def test_an_unrecorded_status_is_not_compared_against_the_golden_default(tmp_path: Path) -> None:
+    """The defaults-collide trap, pinned.
+
+    `GoldenTrajectory.expected_status` defaults to "completed". Defaulting the
+    candidate's `final_status` to the same string made `status_ok` True for a
+    field no recording contained -- a pass asserted about something nothing
+    measured, and the one failure mode this module exists to prevent.
+    """
+    _write_partial_recording(tmp_path, "t1", final_status=True)
+    candidate, _ = resolve_candidate(tmp_path)
+
+    replayer = TrajectoryReplayer(evaluator=_scorer(0.95))
+    report = await replayer.run([_golden("t1")], candidate)
+
+    outcome = report.outcomes[0]
+    assert outcome.classify() == "unmeasured"
+    assert outcome.status_ok is None, "a comparison that never happened must not record a result"
+    assert "final_status" in outcome.detail
+
+
+def test_a_not_compared_field_serialises_as_null_not_as_a_pass() -> None:
+    """The artifact a human reads must not show True for an absent comparison."""
+    outcome = TrajectoryOutcome(
+        trajectory_id="t1",
+        task_class="code_fix",
+        baseline_score=0.9,
+        candidate_score=0.0,
+        tools_ok=None,
+        status_ok=None,
+        score_indeterminate=True,
+    )
+
+    payload = RegressionReport([outcome]).to_dict()["trajectories"][0]
+
+    assert payload["tools_ok"] is None
+    assert payload["status_ok"] is None
+    assert payload["verdict"] == "unmeasured"
+
+
+def test_a_crash_exits_two_not_one(monkeypatch) -> None:
+    """Any uncaught failure is "could not examine", never "a golden regressed".
+
+    Python exits 1 on an uncaught exception, and 1 is this CLI's code for a
+    real regression. Without the wrapper, every crash published a verdict about
+    a corpus it had not read.
+    """
+    import sys
+
+    from eval import run as run_module
+
+    def _boom(_args):
+        raise RuntimeError("the corpus could not be read")
+
+    monkeypatch.setattr(sys, "argv", ["eval.run"])
+    monkeypatch.setattr(run_module, "_run", _boom)
+
+    assert run_module.main() == 2

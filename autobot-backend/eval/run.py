@@ -17,6 +17,14 @@ Usage::
 By default this is a NON-BLOCKING signal: it always exits 0 and prints the
 report, mirroring how other advisory CI checks are added.  Pass
 ``--fail-on-regression`` to gate.
+
+Exit codes are a taxonomy, not a severity scale:
+
+* ``0`` -- the corpus was examined and nothing regressed.
+* ``1`` -- the corpus was examined and something regressed. A claim.
+* ``2`` -- the corpus could not be examined or could not be judged, so no
+  claim is being made. A crash lands here too, because Python's default of 1
+  would otherwise report a regression nothing had measured.
 """
 
 from __future__ import annotations
@@ -75,9 +83,10 @@ def _parse_args() -> argparse.Namespace:
         "--require-real-candidate",
         action="store_true",
         help=(
-            "Exit 1 if the run fell through to the self-consistency baseline. "
-            "CI passes this so a comparison of the goldens with themselves cannot "
-            "be reported as a pass (#16157)."
+            "Exit 2 if the run fell through to the self-consistency baseline, so a "
+            "comparison of the goldens with themselves cannot be reported as a pass. "
+            "2, not 1: not having examined the corpus is a different answer from "
+            "having examined it and found a regression (#16157)."
         ),
     )
     return parser.parse_args()
@@ -93,6 +102,19 @@ def resolve_candidate(recorded_dir: Path) -> tuple[CandidateRunner, bool]:
     if recorded_dir.is_dir() and any(recorded_dir.glob("*.json")):
         return recorded_replay_candidate(recorded_dir), True
     return baseline_candidate, False
+
+
+def _reportable_path(path: Path) -> str:
+    """Render *path* for a log line that ends up in a shared artifact.
+
+    Absolute paths carry the checkout root, which on a developer machine is a
+    home directory and on a runner is noise. Relative to the working directory
+    when possible, absolute only when it genuinely lies elsewhere.
+    """
+    try:
+        return str(path.resolve().relative_to(Path.cwd().resolve()))
+    except ValueError:
+        return str(path)
 
 
 def _resolve_output_path(json_path: str) -> Path | None:
@@ -122,11 +144,8 @@ def _emit(report: RegressionReport, json_path: str) -> None:
         logger.info("Wrote JSON report to %s", resolved)
 
 
-def main() -> int:
-    """CLI entrypoint. Returns the process exit code."""
-    args = _parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-
+def _run(args: argparse.Namespace) -> int:
+    """Resolve a candidate, replay, emit, and pick the exit code."""
     recorded_dir = Path(args.recorded_dir) if args.recorded_dir else Path(__file__).parent / "recorded"
     candidate, is_real = resolve_candidate(recorded_dir)
     report = run_or_schedule(run_eval(candidate=candidate, epsilon=args.epsilon))
@@ -140,7 +159,7 @@ def main() -> int:
         logger.warning(
             "UNMEASURED: no recorded runs in %s, so this replay compared each golden "
             "with itself. It cannot detect drift and its result asserts nothing.",
-            recorded_dir,
+            _reportable_path(recorded_dir),
         )
         if args.require_real_candidate:
             # Exit 2, like the unmeasured case below: falling through to the echo
@@ -175,6 +194,24 @@ def main() -> int:
         )
         return 2
     return 0
+
+
+def main() -> int:
+    """CLI entrypoint. Returns the process exit code.
+
+    The try/except is the exit-code taxonomy, not defensive padding. An
+    uncaught exception leaves Python exiting 1, and 1 is reserved here for "a
+    golden regressed" — so any crash silently published a claim about the
+    corpus that nothing had measured. Being unable to run is exit 2, the same
+    code as being unable to judge, because they are the same answer.
+    """
+    args = _parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    try:
+        return _run(args)
+    except Exception:  # noqa: BLE001 - deliberate: see docstring
+        logger.exception("UNMEASURED: the eval run could not complete, so it judged nothing.")
+        return 2
 
 
 if __name__ == "__main__":
