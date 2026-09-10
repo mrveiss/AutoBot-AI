@@ -28,6 +28,7 @@ from typing import Any, NamedTuple
 from celery.signals import beat_init, worker_ready
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.git_probe import run_git
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from celery_app import celery_app
@@ -732,7 +733,8 @@ def _changed_python_modules(since_iso: str | None, repo_root: Path) -> list[Path
             "--diff-filter=ACMR",
         ]
 
-    code, out, _ = _run(cmd, cwd=str(repo_root))
+    result = run_git(cmd[1:], cwd=str(repo_root))  # #16179
+    code, out = result.returncode, result.stdout
     if code != 0:
         return []
 
@@ -962,10 +964,8 @@ def _verify_claim(claim: dict, repo_root: Path) -> bool:
 
     token = token_match.group(1).replace("-", "_")
     # Search for the token in Python source files
-    code, out, _ = _run(
-        ["git", "grep", "-rl", "--", token, "autobot-backend/"],
-        cwd=str(repo_root),
-    )
+    result = run_git(["grep", "-rl", "--", token, "autobot-backend/"], cwd=str(repo_root))
+    code, out = result.returncode, result.stdout
     return code == 0 and bool(out.strip())
 
 
