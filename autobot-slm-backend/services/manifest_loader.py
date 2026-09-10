@@ -14,9 +14,9 @@ Environment:
     ``SLM_MANIFEST_CACHE_TTL`` -- seconds a parsed manifest is served from
     cache, default 300. ``0`` or negative disables caching, which is the
     dev-mode bypass for editing a manifest on the SLM host (#16026).
-    Documented here rather than in ``autobot_shared/env_registry.py``: that
-    registry holds ``AUTOBOT_*`` names and carries no ``SLM_*`` entry, so an
-    entry there would be the only one of its kind.
+    Read through ``autobot_shared.env_utils.env_int``, as the other SLM knobs
+    are. Documented here rather than in ``autobot_shared/env_registry.py``:
+    that registry holds ``AUTOBOT_*`` names and carries no ``SLM_*`` entry.
 """
 
 import logging
@@ -27,6 +27,7 @@ from typing import Dict, List, Tuple
 
 import yaml
 
+from autobot_shared.env_utils import env_int
 from models.manifest import RoleManifest, UpdatePolicy
 
 logger = logging.getLogger(__name__)
@@ -35,31 +36,17 @@ logger = logging.getLogger(__name__)
 _AUTOBOT_BASE = Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
 _INFRA_BASE = _AUTOBOT_BASE / "autobot-infrastructure"
 
-# Cache TTL in seconds. Env-var backed rather than a bare literal (#16026):
-# a manifest is an operator-edited file, so the staleness window has to be
-# tunable on the host that edits it. `int()` bare would crash the import on a
-# typo, so a bad value warns and falls back instead of taking the service down
-# over a knob nobody meant to set.
-_CACHE_TTL_DEFAULT = 300
-
-
-def _resolve_manifest_cache_ttl() -> int:
-    """Seconds a parsed manifest stays cached; <= 0 disables caching."""
-    raw = os.environ.get("SLM_MANIFEST_CACHE_TTL")
-    if raw is None or raw == "":
-        return _CACHE_TTL_DEFAULT
-    try:
-        return int(raw)
-    except ValueError:
-        logger.warning(
-            "SLM_MANIFEST_CACHE_TTL=%r is not an integer; falling back to %ds",
-            raw,
-            _CACHE_TTL_DEFAULT,
-        )
-        return _CACHE_TTL_DEFAULT
-
-
-_CACHE_TTL = _resolve_manifest_cache_ttl()
+# Cache TTL in seconds, env-backed rather than a bare literal (#16026): a
+# manifest is an operator-edited file, so the staleness window has to be tunable
+# on the host that edits it. `<= 0` disables caching, which is the dev-mode
+# bypass.
+#
+# `env_int` rather than a local reader: it already treats a blank value as
+# absent (#12782 -- a template rendering an undefined var exports `NAME=`, which
+# defeats every `os.environ.get(name, default)` fallback) and already warns and
+# falls back on a non-integer instead of raising at import. services/reconciler.py
+# and api/code_sync.py in this same service already read their knobs this way.
+_CACHE_TTL = env_int("SLM_MANIFEST_CACHE_TTL", 300)
 
 
 class ManifestLoader:
