@@ -203,13 +203,13 @@ export interface paths {
         get?: never;
         /**
          * Override Model Pricing
-         * @description Write an emergency pricing override directly to Redis.
+         * @description Store an emergency pricing override; it outranks the refreshed price until removed.
          */
         put: operations["override_model_pricing_api_admin_pricing__provider___model__put"];
         post?: never;
         /**
          * Delete Model Pricing Override
-         * @description Remove a pricing override from Redis (next refresh will re-populate).
+         * @description Remove a pricing override; the refreshed price applies again.
          */
         delete: operations["delete_model_pricing_override_api_admin_pricing__provider___model__delete"];
         options?: never;
