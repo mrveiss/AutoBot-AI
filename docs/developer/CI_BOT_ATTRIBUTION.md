@@ -61,6 +61,9 @@ Store it as the repository secret `AUTOBOT_PUSH_TOKEN`.
 
 - `.github/workflows/auto-fix-generated-types.yml`
 - `.github/workflows/auto-update-pr-branches.yml`
+- `.github/workflows/sync-main-to-dev.yml` — pushes the `release-sync-main` branch
+  and opens the release-sync PR from it (#16246). The pushed branch carries
+  workflow changes, so the token needs the Workflows permission above.
 
 ## The safety net
 
