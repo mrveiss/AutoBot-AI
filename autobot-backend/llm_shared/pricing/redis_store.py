@@ -7,6 +7,8 @@
 Key format:
   model_pricing:{provider}:{model_id}  →  JSON ModelPricing dict
   model_pricing:by_model:{model_id}     →  JSON ModelPricing dict, bare model names only (#16229)
+  model_pricing:override:{model_id}     →  JSON ModelPricing dict, an operator's override: no TTL,
+                                           never written by a refresh (#16229)
   model_pricing:refresh_status          →  JSON {source: {last_refresh_at, last_attempt_at, success, model_count}}
   model_pricing:crosscheck              →  JSON CrossCheckReport of the last refresh (#16229)
 
@@ -30,6 +32,7 @@ _STATUS_KEY = f"{_KEY_PREFIX}:refresh_status"
 _TTL_SECONDS = 60 * 60 * 25  # 25 hours — outlasts the 24-hour refresh cadence
 _BY_MODEL_PREFIX = f"{_KEY_PREFIX}:by_model"
 _CROSSCHECK_KEY = f"{_KEY_PREFIX}:crosscheck"
+_OVERRIDE_PREFIX = f"{_KEY_PREFIX}:override"
 
 
 def _model_key(provider: str, model_id: str) -> str:
@@ -38,6 +41,10 @@ def _model_key(provider: str, model_id: str) -> str:
 
 def _by_model_key(model_id: str) -> str:
     return f"{_BY_MODEL_PREFIX}:{model_id.lower()}"
+
+
+def _override_key(model_id: str) -> str:
+    return f"{_OVERRIDE_PREFIX}:{model_id.lower()}"
 
 
 def _previous_success(previous: object) -> str | None:
@@ -59,18 +66,20 @@ class PricingRedisStore:
     async def _redis(self):
         return await get_async_redis_client(database=self._database)
 
-    async def get(self, provider: str, model_id: str) -> ModelPricing | None:
+    async def _read(self, key: str) -> ModelPricing | None:
+        """The ModelPricing stored at *key*; None on a miss or an unreachable store."""
         try:
             redis = await self._redis()
             if redis is None:
                 return None
-            raw = await redis.get(_model_key(provider, model_id))
-            if raw is None:
-                return None
-            return ModelPricing.from_dict(json.loads(raw))
+            raw = await redis.get(key)
+            return ModelPricing.from_dict(json.loads(raw)) if raw else None
         except Exception as exc:
-            logger.warning("PricingRedisStore.get failed for %s/%s: %s", provider, model_id, exc)
+            logger.warning("PricingRedisStore read of %s failed: %s", key, exc)
             return None
+
+    async def get(self, provider: str, model_id: str) -> ModelPricing | None:
+        return await self._read(_model_key(provider, model_id))
 
     async def get_all_for_provider(self, provider: str) -> dict[str, ModelPricing]:
         try:
@@ -96,29 +105,33 @@ class PricingRedisStore:
             logger.warning("PricingRedisStore.get_all_for_provider failed for %s: %s", provider, exc)
             return {}
 
-    async def set(self, pricing: ModelPricing) -> bool:
+    async def set_override(self, pricing: ModelPricing) -> bool:
+        """Store an operator's emergency price for a model (admin_pricing, GH#6480).
+
+        It lives apart from the refreshed prices and carries no TTL, so no refresh can
+        overwrite or expire it: it stands until an operator removes it (#16229).
+        """
         try:
             redis = await self._redis()
             if redis is None:
                 return False
-            key = _model_key(pricing.provider, pricing.model_id)
-            await redis.setex(key, _TTL_SECONDS, json.dumps(pricing.to_dict()))
+            await redis.set(_override_key(pricing.model_id), json.dumps(pricing.to_dict()))
             return True
         except Exception as exc:
-            logger.warning("PricingRedisStore.set failed for %s/%s: %s", pricing.provider, pricing.model_id, exc)
+            logger.warning("PricingRedisStore.set_override failed for %s: %s", pricing.model_id, exc)
             return False
 
+    async def get_override(self, model_id: str) -> ModelPricing | None:
+        return await self._read(_override_key(model_id))
+
     async def get_by_model(self, model_id: str) -> ModelPricing | None:
-        """A price by bare model name, whichever catalogue it came from (#16229)."""
-        try:
-            redis = await self._redis()
-            if redis is None:
-                return None
-            raw = await redis.get(_by_model_key(model_id))
-            return ModelPricing.from_dict(json.loads(raw)) if raw else None
-        except Exception as exc:
-            logger.warning("PricingRedisStore.get_by_model failed for %s: %s", model_id, exc)
-            return None
+        """A refreshed price by bare model name, whichever catalogue it came from (#16229)."""
+        return await self._read(_by_model_key(model_id))
+
+    async def resolve(self, model_id: str) -> ModelPricing | None:
+        """The price to charge for a model: an operator's override, else the refreshed price."""
+        override = await self.get_override(model_id)
+        return override if override is not None else await self.get_by_model(model_id)
 
     async def set_many(self, pricings: dict[str, ModelPricing]) -> int:
         """Write multiple ModelPricing entries; return count of successful writes."""
@@ -163,15 +176,15 @@ class PricingRedisStore:
             logger.warning("PricingRedisStore write failed: %s", exc)
         return count
 
-    async def delete(self, provider: str, model_id: str) -> bool:
+    async def delete_override(self, model_id: str) -> bool:
+        """Remove an operator's override; the refreshed price applies again."""
         try:
             redis = await self._redis()
             if redis is None:
                 return False
-            deleted = await redis.delete(_model_key(provider, model_id))
-            return deleted > 0
+            return await redis.delete(_override_key(model_id)) > 0
         except Exception as exc:
-            logger.warning("PricingRedisStore.delete failed for %s/%s: %s", provider, model_id, exc)
+            logger.warning("PricingRedisStore.delete_override failed for %s: %s", model_id, exc)
             return False
 
     async def get_refresh_status(self) -> dict:

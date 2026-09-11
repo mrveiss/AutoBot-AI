@@ -22,6 +22,7 @@ treats empty as failure, so a broken fetch can never make pricing look fresh.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 
 import aiohttp
@@ -44,6 +45,8 @@ _TOKENS_PER_MILLION = 1_000_000
 async def _fetch_json(url: str) -> object | None:
     """GET *url* through the guarded shared client; None on any failure, which is logged."""
     try:
+        # guard_egress=False is not "unguarded": it permits public addresses only and
+        # refuses redirects (rule 8). None is the unguarded mode.
         async with get_http_client().tracked_request(
             "GET", url, timeout=aiohttp.ClientTimeout(total=FETCH_TIMEOUT_SECONDS), guard_egress=False
         ) as resp:
@@ -65,7 +68,7 @@ def per_1m(value: object) -> float | None:
         per_token = float(value)
     except (TypeError, ValueError):
         return None
-    if per_token != per_token or per_token < 0:  # NaN is malformed; negative is a sentinel
+    if not math.isfinite(per_token) or per_token < 0:  # NaN/inf are malformed; negative is a sentinel
         return None
     return per_token * _TOKENS_PER_MILLION
 
