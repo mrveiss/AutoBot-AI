@@ -15,7 +15,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 import { POLLED_READ_MAX_RETRIES } from '@/constants/api-timeouts'
-import type { GPUNodeListResponse, GPUNodeStatus } from '@/types/slm'
+import type { GPUNodeStatus } from '@/types/slm'
 // Shared with autobot-frontend's usePrometheusMetrics.ts — see the kit
 // file's doc comment for which fields are main-app-only extensions (#14907).
 // ServiceHealth is used only inside ServicesSummary's shape (not referenced
@@ -368,7 +368,7 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
   async function fetchGPUDetails(): Promise<void> {
     // #15226: each node's GPUs, as its agent's heartbeat reported them (#16280, #16281)
     try {
-      const data = await slmApiClient.get<GPUNodeListResponse>('/monitoring/gpu/nodes', POLL_OPTS)
+      const data = await slmApiClient.getContract('/api/monitoring/gpu/nodes', POLL_OPTS)
       gpuNodes.value = data.nodes
       gpuDetails.value = summariseGpus(data.nodes)
       gpuUnavailable.value = false
