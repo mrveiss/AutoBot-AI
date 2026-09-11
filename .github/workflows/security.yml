@@ -425,7 +425,7 @@ jobs:
           autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
 
     - name: Upload Semgrep SARIF to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v3
+      uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938  # v4.37.9
       if: always()
       with:
         sarif_file: semgrep.sarif
@@ -453,47 +453,9 @@ jobs:
           --title "Python lint report (flake8)" \
           --fail-on never
 
-    - name: Secret Detection
-      # #13543: `!cancelled()` so an earlier scanner's GATE failing does not skip
-      # this one. Before the gates existed no scanner could fail, so ordering was
-      # free; now a bandit finding would otherwise hide every later scanner's
-      # result — the same decoupling ci.yml applies between its suites (#13300).
-      if: ${{ !cancelled() }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        echo "## Secret Detection" >> "$GITHUB_STEP_SUMMARY"
-        # Check for common secret patterns (without Docker)
-        echo "Scanning for potential secrets..."
-
-        # Check for hardcoded API keys, passwords, tokens
-        SECRETS_FOUND=0
-
-        # Check for AWS keys
-        if grep -rE "AKIA[0-9A-Z]{16}" --exclude="*_test.py" --exclude="test_*.py" autobot-backend/ autobot-slm-backend/ autobot_shared/ 2>/dev/null; then
-          echo "::error::Potential AWS access key found"
-          SECRETS_FOUND=$((SECRETS_FOUND + 1))
-        fi
-
-        # Check for private keys
-        if grep -rE "-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----" autobot-backend/ autobot-slm-backend/ autobot_shared/ 2>/dev/null; then
-          echo "::error::Potential private key found"
-          SECRETS_FOUND=$((SECRETS_FOUND + 1))
-        fi
-
-        # Check for common password patterns in code (excluding tests)
-        if grep -rE "password\s*=\s*['\"][^'\"]{8,}['\"]" autobot-backend/ autobot-slm-backend/ autobot_shared/ --include="*.py" 2>/dev/null | grep -v "test\|example\|placeholder"; then
-          echo "::error::Potential hardcoded password found"
-          SECRETS_FOUND=$((SECRETS_FOUND + 1))
-        fi
-
-        if [ "$SECRETS_FOUND" -eq 0 ]; then
-          echo "No obvious secrets detected" >> "$GITHUB_STEP_SUMMARY"
-        else
-          echo "::error::Found $SECRETS_FOUND potential secret(s) — review required"
-          echo "Found $SECRETS_FOUND potential secret(s) — please review" >> "$GITHUB_STEP_SUMMARY"
-          exit 1
-        fi
+    # Secret detection moved to its own ungated `secret-detection` job below
+    # (#16275). The step that stood here grepped three shapes inside these three
+    # directories, so the repository root was never read.
 
     - name: Upload SAST Reports
       uses: actions/upload-artifact@v7
@@ -511,6 +473,100 @@ jobs:
       if: always()
       run: |
         rm -rf .venv || true
+
+  # #16275: the whole tracked tree, on EVERY event. There is deliberately no
+  # `needs: changes` gate. The committed Fernet key sat in an extensionless root
+  # dotfile that no path filter names, so a gate keyed on file types would skip
+  # exactly the change this job exists to catch. Replaces the SAST job's old
+  # "Secret Detection" step, which grepped three shapes in three directories.
+  secret-detection:
+    name: Secret Detection (whole tree)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version-file: '.python-version'
+
+    # Pinned, and held equal to the pre-commit hook's `rev` and the baseline's
+    # "version" by repo_tests/no_tracked_key_material_test.py: a scanner version
+    # the baseline was not written with reports a different set of findings.
+    - name: Install detect-secrets
+      run: python -m pip install detect-secrets==1.5.0
+
+    # detect-secrets cannot see a bare key file: its high-entropy plugins read
+    # quoted strings, and it reported nothing for .infra_encryption_key. This
+    # step checks that shape; the next one covers everything else.
+    - name: Raw key material in any tracked file (Fernet keys, PEM private keys)
+      shell: bash
+      run: |
+        set -euo pipefail
+        git ls-files -z | python3 pipeline-scripts/tracked_key_material.py
+
+    - name: detect-secrets over every tracked file, against the audited baseline
+      # `!cancelled()` so a key-material finding above cannot hide this
+      # scanner's result (#13543).
+      if: ${{ !cancelled() }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        committed="${RUNNER_TEMP}/secrets.baseline.committed.json"
+        cp .secrets.baseline "${committed}"
+        # jq programs are single-quoted on purpose: `$f` is a jq variable.
+        # shellcheck disable=SC2016
+        unaudited="$(jq -r '.results | to_entries[] | .key as $f | .value[]
+          | select(.is_secret != false)
+          | "\($f):\(.line_number): \(.type) (is_secret: \(.is_secret // "unaudited"))"' "${committed}")"
+        # Rescan every git-tracked file with the baseline's own plugin and filter
+        # settings. This rewrites .secrets.baseline in this disposable checkout
+        # only; the verdicts compared below come from the committed copy.
+        detect-secrets scan --baseline .secrets.baseline
+        # A finding is known when the committed baseline holds the same
+        # (file, type, hashed_secret) with the verdict "not a secret". That is
+        # detect-secrets' own identity for a finding, so one that merely moved
+        # lines stays known. Only path, line and type are printed, never a value.
+        # shellcheck disable=SC2016
+        new="$(jq -r --slurpfile committed "${committed}" '
+          ([$committed[0].results | to_entries[] | .key as $f | .value[]
+            | select(.is_secret == false)
+            | {key: "\($f)|\(.type)|\(.hashed_secret)", value: true}] | from_entries) as $audited
+          | .results | to_entries[] | .key as $f | .value[]
+          | select($audited["\($f)|\(.type)|\(.hashed_secret)"] | not)
+          | "\($f):\(.line_number): \(.type)"' .secrets.baseline)"
+        # A rescan that read nothing reports no new finding, so the comparison
+        # above would pass on a scan that never looked. Its count is asserted
+        # against the committed baseline and the floor declared in the script,
+        # not only printed. Counts only; a crash there fails the step too.
+        status=0
+        floor_report="$(python3 pipeline-scripts/secrets_rescan_floor.py \
+          --rescanned .secrets.baseline --committed "${committed}")" || status=1
+        echo "${floor_report}"
+        {
+          echo "## Secret Detection (whole tree)"
+          echo "${floor_report}"
+        } >> "$GITHUB_STEP_SUMMARY"
+        # An entry marked real, or never audited, fails: a real secret is removed
+        # from the tree, never parked in the baseline.
+        if [ -n "${unaudited}" ]; then
+          while IFS= read -r entry; do
+            echo "::error::baseline entry without a not-a-secret verdict: ${entry}"
+          done <<< "${unaudited}"
+          echo "Baseline entries without a not-a-secret verdict: $(wc -l <<< "${unaudited}")" >> "$GITHUB_STEP_SUMMARY"
+          status=1
+        fi
+        if [ -n "${new}" ]; then
+          while IFS= read -r entry; do
+            echo "::error::potential secret not in the audited baseline: ${entry}"
+          done <<< "${new}"
+          echo "New findings not in the audited baseline: $(wc -l <<< "${new}")" >> "$GITHUB_STEP_SUMMARY"
+          status=1
+        fi
+        exit "${status}"
 
   compliance-check:
     name: Security Compliance Check
@@ -570,7 +626,7 @@ jobs:
   security-summary:
     name: Security Summary Report
     runs-on: ubuntu-latest
-    needs: [changes, dependency-security, static-analysis, compliance-check]
+    needs: [changes, dependency-security, static-analysis, secret-detection, compliance-check]
     if: always()
 
     steps:
@@ -584,6 +640,7 @@ jobs:
       env:
         REF_NAME: ${{ github.ref_name }}
         COMMIT_SHA: ${{ github.sha }}
+        SECRET_DETECTION_RESULT: ${{ needs.secret-detection.result }}
       run: |
         {
           echo "# Security Scan Summary"
@@ -609,10 +666,15 @@ jobs:
             echo "## Static Analysis Security Testing"
             echo "- Bandit security linting completed"
             echo "- Semgrep security analysis completed"
-            echo "- Secret detection completed"
             echo ""
           } >> security-summary.md
         fi
+
+        {
+          echo "## Secret Detection (whole tree)"
+          echo "- Job result: ${SECRET_DETECTION_RESULT}"
+          echo ""
+        } >> security-summary.md
 
         {
           echo "## Recommendations"

@@ -69,6 +69,11 @@ class ReachFloorError(AssertionError):
 #: at import time so the meta-test can enumerate without importing by path.
 REGISTRY: dict[str, "Reach"] = {}
 
+#: Memoised discoveries, keyed on (declaration name, resolved root). Frozen
+#: dataclasses cannot cache on the instance, and the same walk was otherwise
+#: paid once per caller per session.
+_MEASURED: dict[tuple[str, str], Sequence[object]] = {}
+
 
 @dataclass(frozen=True)
 class Reach:
@@ -121,6 +126,30 @@ class Reach:
         clears this and still speaks for a tree it never read. Pair it with
         :meth:`completed`.
         """
+        found = self.population(root)
+        self._require(len(found), "reached", self.what)
+        return found
+
+    def population(self, root: Path) -> Sequence[object]:
+        """What ``discover`` returns for *root*, measured once per root.
+
+        Each discovery shells out to ``git ls-files`` and some open files on top
+        of it, so the same walk was being paid three times a session -- twice by
+        the meta-test and once by the guard itself. Memoised on a module-level
+        map because :class:`Reach` is frozen and cannot hold a cache.
+
+        Keyed on the RESOLVED root, so a guard asked about a scratch directory
+        and about the repository does not get one answer for both -- which is
+        exactly what the empty-tree mutation test relies on.
+
+        A raising ``discover`` is translated to :class:`ReachDiscoveryError`
+        naming the cause (#16154), here rather than in each caller -- both
+        :meth:`examined` and :meth:`verify_floor` route through this method, so
+        the translation is paid once instead of duplicated at every call site.
+        """
+        key = (self.name, str(root.resolve()))
+        if key in _MEASURED:
+            return _MEASURED[key]
         try:
             found = self.discover(root)
         except ReachFloorError:
@@ -138,8 +167,55 @@ class Reach:
                 "`ReachFloorError`. That does not weaken the refusal, it relocates it to the "
                 "typed one this mechanism is built around."
             ) from exc
-        self._require(len(found), "reached", self.what)
+        _MEASURED[key] = found
         return found
+
+    def verify_floor(self, root: Path) -> None:
+        """Refuse a floor that sits too far below its own population (#15928).
+
+        This lives on the primitive rather than in the meta-test that used to
+        hold it, so the rule belongs to ``declare()`` rather than to whoever
+        remembers to enumerate declarations. It still runs on demand rather than
+        at declaration time, and that is deliberate: ``declare()`` executes at
+        IMPORT, where a raise takes the whole module down before any test can
+        report it, and where the root is not yet known. ``_paths.py`` records the
+        same ruling for the same reason.
+
+        Raises :class:`ReachFloorError` rather than asserting, so a caller can
+        tell a floor violation from an unrelated failure.
+        """
+        count = len(self.population(root))
+        slack = count - self.floor
+        if slack < 0:
+            raise ReachFloorError(
+                f"[{self.name}] floor {self.floor} exceeds the live population of "
+                f"{count} {self.what}. The guard cannot pass; lower the floor to "
+                f"{count} only if the population genuinely shrank."
+            )
+        allowance = self.skips + self.growth
+        if slack > allowance:
+            raise ReachFloorError(
+                f"[{self.name}] floor {self.floor} sits {slack} below its live "
+                f"population of {count} {self.what}, which exceeds the declared "
+                f"allowance of {allowance} (skips={self.skips} + growth={self.growth}).\n"
+                f"A floor this far below what the sweep finds passes while most of the "
+                f"tree stops being reached.\n"
+                f"Raise the one that is actually short:\n"
+                f"  skips=  items this guard cannot COMPLETE (unreadable, unparseable). "
+                f"Measure it from a `completed` failure; do not estimate it.\n"
+                f"  growth= ordinary growth tolerated before a deliberate ratchet.\n"
+                f"If neither is short, the floor is stale: ratchet it toward {count}."
+            )
+
+    def headroom(self, root: Path) -> int:
+        """Files this population may still gain before the floor goes red.
+
+        Reported because the failure this prevents is silent until it is not:
+        `hooks-path-override` sat 14 files from red, and nothing said so until
+        someone measured. A guard is allowed to be close to its allowance; it is
+        not allowed for that to be invisible.
+        """
+        return (self.skips + self.growth) - (len(self.population(root)) - self.floor)
 
     def completed(self, processed: Sequence[object] | int) -> None:
         """Apply the same floor to what the guard actually **finished**.
@@ -175,11 +251,14 @@ def declare(
     Registration is the point: an undeclared guard is invisible to the meta-test
     and its floor is unproven, so adoption is measurable rather than assumed.
 
-    ``floor`` is checked against the live population by
-    ``reach_declarations_test.test_every_declared_floor_is_pinned_to_its_population``
-    rather than here (#15928). Validating at declaration time would walk the
-    tree once per imported guard, and the meta-test already enumerates every
-    declaration — so the guarantee is the same and the cost is paid once.
+    ``floor`` is refused by :meth:`Reach.verify_floor`, which the meta-test
+    discharges for every declaration (#15928). It is NOT checked here, and that
+    is a ruling rather than an omission: ``declare()`` runs at IMPORT, where the
+    root is not yet known and where a raise takes the whole module down before
+    any test can report it — losing every parametrised case for that guard,
+    which is the precise failure the meta-test exists to catch.
+
+    The rule belongs to the primitive; the timing belongs to the caller.
 
     **``discover`` must return an empty sequence on an empty tree, never raise**
     (#16154). ``reach_declarations_test`` hands every declaration an empty

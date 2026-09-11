@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.eventually import eventually
 from orchestration.blocked_plan_resumer import BlockedPlanResumer
 
 
@@ -81,7 +82,8 @@ async def test_stop_cancels_running_task():
         return_value=client,
     ):
         await resumer.start()
-        await asyncio.sleep(0.01)
+        # Wait for the listener to actually subscribe, not a fixed delay (#16255)
+        await eventually(lambda: pubsub.subscribe.called)
         await resumer.stop()
 
     assert resumer._task is None
