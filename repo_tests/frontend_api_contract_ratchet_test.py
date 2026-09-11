@@ -77,6 +77,9 @@ _BASELINES = {
         "responses": 187,
         # #15455: raised for the four typed detail fetches #15429 added. Same
         # limitation — this counts assertions, and a correct new call is one.
+        # #16245: SettingsPanel.vue's unrendered /system/health/detailed loader was
+        # removed with its two `apiClient.get<...>` calls; recounted at the rebased
+        # tree, combined with the other cuts already on main.
         "inline_generics": 564,
     },
     "autobot-slm-frontend": {
