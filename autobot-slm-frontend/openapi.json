@@ -15708,6 +15708,26 @@
         ]
       }
     },
+    "/api/auth/proxy-check": {
+      "get": {
+        "description": "nginx auth_request target for the /autobot-api/ internal-key gate (#16374).\n\nA side-effect-free membership check, deliberately separate from ``/me``:\n``/me`` answers \"is this a live SLM session?\", which any backend login\ntoken satisfies by design (epic #10193) -- every read-only or non-admin\nuser therefore passed the old gate too, and nginx then attached the\ntrusted internal key that ``autobot-backend/auth_middleware.py`` treats\nas full admin. This answers \"does this session hold the role the key\nactually confers?\": 204 only for an admin session, 403 for anyone\nauthenticated but not admin, 401 for a missing/invalid/expired token\n(``require_admin`` -- see its docstring for why the upstream HTTPBearer\ndependency already makes \"missing\" and \"invalid\" both 401). Returns no\nbody either way -- an ``auth_request`` subrequest's body is discarded,\nonly the status code is read.",
+        "operationId": "proxy_check_api_auth_proxy_check_get",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Proxy Check",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/refresh": {
       "post": {
         "description": "Refresh access token.",

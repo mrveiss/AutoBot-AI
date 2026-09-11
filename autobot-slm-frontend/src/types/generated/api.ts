@@ -255,6 +255,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/proxy-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Check
+         * @description nginx auth_request target for the /autobot-api/ internal-key gate (#16374).
+         *
+         *     A side-effect-free membership check, deliberately separate from ``/me``:
+         *     ``/me`` answers "is this a live SLM session?", which any backend login
+         *     token satisfies by design (epic #10193) -- every read-only or non-admin
+         *     user therefore passed the old gate too, and nginx then attached the
+         *     trusted internal key that ``autobot-backend/auth_middleware.py`` treats
+         *     as full admin. This answers "does this session hold the role the key
+         *     actually confers?": 204 only for an admin session, 403 for anyone
+         *     authenticated but not admin, 401 for a missing/invalid/expired token
+         *     (``require_admin`` -- see its docstring for why the upstream HTTPBearer
+         *     dependency already makes "missing" and "invalid" both 401). Returns no
+         *     body either way -- an ``auth_request`` subrequest's body is discarded,
+         *     only the status code is read.
+         */
+        get: operations["proxy_check_api_auth_proxy_check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/refresh": {
         parameters: {
             query?: never;
@@ -14647,6 +14680,24 @@ export interface operations {
                         [key: string]: unknown;
                     };
                 };
+            };
+        };
+    };
+    proxy_check_api_auth_proxy_check_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
