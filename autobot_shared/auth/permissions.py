@@ -77,6 +77,19 @@ class Permission(str, Enum):
     SECURITY_AUDIT = "security.audit"
     SECURITY_MANAGE = "security.manage"
 
+    # === Chat, teams and webhooks (#16270) ===
+    # Concepts that API-key scopes and the frontend already use, with no
+    # counterpart here. Migration 062 folded chat:* into api.* and teams:* into
+    # admin.users.*. The owner ruled for dedicated members instead, so a
+    # chat-only key cannot reach api.write.
+    CHAT_USE = "chat.use"
+    CHAT_HISTORY = "chat.history"
+    TEAMS_READ = "teams.read"
+    TEAMS_CREATE = "teams.create"
+    TEAMS_MANAGE = "teams.manage"
+    TEAMS_DELETE = "teams.delete"
+    WEBHOOKS_TRIGGER = "webhooks.trigger"
+
     # === System Administration ===
     ADMIN_USERS_READ = "admin.users.read"
     ADMIN_USERS_WRITE = "admin.users.write"
@@ -272,6 +285,12 @@ def is_admin_role(role: "Role | str | None") -> bool:
 # Canonical role-to-permission mappings.
 # Both autobot-backend (auth_rbac.py) and autobot-slm-backend import this dict
 # so that a permission added here is enforced by both services automatically.
+# #16270 grants.
+# chat.use / chat.history are behaviour-preserving. Every chat route is
+# login-only today (autobot-backend/api/chat*.py), so every role that can log
+# in holds them; superadmin stays empty by design.
+# teams.* and webhooks.trigger are a policy choice: admin only. teams.* follows
+# the #16276 ruling; webhooks.trigger gates nothing yet.
 ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     Role.ADMIN: [
         Permission.API_READ,
@@ -319,6 +338,14 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
         Permission.SANDBOX_MANAGE,
         Permission.SERVICE_MANAGEMENT,
         Permission.SHELL_EXECUTE,
+        # #16270: admin holds every member (roles_are_canonical_test).
+        Permission.CHAT_USE,
+        Permission.CHAT_HISTORY,
+        Permission.TEAMS_READ,
+        Permission.TEAMS_CREATE,
+        Permission.TEAMS_MANAGE,
+        Permission.TEAMS_DELETE,
+        Permission.WEBHOOKS_TRIGGER,
         # #13228: per-bridge MCP grants — mirrors this role's MCP_READ/MCP_EXECUTE level.
         Permission.MCP_BROWSER_READ,
         Permission.MCP_DATABASE_READ,
@@ -362,6 +389,8 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     Role.SUPERADMIN: [],
     Role.OPERATOR: [
         Permission.API_READ,
+        Permission.CHAT_USE,
+        Permission.CHAT_HISTORY,
         Permission.API_WRITE,
         Permission.KNOWLEDGE_READ,
         Permission.KNOWLEDGE_WRITE,
@@ -397,6 +426,8 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     ],
     Role.ANALYST: [
         Permission.API_READ,
+        Permission.CHAT_USE,
+        Permission.CHAT_HISTORY,
         Permission.KNOWLEDGE_READ,
         Permission.ANALYTICS_VIEW,
         Permission.ANALYTICS_EXPORT,
@@ -418,6 +449,8 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     ],
     Role.EDITOR: [
         Permission.API_READ,
+        Permission.CHAT_USE,
+        Permission.CHAT_HISTORY,
         Permission.API_WRITE,
         Permission.KNOWLEDGE_READ,
         Permission.KNOWLEDGE_WRITE,
@@ -441,6 +474,8 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     ],
     Role.USER: [
         Permission.API_READ,
+        Permission.CHAT_USE,
+        Permission.CHAT_HISTORY,
         Permission.KNOWLEDGE_READ,
         Permission.ANALYTICS_VIEW,
         Permission.AGENT_VIEW,
@@ -459,6 +494,8 @@ ROLE_PERMISSIONS: Dict[Role, List[Permission]] = {
     ],
     Role.READONLY: [
         Permission.API_READ,
+        Permission.CHAT_USE,
+        Permission.CHAT_HISTORY,
         Permission.KNOWLEDGE_READ,
         Permission.ANALYTICS_VIEW,
         Permission.AGENT_VIEW,
