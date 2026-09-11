@@ -4644,6 +4644,180 @@
         "title": "FleetUpdateSummaryResponse",
         "type": "object"
       },
+      "GPUDevice": {
+        "description": "One GPU. Metrics are null when the vendor tool could not read them.",
+        "properties": {
+          "device_type": {
+            "$ref": "#/components/schemas/NPUDeviceType"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "memory_total_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Total Mb"
+          },
+          "memory_used_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Used Mb"
+          },
+          "monitored": {
+            "title": "Monitored",
+            "type": "boolean"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "power_watts": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power Watts"
+          },
+          "temperature_celsius": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature Celsius"
+          },
+          "utilization_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utilization Percent"
+          }
+        },
+        "required": [
+          "device_type",
+          "monitored"
+        ],
+        "title": "GPUDevice",
+        "type": "object"
+      },
+      "GPUNodeListResponse": {
+        "description": "Every node's GPU state.",
+        "properties": {
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GPUNodeStatus"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "nodes",
+          "total"
+        ],
+        "title": "GPUNodeListResponse",
+        "type": "object"
+      },
+      "GPUNodeStatus": {
+        "description": "A node's GPU state from its latest heartbeat.",
+        "properties": {
+          "devices": {
+            "items": {
+              "$ref": "#/components/schemas/GPUDevice"
+            },
+            "title": "Devices",
+            "type": "array"
+          },
+          "hostname": {
+            "title": "Hostname",
+            "type": "string"
+          },
+          "last_heartbeat": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Heartbeat"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "node_status": {
+            "title": "Node Status",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/GPUReportState"
+          }
+        },
+        "required": [
+          "node_id",
+          "hostname",
+          "node_status",
+          "state"
+        ],
+        "title": "GPUNodeStatus",
+        "type": "object"
+      },
+      "GPUReportState": {
+        "description": "What a node's latest heartbeat said about its GPUs.",
+        "enum": [
+          "not_reported",
+          "none",
+          "present"
+        ],
+        "title": "GPUReportState",
+        "type": "string"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -5775,6 +5949,17 @@
         ],
         "title": "NPUDetectionResponse",
         "type": "object"
+      },
+      "NPUDeviceType": {
+        "description": "NPU device type enumeration.",
+        "enum": [
+          "intel-npu",
+          "nvidia-gpu",
+          "amd-gpu",
+          "unknown"
+        ],
+        "title": "NPUDeviceType",
+        "type": "string"
       },
       "NPUFleetMetricsResponse": {
         "description": "Aggregate NPU fleet performance metrics.",
@@ -22874,6 +23059,34 @@
         "summary": "Get Errors",
         "tags": [
           "monitoring"
+        ]
+      }
+    },
+    "/api/monitoring/gpu/nodes": {
+      "get": {
+        "description": "Every node's GPU state: not reported, none present, or its devices.",
+        "operationId": "list_gpu_nodes_api_monitoring_gpu_nodes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GPUNodeListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Gpu Nodes",
+        "tags": [
+          "monitoring",
+          "gpu"
         ]
       }
     },
