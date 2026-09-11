@@ -225,6 +225,30 @@ def test_is_target_file_outside_api_excluded(tmp_path: Path) -> None:
     assert hook._is_target_file(other, repo_root) is False
 
 
+def test_test_files_in_api_are_not_scanned(tmp_path: Path) -> None:
+    """A model that a test defines is a fixture, not an endpoint schema (owner ruling 2026-09-11, #16298)."""
+    for name in ("chat_api_test.py", "test_chat_api.py"):
+        path, repo_root = _write_api(
+            tmp_path, name, "from pydantic import BaseModel\n\nclass Fixture(BaseModel):\n    x: int\n"
+        )
+        assert hook._is_target_file(path, repo_root) is False, name
+        assert hook._check_file(path, repo_root) == [], name
+
+
+def test_the_same_model_in_an_endpoint_file_is_still_flagged(tmp_path: Path) -> None:
+    """The contrast case: skipping test files must not open a gap for endpoint files."""
+    path, repo_root = _write_api(
+        tmp_path, "chat_api.py", "from pydantic import BaseModel\n\nclass Fixture(BaseModel):\n    x: int\n"
+    )
+    assert [name for _, name in hook._check_file(path, repo_root)] == ["Fixture"]
+
+
+def test_a_name_merely_containing_test_is_still_scanned(tmp_path: Path) -> None:
+    """Only pytest's two naming conventions are skipped, not any name with "test" in it."""
+    path, repo_root = _write_api(tmp_path, "latest_results.py", "")
+    assert hook._is_target_file(path, repo_root) is True
+
+
 # ---------------------------------------------------------------------------
 # Exit-code integration (main())
 # ---------------------------------------------------------------------------

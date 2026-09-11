@@ -10,7 +10,9 @@ domain schemas_*.py files. Without enforcement, local schemas will be re-introdu
 over time. This hook prevents that regression.
 
 Scan target:
-  autobot-backend/api/*.py  — NOT schemas_*.py files
+  autobot-backend/api/*.py  — NOT schemas_*.py files, NOT test files
+  (*_test.py / test_*.py: their models are fixtures, not endpoint schemas;
+  owner ruling 2026-09-11, #16298)
 
 Allowlisted files (tightly-coupled domain logic, exempt by design):
   workflow_state.py  — WorkflowState tightly coupled with WorkflowStateMachine;
@@ -62,7 +64,14 @@ def _is_target_file(path: Path, repo_root: Path) -> bool:
     Conditions:
     - Resolves to within autobot-backend/api/
     - NOT named schemas_*.py
+    - NOT a test file (``*_test.py`` or ``test_*.py``)
     - NOT in the allowlist
+
+    Test files are skipped (owner ruling, 2026-09-11, #16298). A model that a
+    test defines inside a test method is a fixture, not an endpoint schema, and
+    this hook guards endpoint files. Scanning tests made any edit to
+    ``api_endpoint_migrations_test.py`` impossible: it defines four such
+    fixtures, and they predate this hook.
     """
     try:
         rel = path.resolve().relative_to(repo_root)
@@ -76,6 +85,8 @@ def _is_target_file(path: Path, repo_root: Path) -> bool:
 
     name = path.name
     if name.startswith("schemas_"):
+        return False
+    if name.endswith("_test.py") or name.startswith("test_"):
         return False
     if name in ALLOWLISTED_FILENAMES:
         return False
