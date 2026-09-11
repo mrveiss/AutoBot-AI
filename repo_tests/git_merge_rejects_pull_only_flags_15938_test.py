@@ -1,0 +1,274 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""`git merge --no-rebase` is not a merge flag, and it fails silently (#15938).
+
+``--rebase`` / ``--no-rebase`` belong to ``git pull``. ``git merge`` has no
+rebase mode to disable and rejects the flag outright::
+
+    error: unknown option `no-rebase'
+
+`auto-merge-base-into-parked-branches.yml` passed it, so **every** merge died on
+argument parsing — and the `else` arm that caught the failure was labelled
+``CONFLICTS``. Measured on the 2026-09-09 02:42 run: ``updated=0
+conflicted=11``, job green. A trial of the same eleven branches without the flag
+merged five cleanly and hit two real conflicts, so the workflow had never merged
+anything in its life.
+
+**Why it survived.** The flag was added *defensively*, against a repo- or
+user-level ``pull.rebase`` silently turning the merge into a rebase — a risk
+that does not exist, because ``pull.rebase`` governs ``git pull``. So a guard
+against an impossible failure disabled the thing it guarded. And the outcome it
+produced, "these branches conflict", is exactly what a reader expects from
+long-parked branches: plausible, self-explanatory, and wrong.
+
+Two checks, because the defect had two halves and either alone would have let it
+through: the flag must not be passed, and a merge that fails **without** a
+conflict must not be filed as one.
+"""
+
+from __future__ import annotations
+
+import re
+
+from tools.lint._scan_helpers import tracked_paths
+
+from ._paths import repo_root
+
+#: Flags that belong to `git pull` and are rejected by `git merge`.
+PULL_ONLY = ("--no-rebase", "--rebase")
+
+MERGE_CALL = re.compile(r"\bgit\s+merge\b([^\n;|&]*)")
+
+SCANNED = ("*.sh", "*.yml", "*.yaml", "*.py")
+
+#: This file states the pattern in prose and in its own fixtures.
+EXEMPT = {"repo_tests/git_merge_rejects_pull_only_flags_15938_test.py"}
+
+WORKFLOW = ".github/workflows/auto-merge-base-into-parked-branches.yml"
+
+
+def _logical_lines(text: str) -> list[tuple[int, str]]:
+    """`(first line number, joined line)` with shell continuations folded in.
+
+    A matcher that reads physical lines misses the shape a reintroduction most
+    plausibly takes, because that is how a long git invocation is written::
+
+        git merge \\
+          --no-rebase --no-edit "origin/$BASE"
+
+    Splitting on newlines captures only `` \\ `` as the argument text, the flag
+    lands on a line with no `git merge` on it, and the guard passes having
+    inspected nothing (#16128 review). The line number reported is the FIRST
+    physical line, so the message still points at the invocation.
+    """
+    out: list[tuple[int, str]] = []
+    buffer, start = "", 0
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not buffer:
+            start = number
+        stripped = line.rstrip()
+        if stripped.endswith("\\"):
+            buffer += stripped[:-1] + " "
+            continue
+        out.append((start, buffer + line))
+        buffer = ""
+    if buffer:
+        out.append((start, buffer))
+    return out
+
+
+def offending_lines(text: str) -> list[tuple[int, str]]:
+    """`git merge` invocations carrying a pull-only flag, ignoring comments."""
+    out = []
+    for number, line in _logical_lines(text):
+        if line.lstrip().startswith("#"):
+            continue
+        for match in MERGE_CALL.finditer(line):
+            args = match.group(1)
+            if any(re.search(rf"{re.escape(flag)}\b", args) for flag in PULL_ONLY):
+                out.append((number, line.strip()))
+                break
+    return out
+
+
+def test_no_tracked_file_passes_a_pull_only_flag_to_git_merge() -> None:
+    root = repo_root()
+    offenders = []
+    for rel in tracked_paths(root, *SCANNED):
+        if rel in EXEMPT:
+            continue
+        try:
+            text = (root / rel).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        offenders += [(rel, n, line) for n, line in offending_lines(text)]
+
+    assert not offenders, "\n".join(
+        f"{rel}:{n}: {line}\n"
+        "    `--rebase`/`--no-rebase` are `git pull` flags; `git merge` rejects them "
+        "with `error: unknown option`. The merge does not happen, and callers that "
+        "treat a non-zero exit as a conflict report the branch as unmergeable "
+        "instead of reporting themselves as broken (#15938)."
+        for rel, n, line in offenders
+    )
+
+
+# ------------------------------------------------------------ the classification
+#
+# Removing the flag fixes today's instance. What stops the next one is that a
+# merge failing for any OTHER reason can no longer be filed as a conflict, so the
+# job says "I am broken" rather than "these branches are".
+
+
+def test_the_parked_branch_job_distinguishes_a_conflict_from_a_failure() -> None:
+    text = (repo_root() / WORKFLOW).read_text(encoding="utf-8")
+    assert "grep -q '^CONFLICT'" in text, (
+        f"{WORKFLOW} must classify a failed merge by looking for git's own CONFLICT "
+        "marker. Without that, every non-conflict failure is reported as a conflict, "
+        "which is how #15938 stayed green for the life of the file."
+    )
+    assert "errored+=(" in text, (
+        f"{WORKFLOW} must keep non-conflict failures in their own bucket; folding "
+        "them into `conflicted` is the defect, not the reporting of it."
+    )
+    assert re.search(r"\$\{#errored\[@\]\} -gt 0 \]; then\s*\n\s+echo \"::error::", text), (
+        f"{WORKFLOW} must FAIL when a merge fails without a conflict. A conflict is "
+        "information about a branch; a non-conflict failure is a defect in the job, "
+        "and a job that cannot fail cannot report one."
+    )
+
+
+# ------------------------------------------------------------ guarding the matcher
+
+
+def test_the_matcher_catches_the_shape_that_shipped() -> None:
+    assert offending_lines('git merge --no-rebase --no-edit "origin/$BASE"')
+    assert offending_lines("    if git merge --no-rebase --no-edit x; then")
+    assert offending_lines("git merge --rebase foo")
+
+
+def test_the_matcher_leaves_valid_merges_and_prose_alone() -> None:
+    """A false positive here would refuse the fix along with the defect."""
+    assert not offending_lines('git merge --no-edit "origin/$BASE"')
+    assert not offending_lines("git merge --no-ff --no-commit topic")
+    assert not offending_lines("# never pass git merge --no-rebase; it is a pull flag")
+    # `git pull --no-rebase` is correct usage and must not be touched.
+    assert not offending_lines("git pull --no-rebase origin main")
+    # A merge with no flags at all.
+    assert not offending_lines("git merge origin/Dev_new_gui")
+
+
+# ---------------------------------------------------- where a workspace starts
+#
+# The other half of #15938. `git worktree add -b <branch> <dir>` with no start
+# point branches from the main tree's HEAD, so a new workspace silently inherits
+# whatever that tree last fetched. Freshness used to be a side effect of having a
+# PR: auto-update-pr-branches.yml keeps PR branches current, and before the first
+# push there was no mechanism at all.
+
+WORKSPACE = "autobot-backend/services/task_workspace.py"
+
+
+def test_a_new_workspace_branches_from_a_fetched_base() -> None:
+    """STRUCTURAL only, and that limit is the point of saying it here.
+
+    Everything below is a substring search over the source. It proves the code
+    was WRITTEN and would pass unchanged if the branches were reordered,
+    inverted or made unreachable (#16128 review). The behaviour is verified by
+    execution in `autobot-backend/tasks/test_task_workspace.py::TestFetchedBaseRef`,
+    which calls `_fetched_base_ref` for all three arms of its contract.
+
+    Kept rather than deleted because it guards a different thing: that the
+    start-point argument and the no-remote branch are not quietly dropped from a
+    file whose behavioural tests live in another suite and another shard.
+    """
+    text = (repo_root() / WORKSPACE).read_text(encoding="utf-8")
+    assert "def _fetched_base_ref(" in text, (
+        f"{WORKSPACE} must resolve its base ref through a helper that fetches first; "
+        "branching from the main tree's HEAD inherits that tree's staleness."
+    )
+    assert "add_argv.append(base_ref)" in text, (
+        f"{WORKSPACE} must pass an explicit start point to `git worktree add`. "
+        "Without one git uses HEAD, which is the defect: the call looks correct and "
+        "the branch point is whatever the shared tree happened to be on."
+    )
+    # The start point is conditional, and the condition is the whole design: a
+    # repository with NO remotes has no base to be stale against, so HEAD is the
+    # only base there is. A remote configured with the ref missing still raises.
+    # Collapsing the two either breaks every local-only checkout or silently
+    # restores the defect for real ones.
+    assert "if not probe.stdout.strip():" in text and "return None" in text, (
+        f"{WORKSPACE} must treat 'no remotes' as a real answer rather than an error; "
+        "raising there breaks every throwaway repository, which is how this was found."
+    )
+    # And it must NOT treat a FAILED probe as 'no remotes'. Both produce empty
+    # stdout, so a rule keyed on output alone lets a corrupt repo or a
+    # permissions error take the local-only path and skip the ref check in
+    # silence. Raised in review of #16128, where the assertion above pinned the
+    # shape of the gap rather than the shape of the contract.
+    assert "if probe.returncode != 0:" in text, (
+        f"{WORKSPACE} must distinguish a FAILED `git remote` from a repository that "
+        "genuinely has none — testing stdout alone makes those identical, and one of "
+        "them is a broken checkout quietly branching from HEAD."
+    )
+    assert "AUTOBOT_WORKSPACE_BASE_REF" in text, (
+        f"{WORKSPACE} must take the base ref from an env-var-backed constant, not a " "literal at the call site."
+    )
+
+
+def test_the_base_ref_is_registered_and_distinct_from_the_build_branch() -> None:
+    """Two different questions must not share one variable.
+
+    `AUTOBOT_GIT_BRANCH` records the branch this instance was BUILT from;
+    `AUTOBOT_WORKSPACE_BASE_REF` says where NEW work starts. Reusing the first
+    for the second would be correct today and wrong the moment a deployment runs
+    from anything but the base -- the reuse itself is the defect, not the value.
+    """
+    # Follows the core module's IMPORTS rather than globbing the directory, and
+    # that is the stronger check as well as the one that does not need a reach
+    # floor: it proves the sibling holding the variable is actually imported, so
+    # the registration executes. A glob would pass on a module nobody loads.
+    #
+    # The first version asserted against `env_registry.py` alone and broke the
+    # moment the variable moved to its domain sibling -- which is where that
+    # file's own docstring says a new one belongs, since it is at its ceiling and
+    # may not grow (#14236). The guard had encoded a LOCATION where the contract
+    # is "registered in a module the registry imports".
+    core_path = repo_root() / "autobot_shared" / "env_registry.py"
+    core = core_path.read_text(encoding="utf-8")
+    sources = [core]
+    for module in re.findall(r"from autobot_shared import (env_registry_\w+)", core):
+        sibling = core_path.with_name(f"{module}.py")
+        if sibling.exists():
+            sources.append(sibling.read_text(encoding="utf-8"))
+    assert len(sources) > 1, (
+        "env_registry.py imports no env_registry_* siblings — either the split was "
+        "undone or this parse stopped matching, and a scan that reaches only the core "
+        "file cannot tell those apart from a variable that is genuinely missing."
+    )
+    registry = "\n".join(sources)
+    assert 'name="AUTOBOT_WORKSPACE_BASE_REF"' in registry, (
+        "AUTOBOT_WORKSPACE_BASE_REF must be declared in the env registry — an env var "
+        "read but never registered is invisible to every tool that enumerates config."
+    )
+
+
+def test_a_continuation_does_not_hide_the_flag() -> None:
+    """The shape a reintroduction actually takes (#16128 review).
+
+    A long git invocation is written across a continuation, and a matcher that
+    reads physical lines sees `git merge \\` with no flag and a flag with no
+    `git merge`. It then passes having inspected nothing — the vacuous green
+    this whole file exists to refuse.
+    """
+    found = offending_lines('git merge \\\n  --no-rebase --no-edit "origin/$BASE"\n')
+    assert found, "a line-continuation invocation escaped the matcher"
+    assert found[0][0] == 1, "the finding must point at the `git merge` line, not the flag's"
+
+
+def test_a_continuation_in_valid_usage_is_still_left_alone() -> None:
+    """Folding continuations must not create false positives."""
+    assert not offending_lines('git merge \\\n  --no-edit "origin/$BASE"\n')
+    assert not offending_lines("git pull \\\n  --no-rebase origin main\n")
