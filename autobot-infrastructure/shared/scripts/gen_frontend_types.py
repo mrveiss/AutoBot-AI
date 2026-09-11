@@ -112,6 +112,9 @@ MANIFEST: List[Tuple[str, str]] = [
     # #7226: extend MANIFEST to cover hand-written types prone to drift
     ("autobot-backend/services/workflow_automation/models.py", "WorkflowStepStatus"),
     ("autobot_shared/status_enums.py", "Severity"),  # exported as RiskLevel via alias below
+    # #14937: the canonical role vocabulary, so the frontend role unions derive
+    # from it instead of three hand-maintained copies drifting apart.
+    ("autobot_shared/auth/permissions.py", "Role"),
 ]
 
 

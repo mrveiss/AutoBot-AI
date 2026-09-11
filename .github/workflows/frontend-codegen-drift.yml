@@ -31,6 +31,7 @@ on:
       # Canonical sources covered by MANIFEST (#7122 / #7226)
       - 'autobot_shared/workflow/types.py'
       - 'autobot_shared/status_enums.py'
+      - 'autobot_shared/auth/permissions.py'
       - 'autobot-backend/services/workflow_automation/models.py'
       # Codegen output + tooling
       - 'autobot-frontend/src/types/_generated/**'
@@ -41,6 +42,7 @@ on:
     paths:
       - 'autobot_shared/workflow/types.py'
       - 'autobot_shared/status_enums.py'
+      - 'autobot_shared/auth/permissions.py'
       - 'autobot-backend/services/workflow_automation/models.py'
       - 'autobot-frontend/src/types/_generated/**'
       - 'autobot-infrastructure/shared/scripts/gen_frontend_types.py'

@@ -418,6 +418,7 @@ certs/
 *.key
 *.crt
 config/service-keys/
+autobot-infrastructure/shared/config/service-keys/
 
 # === MCP DIRECTORY EXCLUSIONS ===
 # Prevent MCP binaries and archives from being tracked

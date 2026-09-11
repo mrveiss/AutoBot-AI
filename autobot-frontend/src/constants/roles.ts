@@ -14,15 +14,30 @@
  * equivalent, so there is exactly one place that answers "is this role an
  * administrator" instead of a per-file `=== 'admin'` comparison.
  *
- * Deliberately narrow: this file does not attempt the full role-vocabulary
- * unification #14937 asks for (three more drifted unions, i18n for
- * `superadmin` assignment, the `viewer`/`guest` cleanup) — those are separate,
- * larger slices with their own review surface.
+ * Both lists below are checked against the generated canonical `Role` (#14937):
+ * a member the backend vocabulary does not carry fails to compile.
  */
 
-export const ADMIN_ROLES = ['admin', 'superadmin'] as const
+import type { Role } from '@/types/_generated/workflow'
+
+export const ADMIN_ROLES = ['admin', 'superadmin'] as const satisfies readonly Role[]
 
 export type AdminRole = (typeof ADMIN_ROLES)[number]
+
+/**
+ * The roles an administrator may assign in the UI (#14937). The owner kept this to
+ * admin/user/readonly: `set_user_role` is guarded by `require_platform_admin`, so
+ * offering `superadmin` would let an admin grant a role above their own. The
+ * backend's `RoleUpdateRequest` pattern accepts the same three.
+ */
+export const ASSIGNABLE_ROLES = ['admin', 'user', 'readonly'] as const satisfies readonly Role[]
+
+/** The role a user record without one is treated as -- the least-privileged named role an account is created with. */
+export const DEFAULT_ROLE: Role = 'user'
+
+export function isAssignableRole(role: string): boolean {
+  return (ASSIGNABLE_ROLES as readonly string[]).includes(role)
+}
 
 /** Mirrors `is_admin_role()` — true for every administrative role, case-insensitively. */
 export function isAdminRole(role: string | null | undefined): boolean {

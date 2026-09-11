@@ -193,8 +193,10 @@ export function normalizeNodeStatus(status: NodeStatus | string): 'online' | 'of
  * Normalize a service status string to the four-value union used by
  * ServiceActionButtons ('running' | 'stopped' | 'failed' | 'unknown').
  *
- * ServiceStatus is already this union; this helper provides a type-safe
- * conversion when the value arrives as a plain string from the API.
+ * `ServiceStatus` is wider since #15401 -- it carries the agent's full run-state
+ * vocabulary -- so this is a narrowing, not a no-op: `starting`, `stopping`,
+ * `completed` and `crash-loop` collapse to `unknown` here, as they always did
+ * when those values arrived as plain strings.
  *
  * Issue #3195
  */

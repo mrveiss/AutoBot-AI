@@ -24,6 +24,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.canvas import router
+from autobot_shared.eventually import eventually
 from canvas.models import Canvas, CanvasCell, CellState
 
 # ---------------------------------------------------------------------------
@@ -492,7 +493,6 @@ class TestExportHelpers:
         from api.canvas import _export_json
 
         canvas = _make_canvas()
-        agent_cell = _make_cell(owner="agent", state=CellState.committed)
         user_cell = _make_cell(owner="user", state=CellState.committed)
         user_cell.id = uuid.uuid4()
         user_cell.content = "User content"
@@ -581,9 +581,8 @@ class TestCanvasWebSocketStreaming:
         with patch("user_management.database.db_session_context", _make_cancel_db_mock(owner_id)):
             await _handle_canvas_cancel({"cellId": cell_id, "canvasId": canvas_id}, owner_id)
 
-        # Task should be cancelled
-        await asyncio.sleep(0.01)  # Give task time to process cancellation
-        assert task.done()
+        # Task should be cancelled -- wait on the observable, not a fixed delay (#16255)
+        await eventually(task.done)
         assert task.cancelled()
 
     @pytest.mark.asyncio
@@ -613,8 +612,7 @@ class TestCanvasWebSocketStreaming:
         with patch("user_management.database.db_session_context", _make_cancel_db_mock(owner_id)):
             await _handle_canvas_cancel({"cellId": cell_id_1, "canvasId": canvas_id}, owner_id)
 
-        await asyncio.sleep(0.01)
-        assert task1.done()
+        await eventually(task1.done)  # wait on the observable, not a fixed delay (#16255)
         assert not task2.done()
 
         # Cleanup
@@ -652,9 +650,8 @@ class TestCanvasWebSocketStreaming:
         with patch("user_management.database.db_session_context", _make_cancel_db_mock(owner_id)):
             await _handle_canvas_cancel({"cellId": cell_id, "canvasId": canvas_id}, attacker_id)
 
-        await asyncio.sleep(0.01)
-        # Task must NOT be cancelled
-        assert not task.done()
+        # The stopper's own state (#16255 review): cancelling() sees a requested cancel with no yield
+        assert not task.done() and task.cancelling() == 0
 
         # Cleanup
         task.cancel()

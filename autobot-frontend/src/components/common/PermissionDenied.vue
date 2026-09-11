@@ -36,10 +36,10 @@
 
       <div v-if="showDetails && requiredPermission" class="permission-denied__details">
         <p class="permission-denied__required">
-          {{ $t('common.permissionDenied.requiredPermission') }}: <code>{{ requiredPermission }}</code>
+          {{ $t('common.permissionDenied.requiredPermission') }} <code>{{ requiredPermission }}</code>
         </p>
         <p class="permission-denied__current">
-          {{ $t('common.permissionDenied.yourRole') }}: <code>{{ currentRole }}</code>
+          {{ $t('common.permissionDenied.yourRole') }} <code>{{ currentRole ?? $t('common.permissionDenied.notSignedIn') }}</code>
         </p>
       </div>
 
