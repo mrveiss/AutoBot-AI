@@ -136,6 +136,34 @@ class TestShortfalls:
         assert checker.shortfalls([_declaration()], {}) == []
 
 
+class TestIsExempt:
+    """#16264: KNOWN_CROSS_VENV_EXEMPTIONS matches by (package, file), not by line."""
+
+    def test_exempted_pair_is_exempt(self):
+        declaration = checker.Declaration(
+            source="autobot-slm-backend/requirements.txt:37", name="websockets", operator=">=", required="17.1"
+        )
+        assert checker.is_exempt(checker.Shortfall(declaration, "15.0.1")) is True
+
+    def test_same_package_different_file_is_not_exempt(self):
+        declaration = checker.Declaration(
+            source="autobot-backend/requirements.txt:12", name="websockets", operator=">=", required="17.1"
+        )
+        assert checker.is_exempt(checker.Shortfall(declaration, "15.0.1")) is False
+
+    def test_different_package_same_file_is_not_exempt(self):
+        declaration = checker.Declaration(
+            source="autobot-slm-backend/requirements.txt:1", name="fastapi", operator=">=", required="0.141.1"
+        )
+        assert checker.is_exempt(checker.Shortfall(declaration, "0.135.2")) is False
+
+    def test_line_number_does_not_matter(self):
+        declaration = checker.Declaration(
+            source="autobot-slm-backend/requirements.txt:999", name="websockets", operator=">=", required="17.1"
+        )
+        assert checker.is_exempt(checker.Shortfall(declaration, "15.0.1")) is True
+
+
 class TestAuditRefusesAnEmptyEnumeration:
     def test_empty_tree_raises_instead_of_reporting_clean(self, tmp_path, monkeypatch):
         """#15087: a check that asserts over an enumeration must fail when it is empty.
@@ -237,6 +265,27 @@ class TestMainExitCodes:
         monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("absent.txt",))
         assert checker.main(["--root", str(tmp_path)]) == 2
         assert "no version declarations found" in capsys.readouterr().err
+
+
+class TestKnownCrossVenvExemptions:
+    """#16264: the SLM/backend websockets floor mismatch is a named exception, not a silent one."""
+
+    def test_exemption_set_is_exactly_the_expected_pair(self):
+        assert set(checker.KNOWN_CROSS_VENV_EXEMPTIONS) == {
+            ("websockets", "autobot-slm-backend/requirements.txt"),
+        }
+
+    def test_exempted_pair_does_not_fail_strict(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("autobot-slm-backend/requirements.txt",))
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {"websockets": "15.0.1"})
+        _write(tmp_path, "autobot-slm-backend/requirements.txt", "websockets>=17.1,<18\n")
+        assert checker.main(["--root", str(tmp_path), "--strict"]) == 0
+
+    def test_non_exempted_below_floor_pin_still_fails(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("r.txt",))
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {"websockets": "15.0.1"})
+        _write(tmp_path, "r.txt", "websockets>=17.1,<18\n")
+        assert checker.main(["--root", str(tmp_path), "--strict"]) == 1
 
 
 class TestScopedRoots:

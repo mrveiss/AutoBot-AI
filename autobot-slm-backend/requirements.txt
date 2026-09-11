@@ -34,7 +34,7 @@ redis[asyncio]>=8.1.0
 
 # Async utilities
 aiofiles>=25.1.0
-websockets>=15.0.1,<16     # Issue #3098 + #16264: floor lowered from >=17.1 -- that pin came from unreviewed dependabot group bumps (#15381 et al.), not from a requirement: SLM's own code never imports websockets, it arrives transitively through uvicorn[standard]>=0.52.4, which only requires >=13.0. ci.yml's python-shard job runs SLM's tests in the same venv as the backend (#13300), so the real floor is the backend's own cap at autobot-backend/requirements.txt -- websockets>=15.0.1,<16, because langgraph-sdk 0.4.2 requires <16 (see that file's comment). Matches requirements-ci/framework.txt's ==15.0.1 pin.
+websockets>=17.1,<18       # Issue #3098: SLM's own independent floor -- SLM's code never imports websockets directly (it arrives transitively through uvicorn[standard]>=0.52.4, which only requires >=13.0), but this is the version already running in SLM production, so it must not be lowered without cause. #16264 briefly lowered this to match autobot-backend/requirements.txt's <16 langgraph-sdk cap after ci.yml's python-shard job (#13300) installs SLM's tests into the SAME venv as the backend and surfaced a floor conflict there -- that is a CI-venv-sharing artifact, not a reason to downgrade SLM production. The mismatch is a named exemption in pipeline-scripts/check_dependency_floors.py, pending a genuinely separate SLM venv (#16394).
 
 # Ansible integration
 ansible-runner>=2.4.3

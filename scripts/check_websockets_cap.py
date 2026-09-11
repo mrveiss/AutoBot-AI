@@ -16,11 +16,16 @@ ResolutionImpossible — the durable protection requested in #11030 (option 2). 
 does NOT touch the shared constraint (option 1 would have coupled the pin to
 ``autobot-slm-backend``'s, and ``autobot-slm-backend`` still does not use the
 shared constraint file). ``autobot-slm-backend/requirements.txt`` pins its own
-``websockets>=15.0.1,<16`` independently -- #16264 lowered it to match this
-same langgraph-sdk cap, after finding its prior ``>=17.1,<18`` floor came from
-unreviewed dependabot bumps the SLM code never actually needed. When
-``langgraph`` is ever dropped from the backend the cap is no longer required,
-so the guard auto-relaxes.
+independent ``websockets>=17.1,<18`` floor -- SLM's own code never imports
+websockets, and its pin is not bound by the backend's langgraph-sdk cap.
+ci.yml's python-shard job installs SLM's tests into the SAME venv as the
+backend (#13300), so ``pip``/CI briefly sees the two floors conflict there;
+#16264 handles that with a named ``(package, requirements file)`` exemption in
+``pipeline-scripts/check_dependency_floors.py`` rather than lowering SLM's
+floor, which would downgrade the version already running in SLM production.
+That exemption is a stopgap pending a genuinely separate SLM venv (#16394).
+When ``langgraph`` is ever dropped from the backend the cap is no longer
+required, so the guard auto-relaxes.
 
 Run from the repo root:  python3 scripts/check_websockets_cap.py
 Exit 0 = compliant; exit 1 = the cap is violated (or the file/pin is missing).

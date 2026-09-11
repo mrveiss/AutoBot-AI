@@ -42,6 +42,17 @@ DECLARATION_ROOTS: tuple[str, ...] = (
     "autobot-slm-backend/requirements.txt",
 )
 
+#: (package, declaring requirements file) pairs known to sit below their own
+#: declared floor for a *documented* cross-venv reason -- never a blanket
+#: license to ignore a shortfall, only an exact (name, source file) match.
+#: ``--strict`` treats a listed pair as satisfied; everything else it still
+#: fails on. Each value is the reason a human can act on, not just a marker.
+KNOWN_CROSS_VENV_EXEMPTIONS: Mapping[tuple[str, str], str] = {
+    ("websockets", "autobot-slm-backend/requirements.txt"): (
+        "SLM tests share the backend venv (langgraph-sdk caps websockets<16); " "separate SLM venv is #16394"
+    ),
+}
+
 MAX_REPORTED = 10
 
 #: Stands in for a version in a :class:`Shortfall` raised for a distribution
@@ -87,6 +98,18 @@ class Shortfall:
         return (
             f"{self.declaration.name}: installed {self.installed}, " f"declared {declared} ({self.declaration.source})"
         )
+
+
+def is_exempt(shortfall: Shortfall, exemptions: Mapping[tuple[str, str], str] = KNOWN_CROSS_VENV_EXEMPTIONS) -> bool:
+    """True when *shortfall* is a documented cross-venv mismatch, not real drift.
+
+    Matches by (package, declaring file) only -- never by line number, which
+    shifts on an unrelated edit -- and never partially: a package exempted
+    for one requirements file still fails for every other file that declares
+    it below floor.
+    """
+    source_file = shortfall.declaration.source.rsplit(":", 1)[0]
+    return (shortfall.declaration.name, source_file) in exemptions
 
 
 def canonical(name: str) -> str:
@@ -309,7 +332,11 @@ def main(argv: list[str] | None = None) -> int:
     in_ci = bool(os.environ.get("CI"))
     for line in render(found, examined, len(found) if args.all else MAX_REPORTED, in_ci=in_ci):
         print(line)  # noqa: print
-    return 1 if found and args.strict else 0
+    # #16264: a shortfall matching KNOWN_CROSS_VENV_EXEMPTIONS is still printed
+    # above (it is real, in this interpreter) but never fails --strict -- it is
+    # a documented cross-venv mismatch, not drift this run should gate on.
+    gating = [shortfall for shortfall in found if not is_exempt(shortfall)]
+    return 1 if gating and args.strict else 0
 
 
 if __name__ == "__main__":
