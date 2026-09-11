@@ -52,8 +52,20 @@ on:
 # (run API: actor and triggering_actor both github-actions[bot]; the human run
 # it cancelled: both the PR author) and, unlike `github.triggering_actor`, stays
 # the bot if a human later approves or re-runs it.
+#
+# #16363 review: "a bot" is any `[bot]` actor, not only github-actions[bot].
+# The checkout below pushes with AUTOBOT_PUSH_TOKEN when it is set; if that token
+# belongs to a GitHub App or another bot identity, the fork policy parks the push
+# and the approver releases it exactly as in the fallback case. dependabot[bot]
+# is excluded: its runs are never parked, so there is no approver to protect,
+# and its rebases should keep superseding each other.
+#
+# Accepted trade-off: two bot-caused runs for DIFFERENT head SHAs no longer
+# cancel each other. Each is the regen run of its own commit, which pushes
+# nothing when the types already match, and a stale one's push, if it made one,
+# would be rejected as a non-fast-forward.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref }}${{ github.actor == 'github-actions[bot]' && format('-regen-{0}', github.event.pull_request.head.sha) || '' }}
+  group: ${{ github.workflow }}-${{ github.head_ref }}${{ endsWith(github.actor, '[bot]') && github.actor != 'dependabot[bot]' && format('-regen-{0}', github.event.pull_request.head.sha) || '' }}
   cancel-in-progress: true
 
 permissions:
@@ -250,6 +262,9 @@ jobs:
       actions: write
       statuses: write
       pull-requests: read
+    # One base branch for the sweep and for the hand-off step's dispatch.
+    env:
+      WATCHDOG_BASE_BRANCH: main
 
     steps:
       - uses: actions/checkout@v7
@@ -260,7 +275,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          WATCHDOG_BASE_BRANCH: main
           WATCHDOG_ONLY_PR: ${{ github.event.pull_request.number }}
         shell: bash
         run: |
@@ -292,4 +306,4 @@ jobs:
         run: |
           echo "::error title=Parked-run approval was cancelled::PR #${{ github.event.pull_request.number }} may still have runs awaiting approval; dispatching the CI Dispatch Watchdog sweep (#16360)."
           echo "Approval sweep cancelled before it finished; CI Dispatch Watchdog dispatched to finish it (#16360)." >> "$GITHUB_STEP_SUMMARY"
-          gh workflow run ci-dispatch-watchdog.yml --repo "${{ github.repository }}" --ref Dev_new_gui
+          gh workflow run ci-dispatch-watchdog.yml --repo "${{ github.repository }}" --ref "$WATCHDOG_BASE_BRANCH"
