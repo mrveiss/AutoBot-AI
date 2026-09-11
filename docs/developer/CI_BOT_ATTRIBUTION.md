@@ -45,31 +45,64 @@ The fallback matters: without the secret configured the workflows behave exactly
 as they do today rather than failing, so this change is safe to land before the
 secret exists.
 
-### Configuring the secret
+### The token is optional, and belongs to one repository
 
-A fine-grained personal access token scoped to this repository:
+`AUTOBOT_PUSH_TOKEN` is a CI secret of whichever repository the workflows run
+in. It is optional, and the AutoBot product never reads it. AutoBot is open
+source and runs on anyone's infrastructure, so nothing in it may depend on this
+repository's secrets (owner ruling, 11 Sep 2026). Leaving it unset is
+supported: every workflow falls back to `GITHUB_TOKEN`, at the cost described in
+"The release-sync PR without the token" below.
+
+### Creating one, for this repository or a fork
+
+A fine-grained personal access token, scoped to that one repository:
 
 | Permission | Level |
 |---|---|
 | Contents | Read and write |
 | Pull requests | Read and write |
-| Workflows | Read and write (only if a pushed change touches `.github/workflows/`) |
+| Workflows | Read and write |
 
-Store it as the repository secret `AUTOBOT_PUSH_TOKEN`.
+Workflows is needed because the release-sync push carries changes under
+`.github/workflows/`. Store the token as the repository secret
+`AUTOBOT_PUSH_TOKEN`. A fork creates its own, or leaves it unset.
 
 ### Applies to
 
 - `.github/workflows/auto-fix-generated-types.yml`
 - `.github/workflows/auto-update-pr-branches.yml`
 - `.github/workflows/sync-main-to-dev.yml` — pushes the `release-sync-main` branch
-  and opens the release-sync PR from it (#16246). The pushed branch carries
-  workflow changes, so the token needs the Workflows permission above.
+  and opens the release-sync PR from it (#16246).
+
+## The release-sync PR without the token
+
+Under the fallback, `sync-main-to-dev.yml` pushes `release-sync-main` and opens
+its PR as `github-actions[bot]`, so every run those events trigger parks (see
+Cause). The watchdog below does not release them. It runs `main`'s copy of
+`ci-dispatch-watchdog.yml`, which sets `WATCHDOG_BASE_BRANCH: Dev_new_gui`, and
+it approves runs only for open PRs into that base. The sync PR's two required
+contexts, `No commit trailers` and `No open blocks-merge issues reference this
+PR`, therefore never report, and the PR cannot merge.
+
+**Owner step, at the bootstrap sync and every week after:** once the workflow has
+opened or updated the sync PR, approve its parked runs
+(`POST /repos/{owner}/{repo}/actions/runs/{id}/approve` per run, the endpoint the
+watchdog uses), or close and reopen the PR as a person. `reopened` is a trigger
+of both `no-commit-trailers.yml` and `pr-blocking-findings.yml`, the workflows
+behind those two contexts.
+
+#16272 is the follow-up that removes this manual step.
 
 ## The safety net
 
-`ci-dispatch-watchdog.yml` sweeps parked runs every 15 minutes and approves only
-those whose head repository is this repository **and** whose triggering actor is
-the bot — fork PRs are never approved, only reported.
+`ci-dispatch-watchdog.yml` sweeps parked runs and approves only those whose head
+repository is this repository **and** whose triggering actor is the bot — fork
+PRs are never approved, only reported. It sweeps open PRs into `Dev_new_gui`
+only.
+
+Its cron is `*/15`, but do not count on a release within minutes: measured on
+11 Sep 2026, its scheduled runs fired every 1.5 to 4 hours (#16272).
 
 That cron only fires from the **default branch**. The workflow must therefore
 exist on `main`, not only on `Dev_new_gui`; until it does, the schedule never

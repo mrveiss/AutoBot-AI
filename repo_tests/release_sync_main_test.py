@@ -215,7 +215,7 @@ def test_run_opens_exactly_one_pr_when_none_is_open(rs):
 
 
 def test_run_with_two_open_prs_opens_none_and_updates_only_the_oldest(rs):
-    api = _api([_pull(21), _pull(12)], 310)
+    api = _api([_pull(21, body=rs.BODY_MARKER), _pull(12, body=rs.BODY_MARKER)], 310)
     assert _run(rs, api) == 1, "duplicates must redden the run"
     assert api.writes("POST") == [], "a run with sync PRs open must never open another"
     patches = api.writes("PATCH")
@@ -223,11 +223,20 @@ def test_run_with_two_open_prs_opens_none_and_updates_only_the_oldest(rs):
     assert set(patches[0][1]) == {"body"}, "the update rewrites the body and nothing else"
 
 
-def test_a_hand_opened_sync_from_the_trunk_is_counted_not_duplicated(rs):
+def test_a_hand_opened_sync_from_the_trunk_is_counted_and_its_body_left_alone(rs):
     api = _api([_pull(9), _pull(5, head=SOURCE)], 310)
     assert _run(rs, api) == 1
     assert api.writes("POST") == []
-    assert [path for path, _ in api.writes("PATCH")] == [f"/repos/{REPO}/pulls/5"]
+    assert api.writes("PATCH") == [], "a hand-opened sync PR keeps the body its author wrote"
+
+
+@pytest.mark.parametrize("generated", [True, False])
+def test_only_a_body_this_tool_wrote_is_ever_rewritten(rs, generated):
+    hand_written = f"Bootstrap sync, opened by hand. Adds `{rs.OPENED_BY}`."
+    api = _api([_pull(12, body=rs.BODY_MARKER + "\nstale" if generated else hand_written)], 310)
+    assert _run(rs, api) == 0
+    assert bool(api.writes("PATCH")) is generated, "a hand-written body is never PATCHed, even one naming the workflow"
+    assert api.writes("POST") == []
 
 
 def test_other_prs_into_the_base_are_not_sync_prs(rs):
@@ -367,8 +376,9 @@ def test_body_uses_the_pr_template_headings(rs):
         assert heading in body, f"sync PR body lacks {heading!r}"
 
 
-def test_body_names_the_workflow_that_opened_it(rs):
-    assert "sync-main-to-dev.yml" in rs.build_body(310, [], SOURCE, BASE)
+def test_body_names_the_workflow_that_opened_it_and_leads_with_the_marker(rs):
+    body = rs.build_body(310, [], SOURCE, BASE)
+    assert "sync-main-to-dev.yml" in body and body.startswith(rs.BODY_MARKER)
 
 
 # --------------------------------------------------------------------------

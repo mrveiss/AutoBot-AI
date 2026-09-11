@@ -21,7 +21,9 @@ WHAT IT DECIDES (``decide``). Given the open sync pull requests and the number
 of commits ``main`` lacks:
 
 * none open, commits to sync  -> open one
-* one or more open            -> rewrite the body of the OLDEST; report the rest
+* one or more open            -> update the OLDEST; report the rest
+  (its body is rewritten only if this tool wrote it: a hand-opened sync PR
+  keeps the body its author wrote)
 * none open, nothing to sync  -> do nothing
 
 It never opens a second sync pull request. If duplicates exist it updates the
@@ -94,6 +96,9 @@ DEFAULT_HEAD = "release-sync-main"
 DEFAULT_SOURCE = "Dev_new_gui"
 DEFAULT_BASE = "main"
 OPENED_BY = ".github/workflows/sync-main-to-dev.yml"
+# Leads every body this tool writes, and only a body carrying it is ever rewritten.
+# A sync PR opened by hand keeps the body its author wrote, even one naming OPENED_BY.
+BODY_MARKER = f"<!-- generated-by: {OPENED_BY} -->"
 WORKFLOW_DIR = ".github/workflows"
 WORKFLOW_SUFFIXES = (".yml", ".yaml")
 TRACKING_ISSUE = "#16246"
@@ -270,6 +275,7 @@ def _verification_section(ahead_by: int, base: str, source: str) -> List[str]:
 def build_body(ahead_by: int, scheduled: Sequence[ScheduledChange], source: str, base: str) -> str:
     """The sync PR's body, under the repository's PR template headings."""
     lines = [
+        BODY_MARKER,
         "## Thinking Path",
         "",
         f"`{base}` is the default branch, so scheduled workflows run `{base}`'s copy and",
@@ -412,6 +418,8 @@ def apply_decision(
     if decision.action == ACTION_CREATE:
         return _open_pull(api, head, base, body)
     current = next((p.get("body") or "" for p in pulls if p.get("number") == decision.target), "")
+    if BODY_MARKER not in current:
+        return f"#{decision.target} was opened by hand; its body is left as written"
     if current == body:
         return f"#{decision.target} is already current; nothing written"
     update_pull_body(api, int(decision.target), body)
