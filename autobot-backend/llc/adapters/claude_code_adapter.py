@@ -56,6 +56,7 @@ from .subprocess_support import (
     is_rate_limit_output,
     read_output_tail,
     serialize_invoke_context,
+    spawn_create_time,
     spawn_with_workspace_retry,
 )
 
@@ -215,6 +216,13 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
 
         output_dir: str = cfg.get("output_dir", _DEFAULT_OUTPUT_DIR)
         timeout_sec: int = _resolve_timeout(cfg)
+        # GH#13099 AC4 / PR#16284 review: the global stall/first-output
+        # defaults are appropriate here, not just assumed — _build_command
+        # passes --output-format stream-json --print --verbose (below), so
+        # the CLI is verified to emit one JSON object per line as the turn
+        # progresses (that incremental JSONL is exactly what final_result_event()
+        # and the mid-run rate-limit scan in _status() read), not a single
+        # blob buffered to exit.
         first_output_sec: int = _resolve_first_output_deadline(cfg)
         stall_sec: int = _resolve_stall_deadline(cfg)
 
@@ -266,17 +274,9 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             output_file,
         )
 
-        state = {
-            "pid": proc.pid,
-            "session_id": session_id,
-            "agent_id": agent_id,
-            "output_file": output_file,
-            "stderr_file": stderr_file,  # GH#9992
-            "started_at": time.time(),
-            "timeout_seconds": timeout_sec,
-            "first_output_deadline_seconds": first_output_sec,  # GH#13099
-            "stall_deadline_seconds": stall_sec,  # GH#13099
-        }
+        state = self._build_state(
+            proc, session_id, agent_id, output_file, stderr_file, timeout_sec, first_output_sec, stall_sec
+        )
         with open(_state_path(output_dir, run_id), "w", encoding="utf-8") as fh:
             json.dump(state, fh)
 
@@ -301,6 +301,38 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             env["AUTOBOT_LLC_WAKE_COMMENT_ID"] = wake_comment_id
         inject_agent_credentials(env, context)
         return env, workspace_dir
+
+    def _build_state(
+        self,
+        proc,
+        session_id: str,
+        agent_id: str,
+        output_file: str,
+        stderr_file: str | None,
+        timeout_sec: int,
+        first_output_sec: int,
+        stall_sec: int,
+    ) -> dict:
+        """Assemble the run's persisted state, including its psutil create_time
+        (PR#16284 review) — the PID-reuse guard every later signal/status check
+        verifies against before ever acting on this PID again. Reused by
+        :class:`ClaudeCodeSubscriptionAdapter`, which has no stderr sidecar
+        file (``stderr_file=None`` omits that key, matching its own shape).
+        """
+        state = {
+            "pid": proc.pid,
+            "session_id": session_id,
+            "agent_id": agent_id,
+            "output_file": output_file,
+            "started_at": time.time(),
+            "create_time": spawn_create_time(proc.pid),  # PR#16284 review
+            "timeout_seconds": timeout_sec,
+            "first_output_deadline_seconds": first_output_sec,  # GH#13099
+            "stall_deadline_seconds": stall_sec,  # GH#13099
+        }
+        if stderr_file is not None:
+            state["stderr_file"] = stderr_file  # GH#9992
+        return state
 
     async def _status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
         """Extend base status to detect provider rate-limiting on process exit (GH#9773).

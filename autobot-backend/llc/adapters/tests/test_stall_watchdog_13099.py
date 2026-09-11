@@ -22,6 +22,7 @@ import os
 import signal
 import time
 
+import psutil
 import pytest
 
 from autobot_shared.eventually import eventually
@@ -105,6 +106,7 @@ async def _spawn_and_register(
         "pid": proc.pid,
         "output_file": output_file,
         "started_at": time.time(),
+        "create_time": psutil.Process(proc.pid).create_time(),  # PR#16284 review
         "timeout_seconds": 3600,
         "first_output_deadline_seconds": resolve_first_output_deadline(cfg),
         "stall_deadline_seconds": resolve_stall_deadline(cfg),
@@ -179,6 +181,27 @@ class TestStallKillsWholeGroup:
         )
         try:
             deadline = time.monotonic() + 2.0  # well inside the ~4s printing window
+            while time.monotonic() < deadline:
+                result = await adapter.status(agent_config, run_id)
+                assert result.status.value == "running", result.error
+                await asyncio.sleep(0.2)
+            assert _pid_alive(proc.pid)
+        finally:
+            await _reap(proc)
+
+    async def test_legitimately_quiet_within_deadline_is_not_killed(self, tmp_path, monkeypatch) -> None:
+        """#13099 AC5: a LIVE process quiet for longer than a short window, but
+        still within its configured stall deadline, is NOT killed. Unlike
+        ``test_continuous_output_is_not_killed`` (never actually quiet), this
+        child prints once and then goes genuinely silent for the whole check."""
+        cmd = "echo hello; sleep 3"
+        adapter, proc, agent_config, run_id = await _spawn_and_register(
+            tmp_path, monkeypatch, cmd, first_output_deadline=1, stall_deadline=10
+        )
+        output_file = tmp_path / "out.jsonl"
+        try:
+            await eventually(lambda: output_file.stat().st_size > 0)
+            deadline = time.monotonic() + 2.5  # longer than a "short window", still << stall_deadline=10
             while time.monotonic() < deadline:
                 result = await adapter.status(agent_config, run_id)
                 assert result.status.value == "running", result.error

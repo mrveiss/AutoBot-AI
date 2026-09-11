@@ -11,6 +11,7 @@ Duplicate sets removed from test_claude_code_adapter.py and
 test_copilot_local_adapter.py as part of GH#9844.
 """
 
+import asyncio
 import json
 import os
 import signal
@@ -18,8 +19,10 @@ import tempfile
 import time
 from unittest.mock import AsyncMock, patch
 
+import psutil
 import pytest
 
+from autobot_shared.eventually import eventually
 from llc.adapters.subprocess_base import (
     ADAPTER_TIMEOUT_SECONDS,
     FIRST_OUTPUT_DEADLINE_SECONDS,
@@ -40,6 +43,9 @@ from llc.models.enums import LLCRunStatus
 
 def _state_path(output_dir: str, run_id: str) -> str:
     return os.path.join(output_dir, f"base_state_{run_id.replace('/', '_')}.json")
+
+
+_PSUTIL_PROCESS = "llc.adapters.subprocess_support.psutil.Process"
 
 
 class _DummyAdapter(SubprocessLifecycleAdapter):
@@ -323,7 +329,12 @@ class TestSharedStatus:
                 cancel_called.append(run_id)
 
             adapter.cancel = fake_cancel  # type: ignore[assignment]
-            result = await adapter.status({"adapter_config": {"output_dir": td}}, run_id)
+            # PR#16284 review: _status() now probes liveness FIRST. No
+            # create_time is recorded here, so probe_pid_identity falls back
+            # to a plain liveness probe — force it alive so the test reaches
+            # the timeout check deterministically, not by luck of a real PID.
+            with patch("os.kill", return_value=None):
+                result = await adapter.status({"adapter_config": {"output_dir": td}}, run_id)
 
         assert result.status == LLCRunStatus.TIMEOUT
         assert run_id in cancel_called
@@ -384,8 +395,11 @@ class TestSharedGracefulTimeout:
         with tempfile.TemporaryDirectory() as td:
             state_file = _state_path(td, "123/session-x")
             os.makedirs(os.path.dirname(state_file), exist_ok=True)
+            # PR#16284 review: _cancel() now loads the state file and passes
+            # its create_time to terminate_pid, which never signals without
+            # it verifying — record one a mocked psutil.Process will confirm.
             with open(state_file, "w", encoding="utf-8") as f:
-                json.dump({"pid": 123, "session_id": "session-x"}, f)
+                json.dump({"pid": 123, "session_id": "session-x", "create_time": 100.0}, f)
 
             # GH#13097: force the single-PID fallback so this test stays about the
             # SIGTERM/SIGKILL sequence, not process-group resolution (covered separately).
@@ -393,9 +407,77 @@ class TestSharedGracefulTimeout:
                 patch("os.getpgid", side_effect=ProcessLookupError),
                 patch("os.kill", side_effect=fake_kill),
                 patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+                patch(_PSUTIL_PROCESS) as mock_psutil_cls,
             ):
+                mock_psutil_cls.return_value.create_time.return_value = 100.0
                 await adapter.cancel({"adapter_config": {"output_dir": td}}, "123/session-x")
 
         assert kill_signals[0] == (123, signal.SIGTERM)
         assert mock_sleep.await_count == SIGTERM_GRACE_SECONDS * 10
         assert (123, signal.SIGKILL) in kill_signals
+
+
+# ---------------------------------------------------------------------------
+# A dead process is judged by its exit, never as stalled (PR#16284 review,
+# MEDIUM) — the stall/timeout checks apply only to a live, identity-verified
+# process. Real processes: POSIX has no useful mock for "genuinely exited".
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestDeadRunNeverReportsStalled:
+    async def test_finished_run_polled_after_stall_deadline_is_completed(self) -> None:
+        """A run that completed normally, polled long after its last write
+        (e.g. after a backend outage), reports COMPLETED, not "stalled"."""
+        proc = await asyncio.create_subprocess_exec("true", start_new_session=True)
+        create_time = psutil.Process(proc.pid).create_time()
+        await proc.wait()
+        await eventually(lambda: not psutil.pid_exists(proc.pid))
+
+        with tempfile.TemporaryDirectory() as td:
+            output_file = os.path.join(td, "out.jsonl")
+            with open(output_file, "w", encoding="utf-8") as fh:
+                fh.write("hello\n")
+            run_id = f"{proc.pid}/session-late"
+            state = {
+                "pid": proc.pid,
+                "output_file": output_file,
+                "started_at": time.time() - 9999,  # e.g. an outage-delayed poll
+                "create_time": create_time,
+                "timeout_seconds": 3600,
+                "first_output_deadline_seconds": 1,
+                "stall_deadline_seconds": 1,  # long expired relative to the write above
+            }
+            with open(_state_path(td, run_id), "w", encoding="utf-8") as fh:
+                json.dump(state, fh)
+
+            result = await _DummyAdapter().status({"adapter_config": {"output_dir": td}}, run_id)
+
+        assert result.status == LLCRunStatus.COMPLETED
+
+    async def test_reused_pid_is_also_judged_completed_not_stalled(self) -> None:
+        """The same reorder covers PID reuse: a live process under a
+        DIFFERENT identity is not this run -- reported COMPLETED, and never
+        reaches the stall check that would otherwise try to signal it."""
+        with tempfile.TemporaryDirectory() as td:
+            output_file = os.path.join(td, "out.jsonl")
+            with open(output_file, "w", encoding="utf-8") as fh:
+                fh.write("hello\n")
+            run_id = "424242/session-reused"
+            state = {
+                "pid": 424242,
+                "output_file": output_file,
+                "started_at": time.time() - 9999,
+                "create_time": 100.0,
+                "timeout_seconds": 3600,
+                "first_output_deadline_seconds": 1,
+                "stall_deadline_seconds": 1,
+            }
+            with open(_state_path(td, run_id), "w", encoding="utf-8") as fh:
+                json.dump(state, fh)
+
+            with patch(_PSUTIL_PROCESS) as mock_cls:
+                mock_cls.return_value.create_time.return_value = 200.0  # different process
+                result = await _DummyAdapter().status({"adapter_config": {"output_dir": td}}, run_id)
+
+        assert result.status == LLCRunStatus.COMPLETED

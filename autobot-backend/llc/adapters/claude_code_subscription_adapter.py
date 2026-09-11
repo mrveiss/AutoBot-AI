@@ -60,7 +60,6 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
 
     async def _invoke(self, agent_config: dict, context: dict) -> str:
         """Invoke Claude Code CLI in subscription mode (no API key)."""
-        import time
         import uuid
 
         cli = _resolve_claude_cli()
@@ -69,6 +68,10 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
 
         output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
         timeout_sec: int = int(cfg.get("timeout_seconds", 3600))
+        # GH#13099 AC4 / PR#16284 review: the global (streaming-CLI) defaults
+        # apply — _build_command (inherited, GH#11186) is the SAME builder as
+        # ClaudeCodeAdapter, passing --output-format stream-json --print
+        # --verbose, so this is the identical verified-incremental-JSONL CLI.
         first_output_sec: int = _resolve_first_output_deadline(cfg)
         stall_sec: int = _resolve_stall_deadline(cfg)
 
@@ -121,16 +124,12 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
             output_file,
         )
 
-        state = {
-            "pid": proc.pid,
-            "session_id": session_id,
-            "agent_id": agent_id,
-            "output_file": output_file,
-            "started_at": time.time(),
-            "timeout_seconds": timeout_sec,
-            "first_output_deadline_seconds": first_output_sec,  # GH#13099
-            "stall_deadline_seconds": stall_sec,  # GH#13099
-        }
+        # No stderr sidecar here (stderr goes to a PIPE above) -- reuses the
+        # parent's state builder (incl. GH#13099 fields + PR#16284 review's
+        # create_time) with stderr_file=None so that key is simply omitted.
+        state = self._build_state(
+            proc, session_id, agent_id, output_file, None, timeout_sec, first_output_sec, stall_sec
+        )
         with open(_state_path(output_dir, run_id), "w", encoding="utf-8") as fh:
             json.dump(state, fh)
 

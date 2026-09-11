@@ -8,18 +8,24 @@ import json
 import signal
 from unittest.mock import AsyncMock, patch
 
+import psutil
 import pytest
 
 from llc.adapters.subprocess_support import (
     AGENT_API_KEY_PLACEHOLDER,
+    _identity_verified,
+    _process_group_id,
     extract_usage,
     inject_agent_credentials,
     probe_pid,
+    probe_pid_identity,
     render_context_markdown,
     serialize_invoke_context,
     terminate_pid,
 )
 from llc.models.enums import LLCRunStatus
+
+_PSUTIL_PROCESS = "llc.adapters.subprocess_support.psutil.Process"
 
 
 class TestRenderContextMarkdown:
@@ -136,10 +142,16 @@ class TestProbePid:
 
 @pytest.mark.asyncio
 class TestTerminatePid:
+    """Identity (PR#16284 review) is verified via a mocked psutil.Process.create_time()
+    matching *expected_create_time* — everything here is otherwise the original
+    SIGTERM/grace/SIGKILL sequence, unaffected by the identity check once it passes.
+    """
+
     async def test_returns_true_when_already_gone(self) -> None:
-        # SIGTERM immediately raises ProcessLookupError → process was already dead.
-        with patch("os.kill", side_effect=ProcessLookupError):
-            result = await terminate_pid(99999, grace_seconds=1, log_name="Test")
+        # Identity verifies; SIGTERM itself then raises ProcessLookupError.
+        with patch(_PSUTIL_PROCESS) as mock_cls, patch("os.kill", side_effect=ProcessLookupError):
+            mock_cls.return_value.create_time.return_value = 100.0
+            result = await terminate_pid(99999, grace_seconds=1, log_name="Test", expected_create_time=100.0)
         assert result is True
 
     async def test_returns_false_when_process_exits_during_grace(self) -> None:
@@ -151,9 +163,13 @@ class TestTerminatePid:
             if sig == 0:
                 raise ProcessLookupError  # gone after SIGTERM
 
-        with patch("os.kill", side_effect=smart_kill):
-            with patch("asyncio.sleep", new_callable=AsyncMock):
-                result = await terminate_pid(12345, grace_seconds=1, log_name="Test")
+        with (
+            patch(_PSUTIL_PROCESS) as mock_cls,
+            patch("os.kill", side_effect=smart_kill),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            mock_cls.return_value.create_time.return_value = 100.0
+            result = await terminate_pid(12345, grace_seconds=1, log_name="Test", expected_create_time=100.0)
 
         assert result is False
         assert signal.SIGTERM in kill_calls
@@ -167,9 +183,13 @@ class TestTerminatePid:
             kill_calls.append(sig)
             # signal 0 always returns (process alive); SIGKILL succeeds too.
 
-        with patch("os.kill", side_effect=stubborn_kill):
-            with patch("asyncio.sleep", new_callable=AsyncMock):
-                result = await terminate_pid(12345, grace_seconds=1, log_name="Test")
+        with (
+            patch(_PSUTIL_PROCESS) as mock_cls,
+            patch("os.kill", side_effect=stubborn_kill),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            mock_cls.return_value.create_time.return_value = 100.0
+            result = await terminate_pid(12345, grace_seconds=1, log_name="Test", expected_create_time=100.0)
 
         assert result is False
         assert signal.SIGTERM in kill_calls
@@ -186,12 +206,146 @@ class TestTerminatePid:
                 raise ProcessLookupError
             # SIGTERM: pass; signal-0: pass (alive)
 
-        with patch("os.kill", side_effect=kill_fn):
-            with patch("asyncio.sleep", new_callable=AsyncMock):
-                result = await terminate_pid(12345, grace_seconds=1, log_name="Test")
+        with (
+            patch(_PSUTIL_PROCESS) as mock_cls,
+            patch("os.kill", side_effect=kill_fn),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            mock_cls.return_value.create_time.return_value = 100.0
+            result = await terminate_pid(12345, grace_seconds=1, log_name="Test", expected_create_time=100.0)
 
         assert result is False
         assert sigkill_count[0] == 1  # SIGKILL was attempted once
+
+
+# ---------------------------------------------------------------------------
+# terminate_pid identity guards (PR#16284 review) — never signal a process
+# the run no longer owns.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestTerminatePidIdentityGuards:
+    async def test_no_recorded_create_time_never_signals(self) -> None:
+        """An old state file (no create_time recorded) probes only, never signals."""
+        with patch("os.kill") as mock_kill, patch("os.killpg") as mock_killpg:
+            result = await terminate_pid(12345, grace_seconds=1, log_name="Test", expected_create_time=None)
+        assert result is True
+        mock_kill.assert_not_called()
+        mock_killpg.assert_not_called()
+
+    async def test_mismatched_create_time_never_signals(self) -> None:
+        """A live pid under a DIFFERENT identity (reused) is never signalled."""
+        with (
+            patch(_PSUTIL_PROCESS) as mock_cls,
+            patch("os.kill") as mock_kill,
+            patch("os.killpg") as mock_killpg,
+        ):
+            mock_cls.return_value.create_time.return_value = 200.0  # not the recorded 100.0
+            result = await terminate_pid(12345, grace_seconds=1, log_name="Test", expected_create_time=100.0)
+        assert result is True
+        mock_kill.assert_not_called()
+        mock_killpg.assert_not_called()
+
+    @pytest.mark.parametrize("protected_pid", [1, 0, -5])
+    async def test_pid_le_1_refused_even_with_matching_identity(self, protected_pid: int) -> None:
+        """pid<=1 is refused outright, even when identity would otherwise verify."""
+        with (
+            patch(_PSUTIL_PROCESS) as mock_cls,
+            patch("os.kill") as mock_kill,
+            patch("os.killpg") as mock_killpg,
+        ):
+            mock_cls.return_value.create_time.return_value = 100.0
+            result = await terminate_pid(protected_pid, grace_seconds=1, log_name="Test", expected_create_time=100.0)
+        assert result is True
+        mock_kill.assert_not_called()
+        mock_killpg.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# probe_pid_identity (PR#16284 review)
+# ---------------------------------------------------------------------------
+
+
+class TestProbePidIdentity:
+    def test_no_expected_create_time_falls_back_to_probe_pid(self) -> None:
+        with patch("os.kill", return_value=None):
+            result = probe_pid_identity(12345, None)
+        assert result.status is LLCRunStatus.RUNNING
+
+    def test_matching_create_time_is_running(self) -> None:
+        with patch(_PSUTIL_PROCESS) as mock_cls:
+            mock_cls.return_value.create_time.return_value = 100.0
+            result = probe_pid_identity(12345, 100.0)
+        assert result.status is LLCRunStatus.RUNNING
+
+    def test_mismatched_create_time_is_completed(self) -> None:
+        """A pid alive under a DIFFERENT identity means THIS run is over."""
+        with patch(_PSUTIL_PROCESS) as mock_cls:
+            mock_cls.return_value.create_time.return_value = 200.0
+            result = probe_pid_identity(12345, 100.0)
+        assert result.status is LLCRunStatus.COMPLETED
+
+    def test_no_such_process_is_completed(self) -> None:
+        with patch(_PSUTIL_PROCESS, side_effect=psutil.NoSuchProcess(12345)):
+            result = probe_pid_identity(12345, 100.0)
+        assert result.status is LLCRunStatus.COMPLETED
+
+    def test_access_denied_falls_back_to_probe_pid(self) -> None:
+        with (
+            patch(_PSUTIL_PROCESS, side_effect=psutil.AccessDenied(12345)),
+            patch("os.kill", return_value=None),
+        ):
+            result = probe_pid_identity(12345, 100.0)
+        assert result.status is LLCRunStatus.RUNNING
+
+
+# ---------------------------------------------------------------------------
+# _identity_verified (PR#16284 review)
+# ---------------------------------------------------------------------------
+
+
+class TestIdentityVerified:
+    def test_none_is_never_verified(self) -> None:
+        assert _identity_verified(12345, None) is False
+
+    def test_matching_create_time_verified(self) -> None:
+        with patch(_PSUTIL_PROCESS) as mock_cls:
+            mock_cls.return_value.create_time.return_value = 100.0
+            assert _identity_verified(12345, 100.0) is True
+
+    def test_mismatched_create_time_not_verified(self) -> None:
+        with patch(_PSUTIL_PROCESS) as mock_cls:
+            mock_cls.return_value.create_time.return_value = 200.0
+            assert _identity_verified(12345, 100.0) is False
+
+    def test_psutil_error_not_verified(self) -> None:
+        with patch(_PSUTIL_PROCESS, side_effect=psutil.NoSuchProcess(12345)):
+            assert _identity_verified(12345, 100.0) is False
+
+
+# ---------------------------------------------------------------------------
+# _process_group_id — killpg ONLY when getpgid(pid) == pid (PR#16284 review)
+# ---------------------------------------------------------------------------
+
+
+class TestProcessGroupId:
+    def test_leader_returns_its_own_pid(self) -> None:
+        with patch("os.getpgid", return_value=555):
+            assert _process_group_id(555) == 555
+
+    def test_non_leader_returns_none(self) -> None:
+        """Covers BOTH a foreign group's leader and our own — same guard either way."""
+        with patch("os.getpgid", return_value=1):
+            assert _process_group_id(555) is None
+
+    def test_process_lookup_error_returns_none(self) -> None:
+        with patch("os.getpgid", side_effect=ProcessLookupError):
+            assert _process_group_id(555) is None
+
+    def test_permission_error_returns_none(self) -> None:
+        with patch("os.getpgid", side_effect=PermissionError):
+            assert _process_group_id(555) is None
 
 
 class TestExtractUsage:

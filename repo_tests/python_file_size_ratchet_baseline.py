@@ -257,7 +257,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/knowledge/suggestions.py": 704,
     "autobot-backend/knowledge/tags.py": 834,
     "autobot-backend/knowledge_sync_incremental.py": 894,
-    "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 613,
+    "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
     "autobot-backend/llc/api/companies.py": 1732,
     "autobot-backend/llc/api/roles.py": 741,
     "autobot-backend/llc/api/sprints.py": 1223,

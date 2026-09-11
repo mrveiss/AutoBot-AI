@@ -12,7 +12,9 @@ adapter_config schema::
         "cwd": "/path/to/workdir"
     }
 
-The ``run_id`` is the string-encoded PID of the spawned process.
+The ``run_id`` is ``"<pid>"``, or ``"<pid>:<create_time>"`` when psutil could
+record the child's start time at spawn (PR#16284 review) — the PID-reuse
+guard ``status``/``cancel`` verify before ever trusting that PID again.
 
 Security (GH#11059): ``command`` is tenant-writable, so this adapter runs
 host commands from untrusted config. It is therefore hardened three ways:
@@ -35,7 +37,13 @@ from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
-from .subprocess_support import inject_agent_credentials, probe_pid, spawn_detached, terminate_pid
+from .subprocess_support import (
+    inject_agent_credentials,
+    probe_pid_identity,
+    spawn_create_time,
+    spawn_detached,
+    terminate_pid,
+)
 
 logger = get_logger(__name__)
 
@@ -57,6 +65,22 @@ _SAFE_ENV_PASSTHROUGH = ("PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TM
 def _process_adapter_enabled() -> bool:
     """True only when an operator has explicitly enabled ProcessAdapter (GH#11059)."""
     return os.environ.get(_ENABLE_FLAG, "").strip().lower() in _TRUTHY
+
+
+def _encode_run_id(pid: int, create_time: float | None) -> str:
+    """Pack pid + psutil create_time into the run_id (PR#16284 review).
+
+    A bare pid (``create_time`` unrecordable — psutil raced the child's own
+    exit) falls back to the old ``"<pid>"`` shape, so :func:`_decode_run_id`
+    still parses runs from before this field existed.
+    """
+    return f"{pid}:{create_time}" if create_time is not None else str(pid)
+
+
+def _decode_run_id(run_id: str) -> tuple[int, float | None]:
+    """Unpack a run_id built by :func:`_encode_run_id`."""
+    pid_str, sep, create_time_str = run_id.partition(":")
+    return int(pid_str), (float(create_time_str) if sep else None)
 
 
 def _build_minimal_env(env_extra: dict, context: dict) -> dict:
@@ -98,21 +122,23 @@ class ProcessAdapter:
             env=env,
             cwd=cwd or None,
         )
+        create_time = spawn_create_time(proc.pid)  # PR#16284 review: PID-reuse guard
         logger.info("ProcessAdapter: spawned PID %d for executable %r", proc.pid, argv[0])
-        return str(proc.pid)
+        return _encode_run_id(proc.pid, create_time)
 
     async def status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
         try:
-            pid = int(run_id)
+            pid, create_time = _decode_run_id(run_id)
         except ValueError as exc:
             return AdapterRunStatus(status=LLCRunStatus.FAILED, error=str(exc))
-        return probe_pid(pid)
+        return probe_pid_identity(pid, create_time)
 
     async def cancel(self, agent_config: dict, run_id: str) -> None:
-        pid = int(run_id)
-        # terminate_pid returns True when the process was already gone
-        # (SIGTERM raised ProcessLookupError) — match the original early-return
-        # behavior: no further action needed when the process is already dead.
-        already_gone = await terminate_pid(pid, _SIGTERM_GRACE_SECONDS, _LOG_NAME)
+        pid, create_time = _decode_run_id(run_id)
+        # terminate_pid verifies pid still owns create_time before signalling
+        # anything (PR#16284 review) and returns True when no signal was sent
+        # (already gone, or unverifiable) — match the original early-return
+        # behavior: no further action needed either way.
+        already_gone = await terminate_pid(pid, _SIGTERM_GRACE_SECONDS, _LOG_NAME, create_time)
         if already_gone:
             return

@@ -15,6 +15,8 @@ from llc.adapters.http_adapter import HttpAdapter
 from llc.adapters.process_adapter import ProcessAdapter
 from llc.models.enums import LLCRunStatus
 
+_PSUTIL_PROCESS = "llc.adapters.subprocess_support.psutil.Process"
+
 # ---------------------------------------------------------------------------
 # Base / protocol
 # ---------------------------------------------------------------------------
@@ -67,7 +69,9 @@ class TestProcessAdapter:
                 await adapter.invoke({"command": "echo hello"}, {})
         spawn.assert_not_called()
 
-    async def test_invoke_returns_pid_string(self) -> None:
+    async def test_invoke_returns_encoded_run_id(self) -> None:
+        """PR#16284 review: run_id packs pid + psutil create_time for later
+        PID-reuse-safe identity verification."""
         adapter = ProcessAdapter()
         fake_proc = MagicMock()
         fake_proc.pid = 12345
@@ -75,10 +79,12 @@ class TestProcessAdapter:
         with (
             patch("llc.adapters.process_adapter._process_adapter_enabled", return_value=True),
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=fake_proc),
+            patch(_PSUTIL_PROCESS) as mock_psutil,
         ):
+            mock_psutil.return_value.create_time.return_value = 100.0
             run_id = await adapter.invoke({"command": "echo hello"}, {"key": "value"})
 
-        assert run_id == "12345"
+        assert run_id == "12345:100.0"
 
     async def test_invoke_uses_exec_with_split_argv_not_shell(self) -> None:
         """GH#11059: command runs via exec on shlex-split argv — no shell metacharacter RCE."""
@@ -196,23 +202,26 @@ class TestProcessAdapter:
 
         # GH#13097: force the single-PID fallback so this test stays about the
         # SIGTERM/SIGKILL sequence, not process-group resolution (covered separately).
+        # PR#16284 review: cancel() only signals a pid whose recorded
+        # create_time (packed into run_id) still matches.
         with (
             patch("os.getpgid", side_effect=ProcessLookupError),
             patch("os.kill", side_effect=smart_kill),
             patch("asyncio.sleep", new_callable=AsyncMock),
+            patch(_PSUTIL_PROCESS) as mock_psutil,
         ):
-            await adapter.cancel({}, "12345")
+            mock_psutil.return_value.create_time.return_value = 100.0
+            await adapter.cancel({}, "12345:100.0")
 
         assert any(s == signal.SIGTERM for _, s in killed)
 
-    async def test_cancel_noop_when_pid_gone(self) -> None:
+    async def test_cancel_without_recorded_identity_never_signals(self) -> None:
+        """PR#16284 review: a bare-pid run_id (no create_time) means cancel()
+        can only probe -- it never signals, and never raises."""
         adapter = ProcessAdapter()
-
-        def _raise(pid, sig):
-            raise ProcessLookupError
-
-        with patch("os.getpgid", side_effect=ProcessLookupError), patch("os.kill", side_effect=_raise):
-            await adapter.cancel({}, "99999")  # should not raise
+        with patch("os.kill") as mock_kill:
+            await adapter.cancel({}, "99999")
+        mock_kill.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

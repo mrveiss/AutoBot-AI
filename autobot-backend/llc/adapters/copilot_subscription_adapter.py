@@ -31,7 +31,6 @@ import asyncio
 import json
 import os
 import re
-import time
 import uuid
 from typing import Optional
 
@@ -39,7 +38,7 @@ from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
-from .copilot_local_adapter import CopilotLocalAdapter, _output_path, _resolve_gh_cli, _state_path
+from .copilot_local_adapter import CopilotLocalAdapter, _output_path, _resolve_gh_cli, _state_path, build_copilot_state
 from .subprocess_base import placeholder_run_id
 from .subprocess_base import resolve_first_output_deadline as _resolve_first_output_deadline
 from .subprocess_base import resolve_stall_deadline as _resolve_stall_deadline
@@ -71,8 +70,12 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
 
         output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
         timeout_sec: int = int(cfg.get("timeout_seconds", 3600))
-        first_output_sec: int = _resolve_first_output_deadline(cfg)
-        stall_sec: int = _resolve_stall_deadline(cfg)
+        # GH#13099 AC4 / PR#16284 review: same unverified-buffering reasoning
+        # as CopilotLocalAdapter (identical `gh copilot suggest` invocation)
+        # — default to the run's own timeout so the watchdog never fires
+        # before the run would have timed out anyway.
+        first_output_sec: int = _resolve_first_output_deadline(cfg, default=timeout_sec)
+        stall_sec: int = _resolve_stall_deadline(cfg, default=timeout_sec)
         # GH#10217: prefer a credential stored in the LLC secrets vault
         # (gh_token_secret = secret name) over a plaintext gh_token in config.
         gh_token: Optional[str] = await self._resolve_gh_token(agent_config, cfg)
@@ -123,16 +126,10 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
             output_file,
         )
 
-        state = {
-            "pid": proc.pid,
-            "session_id": session_id,
-            "agent_id": agent_id,
-            "output_file": output_file,
-            "started_at": time.time(),
-            "timeout_seconds": timeout_sec,
-            "first_output_deadline_seconds": first_output_sec,  # GH#13099
-            "stall_deadline_seconds": stall_sec,  # GH#13099
-        }
+        # No stderr sidecar here (stderr goes to DEVNULL above).
+        state = build_copilot_state(
+            proc, session_id, agent_id, output_file, None, timeout_sec, first_output_sec, stall_sec
+        )
         with open(_state_path(output_dir, run_id), "w", encoding="utf-8") as fh:
             json.dump(state, fh)
 

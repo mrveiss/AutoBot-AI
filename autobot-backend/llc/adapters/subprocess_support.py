@@ -29,6 +29,8 @@ import signal
 import time
 from typing import Any
 
+import psutil
+
 from autobot_shared.logging_manager import get_logger
 
 from ..config import AGENT_API_BASE_URL, AGENT_API_KEY_PLACEHOLDER
@@ -327,6 +329,21 @@ async def spawn_with_workspace_retry(
         return proc, None
 
 
+def spawn_create_time(pid: int) -> float | None:
+    """The psutil-recorded start time for a just-spawned *pid* (PR#16284 review).
+
+    Called right after ``spawn_detached`` returns and stored in the run
+    state, so a later signal or status check can verify it's still the SAME
+    process before ever acting on the PID again — a PID is only unique at a
+    point in time; the OS reuses it. ``None`` means psutil couldn't read it
+    (the process already exited in the gap between spawn and this call).
+    """
+    try:
+        return psutil.Process(pid).create_time()
+    except psutil.Error:
+        return None
+
+
 def probe_pid(pid: int) -> AdapterRunStatus:
     """Return an :class:`AdapterRunStatus` reflecting the liveness of *pid*.
 
@@ -346,6 +363,28 @@ def probe_pid(pid: int) -> AdapterRunStatus:
         return AdapterRunStatus(status=LLCRunStatus.RUNNING)
     except OSError as exc:
         return AdapterRunStatus(status=LLCRunStatus.FAILED, error=str(exc))
+
+
+def probe_pid_identity(pid: int, expected_create_time: float | None) -> AdapterRunStatus:
+    """Like :func:`probe_pid`, but a PID reused by a different process reports COMPLETED.
+
+    *expected_create_time* is the run's own psutil-recorded start time
+    (PR#16284 review). A pid that is alive but under a DIFFERENT identity is
+    not this run — the run itself is over, whoever now holds that number.
+    ``None`` (an old state file, predating this field) can't be verified
+    either way, so it falls back to the plain liveness probe.
+    """
+    if expected_create_time is None:
+        return probe_pid(pid)
+    try:
+        actual = psutil.Process(pid).create_time()
+    except psutil.NoSuchProcess:
+        return AdapterRunStatus(status=LLCRunStatus.COMPLETED)
+    except psutil.Error:
+        return probe_pid(pid)
+    if actual != expected_create_time:
+        return AdapterRunStatus(status=LLCRunStatus.COMPLETED)
+    return AdapterRunStatus(status=LLCRunStatus.RUNNING)
 
 
 def check_output_stall(
@@ -383,22 +422,24 @@ def check_output_stall(
 
 
 def _process_group_id(pid: int) -> int | None:
-    """Return *pid*'s process group id, or ``None`` when it must not be killpg'd.
+    """Return *pid* itself when it leads its own process group, else ``None`` (PR#16284 review).
 
     ``None`` tells the caller to fall back to signalling *pid* alone:
 
     * ``os.getpgid`` raised ``ProcessLookupError``/``PermissionError`` — the
-      child already exited, or changed its own pgid (e.g. re-execed into a
-      session of its own) so it is no longer reachable through ours; or
-    * the discovered pgid is OUR OWN controlling process group — a child
-      spawned without ``start_new_session`` shares our pgid, and killpg-ing
-      it would signal this backend process too.
+      process already exited or is unreachable; or
+    * *pid* is not its group's leader. Every ``spawn_detached`` child IS
+      (``start_new_session=True`` makes it a new session's leader, so its
+      pgid always equals its own pid) — a pid that ISN'T its own leader might
+      share a group with processes we don't own (someone else's leader), or
+      even our own controlling group; killpg-ing either is wrong, and this
+      one check excludes both instead of special-casing our own group only.
     """
     try:
         pgid = os.getpgid(pid)
     except (ProcessLookupError, PermissionError):
         return None
-    return None if pgid == os.getpgid(0) else pgid
+    return pid if pgid == pid else None
 
 
 def _signal_target(pid: int, pgid: int | None, sig: int) -> None:
@@ -417,15 +458,46 @@ def _signal_target(pid: int, pgid: int | None, sig: int) -> None:
     os.kill(pid, sig)
 
 
-async def terminate_pid(pid: int, grace_seconds: int, log_name: str) -> bool:
+def _identity_verified(pid: int, expected_create_time: float | None) -> bool:
+    """True only if *pid* is alive right now with the exact recorded start time.
+
+    ``expected_create_time`` of ``None`` (nothing recorded to check against —
+    e.g. a state file written before this field existed) is never a match:
+    unverifiable is treated as not-ours, not as a pass.
+    """
+    if expected_create_time is None:
+        return False
+    try:
+        return psutil.Process(pid).create_time() == expected_create_time
+    except psutil.Error:
+        return False
+
+
+async def terminate_pid(
+    pid: int,
+    grace_seconds: int,
+    log_name: str,
+    expected_create_time: float | None,
+) -> bool:
     """Send SIGTERM to *pid*'s process group, poll for exit, then SIGKILL (GH#13097).
 
-    Kills the whole group so a CLI agent's descendants die with it instead of
-    being orphaned; see :func:`_process_group_id` for the single-PID fallback.
-    Returns ``True`` if the process was already gone on the first signal,
-    ``False`` otherwise. The grace poll uses 0.1 s intervals for
-    *grace_seconds* seconds before escalating to SIGKILL.
+    Never signals without first confirming *pid* is still the process
+    recorded at spawn (PR#16284 review): *expected_create_time* must match
+    ``psutil.Process(pid).create_time()`` exactly, re-checked before the
+    eventual SIGKILL too. ``None`` (nothing recorded, e.g. an old state file)
+    can never be verified, so it always means probe only, no signal.
+    ``pid <= 1`` is refused outright regardless of identity.
+
+    Kills the whole group only when *pid* leads it — see
+    :func:`_process_group_id`. Returns ``True`` when no signal was sent (the
+    process was already gone, unverifiable, or refused), ``False`` if it was
+    live, verified, and (eventually) killed. The grace poll uses 0.1 s
+    intervals for *grace_seconds* seconds before escalating.
     """
+    if pid <= 1 or not _identity_verified(pid, expected_create_time):
+        _logger.info("%s: not signalling PID %d (unverified identity or protected pid)", log_name, pid)
+        return True
+
     pgid = _process_group_id(pid)
     try:
         _signal_target(pid, pgid, signal.SIGTERM)
@@ -439,6 +511,10 @@ async def terminate_pid(pid: int, grace_seconds: int, log_name: str) -> bool:
             os.kill(pid, 0)
         except ProcessLookupError:
             return False
+
+    if not _identity_verified(pid, expected_create_time):
+        _logger.info("%s: PID %d no longer verified before SIGKILL -- skipping", log_name, pid)
+        return False
 
     try:
         _signal_target(pid, pgid, signal.SIGKILL)
@@ -459,7 +535,9 @@ __all__ = [
     "serialize_invoke_context",
     "inject_agent_credentials",
     "probe_pid",
+    "probe_pid_identity",
     "check_output_stall",
+    "spawn_create_time",
     "spawn_detached",
     "spawn_with_workspace_retry",
     "terminate_pid",

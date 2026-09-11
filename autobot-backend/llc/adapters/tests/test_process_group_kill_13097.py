@@ -23,6 +23,7 @@ import signal
 import time
 from unittest.mock import patch
 
+import psutil
 import pytest
 
 from autobot_shared.eventually import eventually
@@ -32,6 +33,11 @@ _ADAPTERS_DIR = pathlib.Path(__file__).resolve().parent.parent
 _TEST_LOG_NAME = "ProcessGroupKillTest"
 
 _requires_posix = pytest.mark.skipif(os.name != "posix", reason="killpg/getpgid process-group signalling is POSIX-only")
+
+
+def _create_time(pid: int) -> float:
+    """The real psutil create_time for a just-spawned *pid* (PR#16284 review)."""
+    return psutil.Process(pid).create_time()
 
 
 def _pid_alive(pid: int) -> bool:
@@ -79,7 +85,8 @@ class TestGrandchildSurvival:
         proc, grandchild_pid = await _spawn_parent_with_grandchild()
         try:
             assert _pid_alive(grandchild_pid)
-            await terminate_pid(proc.pid, grace_seconds=2, log_name=_TEST_LOG_NAME)
+            create_time = _create_time(proc.pid)
+            await terminate_pid(proc.pid, grace_seconds=2, log_name=_TEST_LOG_NAME, expected_create_time=create_time)
             await eventually(lambda: not _pid_alive(grandchild_pid))
         finally:
             await _reap(proc)
@@ -107,8 +114,12 @@ class TestTerminatePidRealProcesses:
 
     async def test_already_dead_pid_returns_true(self) -> None:
         proc = await asyncio.create_subprocess_exec("true", start_new_session=True)
+        create_time = _create_time(proc.pid)
         await proc.wait()
-        assert await terminate_pid(proc.pid, grace_seconds=1, log_name=_TEST_LOG_NAME) is True
+        result = await terminate_pid(
+            proc.pid, grace_seconds=1, log_name=_TEST_LOG_NAME, expected_create_time=create_time
+        )
+        assert result is True
 
     async def test_sigterm_then_sigkill_after_grace(self) -> None:
         """A process that traps SIGTERM is still gone after the grace period (SIGKILL)."""
@@ -121,8 +132,11 @@ class TestTerminatePidRealProcesses:
         )
         try:
             assert _pid_alive(proc.pid)
+            create_time = _create_time(proc.pid)
             start = time.monotonic()
-            result = await terminate_pid(proc.pid, grace_seconds=1, log_name=_TEST_LOG_NAME)
+            result = await terminate_pid(
+                proc.pid, grace_seconds=1, log_name=_TEST_LOG_NAME, expected_create_time=create_time
+            )
             elapsed = time.monotonic() - start
             assert result is False
             assert elapsed >= 1.0, "SIGKILL must not fire before the grace period elapses"
@@ -137,12 +151,48 @@ class TestTerminatePidRealProcesses:
         )
         try:
             assert os.getpgid(proc.pid) == os.getpgid(0), "precondition: child shares our process group"
+            create_time = _create_time(proc.pid)
             with patch("os.killpg", side_effect=AssertionError("must never killpg our own group")):
-                result = await terminate_pid(proc.pid, grace_seconds=1, log_name=_TEST_LOG_NAME)
+                result = await terminate_pid(
+                    proc.pid, grace_seconds=1, log_name=_TEST_LOG_NAME, expected_create_time=create_time
+                )
             assert result is False
             await eventually(lambda: not _pid_alive(proc.pid))
         finally:
             await _reap(proc)
+
+
+_PSUTIL_PROCESS = "llc.adapters.subprocess_support.psutil.Process"
+
+
+@_requires_posix
+@pytest.mark.asyncio
+class TestPidReuseSafety:
+    """PR#16284 review: never signal a process the run no longer owns.
+
+    A real spawn + record + exit, then a mocked psutil reporting the SAME
+    pid alive under a DIFFERENT identity — exactly what a PID the OS handed
+    to an unrelated process looks like from terminate_pid's side.
+    """
+
+    async def test_reused_pid_with_different_identity_is_never_signalled(self) -> None:
+        proc = await spawn_detached("true", stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+        create_time = _create_time(proc.pid)
+        await proc.wait()  # the pid is free now -- something else could hold it next
+
+        with (
+            patch(_PSUTIL_PROCESS) as mock_cls,
+            patch("os.kill") as mock_kill,
+            patch("os.killpg") as mock_killpg,
+        ):
+            mock_cls.return_value.create_time.return_value = create_time + 1.0  # a DIFFERENT process
+            result = await terminate_pid(
+                proc.pid, grace_seconds=1, log_name=_TEST_LOG_NAME, expected_create_time=create_time
+            )
+
+        assert result is True
+        mock_kill.assert_not_called()
+        mock_killpg.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
