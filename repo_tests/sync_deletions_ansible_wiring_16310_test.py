@@ -525,6 +525,12 @@ def _play_applies_role_in_full(playbook_path, role_name: str) -> bool:
         ("provision-fleet-roles.yml", "backend"),
         ("provision-fleet-roles.yml", "frontend"),
         ("site.yml", "backend"),
+        # deploy-slm-manager.yml (SLM manager provisioning) applies
+        # roles/slm_manager in full via a bare `roles:` list entry
+        # (`- role: slm_manager`, no tasks_from) -- the provisioning path for
+        # roles/slm_manager/tasks/main.yml's own #16310 wiring. Nothing else
+        # in CI would catch a future switch to `tasks_from`.
+        ("deploy-slm-manager.yml", "slm_manager"),
         # site.yml's frontend play references a role named "frontend_app",
         # which does not exist under roles/ -- a pre-existing, unrelated
         # defect (not introduced by #16310) filed separately rather than
@@ -541,24 +547,27 @@ def test_provisioning_playbooks_run_the_role_in_full(playbook, role_name) -> Non
     )
 
 
-def test_site_yml_frontend_role_reference_is_broken() -> None:
-    """Documents a pre-existing, unrelated defect found while verifying
-    reachability: site.yml's Frontend play lists role `frontend_app`, which
-    does not exist (the real role is `frontend`). Filed as #16342 rather than
-    fixed here (different scope). Asserted here so the gap is a stated
-    finding, not a silent one -- if this ever starts passing because someone
-    renamed the role or added roles/frontend_app, update or remove this test
-    (and close #16342) rather than leaving a stale record."""
+@pytest.mark.xfail(
+    strict=True,
+    reason="#16342: site.yml's frontend play references nonexistent role frontend_app",
+)
+def test_site_yml_frontend_play_applies_only_existing_roles() -> None:
+    """The CORRECT end state (#16342), not "the bug exists" -- an assertion
+    that the bug exists would redden this unrelated PR the moment #16342 is
+    fixed. `xfail(strict=True)` instead: today this fails as expected
+    (`frontend_app` does not exist), and once #16342 lands the assertion
+    starts passing, which strict xfail reports as a FAILURE ("unexpected
+    pass"), forcing the marker's removal -- the same pattern
+    tests/test_update_all_applies_roles_12959.py's own docstring describes
+    using for exactly this reason (a baseline would have quietly absorbed
+    the fix and kept claiming the problem was still there, the #12894
+    lesson)."""
     site_yml = yaml.safe_load((_ANSIBLE_ROOT / "site.yml").read_text(encoding="utf-8"))
     frontend_play = next((p for p in site_yml if isinstance(p, dict) and p.get("hosts") == "frontend"), None)
     assert frontend_play is not None, "site.yml: no play with hosts: frontend"
     role_names = [e.get("role") or e.get("name") if isinstance(e, dict) else e for e in frontend_play.get("roles", [])]
-    assert (
-        "frontend_app" in role_names
-    ), "site.yml frontend play changed -- re-verify roles/frontend_app before removing this test"
-    assert not (
-        _ANSIBLE_ROOT / "roles" / "frontend_app"
-    ).is_dir(), "roles/frontend_app now exists -- site.yml is no longer broken here"
+    missing = [name for name in role_names if not (_ANSIBLE_ROOT / "roles" / name).is_dir()]
+    assert missing == [], f"site.yml Frontend play references nonexistent role(s): {missing}"
 
 
 def test_slm_agent_role_is_imported_in_full_by_update_all_nodes() -> None:
