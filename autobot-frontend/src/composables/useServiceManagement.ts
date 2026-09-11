@@ -16,8 +16,8 @@ import { useLoadingState } from '@/composables/useLoadingState'
 import { NetworkConstants } from '@/constants/network'
 import redisServiceAPI, {
   type ServiceOperationResult,
-  type ServiceStatus,
-  type ServiceHealth,
+  type RedisServiceStatus,
+  type RedisServiceHealth,
 } from '@/services/RedisServiceAPI'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { createLogger } from '@/utils/debugUtils'
@@ -32,7 +32,7 @@ interface VmInfo {
   ssh_accessible: boolean | null
 }
 
-interface ExtendedServiceStatus extends ServiceStatus {
+interface ExtendedServiceStatus extends RedisServiceStatus {
   vm_info?: VmInfo
 }
 
@@ -40,7 +40,7 @@ interface ExtendedServiceStatus extends ServiceStatus {
 interface ServiceWsMessage {
   type: string
   status?: string
-  details?: Partial<ServiceStatus>
+  details?: Partial<RedisServiceStatus>
   timestamp?: string
   message?: string
 }
@@ -50,7 +50,7 @@ type StatusUpdateCallback = (message: ServiceWsMessage) => void
 export interface UseServiceManagementReturn {
   // State
   serviceStatus: Ref<ExtendedServiceStatus>
-  healthStatus: Ref<ServiceHealth | null>
+  healthStatus: Ref<RedisServiceHealth | null>
   loading: Ref<boolean>
   error: Ref<string | null>
 
@@ -95,7 +95,7 @@ export function useServiceManagement(
     },
   })
 
-  const healthStatus = ref<ServiceHealth | null>(null)
+  const healthStatus = ref<RedisServiceHealth | null>(null)
   const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
