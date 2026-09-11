@@ -78,11 +78,12 @@ jobs:
           set -uo pipefail
           # The script's own reach floor (MIN_TRACKED_PY_FILES) already fails a
           # run whose tree walk came back empty, so an unreadable checkout
-          # cannot report clean here. rc is captured rather than allowed to
-          # abort the job, because the reporting steps below need to run on
-          # exactly the failing path.
-          python3 scripts/check_python_file_size.py --audit-ceilings >audit.log 2>&1
-          rc=$?
+          # cannot report clean here. `|| rc=$?` keeps a failing audit from
+          # aborting the step -- it runs under bash -e, and `set -uo pipefail`
+          # does not clear -e -- so rc reaches the reporting steps below on
+          # exactly the failing path (#16237).
+          rc=0
+          python3 scripts/check_python_file_size.py --audit-ceilings >audit.log 2>&1 || rc=$?
           cat audit.log
           echo "rc=${rc}" >>"$GITHUB_OUTPUT"
           {
@@ -187,6 +188,57 @@ jobs:
               issue_number: open.number,
               state: 'closed',
             });
+
+      - name: Open or update the could-not-run issue
+        # The audit step captures its rc, so failure() here means some other
+        # step failed -- checkout, Python setup, or a reporting step above. A
+        # guard that did not finish must not read as a clean base either
+        # (#16237). It sits BEFORE the step below, which fails the run on
+        # purpose: after it, failure() would also fire on every real violation.
+        if: failure()
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = 'ci: the file-size ratchet guard could not run on ' + context.ref.replace('refs/heads/', '');
+            const body = [
+              'The base file-size guard failed on `' + context.sha + '` for a reason other than a ceiling',
+              'violation -- checkout, setup, the audit step itself, or one of its reporting steps. Its',
+              'result may not have reached an issue; the run log is the only record.',
+              '',
+              'Run: ' + context.serverUrl + '/' + context.repo.owner + '/' + context.repo.repo +
+                '/actions/runs/' + context.runId,
+              '',
+              'Filed automatically by `.github/workflows/ratchet-base-guard.yml` (#16237).',
+            ].join('\n');
+
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'automation',
+              per_page: 100,
+            });
+            const open = existing.find((issue) => issue.title === title && !issue.pull_request);
+
+            if (open) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: open.number,
+                body,
+              });
+              core.notice('Updated could-not-run issue #' + open.number);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['bug', 'infrastructure', 'automation'],
+              });
+              core.notice('Opened could-not-run issue #' + created.data.number);
+            }
 
       - name: Fail the run when the branch violates the ratchet
         if: success() && steps.audit.outputs.rc != '0'

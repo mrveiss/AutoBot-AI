@@ -167,10 +167,12 @@ jobs:
           set -uo pipefail
           # The exit code is the point, so it is captured rather than piped away:
           # `... | tee` would report tee's status and this step could never fail.
+          # `|| rc=$?` rather than a bare capture on the next line: this step runs
+          # under bash -e, which would abort on exit 2 before rc is captured (#16237).
           REPORT="$RUNNER_TEMP/ci-red-cause.txt"
+          rc=0
           python3 pipeline-scripts/ci_red_cause.py --sha "$HEAD_SHA" --exit-zero \
-            >"$REPORT" 2>&1
-          rc=$?
+            >"$REPORT" 2>&1 || rc=$?
           {
             echo "### Red-check causes for \`$HEAD_SHA\`"
             echo ''

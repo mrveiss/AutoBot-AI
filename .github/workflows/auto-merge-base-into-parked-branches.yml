@@ -177,8 +177,12 @@ jobs:
               # A guard added against an impossible risk disabled the thing it
               # guarded, and reported the outcome the reader most expected.
               # repo_tests/git_merge_rejects_pull_only_flags_15938_test.py pins it.
-              merge_out=$(git merge --no-edit "origin/$BASE" 2>&1)
-              merge_rc=$?
+              #
+              # `|| merge_rc=$?` on the same line: this step runs under bash -e,
+              # so a bare capture on the next line is never reached when the
+              # merge fails, and the first conflict would abort the loop (#16237).
+              merge_rc=0
+              merge_out=$(git merge --no-edit "origin/$BASE" 2>&1) || merge_rc=$?
               if [ "$merge_rc" = "0" ]; then
                   if [ "$DRY_RUN" = "true" ]; then
                       echo "    would push (dry run)"

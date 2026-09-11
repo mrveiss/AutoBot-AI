@@ -139,3 +139,10 @@ python:
   # to the baseline -- an unaudited finding parked in it -- skips that guard. The
   # ungated `secret-detection` job in security.yml checks the verdicts too.
   - '.secrets.baseline'
+  # #16237: `workflow_rc_capture_test.py` runs one step of each of these on a
+  # planted failing path, proving it captures its exit code instead of aborting
+  # under `bash -e`. Without an entry here, a change confined to one of them --
+  # the only change that could reintroduce the abort -- skips the guard.
+  - '.github/workflows/ci-dispatch-watchdog.yml'
+  - '.github/workflows/import-hermeticity-sweep.yml'
+  - '.github/workflows/ratchet-base-guard.yml'
