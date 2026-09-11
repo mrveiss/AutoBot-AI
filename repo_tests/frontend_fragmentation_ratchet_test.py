@@ -87,7 +87,7 @@ BASELINE = {
     # `.vue` components carrying their own <style> rules. Target is a small
     # number of shared stylesheets, not 381 components each with a private
     # copy of the design system.
-    "components_declaring_styles": 381,
+    "components_declaring_styles": 380,  # #16245: RedisServiceControl.vue removed
     # Distinct class names declared anywhere in the frontend.
     "distinct_class_names": 5625,  # #16245: health-check-card and redis-service-control were RedisServiceControl.vue's alone
     # Total CSS rule declarations.
