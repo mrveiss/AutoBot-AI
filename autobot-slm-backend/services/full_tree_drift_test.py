@@ -27,10 +27,6 @@ from autobot_shared.paths import scrubbed_git_env
 
 _SERVICES_DIR = Path(__file__).parent
 
-_gt_stub = types.ModuleType("services.git_tracker")
-_gt_stub.DEFAULT_REPO_PATH = "/opt/autobot/code_source"  # type: ignore[attr-defined]
-sys.modules["services.git_tracker"] = _gt_stub
-
 
 def _real_load(name: str, path: Path):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -40,7 +36,27 @@ def _real_load(name: str, path: Path):
     return module
 
 
+# #16310 review round 7 (sys.modules leak guard):
+#
+# "services.git_tracker" is a SYNTHETIC stub (types.ModuleType, no __spec__)
+# and used to be installed unconditionally with no restore, same bug as
+# services/sync_deletions_test.py and scripts/sync_deletion_planner_test.py.
+#
+# "services" ITSELF is also captured/restored here, unlike those two: the
+# guard reported it "replaced" (synthetic conftest MagicMock -> a genuine
+# module) and refused to treat that as a harmless repair with
+# "exempt-refused: multi-source-root" -- "services" as a bare top-level name
+# is a real, independently importable package under BOTH
+# autobot-backend/services/ (which conftest.py notes IS on pytest's
+# pythonpath) and autobot-slm-backend/services/ (which is deliberately NOT,
+# #13084), so a genuine top-level "services" binding reaching sys.modules
+# here could silently be the WRONG one for any test that runs after this
+# file and does an unqualified `import services`. Scoped into the same
+# capture/restore as every other name below removes the ambiguity rather
+# than asking the guard to trust which "services" it is.
 _SWAPPED = (
+    "services",
+    "services.git_tracker",
     "services.deploy_artifacts",
     "services.drift_checker",
     "services.deployed_dir_resolver",
@@ -50,6 +66,10 @@ _SWAPPED = (
 )
 _prev_modules = {name: sys.modules.get(name) for name in _SWAPPED}
 try:
+    _gt_stub = types.ModuleType("services.git_tracker")
+    _gt_stub.DEFAULT_REPO_PATH = "/opt/autobot/code_source"  # type: ignore[attr-defined]
+    sys.modules["services.git_tracker"] = _gt_stub
+
     _real_load("services.deploy_artifacts", _SERVICES_DIR / "deploy_artifacts.py")
     _real_load("services.drift_checker", _SERVICES_DIR / "drift_checker.py")
     _real_load("services.deployed_dir_resolver", _SERVICES_DIR / "deployed_dir_resolver.py")
@@ -203,7 +223,23 @@ async def test_a_git_rm_cached_then_gitignored_file_reads_as_host_state(tmp_path
     """#16310 review (MEDIUM 4): a file that was `git rm --cached` then
     gitignored still has git history -- checking history before the
     host-state/ignored check would label it removed_from_source and steer an
-    operator into deleting a live key by hand (#16300's pattern)."""
+    operator into deleting a live key by hand (#16300's pattern).
+
+    #16310 review round 7, real bug: `git rm --cached` never touches the
+    working tree, so this file stays physically present in the CONTROLLER's
+    own source checkout with unchanged content -- byte-identical to the
+    deployed copy below. `_walk_checksums` (a raw filesystem walk of
+    source_dir, not a git query) saw that match and
+    `_classify_all_paths` read it as "no drift", `continue`-ing before ever
+    reaching `_classify_deployed_only` -- the git-history-aware check this
+    docstring's first paragraph is about. Fixed by `_source_ignored_paths`
+    excluding source-side paths git ignores before the checksum comparison
+    runs at all. Same fixture, same real host layout, as
+    services/sync_deletions_test.py::test_a_git_rm_cached_then_gitignored_file_is_kept
+    -- that one was never affected (compute_deletion_plan is entirely
+    git-diff/git-log driven and never walks source_dir's raw disk), which is
+    the proof this is a full_tree_drift.py-specific bug, not a shared one.
+    """
     repo = tmp_path / "repo"
     _init_repo(repo)
     _write(repo / "comp" / "secrets.local.yaml", "token: abc\n")

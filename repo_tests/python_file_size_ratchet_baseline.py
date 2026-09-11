@@ -522,6 +522,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "pipeline-scripts/detect-hardcoded-values_test.py": 653,
     "repo_tests/ci_dispatch_watchdog_test.py": 1283,
     "repo_tests/enum_union_guard_test.py": 801,
+    "repo_tests/sync_deletions_ansible_wiring_16310_test.py": 640,  # #16310
     "repo_tests/sys_modules_leak_guard.py": 1164,
     "scripts/audit_api_wiring.py": 897,
 }

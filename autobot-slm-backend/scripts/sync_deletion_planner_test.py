@@ -27,10 +27,6 @@ from autobot_shared.paths import scrubbed_git_env
 _SCRIPTS_DIR = Path(__file__).parent
 _SERVICES_DIR = _SCRIPTS_DIR.parent / "services"
 
-_gt_stub = types.ModuleType("services.git_tracker")
-_gt_stub.DEFAULT_REPO_PATH = "/opt/autobot/code_source"  # type: ignore[attr-defined]
-sys.modules["services.git_tracker"] = _gt_stub
-
 
 def _real_load(name: str, path: Path):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -40,7 +36,15 @@ def _real_load(name: str, path: Path):
     return module
 
 
+# #16310 review round 7 (sys.modules leak guard): "services.git_tracker" is a
+# SYNTHETIC stub (types.ModuleType, no __spec__), not a real load, and used to
+# be installed here unconditionally with no restore -- it stayed in
+# sys.modules for the rest of the session, visible to every test module that
+# ran after this one. Folded into the same _SWAPPED/_prev_modules/finally
+# cycle as the real-loaded modules below so it is captured and restored (or
+# popped, if it was absent before) exactly like the rest.
 _SWAPPED = (
+    "services.git_tracker",
     "services.deploy_artifacts",
     "services.drift_checker",
     "services.deployed_dir_resolver",
@@ -51,6 +55,10 @@ _SWAPPED = (
 )
 _prev_modules = {name: sys.modules.get(name) for name in _SWAPPED}
 try:
+    _gt_stub = types.ModuleType("services.git_tracker")
+    _gt_stub.DEFAULT_REPO_PATH = "/opt/autobot/code_source"  # type: ignore[attr-defined]
+    sys.modules["services.git_tracker"] = _gt_stub
+
     _real_load("services.deploy_artifacts", _SERVICES_DIR / "deploy_artifacts.py")
     _real_load("services.drift_checker", _SERVICES_DIR / "drift_checker.py")
     _real_load("services.deployed_dir_resolver", _SERVICES_DIR / "deployed_dir_resolver.py")

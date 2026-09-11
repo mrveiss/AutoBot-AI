@@ -34,10 +34,6 @@ from autobot_shared.paths import scrubbed_git_env
 
 _SERVICES_DIR = Path(__file__).parent
 
-_gt_stub = types.ModuleType("services.git_tracker")
-_gt_stub.DEFAULT_REPO_PATH = "/opt/autobot/code_source"  # type: ignore[attr-defined]
-sys.modules["services.git_tracker"] = _gt_stub
-
 
 def _real_load(name: str, path: Path):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -47,7 +43,15 @@ def _real_load(name: str, path: Path):
     return module
 
 
+# #16310 review round 7 (sys.modules leak guard): "services.git_tracker" is a
+# SYNTHETIC stub (types.ModuleType, no __spec__), not a real load, and used to
+# be installed here unconditionally with no restore -- it stayed in
+# sys.modules for the rest of the session, visible to every test module that
+# ran after this one. Folded into the same _SWAPPED/_prev_modules/finally
+# cycle as the real-loaded modules below so it is captured and restored (or
+# popped, if it was absent before) exactly like the rest.
 _SWAPPED = (
+    "services.git_tracker",
     "services.deploy_artifacts",
     "services.drift_checker",
     "services.deployed_dir_resolver",
@@ -57,6 +61,10 @@ _SWAPPED = (
 )
 _prev_modules = {name: sys.modules.get(name) for name in _SWAPPED}
 try:
+    _gt_stub = types.ModuleType("services.git_tracker")
+    _gt_stub.DEFAULT_REPO_PATH = "/opt/autobot/code_source"  # type: ignore[attr-defined]
+    sys.modules["services.git_tracker"] = _gt_stub
+
     _real_load("services.deploy_artifacts", _SERVICES_DIR / "deploy_artifacts.py")
     _real_load("services.drift_checker", _SERVICES_DIR / "drift_checker.py")
     _real_load("services.deployed_dir_resolver", _SERVICES_DIR / "deployed_dir_resolver.py")
@@ -167,7 +175,17 @@ async def test_same_commit_is_a_no_op(tmp_path) -> None:
 
 
 async def test_a_git_rm_cached_then_gitignored_file_is_kept(tmp_path) -> None:
-    """#16300's pattern: git shows a `D`, but the file was deliberately kept."""
+    """#16300's pattern: git shows a `D`, but the file was deliberately kept.
+
+    #16310 review round 7: the real-host-layout companion of
+    services/full_tree_drift_test.py::test_a_git_rm_cached_then_gitignored_file_reads_as_host_state
+    (same fixture). That module had a real bug here (a raw filesystem walk
+    of source_dir saw the file `git rm --cached` leaves physically present);
+    this module never did, because compute_deletion_plan's candidate list
+    comes entirely from `git diff`/`git log` against repo_root, never from
+    walking source_dir's disk contents -- kept_reason's gitignored check was
+    always reachable here.
+    """
     repo = tmp_path / "repo"
     _init_repo(repo)
     _write(repo / "comp" / "secrets.local.yaml", "token: abc\n")

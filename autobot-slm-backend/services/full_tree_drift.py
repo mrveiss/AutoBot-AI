@@ -46,7 +46,7 @@ from autobot_shared.time_utils import utc_timestamp
 from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
 from services.deployed_dir_resolver import get_live_dir
 from services.drift_checker import VISIBILITY_COMPONENTS, deploy_only_entries, get_default_source_dir, owned_subtrees
-from services.git_subprocess import component_pathspec, last_commit_for_path
+from services.git_subprocess import component_pathspec, last_commit_for_path, run_git
 from services.git_tracker import DEFAULT_REPO_PATH
 from services.host_state_filter import kept_reason
 
@@ -242,6 +242,38 @@ def _collect_both_checksums(
     return dep_checksums, src_checksums
 
 
+async def _source_ignored_paths(repo_root: str, pathspec_prefix: str) -> set[str]:
+    """Component-relative paths ``git`` ignores in the CONTROLLER's own
+    source checkout right now -- #16310 review round 7, real bug.
+
+    ``_walk_checksums`` below is a raw filesystem walk of ``source_dir``, not
+    a git query, and ``git rm --cached`` never touches the working tree
+    (only the index): a file untracked-then-gitignored (#16300's pattern)
+    stays physically present in ``code_source`` with its content unchanged.
+    When that content still matches the deployed copy, treating the walk's
+    checksum as "the source" made ``_classify_all_paths`` read the pair as
+    identical and ``continue`` -- never reaching ``_classify_deployed_only``,
+    the git-history-aware check that would have called it
+    ``host_state:gitignored``. A file git no longer tracks is not source,
+    regardless of whether a stale copy happens to still be sitting on the
+    controller's disk.
+
+    One bulk ``git ls-files`` call, not a per-file ``git check-ignore`` --
+    the #16310 review round 3 bootstrap-enumeration-cost lesson repeated
+    here. A failed git call degrades to "nothing known ignored" (logged,
+    not raised) rather than failing the whole drift run over a refinement
+    of an already-successful comparison.
+    """
+    pathspec = f"{pathspec_prefix}/" if pathspec_prefix else "."
+    output, rc = await run_git(repo_root, "ls-files", "--others", "--ignored", "--exclude-standard", "--", pathspec)
+    if rc != 0:
+        logger.warning("full_tree_drift: git ls-files --ignored failed for %r (rc=%d)", pathspec, rc)
+        return set()
+
+    prefix = f"{pathspec_prefix}/" if pathspec_prefix else ""
+    return {line[len(prefix) :] for line in output.splitlines() if line and (not prefix or line.startswith(prefix))}
+
+
 async def _classify_all_paths(
     dep_checksums: dict[str, str],
     src_checksums: dict[str, str],
@@ -282,6 +314,13 @@ async def compute_full_tree_drift(component: str, repo_root: str = DEFAULT_REPO_
 
     dep_checksums, src_checksums = both
     pathspec_prefix = component_pathspec(repo_root, source_dir)
+
+    # #16310 review round 7: a path git ignores in the source checkout is
+    # not source, even if a stale copy is still sitting on the controller's
+    # disk with matching content -- see _source_ignored_paths.
+    for ignored in await _source_ignored_paths(repo_root, pathspec_prefix):
+        src_checksums.pop(ignored, None)
+
     await _classify_all_paths(dep_checksums, src_checksums, component, repo_root, pathspec_prefix, result)
     return result
 

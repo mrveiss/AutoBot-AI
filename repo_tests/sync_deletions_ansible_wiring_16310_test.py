@@ -41,6 +41,7 @@ repo_tests/ansible_backend_path_defects_15560_test.py).
 
 from __future__ import annotations
 
+import ast
 import re
 
 import pytest
@@ -151,21 +152,71 @@ def test_deletion_task_runs_immediately_after_its_sync_task(rel_path: str, sync_
 # --------------------------------------------------------------------------
 
 
+def _read_literal_string_collection(source: str, var_name: str) -> set[str]:
+    """The string members of *var_name*'s literal collection in *source*,
+    read with ``ast`` rather than imported.
+
+    repo_tests cannot import autobot-slm-backend packages -- it is a
+    separate source root -- and a by-path load would pull in
+    deploy_artifacts.py's own imports too, which is exactly what
+    repo_tests/by_path_loaded_modules_are_package_free_test.py polices
+    against (#16310 review round 7). Handles both shapes this module uses:
+    ``NAME: frozenset[str] = frozenset({...})`` and
+    ``NAME: tuple[str, ...] = (...)``. Asserts the shape is still a literal
+    rather than silently returning an empty set if it ever stops being one
+    -- callers are told to switch to the by-path route deliberately instead.
+    """
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            target_names = [node.target.id]
+        elif isinstance(node, ast.Assign):
+            target_names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        else:
+            continue
+        if var_name not in target_names:
+            continue
+
+        value = node.value
+        if isinstance(value, ast.Call) and isinstance(value.func, ast.Name) and value.func.id == "frozenset":
+            assert value.args, f"{var_name}: frozenset() call has no literal argument"
+            value = value.args[0]
+        assert isinstance(value, (ast.Set, ast.Tuple, ast.List)), (
+            f"{var_name}: expected a literal set/tuple/list (or frozenset(...) of one), found "
+            f"{type(value).__name__} instead -- the by-path import route needs picking deliberately"
+        )
+        values = {e.value for e in value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)}
+        assert len(values) == len(value.elts), f"{var_name}: literal contains a non-string-constant element"
+        return values
+    raise AssertionError(f"{var_name}: no assignment found in {len(source.splitlines())}-line source")
+
+
 def test_bootstrap_find_prunes_the_same_artifact_vocabulary_as_deploy_artifacts() -> None:
     """The `find ... -prune` name list must match ARTIFACT_DIRS/
     ARTIFACT_DIR_SUFFIXES exactly -- a hand-mirrored copy that drifts is the
     #14231 failure mode arriving in a new place."""
-    from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
+    deploy_artifacts_source = (_REPO_ROOT / "autobot-slm-backend" / "services" / "deploy_artifacts.py").read_text(
+        encoding="utf-8"
+    )
+    artifact_dirs = _read_literal_string_collection(deploy_artifacts_source, "ARTIFACT_DIRS")
+    artifact_dir_suffixes = _read_literal_string_collection(deploy_artifacts_source, "ARTIFACT_DIR_SUFFIXES")
 
     text = _SHARED_TASK_FILE.read_text(encoding="utf-8")
-    find_block = re.search(r"find .*?-prune", text, re.DOTALL)
-    assert find_block, "no `find ... -prune` command found in sync_deletions.yml"
+    # Anchored on the real invocation (`find {{ sync_deletions_target_dir }}
+    # ...`), not a bare `r"find .*?-prune"` -- this file's own header prose
+    # mentions both "find" and "-prune" in comments well before the actual
+    # command (documenting the newline-in-filename residual limitation), and
+    # a non-greedy DOTALL scan from the first "find" landed on THAT comment
+    # text instead of the command, silently matching zero `-name` tokens.
+    # repo_tests/sync_deletions_ansible_wiring_16310_test.py review round 7.
+    find_block = re.search(r"find\s+\{\{\s*sync_deletions_target_dir\s*\}\}.*?-prune", text, re.DOTALL)
+    assert find_block, "no `find {{ sync_deletions_target_dir }} ... -prune` command found in sync_deletions.yml"
 
     names = set(re.findall(r"-name\s+'?\*?([\w.\-]+)'?", find_block.group(0)))
     # ARTIFACT_DIR_SUFFIXES entries (".egg-info") are matched via `*.egg-info`;
     # stripping only the leading `*` (not the dot) leaves ".egg-info", matching
     # the literal suffix value -- no dot-stripping on either side.
-    expected = set(ARTIFACT_DIRS) | set(ARTIFACT_DIR_SUFFIXES)
+    expected = artifact_dirs | artifact_dir_suffixes
     missing = expected - names
     assert missing == set(), f"find -prune is missing artifact names: {missing}"
 
