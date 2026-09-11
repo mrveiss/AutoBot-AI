@@ -101,6 +101,7 @@ from services.playbook_executor import get_playbook_executor
 from services.slm_frontend_build import build_slm_frontend as _build_slm_frontend
 from services.slm_frontend_build import write_slm_deployed_commit_marker as _write_slm_deployed_commit_marker
 from services.ssh_utils import _ssh_key_usable
+from services.sync_deletions import cleanup_colocated_components
 from services.sync_orchestrator import get_sync_orchestrator
 
 logger = logging.getLogger(__name__)
@@ -1327,11 +1328,9 @@ async def get_pending_nodes(
 
 
 # Components synced by the SLM code-sync flow. Per-component exclude lists are
-# empty: every build/deploy artifact (__pycache__, *.pyc, .git, node_modules,
-# dist, build, venv/.venv, *.egg-info, *.log, …) is now excluded universally at
-# the rsync chokepoint from the canonical vocabulary (#11459,
-# services/deploy_artifacts.py). A component only needs an entry here if it must
-# exclude something that is NOT a standard artifact.
+# empty: every build/deploy artifact is excluded universally at the rsync
+# chokepoint from the canonical vocabulary (#11459, services/deploy_artifacts.py).
+# An entry here only needs its own list to exclude something non-standard.
 _SLM_COMPONENTS: List[Tuple[str, List[str]]] = [
     ("autobot-slm-backend", []),
     ("autobot-slm-frontend", []),
@@ -1341,11 +1340,9 @@ _SLM_COMPONENTS: List[Tuple[str, List[str]]] = [
 
 # #14231: the list of paths that must survive every sync now lives in
 # services/deploy_artifacts.py, next to the artifact vocabulary it sits beside
-# at the rsync chokepoint. It was extended here three times by incident (#9970
-# `.env`/`data`, #13851 `logs`, #14231 four more) while the ansible sync path
-# in roles/slm_manager/tasks/main.yml carried its own partial copy -- two code
-# paths writing the same tree, disagreeing about which files may be deleted.
-# One source, one guard test (tests/api/test_host_state_excludes_14231.py).
+# at the rsync chokepoint -- one source, one guard test
+# (tests/api/test_host_state_excludes_14231.py), rather than a second partial
+# copy in roles/slm_manager/tasks/main.yml disagreeing about what may be deleted.
 _PROTECTED_EXCLUDES: List[str] = list(HOST_STATE_EXCLUDES)
 
 
@@ -1363,10 +1360,9 @@ def _rsync_exclude_args(excludes: List[str], component: str | None = None) -> Li
     #13851: when *component* is given, subtrees owned by ANOTHER component and
     the component's deploy-only entries are excluded too, anchored at the
     transfer root so a same-named directory deeper in the tree is unaffected.
-    Defence in depth against the same class of bug that made this necessary: the
-    backend's delete-style resolve would have removed 34 files under
-    ``autobot-backend/plugins`` — deployed there by the ``plugins`` component,
-    perfectly in sync with their real source, and invisible to a walk that only
+    Defence in depth: the backend's delete-style resolve would have removed 34
+    files under ``autobot-backend/plugins`` — perfectly in sync with their
+    real source (the ``plugins`` component), invisible to a walk that only
     knows about ``code_source/autobot-backend``.
 
     Subtrees get a trailing slash (they are directories); deploy-only entries do
@@ -4923,6 +4919,7 @@ async def _run_pull_stage(job: UpdateAllJob, db_service_ref) -> Optional[str]:
             async with db_service_ref.session() as db:
                 await _update_version_setting(db, commit)
                 await db.commit()
+            await cleanup_colocated_components(log=lambda line: _stage_log(stage, line))  # #16310
         return commit
     except Exception as exc:
         stage.status = _StageStatus.FAILED
@@ -6092,3 +6089,6 @@ async def get_update_all_status(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="No update-all job found. POST /code-sync/update-all to start one.",
     )
+
+
+from api import full_tree_drift  # noqa: E402,F401 -- registers GET /drift/full onto `router` (#16310)

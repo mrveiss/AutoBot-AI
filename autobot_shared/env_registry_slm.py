@@ -293,3 +293,19 @@ register_env_var(
         component="slm",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SYNC_GIT_TIMEOUT_S",
+        type=float,
+        default=30.0,
+        description=(
+            "Timeout, in seconds, for a single git subprocess (`rev-parse`, "
+            "`diff --name-status`) during the builtin updater's git-aware "
+            "deletion pass. Raising it tolerates a slower repository; lowering "
+            "it fails a wedged git process sooner rather than stalling a sync "
+            "(autobot-slm-backend/services/sync_deletions.py, #16310)."
+        ),
+        component="slm",
+    )
+)
