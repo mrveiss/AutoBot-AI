@@ -13,7 +13,7 @@
 
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { effectScope } from 'vue'
-import { isReducedMotion, scrollBehavior, useReducedMotion } from './useReducedMotion'
+import { isReducedMotion, preferredScrollBehavior, useReducedMotion } from './useReducedMotion'
 
 /** Install a `matchMedia` that reports `matches` and records its listeners. */
 function stubMatchMedia(matches: boolean) {
@@ -69,15 +69,15 @@ describe('isReducedMotion', () => {
   })
 })
 
-describe('scrollBehavior', () => {
+describe('preferredScrollBehavior', () => {
   it('is smooth by default', () => {
     stubMatchMedia(false)
-    expect(scrollBehavior()).toBe('smooth')
+    expect(preferredScrollBehavior()).toBe('smooth')
   })
 
   it('is auto when reduced motion is requested', () => {
     stubMatchMedia(true)
-    expect(scrollBehavior()).toBe('auto')
+    expect(preferredScrollBehavior()).toBe('auto')
   })
 })
 

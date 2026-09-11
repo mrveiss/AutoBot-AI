@@ -15,12 +15,16 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import { slmApiClient } from '@/utils/ApiClient'
 import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
 import { useNodeServices } from '@/composables/useNodeServices'
 
 const fleetStore = useFleetStore()
+// #15665: every user-visible string goes through i18n, script-side ones too --
+// the same keys ToolsView uses, since this tab was extracted from it.
+const { t } = useI18n()
 
 // Tool definitions - reduced to 3 unique tools per Issue #737
 // Removed: network-test (use NodeCard "Test"), health-check (use NodeLifecyclePanel),
@@ -28,22 +32,22 @@ const fleetStore = useFleetStore()
 const tools = [
   {
     id: 'log-viewer',
-    name: 'Service Logs',
-    description: 'View service logs from nodes via journalctl',
+    name: t('toolsView.logViewer'),
+    description: t('toolsView.logViewerDescription'),
     icon: 'document',
     available: true,
   },
   {
     id: 'redis-cli',
-    name: 'Redis CLI',
-    description: 'Execute Redis commands on the cluster',
+    name: t('toolsView.redisCli'),
+    description: t('toolsView.redisCliDescription'),
     icon: 'database',
     available: true,
   },
   {
     id: 'ansible-runner',
-    name: 'Command Runner',
-    description: 'Run shell commands on nodes',
+    name: t('fleet.fleetToolsTab.commandRunner'),
+    description: t('fleet.fleetToolsTab.commandRunnerDescription'),
     icon: 'terminal',
     available: true,
   },
@@ -88,7 +92,7 @@ function closeTool(): void {
 // Log viewer using useNodeServices composable (Issue #737)
 async function getServiceLogs(): Promise<void> {
   if (!selectedNode.value || !selectedService.value) {
-    error.value = 'Please select a node and service'
+    error.value = t('toolsView.pleaseSelectANodeAndService')
     return
   }
 
@@ -98,9 +102,9 @@ async function getServiceLogs(): Promise<void> {
 
   try {
     const logs = await nodeServices.getLogs(selectedService.value, logLines.value)
-    result.value = logs || 'No logs available'
+    result.value = logs || t('toolsView.noLogsAvailable')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to fetch logs'
+    error.value = e instanceof Error ? e.message : t('toolsView.failedToFetchLogs')
   } finally {
     loading.value = false
   }
@@ -108,7 +112,7 @@ async function getServiceLogs(): Promise<void> {
 
 async function runRedisCommand(): Promise<void> {
   if (!redisCommand.value.trim()) {
-    error.value = 'Please enter a Redis command'
+    error.value = t('toolsView.pleaseEnterARedis')
     return
   }
 
@@ -122,7 +126,7 @@ async function runRedisCommand(): Promise<void> {
     const targetNode = redisNode || (selectedNode.value ? selectedNodeDetails.value : null)
 
     if (!targetNode) {
-      throw new Error('No node selected and no Redis node found')
+      throw new Error(t('toolsView.runNoNodeSelected'))
     }
 
     // Execute via SSH
@@ -141,13 +145,13 @@ async function runRedisCommand(): Promise<void> {
 
     if (!response.ok) {
       const err = await response.json()
-      throw new Error(err.detail || 'Redis command failed')
+      throw new Error(err.detail || t('toolsView.redisCommandFailed'))
     }
 
     const data = await response.json()
-    result.value = `Redis Response:\n\n${data.output || data.stdout || 'No output'}`
+    result.value = t('toolsView.redisResponse', { output: data.output || data.stdout || t('toolsView.noOutput') })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Redis command failed'
+    error.value = e instanceof Error ? e.message : t('toolsView.redisCommandFailed')
   } finally {
     loading.value = false
   }
@@ -155,7 +159,7 @@ async function runRedisCommand(): Promise<void> {
 
 async function runShellCommand(): Promise<void> {
   if (!selectedNode.value || !shellCommand.value.trim()) {
-    error.value = 'Please select a node and enter a command'
+    error.value = t('toolsView.pleaseSelectANodeAnd')
     return
   }
 
@@ -172,14 +176,16 @@ async function runShellCommand(): Promise<void> {
 
     if (!response.ok) {
       const err = await response.json()
-      throw new Error(err.detail || 'Command execution failed')
+      throw new Error(err.detail || t('toolsView.commandExecutionFailed'))
     }
 
     const data = await response.json()
-    result.value = `Command Output:\n\n${data.output || data.stdout || 'No output'}\n\n` +
-      (data.stderr ? `Stderr:\n${data.stderr}` : '')
+    result.value = t('toolsView.commandOutputResult', {
+      output: data.output || data.stdout || t('toolsView.noOutput'),
+      stderr: data.stderr ? `Stderr:\n${data.stderr}` : '',
+    })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Command execution failed'
+    error.value = e instanceof Error ? e.message : t('toolsView.commandExecutionFailed')
   } finally {
     loading.value = false
   }
