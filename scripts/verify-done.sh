@@ -345,7 +345,7 @@ else
     wt_ignored=$(git -C "$dir" status --porcelain --ignored=matching 2>/dev/null | grep -c '^!!')
     # `git status` cannot see these by design, and neither can
     # `git worktree remove` — the pair that composes into silent data loss.
-    idx_bits=$(git -C "$dir" ls-files -v 2>/dev/null | grep -c '^[a-zS]')
+    idx_bits=$(git_tracked_files "$dir" -v 2>/dev/null | grep -c '^[a-zS]')
     locked=no
     awk -v d="worktree $dir" '$0==d{f=1;next} /^worktree /{f=0} f&&/^locked/{print;exit}' \
       <<< "$WT_LIST" | grep -q . && locked=yes

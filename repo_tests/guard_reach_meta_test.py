@@ -57,17 +57,60 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import pytest  # noqa: E402
 from repo_tests._paths import repo_root  # noqa: E402
 
 from tools.lint._scan_helpers import tracked_paths  # noqa: E402
 
 #: What counts as enumerating the tree.
-_ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(")
+#:
+#: ``.glob(`` was missing until #16147, and its absence was the same defect this
+#: module exists to catch, one level up: the sweep reported every guard compliant
+#: while 21 tree-scanning guards were outside the set it read. A blind spot in a
+#: detector is indistinguishable from a clean result, which is why the floor below
+#: is bound to guards EXAMINED rather than to guards found wanting.
+#:
+#: ``.glob(`` is listed after ``rglob(`` deliberately -- ``rglob`` contains no
+#: literal ``.glob(``, so the two are independent alternatives rather than one
+#: subsuming the other.
+_ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(|\.glob\(")
 
 #: Bound to guards EXAMINED, never to guards found wanting. A `git ls-files`
 #: returning nothing would otherwise pass this module having read zero guards --
 #: the exact failure it exists to catch, inside itself.
-MIN_GUARDS_EXAMINED = 60
+#:
+#: MEASURED 2026-09-10 against `origin/Dev_new_gui`: 201 tracked
+#: `repo_tests/*_test.py`, of which **101** match `_ENUMERATOR` (80 before
+#: `.glob(` was added, 21 reachable only through it). The floor sits at 95 rather
+#: than at 101 so that deleting a handful of guards is a test failure about the
+#: guards rather than about this number -- but a collapse, which is what an
+#: enumeration bug produces, still trips it. The previous value of 60 sat 20
+#: below the then-current 80 and 41 below the true population, so it could not
+#: have fired on the very blind spot #16147 reports.
+MIN_GUARDS_EXAMINED = 95
+
+#: WHAT THIS MODULE CHECKS, AND WHAT IT DOES NOT (#16154).
+#:
+#: This asks whether a floor **exists**. Whether that floor can actually **fire**
+#: is a different question, answered by `reach_declarations_test`, which hands
+#: every declaration an empty repository and requires it to raise.
+#:
+#: The two ask different questions, and NEITHER is reliably in the pre-push set:
+#: `tools/git-hooks/pre-push` selects tests by changed-file match and directory
+#: sibling, so a meta-test runs only when it is itself in the diff. An earlier
+#: version of this comment claimed this module was always in that set; the hook
+#: does not say so, and the claim was removed rather than left to be trusted.
+#: So a floor that exists but cannot fire --
+#: because its `discover` raises on an empty tree instead of returning [] --
+#: passes pre-push and fails in CI, which is the slowest possible place to learn
+#: it. Stating the gap here rather than implying full coverage: an author who
+#: reads this module and sees "reach is checked" will not go looking for the
+#: half that is not checked until it is pushed.
+#:
+#: `_reach.declare` documents the empty-tree contract at the point an author
+#: writes a `discover`, and `_reach.Reach.examined` raises `ReachDiscoveryError`
+#: naming a raising `discover` as the cause rather than letting a bare traceback
+#: read as a broken guard.
 
 #: Tree-scanning `*_test.py` guards with no floor of any kind, frozen so a NEW
 #: one fails. May only shrink, and a shrink must be recorded here.
@@ -75,6 +118,27 @@ GRANDFATHERED = frozenset(
     {
         "repo_tests/background_task_retention_ratchet_test.py",
         "repo_tests/fixture_fixed_path_teardown_guard_gating_test.py",
+        # Entered the examined set with `.glob(` (#16147). It was always a
+        # tree-scanning guard with no floor; it was simply invisible to the
+        # detector. Recorded here rather than fixed in the same change, so the
+        # enumerator widening is reviewable on its own -- the alternative is a
+        # diff where a detector change and a guard change explain each other.
+        "repo_tests/promtool_rules_test.py",
+        "repo_tests/workflow_planner_deprecation_test.py",
+    }
+)
+
+#: GRANDFATHERED as last recorded -- a mirrored second copy (#16147 AC4), the
+#: same two-copy shape as the file-size ratchet's RATCHET_BASELINE. The staleness
+#: test forces removals; without this copy, ADDING an entry to GRANDFATHERED
+#: silences a new unfloored guard and no test fails. Growing the list now takes
+#: editing both sets -- a recorded decision a reviewer sees -- and a shrink is
+#: mirrored here too, so a removed entry cannot quietly come back.
+_GRANDFATHERED_BASELINE = frozenset(
+    {
+        "repo_tests/background_task_retention_ratchet_test.py",
+        "repo_tests/fixture_fixed_path_teardown_guard_gating_test.py",
+        "repo_tests/promtool_rules_test.py",
         "repo_tests/workflow_planner_deprecation_test.py",
     }
 )
@@ -211,3 +275,131 @@ def test_the_grandfathered_list_has_not_gone_stale() -> None:
     assert (
         not stale
     ), "GRANDFATHERED entries that now have a floor -- remove them, the list only shrinks:\n  " + "\n  ".join(stale)
+
+
+def _grown(current: frozenset[str]) -> list[str]:
+    return sorted(current - _GRANDFATHERED_BASELINE)
+
+
+def test_the_grandfathered_list_never_grows_silently() -> None:
+    """#16147 AC4: the list only shrinks, and it is compared as a SET.
+
+    A count would pass one entry swapped for another; the set difference in each
+    direction is the assertion worth making (RATCHET_BASELINES.md, rule 4).
+    """
+    grown = _grown(GRANDFATHERED)
+    assert not grown, (
+        "GRANDFATHERED gained entries missing from _GRANDFATHERED_BASELINE -- a new "
+        "tree-scanning guard needs a floor, not an exemption:\n  " + "\n  ".join(grown)
+    )
+    unmirrored = sorted(_GRANDFATHERED_BASELINE - GRANDFATHERED)
+    assert not unmirrored, (
+        "entries removed from GRANDFATHERED but not from _GRANDFATHERED_BASELINE -- mirror "
+        "the shrink, or a removed exemption can quietly return:\n  " + "\n  ".join(unmirrored)
+    )
+
+
+def test_the_growth_check_finds_an_added_entry() -> None:
+    """Known positive (rule 6): the check must see an addition before its silence means anything."""
+    assert _grown(GRANDFATHERED | {"repo_tests/planted_unfloored_guard_test.py"}) == [
+        "repo_tests/planted_unfloored_guard_test.py"
+    ]
+
+
+def _examined_with(pattern: re.Pattern[str]) -> set[str]:
+    """Guards a given enumerator pattern reaches. Used to mutate the detector."""
+    root = repo_root()
+    reached = set()
+    for path in _tracked_guards():
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if pattern.search(source):
+            reached.add(path.relative_to(root).as_posix())
+    return reached
+
+
+def test_dropping_glob_from_the_enumerator_breaks_the_sweep() -> None:
+    """#16147 mutation: the `.glob(` alternative must be load-bearing.
+
+    A detector term that changes nothing when removed is decoration, and this
+    module cannot tell decoration from coverage by reading itself. So remove the
+    term and require the sweep to notice.
+
+    Measured 2026-09-10: 101 guards reached with `.glob(`, 80 without -- and 80
+    is below `MIN_GUARDS_EXAMINED`, so a regression that dropped the term would
+    fail loudly rather than quietly reading 21 fewer guards.
+
+    This is the check that the previous floor of 60 could not perform: at 60,
+    dropping `.glob(` left 80 examined, comfortably above the floor, and the
+    sweep reported the same clean result over a fifth fewer guards.
+    """
+    without_glob = re.compile(_ENUMERATOR.pattern.replace(r"|\.glob\(", ""))
+    assert without_glob.pattern != _ENUMERATOR.pattern, "the mutation did not change the pattern"
+
+    full = _examined_with(_ENUMERATOR)
+    narrowed = _examined_with(without_glob)
+
+    assert narrowed < full, "removing `.glob(` reached the same guards -- the term is decoration"
+    assert len(narrowed) < MIN_GUARDS_EXAMINED, (
+        f"removing `.glob(` still reaches {len(narrowed)} guards, at or above the floor of "
+        f"{MIN_GUARDS_EXAMINED}. The floor cannot detect the loss, so it is not protecting "
+        "the extension -- raise it or the mutation is unguarded."
+    )
+
+
+def test_glob_reaches_guards_no_other_term_does() -> None:
+    """The positive half: `.glob(` is not merely redundant with `rglob(`.
+
+    `rglob` contains no literal `.glob(`, so the two are independent — but that
+    is an argument, and this asserts it against the tree instead. Named guards
+    rather than a count, because a count can be satisfied by any 21 files.
+    """
+    without_glob = re.compile(_ENUMERATOR.pattern.replace(r"|\.glob\(", ""))
+    only_via_glob = _examined_with(_ENUMERATOR) - _examined_with(without_glob)
+
+    assert "repo_tests/promtool_rules_test.py" in only_via_glob
+    assert "repo_tests/workflow_concurrency_guard_test.py" in only_via_glob
+
+
+def test_a_raising_discover_is_named_as_the_cause_not_a_bare_traceback() -> None:
+    """#16154: "the sweep is broken" and "the tree is small" are different states.
+
+    A `discover` that raises on an empty tree used to surface as whatever
+    exception it threw -- an `EmptyEnumeration`, a `FileNotFoundError` -- which
+    reads as a broken guard rather than as the specific, documented contract
+    violation it is. `reach_declarations_test` then ends early having proven
+    nothing, and the floor it was checking is untested while looking checked.
+    """
+    from repo_tests._reach import Reach, ReachDiscoveryError, ReachFloorError
+
+    def _raises(_root):
+        raise RuntimeError("enumeration exploded")
+
+    reach = Reach(name="synthetic", discover=_raises, floor=1, what="things")
+
+    with pytest.raises(ReachDiscoveryError) as caught:
+        reach.examined(repo_root())
+
+    message = str(caught.value)
+    assert "RuntimeError" in message, "the original exception type must survive into the message"
+    assert "must return an empty sequence" in message or "empty" in message
+    assert "excluded_tree_size_debt_test" in message, "must point at the handling it expects"
+    assert not isinstance(
+        caught.value, ReachFloorError
+    ), "a broken sweep must not present as a floor breach -- they call for opposite fixes"
+
+
+def test_a_floor_breach_is_still_a_floor_error() -> None:
+    """The control: wrapping discover must not swallow the ordinary case.
+
+    A change that turned every failure into `ReachDiscoveryError` would pass the
+    test above and destroy the distinction it exists to draw.
+    """
+    from repo_tests._reach import Reach, ReachFloorError
+
+    reach = Reach(name="synthetic-floor", discover=lambda _root: [], floor=5, what="things")
+
+    with pytest.raises(ReachFloorError):
+        reach.examined(repo_root())

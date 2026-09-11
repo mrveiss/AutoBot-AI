@@ -41,9 +41,9 @@ import re
 from pathlib import Path
 
 import pytest
-
 from repo_tests._paths import repo_root
 from repo_tests.python_filter_covers_its_guards_test import _filter_patterns, _is_covered
+
 from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
@@ -137,6 +137,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/ansible_inventory_path_exists_test.py",
             "repo_tests/deployment_script_scan.py",
             "repo_tests/embedded_python_dependency_declared_test.py",
+            "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
             "repo_tests/hook_decision_exit_codes_15956_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/one_git_enumeration_15926_test.py",
@@ -156,6 +157,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.yaml": (
         {
+            "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
             "repo_tests/hook_suites_run_in_ci_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/infra_libs_test_wiring_guard_15051_test.py",
@@ -171,6 +173,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/ansible_pip_isolation_test.py",
             "repo_tests/documented_playbook_invocations_test.py",
             "repo_tests/frontend_duplicate_typecheck_compile_guard_test.py",
+            "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
             "repo_tests/hook_suites_run_in_ci_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/infra_libs_test_wiring_guard_15051_test.py",
@@ -193,8 +196,16 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "root-relative `*_test.sh` sweep; the matching files live outside the python filter's trees",
     ),
     "*package.json": (
-        {"repo_tests/npm_test_scripts_run_in_ci_test.py"},
+        {
+            "repo_tests/npm_audit_covers_its_workspaces_test.py",
+            "repo_tests/npm_test_scripts_run_in_ci_test.py",
+        },
         "root-relative `*package.json` sweep; the matching files live outside the python filter's trees",
+    ),
+    "*package-lock.json": (
+        {"repo_tests/npm_audit_covers_its_workspaces_test.py"},
+        "root-relative `*package-lock.json` sweep (#16131): a lockfile is what makes a workspace "
+        "auditable, and they live outside the python filter's trees",
     ),
     "*requirements*.txt": (
         {"repo_tests/declared_distributions_test.py", "repo_tests/dependabot_requirements_coverage_test.py"},
