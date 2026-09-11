@@ -3164,7 +3164,7 @@ export interface paths {
         };
         /**
          * Search users for sharing
-         * @description Search users by name or username for use in sharing dialogs. Safe to call in all deployment modes — returns empty list with available=False when user management is not enabled. Issue #2072.
+         * @description Search users in the caller's own organisation by name or username, for sharing dialogs. Requires login and an organisation context (#16279). Returns an empty list with available=False if the search fails. Issue #2072.
          */
         get: operations["search_users_for_sharing_api_user_management_users_search_get"];
         put?: never;
@@ -3351,6 +3351,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/user-management/teams/my-teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get my teams
+         * @description Get all teams the current user is a member of.
+         */
+        get: operations["get_my_teams_api_user_management_teams_my_teams_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/user-management/teams/{team_id}": {
         parameters: {
             query?: never;
@@ -3425,26 +3445,6 @@ export interface paths {
          * @description Change a team member's role.
          */
         patch: operations["update_member_role_api_user_management_teams__team_id__members__user_id__patch"];
-        trace?: never;
-    };
-    "/api/user-management/teams/my-teams": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get my teams
-         * @description Get all teams the current user is a member of.
-         */
-        get: operations["get_my_teams_api_user_management_teams_my_teams_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/user-management/organizations": {
@@ -108509,6 +108509,26 @@ export interface operations {
             };
         };
     };
+    get_my_teams_api_user_management_teams_my_teams_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamResponse"][];
+                };
+            };
+        };
+    };
     get_team_api_user_management_teams__team_id__get: {
         parameters: {
             query?: never;
@@ -108742,26 +108762,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_my_teams_api_user_management_teams_my_teams_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TeamResponse"][];
                 };
             };
         };
