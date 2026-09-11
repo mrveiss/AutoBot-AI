@@ -206,8 +206,8 @@ class TestLoadAllTellsAbsentFromFailed:
         assert "autobot-broken" not in result and "autobot-empty" not in result
         warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
         debugs = [r.getMessage() for r in caplog.records if r.levelname == "DEBUG"]
-        assert any("autobot-broken" in m for m in warnings), (
-            f"a manifest that failed to load produced no WARNING naming its role: {warnings}"
-        )
+        assert any(
+            "autobot-broken" in m for m in warnings
+        ), f"a manifest that failed to load produced no WARNING naming its role: {warnings}"
         assert not any("autobot-empty" in m for m in warnings), "an absent manifest must not read as a failure"
         assert any("autobot-empty" in m for m in debugs), "an absent manifest must still be recorded, at DEBUG"
