@@ -841,6 +841,7 @@
       "value0UpdatePluralAvailable": "{value0} update{plural} available"
     },
     "nodeServicesPanel": {
+      "actionFailed": "Failed to {action} {service}",
       "actions": "Actions",
       "autoRefreshEveryValue0S": "Auto-refresh (every {value0}s)",
       "close": "Close",
@@ -850,9 +851,7 @@
       "hide": "Hide",
       "lastCheck": "Last Check",
       "live": "Live",
-      "loadingLogs": "Loading logs...",
       "loadingServices": "Loading services...",
-      "logsValue0": "Logs: {value0}",
       "memory": "Memory",
       "no": "No",
       "noServicesDiscoveredYet": "No services discovered yet.",
@@ -873,6 +872,12 @@
       "value0Services": "{value0} - Services",
       "viewLogs": "View Logs",
       "yes": "Yes"
+    },
+    "serviceLogsModal": {
+      "close": "Close",
+      "loadFailed": "Failed to load logs. The service may not have any logs yet.",
+      "loading": "Loading logs...",
+      "title": "Logs: {service}"
     }
   },
   "fleetOverview": {
@@ -1593,21 +1598,24 @@
     "cancel": "Cancel",
     "checkedValue0": "Checked {value0}",
     "checking": "Checking…",
-    "clients": "Clients",
     "dismiss": "Dismiss",
     "fetchStatusFailed": "Failed to fetch Redis service status",
     "inMemoryDataStore": "In-memory data store",
+    "mainPid": "Main PID",
     "memoryUsed": "Memory Used",
-    "peakMemory": "Peak Memory",
+    "noRedisNode": "No node holds the Redis role, so there is no Redis service to control.",
+    "notReported": "{service} is not reported on node {node}.",
     "redisService": "Redis Service",
     "refreshStatus": "Refresh status",
     "restart": "Restart",
     "start": "Start",
+    "state": "State",
     "stop": "Stop",
     "stopRedis": "Stop Redis",
     "stopRedisService": "Stop Redis service?",
     "stoppingRedisWillInterrupt": "Stopping Redis will interrupt all active connections and may cause data loss for\n            in-flight operations. AutoBot services will become unavailable until Redis is restarted.",
-    "uptime": "Uptime"
+    "unknown": "unknown",
+    "viewLogs": "View logs"
   },
   "replicationView": {
     "actions": "Actions",
