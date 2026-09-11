@@ -11,10 +11,14 @@ A correct verdict the reader cannot attribute costs the same investigation as a
 wrong one. These tests run the step's real shell with each outcome in turn,
 rather than reasoning about which branch would be taken -- the reasoning is what
 produced the original defect.
+
+#16319: the pins are absolute duplicated-line counts, and the gate steps and
+this step read jscpd's report through one parser, ``scripts/duplication_gate.py``.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import shutil
 import subprocess
 from pathlib import Path
@@ -39,8 +43,24 @@ def _explain_step() -> dict:
     raise AssertionError("no step named 'Explain failure' in duplication-guard.yml")
 
 
-def _run_explain(main_outcome: str, slm_outcome: str) -> str:
-    """Execute the step's real script with the two step outcomes injected."""
+def _job() -> dict:
+    document = yaml.safe_load((repo_root() / WORKFLOW).read_text(encoding="utf-8"))
+    return document["jobs"][next(iter(document["jobs"]))]
+
+
+def _step(step_id: str) -> dict:
+    for step in _job()["steps"]:
+        if step.get("id") == step_id:
+            return step
+    raise AssertionError(f"no step with id {step_id!r} in duplication-guard.yml")
+
+
+def _run_explain(main_outcome: str, slm_outcome: str, **extra_env: str) -> str:
+    """Execute the step's real script with the two step outcomes injected.
+
+    Run from the repository root, as in CI: the step calls
+    ``scripts/duplication_gate.py`` by relative path.
+    """
     bash = shutil.which("bash")
     if bash is None:  # pragma: no cover - every CI image has bash
         pytest.skip("bash unavailable")
@@ -48,12 +68,14 @@ def _run_explain(main_outcome: str, slm_outcome: str) -> str:
         [bash, "-c", _explain_step()["run"]],
         capture_output=True,
         text=True,
+        cwd=repo_root(),
         env={
             "PATH": "/usr/bin:/bin",
             "MAIN_OUTCOME": main_outcome,
             "SLM_OUTCOME": slm_outcome,
-            "THRESHOLD": "1.05",
-            "SLM_THRESHOLD": "1.82",
+            "MAX_DUP_LINES": "11723",
+            "SLM_MAX_DUP_LINES": "4729",
+            **extra_env,
         },
     )
     return result.stdout + result.stderr
@@ -99,15 +121,15 @@ def test_only_the_failing_scope_is_named_when_slm_fails() -> None:
 @pytest.mark.parametrize(
     ("main_outcome", "slm_outcome", "named", "unnamed"),
     [
-        ("failure", "success", "(env THRESHOLD)", "(env SLM_THRESHOLD)"),
-        ("success", "failure", "(env SLM_THRESHOLD)", "(env THRESHOLD)"),
+        ("failure", "success", "(env MAX_DUP_LINES)", "(env SLM_MAX_DUP_LINES)"),
+        ("success", "failure", "(env SLM_MAX_DUP_LINES)", "(env MAX_DUP_LINES)"),
     ],
 )
 def test_the_failing_scope_names_its_own_env_var(main_outcome, slm_outcome, named, unnamed) -> None:
     """#16163 AC1: the value says how far over; the env var name says which knob.
 
-    Matched as the whole `(env NAME)` token, because `THRESHOLD` is a substring
-    of `SLM_THRESHOLD` and a bare substring check would pass either way.
+    Matched as the whole `(env NAME)` token, because `MAX_DUP_LINES` is a
+    substring of `SLM_MAX_DUP_LINES` and a bare substring check would pass either way.
     """
     output = _run_explain(main_outcome=main_outcome, slm_outcome=slm_outcome)
     assert named in output, f"the failing scope did not name {named}"
@@ -142,7 +164,7 @@ def test_a_missing_log_reports_no_figure_rather_than_a_guessed_one() -> None:
     default or a zero is caught here rather than believed in a PR comment.
     """
     output = _run_explain(main_outcome="failure", slm_outcome="success")
-    assert "no captured log" in output or "could not parse" in output
+    assert "no captured log" in output or "could not read jscpd totals" in output
     assert "OVER BY" not in output, "reported an overage with no log to measure from"
 
 
@@ -157,37 +179,68 @@ _REAL_JSCPD_TOTAL_ROW = (
 )
 
 
-def test_the_parser_reads_a_real_jscpd_row_not_a_synthetic_one(tmp_path) -> None:
+def _gate_module():
+    """The parser the workflow runs, loaded from its file rather than re-implemented."""
+    spec = importlib.util.spec_from_file_location("duplication_gate", repo_root() / "scripts" / "duplication_gate.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_parser_reads_a_real_jscpd_row_not_a_synthetic_one() -> None:
     """#16163: the first parser passed its own fixtures and failed every real log.
 
     It matched on ASCII `|`. jscpd draws with U+2502 wrapped in ANSI colour, so
-    there is not one ASCII pipe in real output -- and the step fell to its
-    cannot-parse branch on every actual failure, which is the branch this work
-    exists to eliminate. A synthetic fixture using `|` would still pass today and
-    prove nothing, so the fixture is a captured production row.
+    there is not one ASCII pipe in real output. The fixture is therefore a
+    captured production row, and since #16319 it is read by the workflow's own
+    parser, not by a copy of it written here.
 
     Asserts the FIGURES, not that parsing succeeded: an off-by-one in the field
-    split read 1,227,700 tokens as the line count and reported 0.3852% -- a wrong
-    number formatted to four decimal places, which is worse than no number.
+    split once read 1,227,700 tokens as the line count.
     """
-    log = tmp_path / "jscpd.log"
+    totals = _gate_module().parse_totals(_REAL_JSCPD_TOTAL_ROW + "\n")
+
+    assert (totals.duplicated_lines, totals.lines, totals.clones) == (4729, 259798, 135)
+
+
+def test_explain_reports_the_overage_in_lines_against_the_pin(tmp_path) -> None:
+    """#16319 AC4: the failing scope's overage, in duplicated lines, against its pin."""
+    log = tmp_path / "slm-gate.log"
     log.write_text(_REAL_JSCPD_TOTAL_ROW + "\n", encoding="utf-8")
 
-    flat = _strip_decoration(log.read_text(encoding="utf-8"))
-    row = [line for line in flat.splitlines() if "Total:" in line][-1]
-    fields = row.split("|")
+    output = _run_explain("success", "failure", SLM_LOG=str(log), SLM_MAX_DUP_LINES="4728")
 
-    total = int("".join(c for c in fields[3] if c.isdigit()))
-    dup = int("".join(c for c in fields[6].split("(")[0] if c.isdigit()))
-
-    assert (dup, total) == (4729, 259798), f"parsed {dup}/{total}, expected 4729/259798"
-    assert round(dup / total * 100, 4) == 1.8203
-    assert round(total * 1.82 / 100, 1) == 4728.3
-    assert round(dup - total * 1.82 / 100, 1) == 0.7
+    assert "OVER BY:   1 lines" in output
+    assert "(env SLM_MAX_DUP_LINES)" in output
 
 
-def _strip_decoration(text: str) -> str:
-    """ANSI escapes out, box separators normalised -- what the workflow's sed does."""
-    import re as _re
+@pytest.mark.parametrize(
+    ("step_id", "trees", "log", "pin"),
+    [
+        ("main_scope", "autobot-backend autobot-frontend/src", "/tmp/main-dup.log", "MAX_DUP_LINES"),
+        (
+            "slm_scope",
+            "autobot_shared autobot-slm-backend autobot-slm-frontend/src",
+            "/tmp/slm-gate.log",
+            "SLM_MAX_DUP_LINES",
+        ),
+    ],
+)
+def test_each_gate_scans_its_declared_scope_and_applies_its_own_pin(step_id, trees, log, pin) -> None:
+    """The boundary a reader meets in the env comments must be the one scanned (RATCHET_BASELINES rule 2).
 
-    return _re.sub(r"\x1b\[[0-9;]*m", "", text).replace("\u2502", "|")
+    Also pins that the percentage gate is gone: jscpd's own ``--threshold`` must
+    not come back beside the count.
+    """
+    run = _step(step_id)["run"]
+
+    assert trees in run
+    assert f'scripts/duplication_gate.py {log} "${{{pin}}}"' in run
+    assert "--threshold" not in run
+
+
+def test_the_pins_are_duplicated_line_counts_not_percentages() -> None:
+    env = _job()["env"]
+
+    assert env["MAX_DUP_LINES"].isdigit() and env["SLM_MAX_DUP_LINES"].isdigit()
+    assert "THRESHOLD" not in env and "SLM_THRESHOLD" not in env
