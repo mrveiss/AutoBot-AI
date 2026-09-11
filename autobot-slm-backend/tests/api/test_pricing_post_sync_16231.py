@@ -26,7 +26,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # test_code_sync_symlink_restore.py's module docstring for why.
 # ---------------------------------------------------------------------------
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _code_sync_import import import_code_sync  # noqa: E402
+from _code_sync_import import import_code_sync, patch_real_deployed_root  # noqa: E402
 
 import_code_sync()
 
@@ -119,11 +119,18 @@ def test_frontend_sync_never_invokes_the_pricing_post_sync_step() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_a_failing_pricing_refresh_records_the_reason_and_the_sync_still_succeeds() -> None:
+def test_a_failing_pricing_refresh_records_the_reason_and_the_sync_still_succeeds(monkeypatch) -> None:
     """rc != 0 from the refresh CLI: recorded as failed, sync unaffected (#16231 AC4).
 
     The real ``run_pricing_refresh_post_sync`` runs here (not mocked); only the
-    subprocess it spawns is faked.
+    subprocess it spawns is faked. It reaches ``_load_env_file``'s containment
+    guard (#16229 review) on the way, so it needs the real
+    ``deployed_dir_resolver`` (#16236) -- under the conftest stub,
+    ``deployed_root()`` is a MagicMock and the guard raises before the
+    subprocess is ever spawned, recording a "failed to start" step instead of
+    the rc!=0 one this test asserts on. The default root ("/opt/autobot")
+    already matches this test's hardcoded deployed_dir, so no
+    SLM_DEPLOYED_ROOT override is needed.
     """
 
     async def _fake_exec(*cmd, **kw):
@@ -133,6 +140,7 @@ def test_a_failing_pricing_refresh_records_the_reason_and_the_sync_still_succeed
         return proc
 
     with contextlib.ExitStack() as stack:
+        patch_real_deployed_root(monkeypatch)
         _patch_backend_branch_helpers(stack)
         stack.enter_context(patch("asyncio.create_subprocess_exec", side_effect=_fake_exec))
         _, steps, pip_ok = _run(
@@ -145,8 +153,14 @@ def test_a_failing_pricing_refresh_records_the_reason_and_the_sync_still_succeed
     ), f"no step names the pricing refresh failure: {steps!r}"
 
 
-def test_a_timed_out_pricing_refresh_records_the_reason_and_the_sync_still_succeeds() -> None:
-    """A refresh that does not finish in time: recorded as timed out, sync unaffected (#16231 AC4)."""
+def test_a_timed_out_pricing_refresh_records_the_reason_and_the_sync_still_succeeds(monkeypatch) -> None:
+    """A refresh that does not finish in time: recorded as timed out, sync unaffected (#16231 AC4).
+
+    Needs the real ``deployed_dir_resolver`` (#16236) for the same reason as
+    the rc!=0 test above: the containment guard ``_load_env_file`` runs
+    through must raise for real reasons, not because the stub's
+    ``deployed_root()`` is a MagicMock.
+    """
 
     async def _fake_exec(*cmd, **kw):
         proc = MagicMock()
@@ -154,6 +168,7 @@ def test_a_timed_out_pricing_refresh_records_the_reason_and_the_sync_still_succe
         return proc
 
     with contextlib.ExitStack() as stack:
+        patch_real_deployed_root(monkeypatch)
         _patch_backend_branch_helpers(stack)
         stack.enter_context(patch("asyncio.create_subprocess_exec", side_effect=_fake_exec))
         stack.enter_context(patch("asyncio.wait_for", side_effect=asyncio.TimeoutError))
@@ -176,6 +191,10 @@ def test_a_timed_out_pricing_refresh_records_the_reason_and_the_sync_still_succe
 
 
 def test_load_env_file_accepts_a_path_under_the_deployed_root(tmp_path, monkeypatch) -> None:
+    # Needs the real deployed_dir_resolver (#16236): the conftest stub's
+    # deployed_root() is a MagicMock, so SLM_DEPLOYED_ROOT alone has nothing to
+    # act on and the guard would reject every path, including this one.
+    patch_real_deployed_root(monkeypatch)
     monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
     deployed = tmp_path / "autobot-backend"
     deployed.mkdir()
@@ -187,6 +206,11 @@ def test_load_env_file_accepts_a_path_under_the_deployed_root(tmp_path, monkeypa
 
 
 def test_load_env_file_refuses_a_dot_dot_escape(tmp_path, monkeypatch) -> None:
+    # Needs the real deployed_dir_resolver (#16236): under the conftest stub,
+    # deployed_root() is a MagicMock and the guard raises for every path
+    # regardless of the .. escape, which would pass this test for the wrong
+    # reason (it never exercises the escape-detection logic at all).
+    patch_real_deployed_root(monkeypatch)
     monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
     escaping = tmp_path / "autobot-backend" / ".." / ".." / "etc" / "passwd"
 
@@ -199,6 +223,10 @@ def test_load_env_file_refuses_a_dot_dot_escape(tmp_path, monkeypatch) -> None:
 
 
 def test_load_env_file_refuses_an_absolute_path_outside_the_root(tmp_path, monkeypatch) -> None:
+    # Needs the real deployed_dir_resolver (#16236) -- see the .. escape test
+    # above for why: without it, the guard raises regardless of this test's
+    # specific "outside the root" scenario.
+    patch_real_deployed_root(monkeypatch)
     monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path / "deployed"))
     outside = tmp_path / "elsewhere" / ".env"
     outside.parent.mkdir()
@@ -214,7 +242,13 @@ def test_load_env_file_refuses_an_absolute_path_outside_the_root(tmp_path, monke
 
 def test_load_env_file_missing_file_under_the_root_returns_empty(tmp_path, monkeypatch) -> None:
     """A path that validates but doesn't exist is a normal 'no .env yet' case,
-    not an error — distinct from a path that fails validation entirely."""
+    not an error — distinct from a path that fails validation entirely.
+
+    Needs the real deployed_dir_resolver (#16236): the conftest stub's
+    deployed_root() is a MagicMock, so SLM_DEPLOYED_ROOT alone has nothing to
+    act on and the guard would reject this path too.
+    """
+    patch_real_deployed_root(monkeypatch)
     monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
 
     result = cs._load_env_file(tmp_path / "autobot-backend" / ".env")
@@ -226,7 +260,13 @@ def test_load_env_file_refuses_a_sibling_directory_sharing_the_root_as_a_string_
     """The containment check must be anchored on ``root + os.sep`` -- a naive
     ``startswith(root)`` would wrongly accept a sibling whose name merely
     starts with the same characters (e.g. ``/opt/autobot`` vs
-    ``/opt/autobot-evil``)."""
+    ``/opt/autobot-evil``).
+
+    Needs the real deployed_dir_resolver (#16236) -- see the .. escape test
+    above for why: without it the guard raises regardless of the sibling-prefix
+    scenario this test names.
+    """
+    patch_real_deployed_root(monkeypatch)
     monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
     sibling = Path(str(tmp_path) + "-evil") / ".env"
 
@@ -242,7 +282,14 @@ def test_load_env_file_refuses_the_deployed_root_itself(tmp_path, monkeypatch) -
     """An env file can never *be* the deployed root directory, so the guard
     must not special-case that equality (CodeQL #1134/#1135, #16236) -- the
     single ``startswith(root + os.sep)`` check refuses it like any other
-    path that isn't strictly under the root."""
+    path that isn't strictly under the root.
+
+    Needs the real deployed_dir_resolver (#16236): under the conftest stub,
+    deployed_root() is a MagicMock and every path -- including one nowhere
+    near the equality edge case -- raises, so this test would give zero
+    regression coverage for #1134/#1135 without it.
+    """
+    patch_real_deployed_root(monkeypatch)
     monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
 
     try:
