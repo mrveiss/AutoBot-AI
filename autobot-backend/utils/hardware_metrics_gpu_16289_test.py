@@ -18,7 +18,7 @@ def _available(rows) -> bool:
 
 
 def test_a_gpu_other_than_an_rtx_4070_is_available():
-    assert _available([{"name": "NVIDIA RTX A2000"}]) is True
+    assert _available([{"name": "NVIDIA Test GPU B"}]) is True
 
 
 def test_no_nvidia_smi_is_unavailable():
@@ -33,7 +33,7 @@ FIRST = dict(
     zip(
         METRICS_QUERY_FIELDS,
         [
-            "NVIDIA GeForce RTX 4070 Laptop GPU",
+            "NVIDIA Test GPU A",
             "2047",
             "8188",
             "12",
@@ -59,7 +59,7 @@ SECOND = dict(
     zip(
         METRICS_QUERY_FIELDS,
         [
-            "NVIDIA RTX A2000",
+            "NVIDIA Test GPU B",
             "10",
             "6138",
             "99",
@@ -81,7 +81,7 @@ SECOND = dict(
     )
 )
 FIRST_METRICS = {
-    "name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "name": "NVIDIA Test GPU A",
     "utilization_percent": 12.0,
     "memory_used_mb": 2047,
     "memory_total_mb": 8188,
