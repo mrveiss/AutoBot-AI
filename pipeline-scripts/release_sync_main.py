@@ -91,10 +91,13 @@ from ci_dispatch_watchdog import (  # noqa: E402
     WatchdogError,
 )
 
+# The one definition of "the release-sync PR", shared with the watchdog (#16272).
+from release_sync_pull import RELEASE_SYNC_BASE, RELEASE_SYNC_HEAD, is_sync_pull  # noqa: E402
+
 SYNC_TITLE = "release: sync main from Dev_new_gui"
-DEFAULT_HEAD = "release-sync-main"
+DEFAULT_HEAD = RELEASE_SYNC_HEAD
 DEFAULT_SOURCE = "Dev_new_gui"
-DEFAULT_BASE = "main"
+DEFAULT_BASE = RELEASE_SYNC_BASE
 OPENED_BY = ".github/workflows/sync-main-to-dev.yml"
 # Leads every body this tool writes, and only a body carrying it is ever rewritten.
 # A sync PR opened by hand keeps the body its author wrote, even one naming OPENED_BY.
@@ -148,18 +151,6 @@ class ScheduledChange(NamedTuple):
 
 class PullCreationRefused(WatchdogApiError):
     """The repository does not let GitHub Actions open pull requests."""
-
-
-def is_sync_pull(pull: Dict[str, Any], repository: str, heads: AbstractSet[str], base: str) -> bool:
-    """True for an open pull request from one of this repository's *heads* into *base*.
-
-    A fork's branch can carry the same name, so the head repository is checked as
-    well as the ref — a fork's pull request is never treated as the sync.
-    """
-    head_info = pull.get("head") or {}
-    head_repo = (head_info.get("repo") or {}).get("full_name")
-    base_ref = (pull.get("base") or {}).get("ref")
-    return head_info.get("ref") in heads and head_repo == repository and base_ref == base
 
 
 def decide(open_sync_pulls: Sequence[Dict[str, Any]], ahead_by: int) -> SyncDecision:

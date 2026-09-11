@@ -79,27 +79,33 @@ Workflows is needed because the release-sync push carries changes under
 
 Under the fallback, `sync-main-to-dev.yml` pushes `release-sync-main` and opens
 its PR as `github-actions[bot]`, so every run those events trigger parks (see
-Cause). The watchdog below does not release them. It runs `main`'s copy of
-`ci-dispatch-watchdog.yml`, which sets `WATCHDOG_BASE_BRANCH: Dev_new_gui`, and
-it approves runs only for open PRs into that base. The sync PR's two required
-contexts, `No commit trailers` and `No open blocks-merge issues reference this
-PR`, therefore never report, and the PR cannot merge.
+Cause). The watchdog below releases them only once #16272 is live on `main`. It
+runs `main`'s copy of `ci-dispatch-watchdog.yml`, and a copy without #16272
+approves runs only for open PRs into `WATCHDOG_BASE_BRANCH` (`Dev_new_gui`).
+Until then the sync PR's two required contexts, `No commit trailers` and `No
+open blocks-merge issues reference this PR`, never report, and the PR cannot
+merge.
 
-**Owner step, at the bootstrap sync and every week after:** once the workflow has
+**Owner step, for the bootstrap sync, and for every sync until #16272 is live on
+`main`:** once the workflow has
 opened or updated the sync PR, approve its parked runs
 (`POST /repos/{owner}/{repo}/actions/runs/{id}/approve` per run, the endpoint the
 watchdog uses), or close and reopen the PR as a person. `reopened` is a trigger
 of both `no-commit-trailers.yml` and `pr-blocking-findings.yml`, the workflows
 behind those two contexts.
 
-#16272 is the follow-up that removes this manual step.
+The watchdog's schedule runs `main`'s copy, so #16272 takes effect only after the
+first sync lands: the bootstrap sync always needs this step. From then on the
+watchdog sweeps the release-sync PR along with its other heads, on the irregular
+schedule described below.
 
 ## The safety net
 
 `ci-dispatch-watchdog.yml` sweeps parked runs and approves only those whose head
 repository is this repository **and** whose triggering actor is the bot — fork
-PRs are never approved, only reported. It sweeps open PRs into `Dev_new_gui`
-only.
+PRs are never approved, only reported. It sweeps open PRs into `Dev_new_gui`,
+plus the one open release-sync PR into `main` (head `release-sync-main`, from
+this repository), and no other PR into `main` (#16272).
 
 Its cron is `*/15`, but do not count on a release within minutes: measured on
 11 Sep 2026, its scheduled runs fired every 1.5 to 4 hours (#16272).
