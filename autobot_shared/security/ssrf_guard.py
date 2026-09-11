@@ -271,9 +271,8 @@ async def pinned_request_with_redirects(
             # IP (defeats DNS-rebind); redirects are disabled so every hop is
             # re-validated here rather than followed by aiohttp.
             # py/full-ssrf here is a false positive; inline codeql[...] comments do
-            # NOT dismiss alerts (#12307). It is handled by dismissing the
-            # code-scanning alert, citing the reason documented in
-            # .github/codeql/codeql-config.yml.
+            # NOT dismiss alerts (#12307); the alert is dismissed citing the
+            # reason documented in .github/codeql/codeql-config.yml.
             resp = await session.request(
                 current_method, current_url, headers=current_headers, allow_redirects=False, ssl=ssl
             )
