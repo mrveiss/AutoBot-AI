@@ -72,6 +72,7 @@ vi.mock('@/composables/useCodeSync', async (importOriginal) => {
       // whole module, that second call resolves to this SAME mock object, so
       // it needs these two fields or the panel's `.value` access throws.
       fullTreeDriftReport: ref(null),
+      fullTreeDriftError: ref(null),
       fetchFullTreeDrift: vi.fn(),
       getResolveDriftStatus: vi.fn(),
       startResolveDriftAsync: vi.fn(),

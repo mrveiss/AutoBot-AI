@@ -12,12 +12,27 @@ not text -- a deletion task present anywhere in the file would pass a
 substring check while still running before the sync it is supposed to
 follow, inside no failure boundary, or with no containment check at all.
 
-Covers roles/backend, roles/frontend (co-located AND remote: the same task
-file runs against whichever host these roles target, so there is no separate
-"remote-node role" to wire), roles/slm_manager (SLM backend), and
-playbooks/update-all-nodes.yml (the SLM's actual self-update path for
-slm-backend/slm-frontend/autobot_shared -- unarchive-based, not
+Covers roles/backend, roles/frontend, roles/slm_manager (SLM backend),
+roles/slm_agent (its own main.yml, imported in full by update-all-nodes.yml
+on both plays -- #16310 review round 6), and playbooks/update-all-nodes.yml
+directly for every component PLAY 1/PLAY 2 actually sync (self-update:
+slm-backend/slm-frontend/autobot_shared; fleet update: backend, backend's
+autobot_shared, frontend, npu-worker, browser-worker, ai-stack, the
+non-backend-node autobot_shared -- unarchive-based, not
 `ansible.posix.synchronize`, per #16310 review).
+
+#16310 review round 6, BLOCKING (reachability): update-all-nodes.yml is the
+ONLY updater a GUI user can reach, and it applies roles/backend and
+roles/frontend via targeted `include_role ... tasks_from` includes only
+(the #12959 delivery contract) or raw `unarchive:` tasks written directly in
+this playbook -- it never runs either role's main.yml. A deletion task or
+AC4's npu_workers cleanup that existed ONLY in main.yml was ordered
+correctly on paper and reachable from nothing a GUI Update All click
+actually runs. So `roles/*/tasks/main.yml` entries below are asserted
+ONLY as the provisioning-path wiring (site.yml, provision-fleet-roles.yml
+Phase 4a/4b run each role's main.yml in full) -- every component
+update-all-nodes.yml itself updates is asserted directly against that
+playbook's own tasks, never against main.yml as a proxy for it.
 
 Lives in repo_tests/ because CI's shard command passes an explicit path list
 and autobot-slm-backend/ansible is not on it (mirrors
@@ -35,16 +50,36 @@ from repo_tests._paths import repo_root
 _REPO_ROOT = repo_root()
 _ANSIBLE_ROOT = _REPO_ROOT / "autobot-slm-backend" / "ansible"
 _SHARED_TASK_FILE = _ANSIBLE_ROOT / "roles" / "_shared" / "tasks" / "sync_deletions.yml"
+_UPDATE_ALL_PLAYBOOK = "playbooks/update-all-nodes.yml"
 _SYNC_DELETIONS_INCLUDE = "sync_deletions.yml"
 _MARKER = ".autobot_sync_deletions_commit"
 
 # (file relative to _ANSIBLE_ROOT, name-substring of the sync task the
-# deletion task must follow).
+# deletion task must follow). Provisioning-only entries (main.yml, never run
+# by update-all-nodes.yml) are labeled; every update-all-nodes.yml entry
+# below is a component that playbook itself syncs.
 _SYNC_THEN_DELETE_SITES: tuple[tuple[str, str], ...] = (
+    # Provisioning path only (site.yml / provision-fleet-roles.yml Phase 4a/4b
+    # run the role's main.yml in full) -- see test_provisioning_playbooks_run_the_role
+    # below for the reachability half of this claim.
     ("roles/backend/tasks/main.yml", "Sync autobot-backend code from code_source"),
     ("roles/frontend/tasks/main.yml", "Sync frontend code from code_source"),
     ("roles/slm_manager/tasks/main.yml", "Sync SLM backend code from code_source"),
-    ("playbooks/update-all-nodes.yml", "SLM | Deploy autobot-slm-frontend"),
+    # roles/slm_agent/tasks/main.yml is import_role'd in FULL by BOTH
+    # update-all-nodes.yml plays (see test_slm_agent_role_is_imported_in_full
+    # below) -- unlike backend/frontend, this one IS reachable from the
+    # update path through its own main.yml.
+    ("roles/slm_agent/tasks/main.yml", "SLM Agent | Copy agent source - heartbeat_payload.py"),
+    # update-all-nodes.yml PLAY 1 (SLM self-update).
+    (_UPDATE_ALL_PLAYBOOK, "SLM | Deploy autobot-slm-frontend"),
+    # update-all-nodes.yml PLAY 2 (fleet update) -- every component it syncs.
+    (_UPDATE_ALL_PLAYBOOK, "[PLAY 2] Backend | Deploy autobot-backend"),
+    (_UPDATE_ALL_PLAYBOOK, "[PLAY 2] Backend | Deploy autobot_shared"),
+    (_UPDATE_ALL_PLAYBOOK, "[PLAY 2] Frontend | Deploy autobot-frontend"),
+    (_UPDATE_ALL_PLAYBOOK, "[PLAY 2] NPU | Deploy autobot-npu-worker"),
+    (_UPDATE_ALL_PLAYBOOK, "[PLAY 2] Browser | Deploy autobot-browser-worker"),
+    (_UPDATE_ALL_PLAYBOOK, "[PLAY 2] AI Stack | Deploy ai_api_server and requirements"),
+    (_UPDATE_ALL_PLAYBOOK, "[PLAY 2] Shared | Deploy autobot_shared"),
 )
 
 
@@ -336,12 +371,19 @@ def test_every_delete_style_sync_excludes_the_deletion_marker() -> None:
 #
 # Dropped entirely by the cf2a08f1e ansible-native redesign (deletion moved
 # from Python-applies to Ansible-applies, and this AC's cleanup had no new
-# home). Re-delivered as a backend-role task, checksum-gated so a host where
-# the nested and canonical copies have since diverged is left alone and
-# reported rather than silently losing data.
+# home). Re-delivered as roles/backend/tasks/npu_workers_cleanup.yml,
+# checksum-gated so a host where the nested and canonical copies have since
+# diverged is left alone and reported rather than silently losing data.
+#
+# #16310 review round 6: split out of main.yml into its own task file so it
+# can ALSO be applied via `include_role: {name: backend, tasks_from:
+# npu_workers_cleanup}` from update-all-nodes.yml PLAY 2 -- the update path
+# never runs main.yml (see test_provisioning_playbooks_run_the_role_in_full
+# and test_npu_workers_cleanup_is_delivered_on_the_update_path below).
 # --------------------------------------------------------------------------
 
 _BACKEND_MAIN = "roles/backend/tasks/main.yml"
+_NPU_CLEANUP_FILE = "roles/backend/tasks/npu_workers_cleanup.yml"
 _NPU_NESTED_PATH = "{{ backend_code_dir }}/autobot-backend/config/npu_workers.yaml"
 _NPU_CANONICAL_PATH = "{{ backend_code_dir }}/config/npu_workers.yaml"
 
@@ -350,10 +392,14 @@ def _backend_tasks() -> list[dict]:
     return _flatten(_load_tasks(_BACKEND_MAIN))
 
 
+def _npu_cleanup_tasks() -> list[dict]:
+    return _flatten(_load_tasks(_NPU_CLEANUP_FILE))
+
+
 def _npu_task(name_substring: str) -> dict:
-    tasks = _backend_tasks()
+    tasks = _npu_cleanup_tasks()
     idx = _index_of(tasks, lambda t: name_substring in str(t.get("name", "")))
-    assert idx != -1, f"{_BACKEND_MAIN}: no task with {name_substring!r} in its name"
+    assert idx != -1, f"{_NPU_CLEANUP_FILE}: no task with {name_substring!r} in its name"
     return tasks[idx]
 
 
@@ -362,19 +408,49 @@ def _when_text(task: dict) -> str:
     return " ".join(when) if isinstance(when, list) else str(when)
 
 
-def test_npu_workers_cleanup_runs_right_after_the_deletion_task() -> None:
-    """Re-delivered on the same update path sync_deletions already runs on
-    -- not a separate cleanup playbook an operator has to remember to run."""
+def test_npu_workers_cleanup_is_included_right_after_the_deletion_task_in_main_yml() -> None:
+    """Provisioning path: main.yml includes npu_workers_cleanup.yml right
+    after the #16310 deletion task -- not a separate step an operator has to
+    remember to run."""
     tasks = _backend_tasks()
     delete_index = _index_of(tasks, _includes_sync_deletions)
     assert delete_index != -1, f"{_BACKEND_MAIN}: sync_deletions include not found"
 
-    remove_index = _index_of(
-        tasks[delete_index:],
-        lambda t: "Remove nested npu_workers.yaml duplicate" in str(t.get("name", "")),
-    )
-    assert remove_index != -1, f"{_BACKEND_MAIN}: no npu_workers.yaml cleanup task after sync_deletions"
+    def _includes_npu_cleanup(task: dict) -> bool:
+        target = task.get("ansible.builtin.include_tasks") or task.get("include_tasks")
+        return target == "npu_workers_cleanup.yml"
+
+    remove_index = _index_of(tasks[delete_index:], _includes_npu_cleanup)
+    assert remove_index != -1, f"{_BACKEND_MAIN}: no npu_workers_cleanup.yml include after sync_deletions"
     assert remove_index > 0
+
+
+def test_npu_workers_cleanup_is_delivered_on_the_update_path() -> None:
+    """#16310 review round 6, item 2: AC4 must be reachable from PLAY 2 via
+    the #12959 `include_role ... tasks_from` contract, not only from
+    main.yml (provisioning)."""
+    plays = yaml.safe_load((_ANSIBLE_ROOT / _UPDATE_ALL_PLAYBOOK).read_text(encoding="utf-8"))
+    tasks = _flatten(plays)
+
+    def _is_npu_cleanup_include_role(task: dict) -> bool:
+        include = task.get("ansible.builtin.include_role") or task.get("include_role")
+        return (
+            isinstance(include, dict)
+            and include.get("name") == "backend"
+            and include.get("tasks_from") == "npu_workers_cleanup"
+        )
+
+    backend_sync_index = _index_of(
+        tasks, lambda t: "[PLAY 2] Backend | Deploy autobot-backend" in str(t.get("name", ""))
+    )
+    assert backend_sync_index != -1, f"{_UPDATE_ALL_PLAYBOOK}: PLAY 2 backend sync task not found"
+
+    cleanup_index = _index_of(tasks[backend_sync_index:], _is_npu_cleanup_include_role)
+    assert cleanup_index != -1, (
+        f"{_UPDATE_ALL_PLAYBOOK}: no `include_role: {{name: backend, tasks_from: npu_workers_cleanup}}` "
+        "after the PLAY 2 backend sync -- AC4 is inert on every host updated through the builtin updater"
+    )
+    assert cleanup_index > 0
 
 
 def test_npu_workers_cleanup_stats_both_files_with_a_checksum_first() -> None:
@@ -416,3 +492,89 @@ def test_npu_workers_cleanup_reports_instead_of_deleting_on_a_mismatch() -> None
     when_text = _when_text(refuse)
     assert "_npu_legacy_nested_stat.stat.exists" in when_text
     assert "checksum" in when_text.lower()
+
+
+# --------------------------------------------------------------------------
+# #16310 review round 6, BLOCKING (reachability): main.yml wiring for
+# backend/frontend is provisioning-only. Prove the provisioning half of that
+# claim rather than asserting it in a comment -- a playbook that stops
+# running a role in full would silently strand this wiring exactly like the
+# update path already did.
+# --------------------------------------------------------------------------
+
+
+def _play_applies_role_in_full(playbook_path, role_name: str) -> bool:
+    plays = yaml.safe_load(playbook_path.read_text(encoding="utf-8"))
+    for play in plays if isinstance(plays, list) else []:
+        if not isinstance(play, dict):
+            continue
+        for entry in play.get("roles") or []:
+            name = entry.get("role") or entry.get("name") if isinstance(entry, dict) else entry
+            if name == role_name:
+                return True
+        for task in _flatten(play.get("tasks") or []):
+            include = task.get("ansible.builtin.include_role") or task.get("include_role")
+            if isinstance(include, dict) and include.get("name") == role_name and "tasks_from" not in include:
+                return True
+    return False
+
+
+@pytest.mark.parametrize(
+    "playbook,role_name",
+    [
+        ("provision-fleet-roles.yml", "backend"),
+        ("provision-fleet-roles.yml", "frontend"),
+        ("site.yml", "backend"),
+        # site.yml's frontend play references a role named "frontend_app",
+        # which does not exist under roles/ -- a pre-existing, unrelated
+        # defect (not introduced by #16310) filed separately rather than
+        # fixed here. provision-fleet-roles.yml's Phase 4b (checked above)
+        # is frontend's real, working provisioning path.
+    ],
+)
+def test_provisioning_playbooks_run_the_role_in_full(playbook, role_name) -> None:
+    path = _ANSIBLE_ROOT / "playbooks" / playbook
+    assert path.is_file(), f"{path} not found"
+    assert _play_applies_role_in_full(path, role_name), (
+        f"{playbook}: no play applies roles/{role_name} in full (no `tasks_from`) -- "
+        f"the main.yml #16310 wiring for {role_name} would be provisioning-unreachable too"
+    )
+
+
+def test_site_yml_frontend_role_reference_is_broken() -> None:
+    """Documents a pre-existing, unrelated defect found while verifying
+    reachability: site.yml's Frontend play lists role `frontend_app`, which
+    does not exist (the real role is `frontend`). Filed as #16342 rather than
+    fixed here (different scope). Asserted here so the gap is a stated
+    finding, not a silent one -- if this ever starts passing because someone
+    renamed the role or added roles/frontend_app, update or remove this test
+    (and close #16342) rather than leaving a stale record."""
+    site_yml = yaml.safe_load((_ANSIBLE_ROOT / "site.yml").read_text(encoding="utf-8"))
+    frontend_play = next((p for p in site_yml if isinstance(p, dict) and p.get("hosts") == "frontend"), None)
+    assert frontend_play is not None, "site.yml: no play with hosts: frontend"
+    role_names = [e.get("role") or e.get("name") if isinstance(e, dict) else e for e in frontend_play.get("roles", [])]
+    assert (
+        "frontend_app" in role_names
+    ), "site.yml frontend play changed -- re-verify roles/frontend_app before removing this test"
+    assert not (
+        _ANSIBLE_ROOT / "roles" / "frontend_app"
+    ).is_dir(), "roles/frontend_app now exists -- site.yml is no longer broken here"
+
+
+def test_slm_agent_role_is_imported_in_full_by_update_all_nodes() -> None:
+    """#16310 review round 6: roles/slm_agent/tasks/main.yml's own
+    sync_deletions wiring is reachable from update-all-nodes.yml ONLY if
+    that playbook actually imports the role in full (no tasks_from)."""
+    plays = yaml.safe_load((_ANSIBLE_ROOT / _UPDATE_ALL_PLAYBOOK).read_text(encoding="utf-8"))
+    found = False
+    for task in _flatten(plays):
+        include = (
+            task.get("ansible.builtin.import_role")
+            or task.get("import_role")
+            or task.get("ansible.builtin.include_role")
+            or task.get("include_role")
+        )
+        if isinstance(include, dict) and include.get("name") == "slm_agent" and "tasks_from" not in include:
+            found = True
+            break
+    assert found, f"{_UPDATE_ALL_PLAYBOOK}: no full (no tasks_from) import of the slm_agent role found"

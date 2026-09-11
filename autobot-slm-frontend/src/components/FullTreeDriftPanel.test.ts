@@ -9,6 +9,13 @@
  * the report can carry -- `removed_from_source` (+ commit), `build_bundle`
  * (count), and `host_state:<category>` (count) -- and that the verdict
  * filter narrows what is shown without losing data.
+ *
+ * #16310 review round 6, item 4: also proves the panel's error state is
+ * ISOLATED from the rest of the page -- it reads `fullTreeDriftError`
+ * (dedicated), never the composable's shared `error` (written by every
+ * other useCodeSync method), so an unrelated page failure never shows up
+ * here and a genuine drift-fetch failure is never silently displaced by an
+ * unrelated success elsewhere clearing the shared ref.
  */
 
 import { describe, it, expect, vi } from 'vitest'
@@ -21,12 +28,17 @@ import type { FullTreeDriftReport } from '@/composables/useCodeSync'
 
 const fetchFullTreeDrift = vi.fn()
 const reportRef = ref<FullTreeDriftReport | null>(null)
-const errorRef = ref<string | null>(null)
+// The composable's PAGE-WIDE error -- other methods (fetchStatus, syncNode,
+// ...) write this. The panel must never read it.
+const pageErrorRef = ref<string | null>(null)
+// The panel's OWN, dedicated error -- only fetchFullTreeDrift's catch writes it.
+const fullTreeDriftErrorRef = ref<string | null>(null)
 
 vi.mock('@/composables/useCodeSync', () => ({
   useCodeSync: () => ({
-    error: errorRef,
+    error: pageErrorRef,
     fullTreeDriftReport: reportRef,
+    fullTreeDriftError: fullTreeDriftErrorRef,
     fetchFullTreeDrift,
   }),
 }))
@@ -116,5 +128,30 @@ describe('FullTreeDriftPanel (#16310)', () => {
 
     expect(wrapper.text()).toContain('utils/old_module.py')
     expect(wrapper.text()).not.toContain('config/settings.py')
+  })
+
+  it('shows its own error on a failed fetch, never the page-wide error', () => {
+    reportRef.value = null
+    pageErrorRef.value = 'an unrelated page error (e.g. syncNode failed)'
+    fullTreeDriftErrorRef.value = null
+    const wrapper = mountPanel()
+
+    // An unrelated page-wide failure must not surface on this panel.
+    expect(wrapper.text()).not.toContain('an unrelated page error')
+
+    pageErrorRef.value = null
+  })
+
+  it('shows its own error on a failed fetch, and no stale "no drift" report', () => {
+    reportRef.value = null
+    fullTreeDriftErrorRef.value = 'Failed to fetch full-tree drift report'
+    const wrapper = mountPanel()
+
+    expect(wrapper.text()).toContain('Failed to fetch full-tree drift report')
+    // report is still null (the fetch never succeeded) -- must not render
+    // any per-component "No drift" verdict as if a check had completed.
+    expect(wrapper.text()).not.toContain('No drift')
+
+    fullTreeDriftErrorRef.value = null
   })
 })

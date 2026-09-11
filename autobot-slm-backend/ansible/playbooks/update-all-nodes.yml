@@ -770,6 +770,37 @@
       changed_when: true
       tags: [backend]
 
+    # #16310 review round 6 (reachability): `unarchive` above only
+    # extracts/overwrites -- it never removes a path deleted from source, and
+    # this play (not roles/backend/tasks/main.yml) is what the builtin
+    # updater actually runs for remote backend nodes (#12959 delivery
+    # contract -- backend's role is applied only via targeted
+    # `tasks_from`, never in full, so main.yml's own #16310 wiring never
+    # reaches this host through Update All).
+    - name: "[PLAY 2] Backend | Delete files removed from source: backend (#16310)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/sync_deletions.yml
+      vars:
+        sync_deletions_label: "Backend (fleet update)"
+        sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-backend"
+        sync_deletions_target_dir: /opt/autobot/autobot-backend
+        sync_deletions_owner: autobot
+      when: "'backend' in group_names"
+      tags: [backend]
+
+    # AC4 (#16310): same reachability gap as above -- moved to its own task
+    # file (roles/backend/tasks/npu_workers_cleanup.yml) so it can be applied
+    # here via `tasks_from`, the #12959-contract way, without dragging the
+    # rest of the backend role's provisioning (apt, venv, service accounts)
+    # onto every fleet update.
+    - name: "[PLAY 2] Backend | Clean up legacy npu_workers.yaml duplicate (#16310)"
+      ansible.builtin.include_role:
+        name: backend
+        tasks_from: npu_workers_cleanup
+      vars:
+        backend_code_dir: /opt/autobot/autobot-backend
+      when: "'backend' in group_names"
+      tags: [backend]
+
     - name: "[PLAY 2] Backend | Fix shared ownership (#1632)"
       file:
         path: /opt/autobot/autobot_shared
@@ -777,6 +808,16 @@
         group: autobot
         recurse: true
       become: true
+      when: "'backend' in group_names"
+      tags: [backend, shared]
+
+    - name: "[PLAY 2] Backend | Delete files removed from source: autobot_shared (#16310)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/sync_deletions.yml
+      vars:
+        sync_deletions_label: "Backend autobot_shared (fleet update)"
+        sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot_shared"
+        sync_deletions_target_dir: /opt/autobot/autobot_shared
+        sync_deletions_owner: autobot
       when: "'backend' in group_names"
       tags: [backend, shared]
 
@@ -1183,6 +1224,20 @@
       when: "'frontend' in group_names"
       tags: [frontend]
 
+    # #16310 review round 6 (reachability): roles/frontend/tasks/main.yml's
+    # own #16310 wiring only runs when the frontend role is applied in full
+    # (provisioning), which Update All never does for this component --
+    # `unarchive` above is the actual deploy mechanism on this path.
+    - name: "[PLAY 2] Frontend | Delete files removed from source: frontend (#16310)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/sync_deletions.yml
+      vars:
+        sync_deletions_label: "Frontend (fleet update)"
+        sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-frontend"
+        sync_deletions_target_dir: /opt/autobot/autobot-frontend
+        sync_deletions_owner: autobot
+      when: "'frontend' in group_names"
+      tags: [frontend]
+
     - name: "[PLAY 2] Frontend | Install Node.js dependencies"
       command:
         cmd: npm ci --ignore-scripts
@@ -1240,6 +1295,20 @@
         group: autobot
         recurse: true
       become: true
+      when: >-
+        'npu' in group_names
+      tags: [npu, npu-worker]
+
+    # #16310 review round 6 (reachability): same gap as backend/frontend --
+    # `unarchive` above never deletes, and no npu-worker role's main.yml runs
+    # on this path.
+    - name: "[PLAY 2] NPU | Delete files removed from source: npu-worker (#16310)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/sync_deletions.yml
+      vars:
+        sync_deletions_label: "NPU worker (fleet update)"
+        sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-npu-worker"
+        sync_deletions_target_dir: /opt/autobot/autobot-npu-worker
+        sync_deletions_owner: autobot
       when: >-
         'npu' in group_names
       tags: [npu, npu-worker]
@@ -1374,6 +1443,18 @@
         group: autobot
         recurse: true
       become: true
+      when: >-
+        'browser' in group_names
+      tags: [browser, browser-worker]
+
+    # #16310 review round 6 (reachability): same gap as backend/frontend/npu.
+    - name: "[PLAY 2] Browser | Delete files removed from source: browser-worker (#16310)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/sync_deletions.yml
+      vars:
+        sync_deletions_label: "Browser worker (fleet update)"
+        sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-browser-worker"
+        sync_deletions_target_dir: /opt/autobot/autobot-browser-worker
+        sync_deletions_owner: autobot
       when: >-
         'browser' in group_names
       tags: [browser, browser-worker]
@@ -1518,6 +1599,25 @@
         'aiml' in group_names
       tags: [ai-stack, aiml]
 
+    # #16310 review round 6 (reachability): same gap as the other workers.
+    # Nonstandard source path (#12450, _NONSTANDARD_COMPONENT_PATHS): this
+    # component has no top-level code_source/autobot-ai-stack/ -- it lives
+    # under autobot-infrastructure/ and the archive strips 4 path components
+    # so its contents land directly under the deployed root, matching
+    # services/drift_checker.py's override for "autobot-ai-stack".
+    - name: "[PLAY 2] AI Stack | Delete files removed from source: ai-stack (#16310)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/sync_deletions.yml
+      vars:
+        sync_deletions_label: "AI Stack (fleet update)"
+        sync_deletions_source_dir: >-
+          {{ (code_source_dir | default(autobot.base_dir ~ '/code_source')) ~
+          '/autobot-infrastructure/shared/docker/ai-stack' }}
+        sync_deletions_target_dir: /opt/autobot/autobot-ai-stack
+        sync_deletions_owner: autobot
+      when: >-
+        'aiml' in group_names
+      tags: [ai-stack, aiml]
+
     - name: "[PLAY 2] AI Stack | Restart autobot-ai-stack service"
       systemd:
         name: autobot-ai-stack
@@ -1554,6 +1654,20 @@
         group: autobot
         recurse: true
       become: true
+      when: "'backend' not in group_names"
+      tags: [shared]
+
+    # #16310 review round 6 (reachability): the backend-colocated copy of
+    # this same component is handled separately, right after "Backend |
+    # Delete files removed from source: backend" above -- the two `when`
+    # conditions are mutually exclusive, one marker file per host either way.
+    - name: "[PLAY 2] Shared | Delete files removed from source: autobot_shared (#16310)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/sync_deletions.yml
+      vars:
+        sync_deletions_label: "Shared autobot_shared (fleet update)"
+        sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot_shared"
+        sync_deletions_target_dir: /opt/autobot/autobot_shared
+        sync_deletions_owner: autobot
       when: "'backend' not in group_names"
       tags: [shared]
 

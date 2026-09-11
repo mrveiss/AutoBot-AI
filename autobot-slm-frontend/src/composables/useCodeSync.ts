@@ -368,6 +368,14 @@ export function useCodeSync() {
   const lastRefresh = ref<Date | null>(null)
   const driftReport = ref<FileDriftReport | null>(null) // Issue #2834
   const fullTreeDriftReport = ref<FullTreeDriftReport | null>(null) // #16310
+  // #16310 review round 6, item 4 (medium): a DEDICATED error ref, not the
+  // shared `error` above. That shared ref is written by every other method
+  // in this composable -- an unrelated fetchStatus()/refreshVersion()
+  // success elsewhere on the page would silently clear a genuine full-tree
+  // drift failure (the stale report would then read as "no drift" with no
+  // visible error), and the reverse (an unrelated page error showing up on
+  // this panel) was the original bug. FullTreeDriftPanel.vue reads this one.
+  const fullTreeDriftError = ref<string | null>(null) // #16310
 
   // =============================================================================
   // Computed Properties
@@ -801,14 +809,14 @@ export function useCodeSync() {
    */
   async function fetchFullTreeDrift(): Promise<FullTreeDriftReport | null> {
     loading.value = true
-    error.value = null
+    fullTreeDriftError.value = null
 
     try {
       const data = await slmApiClient.get<FullTreeDriftReport>('/code-sync/drift/full')
       fullTreeDriftReport.value = data
       return data
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Failed to fetch full-tree drift report'
+      fullTreeDriftError.value = e instanceof Error ? e.message : 'Failed to fetch full-tree drift report'
       return null
     } finally {
       loading.value = false
@@ -923,6 +931,7 @@ export function useCodeSync() {
     lastRefresh: readonly(lastRefresh),
     driftReport: readonly(driftReport), // Issue #2834
     fullTreeDriftReport: readonly(fullTreeDriftReport), // #16310
+    fullTreeDriftError: readonly(fullTreeDriftError), // #16310
 
     // Computed
     hasOutdatedNodes,

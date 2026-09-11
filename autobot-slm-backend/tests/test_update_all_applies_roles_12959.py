@@ -70,7 +70,7 @@ MANAGED_COMPONENT_ROLES = {
 #: Components with a delivery path today. Each entry is a regression guard: the
 #: named task file was added *because* a merged fix failed to reach a host.
 DELIVERED = {
-    "backend": {"env_only", "unit_only"},  # #12871, #12777
+    "backend": {"env_only", "unit_only", "npu_workers_cleanup"},  # #12871, #12777, #16310
     "tts-worker": {"code_only"},  # #12886
     "postgresql": {"credentials_reconcile"},  # #12907
     "ai-stack": {"code_only"},  # #13460
