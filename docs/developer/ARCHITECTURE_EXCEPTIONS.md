@@ -321,10 +321,10 @@ a task while touching scopes it never claimed. Collapsing them would make the
 answer to one question read as the answer to the other.
 
 The structural reason makes an adapter worse, not merely unnecessary.
-`task_claim` emits audit: `claim_task` on every outcome, including
-`redis_unavailable` and `redis_error`; `renew_claim` and `release_claim` on the
-outcomes where Redis answered (their fail-open branches emit nothing today —
-#16217). `work_claims` emits none and cannot: `autobot_shared` must not import
+`task_claim` emits audit on every outcome of `claim_task`, `renew_claim` and
+`release_claim`, including the fail-open `redis_unavailable` and `redis_error`
+(the renew and release fail-open branches emitted nothing until #16217).
+`work_claims` emits none and cannot: `autobot_shared` must not import
 from `autobot-backend`. An adapter could not move emission down, so it would
 leave a backend-side wrapper still owning audit, signatures and tests — the same
 constraint that already put `services/claim_yield.py` (#15948) in the backend
@@ -341,6 +341,7 @@ made on said "every outcome" is audited, counted 8 emission sites, and put the
 shared Lua at "roughly 40 lines". Measured, there are 5 emission sites, the
 fail-open branches above are unaudited, and the comparable Lua is about ten
 lines a side. Both corrections strengthen the decision rather than weaken it.
+#16217 has since audited those four fail-open branches, so there are now 9.
 
 **How the split is enforced:** `task` is a **reserved** kind in `work_claims`,
 not merely an absent one. Absent produced "unknown scope kind" — the same
