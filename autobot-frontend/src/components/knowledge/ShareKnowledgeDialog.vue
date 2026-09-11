@@ -401,7 +401,7 @@ const closeDialog = async () => {
 
 .search-input:focus {
   outline: none;
-  border-color: var(--color-electric-500, #3b82f6);
+  border-color: var(--color-electric-500);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 .search-input:focus-visible {
@@ -541,7 +541,7 @@ const closeDialog = async () => {
 }
 
 .remove-button:hover {
-  background-color: #fee2e2;
+  background-color: var(--color-error-bg);
 }
 
 .btn {
@@ -566,13 +566,13 @@ const closeDialog = async () => {
 }
 
 .btn-primary {
-  background-color: #3b82f6;
+  background-color: var(--color-electric-500);
   color: white;
   border: none;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: #2563eb;
+  background-color: var(--color-electric-600);
 }
 
 .btn-primary:disabled {

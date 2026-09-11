@@ -623,7 +623,7 @@ onMounted(loadUsers)
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-secondary);
-  background: var(--color-surface-alt, #f9fafb);
+  background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-default);
 }
 
