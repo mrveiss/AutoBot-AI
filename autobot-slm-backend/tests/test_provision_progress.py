@@ -129,7 +129,7 @@ class TestTaskProgressTracker:
 
         tracker = TaskProgressTracker("npm install", callback, heartbeat_interval=1)
         async with tracker:
-            await asyncio.sleep(1.5)  # Wait slightly longer than interval
+            await eventually(lambda: received)  # wait on the beat, not a fixed window (#16255)
 
         assert received, "No heartbeat received"
         assert received[0]["stage"] == "heartbeat"
@@ -145,7 +145,7 @@ class TestTaskProgressTracker:
 
         tracker = TaskProgressTracker("pip install", callback, heartbeat_interval=1)
         async with tracker:
-            await asyncio.sleep(1.5)
+            await eventually(lambda: received)  # wait on the beat, not a fixed window (#16255)
 
         assert received
         msg = received[0]["message"]
@@ -161,7 +161,7 @@ class TestTaskProgressTracker:
 
         tracker = TaskProgressTracker("ollama pull llama3", callback, heartbeat_interval=1)
         async with tracker:
-            await asyncio.sleep(1.5)
+            await eventually(lambda: received)  # wait on the beat, not a fixed window (#16255)
 
         assert received
         msg = received[0]["message"]
@@ -177,7 +177,7 @@ class TestTaskProgressTracker:
 
         tracker = TaskProgressTracker("Restart nginx", callback, heartbeat_interval=1)
         async with tracker:
-            await asyncio.sleep(1.5)
+            await eventually(lambda: received)  # wait on the beat, not a fixed window (#16255)
 
         assert received
         msg = received[0]["message"]
@@ -198,6 +198,7 @@ class TestTaskProgressTracker:
         """elapsed_seconds increases while inside the context."""
         tracker = TaskProgressTracker("pip install", None, heartbeat_interval=60)
         async with tracker:
+            # fixed sleep on purpose (#16255): elapsed_seconds is a time.monotonic() delta -- time IS the subject
             await asyncio.sleep(0.1)
             elapsed = tracker.elapsed_seconds
         assert elapsed >= 0.05
@@ -212,12 +213,12 @@ class TestTaskProgressTracker:
 
         tracker = TaskProgressTracker("npm ci", callback, heartbeat_interval=1)
         async with tracker:
-            await asyncio.sleep(1.5)
+            await eventually(lambda: received)  # wait on the beat, not a fixed window (#16255)
+            heartbeat_task = tracker._heartbeat_task
 
-        count_on_exit = len(received)
-        await asyncio.sleep(1.5)  # Wait another interval after exit
-
-        assert len(received) == count_on_exit, "Heartbeats continued after context manager exited"
+        # The stopper's own state (#16255 review), not a snapshot: a still-running
+        # heartbeat task is exactly the regression this test is named for.
+        assert heartbeat_task.done(), "the heartbeat task was still running after exit"
 
     @pytest.mark.asyncio
     async def test_callback_exception_does_not_crash_tracker(self):

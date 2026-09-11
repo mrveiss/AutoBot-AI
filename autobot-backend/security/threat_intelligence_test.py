@@ -182,7 +182,7 @@ class TestThreatIntelligenceCache:
         result = await cache.get("https://example.com")
         assert result is not None
 
-        # Wait for expiration
+        # fixed sleep on purpose (#16255): TTL expiry via time.time() is the subject; no injectable clock
         await asyncio.sleep(1.1)
 
         # Should be expired
@@ -197,7 +197,7 @@ class TestThreatIntelligenceCache:
         await cache.set("https://example1.com", ThreatScore())
         await cache.set("https://example2.com", ThreatScore())
 
-        # Wait for expiration
+        # fixed sleep on purpose (#16255): TTL expiry via time.time() is the subject; no injectable clock
         await asyncio.sleep(1.1)
 
         # Add fresh entry
