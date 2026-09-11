@@ -564,6 +564,59 @@
       sync_deletions_owner: "{{ backend_user }}"
     tags: ['backend', 'deploy']
 
+  # #16310 AC4: the pre-fix cwd-relative NPUWorkerManager default (fixed by
+  # services/npu_worker_manager.py:106, covered by
+  # tests/test_npu_config_path_not_cwd_relative.py) wrote the live worker
+  # registry to a NESTED {{ backend_code_dir }}/autobot-backend/config/
+  # npu_workers.yaml on any host that once started the service from the
+  # wrong cwd. That nested copy is neither source (nothing under
+  # autobot-backend/ in the repo ships a nested autobot-backend/, so
+  # sync_deletions above never sees it) nor the live registry -- the
+  # service always reads/writes the canonical
+  # {{ backend_code_dir }}/config/npu_workers.yaml now. It is a leftover
+  # duplicate. Removed ONLY while still byte-identical to the canonical
+  # file, so a host where the two have since diverged is left alone and
+  # reported, never silently overwritten or deleted (#16310 review, AC4
+  # regression -- this replaces the Python-side cleanup dropped in the
+  # cf2a08f1e ansible-native redesign).
+  - name: "Backend | Stat nested legacy npu_workers.yaml duplicate (#16310)"
+    ansible.builtin.stat:
+      path: "{{ backend_code_dir }}/autobot-backend/config/npu_workers.yaml"
+      checksum_algorithm: sha256
+    register: _npu_legacy_nested_stat
+    tags: ['backend', 'deploy']
+
+  - name: "Backend | Stat canonical npu_workers.yaml (#16310)"
+    ansible.builtin.stat:
+      path: "{{ backend_code_dir }}/config/npu_workers.yaml"
+      checksum_algorithm: sha256
+    register: _npu_legacy_canonical_stat
+    when: _npu_legacy_nested_stat.stat.exists
+    tags: ['backend', 'deploy']
+
+  - name: "Backend | Remove nested npu_workers.yaml duplicate (byte-identical only) (#16310)"
+    ansible.builtin.file:
+      path: "{{ backend_code_dir }}/autobot-backend/config/npu_workers.yaml"
+      state: absent
+    when:
+      - _npu_legacy_nested_stat.stat.exists
+      - _npu_legacy_canonical_stat.stat.exists | default(false)
+      - _npu_legacy_nested_stat.stat.checksum == _npu_legacy_canonical_stat.stat.checksum
+    tags: ['backend', 'deploy']
+
+  - name: "Backend | REFUSING to remove nested npu_workers.yaml — checksum mismatch (#16310)"
+    ansible.builtin.debug:
+      msg: >-
+        {{ backend_code_dir }}/autobot-backend/config/npu_workers.yaml is a
+        legacy nested duplicate but does not match the canonical
+        {{ backend_code_dir }}/config/npu_workers.yaml (or the canonical file
+        is missing). Left in place, not removed (#16310).
+    when:
+      - _npu_legacy_nested_stat.stat.exists
+      - not (_npu_legacy_canonical_stat.stat.exists | default(false)) or
+        (_npu_legacy_nested_stat.stat.checksum != _npu_legacy_canonical_stat.stat.checksum)
+    tags: ['backend', 'deploy']
+
   - name: "Backend | Fix ownership of backend code dir after sync"
     ansible.builtin.file:
       path: "{{ backend_code_dir }}"

@@ -67,6 +67,12 @@ vi.mock('@/composables/useCodeSync', async (importOriginal) => {
       fetchSchedules: vi.fn().mockResolvedValue(undefined),
       fetchRoles: vi.fn().mockResolvedValue(undefined),
       fetchDrift: vi.fn(),
+      // #16310: CodeSyncView now mounts FullTreeDriftPanel unconditionally,
+      // which calls useCodeSync() itself -- since this vi.mock replaces the
+      // whole module, that second call resolves to this SAME mock object, so
+      // it needs these two fields or the panel's `.value` access throws.
+      fullTreeDriftReport: ref(null),
+      fetchFullTreeDrift: vi.fn(),
       getResolveDriftStatus: vi.fn(),
       startResolveDriftAsync: vi.fn(),
       selfUpdate: vi.fn(),

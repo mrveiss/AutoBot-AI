@@ -329,3 +329,90 @@ def test_every_delete_style_sync_excludes_the_deletion_marker() -> None:
         f"{source}: {name}" for source, name, sync in syncs if f"--exclude=/{_MARKER}" not in sync.get("rsync_opts", [])
     ]
     assert gaps == [], f"delete-style sync(s) do not exclude the deletion marker: {gaps}"
+
+
+# --------------------------------------------------------------------------
+# AC4 regression: the nested npu_workers.yaml duplicate cleanup
+#
+# Dropped entirely by the cf2a08f1e ansible-native redesign (deletion moved
+# from Python-applies to Ansible-applies, and this AC's cleanup had no new
+# home). Re-delivered as a backend-role task, checksum-gated so a host where
+# the nested and canonical copies have since diverged is left alone and
+# reported rather than silently losing data.
+# --------------------------------------------------------------------------
+
+_BACKEND_MAIN = "roles/backend/tasks/main.yml"
+_NPU_NESTED_PATH = "{{ backend_code_dir }}/autobot-backend/config/npu_workers.yaml"
+_NPU_CANONICAL_PATH = "{{ backend_code_dir }}/config/npu_workers.yaml"
+
+
+def _backend_tasks() -> list[dict]:
+    return _flatten(_load_tasks(_BACKEND_MAIN))
+
+
+def _npu_task(name_substring: str) -> dict:
+    tasks = _backend_tasks()
+    idx = _index_of(tasks, lambda t: name_substring in str(t.get("name", "")))
+    assert idx != -1, f"{_BACKEND_MAIN}: no task with {name_substring!r} in its name"
+    return tasks[idx]
+
+
+def _when_text(task: dict) -> str:
+    when = task.get("when", "")
+    return " ".join(when) if isinstance(when, list) else str(when)
+
+
+def test_npu_workers_cleanup_runs_right_after_the_deletion_task() -> None:
+    """Re-delivered on the same update path sync_deletions already runs on
+    -- not a separate cleanup playbook an operator has to remember to run."""
+    tasks = _backend_tasks()
+    delete_index = _index_of(tasks, _includes_sync_deletions)
+    assert delete_index != -1, f"{_BACKEND_MAIN}: sync_deletions include not found"
+
+    remove_index = _index_of(
+        tasks[delete_index:],
+        lambda t: "Remove nested npu_workers.yaml duplicate" in str(t.get("name", "")),
+    )
+    assert remove_index != -1, f"{_BACKEND_MAIN}: no npu_workers.yaml cleanup task after sync_deletions"
+    assert remove_index > 0
+
+
+def test_npu_workers_cleanup_stats_both_files_with_a_checksum_first() -> None:
+    nested_stat = _npu_task("Stat nested legacy npu_workers.yaml duplicate")
+    canonical_stat = _npu_task("Stat canonical npu_workers.yaml")
+    checks = (
+        (nested_stat, "_npu_legacy_nested_stat", _NPU_NESTED_PATH),
+        (canonical_stat, "_npu_legacy_canonical_stat", _NPU_CANONICAL_PATH),
+    )
+    for task, register, path in checks:
+        stat_args = task.get("ansible.builtin.stat", {})
+        assert stat_args.get("checksum_algorithm") == "sha256", f"{task.get('name')}: must compute a checksum"
+        assert stat_args.get("path") == path
+        assert task.get("register") == register
+
+
+def test_npu_workers_cleanup_removal_is_gated_on_matching_checksums() -> None:
+    """Removed ONLY while byte-identical to the canonical file -- a
+    diverged nested copy (e.g. an operator recovered live state from it)
+    must survive, never be silently deleted or overwritten."""
+    remove = _npu_task("Remove nested npu_workers.yaml duplicate")
+    when_text = _when_text(remove)
+    assert "_npu_legacy_nested_stat.stat.exists" in when_text
+    assert "_npu_legacy_canonical_stat.stat.exists" in when_text
+    assert "_npu_legacy_nested_stat.stat.checksum == _npu_legacy_canonical_stat.stat.checksum" in when_text
+
+    file_args = remove.get("ansible.builtin.file", {})
+    assert file_args.get("state") == "absent"
+    assert file_args.get("path") == _NPU_NESTED_PATH
+
+
+def test_npu_workers_cleanup_reports_instead_of_deleting_on_a_mismatch() -> None:
+    """The mismatch branch must never call ansible.builtin.file: state=absent
+    -- reporting and refusing is the whole point of the checksum gate."""
+    refuse = _npu_task("REFUSING to remove nested npu_workers.yaml")
+    assert "ansible.builtin.file" not in refuse, "the mismatch branch must not delete anything"
+    assert "ansible.builtin.debug" in refuse
+
+    when_text = _when_text(refuse)
+    assert "_npu_legacy_nested_stat.stat.exists" in when_text
+    assert "checksum" in when_text.lower()
