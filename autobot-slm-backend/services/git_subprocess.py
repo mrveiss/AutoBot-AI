@@ -19,6 +19,13 @@ from pathlib import Path
 from autobot_shared.env_utils import env_float
 from autobot_shared.paths import scrubbed_git_env
 
+# Plain stdlib logging, deliberately -- NOT autobot_shared.logging_manager.
+# This module is imported (via services/sync_deletions.py) by api/code_sync.py,
+# whose test harness (tests/api/test_collect_outdated_node_ids.py) stubs
+# `config` as a MagicMock; logging_manager.get_logger() builds a
+# RotatingFileHandler that compares that MagicMock to an int and raises at
+# logger-CREATION time. Same precedent as
+# autobot_shared/user_management/password_epoch.py:50-58.
 logger = logging.getLogger(__name__)
 
 # Bounds every subprocess below. A cold `git diff`/`git log` over a

@@ -101,7 +101,8 @@ from services.playbook_executor import get_playbook_executor
 from services.slm_frontend_build import build_slm_frontend as _build_slm_frontend
 from services.slm_frontend_build import write_slm_deployed_commit_marker as _write_slm_deployed_commit_marker
 from services.ssh_utils import _ssh_key_usable
-from services.sync_deletions import cleanup_colocated_components
+from services.sync_deletions import apply_role_deletions
+from services.sync_deletions import remove_deleted_paths as _remove_deleted_paths
 from services.sync_orchestrator import get_sync_orchestrator
 
 logger = logging.getLogger(__name__)
@@ -2887,18 +2888,14 @@ async def _ensure_autobot_shared_synced(component: str, force: bool = False) -> 
     (returns success) for autobot_shared itself and for frontends — they either ARE
     the shared component or do not import it at start.
 
-    Returns (ok, message, blocked_deletions). On rsync failure the caller must
-    fail-safe (do NOT restart the backend onto a half-deployed shared tree), and
-    on a guard refusal it must surface ``blocked_deletions`` — the paths are the
-    whole point of refusing, so returning only prose would leave the caller's
-    structured field empty next to a message naming N paths.
+    Returns (ok, message, blocked_deletions): on a guard refusal the caller
+    must surface ``blocked_deletions`` rather than only prose, and on rsync
+    failure it must fail-safe (never restart onto a half-deployed shared tree).
 
-    #13851: this is a delete-style rsync like any other resolve, and it runs on
-    every backend resolve without the caller asking for it — so it gets the same
-    deletion guard. Unguarded it was the one RESOLVE path that could still
-    remove a deployed file the source tree does not have. (``_deploy_constraints_dir``
-    and ``_sync_slm_from_code_source`` also delete, but neither is reachable
-    from a drift resolve.)
+    #13851: delete-style like any other resolve, so it gets the same deletion
+    guard — unguarded it was the one RESOLVE path that could remove a deployed
+    file the source tree does not have. (``_deploy_constraints_dir`` and
+    ``_sync_slm_from_code_source`` also delete, neither reachable from a resolve.)
     """
     if component not in _BACKEND_COMPONENTS:
         return True, "", []
@@ -3198,16 +3195,14 @@ async def _mark_slm_node_up_to_date(db_service, node_id: str) -> None:
 async def _sync_slm_from_code_source(node_id: str, job_id: str) -> None:
     """Pull SLM components from the code source node and restart services.
 
-    Used when the GUI triggers a sync for the SLM server itself (#913).
-    The Ansible playbook cannot be used because it runs rsync FROM the
-    controller (SLM server) but the source path only exists on the dev machine.
-    This function reverses the direction: SLM server PULLS from the code source.
+    Used when the GUI triggers a sync for the SLM server itself (#913). Ansible
+    can't be used (it rsyncs FROM the controller, but the source only exists on
+    the dev machine); this reverses direction: the SLM server PULLS the code.
 
     *job_id* is needed only to persist the dependency-reconciliation steps
     (#15063) — the fleet-sync job row is already marked complete before this
     runs (a self-restart may kill this process), so that write is the last
-    reliable place for the removal set to reach the job's own output rather
-    than only a log an operator must go find.
+    reliable place for the removal set to reach the job's own output.
 
     NOTE: Must create its own DB session — the request-scoped session passed
     from sync_node is closed by FastAPI before this background task runs.
@@ -3244,6 +3239,11 @@ async def _sync_slm_from_code_source(node_id: str, job_id: str) -> None:
         if not ok:
             logger.error("SLM self-sync component %s failed: %s", component, msg)
             all_ok = False
+        elif is_local_source:  # #16310: deletion only after a confirmed local sync
+            source_dir = f"{repo_path}/{component}"
+            deletion = await _remove_deleted_paths(component, source_dir, get_live_dir(component), repo_path)
+            for line in deletion.step_log_lines():
+                logger.info("SLM self-sync deletion: %s", line)
 
     if not all_ok:
         logger.error("SLM self-sync had failures; services NOT restarted")
@@ -4919,7 +4919,6 @@ async def _run_pull_stage(job: UpdateAllJob, db_service_ref) -> Optional[str]:
             async with db_service_ref.session() as db:
                 await _update_version_setting(db, commit)
                 await db.commit()
-            await cleanup_colocated_components(log=lambda line: _stage_log(stage, line))  # #16310
         return commit
     except Exception as exc:
         stage.status = _StageStatus.FAILED
@@ -5074,6 +5073,9 @@ async def _run_colocated_role_procedures(stage: UpdateAllStage, roles: list, slm
             continue
         outcome = "ok" if result.get("success") else f"FAILED ({result.get('error', 'see output')})"
         _stage_log(stage, f"co-located {role.name}: {outcome} via {role.ansible_playbook} (#12083)")
+        if result.get("success"):  # #16310: deletion only after a confirmed sync
+            for line in await apply_role_deletions(role.name):
+                _stage_log(stage, line)
 
 
 async def _resolve_colocated_managed_services(stage: UpdateAllStage, slm_node_id: str) -> None:
@@ -5083,12 +5085,10 @@ async def _resolve_colocated_managed_services(stage: UpdateAllStage, slm_node_id
     assigned-or-detected on the SLM's own node now gets its COMPLETE ansible
     procedure — code + deps + env/systemd render + build + schema migrate +
     restart + health — via run_role_full_procedure, the SAME entrypoint the
-    per-role Migrate button (api/roles.py) uses, so the two paths can never
-    drift apart. This is the fast path taken when the SLM control plane is
-    already at the target commit (no Ansible self-update fires), so nothing
-    else would otherwise apply config-only changes (env single_company toggle,
-    systemd drop-in removal, internal-key unify, frontend rebuild) for these
-    roles — the #11605 rsync-only resolve never touched them either.
+    per-role Migrate button (api/roles.py) uses, so the two paths never drift
+    apart. Fast path taken when the SLM control plane is already at the
+    target commit (no Ansible self-update fires), so nothing else would
+    otherwise apply config-only changes for these roles.
 
     #11611: autobot_shared is synced ahead of every role here (belt-and-
     suspenders — the backend Ansible role also re-syncs it internally, but

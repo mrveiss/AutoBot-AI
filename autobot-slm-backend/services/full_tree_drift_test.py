@@ -45,6 +45,7 @@ _SWAPPED = (
     "services.drift_checker",
     "services.deployed_dir_resolver",
     "services.git_subprocess",
+    "services.host_state_filter",
     "services.full_tree_drift",
 )
 _prev_modules = {name: sys.modules.get(name) for name in _SWAPPED}
@@ -53,6 +54,7 @@ try:
     _real_load("services.drift_checker", _SERVICES_DIR / "drift_checker.py")
     _real_load("services.deployed_dir_resolver", _SERVICES_DIR / "deployed_dir_resolver.py")
     _real_load("services.git_subprocess", _SERVICES_DIR / "git_subprocess.py")
+    _real_load("services.host_state_filter", _SERVICES_DIR / "host_state_filter.py")
     _ftd = _real_load("services.full_tree_drift", _SERVICES_DIR / "full_tree_drift.py")
 finally:
     for _name, _prev in _prev_modules.items():
@@ -195,3 +197,25 @@ async def test_a_component_not_colocated_here_is_skipped_not_errored(tmp_path, m
 
     assert result.skipped is True
     assert result.error is None
+
+
+async def test_a_git_rm_cached_then_gitignored_file_reads_as_host_state(tmp_path, monkeypatch) -> None:
+    """#16310 review (MEDIUM 4): a file that was `git rm --cached` then
+    gitignored still has git history -- checking history before the
+    host-state/ignored check would label it removed_from_source and steer an
+    operator into deleting a live key by hand (#16300's pattern)."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo / "comp" / "secrets.local.yaml", "token: abc\n")
+    _commit_all(repo, "seed")
+    _git(repo, "rm", "--cached", "-q", "comp/secrets.local.yaml")
+    _write(repo / "comp" / ".gitignore", "secrets.local.yaml\n")
+    _commit_all(repo, "untrack and ignore secrets.local.yaml")
+
+    _write(tmp_path / "deployed" / "comp" / "secrets.local.yaml", "token: abc\n")
+
+    result = await _drift_for(tmp_path, monkeypatch, "comp", repo)
+
+    entry = _by_path(result, "secrets.local.yaml")
+    assert entry is None, "a kept, gitignored file must never be reported as removed_from_source"
+    assert result.exclusions.get("host_state:gitignored") == 1

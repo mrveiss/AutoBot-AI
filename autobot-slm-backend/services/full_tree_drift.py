@@ -48,7 +48,11 @@ from services.deployed_dir_resolver import get_live_dir
 from services.drift_checker import VISIBILITY_COMPONENTS, deploy_only_entries, get_default_source_dir, owned_subtrees
 from services.git_subprocess import component_pathspec, run_git
 from services.git_tracker import DEFAULT_REPO_PATH
+from services.host_state_filter import kept_reason
 
+# Plain stdlib logging, deliberately -- see services/git_subprocess.py's
+# comment: get_logger() crashes at creation time under a MagicMock `config`,
+# the precedent autobot_shared/user_management/password_epoch.py:50-58 sets.
 logger = logging.getLogger(__name__)
 
 # Top-level names the SLM frontend publish step owns (services/
@@ -183,42 +187,60 @@ async def _last_commit_for_path(repo_root: str, pathspec: str) -> str | None:
 async def _classify_deployed_only(
     rel_path: str, component: str, repo_root: str, pathspec_prefix: str
 ) -> tuple[str, str | None]:
-    """Verdict and detail for a file present only in the deployed tree."""
+    """Verdict and detail for a file present only in the deployed tree.
+
+    #16310 review (MEDIUM 4): the host-state/ignored check runs BEFORE the
+    git-history check. A file that was ``git rm --cached`` then gitignored
+    still has history -- checking history first would label it
+    ``removed_from_source`` and steer an operator into deleting a live key
+    by hand, exactly the #16300 pattern ``services/host_state_filter.py``
+    exists to catch.
+    """
     pathspec = f"{pathspec_prefix}/{rel_path}" if pathspec_prefix else rel_path
+    reason = await kept_reason(rel_path, repo_root, pathspec)
+    if reason is not None:
+        return VERDICT_HOST_STATE, reason
     commit = await _last_commit_for_path(repo_root, pathspec)
     if commit is not None:
         return VERDICT_REMOVED_FROM_SOURCE, commit
     return VERDICT_HOST_STATE, _classify_host_state(rel_path, component)
 
 
-async def compute_full_tree_drift(component: str, repo_root: str = DEFAULT_REPO_PATH) -> ComponentDrift:
-    """Full-tree drift for one component -- every file, one of four verdicts."""
-    result = ComponentDrift(component=component)
+def _resolve_component_trees(component: str) -> tuple[str, str] | ComponentDrift:
+    """(source_dir, deployed_dir), or an early terminal result (skipped/error)."""
     deployed_dir = get_live_dir(component)
     if not Path(deployed_dir).exists():
-        result.skipped = True  # not colocated on this host -- not an error
-        return result
-
+        return ComponentDrift(component=component, skipped=True)  # not colocated here
     try:
         source_dir = get_default_source_dir(component)
     except ValueError as exc:
-        result.error = f"source path unavailable: {exc}"
-        return result
+        return ComponentDrift(component=component, error=f"source path unavailable: {exc}")
+    return source_dir, deployed_dir
 
-    owned = owned_subtrees(component)
-    dep_checksums = _walk_checksums(Path(deployed_dir), owned, result.exclusions)
+
+def _collect_both_checksums(
+    source_dir: str, deployed_dir: str, owned: frozenset[str], exclusions: dict[str, int]
+) -> tuple[dict[str, str], dict[str, str]] | str:
+    """(deployed, source) checksums, or an error string naming which side failed."""
+    dep_checksums = _walk_checksums(Path(deployed_dir), owned, exclusions)
     if dep_checksums is None:
-        result.error = f"deployed tree unreadable: {deployed_dir}"
-        return result
+        return f"deployed tree unreadable: {deployed_dir}"
     if not dep_checksums:
-        result.error = f"deployed tree is empty: {deployed_dir}"
-        return result
+        return f"deployed tree is empty: {deployed_dir}"
     src_checksums = _walk_checksums(Path(source_dir), frozenset(), {})
     if src_checksums is None:
-        result.error = f"source tree unreadable: {source_dir}"
-        return result
+        return f"source tree unreadable: {source_dir}"
+    return dep_checksums, src_checksums
 
-    pathspec_prefix = component_pathspec(repo_root, source_dir)
+
+async def _classify_all_paths(
+    dep_checksums: dict[str, str],
+    src_checksums: dict[str, str],
+    component: str,
+    repo_root: str,
+    pathspec_prefix: str,
+    result: ComponentDrift,
+) -> None:
     for rel_path in sorted(set(dep_checksums) | set(src_checksums)):
         result.compared += 1
         src_cs, dep_cs = src_checksums.get(rel_path), dep_checksums.get(rel_path)
@@ -234,6 +256,24 @@ async def compute_full_tree_drift(component: str, repo_root: str = DEFAULT_REPO_
             result.drifted.append(FileVerdict(rel_path, verdict, detail))
         else:
             _bump(result.exclusions, detail)
+
+
+async def compute_full_tree_drift(component: str, repo_root: str = DEFAULT_REPO_PATH) -> ComponentDrift:
+    """Full-tree drift for one component -- every file, one of four verdicts."""
+    trees = _resolve_component_trees(component)
+    if isinstance(trees, ComponentDrift):
+        return trees
+    source_dir, deployed_dir = trees
+
+    result = ComponentDrift(component=component)
+    both = _collect_both_checksums(source_dir, deployed_dir, owned_subtrees(component), result.exclusions)
+    if isinstance(both, str):
+        result.error = both
+        return result
+
+    dep_checksums, src_checksums = both
+    pathspec_prefix = component_pathspec(repo_root, source_dir)
+    await _classify_all_paths(dep_checksums, src_checksums, component, repo_root, pathspec_prefix, result)
     return result
 
 
