@@ -20,7 +20,7 @@ import pytest_asyncio
 
 from agents.base_agent_types import AgentRequest
 from agents.scope_enforcement import hold_scopes, refused_response
-from autobot_shared.coordination.work_claims import ClaimMode, list_claims, try_acquire
+from autobot_shared.coordination.work_claims import ClaimMode, ScopeError, list_claims, try_acquire
 
 try:
     import fakeredis.aioredis as fakeredis_async
@@ -164,3 +164,14 @@ def test_a_refusal_names_the_holder_and_their_intent():
     assert response.metadata["held_by_agent"] == "agent-9"
     assert response.metadata["holder_intent"] == "fix the header parse"
     assert "fix the header parse" in response.error, "the operator reads `error`, not just metadata"
+
+
+@pytest.mark.asyncio
+async def test_a_malformed_later_scope_frees_the_ones_already_taken(redis):
+    """#16213 review: `path:a` is genuinely acquired, then the next declaration fails
+    to parse. The raise must not strand `path:a` until its TTL -- the same
+    every-scope-or-none rule as a conflict, on the raising path."""
+    with pytest.raises(ScopeError):
+        async with hold_scopes(["path:a", "not a scope"], agent_id="agent-1", task_id="t1", intent="write"):
+            pass
+    assert await list_claims() == [], "a scope taken before the malformed one must be released"

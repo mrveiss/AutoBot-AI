@@ -54,6 +54,54 @@ def _make_eval_fail(confidence=0.3, reason="low_confidence"):
 # ---------------------------------------------------------------------------
 
 
+class TestMalformedDeclaredScope:
+    """A caller's typo must fail the task, not wedge it in WORKING (#16209)."""
+
+    @pytest.mark.asyncio
+    async def test_an_unparseable_scope_fails_the_task_rather_than_wedging_it(self):
+        tm = _make_task_manager_mock()
+
+        with (
+            patch("a2a.task_executor.get_task_manager", return_value=tm),
+            patch("a2a.task_executor.get_trust_manager", return_value=MagicMock()),
+        ):
+            # No "<kind>:" prefix -- Scope.parse raises ScopeError, which is not
+            # ClaimUnavailable, so hold_scopes does not catch it.
+            await execute_a2a_task("task-bad", "do something", context={"declared_scopes": ["not-a-valid-scope"]})
+
+        states = [c.args[1] for c in tm.update_state.call_args_list if len(c.args) > 1]
+        assert states, "the task reached no terminal state at all -- it is wedged in WORKING"
+        assert any(
+            getattr(s, "value", s) == "failed" or "FAILED" in str(s) for s in states
+        ), f"expected a FAILED terminal state, got {states}"
+        messages = [c.kwargs.get("message") for c in tm.update_state.call_args_list]
+        assert "invalid_declared_scope" in messages, f"the failure must name the cause, not be a bare error: {messages}"
+
+    @pytest.mark.asyncio
+    async def test_a_wellformed_scope_does_not_take_the_failure_path(self):
+        """The contrast: the guard must not fail everything it is shown."""
+        tm = _make_task_manager_mock()
+        orchestrator = MagicMock()
+        orchestrator.process_request = AsyncMock(return_value={"response": "ok"})
+        scrub_result = MagicMock()
+        scrub_result.text = "ok"
+        scrub_result.redaction_count = 0
+
+        with (
+            patch("a2a.task_executor.get_task_manager", return_value=tm),
+            patch("a2a.task_executor.get_trust_manager", return_value=MagicMock()),
+            patch("a2a.task_executor.scrub_outbound", return_value=scrub_result),
+            patch("a2a.task_executor.evaluate_task_output", new=AsyncMock(return_value=_make_eval_pass())),
+            patch(
+                "agents.agent_orchestration.get_distributed_agent_coordinator", return_value=orchestrator, create=True
+            ),
+        ):
+            await execute_a2a_task("task-ok", "do something", context={"declared_scopes": []})
+
+        messages = [c.kwargs.get("message") for c in tm.update_state.call_args_list]
+        assert "invalid_declared_scope" not in messages, f"a valid declaration took the failure path: {messages}"
+
+
 class TestExecutorRecordsSuccess:
     @pytest.mark.asyncio
     async def test_completed_task_records_success(self):
