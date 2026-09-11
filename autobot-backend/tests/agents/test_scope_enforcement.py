@@ -13,14 +13,13 @@ happy-path test would pass on a version that got all four wrong.
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 import pytest_asyncio
 
 from agents.base_agent_types import AgentRequest
 from agents.scope_enforcement import hold_scopes, refused_response
 from autobot_shared.coordination.work_claims import ClaimMode, ScopeError, list_claims, try_acquire
+from autobot_shared.eventually import eventually
 
 try:
     import fakeredis.aioredis as fakeredis_async
@@ -105,10 +104,12 @@ async def test_the_renewal_stops_when_the_run_does(redis, monkeypatch):
     monkeypatch.setattr("agents.scope_enforcement.CLAIM_TTL_S", 3)
 
     async with hold_scopes(["path:a/b.py"], agent_id="agent-1", task_id="t1", intent="write"):
-        await asyncio.sleep(1.2)
+        # Wait for a real renewal, not a fixed window a busy runner can miss (#16255).
+        await eventually(lambda: renewals)
     after_exit = len(renewals)
 
-    await asyncio.sleep(1.2)
+    # No wait needed here: hold_scopes' `finally` cancels and awaits the renewer
+    # before the `async with` above returns, so nothing can renew after that point.
     assert len(renewals) == after_exit, "the renewer kept running after the run ended"
 
 
