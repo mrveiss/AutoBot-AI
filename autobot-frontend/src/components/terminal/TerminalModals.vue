@@ -239,7 +239,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, type Ref } from 'vue'
+import { onBeforeUnmount, ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { withTimeout } from '@/utils/withTimeout'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -332,8 +332,31 @@ const clearMessages = () => {
   workflowSuccess.value = ''
 }
 
+// Pending auto-hide timers, one per message slot (#16315). A new message in a
+// slot cancels that slot's pending timer, so an earlier timer can't blank a
+// later message; onBeforeUnmount clears whatever is still pending.
+const autoHideTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+const scheduleAutoHide = (slotKey: string, setter: (msg: string) => void, delayMs: number) => {
+  const pending = autoHideTimers.get(slotKey)
+  if (pending) clearTimeout(pending)
+
+  autoHideTimers.set(
+    slotKey,
+    setTimeout(() => {
+      setter('')
+      autoHideTimers.delete(slotKey)
+    }, delayMs),
+  )
+}
+
+onBeforeUnmount(() => {
+  for (const timer of autoHideTimers.values()) clearTimeout(timer)
+  autoHideTimers.clear()
+})
+
 // Standard error handler
-const handleError = (error: unknown, setter: (msg: string) => void) => {
+const handleError = (error: unknown, setter: (msg: string) => void, slot: string) => {
   logger.error('Terminal modal error:', error)
 
   let errorMessage = t('terminal.modals.unexpectedError')
@@ -360,19 +383,15 @@ const handleError = (error: unknown, setter: (msg: string) => void) => {
   setter(errorMessage)
 
   // Auto-hide error after 10 seconds
-  setTimeout(() => {
-    setter('')
-  }, 10000)
+  scheduleAutoHide(`${slot}-error`, setter, 10000)
 }
 
 // Standard success handler
-const handleSuccess = (message: string, setter: (msg: string) => void) => {
+const handleSuccess = (message: string, setter: (msg: string) => void, slot: string) => {
   setter(message)
 
   // Auto-hide success after 5 seconds
-  setTimeout(() => {
-    setter('')
-  }, 5000)
+  scheduleAutoHide(`${slot}-success`, setter, 5000)
 }
 
 interface ActionRun {
@@ -383,6 +402,9 @@ interface ActionRun {
   successKey: string
   setError: (msg: string) => void
   setSuccess: (msg: string) => void
+  // Auto-hide timer identity (#16315) — distinguishes this run's error/success
+  // message slots from the other three action families'.
+  slot: string
 }
 
 // Runs a parent action against its deadline. A rejection, or a synchronous
@@ -396,9 +418,9 @@ const runAction = async (run: ActionRun) => {
 
   try {
     await withTimeout(Promise.resolve().then(run.action), run.timeoutMs, t(run.timeoutKey))
-    handleSuccess(t(run.successKey), run.setSuccess)
+    handleSuccess(t(run.successKey), run.setSuccess, run.slot)
   } catch (error) {
-    handleError(error, run.setError)
+    handleError(error, run.setError, run.slot)
   } finally {
     run.busy.value = false
   }
@@ -413,6 +435,7 @@ const handleReconnect = () =>
     successKey: 'terminal.modals.reconnectSucceeded',
     setError: (msg) => (connectionError.value = msg),
     setSuccess: (msg) => (connectionSuccess.value = msg),
+    slot: 'connection',
   })
 
 const handleExecuteCommand = () =>
@@ -424,6 +447,7 @@ const handleExecuteCommand = () =>
     successKey: 'terminal.modals.commandSent',
     setError: (msg) => (commandError.value = msg),
     setSuccess: (msg) => (commandSuccess.value = msg),
+    slot: 'command',
   })
 
 const cancelCommand = () => {
@@ -441,6 +465,7 @@ const handleEmergencyKill = () =>
     successKey: 'terminal.modals.killSent',
     setError: (msg) => (killError.value = msg),
     setSuccess: (msg) => (killSuccess.value = msg),
+    slot: 'kill',
   })
 
 const cancelKill = () => {
@@ -468,6 +493,7 @@ const runWorkflowAction = async (
     successKey,
     setError: (msg) => (workflowError.value = msg),
     setSuccess: (msg) => (workflowSuccess.value = msg),
+    slot: 'workflow',
   })
   lastWorkflowAction.value = null
 }

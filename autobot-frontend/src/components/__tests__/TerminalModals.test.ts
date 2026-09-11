@@ -129,6 +129,48 @@ describe('TerminalModals (#16285)', () => {
     expect(successText(wrapper).exists()).toBe(false)
   })
 
+  it('clears every pending auto-hide timer on unmount (#16315)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const wrapper = mountModals({
+      showCommandConfirmation: true,
+      executeCommandAction: () => Promise.reject(new Error('boom')),
+    })
+
+    await press(wrapper, modals.executeCommand)
+    expect(errorText(wrapper).text()).toBe('boom')
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+    wrapper.unmount()
+
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it("a later message in the same slot outlives the earlier message's auto-hide timer (#16315)", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    let callCount = 0
+    const wrapper = mountModals({
+      showCommandConfirmation: true,
+      executeCommandAction: () => Promise.reject(new Error(callCount++ === 0 ? 'first' : 'second')),
+    })
+
+    await press(wrapper, modals.executeCommand)
+    expect(errorText(wrapper).text()).toBe('first')
+
+    await vi.advanceTimersByTimeAsync(3_000)
+    await press(wrapper, modals.executeCommand)
+    expect(errorText(wrapper).text()).toBe('second')
+
+    // The first message's own 10s auto-hide would fire here (10s after the
+    // first press). It must not blank the second message, which still has
+    // 7s left of its own 10s window.
+    await vi.advanceTimersByTimeAsync(7_000)
+    expect(errorText(wrapper).text()).toBe('second')
+
+    // The second message's own timer fires 10s after its own press.
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(errorText(wrapper).exists()).toBe(false)
+  })
+
   it('shows a workflow-step failure in the step modal', async () => {
     const wrapper = mountModals({
       showLegacyModal: true,
