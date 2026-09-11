@@ -433,7 +433,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/utils/file_categorization.py": 724,
     "autobot-backend/utils/gpu_vector_search.py": 1220,
     "autobot-backend/utils/graceful_degradation.py": 704,
-    "autobot-backend/utils/hardware_metrics.py": 1554,
+    "autobot-backend/utils/hardware_metrics.py": 1550,
     "autobot-backend/utils/monitoring_alerts.py": 858,
     "autobot-backend/utils/operation_timeout_integration.py": 731,
     "autobot-backend/utils/performance_monitoring/monitor.py": 718,
