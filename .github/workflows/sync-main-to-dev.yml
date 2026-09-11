@@ -13,6 +13,8 @@
 # The PR itself is opened or updated by pipeline-scripts/release_sync_main.py:
 # at most one sync PR, a body naming the scheduled workflows the merge changes,
 # and the instruction to merge with a merge commit. Nothing here merges.
+# Where GitHub refuses the PR (this repository syncs by hand, #15834), it keeps
+# one tracking issue with the compare link and the command instead.
 #
 # See: https://github.com/mrveiss/AutoBot-AI/issues/2445
 
@@ -43,6 +45,9 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # #15834: where GitHub refuses the PR, the script keeps a tracking issue,
+      # and this repository's default token permission is read-only.
+      issues: write
 
     steps:
       # #13516: `inputs.confirm` reaches the shell through `env:`, not inline
@@ -103,43 +108,47 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Dev_new_gui is $AHEAD ahead, $BEHIND behind main ($DIVERGENT non-merge commit(s) only on main)"
 
+      # #15834: no `if:` on the ahead count. With nothing to sync the script still
+      # runs, to close the tracking issue; only the push needs commits to carry.
       - name: Open the release sync PR
         id: sync
-        if: steps.check.outputs.ahead != '0'
         env:
           # #16246: the push token, for the same reason as the checkout above: a
           # PR opened with GITHUB_TOKEN starts no checks. The PR body tells a
           # reader what to do if the fallback was used.
           GITHUB_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          AHEAD: ${{ steps.check.outputs.ahead }}
           BEHIND: ${{ steps.check.outputs.behind }}
           DIVERGENT: ${{ steps.check.outputs.divergent }}
         run: |
-          if [ "$DIVERGENT" != "0" ]; then
-            echo "::error::main has $DIVERGENT non-merge commit(s) not in Dev_new_gui — work committed straight to main. Resolve manually first."
-            exit 1
-          fi
-          if [ "$BEHIND" != "0" ]; then
-            echo "::notice::main carries $BEHIND merge commit(s) the trunk lacks (from previous promotions). No content of their own, so not a blocker — see #13974."
+          if [ "$AHEAD" != "0" ]; then
+            if [ "$DIVERGENT" != "0" ]; then
+              echo "::error::main has $DIVERGENT non-merge commit(s) not in Dev_new_gui — work committed straight to main. Resolve manually first."
+              exit 1
+            fi
+            if [ "$BEHIND" != "0" ]; then
+              echo "::notice::main carries $BEHIND merge commit(s) the trunk lacks (from previous promotions). No content of their own, so not a blocker — see #13974."
+            fi
+
+            # This step used to `git push origin origin/Dev_new_gui:main`, which
+            # can never succeed: `main` requires two status checks ("No open
+            # blocks-merge issues reference this PR", "No commit trailers"), and a
+            # direct push moves the branch to a commit that has neither, so the
+            # protected-branch hook declines it:
+            #
+            #   remote: error: GH006: Protected branch update failed for refs/heads/main.
+            #   ! [remote rejected] origin/Dev_new_gui -> main (protected branch hook declined)
+            #
+            # Routing through a PR lets those checks run against the release head,
+            # which is what the protection is for. Precedent: #13816 synced this
+            # way by hand.
+            git push --force origin "origin/Dev_new_gui:refs/heads/$SYNC_BRANCH"
           fi
 
-          # This step used to `git push origin origin/Dev_new_gui:main`, which
-          # can never succeed: `main` requires two status checks ("No open
-          # blocks-merge issues reference this PR", "No commit trailers"), and a
-          # direct push moves the branch to a commit that has neither, so the
-          # protected-branch hook declines it:
-          #
-          #   remote: error: GH006: Protected branch update failed for refs/heads/main.
-          #   ! [remote rejected] origin/Dev_new_gui -> main (protected branch hook declined)
-          #
-          # Routing through a PR lets those checks run against the release head,
-          # which is what the protection is for. Precedent: #13816 synced this
-          # way by hand.
-          git push --force origin "origin/Dev_new_gui:refs/heads/$SYNC_BRANCH"
-
-          # #16246: opens the sync PR, or rewrites the body of the oldest one open
-          # (from $SYNC_BRANCH or from the trunk), and never opens a second. If
-          # the repository does not let Actions open PRs it prints the compare
-          # link as a warning and succeeds: the push above has already landed.
+          # #16246, #15834: opens the sync PR, or rewrites the body of the oldest
+          # one open (from $SYNC_BRANCH or from the trunk), and never opens a
+          # second. Where GitHub refuses the PR it keeps ONE tracking issue with
+          # the compare link and the command instead, and fails if it cannot.
           python3 pipeline-scripts/release_sync_main.py \
             --head "$SYNC_BRANCH" --source Dev_new_gui --base main

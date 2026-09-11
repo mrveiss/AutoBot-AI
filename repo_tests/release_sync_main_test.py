@@ -21,31 +21,25 @@ files are long:
   listings, not the compare, whose file list stops at 300.
 
 A listing or compare that cannot be read raises. Read as "no PR open" it would
-open a duplicate; read as "0 commits" it would skip a sync.
+open a duplicate; read as "0 commits" it would skip a sync. What happens when
+GitHub refuses the PR (#15834) is pinned in ``release_sync_tracking_issue_test.py``.
 """
 
 from __future__ import annotations
 
-import base64
-import hashlib
-import importlib.util
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 import pytest
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._release_sync_fakes import BASE, HEAD, REPO, SCRIPT, SOURCE, _api, _pull, _run, load_script
 
 _REPO_ROOT = repo_root()
-_SCRIPT = _REPO_ROOT / "pipeline-scripts" / "release_sync_main.py"
+_SCRIPT = SCRIPT
 _WORKFLOW = _REPO_ROOT / ".github/workflows/sync-main-to-dev.yml"
 
-REPO = "mrveiss/AutoBot-AI"
-HEAD = "release-sync-main"
-SOURCE = "Dev_new_gui"
-BASE = "main"
 PUSH_TOKEN = "${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}"
-REFUSAL = {"message": "GitHub Actions is not permitted to create or approve pull requests."}
 
 # A merge endpoint: `PUT .../pulls/{n}/merge` or `POST .../merges`.
 _MERGE_ENDPOINT = re.compile(r"/merges?\b")
@@ -56,79 +50,9 @@ UNSCHEDULED = "on:\n  push:\n    branches: [main]\njobs: {}\n"
 UNSCHEDULED_V2 = "on:\n  workflow_dispatch:\njobs: {}\n"
 
 
-def _load():
-    spec = importlib.util.spec_from_file_location("release_sync_main", _SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 @pytest.fixture(scope="module")
 def rs():
-    return _load()
-
-
-def _pull(number: int, *, head: str = HEAD, base: str = BASE, repo: str = REPO, body: str = ""):
-    return {
-        "number": number,
-        "head": {"ref": head, "repo": {"full_name": repo}},
-        "base": {"ref": base},
-        "body": body,
-    }
-
-
-def _blob(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()
-
-
-def _content(text: str) -> Dict[str, str]:
-    return {"encoding": "base64", "content": base64.b64encode(text.encode("utf-8")).decode("ascii")}
-
-
-class _FakeApi:
-    """Routes by (method, path fragment) and records every request made."""
-
-    def __init__(self, routes: List[Tuple[str, str, Tuple[int, Any]]]):
-        self.routes = routes
-        self.repository = REPO
-        self.calls: List[Tuple[str, str, Optional[Dict[str, Any]]]] = []
-
-    def request(self, method: str, path: str, payload: Optional[Dict[str, Any]] = None):
-        self.calls.append((method, path, payload))
-        for route_method, fragment, response in self.routes:
-            if route_method == method and fragment in path:
-                return response
-        return 404, {"message": "no route"}
-
-    def writes(self, method: str) -> List[Tuple[str, Optional[Dict[str, Any]]]]:
-        return [(path, payload) for verb, path, payload in self.calls if verb == method]
-
-
-def _listing_routes(ref: str, files: Dict[str, str]) -> List[Tuple[str, str, Tuple[int, Any]]]:
-    listing = [
-        {"type": "file", "name": path.rsplit("/", 1)[-1], "path": path, "sha": _blob(text)}
-        for path, text in files.items()
-    ]
-    routes = [("GET", f"contents/.github/workflows?ref={ref}", (200, listing))]
-    routes += [("GET", f"contents/{path}?ref={ref}", (200, _content(text))) for path, text in files.items()]
-    return routes
-
-
-def _api(pulls, ahead: int, head_files=None, base_files=None) -> _FakeApi:
-    """Routes 0-3 are the PR listing, the compare, the create and the update, in that order."""
-    routes = [
-        ("GET", "/pulls?", (200, pulls)),
-        ("GET", f"compare/{BASE}...{HEAD}", (200, {"ahead_by": ahead, "behind_by": 1})),
-        ("POST", f"/repos/{REPO}/pulls", (201, {"number": 900})),
-        ("PATCH", "/pulls/", (200, {})),
-    ]
-    routes += _listing_routes(HEAD, head_files or {})
-    routes += _listing_routes(BASE, base_files or {})
-    return _FakeApi(routes)
-
-
-def _run(rs, api: _FakeApi, dry_run: bool = False) -> int:
-    return rs.run_sync(api, HEAD, BASE, dry_run, SOURCE)
+    return load_script()
 
 
 # --------------------------------------------------------------------------
@@ -266,6 +190,14 @@ def test_nothing_to_sync_reads_no_workflows_and_writes_nothing(rs):
     assert not any("contents/" in path for _, path, _ in api.calls)
 
 
+def test_the_count_is_read_from_the_trunk_not_the_release_branch(rs):
+    """The release branch is deleted when the sync PR merges; a compare against it is a 404."""
+    api = _api([], 0)
+    _run(rs, api)
+    compares = [path for _, path, _ in api.calls if "compare/" in path]
+    assert compares and all(f"{BASE}...{SOURCE}" in path for path in compares)
+
+
 def test_unreadable_pr_listing_never_reads_as_no_pr_open(rs):
     api = _api([], 310)
     api.routes[0] = ("GET", "/pulls?", (403, {"message": "rate limited"}))
@@ -283,21 +215,9 @@ def test_a_full_page_of_open_prs_is_not_read_as_the_whole_listing(rs):
 
 def test_unusable_compare_never_reads_as_nothing_to_sync(rs):
     api = _api([], 310)
-    api.routes[1] = ("GET", f"compare/{BASE}...{HEAD}", (200, {"message": "no ahead_by"}))
+    api.routes[1] = ("GET", f"compare/{BASE}...{SOURCE}", (200, {"message": "no ahead_by"}))
     with pytest.raises(rs.WatchdogApiError):
         _run(rs, api)
-
-
-def test_actions_refusing_to_open_prs_is_a_warning_not_a_failure(rs, capsys, monkeypatch):
-    """Carried over from the workflow's shell: the branch push has landed; one click is left."""
-    monkeypatch.setenv("GITHUB_SERVER_URL", "https://example.invalid")
-    api = _api([], 310)
-    api.routes[2] = ("POST", f"/repos/{REPO}/pulls", (403, REFUSAL))
-    assert _run(rs, api) == 0
-    out = capsys.readouterr().out
-    assert "::warning::" in out
-    assert f"https://example.invalid/{REPO}/compare/{BASE}...{HEAD}?expand=1" in out
-    assert api.writes("PATCH") == []
 
 
 def test_refusal_hint_links_the_compare_page_or_names_the_branch(rs):
@@ -451,7 +371,7 @@ def test_workflow_list_comes_from_both_directory_listings_not_the_compare(rs):
         ".github/workflows/gone.yml": SCHEDULED,
     }
     api = _api([], 310, head_files, base_files)
-    changes = rs.scheduled_changes(api, HEAD, BASE)
+    changes = rs.scheduled_changes(api, SOURCE, BASE)
     assert [(c.path.rsplit("/", 1)[-1], c.state) for c in changes] == [
         ("gone.yml", "stops"),
         ("moved.yml", "changes"),
@@ -528,9 +448,10 @@ def test_manual_runs_still_need_the_release_confirmation_and_scheduled_runs_skip
     assert "inputs.confirm != 'release'" in condition, "manual runs must still type 'release'"
 
 
-def test_permissions_are_the_release_push_and_the_pr_only():
+def test_permissions_are_the_release_push_the_pr_and_the_tracking_issue_only():
     assert _spec().get("permissions") in (None, {}), "no workflow-level grant beyond the job's"
-    assert _job()["permissions"] == {"contents": "write", "pull-requests": "write"}
+    expected = {"contents": "write", "pull-requests": "write", "issues": "write"}
+    assert _job()["permissions"] == expected, "issues: write is explicit: the default token is read-only (#15834)"
 
 
 def test_runs_one_at_a_time():

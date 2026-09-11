@@ -51,8 +51,8 @@ secret exists.
 in. It is optional, and the AutoBot product never reads it. AutoBot is open
 source and runs on anyone's infrastructure, so nothing in it may depend on this
 repository's secrets (owner ruling, 11 Sep 2026). Leaving it unset is
-supported: every workflow falls back to `GITHUB_TOKEN`, at the cost described in
-"The release-sync PR without the token" below.
+supported: every workflow falls back to `GITHUB_TOKEN`. What that means for the
+release sync is in "The release sync in this repository: by hand" below.
 
 ### Creating one, for this repository or a fork
 
@@ -73,31 +73,37 @@ Workflows is needed because the release-sync push carries changes under
 - `.github/workflows/auto-fix-generated-types.yml`
 - `.github/workflows/auto-update-pr-branches.yml`
 - `.github/workflows/sync-main-to-dev.yml` — pushes the `release-sync-main` branch
-  and opens the release-sync PR from it (#16246).
+  and opens the release-sync PR from it, or, where GitHub refuses the PR, keeps
+  the tracking issue described below (#16246).
 
-## The release-sync PR without the token
+## The release sync in this repository: by hand
 
-Under the fallback, `sync-main-to-dev.yml` pushes `release-sync-main` and opens
-its PR as `github-actions[bot]`, so every run those events trigger parks (see
-Cause). The watchdog below releases them only once #16272 is live on `main`. It
-runs `main`'s copy of `ci-dispatch-watchdog.yml`, and a copy without #16272
-approves runs only for open PRs into `WATCHDOG_BASE_BRANCH` (`Dev_new_gui`).
-Until then the sync PR's two required contexts, `No commit trailers` and `No
-open blocks-merge issues reference this PR`, never report, and the PR cannot
-merge.
+The owner ruled that this repository syncs `main` by hand (#15834 Q2). It has no
+`AUTOBOT_PUSH_TOKEN`, and "Allow GitHub Actions to create and approve pull
+requests" stays off. Measured 11 Sep 2026: `actions/permissions/workflow` returns
+`default_workflow_permissions: read` and `can_approve_pull_request_reviews:
+false`, and the repository holds no Actions secrets.
 
-**Owner step, for the bootstrap sync, and for every sync until #16272 is live on
-`main`:** once the workflow has
-opened or updated the sync PR, approve its parked runs
-(`POST /repos/{owner}/{repo}/actions/runs/{id}/approve` per run, the endpoint the
-watchdog uses), or close and reopen the PR as a person. `reopened` is a trigger
-of both `no-commit-trailers.yml` and `pr-blocking-findings.yml`, the workflows
-behind those two contexts.
+So `sync-main-to-dev.yml` pushes `release-sync-main` but can never open the sync
+PR. When GitHub refuses it, the workflow keeps ONE tracking issue instead, titled
+`release: main is behind Dev_new_gui — open the sync PR by hand` and labelled
+`automation`. The issue carries the PR body (the commit count, the scheduled
+workflows the sync activates, changes or stops, and the merge-commit
+instruction), the compare link, and the one command that opens the PR. Each run
+updates it in place, and closes it once a sync PR is open or `main` has nothing
+left to sync. If the issue cannot be written the run fails, so a green run means
+the PR or the issue is current. The job declares `issues: write` because the
+default token here is read-only.
 
-The watchdog's schedule runs `main`'s copy, so #16272 takes effect only after the
-first sync lands: the bootstrap sync always needs this step. From then on the
-watchdog sweeps the release-sync PR along with its other heads, on the irregular
-schedule described below.
+**Owner step, every sync:** open the PR from the issue's link or command, then
+merge it with a merge commit, as its body says. A PR a person opens starts its
+checks normally, so nothing parks.
+
+The watchdog's release of the sync PR's parked runs (#16272) therefore does not
+come into play here. It matters only if the workflow ever opens the PR as the
+bot, which needs "Allow GitHub Actions to create and approve pull requests"
+turned on with no push token set. A push token opens the PR as the token's
+owner, whose runs do not park.
 
 ## The safety net
 

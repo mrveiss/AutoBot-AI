@@ -44,26 +44,37 @@ it silently drops workflows. The ``.github/workflows`` directory listing is
 fetched on both refs instead; its blob SHAs say which files differ, and only
 those files' contents are fetched.
 
+WHEN GITHUB REFUSES THE PR (#15834). This repository syncs by hand: it has no
+push token, and "Allow GitHub Actions to create and approve pull requests" is
+off, so every PR this tool opens is refused. It then keeps ONE tracking issue
+instead, found by exact title plus label (never by a text search), carrying the
+PR body, the compare link and the one command that opens the PR. The issue is
+closed once a sync PR is open (a hand-opened one counts) or nothing is left to
+sync. A refusal used to warn and exit 0: a green run that opened nothing.
+
+The commit count and the workflow list are read from the trunk (``--source``),
+not the release branch: that branch is deleted when the sync PR merges, and a
+compare against a missing branch is a 404.
+
 Usage:
     pipeline-scripts/release_sync_main.py --head release-sync-main --source Dev_new_gui
     pipeline-scripts/release_sync_main.py --dry-run
 
 Environment:
-    GITHUB_TOKEN       required — API credential (pull-requests: write)
+    GITHUB_TOKEN       required — API credential (pull-requests: write, issues: write)
     GITHUB_REPOSITORY  required — "owner/repo"
     GITHUB_API_URL     API root (default https://api.github.com)
-    GITHUB_SERVER_URL  web root for the compare link printed when Actions may not
-                       open pull requests (set by Actions; unset, the warning names
-                       the branch instead of linking)
+    GITHUB_SERVER_URL  web root for the tracking issue's compare link (set by
+                       Actions; unset, the issue names the branch instead)
 
 Exit codes:
-    0  the sync pull request was opened or updated, there was nothing to sync, or
-       the repository does not let Actions open pull requests (a warning names
-       the compare link; the branch push, the part that matters, has landed)
+    0  the sync PR was opened or updated, or GitHub refused it and the tracking
+       issue is current, or nothing was left to sync; a tracking issue no longer
+       needed was closed
     1  more than one sync pull request is open: the oldest was updated, and the
        others are named for closing by hand
-    2  missing configuration, or the API gave an unusable answer; nothing was
-       written
+    2  missing configuration, or the API gave an unusable answer, including a
+       failure to keep the tracking issue: never a green run that kept nothing
 """
 
 from __future__ import annotations
@@ -106,10 +117,14 @@ WORKFLOW_DIR = ".github/workflows"
 WORKFLOW_SUFFIXES = (".yml", ".yaml")
 TRACKING_ISSUE = "#16246"
 # GitHub's maximum page size. A full page may not be the whole listing.
-MAX_PULLS_PER_PAGE = 100
+MAX_PER_PAGE = 100
 # GitHub's wording when "Allow GitHub Actions to create and approve pull
 # requests" is off for the repository. Observed on this workflow 2026-08-10.
 ACTIONS_PR_REFUSAL = "not permitted to create or approve pull requests"
+# #15834 Q2: where GitHub refuses the PR, ONE tracking issue stands in for it,
+# found by this exact title plus this label, never by a text search.
+TRACKING_TITLE = "release: main is behind Dev_new_gui — open the sync PR by hand"
+TRACKING_LABEL = "automation"
 
 ACTION_CREATE = "create"
 ACTION_UPDATE = "update"
@@ -299,11 +314,11 @@ def _get(api: GitHubApi, path: str, context: str) -> Any:
 
 def open_sync_pulls(api: GitHubApi, heads: AbstractSet[str], base: str) -> List[Dict[str, Any]]:
     """Open sync pull requests into *base*. Raises rather than returning [] or a partial list."""
-    query = urllib.parse.urlencode({"state": "open", "base": base, "per_page": str(MAX_PULLS_PER_PAGE)})
+    query = urllib.parse.urlencode({"state": "open", "base": base, "per_page": str(MAX_PER_PAGE)})
     body = _get(api, f"/repos/{api.repository}/pulls?{query}", f"open PRs into {base}")
     if not isinstance(body, list):
         raise WatchdogApiError(f"open PRs into {base}: expected a list, got {type(body).__name__}")
-    if len(body) >= MAX_PULLS_PER_PAGE:
+    if len(body) >= MAX_PER_PAGE:
         raise WatchdogApiError(f"{len(body)} open PRs into {base} fill a page; a sync PR may be on the next")
     return [pull for pull in body if is_sync_pull(pull, api.repository, heads, base)]
 
@@ -385,16 +400,90 @@ def update_pull_body(api: GitHubApi, number: int, body: str) -> None:
         raise WatchdogApiError(f"cannot update the body of #{number} (HTTP {status}): {reply}")
 
 
-def _open_pull(api: GitHubApi, head: str, base: str, body: str) -> str:
-    """Open the sync PR, or say where to open it when the repository refuses Actions."""
-    try:
-        return f"opened #{create_pull(api, head, base, body)}"
-    except PullCreationRefused:
-        server = os.environ.get("GITHUB_SERVER_URL", "").strip()
-        hint = refusal_hint(server, api.repository, base, head)
-        _emit("::warning::Actions may not open PRs in this repository, so the sync PR was not opened.")
-        _emit(f"::warning::The branch is pushed and ready: {hint}")
-        return "the sync PR was not opened; see the warning above"
+def is_tracking_issue(issue: Dict[str, Any]) -> bool:
+    """The tracking issue: an issue, not a PR, with exactly the tracking title."""
+    return "pull_request" not in issue and issue.get("title") == TRACKING_TITLE
+
+
+def open_tracking_issues(api: GitHubApi) -> List[Dict[str, Any]]:
+    """Open tracking issues, oldest first, by exact title plus label. Raises rather than returning []."""
+    query = urllib.parse.urlencode({"state": "open", "labels": TRACKING_LABEL, "per_page": str(MAX_PER_PAGE)})
+    body = _get(api, f"/repos/{api.repository}/issues?{query}", "open tracking issues")
+    if not isinstance(body, list):
+        raise WatchdogApiError(f"open tracking issues: expected a list, got {type(body).__name__}")
+    if len(body) >= MAX_PER_PAGE:
+        raise WatchdogApiError(
+            f"{len(body)} open `{TRACKING_LABEL}` issues fill a page; the tracking issue may be next"
+        )
+    return sorted((issue for issue in body if is_tracking_issue(issue)), key=lambda issue: int(issue["number"]))
+
+
+def tracking_body(pr_body: str, server: str, repository: str, head: str, base: str) -> str:
+    """The sync PR's body, plus how a person opens it: the compare link and one command."""
+    command = (
+        f"gh pr create --repo {repository} --base {base} --head {head} --title '{SYNC_TITLE}' --body '{BODY_MARKER}'"
+    )
+    lines = [
+        pr_body.rstrip("\n"),
+        "",
+        "## Open the sync PR by hand",
+        "",
+        "This repository syncs by hand (#15834): GitHub Actions may not open pull requests",
+        f"here, so this issue stands in for the sync PR. `{head}` is pushed and current;",
+        f"{refusal_hint(server, repository, base, head)}. Or run:",
+        "",
+        "```bash",
+        command,
+        "```",
+        "",
+        "A PR a person opens starts its checks normally. Its body carries the marker, so",
+        "the next run of the workflow fills it in, and closes this issue.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _issue_write(api: GitHubApi, method: str, path: str, payload: Dict[str, Any], what: str) -> Dict[str, Any]:
+    status, reply = api.request(method, path, payload)
+    if status not in (200, 201) or not isinstance(reply, dict):
+        raise WatchdogApiError(f"cannot {what} (HTTP {status}): {reply}")
+    return reply
+
+
+def close_tracking_issues(api: GitHubApi, issues: Sequence[Dict[str, Any]]) -> List[int]:
+    """Close each issue as completed. Returns the numbers closed."""
+    closed: List[int] = []
+    for issue in issues:
+        number = int(issue["number"])
+        payload = {"state": "closed", "state_reason": "completed"}
+        _issue_write(
+            api, "PATCH", f"/repos/{api.repository}/issues/{number}", payload, f"close tracking issue #{number}"
+        )
+        closed.append(number)
+    return closed
+
+
+def upsert_tracking_issue(api: GitHubApi, issues: Sequence[Dict[str, Any]], body: str) -> str:
+    """Open the one tracking issue, or bring the oldest up to date and close any duplicate."""
+    if not issues:
+        payload = {"title": TRACKING_TITLE, "body": body, "labels": [TRACKING_LABEL]}
+        reply = _issue_write(api, "POST", f"/repos/{api.repository}/issues", payload, "open the tracking issue")
+        return f"opened tracking issue #{reply.get('number')}"
+    number = int(issues[0]["number"])
+    if (issues[0].get("body") or "") != body:
+        path = f"/repos/{api.repository}/issues/{number}"
+        _issue_write(api, "PATCH", path, {"body": body}, f"update tracking issue #{number}")
+    closed = close_tracking_issues(api, issues[1:])
+    return f"tracking issue #{number} is current" + (f"; closed duplicate(s) {closed}" if closed else "")
+
+
+def settle_tracking(api: GitHubApi, issues: Sequence[Dict[str, Any]], issue_body: Optional[str]) -> str:
+    """Keep the tracking issue current when a body is given; otherwise close any that is open."""
+    if issue_body is not None:
+        return upsert_tracking_issue(api, issues, issue_body)
+    closed = close_tracking_issues(api, issues)
+    if not closed:
+        return "no tracking issue open"
+    return f"closed tracking issue(s) {closed}: a sync PR exists, or nothing is left to sync"
 
 
 def apply_decision(
@@ -404,17 +493,23 @@ def apply_decision(
     body: str,
     head: str,
     base: str,
-) -> str:
-    """Perform the one write the decision calls for. Returns what was done."""
+) -> Tuple[str, bool]:
+    """Perform the one PR write the decision calls for. Returns what was done, and whether GitHub refused it."""
+    if decision.action == ACTION_NOTHING:
+        return "no sync PR to write", False
     if decision.action == ACTION_CREATE:
-        return _open_pull(api, head, base, body)
+        try:
+            return f"opened #{create_pull(api, head, base, body)}", False
+        except PullCreationRefused:
+            _emit("::warning::Actions may not open PRs in this repository (#15834); keeping the tracking issue.")
+            return "the sync PR was not opened", True
     current = next((p.get("body") or "" for p in pulls if p.get("number") == decision.target), "")
     if BODY_MARKER not in current:
-        return f"#{decision.target} was opened by hand; its body is left as written"
+        return f"#{decision.target} was opened by hand; its body is left as written", False
     if current == body:
-        return f"#{decision.target} is already current; nothing written"
+        return f"#{decision.target} is already current; nothing written", False
     update_pull_body(api, int(decision.target), body)
-    return f"updated the body of #{decision.target}"
+    return f"updated the body of #{decision.target}", False
 
 
 def _emit(text: str, *, err: bool = False) -> None:
@@ -423,25 +518,35 @@ def _emit(text: str, *, err: bool = False) -> None:
 
 
 def run_sync(api: GitHubApi, head: str, base: str, dry_run: bool, source: Optional[str] = None) -> int:
-    """Decide, build the body, and write at most one pull request."""
+    """Decide, write at most one pull request, and keep the tracking issue in step with it."""
     source = source or head
     pulls = open_sync_pulls(api, {head, source}, base)
-    ahead = commits_missing_from_base(api, head, base)
+    ahead = commits_missing_from_base(api, source, base)
     decision = decide(pulls, ahead)
     _emit(f"release-sync: {decision.action}: {decision.reason}")
-    if decision.action == ACTION_NOTHING:
-        return 0
-    body = build_body(ahead, scheduled_changes(api, head, base), source, base)
+    tracking = open_tracking_issues(api)
+    body = ""
+    if decision.action != ACTION_NOTHING:
+        body = build_body(ahead, scheduled_changes(api, source, base), source, base)
     if dry_run:
-        _emit("release-sync: --dry-run, nothing written. The body would be:")
+        _emit(f"release-sync: --dry-run, nothing written; {len(tracking)} tracking issue(s) open. Body:")
         _emit(body)
-    else:
-        _emit(f"release-sync: {apply_decision(api, decision, pulls, body, head, base)}")
-    if decision.extras:
-        listed = ", ".join(f"#{number}" for number in decision.extras)
-        _emit(f"release-sync: duplicate sync PRs open, close by hand: {listed}", err=True)
-        return 1
-    return 0
+        return _extras_exit(decision)
+    done, refused = apply_decision(api, decision, pulls, body, head, base)
+    _emit(f"release-sync: {done}")
+    server = os.environ.get("GITHUB_SERVER_URL", "").strip()
+    issue_body = tracking_body(body, server, api.repository, head, base) if refused else None
+    _emit(f"release-sync: {settle_tracking(api, tracking, issue_body)}")
+    return _extras_exit(decision)
+
+
+def _extras_exit(decision: SyncDecision) -> int:
+    """1 when duplicate sync PRs are open, named for closing by hand; otherwise 0."""
+    if not decision.extras:
+        return 0
+    listed = ", ".join(f"#{number}" for number in decision.extras)
+    _emit(f"release-sync: duplicate sync PRs open, close by hand: {listed}", err=True)
+    return 1
 
 
 def build_api() -> GitHubApi:
