@@ -77281,6 +77281,25 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * InstallRequest
+         * @description Request body for installing a marketplace plugin.
+         */
+        InstallRequest: {
+            /**
+             * Plugin Name
+             * @description Name of the plugin to install from catalog
+             */
+            plugin_name: string;
+            /**
+             * Source Id
+             * @description Marketplace source id; 'builtin' or a user-added source UUID (#6481)
+             * @default builtin
+             */
+            source_id: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** InstalledSkillOut */
         InstalledSkillOut: {
             /** Id */
@@ -94533,6 +94552,16 @@ export interface components {
         SkillHealthResponse: {
             [key: string]: unknown;
         };
+        /** SkillHubInstallRequest */
+        SkillHubInstallRequest: {
+            /**
+             * Skill Id
+             * @description Registry id or name of the skill to install
+             */
+            skill_id: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * SkillInstallRequest
          * @description Request body for installing a skill from the catalog.
@@ -103259,16 +103288,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** InstallRequest */
-        api__schemas_skills_hub__InstallRequest: {
-            /**
-             * Skill Id
-             * @description Registry id or name of the skill to install
-             */
-            skill_id: string;
-        } & {
-            [key: string]: unknown;
-        };
         /** ClearAllResponse */
         api__schemas_system__ClearAllResponse: {
             /** Success */
@@ -103277,25 +103296,6 @@ export interface components {
             message: string;
             /** Total Deleted */
             total_deleted: number;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * InstallRequest
-         * @description Request body for installing a marketplace plugin.
-         */
-        api__schemas_workflows__InstallRequest: {
-            /**
-             * Plugin Name
-             * @description Name of the plugin to install from catalog
-             */
-            plugin_name: string;
-            /**
-             * Source Id
-             * @description Marketplace source id; 'builtin' or a user-added source UUID (#6481)
-             * @default builtin
-             */
-            source_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -163777,7 +163777,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["api__schemas_skills_hub__InstallRequest"];
+                "application/json": components["schemas"]["SkillHubInstallRequest"];
             };
         };
         responses: {
@@ -167360,7 +167360,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["api__schemas_workflows__InstallRequest"];
+                "application/json": components["schemas"]["InstallRequest"];
             };
         };
         responses: {
