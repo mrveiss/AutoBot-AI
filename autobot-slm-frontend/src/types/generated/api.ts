@@ -272,12 +272,16 @@ export interface paths {
          *     user therefore passed the old gate too, and nginx then attached the
          *     trusted internal key that ``autobot-backend/auth_middleware.py`` treats
          *     as full admin. This answers "does this session hold the role the key
-         *     actually confers?": 204 only for an admin session, 403 for anyone
-         *     authenticated but not admin, 401 for a missing/invalid/expired token
-         *     (``require_admin`` -- see its docstring for why the upstream HTTPBearer
-         *     dependency already makes "missing" and "invalid" both 401). Returns no
-         *     body either way -- an ``auth_request`` subrequest's body is discarded,
-         *     only the status code is read.
+         *     actually confers?": 204 for a session whose role grants
+         *     ``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it
+         *     -- including SUPERADMIN, which holds no granular permissions (#13854)
+         *     and is refused here as on every other permission-gated SLM admin route
+         *     -- and an unknown role resolves to USER, so it also fails closed. 401
+         *     covers a missing Authorization header (the upstream ``HTTPBearer``'s
+         *     ``auto_error=True`` raises it before this dependency runs) or an
+         *     invalid/expired token (``get_current_user`` raises it). Returns no body
+         *     either way -- an ``auth_request`` subrequest's body is discarded, only
+         *     the status code is read.
          */
         get: operations["proxy_check_api_auth_proxy_check_get"];
         put?: never;
