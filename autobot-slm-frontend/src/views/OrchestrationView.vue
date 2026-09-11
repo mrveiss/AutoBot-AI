@@ -49,6 +49,9 @@ import PostSyncActionBadges from '@/components/orchestration/PostSyncActionBadge
 import RedisServicePanel from '@/components/RedisServicePanel.vue'
 import ReplicationView from '@/views/ReplicationView.vue'
 import type { NodeStatus, ServiceStatus } from '@/types/slm'
+// #15401: ServiceStatus now carries the agent's full run-state vocabulary;
+// ServiceActionButtons takes the four values it has actions for.
+import { normalizeServiceStatus } from '@/utils/node-status'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
 
@@ -1291,7 +1294,7 @@ onUnmounted(() => {
                       <ServiceActionButtons
                         :serviceName="service.service_name"
                         :nodeId="node.nodeId"
-                        :status="service.status"
+                        :status="normalizeServiceStatus(service.status)"
                         :isActionInProgress="orchestration.actionInProgress"
                         :activeAction="orchestration.activeAction"
                         @start="(nId, svc) => handleServiceAction(nId, svc, 'start')"
