@@ -22,7 +22,7 @@
  */
 
 import { ref, computed, watch, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope, type Ref } from 'vue'
-import { isReducedMotion } from './useReducedMotion'
+import { preferredScrollBehavior } from './useReducedMotion'
 
 export interface UseVirtualScrollOptions<T = unknown> {
   /**
@@ -226,10 +226,11 @@ export function useVirtualScroll<T = unknown>(options: UseVirtualScrollOptions<T
   /**
    * #14770: `scrollTo({ behavior })` is motion the app initiates, so the
    * stylesheet's global reduced-motion rule cannot reach it. An explicit
-   * option or argument wins; otherwise the preference decides.
+   * option or argument wins; otherwise the shared helper decides (#14807), so
+   * this default cannot drift from every other scroll the app initiates.
    */
   const resolveBehavior = (behavior?: ScrollBehavior): ScrollBehavior =>
-    behavior ?? opts.scrollBehavior ?? (isReducedMotion() ? 'auto' : 'smooth')
+    behavior ?? opts.scrollBehavior ?? preferredScrollBehavior()
 
   // Scroll to specific index
   const scrollToIndex = (index: number, behavior?: ScrollBehavior) => {

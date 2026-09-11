@@ -237,6 +237,18 @@ export const WIDGET_STYLES = `
 .ab-send:disabled               { opacity: 0.45; cursor: not-allowed; }
 .ab-send svg                    { width: 18px; height: 18px; }
 
+/* ── Reduced motion (#15749) ────────────────────────────────────────────────
+   The host page's stylesheet cannot reach into this shadow root, so the widget
+   honours the preference itself — including the smooth message scroll above. */
+@media (prefers-reduced-motion: reduce) {
+  .ab-messages { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* ── Responsive (mobile ≤ 480 px) ───────────────────────────────────────── */
 @media (max-width: 480px) {
   .ab-panel {

@@ -286,21 +286,21 @@
             <template v-else-if="node.type === 'condition'">
               <select v-model="(node.data as any).condition_type" @click.stop>
                 <option value="expression">{{ $t('workflow.canvas.conditionExpr') }}</option>
-                <option value="jsonpath">JSONPath</option>
+                <option value="jsonpath">{{ $t('workflow.canvas.jsonPath') }}</option>
                 <option value="compare">{{ $t('workflow.canvas.conditionCompare') }}</option>
               </select>
               <input v-model="(node.data as any).condition" :placeholder="(node.data as any).condition_type === 'jsonpath' ? '$.result.status == &quot;ok&quot;' : $t('workflow.canvas.conditionPlaceholder')" class="mono" @click.stop />
               <div class="branch-labels">
-                <span class="branch-true">✓ True</span>
-                <span class="branch-false">✗ False</span>
+                <span class="branch-true">{{ $t('workflow.canvas.branchTrue') }}</span>
+                <span class="branch-false">{{ $t('workflow.canvas.branchFalse') }}</span>
               </div>
             </template>
             <template v-else-if="node.type === 'switch'">
               <input v-model="(node.data as any).switch_on" :placeholder="$t('workflow.canvas.switchOnPlaceholder')" class="mono" @click.stop />
               <div class="switch-cases">
                 <div v-for="(c, i) in (((node.data as any).cases || []) as string[])" :key="i" class="switch-case-row">
-                  <input v-model="(node.data as any).cases[i]" :placeholder="`case ${i + 1}`" class="mono" @click.stop />
-                  <button class="delete-case-btn" @click.stop="removeCase(node, i)">×</button>
+                  <input v-model="(node.data as any).cases[i]" :placeholder="$t('workflow.canvas.casePlaceholder', { n: i + 1 })" class="mono" @click.stop />
+                  <button class="delete-case-btn" :aria-label="$t('workflow.canvas.removeCase', { n: i + 1 })" @click.stop="removeCase(node, i)">×</button>
                 </div>
                 <button class="add-case-btn" @click.stop="addCase(node)">+ {{ $t('workflow.canvas.addCase') }}</button>
               </div>
@@ -308,37 +308,37 @@
             </template>
             <template v-else-if="node.type.startsWith('vision-')">
               <div class="node-row">
-                <label class="target-label">Target:</label>
+                <label class="target-label">{{ $t('workflow.canvas.targetLabel') }}</label>
                 <select v-model="(node.data as any).target" @click.stop>
-                  <option value="vnc">VNC</option>
-                  <option value="web">Web</option>
+                  <option value="vnc">{{ $t('workflow.canvas.targetVnc') }}</option>
+                  <option value="web">{{ $t('workflow.canvas.targetWeb') }}</option>
                 </select>
               </div>
               <template v-if="node.type === 'vision-capture'">
-                <label class="checkbox"><input type="checkbox" v-model="(node.data as any).include_ocr" @click.stop /> OCR</label>
-                <label class="checkbox"><input type="checkbox" v-model="(node.data as any).include_elements" @click.stop /> Elements</label>
+                <label class="checkbox"><input type="checkbox" v-model="(node.data as any).include_ocr" @click.stop /> {{ $t('workflow.canvas.includeOcr') }}</label>
+                <label class="checkbox"><input type="checkbox" v-model="(node.data as any).include_elements" @click.stop /> {{ $t('workflow.canvas.includeElements') }}</label>
               </template>
               <template v-else-if="node.type === 'vision-find-element'">
-                <input v-model="(node.data as any).element_type" placeholder="Element type (button, input...)" @click.stop />
-                <input v-model="(node.data as any).text_match" placeholder="Text to match" @click.stop />
+                <input v-model="(node.data as any).element_type" :placeholder="$t('workflow.canvas.elementTypePlaceholder')" @click.stop />
+                <input v-model="(node.data as any).text_match" :placeholder="$t('workflow.canvas.textMatchPlaceholder')" @click.stop />
               </template>
               <template v-else-if="node.type === 'vision-click'">
                 <select v-model="(node.data as any).click_type" @click.stop>
-                  <option value="single">Single Click</option>
-                  <option value="double">Double Click</option>
-                  <option value="right">Right Click</option>
+                  <option value="single">{{ $t('workflow.canvas.singleClick') }}</option>
+                  <option value="double">{{ $t('workflow.canvas.doubleClick') }}</option>
+                  <option value="right">{{ $t('workflow.canvas.rightClick') }}</option>
                 </select>
               </template>
               <template v-else-if="node.type === 'vision-type-text'">
-                <input v-model="(node.data as any).text" placeholder="Text to type" @click.stop />
-                <label class="checkbox"><input type="checkbox" v-model="(node.data as any).clear_first" @click.stop /> Clear first</label>
+                <input v-model="(node.data as any).text" :placeholder="$t('workflow.canvas.textToTypePlaceholder')" @click.stop />
+                <label class="checkbox"><input type="checkbox" v-model="(node.data as any).clear_first" @click.stop /> {{ $t('workflow.canvas.clearFirst') }}</label>
               </template>
               <template v-else-if="node.type === 'vision-ocr'">
-                <span class="hint">Extracts all text from screen</span>
+                <span class="hint">{{ $t('workflow.canvas.ocrHint') }}</span>
               </template>
               <template v-else-if="node.type === 'vision-wait'">
-                <input v-model="(node.data as any).element_criteria" placeholder="Element to wait for" @click.stop />
-                <input v-model.number="(node.data as any).timeout_ms" type="number" placeholder="Timeout (ms)" @click.stop />
+                <input v-model="(node.data as any).element_criteria" :placeholder="$t('workflow.canvas.waitElementPlaceholder')" @click.stop />
+                <input v-model.number="(node.data as any).timeout_ms" type="number" :placeholder="$t('workflow.canvas.timeoutPlaceholder')" @click.stop />
               </template>
             </template>
             <!-- #13963: a workflow a role runs. Read-only, like the other org

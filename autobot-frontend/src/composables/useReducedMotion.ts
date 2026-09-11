@@ -45,8 +45,12 @@ export function isReducedMotion(): boolean {
  * Exists so call sites read as intent rather than as a repeated ternary, and
  * so there is one place to change if the fallback ever needs to be something
  * other than `'auto'`.
+ *
+ * #14807: not called `scrollBehavior` — that name already belongs to
+ * vue-router's option and to `useVirtualScroll`'s, so a bare `scrollBehavior`
+ * at either site made the reader work out which of the three was meant.
  */
-export function scrollBehavior(): ScrollBehavior {
+export function preferredScrollBehavior(): ScrollBehavior {
   return isReducedMotion() ? 'auto' : 'smooth'
 }
 

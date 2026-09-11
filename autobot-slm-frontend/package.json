@@ -14,6 +14,7 @@
     "lint:stylelint": "stylelint \"src/**/*.{css,vue}\"",
     "lint:fix": "eslint . --fix",
     "type-check": "vue-tsc --noEmit -p tsconfig.json",
+    "check:i18n": "node ../autobot-frontend/scripts/check-i18n-keys.mjs --root . --en src/locales/en.json",
     "gen:types:openapi": "python3 ../autobot-slm-backend/scripts/dump_openapi.py > openapi.json",
     "gen:types": "openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties",
     "verify:types": "git diff --exit-code src/types/generated/api.ts",

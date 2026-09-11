@@ -88,6 +88,17 @@ if (typeof window !== 'undefined') {
   }
 }
 
+// #15749: ApexCharts animates unless told otherwise, and a chart that never
+// mentions `animations` gives the reduced-motion guard nothing to see. This
+// global default covers those raw `<apexchart>` users; BaseChart re-decides per
+// render, so a mid-session change of the setting reaches its charts too.
+import { isReducedMotion } from '@/composables/useReducedMotion'
+if (typeof window !== 'undefined') {
+  ;(window as unknown as { Apex?: object }).Apex = {
+    chart: { animations: { enabled: !isReducedMotion() } },
+  }
+}
+
 // Create Pinia store with persistence
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
