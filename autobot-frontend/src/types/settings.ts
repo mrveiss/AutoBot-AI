@@ -83,10 +83,24 @@ export interface BackendSettings {
   agents?: Record<string, unknown>;
 }
 
-// Health Status Interface (updated to match BackendSettings component expectations)
-export interface HealthStatus {
+/**
+ * GET /system/health/detailed -- a report object, not a status value (#15401).
+ *
+ * Named `HealthStatus` until #15401, colliding with the SLM's `HealthStatus` (a
+ * closed status union; the SLM owns deep-settings vocabulary) and with
+ * `SystemRepository`'s. The backend returns `SystemHealthResponse` with extra
+ * fields allowed: `status`, `timestamp`, `initialization`, `components`,
+ * `detailed`, `errors`. `basic_health` and `detailed_available` never come from
+ * that endpoint -- SettingsPanel builds them when the detailed call fails.
+ */
+export interface DetailedHealthReport {
   status?: string;
   message?: string;
+  timestamp?: string;
+  initialization?: { status?: string; message?: string };
+  components?: Record<string, unknown>;
+  detailed?: boolean;
+  errors?: unknown;
   basic_health?: Record<string, unknown>;
   detailed_available?: boolean;
   backend?: {

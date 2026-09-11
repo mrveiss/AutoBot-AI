@@ -34,11 +34,21 @@
 
 - name: "ServiceAuth | Find latest service keys backup"
   ansible.builtin.find:
-    paths: "{{ playbook_dir }}/../../../infrastructure/shared/config/service-keys"
+    paths: "{{ service_auth_keys_source_dir }}"
     patterns: "service-keys-*.yaml"
   register: _service_keys_files
   delegate_to: localhost
   run_once: true
+
+- name: "ServiceAuth | Refuse to deploy without a keys export"
+  ansible.builtin.fail:
+    msg: >-
+      No service-keys-*.yaml in {{ service_auth_keys_source_dir }}. Run
+      playbooks/rotate-service-keys.yml to generate one; keys are never read
+      from the repository (#16275).
+  when: _service_keys_files.matched == 0
+  run_once: true
+  delegate_to: localhost
 
 - name: "ServiceAuth | Select most recent keys file"
   ansible.builtin.set_fact:

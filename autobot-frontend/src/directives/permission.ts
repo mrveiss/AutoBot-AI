@@ -26,6 +26,7 @@
 
 import type { Directive, DirectiveBinding } from 'vue'
 import { getPermissionsForRole, type Permission } from '@/composables/usePermissions'
+import { isAdminRole } from '@/constants/roles'
 
 type PermissionValue = Permission | string | (Permission | string)[]
 
@@ -43,17 +44,18 @@ const originalDisplayMap = new WeakMap<HTMLElement, string>()
  * Get user role from localStorage/store without using composable
  * This avoids Vue composable lifecycle issues in directives
  */
-function getCurrentUserRole(): string {
+function getCurrentUserRole(): string | null {
   try {
     const storedUser = localStorage.getItem('autobot_user')
     if (storedUser) {
       const user = JSON.parse(storedUser)
-      return user.role || 'guest'
+      return user.role || null
     }
   } catch {
     // Ignore parse errors
   }
-  return 'guest'
+  // #14937: no stored user means no role -- not a `guest` role, which the backend removed (#744).
+  return null
 }
 
 /**
@@ -62,7 +64,9 @@ function getCurrentUserRole(): string {
 function userHasPermission(permission: Permission | string): boolean {
   const role = getCurrentUserRole()
   // Admin always has all permissions
-  if (role === 'admin') return true
+  // #14937: every administrative role, as `is_admin_role()` -- a bare 'admin'
+  // comparison rejected superadmin.
+  if (isAdminRole(role)) return true
   const permissions = getPermissionsForRole(role)
   return permissions.includes(permission as Permission)
 }
@@ -72,7 +76,9 @@ function userHasPermission(permission: Permission | string): boolean {
  */
 function userHasAnyPermission(perms: (Permission | string)[]): boolean {
   const role = getCurrentUserRole()
-  if (role === 'admin') return true
+  // #14937: every administrative role, as `is_admin_role()` -- a bare 'admin'
+  // comparison rejected superadmin.
+  if (isAdminRole(role)) return true
   const permissions = getPermissionsForRole(role)
   return perms.some(p => permissions.includes(p as Permission))
 }
@@ -82,7 +88,9 @@ function userHasAnyPermission(perms: (Permission | string)[]): boolean {
  */
 function userHasAllPermissions(perms: (Permission | string)[]): boolean {
   const role = getCurrentUserRole()
-  if (role === 'admin') return true
+  // #14937: every administrative role, as `is_admin_role()` -- a bare 'admin'
+  // comparison rejected superadmin.
+  if (isAdminRole(role)) return true
   const permissions = getPermissionsForRole(role)
   return perms.every(p => permissions.includes(p as Permission))
 }

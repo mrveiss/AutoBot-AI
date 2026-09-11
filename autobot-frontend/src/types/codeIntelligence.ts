@@ -8,8 +8,19 @@
  * Issue #772 - Code Intelligence & Repository Analysis
  */
 
-// Severity levels used across all analyzers
-export type Severity = 'info' | 'low' | 'medium' | 'high' | 'critical'
+import type { Severity as CanonicalSeverity } from './_generated/workflow'
+
+/**
+ * The severities the code-intelligence analyzers emit (#14993).
+ *
+ * `AntiPatternSeverity`, `SecuritySeverity` and `PerformanceSeverity` all carry
+ * exactly these five, so this stays a subset of the canonical union -- but it is
+ * checked against it: a value the generated `Severity` does not carry fails to
+ * compile here instead of being re-spelled (the `models.ts` copy was upper-case).
+ */
+export const CODE_INTELLIGENCE_SEVERITIES = ['info', 'low', 'medium', 'high', 'critical'] as const satisfies readonly CanonicalSeverity[]
+
+export type Severity = (typeof CODE_INTELLIGENCE_SEVERITIES)[number]
 
 // Anti-pattern types
 export interface AntiPatternType {
