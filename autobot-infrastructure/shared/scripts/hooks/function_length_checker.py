@@ -38,9 +38,13 @@ from typing import Dict, List, Optional, Set, Tuple
 
 # The diff helpers every scoped lint hook shares (#16178): hunk parsing, rename
 # pairing and the pre-commit range, in one place rather than one copy per hook.
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tools" / "lint"))
+# Imported as a package from the repository root, which is how the repo_tests
+# guards import it and how infra_script_imports_resolve_test.py resolves an
+# import here. A bare `_scan_helpers` on a tools/lint path entry resolves at
+# runtime but under no root that guard checks, so it reads as broken.
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
-from _scan_helpers import added_lines, resolve_base, staged_paths  # noqa: E402
+from tools.lint._scan_helpers import added_lines, resolve_base, staged_paths  # noqa: E402
 
 # ANSI color codes (matching bash wrapper)
 RED = "\033[0;31m"
