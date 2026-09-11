@@ -119,6 +119,12 @@ python:
   # asserting those loads stay package-free.
   - '.github/workflows/slm-migration-gate.yml'
   - 'autobot-frontend/package.json'
+  # #15749: `frontend_reduced_motion_guard_test.py` reads these two by literal
+  # path to assert the reduced-motion wiring holds. Without an entry here, a
+  # change confined to either is exactly the change that skips the suite
+  # guarding it -- #15900's coverage checker caught both.
+  - 'autobot-frontend/src/embed/embed-styles.ts'
+  - 'autobot-frontend/src/main.ts'
   - 'install.sh'
   # #15983: `ansible_core_pin_frozen_15983_test.py` reads this pin to assert the
   # dependabot freeze holds. Without an entry here, editing the pin is exactly the
