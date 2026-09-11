@@ -214,12 +214,11 @@ class TestTaskProgressTracker:
         tracker = TaskProgressTracker("npm ci", callback, heartbeat_interval=1)
         async with tracker:
             await eventually(lambda: received)  # wait on the beat, not a fixed window (#16255)
+            heartbeat_task = tracker._heartbeat_task
 
-        # No further wait needed (#16255): __aexit__ cancels and awaits the
-        # heartbeat task before the `async with` above returns, so nothing can
-        # fire after this point no matter how long we then wait.
-        count_on_exit = len(received)
-        assert len(received) == count_on_exit, "Heartbeats continued after context manager exited"
+        # The stopper's own state (#16255 review), not a snapshot: a still-running
+        # heartbeat task is exactly the regression this test is named for.
+        assert heartbeat_task.done(), "the heartbeat task was still running after exit"
 
     @pytest.mark.asyncio
     async def test_callback_exception_does_not_crash_tracker(self):

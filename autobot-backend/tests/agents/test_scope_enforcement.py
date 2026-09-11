@@ -13,6 +13,8 @@ happy-path test would pass on a version that got all four wrong.
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 import pytest_asyncio
 
@@ -106,11 +108,11 @@ async def test_the_renewal_stops_when_the_run_does(redis, monkeypatch):
     async with hold_scopes(["path:a/b.py"], agent_id="agent-1", task_id="t1", intent="write"):
         # Wait for a real renewal, not a fixed window a busy runner can miss (#16255).
         await eventually(lambda: renewals)
-    after_exit = len(renewals)
 
-    # No wait needed here: hold_scopes' `finally` cancels and awaits the renewer
-    # before the `async with` above returns, so nothing can renew after that point.
-    assert len(renewals) == after_exit, "the renewer kept running after the run ended"
+    # The stopper's own state (#16255 review), not a snapshot: a leaked
+    # _renew_forever task is exactly the regression this test is named for.
+    leaked = [t for t in asyncio.all_tasks() if not t.done() and t.get_coro().__name__ == "_renew_forever"]
+    assert not leaked, "the renewer kept running after the run ended"
 
 
 @pytest.mark.asyncio

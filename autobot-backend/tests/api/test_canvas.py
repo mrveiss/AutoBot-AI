@@ -650,9 +650,8 @@ class TestCanvasWebSocketStreaming:
         with patch("user_management.database.db_session_context", _make_cancel_db_mock(owner_id)):
             await _handle_canvas_cancel({"cellId": cell_id, "canvasId": canvas_id}, attacker_id)
 
-        # No wait needed (#16255): the rejection returns without awaiting anything
-        # that could cancel the task, so the state is already settled here.
-        assert not task.done()
+        # The stopper's own state (#16255 review): cancelling() sees a requested cancel with no yield
+        assert not task.done() and task.cancelling() == 0
 
         # Cleanup
         task.cancel()
