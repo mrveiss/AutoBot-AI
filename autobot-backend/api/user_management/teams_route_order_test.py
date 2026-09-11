@@ -9,20 +9,37 @@ to the first route whose path matches, and ``{team_id}`` matches the segment
 ``my-teams`` as well, so every ``/my-teams`` request became a failed
 UUID parse (422) inside ``get_team``. This asks the router itself which route
 a request reaches, which is the question the bug was about.
+
+The router is walked through ``effective_routes`` rather than ``.routes``
+(``repo_tests/router_routes_traversal_test.py``, #15093). On the FastAPI that
+CI pins, ``include_router`` defers: the user-management router's ``.routes``
+holds one wrapper per child router, so a ``.routes`` walk would match nothing.
+``effective_routes`` descends into each child in place, so its order is
+Starlette's dispatch order.
 """
 
 from starlette.routing import Match
 
 from api.user_management.router import router as user_management_router
+from autobot_shared.api_routing.router_routes import effective_routes
 
 
 def _first_route_for(method: str, path: str):
-    """Return the route Starlette would dispatch *method* *path* to, or None."""
-    scope = {"type": "http", "method": method, "path": path, "root_path": ""}
-    for route in user_management_router.routes:
-        match, _ = route.matches(scope)
+    """Return the route Starlette would dispatch *method* *path* to, or None.
+
+    On the deferred shape a child route's own ``path`` lacks the including
+    router's prefix, which ``effective_routes`` reports as ``known_prefix``.
+    So each route is matched against the request path with that prefix
+    removed. On the eager shape ``known_prefix`` is empty, and this reduces to
+    matching the full path.
+    """
+    for mounted in effective_routes(user_management_router):
+        if not path.startswith(mounted.known_prefix):
+            continue
+        scope = {"type": "http", "method": method, "path": path[len(mounted.known_prefix) :], "root_path": ""}
+        match, _ = mounted.route.matches(scope)
         if match == Match.FULL:
-            return route
+            return mounted.route
     return None
 
 

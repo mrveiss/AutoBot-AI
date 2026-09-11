@@ -30,6 +30,7 @@ from fastapi.testclient import TestClient
 
 from api.settings import router
 from api.user_management.dependencies import get_optional_db_session
+from autobot_shared.api_routing.router_routes import effective_routes
 
 # ---------------------------------------------------------------------------
 # Session stub callables
@@ -59,13 +60,15 @@ def _registered_deps(method: str, path_suffix: str) -> dict:
     imports of the same name (which may be different MagicMock instances when
     the stub module uses __getattr__).
     """
-    for route in router.routes:
-        if not hasattr(route, "methods") or not hasattr(route, "path"):
+    # effective_routes, not router.routes (#15093): the settings router includes
+    # api/settings_config.py's router (#16278), and on the FastAPI CI pins a
+    # parent's .routes holds a wrapper per child rather than the child's routes.
+    for mounted in effective_routes(router):
+        if method.upper() not in mounted.methods:
             continue
-        if method.upper() not in route.methods:
+        if not mounted.path.endswith(path_suffix):
             continue
-        if not route.path.endswith(path_suffix):
-            continue
+        route = mounted.route
         sig = inspect.signature(route.endpoint)
         result = {}
         for name, param in sig.parameters.items():
