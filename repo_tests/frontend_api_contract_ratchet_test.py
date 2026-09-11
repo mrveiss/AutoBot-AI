@@ -77,7 +77,9 @@ _BASELINES = {
         "responses": 187,
         # #15455: raised for the four typed detail fetches #15429 added. Same
         # limitation — this counts assertions, and a correct new call is one.
-        "inline_generics": 577,
+        # #16245: 577 -> 575. SettingsPanel.vue's unrendered /system/health/detailed
+        # loader was removed with its two `apiClient.get<...>` calls (5 -> 3 there).
+        "inline_generics": 575,
     },
     "autobot-slm-frontend": {
         "clients": 1,
@@ -165,17 +167,13 @@ def _client_class_names(root: Path) -> set[str]:
 
 def _raw_fetch_files(root: Path) -> list[str]:
     return [
-        path.relative_to(_REPO_ROOT).as_posix()
-        for path in _source_files(root)
-        if _RAW_FETCH_RE.search(_read(path))
+        path.relative_to(_REPO_ROOT).as_posix() for path in _source_files(root) if _RAW_FETCH_RE.search(_read(path))
     ]
 
 
 def _axios_importers(root: Path) -> list[str]:
     return [
-        path.relative_to(_REPO_ROOT).as_posix()
-        for path in _source_files(root)
-        if _AXIOS_IMPORT_RE.search(_read(path))
+        path.relative_to(_REPO_ROOT).as_posix() for path in _source_files(root) if _AXIOS_IMPORT_RE.search(_read(path))
     ]
 
 
