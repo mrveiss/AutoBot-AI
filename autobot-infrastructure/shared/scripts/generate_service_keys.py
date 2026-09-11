@@ -131,7 +131,7 @@ SERVICES = [
 
 def _resolve_host(host_attr: str) -> str:
     """Resolve host IP from SSOT config."""
-    return getattr(config.vms, host_attr)
+    return getattr(config.vm, host_attr)
 
 
 def _generate_all_keys(auth_manager):
@@ -306,8 +306,8 @@ async def generate_keys(output_dir: str | None = None):
     with no exported copy to deploy from, so nothing is stored until
     ``_save_backup`` has written and fsynced it.
     """
-    redis_host = config.vms.redis
-    redis_port = config.ports.redis
+    redis_host = config.vm.redis
+    redis_port = config.port.redis
     _log_run_header(redis_host, redis_port)
 
     redis_client_factory, key_manager_cls = _load_backend()
