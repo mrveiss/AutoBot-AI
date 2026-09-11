@@ -585,17 +585,23 @@ def _play_applies_role_in_full(playbook_path, role_name: str) -> bool:
 
 
 @pytest.mark.parametrize(
-    "playbook,role_name",
+    "playbook_rel_path,role_name",
     [
-        ("provision-fleet-roles.yml", "backend"),
-        ("provision-fleet-roles.yml", "frontend"),
+        # #16310 review round 10: path relative to _ANSIBLE_ROOT, not
+        # hardcoded under playbooks/ -- site.yml lives directly under
+        # ansible/, not ansible/playbooks/ (`git ls-files` confirms that is
+        # its only location), and a wrong join made this parametrization
+        # fail on "file not found" rather than the role check it exists to
+        # run.
+        ("playbooks/provision-fleet-roles.yml", "backend"),
+        ("playbooks/provision-fleet-roles.yml", "frontend"),
         ("site.yml", "backend"),
         # deploy-slm-manager.yml (SLM manager provisioning) applies
         # roles/slm_manager in full via a bare `roles:` list entry
         # (`- role: slm_manager`, no tasks_from) -- the provisioning path for
         # roles/slm_manager/tasks/main.yml's own #16310 wiring. Nothing else
         # in CI would catch a future switch to `tasks_from`.
-        ("deploy-slm-manager.yml", "slm_manager"),
+        ("playbooks/deploy-slm-manager.yml", "slm_manager"),
         # site.yml's frontend play references a role named "frontend_app",
         # which does not exist under roles/ -- a pre-existing, unrelated
         # defect (not introduced by #16310) filed separately rather than
@@ -603,17 +609,18 @@ def _play_applies_role_in_full(playbook_path, role_name: str) -> bool:
         # is frontend's real, working provisioning path.
     ],
 )
-def test_provisioning_playbooks_run_the_role_in_full(playbook, role_name) -> None:
-    path = _ANSIBLE_ROOT / "playbooks" / playbook
+def test_provisioning_playbooks_run_the_role_in_full(playbook_rel_path, role_name) -> None:
+    path = _ANSIBLE_ROOT / playbook_rel_path
     assert path.is_file(), f"{path} not found"
     assert _play_applies_role_in_full(path, role_name), (
-        f"{playbook}: no play applies roles/{role_name} in full (no `tasks_from`) -- "
+        f"{playbook_rel_path}: no play applies roles/{role_name} in full (no `tasks_from`) -- "
         f"the main.yml #16310 wiring for {role_name} would be provisioning-unreachable too"
     )
 
 
 @pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason="#16342: site.yml's frontend play references nonexistent role frontend_app",
 )
 def test_site_yml_frontend_play_applies_only_existing_roles() -> None:
@@ -626,8 +633,21 @@ def test_site_yml_frontend_play_applies_only_existing_roles() -> None:
     tests/test_update_all_applies_roles_12959.py's own docstring describes
     using for exactly this reason (a baseline would have quietly absorbed
     the fix and kept claiming the problem was still there, the #12894
-    lesson)."""
-    site_yml = yaml.safe_load((_ANSIBLE_ROOT / "site.yml").read_text(encoding="utf-8"))
+    lesson).
+
+    #16310 review round 10: `raises=AssertionError` plus a `pytest.fail`
+    (not a plain `assert`) for the file-existence check below -- a strict
+    xfail with no `raises=` treats ANY failure as the expected one, so a
+    missing/moved site.yml (a `FileNotFoundError` from `read_text`, or an
+    `AssertionError` from a plain `assert path.is_file()`) would ALSO read
+    as "confirmed #16342", silently. `pytest.fail` raises `Failed`, not
+    `AssertionError`, so it falls outside `raises=` and surfaces as a real,
+    unmasked failure instead.
+    """
+    site_yml_path = _ANSIBLE_ROOT / "site.yml"
+    if not site_yml_path.is_file():
+        pytest.fail(f"{site_yml_path} not found", pytrace=False)
+    site_yml = yaml.safe_load(site_yml_path.read_text(encoding="utf-8"))
     frontend_play = next((p for p in site_yml if isinstance(p, dict) and p.get("hosts") == "frontend"), None)
     assert frontend_play is not None, "site.yml: no play with hosts: frontend"
     role_names = [e.get("role") or e.get("name") if isinstance(e, dict) else e for e in frontend_play.get("roles", [])]

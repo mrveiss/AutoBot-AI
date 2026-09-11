@@ -20,6 +20,17 @@ stubs services.drift_checker/deployed_dir_resolver/git_tracker/sync_deletions
 as MagicMocks (AST-derived from api/code_sync.py's imports -- gone now that
 code_sync.py no longer imports this module, but the pattern is harmless to
 keep for isolation from any other stub state a shared test run left behind).
+
+#16310 review round 10: lives under tests/services/, not co-located with
+sync_deletions.py in services/, for the same reason as
+tests/services/full_tree_drift_test.py (see its module docstring):
+autobot-slm-backend/services/ has its own __init__.py, so pytest's own
+collection of a test module living there imports the REAL "services"
+package before this file's top-level bootstrap ever runs, which the
+sys.modules leak guard then reports as a leak no capture/restore inside
+this file could catch in time. tests/services/conftest.py (#11478/#13084)
+already replaces sys.modules["services"] with a hollow real-path package
+before collection reaches anything here, which is what this move buys.
 """
 
 from __future__ import annotations
@@ -32,7 +43,7 @@ from pathlib import Path
 
 from autobot_shared.paths import scrubbed_git_env
 
-_SERVICES_DIR = Path(__file__).parent
+_SERVICES_DIR = Path(__file__).parent.parent.parent / "services"
 
 
 def _real_load(name: str, path: Path):
@@ -50,7 +61,15 @@ def _real_load(name: str, path: Path):
 # ran after this one. Folded into the same _SWAPPED/_prev_modules/finally
 # cycle as the real-loaded modules below so it is captured and restored (or
 # popped, if it was absent before) exactly like the rest.
+#
+# "services" is ALSO listed, defensively -- this file living under
+# tests/services/ (round 10, see the module docstring) means
+# tests/services/conftest.py has already replaced it with a hollow
+# real-path package before this file's top-level code runs, so the capture
+# below sees that hollow package, not a genuine one, and the restore is a
+# same-value no-op either way.
 _SWAPPED = (
+    "services",
     "services.git_tracker",
     "services.deploy_artifacts",
     "services.drift_checker",
@@ -182,7 +201,7 @@ async def test_a_git_rm_cached_then_gitignored_file_is_kept(tmp_path) -> None:
     """#16300's pattern: git shows a `D`, but the file was deliberately kept.
 
     #16310 review round 7: the real-host-layout companion of
-    services/full_tree_drift_test.py::test_a_git_rm_cached_then_gitignored_file_reads_as_host_state
+    tests/services/full_tree_drift_test.py::test_a_git_rm_cached_then_gitignored_file_reads_as_host_state
     (same fixture). That module had a real bug here (a raw filesystem walk
     of source_dir saw the file `git rm --cached` leaves physically present);
     this module never did, because compute_deletion_plan's candidate list

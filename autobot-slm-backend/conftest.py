@@ -232,7 +232,9 @@ _EXTRA_SERVICE_MODULES = (
     # api.code_sync needs services.full_tree_drift resolvable, even though the
     # AST scan above (which only reads code_sync.py/setup_wizard.py directly)
     # never sees it. Its own real coroutines are exercised by
-    # services/full_tree_drift_test.py's self-contained real-load, not here.
+    # tests/services/full_tree_drift_test.py's self-contained real-load
+    # (#16310 review round 10: moved out of services/ itself, see that
+    # file's module docstring), not here.
     "services.full_tree_drift",
 )
 

@@ -8,11 +8,31 @@ Owner requirement, 11 Sep 2026: every file under a deployed component gets one
 of four verdicts -- modified, removed_from_source (drift), build_bundle or
 host_state (named exclusions) -- and a run over an empty or unreadable tree
 fails loudly rather than reporting no drift. Exercised against a real,
-disposable git repository, the same way services/sync_deletions_test.py is:
-the removed_from_source verdict is specifically a claim about what
+disposable git repository, the same way tests/services/sync_deletions_test.py
+is: the removed_from_source verdict is specifically a claim about what
 ``git log`` says, which a mock cannot stand in for.
 
-Bootstrap mirrors services/sync_deletions_test.py.
+Bootstrap mirrors tests/services/sync_deletions_test.py.
+
+#16310 review round 10: lives under tests/services/, not co-located with
+full_tree_drift.py in services/, on purpose. autobot-slm-backend/services/
+has its own __init__.py, so pytest's own collection of a test module living
+there imports the real "services" package (needed to bind
+services.full_tree_drift_test as an attribute) BEFORE this file's top-level
+code runs -- by the time the _SWAPPED/_prev_modules capture below executes,
+"services" is already the genuine package, and restoring "whatever it was"
+just puts the genuine package straight back. Neither round 7's nor round
+9's capture/restore could have fixed that; both ran too late.
+tests/services/conftest.py (#11478/#13084) already solves exactly this for
+this whole directory: it replaces sys.modules["services"] with a hollow,
+real-path ModuleType (spec-less, so still "synthetic" to the leak guard)
+BEFORE pytest collects anything here, so pytest's own package-parent
+resolution finds that hollow package already in place and never touches
+services/__init__.py at all. Moved here rather than adding a sibling
+services/conftest.py: that would apply to every OTHER co-located
+services/*_test.py file too (~30 of them, none audited for reliance on
+services.<name> auto-fabricating a MagicMock), where this move only affects
+the two files that actually need the fix.
 """
 
 from __future__ import annotations
@@ -25,7 +45,7 @@ from pathlib import Path
 
 from autobot_shared.paths import scrubbed_git_env
 
-_SERVICES_DIR = Path(__file__).parent
+_SERVICES_DIR = Path(__file__).parent.parent.parent / "services"
 
 
 def _real_load(name: str, path: Path):
@@ -36,24 +56,20 @@ def _real_load(name: str, path: Path):
     return module
 
 
-# #16310 review round 7 (sys.modules leak guard):
+# #16310 review round 7 (sys.modules leak guard): "services.git_tracker" is
+# a SYNTHETIC stub (types.ModuleType, no __spec__) and used to be installed
+# unconditionally with no restore, same bug as
+# tests/services/sync_deletions_test.py and
+# scripts/sync_deletion_planner_test.py. Folded into this file's own
+# _SWAPPED/_prev_modules/finally cycle so it is captured and restored (or
+# popped, if it was absent) like every other name here.
 #
-# "services.git_tracker" is a SYNTHETIC stub (types.ModuleType, no __spec__)
-# and used to be installed unconditionally with no restore, same bug as
-# services/sync_deletions_test.py and scripts/sync_deletion_planner_test.py.
-#
-# "services" ITSELF is also captured/restored here, unlike those two: the
-# guard reported it "replaced" (synthetic conftest MagicMock -> a genuine
-# module) and refused to treat that as a harmless repair with
-# "exempt-refused: multi-source-root" -- "services" as a bare top-level name
-# is a real, independently importable package under BOTH
-# autobot-backend/services/ (which conftest.py notes IS on pytest's
-# pythonpath) and autobot-slm-backend/services/ (which is deliberately NOT,
-# #13084), so a genuine top-level "services" binding reaching sys.modules
-# here could silently be the WRONG one for any test that runs after this
-# file and does an unqualified `import services`. Scoped into the same
-# capture/restore as every other name below removes the ambiguity rather
-# than asking the guard to trust which "services" it is.
+# "services" is ALSO listed, defensively, though this module living under
+# tests/services/ (round 10, see the module docstring) means
+# tests/services/conftest.py has already replaced it with a hollow
+# real-path package before this file's top-level code runs -- the
+# _prev_modules capture below sees that hollow package, not a genuine one,
+# and the restore is a same-value no-op either way.
 _SWAPPED = (
     "services",
     "services.git_tracker",
@@ -109,7 +125,7 @@ def _init_repo(repo: Path) -> None:
 
 def _commit_all(repo: Path, message: str) -> None:
     _git(repo, "add", "-A")
-    # #16310 review round 9: --allow-empty, matching services/sync_deletions_test.py
+    # #16310 review round 9: --allow-empty, matching tests/services/sync_deletions_test.py
     # and scripts/sync_deletion_planner_test.py's identical helper -- a
     # future no-op-second-commit fixture here must not exit 1 either.
     _git(repo, "commit", "--allow-empty", "-q", "-m", message)
@@ -238,7 +254,7 @@ async def test_a_git_rm_cached_then_gitignored_file_reads_as_host_state(tmp_path
     docstring's first paragraph is about. Fixed by `_source_ignored_paths`
     excluding source-side paths git ignores before the checksum comparison
     runs at all. Same fixture, same real host layout, as
-    services/sync_deletions_test.py::test_a_git_rm_cached_then_gitignored_file_is_kept
+    tests/services/sync_deletions_test.py::test_a_git_rm_cached_then_gitignored_file_is_kept
     -- that one was never affected (compute_deletion_plan is entirely
     git-diff/git-log driven and never walks source_dir's raw disk), which is
     the proof this is a full_tree_drift.py-specific bug, not a shared one.

@@ -8,7 +8,7 @@ Real-loads the CLI module directly (bypassing ``services/__init__.py``,
 which imports the full app stack -- DB, auth, deployment services --
 unnecessary for this planner and unavailable in a bare test sandbox) rather
 than invoking it as a subprocess, the same isolation
-services/sync_deletions_test.py uses for the library underneath it. Exercised
+tests/services/sync_deletions_test.py uses for the library underneath it. Exercised
 against a real, disposable git repository: the whole point of the CLI is to
 answer questions only git can answer.
 """
@@ -112,8 +112,8 @@ def _init_repo(repo: Path) -> None:
 
 def _commit_all(repo: Path, message: str) -> str:
     _git(repo, "add", "-A")
-    # #16310 review round 9: --allow-empty, matching services/sync_deletions_test.py
-    # and services/full_tree_drift_test.py's identical helper -- a future
+    # #16310 review round 9: --allow-empty, matching tests/services/sync_deletions_test.py
+    # and tests/services/full_tree_drift_test.py's identical helper -- a future
     # no-op-second-commit fixture here must not exit 1 either.
     _git(repo, "commit", "--allow-empty", "-q", "-m", message)
     return _git(repo, "rev-parse", "HEAD")
