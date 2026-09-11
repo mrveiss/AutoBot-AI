@@ -23,9 +23,9 @@ from typing import List, Tuple
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-_ACTION = _REPO_ROOT / ".github/actions/setup-python-suite/action.yml"
+_ACTION = repo_root() / ".github/actions/setup-python-suite/action.yml"
 _STEP = "Install CI system packages (#14550, #13896)"
 _BASH = shutil.which("bash")
 
