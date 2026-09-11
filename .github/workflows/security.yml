@@ -538,12 +538,18 @@ jobs:
           | .results | to_entries[] | .key as $f | .value[]
           | select($audited["\($f)|\(.type)|\(.hashed_secret)"] | not)
           | "\($f):\(.line_number): \(.type)"' .secrets.baseline)"
-        total="$(jq '[.results[] | length] | add // 0' .secrets.baseline)"
+        # A rescan that read nothing reports no new finding, so the comparison
+        # above would pass on a scan that never looked. Its count is asserted
+        # against the committed baseline and the floor declared in the script,
+        # not only printed. Counts only; a crash there fails the step too.
+        status=0
+        floor_report="$(python3 pipeline-scripts/secrets_rescan_floor.py \
+          --rescanned .secrets.baseline --committed "${committed}")" || status=1
+        echo "${floor_report}"
         {
           echo "## Secret Detection (whole tree)"
-          echo "detect-secrets findings over every tracked file: ${total}"
+          echo "${floor_report}"
         } >> "$GITHUB_STEP_SUMMARY"
-        status=0
         # An entry marked real, or never audited, fails: a real secret is removed
         # from the tree, never parked in the baseline.
         if [ -n "${unaudited}" ]; then

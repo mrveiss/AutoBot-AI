@@ -42,6 +42,7 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
 import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
@@ -51,6 +52,11 @@ from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _REPO_ROOT = repo_root()
 _DETECTOR = _REPO_ROOT / "pipeline-scripts" / "tracked_key_material.py"
+_FLOOR_GATE = _REPO_ROOT / "pipeline-scripts" / "secrets_rescan_floor.py"
+#: How far audited findings may accumulate above the rescan FLOOR before this guard
+#: asks for it to be raised -- a maintenance interval chosen by judgement, not
+#: measured. Past it, a rescan could lose that many findings and still pass.
+_FLOOR_HEADROOM = 100
 _PRE_COMMIT = _REPO_ROOT / ".pre-commit-config.yaml"
 _BASELINE = _REPO_ROOT / ".secrets.baseline"
 _SECURITY_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "security.yml"
@@ -85,20 +91,30 @@ REACH = declare(
 )
 
 
-@functools.lru_cache(maxsize=1)
-def _detector() -> ModuleType:
-    """The CI script itself, loaded by path and registered before it executes.
+@functools.lru_cache(maxsize=None)
+def _load_script(path: Path) -> ModuleType:
+    """A CI script itself, loaded by path and registered before it executes.
 
-    Registration first, because its dataclass resolves its own annotations
+    Registration first, because a dataclass resolves its own annotations
     through ``sys.modules``.
     """
-    name = "_tracked_key_material_16275"
-    spec = importlib.util.spec_from_file_location(name, _DETECTOR)
-    assert spec is not None and spec.loader is not None, f"cannot load {_DETECTOR}"
+    name = f"_{path.stem}_16275"
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None, f"cannot load {path}"
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _detector() -> ModuleType:
+    """The shape detector the CI job runs, so the guard and the gate share one predicate."""
+    return _load_script(_DETECTOR)
+
+
+def _floor_gate() -> ModuleType:
+    """The rescan-count gate the CI job runs after detect-secrets."""
+    return _load_script(_FLOOR_GATE)
 
 
 def _planted_fernet_key() -> bytes:
@@ -226,6 +242,45 @@ def test_every_baseline_entry_carries_a_not_a_secret_verdict() -> None:
     assert not unaudited, "baseline entries without a not-a-secret verdict:\n" + "\n".join(unaudited)
 
 
+def test_the_rescan_floor_sits_just_under_the_committed_baseline() -> None:
+    """Above the baseline it reds every run; far below it, it catches only total collapse."""
+    gate = _floor_gate()
+    committed = gate.count_findings(json.loads(_BASELINE.read_text(encoding="utf-8")))
+    assert 0 < gate.FLOOR <= committed, f"FLOOR {gate.FLOOR} must sit at or under the {committed} committed findings"
+    assert committed - gate.FLOOR <= _FLOOR_HEADROOM, (
+        f"the baseline holds {committed} findings, {committed - gate.FLOOR} above FLOOR {gate.FLOOR}:"
+        " raise FLOOR so a narrowed rescan still fails"
+    )
+
+
+@pytest.mark.parametrize(
+    ("rescanned", "committed", "floor", "refusals"),
+    [
+        (1331, 1331, 1300, 0),  # read everything the baseline holds
+        (1400, 1331, 1300, 0),  # the tree grew: reading more is never a failure
+        (1299, 1331, 1300, 1),  # a narrowed scan, under the floor
+        (0, 1331, 1300, 2),  # read nothing: zero against a non-empty baseline, and under the floor
+        (0, 5, 0, 1),  # the zero-read refusal holds with no floor at all
+        (1331, 1250, 1300, 1),  # entries removed without lowering the floor
+        (0, 0, 0, 0),  # nothing committed, nothing read
+    ],
+)
+def test_the_floor_refuses_a_rescan_that_read_too_little(
+    rescanned: int, committed: int, floor: int, refusals: int
+) -> None:
+    assert len(_floor_gate().floor_problems(rescanned, committed, floor)) == refusals
+
+
+def test_findings_are_counted_from_a_planted_baseline() -> None:
+    """Every entry counts, empty is zero, and a malformed baseline raises rather than reading as zero."""
+    gate = _floor_gate()
+    assert gate.count_findings({"results": {"a.py": [{}, {}], ".env.planted": [{}]}}) == 3
+    assert gate.count_findings({"results": {}}) == 0
+    for malformed in ({}, {"results": []}, {"results": {"a.py": {}}}, []):
+        with pytest.raises(ValueError):
+            gate.count_findings(malformed)
+
+
 def test_ci_scans_every_tracked_file_on_every_event() -> None:
     """Ungated: a path filter keyed on file types would skip an extensionless dotfile."""
     job = yaml.safe_load(_SECURITY_WORKFLOW.read_text(encoding="utf-8"))["jobs"].get("secret-detection")
@@ -234,3 +289,6 @@ def test_ci_scans_every_tracked_file_on_every_event() -> None:
     runs = "\n".join(step.get("run", "") for step in job["steps"])
     assert "git ls-files -z | python3 pipeline-scripts/tracked_key_material.py" in runs
     assert "detect-secrets scan --baseline .secrets.baseline" in runs
+    # The rescan's count is asserted, not only printed: a scan that read nothing is not clean.
+    assert "python3 pipeline-scripts/secrets_rescan_floor.py" in runs, "the rescan floor is not enforced in CI"
+    assert '--rescanned .secrets.baseline --committed "${committed}"' in runs
