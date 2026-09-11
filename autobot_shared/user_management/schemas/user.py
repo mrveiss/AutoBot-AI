@@ -15,6 +15,25 @@ from typing import List
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+#: Usernames no account may take. ``"default"`` is the owner stamped on every
+#: transcriber row written before #15758. A principal with no ``user_id``
+#: resolves to its username, so an account named ``default`` would own every
+#: legacy row. The transcriber refuses that identity at request time
+#: (``transcriber.deps.resolve_user_id``); this refuses it when the account is
+#: created or renamed, which is where the clash should surface.
+RESERVED_USERNAMES = frozenset({"default"})
+
+_USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_]+$")
+
+
+def _checked_username(v: str) -> str:
+    """Validate a username's format and reservation; return it lowercased."""
+    if not _USERNAME_PATTERN.match(v):
+        raise ValueError("Username must contain only letters, numbers, and underscores")
+    if v.lower() in RESERVED_USERNAMES:
+        raise ValueError(f"Username '{v.lower()}' is reserved")
+    return v.lower()
+
 
 class RoleResponse(BaseModel):
     """Role information in responses."""
@@ -50,10 +69,8 @@ class UserCreate(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, v: str) -> str:
-        """Validate username format."""
-        if not re.match(r"^[a-zA-Z0-9_]+$", v):
-            raise ValueError("Username must contain only letters, numbers, and underscores")
-        return v.lower()
+        """Validate username format, and that it is not reserved."""
+        return _checked_username(v)
 
     @field_validator("password")
     @classmethod
@@ -85,12 +102,10 @@ class UserUpdate(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, v: str | None) -> str | None:
-        """Validate username format if provided."""
+        """Validate username format, and that it is not reserved, if provided."""
         if v is None:
             return v
-        if not re.match(r"^[a-zA-Z0-9_]+$", v):
-            raise ValueError("Username must contain only letters, numbers, and underscores")
-        return v.lower()
+        return _checked_username(v)
 
 
 class UserResponse(BaseModel):
