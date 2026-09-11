@@ -24,7 +24,7 @@
  * filters below show those counts, not file lists, for the same reason.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, type DeepReadonly } from 'vue'
 import { formatDateTime } from '@/composables/useTimezone'
 import {
   useCodeSync,
@@ -56,24 +56,24 @@ function showsGroup(group: VerdictFilter): boolean {
   return verdictFilter.value === 'all' || verdictFilter.value === group
 }
 
-function filesByVerdict(component: FullTreeComponentDrift, verdict: string): FullTreeFileVerdict[] {
+function filesByVerdict(component: DeepReadonly<FullTreeComponentDrift>, verdict: string): FullTreeFileVerdict[] {
   return component.drifted.filter((file) => file.verdict === verdict)
 }
 
-function buildBundleCount(component: FullTreeComponentDrift): number {
+function buildBundleCount(component: DeepReadonly<FullTreeComponentDrift>): number {
   return component.exclusions.build_bundle ?? 0
 }
 
 // host_state:<category> and deploy_only:<path> are both host-owned state
 // (services/full_tree_drift.py's _classify_host_state) -- grouped under the
 // one "Host state" filter an operator reads as "left alone, intentionally".
-function hostStateEntries(component: FullTreeComponentDrift): [string, number][] {
+function hostStateEntries(component: DeepReadonly<FullTreeComponentDrift>): [string, number][] {
   return Object.entries(component.exclusions).filter(
     ([name]) => name.startsWith('host_state:') || name.startsWith('deploy_only:'),
   )
 }
 
-function isComponentClean(component: FullTreeComponentDrift): boolean {
+function isComponentClean(component: DeepReadonly<FullTreeComponentDrift>): boolean {
   return (
     filesByVerdict(component, 'modified').length === 0 &&
     filesByVerdict(component, 'removed_from_source').length === 0 &&
