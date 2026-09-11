@@ -267,40 +267,38 @@ rather than coverage.
 well as removed — but it is a baseline the same way: frozen output a detector
 produced, read by a hook and a CI gate that must agree with it. Since #16353 it
 carries no `line_number`. A loaded entry's `line_number` defaults to 0
-(`potential_secret.py:30`, `:83-90`, detect-secrets v1.5.0), the pre-commit
-hook's `trim()` only overwrites a **non-zero** stored value
-(`secrets_collection.py:180-182`), and `json()` omits a zero field on write
-(`:107-108`) — so a stripped baseline stays stripped through the hook, and a
-line-only move in an already-findings file produces no diff.
+(`PotentialSecret.load_secret_from_dict`'s default, detect-secrets v1.5.0), the
+pre-commit hook's `SecretsCollection.trim` only overwrites a **non-zero** stored
+value, and `PotentialSecret.json` omits a zero field on write — so a stripped
+baseline stays stripped through the hook, and a line-only move in an
+already-findings file produces no diff.
 
 **Adding a newly audited entry must follow this order, not any other:**
 
 1. **Scan** — `detect-secrets scan --baseline .secrets.baseline`. This is a full
-   fresh rescan (`baseline.create()`, `main.py:70-75`) merged with the existing
-   verdicts via `SecretsCollection.merge()` (`secrets_collection.py:92-122`):
-   the merge keeps the *fresh scan's* secrets — every one of them, old and new,
-   now carrying a real, non-zero `line_number` from the live scan — and copies
-   over only `is_secret`/`is_verified` from the old baseline (`:116-122`). This
-   is the step the design comment on #16353 already established re-adds the
+   fresh rescan (`baseline.create()` in `detect_secrets/main.py`) merged with
+   the existing verdicts via `SecretsCollection.merge()`: the merge keeps the
+   *fresh scan's* secrets — every one of them, old and new, now carrying a
+   real, non-zero `line_number` from the live scan — and that same `merge()`
+   copies over only `is_secret`/`is_verified` from the old baseline. This is
+   the step the design comment on #16353 already established re-adds the
    field; `--slim` is ignored alongside `--baseline`.
 2. **Audit** — `detect-secrets audit .secrets.baseline`, to label whatever the
    scan added. This step needs the line numbers step 1 just restored.
-   `audit_baseline` (`audit/audit.py:18-27`) calls `secrets.trim()` with no
-   `scanned_results` — on a baseline that already has an entry for every
-   currently-existing file, this only drops entries whose file vanished, it
-   does not touch `line_number` — then `_classify_secrets`, which iterates
+   `audit_baseline` (in `detect_secrets/audit/audit.py`) calls `secrets.trim()`
+   with no `scanned_results` — on a baseline that already has an entry for
+   every currently-existing file, this only drops entries whose file vanished,
+   it does not touch `line_number` — then `_classify_secrets`, which iterates
    `get_secret_iterator(secrets)`. That iterator yields only entries with
-   `is_secret is None` (`audit/iterator.py:16`) — the newly-scanned, unlabelled
-   ones. For each, `_classify_secrets` calls the singular
-   `get_raw_secret_from_file(secret)` (`audit/common.py:45-63`) to render the
-   code snippet the auditor labels. That function raises `NoLineNumberError`
-   when `not secret.line_number` (`:57-58`), and the caller's `except
-   NoLineNumberError` **breaks the whole classification loop**
-   (`audit/audit.py:70-72`) — one unlabelled entry with `line_number == 0`
-   stops the audit at whatever entry the iterator reaches first, silently,
-   with no further entries reviewed. Running `audit` before `scan`, or after
-   stripping, hits exactly this on any baseline that still has something
-   unlabelled.
+   `is_secret is None` — the newly-scanned, unlabelled ones. For each,
+   `_classify_secrets` calls the singular `get_raw_secret_from_file(secret)`
+   to render the code snippet the auditor labels. That function raises
+   `NoLineNumberError` when `not secret.line_number`, and the caller's
+   `except NoLineNumberError` **breaks the whole classification loop** — one
+   unlabelled entry with `line_number == 0` stops the audit at whatever entry
+   the iterator reaches first, silently, with no further entries reviewed.
+   Running `audit` before `scan`, or after stripping, hits exactly this on any
+   baseline that still has something unlabelled.
 3. **Strip** — `jq --indent 2 'del(.results[][].line_number)' .secrets.baseline
    > tmp && mv tmp .secrets.baseline`, then commit. Re-run this every time
    after step 1, since step 1 re-adds the field to every entry, not only the

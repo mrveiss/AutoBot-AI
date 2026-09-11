@@ -6,25 +6,27 @@
 
 The detect-secrets pre-commit hook rewrites the baseline whenever a staged file
 with findings gains or loses lines, even when no finding is added or removed:
-``trim()`` (``secrets_collection.py:180-182``, v1.5.0) copies the fresh scan's
-line number onto every stored entry whose own ``line_number`` is non-zero. Two
-PRs that only shift lines in the same file then conflict in the baseline, and
-whichever lands second regenerates -- and rewrites -- it again.
+``SecretsCollection.trim``'s non-zero ``line_number`` guard (v1.5.0) copies the
+fresh scan's line number onto every stored entry whose own ``line_number`` is
+non-zero. Two PRs that only shift lines in the same file then conflict in the
+baseline, and whichever lands second regenerates -- and rewrites -- it again.
 
 Stripping the field breaks that cycle without touching the upstream hook. A
-loaded entry with no ``line_number`` defaults to 0 (``potential_secret.py:30``,
-``:83-90``), ``trim()``'s guard is false for a zero, so it is never overwritten,
-and ``json()`` omits a zero field on write (``potential_secret.py:107-108``).
-detect-secrets' own identity for a finding is ``(filename, secret_hash, type)``
-(``secrets_collection.py:51-54``) -- line-independent already -- so a stripped
-baseline stays stripped through the hook, and a line-only move produces no diff.
+loaded entry with no ``line_number`` defaults to 0
+(``PotentialSecret.load_secret_from_dict``'s default), ``trim()``'s guard is
+false for a zero, so it is never overwritten, and ``PotentialSecret.json``
+omits a zero field on write. detect-secrets' own identity for a finding is
+``(filename, secret_hash, type)`` -- ``PotentialSecret``'s ``fields_to_compare``
+-- line-independent already -- so a stripped baseline stays stripped through
+the hook, and a line-only move produces no diff.
 
 A *regenerate* reintroduces the field: ``detect-secrets scan --baseline``
-re-adds ``line_number`` when it merges a fresh scan into the baseline
-(``main.py:85-87``), and ``--slim`` is ignored together with ``--baseline``. So
-the strip below is a step to repeat after any regenerate, not a one-time edit --
-this guard is what catches a regenerate that skipped it, before the next PR's
-line-only diff does instead.
+re-adds ``line_number`` when the scan command's ``merge()`` in
+``detect_secrets/main.py`` folds a fresh scan into the baseline, and
+``--slim`` is ignored together with ``--baseline``. So the strip below is a
+step to repeat after any regenerate, not a one-time edit -- this guard is
+what catches a regenerate that skipped it, before the next PR's line-only
+diff does instead.
 """
 
 from __future__ import annotations
