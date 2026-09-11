@@ -30,10 +30,26 @@ USER_HEADER = "x-test-user"
 
 
 @pytest_asyncio.fixture
-async def client(tmp_path):
+async def db(tmp_path):
+    """Transcriber database shared by `client` and by tests that seed rows directly."""
+    _db = Database(str(tmp_path / "test.db"))
+    await _db.connect()
+    try:
+        yield _db
+    finally:
+        # #13861: `connect()` had no matching `close()`, and aiosqlite runs its
+        # connection on a NON-daemon worker thread. Every one of the 8 tests
+        # created a fixture, so 8 threads outlived the run and the interpreter
+        # could never exit — the suite passed, printed `........ [100%]`, and
+        # then hung until CI cancelled the job at 15 minutes. 20 of 20 runs
+        # across seven branches ended `cancelled`, never once pass or fail.
+        await _db.close()
+
+
+@pytest_asyncio.fixture
+async def client(tmp_path, db):
     """App with both routers and header-driven request.state.user identity."""
     app = FastAPI()
-    db = Database(str(tmp_path / "test.db"))
     upload_dir = tmp_path / "uploads"
     upload_dir.mkdir()
 
@@ -47,24 +63,14 @@ async def client(tmp_path):
             request.state.user = SimpleNamespace(id=uid)
         return await call_next(request)
 
-    await db.connect()
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[authenticate] = lambda: None
     app.state.transcriber_upload_dir = str(upload_dir)
     app.include_router(projects_router, prefix="/api/transcriber")
     app.include_router(recordings_router, prefix="/api/transcriber")
 
-    try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            yield c
-    finally:
-        # #13861: `connect()` had no matching `close()`, and aiosqlite runs its
-        # connection on a NON-daemon worker thread. Every one of the 8 tests
-        # created a fixture, so 8 threads outlived the run and the interpreter
-        # could never exit — the suite passed, printed `........ [100%]`, and
-        # then hung until CI cancelled the job at 15 minutes. 20 of 20 runs
-        # across seven branches ended `cancelled`, never once pass or fail.
-        await db.close()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        yield c
 
 
 async def _create_project(client, user: str) -> int:
@@ -189,18 +195,18 @@ async def test_second_user_cannot_access_recordings(client):
 
 
 @pytest.mark.asyncio
-async def test_legacy_default_rows_not_accessible_to_other_users(client):
+async def test_legacy_default_rows_not_accessible_to_other_users(client, db):
     """DEFAULT_USER rows are NOT shared across real users (#9968 IDOR fix).
 
-    Pre-auth rows (stamped DEFAULT_USER) are accessible only by the
-    DEFAULT_USER caller.  Real authenticated users are denied — the old
-    "any caller can read default rows" behaviour was the IDOR.  Cross-user
-    reassignment of legacy rows is tracked separately.
+    Pre-auth rows (stamped DEFAULT_USER) are accessible to the DEFAULT_USER
+    caller and, since #15758, to admins.  Real authenticated users are denied —
+    the old "any caller can read default rows" behaviour was the IDOR.
+    Cross-user reassignment of legacy rows is tracked separately.
+
+    The row is seeded directly: since #15758 every route authenticates, so no
+    request can create a DEFAULT_USER row any more.
     """
-    r = await client.post(
-        "/api/transcriber/projects", json={"name": "legacy", "description": ""}
-    )  # no user header -> DEFAULT_USER
-    pid = r.json()["id"]
+    pid = await db.create_project("legacy", "", DEFAULT_USER)
     # Real user bob is DENIED access to a DEFAULT_USER-owned row
     r = await client.get(f"/api/transcriber/projects/{pid}", headers={USER_HEADER: "bob"})
     assert r.status_code == 404, "IDOR (#9968): real user should not access DEFAULT_USER rows"
