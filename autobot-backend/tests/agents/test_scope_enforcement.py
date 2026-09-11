@@ -23,6 +23,7 @@ from agents.base_agent_types import AgentRequest
 from agents.scope_enforcement import ClaimNotHeld, hold_scopes, refused_response, require_held
 from autobot_shared.coordination.run_progress import current_run, record_progress
 from autobot_shared.coordination.work_claims import ClaimMode, ClaimUnavailable, ScopeError, list_claims, try_acquire
+from autobot_shared.eventually import eventually
 
 try:
     import fakeredis.aioredis as fakeredis_async
@@ -229,6 +230,7 @@ async def test_a_run_that_keeps_reporting_progress_keeps_its_claim(redis, monkey
     renewals = _fast(monkeypatch, window=2.0)
     async with hold_scopes(["path:a/b.py"], agent_id="agent-1", task_id="t1", intent="write"):
         for _ in range(16):
+            # fixed sleep on purpose (#16255): elapsed time is the subject; the run must outlast the stall window
             await asyncio.sleep(0.25)
             record_progress()
         assert current_run().standing == "held"
@@ -240,10 +242,11 @@ async def test_a_run_that_goes_silent_lapses_and_stops_renewing(redis, monkeypat
     """A run hung on an await reports nothing, so its renewal stops and its claim is marked lapsed."""
     renewals = _fast(monkeypatch, window=1.5)
     async with hold_scopes(["path:a/b.py"], agent_id="agent-1", task_id="t1", intent="write"):
-        await asyncio.sleep(3.5)
         run = current_run()
-        assert run.standing == "lapsed" and "no progress" in run.lapse_reason
+        await eventually(lambda: run.standing == "lapsed")
+        assert "no progress" in run.lapse_reason
         settled = len(renewals)
+        # fixed sleep on purpose (#16255): nothing may happen here; a renewal interval passes with no renew
         await asyncio.sleep(1.2)
         assert len(renewals) == settled, "a stalled run's claim was still being renewed"
 
@@ -257,10 +260,9 @@ async def test_progress_from_a_spawned_task_reaches_the_run(redis):
 
     async with hold_scopes(["path:a/b.py"], agent_id="agent-1", task_id="t1", intent="write"):
         run = current_run()
-        before = run.last_progress
-        await asyncio.sleep(0.05)
+        run.last_progress = 0.0
         await asyncio.create_task(_child())
-        assert run.last_progress > before
+        assert run.last_progress > 0.0
 
 
 @pytest.mark.asyncio
@@ -268,10 +270,9 @@ async def test_progress_in_a_nested_run_is_progress_of_the_outer_one(redis):
     async with hold_scopes(["path:a/one.py"], agent_id="agent-1", task_id="t1", intent="write"):
         outer = current_run()
         async with hold_scopes(["path:a/two.py"], agent_id="agent-1", task_id="t1", intent="write"):
-            before = outer.last_progress
-            await asyncio.sleep(0.05)
+            outer.last_progress = 0.0
             record_progress()
-            assert outer.last_progress > before
+            assert outer.last_progress > 0.0
 
 
 def test_reporting_progress_outside_a_run_does_nothing():
@@ -295,7 +296,8 @@ async def test_a_write_under_a_lapsed_claim_is_refused(redis, monkeypatch):
     """A run that stalled and woke up must not write over a scope someone else may now hold."""
     _fast(monkeypatch, window=0.5)
     async with hold_scopes(["kb:entry"], agent_id="agent-1", task_id="t1", intent="write"):
-        await asyncio.sleep(2.2)
+        run = current_run()
+        await eventually(lambda: run.standing == "lapsed")
         with pytest.raises(ClaimNotHeld, match="lapsed"):
             require_held(["kb:entry"], site="test")
 
@@ -368,7 +370,8 @@ async def test_the_kb_librarian_will_not_write_under_a_lapsed_claim(redis, monke
     _fast(monkeypatch, window=0.5)
 
     async with hold_scopes(scopes, agent_id="kb", task_id="t1", intent="add_knowledge"):
-        await asyncio.sleep(2.2)
+        run = current_run()
+        await eventually(lambda: run.standing == "lapsed")
         with pytest.raises(ClaimNotHeld):
             await agent._handle_add_knowledge(request)
     assert writes == [], "the write went through under a lapsed claim"
