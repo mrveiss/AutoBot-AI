@@ -212,22 +212,27 @@ def test_logical_lines_with_no_continuation_is_one_entry_per_physical_line() -> 
 
 
 def test_logical_lines_folds_a_two_line_continuation() -> None:
-    """The shape a persistent override is actually written in (#15961)."""
-    joined = helpers.logical_lines("git config \\\n  core.hooksPath /tmp/x")
+    """The shape a long invocation is actually written in (#15961).
+
+    Neutral tokens on purpose: the guards that call this helper scan every
+    tracked file, this one included, so a real offending spelling would trip
+    them. The guards' own test files carry the real spellings as fixtures.
+    """
+    joined = helpers.logical_lines("some-tool subcommand \\\n  --dangerous-flag /tmp/x")
     assert len(joined) == 1
     number, line = joined[0]
     assert number == 1
-    assert "git config" in line and "core.hooksPath /tmp/x" in line
+    assert "some-tool subcommand" in line and "--dangerous-flag /tmp/x" in line
 
 
 def test_logical_lines_folds_a_three_line_continuation() -> None:
-    joined = helpers.logical_lines("git \\\n  -c \\\n  core.hooksPath=/tmp/x commit")
+    joined = helpers.logical_lines("some-tool \\\n  -o \\\n  option=/tmp/x run")
     assert len(joined) == 1
     number, line = joined[0]
     assert number == 1
-    assert "-c" in line
-    assert "core.hooksPath=/tmp/x" in line
-    assert "commit" in line
+    assert "-o" in line
+    assert "option=/tmp/x" in line
+    assert "run" in line
 
 
 def test_logical_lines_does_not_fold_a_mid_line_backslash() -> None:
