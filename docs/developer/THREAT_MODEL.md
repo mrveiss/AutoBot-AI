@@ -30,10 +30,9 @@ known base · `resolve_within_sandbox` (:288) the file-management sandbox ·
   refusals (absolute, `..`, drive qualifier) are defence in depth only; replacing it is a smell (#15786).
 - The validated string is the string used. Validating `user_path` then opening something
   rebuilt from the original input is a finding.
-- `resolve_within_sandbox` forbids **any** `..`, `~`, leading `/`, or
-  `SANDBOX_INVALID_PATH_CHARACTERS` (:45) — in-bounds or not. `''`, `'/'`, `'//'` legitimately
-  address the sandbox root and return it unchanged (#11823); a diff that makes them raise
-  again breaks root listing.
+- `resolve_within_sandbox` forbids **any** `..`, `~`, leading `/`, or `SANDBOX_INVALID_PATH_CHARACTERS` (:45)
+  — in-bounds or not. `''`, `'/'`, `'//'` legitimately address the sandbox root and return it unchanged
+  (#11823); a diff that makes them raise again breaks root listing.
 
 **Known bypass shapes:** double percent-encoding (`%252e%252e`), Unicode confusables
 (`﹒﹒`, `‥`), null byte via encoding, symlink pointing out of the root, a `MagicMock`
@@ -61,10 +60,9 @@ the one read-side gate · `validate_ownership` (:613).
   [`security/enforcement_mode.py`](../../autobot-backend/security/enforcement_mode.py), to
   `DEGRADED_ENFORCEMENT_MODE` (:53) and never to `disabled`: checks still run and violations
   are still recorded (#14010). A new `except` that returns `"disabled"` is a fail-open.
-- A resolution that degraded stays marked `degraded` (:73), so a `log_only` decision record
-  says which of the two `log_only` states produced it (#15159). It marks the record only —
-  `log_only` is allow-and-audit in both, deliberately. A degraded route reporting the chosen
-  `reason` is a finding.
+- A resolution that degraded stays marked `degraded` (:73), so a `log_only` decision record says
+  which of the two `log_only` states produced it (#15159). It marks the record only — `log_only` is
+  allow-and-audit in both, deliberately. A degraded route reporting the chosen `reason` is a finding.
 - Only two legitimate fast-path bypasses exist, in
   [`security/session_ownership.py`](../../autobot-backend/security/session_ownership.py) —
   `_resolve_fast_paths` (:480): global auth disabled, and enforcement explicitly `disabled`.
@@ -89,9 +87,8 @@ Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-back
 
 - A plugin route without `Depends(check_admin_permission)` is remote code execution.
   This is the single highest-severity shape in this subsystem — check it first.
-- Extraction goes through `archive_safety`; [`plugin_install.py`](../../autobot-backend/plugin_install.py)
-  only re-exports `_validate_zip_metadata` and `_safe_extract`.
-  A local `zf.extractall` reintroduces zip-slip and symlink escape.
+- Extraction goes through `archive_safety`; [`plugin_install.py`](../../autobot-backend/plugin_install.py) only
+  re-exports `_validate_zip_metadata` and `_safe_extract`. A local `zf.extractall` reintroduces zip-slip and symlink escape.
 - Names match `_NAME_PATTERN` (:36) before any filesystem touch; the target is claimed by `_claim_install_target` (:107)
   via `mkdir(exist_ok=False)`, which — with the per-name `_install_locks` — is what makes the collision check TOCTOU-free.
 - Git installs: scheme restricted to http(s), `--` before the URL, `protocol.file.allow=never`, no submodule recursion,
@@ -127,10 +124,13 @@ for service-to-service · [`services/auth.py`](../../autobot-slm-backend/service
 - Keys come from SSOT config, never a literal. A default value for an encryption key is a
   finding even when production overrides it via env var.
 - SLM token revocation fails CLOSED (#16387, owner decision): when the HS256 jti-denylist check
-  (`is_jti_revoked` (:131) in [`token_denylist.py`](../../autobot-slm-backend/services/token_denylist.py))
+  (`is_jti_revoked` (:132) in [`token_denylist.py`](../../autobot-slm-backend/services/token_denylist.py))
   or the password-epoch check can't run because Redis errored, `decode_token_async` denies the token (401)
   instead of reading "could not check" as "not revoked" — a Redis outage takes SLM login down, including
   the backend admin path reached through the proxy (#16374).
+- The RS256 authority-token path fails CLOSED the same way (#16412): [`rs256_denylist.py`](../../autobot-slm-backend/services/rs256_denylist.py)
+  `is_rs256_jti_revoked` (:91) raises on a Redis error rather than reporting "not revoked"; its caller
+  [`jwks_verifier.py`](../../autobot-slm-backend/services/jwks_verifier.py) `verify_authority_token` (:177) denies the token (401) at both call sites; the write side stays best-effort.
 
 ## Cross-cutting
 
