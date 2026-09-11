@@ -82,7 +82,10 @@ class TestStopRacesAMidFlightCreate:
         assert await _wait_for(client.containers.entered.is_set), "the create never started"
 
         stop = asyncio.create_task(pool.stop())
-        await asyncio.sleep(0.05)
+        # One scheduling turn, not a fixed delay (#16255): the replenish already
+        # holds ``_replenish_lock`` (confirmed by ``entered`` above), so stop()
+        # blocks on it as soon as it is first scheduled -- no real wait needed.
+        await asyncio.sleep(0)
         assert not stop.done(), (
             "stop() returned while a create was still in flight — whatever that create produces "
             "has nowhere to be recorded and is leaked"
