@@ -238,10 +238,10 @@ function formatExpiry(ts: number): string {
 
 .connection-status { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; }
-.status-dot.connected { background: #22c55e; }
-.status-dot.disconnected { background: #ef4444; }
+.status-dot.connected { background: var(--color-success); }
+.status-dot.disconnected { background: var(--color-error); }
 .status-text { font-size: 0.85rem; color: var(--autobot-text-secondary); }
-.connected-text { color: #22c55e; }
+.connected-text { color: var(--color-success); }
 .expiry-note { font-size: 0.75rem; color: var(--autobot-text-muted); }
 
 .tos-notice { font-size: 0.75rem; color: var(--autobot-text-muted); margin-bottom: 0.5rem; }
@@ -252,9 +252,9 @@ function formatExpiry(ts: number): string {
 .device-instruction { padding: 0.75rem; background: var(--autobot-bg-surface); border-radius: 6px; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem; }
 .device-code { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.15em; text-align: center; padding: 0.25rem; }
 
-.btn-danger-sm { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid #ef4444; color: #ef4444; background: transparent; cursor: pointer; }
-.btn-danger-sm:hover { background: #fee2e2; }
+.btn-danger-sm { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid var(--color-error); color: var(--color-error); background: transparent; cursor: pointer; }
+.btn-danger-sm:hover { background: var(--color-error-bg); }
 .btn-sm { font-size: 0.8rem; padding: 0.3rem 0.75rem; }
 
-.error-msg { color: #ef4444; font-size: 0.8rem; }
+.error-msg { color: var(--color-error); font-size: 0.8rem; }
 </style>
