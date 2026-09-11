@@ -40,8 +40,20 @@ on:
       - 'autobot-slm-frontend/src/types/generated/api.ts'
       - '.github/workflows/auto-fix-generated-types.yml'
 
+# #16360: a run caused by this workflow's OWN push (github-actions[bot]
+# committing the regenerated types) gets a group of its own. Before this, the
+# `approve-parked-runs` job below released that parked run, the released run
+# joined this group, and its cancel-in-progress cancelled the very run the
+# approver lives in: on #16351 the released run 34615151655 started at
+# 15:23:12Z and the approver's run 34612780429 was cancelled at 15:23:15Z.
+# Separating the GROUP is used rather than a per-run cancel-in-progress
+# expression because it does not depend on which run's setting governs a
+# cancel, which GitHub does not document. `github.actor` is the bot on that run
+# (run API: actor and triggering_actor both github-actions[bot]; the human run
+# it cancelled: both the PR author) and, unlike `github.triggering_actor`, stays
+# the bot if a human later approves or re-runs it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref }}${{ github.actor == 'github-actions[bot]' && format('-regen-{0}', github.event.pull_request.head.sha) || '' }}
   cancel-in-progress: true
 
 permissions:
@@ -213,9 +225,11 @@ jobs:
   # the `synchronize` event the push raises is itself attributed to
   # github-actions[bot], so a watchdog run it triggers would park too,
   # awaiting the very approval it exists to grant (see the header comment in
-  # ci-dispatch-watchdog.yml). Its `schedule` cron still catches this within
-  # 15 minutes, but leaves the PR parked with zero visible failing checks
-  # until then. This job repairs it immediately — in the SAME workflow run
+  # ci-dispatch-watchdog.yml). Its `schedule` cron is not a dependable
+  # backstop: GitHub fires that `*/15` cron every few hours, not every 15
+  # minutes (7 `schedule` runs among the 200 watchdog runs up to 2026-09-11,
+  # #16360), and the PR sits parked with zero visible failing checks until
+  # then. This job repairs it immediately — in the SAME workflow run
   # that did the push, which was triggered by whatever human action opened or
   # updated the PR and is therefore not itself parked — using the identical
   # script the watchdog runs (`ci_dispatch_watchdog.py --check dispatch`), not
@@ -240,10 +254,42 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The sweep's output is kept for the summary step below. pipefail keeps
+      # the script's exit code, which `| tee` would otherwise discard.
       - name: Approve the run this push just parked
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           WATCHDOG_BASE_BRANCH: main
           WATCHDOG_ONLY_PR: ${{ github.event.pull_request.number }}
-        run: python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch | tee "$RUNNER_TEMP/approval-sweep.log"
+
+      # #16360 AC3: the sweep's result where a human looks, not only in the log.
+      - name: Summarise the approval sweep
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Parked-run approval for PR #${{ github.event.pull_request.number }}"
+            echo
+            grep -E "Sweep complete:|could NOT approve|left with parked runs|leaving .* parked" \
+              "$RUNNER_TEMP/approval-sweep.log" 2>/dev/null || echo "The sweep printed no result line; see its step log."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # #16360 AC3: a cancelled approver cannot report from inside the sweep,
+      # and whatever it had not approved yet stays parked. A `cancelled()` step
+      # still runs, so it names the gap and hands the sweep to the watchdog:
+      # workflow_dispatch is the one trigger the GITHUB_TOKEN may use to start
+      # a run.
+      - name: Hand an interrupted sweep to the watchdog
+        if: cancelled()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "::error title=Parked-run approval was cancelled::PR #${{ github.event.pull_request.number }} may still have runs awaiting approval; dispatching the CI Dispatch Watchdog sweep (#16360)."
+          echo "Approval sweep cancelled before it finished; CI Dispatch Watchdog dispatched to finish it (#16360)." >> "$GITHUB_STEP_SUMMARY"
+          gh workflow run ci-dispatch-watchdog.yml --repo "${{ github.repository }}" --ref Dev_new_gui
