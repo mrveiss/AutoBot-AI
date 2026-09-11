@@ -48,9 +48,12 @@ admin-role dependency.
 from __future__ import annotations
 
 import re
+import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 from repo_tests._paths import repo_root
+
+from autobot_shared.paths import scrubbed_git_env
 
 REPO_ROOT = repo_root()
 
@@ -235,9 +238,18 @@ def _nginx_template_paths() -> list[Path]:
     Discovered by content, not a hand-maintained path list — a config-shaped
     template (a ``location`` block exists) is in scope regardless of where it
     lives, so a new proxy vhost is covered without a matching edit here.
+
+    Discovery walks ``git ls-files`` under ``scrubbed_git_env()`` rather than
+    a filesystem glob from the repo root: this repo keeps worktrees inside the
+    working copy, so a raw walk can wander into another checkout (#15955,
+    tripped by this test's own first version).
     """
+    result = subprocess.run(  # nosec B603 B607
+        ["git", "ls-files", "*.j2"], cwd=REPO_ROOT, capture_output=True, text=True, check=False, env=scrubbed_git_env()
+    )
     paths = []
-    for path in sorted(REPO_ROOT.glob("**/*.j2")):
+    for rel in sorted(result.stdout.splitlines()):
+        path = REPO_ROOT / rel
         if "node_modules" in path.parts:
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")
