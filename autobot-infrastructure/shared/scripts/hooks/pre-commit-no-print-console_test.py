@@ -70,7 +70,14 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # carrying noqa. It was wrong because a multi-line call reports as ONE violation
 # spanning a line range, and some occurrences sit inside strings. A count of a proxy
 # is not a count of the thing, and the ratchet is pinned to the thing.
-_KNOWN_REPO_VIOLATIONS = 359
+#
+# 352 since #16318: pipeline-scripts/generate_env_docs.py and
+# check_env_var_registry.py are CLI tools whose stdout/stderr IS their
+# interface, the same #1082 allowance `scripts/` entry points and tools/lint/
+# already carry -- their 7 print() call sites (2 multi-line, counted once
+# each) now carry `# noqa: print` rather than a logger conversion.
+# 359 - 7 = 352 exactly.
+_KNOWN_REPO_VIOLATIONS = 352
 
 
 def _test_git_env() -> dict[str, str]:
