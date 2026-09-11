@@ -1,10 +1,24 @@
 name: import-hermeticity-sweep
 
-# Deliberately NOT on pull_request. The sweep starts 606 interpreters, one per
-# module, and a base merge already multiplies every workflow by the number of open
-# PRs (#16203). This asks a question about the tree, not about a diff, so it runs on
-# a schedule and on demand.
+# The sweep starts 606 interpreters, one per module, and asks a question about the
+# tree rather than a diff, so its reader is the nightly schedule. But a schedule runs
+# the DEFAULT branch's copy of a workflow, and that branch does not carry this one, so
+# on its own the schedule never fires (#16221). The pull_request trigger is what runs
+# it against Dev_new_gui work, path-filtered to the trees it imports and installs so
+# the cost (#16203) lands only on a PR that can change the answer. A PR run fails its
+# own check on offenders but never opens, updates or closes an issue: those describe
+# the base branch, not a diff that may never merge.
 on:
+  pull_request:
+    branches: [Dev_new_gui]
+    paths:
+      - 'autobot-backend/**'
+      - 'autobot-slm-backend/**'
+      - 'autobot_shared/**'
+      - 'requirements-ci.txt'
+      - 'requirements-ci/**'
+      - 'repo_tests/import_hermeticity_test.py'
+      - '.github/workflows/import-hermeticity-sweep.yml'
   schedule:
     - cron: "0 4 * * *"  # daily 04:00 UTC
   workflow_dispatch:
@@ -14,15 +28,18 @@ permissions:
 
 concurrency:
   group: import-hermeticity-sweep-${{ github.ref }}
-  cancel-in-progress: false
+  # A superseded PR run can be dropped; a scheduled or dispatched run is the
+  # reading of the base and must finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   sweep:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # issues: write so a red sweep reaches a reader. A schedule-only job has no PR
-    # and no author to notify, so without it a regression merges green and the
-    # 04:00 run goes red with nobody told (#16199 review).
+    # issues: write so a red sweep reaches a reader. A scheduled run has no PR and
+    # no author to notify, so without it a regression merges green and the 04:00
+    # run goes red with nobody told (#16199 review). PR runs never use it: every
+    # issue step below is gated off pull_request.
     permissions:
       contents: read
       issues: write
@@ -61,12 +78,14 @@ jobs:
           AUTOBOT_IMPORT_HERMETICITY_SWEEP: "1"
         run: |
           set -uo pipefail
-          # rc is captured rather than allowed to abort the job, because the
-          # reporting steps below have to run on exactly the failing path
-          # (same shape as ratchet-base-guard.yml).
+          # errexit is lifted around the pipeline: this step runs under bash -e, so a failing
+          # sweep would abort here before rc is captured, and a real offender would be filed
+          # as "could not run" (#16237). Not `|| true`: that resets PIPESTATUS.
+          set +e
           python -m pytest repo_tests/import_hermeticity_test.py -p no:cacheprovider -q \
             2>&1 | tee sweep-output.txt
           rc=${PIPESTATUS[0]}
+          set -e
           echo "rc=${rc}" >>"$GITHUB_OUTPUT"
           {
             echo 'report<<SWEEP_EOF'
@@ -101,7 +120,8 @@ jobs:
         # `success() &&` is load-bearing: a custom `if:` REPLACES the implicit
         # success(), so without it a failed install would leave rc unset, compare
         # unequal to '0', and file an offender report for a sweep that never ran.
-        if: success() && steps.sweep.outputs.rc != '0'
+        # Off pull_request: a PR run reports through its own red check (#16221).
+        if: success() && github.event_name != 'pull_request' && steps.sweep.outputs.rc != '0'
         uses: actions/github-script@v9
         env:
           # Through the environment, never interpolated into the script body: the
@@ -120,8 +140,8 @@ jobs:
               process.env.SWEEP_REPORT || '(the sweep produced no output)',
               '```',
               '',
-              'The sweep runs on a schedule, not per PR (#16203), so the change that caused this',
-              'has already merged. This issue is its only reader; a clean run closes it.',
+              'Only scheduled and dispatched runs file this issue; a pull-request run reports',
+              'through its own red check instead (#16221). A clean scheduled run closes it.',
               '',
               'Filed automatically by `.github/workflows/import-hermeticity-sweep.yml` (#16198).',
             ].join('\n');
@@ -143,7 +163,8 @@ jobs:
             }
 
       - name: Close the sweep-failure issue once the sweep is clean again
-        if: success() && steps.sweep.outputs.rc == '0'
+        # Off pull_request: a clean diff says nothing about whether the base is clean.
+        if: success() && github.event_name != 'pull_request' && steps.sweep.outputs.rc == '0'
         uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -168,7 +189,8 @@ jobs:
         # The sweep step never fails (it captures rc), so failure() here means an
         # earlier step did -- checkout, setup or the dependency install. That is a
         # sweep that never looked, and it must not read as a clean night either.
-        if: failure()
+        # On a pull_request run the red check is the report; no issue is filed.
+        if: failure() && github.event_name != 'pull_request'
         uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -195,5 +217,5 @@ jobs:
       - name: Fail the run when the sweep found offenders
         if: success() && steps.sweep.outputs.rc != '0'
         run: |
-          echo "::error::the import-hermeticity sweep found offenders -- see the issue this run just filed or updated"
+          echo "::error::the import-hermeticity sweep found offenders -- the list is in this run's summary, and off pull_request in the issue this run filed or updated"
           exit 1
