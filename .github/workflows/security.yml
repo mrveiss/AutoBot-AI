@@ -146,12 +146,13 @@ jobs:
     # runs at `any` — filtering by a severity the tool never emits would pass
     # everything through while looking like a threshold.
     #
-    # MEASURED BACKLOG: 4 advisories, every one of them in `chromadb==1.5.9`
-    # (PYSEC-2026-311, CVE-2026-45830, CVE-2026-45831, CVE-2026-45833). They are
-    # named individually below rather than absorbed by a count, so a FIFTH
-    # advisory — or a different advisory in a different package — turns this step
-    # red on the run it appears. An allowance the scanner has stopped reporting
-    # also fails, so this list must shrink as the fix lands. Bumping chromadb is
+    # MEASURED BACKLOG: 1 advisory, in `chromadb==1.5.9`
+    # (PYSEC-2026-311). It is named individually below rather than absorbed by
+    # a count, so a SECOND advisory — or a different advisory in a different
+    # package — turns this step red on the run it appears. An allowance the
+    # scanner has stopped reporting also fails, so this list must shrink as
+    # the fix lands (CVE-2026-45830, CVE-2026-45831, CVE-2026-45833 dropped
+    # off the scanner and were removed here as a result). Bumping chromadb is
     # tracked as #15052: it is a core RAG dependency and the bump needs its own
     # verification, not a line in a CI-wiring change.
     - name: Python Dependency Audit
@@ -166,10 +167,7 @@ jobs:
           --report python-audit.json \
           --title "Python dependency audit (pip-audit)" \
           --fail-on any \
-          --allow-id PYSEC-2026-311 \
-          --allow-id CVE-2026-45830 \
-          --allow-id CVE-2026-45831 \
-          --allow-id CVE-2026-45833
+          --allow-id PYSEC-2026-311
 
     # REPORT ONLY, and the step name says so (#13543). `safety check` without
     # credentials is deprecated upstream and cannot be relied on to produce a
