@@ -129,3 +129,9 @@ python:
   # change that skips the suite guarding it -- the guard would be bypassable by
   # touching the one file it exists to watch. #15900's coverage checker caught it.
   - 'constraints/ansible-core.txt'
+  # #16275: `no_tracked_key_material_test.py` asserts every entry in the
+  # detect-secrets baseline carries an audited verdict and that its version
+  # matches the hook and the CI install. Without an entry here, a change confined
+  # to the baseline -- an unaudited finding parked in it -- skips that guard. The
+  # ungated `secret-detection` job in security.yml checks the verdicts too.
+  - '.secrets.baseline'
