@@ -239,7 +239,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onBeforeUnmount } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { BaseModal } from '@autobot/ui'
@@ -312,6 +312,30 @@ const COMMAND_TIMEOUT = 30000   // 30 seconds
 const KILL_TIMEOUT = 15000      // 15 seconds
 const WORKFLOW_TIMEOUT = 20000  // 20 seconds
 
+// #16315: each modal shows at most one message (error or success) at a
+// time, so its auto-hide timer is tracked per modal ("slot") rather than
+// per ref. A new message in a slot cancels that slot's own pending timer
+// instead of leaving it to blank the newer message early, and unmounting
+// clears every slot so a timer never fires into a disposed component.
+type MessageSlot = 'connection' | 'command' | 'kill' | 'workflow'
+const autoHideTimers = new Map<MessageSlot, ReturnType<typeof setTimeout>>()
+
+const scheduleAutoHide = (slot: MessageSlot, setter: (msg: string) => void, delayMs: number) => {
+  const pending = autoHideTimers.get(slot)
+  if (pending !== undefined) {
+    clearTimeout(pending)
+  }
+  autoHideTimers.set(slot, setTimeout(() => {
+    setter('')
+    autoHideTimers.delete(slot)
+  }, delayMs))
+}
+
+onBeforeUnmount(() => {
+  autoHideTimers.forEach((timer) => clearTimeout(timer))
+  autoHideTimers.clear()
+})
+
 // Utility function to clear all messages
 const clearMessages = () => {
   connectionError.value = ''
@@ -325,7 +349,7 @@ const clearMessages = () => {
 }
 
 // Standard error handler
-const handleError = (error: unknown, setter: (msg: string) => void) => {
+const handleError = (error: unknown, setter: (msg: string) => void, slot: MessageSlot) => {
   logger.error('Terminal modal error:', error)
 
   let errorMessage = 'An unexpected error occurred'
@@ -352,19 +376,15 @@ const handleError = (error: unknown, setter: (msg: string) => void) => {
   setter(errorMessage)
 
   // Auto-hide error after 10 seconds
-  setTimeout(() => {
-    setter('')
-  }, 10000)
+  scheduleAutoHide(slot, setter, 10000)
 }
 
 // Standard success handler
-const handleSuccess = (message: string, setter: (msg: string) => void) => {
+const handleSuccess = (message: string, setter: (msg: string) => void, slot: MessageSlot) => {
   setter(message)
 
   // Auto-hide success after 5 seconds
-  setTimeout(() => {
-    setter('')
-  }, 5000)
+  scheduleAutoHide(slot, setter, 5000)
 }
 
 // Enhanced action handlers with error handling and loading states
@@ -389,10 +409,10 @@ const handleReconnect = async () => {
 
     await Promise.race([reconnectPromise, timeoutPromise])
 
-    handleSuccess('Successfully reconnected to terminal', (msg) => connectionSuccess.value = msg)
+    handleSuccess('Successfully reconnected to terminal', (msg) => connectionSuccess.value = msg, 'connection')
 
   } catch (error) {
-    handleError(error, (msg) => connectionError.value = msg)
+    handleError(error, (msg) => connectionError.value = msg, 'connection')
   } finally {
     isReconnecting.value = false
   }
@@ -419,10 +439,10 @@ const handleExecuteCommand = async () => {
 
     await Promise.race([executePromise, timeoutPromise])
 
-    handleSuccess('Command executed successfully', (msg) => commandSuccess.value = msg)
+    handleSuccess('Command executed successfully', (msg) => commandSuccess.value = msg, 'command')
 
   } catch (error) {
-    handleError(error, (msg) => commandError.value = msg)
+    handleError(error, (msg) => commandError.value = msg, 'command')
   } finally {
     isExecutingCommand.value = false
   }
@@ -455,10 +475,10 @@ const handleEmergencyKill = async () => {
 
     await Promise.race([killPromise, timeoutPromise])
 
-    handleSuccess('All processes terminated successfully', (msg) => killSuccess.value = msg)
+    handleSuccess('All processes terminated successfully', (msg) => killSuccess.value = msg, 'kill')
 
   } catch (error) {
-    handleError(error, (msg) => killError.value = msg)
+    handleError(error, (msg) => killError.value = msg, 'kill')
   } finally {
     isKillingProcesses.value = false
   }
@@ -492,10 +512,10 @@ const handleConfirmWorkflowStep = async () => {
 
     await Promise.race([workflowPromise, timeoutPromise])
 
-    handleSuccess('Workflow step executed successfully', (msg) => workflowSuccess.value = msg)
+    handleSuccess('Workflow step executed successfully', (msg) => workflowSuccess.value = msg, 'workflow')
 
   } catch (error) {
-    handleError(error, (msg) => workflowError.value = msg)
+    handleError(error, (msg) => workflowError.value = msg, 'workflow')
   } finally {
     isProcessingWorkflow.value = false
     lastWorkflowAction.value = null
@@ -524,10 +544,10 @@ const handleSkipWorkflowStep = async () => {
 
     await Promise.race([skipPromise, timeoutPromise])
 
-    handleSuccess('Workflow step skipped successfully', (msg) => workflowSuccess.value = msg)
+    handleSuccess('Workflow step skipped successfully', (msg) => workflowSuccess.value = msg, 'workflow')
 
   } catch (error) {
-    handleError(error, (msg) => workflowError.value = msg)
+    handleError(error, (msg) => workflowError.value = msg, 'workflow')
   } finally {
     isProcessingWorkflow.value = false
     lastWorkflowAction.value = null
@@ -556,10 +576,10 @@ const handleTakeManualControl = async () => {
 
     await Promise.race([manualPromise, timeoutPromise])
 
-    handleSuccess('Manual control activated successfully', (msg) => workflowSuccess.value = msg)
+    handleSuccess('Manual control activated successfully', (msg) => workflowSuccess.value = msg, 'workflow')
 
   } catch (error) {
-    handleError(error, (msg) => workflowError.value = msg)
+    handleError(error, (msg) => workflowError.value = msg, 'workflow')
   } finally {
     isProcessingWorkflow.value = false
     lastWorkflowAction.value = null
