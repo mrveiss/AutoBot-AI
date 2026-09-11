@@ -101,8 +101,6 @@ from services.playbook_executor import get_playbook_executor
 from services.slm_frontend_build import build_slm_frontend as _build_slm_frontend
 from services.slm_frontend_build import write_slm_deployed_commit_marker as _write_slm_deployed_commit_marker
 from services.ssh_utils import _ssh_key_usable
-from services.sync_deletions import apply_role_deletions
-from services.sync_deletions import remove_deleted_paths as _remove_deleted_paths
 from services.sync_orchestrator import get_sync_orchestrator
 
 logger = logging.getLogger(__name__)
@@ -3239,11 +3237,6 @@ async def _sync_slm_from_code_source(node_id: str, job_id: str) -> None:
         if not ok:
             logger.error("SLM self-sync component %s failed: %s", component, msg)
             all_ok = False
-        elif is_local_source:  # #16310: deletion only after a confirmed local sync
-            source_dir = f"{repo_path}/{component}"
-            deletion = await _remove_deleted_paths(component, source_dir, get_live_dir(component), repo_path)
-            for line in deletion.step_log_lines():
-                logger.info("SLM self-sync deletion: %s", line)
 
     if not all_ok:
         logger.error("SLM self-sync had failures; services NOT restarted")
@@ -5073,9 +5066,6 @@ async def _run_colocated_role_procedures(stage: UpdateAllStage, roles: list, slm
             continue
         outcome = "ok" if result.get("success") else f"FAILED ({result.get('error', 'see output')})"
         _stage_log(stage, f"co-located {role.name}: {outcome} via {role.ansible_playbook} (#12083)")
-        if result.get("success"):  # #16310: deletion only after a confirmed sync
-            for line in await apply_role_deletions(role.name):
-                _stage_log(stage, line)
 
 
 async def _resolve_colocated_managed_services(stage: UpdateAllStage, slm_node_id: str) -> None:

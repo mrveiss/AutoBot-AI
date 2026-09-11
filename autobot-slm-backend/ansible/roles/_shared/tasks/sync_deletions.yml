@@ -1,0 +1,150 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# Delete files removed from source, right after the role's own synchronize
+# task succeeds (#16310 owner decision). One mechanism for co-located and
+# remote targets: the plan is always computed on the CONTROLLER (delegate_to
+# localhost), which holds the git checkout, and the deletions/marker write
+# always apply to whichever host THIS play is currently targeting --
+# co-located (the SLM itself) or a remote fleet node, no second code path.
+#
+# Included immediately after a role's synchronize task, never before it and
+# never on its own: if that task failed, the play already aborted and none
+# of this runs, so a failed sync leaves both the target tree and this
+# module's marker untouched (#16310 review, BLOCKING 1's ordering rule).
+#
+# Never reads or writes .deployed_commit — that stays
+# _get_slm_deployed_commit()'s C4 self-update skip-gate (#12202). This
+# module's own marker is a different file, DELETION_MARKER
+# (services/sync_deletions.py), read here only as a one-time bootstrap when
+# THIS module's own marker is absent.
+#
+# Contract:
+#   sync_deletions_label       (str) Display label, e.g. "Backend".
+#   sync_deletions_source_dir  (str) This component's source dir under
+#                               code_source, absolute, on the CONTROLLER.
+#   sync_deletions_target_dir  (str) The deployed component dir, absolute,
+#                               on the TARGET host this play is running against.
+#   sync_deletions_owner       (str) Account that must own the marker.
+#   sync_deletions_planner_python (str) Path to the SLM's own venv python,
+#                               on the CONTROLLER -- the planner needs
+#                               services.sync_deletions importable.
+
+- name: "{{ sync_deletions_label }} | Deletions: slurp this module's own marker from the target"
+  ansible.builtin.slurp:
+    src: "{{ sync_deletions_target_dir }}/.autobot_sync_deletions_commit"
+  register: _sd_own_marker
+  become: true
+  ignore_errors: true
+  tags: ['slm', 'deploy']
+
+- name: "{{ sync_deletions_label }} | Deletions: slurp the legacy .deployed_commit as a read-only bootstrap"
+  ansible.builtin.slurp:
+    src: "{{ sync_deletions_target_dir }}/.deployed_commit"
+  register: _sd_legacy_marker
+  become: true
+  ignore_errors: true
+  when: _sd_own_marker is failed
+  tags: ['slm', 'deploy']
+
+- name: "{{ sync_deletions_label }} | Deletions: settle on the previous commit, if any"
+  ansible.builtin.set_fact:
+    _sd_previous_commit: >-
+      {{ (_sd_own_marker.content | b64decode | trim)
+         if (_sd_own_marker is succeeded)
+         else ((_sd_legacy_marker.content | b64decode | trim)
+               if (_sd_legacy_marker is defined and _sd_legacy_marker is succeeded)
+               else '') }}
+  tags: ['slm', 'deploy']
+
+- name: "{{ sync_deletions_label }} | Deletions: resolve the commit being deployed"
+  ansible.builtin.command:
+    cmd: git -c safe.directory={{ code_source_dir }} -C {{ code_source_dir }} rev-parse HEAD
+  register: _sd_new_commit_git
+  changed_when: false
+  delegate_to: localhost
+  tags: ['slm', 'deploy']
+
+- name: "{{ sync_deletions_label }} | Deletions: compute the diff-based plan (previous commit known)"
+  ansible.builtin.command:
+    cmd: >-
+      {{ sync_deletions_planner_python | default(autobot.base_dir ~ '/autobot-slm-backend/venv/bin/python3') }} {{ autobot.base_dir }}/autobot-slm-backend/scripts/sync_deletion_planner.py
+      diff --repo-root {{ code_source_dir }} --source-dir {{ sync_deletions_source_dir }}
+      --previous-commit {{ _sd_previous_commit }} --new-commit {{ _sd_new_commit_git.stdout | trim }}
+  register: _sd_plan_diff
+  changed_when: false
+  delegate_to: localhost
+  when: _sd_previous_commit | length > 0
+  tags: ['slm', 'deploy']
+
+- name: "{{ sync_deletions_label }} | Deletions: enumerate files present on the target (bootstrap only)"
+  ansible.builtin.find:
+    paths: "{{ sync_deletions_target_dir }}"
+    recurse: true
+    file_type: file
+  register: _sd_present
+  become: true
+  when: _sd_previous_commit | length == 0
+  tags: ['slm', 'deploy']
+
+- name: "{{ sync_deletions_label }} | Deletions: allocate a present-files list file for the bootstrap plan"
+  ansible.builtin.tempfile:
+    state: file
+    prefix: autobot-sync-deletions-present-
+  register: _sd_present_file
+  delegate_to: localhost
+  when: _sd_previous_commit | length == 0
+  tags: ['slm', 'deploy']
+
+- name: "{{ sync_deletions_label }} | Deletions: write the present-files list for the bootstrap plan"
+  ansible.builtin.copy:
+    content: |-
+      {{ (_sd_present.files | map(attribute='path')
+          | map('regex_replace', '^' ~ sync_deletions_target_dir ~ '/', '') | list) | join('\n') }}
+    dest: "{{ _sd_present_file.path }}"
+  delegate_to: localhost
+  when: _sd_previous_commit | length == 0
+  tags: ['slm', 'deploy']
+
+- name: "{{ sync_deletions_label }} | Deletions: compute the bootstrap plan (no marker yet -- at most once)"
+  ansible.builtin.command:
+    cmd: >-
+      {{ sync_deletions_planner_python | default(autobot.base_dir ~ '/autobot-slm-backend/venv/bin/python3') }} {{ autobot.base_dir }}/autobot-slm-backend/scripts/sync_deletion_planner.py
+      bootstrap --repo-root {{ code_source_dir }} --source-dir {{ sync_deletions_source_dir }}
+      --new-commit {{ _sd_new_commit_git.stdout | trim }} --present-file {{ _sd_present_file.path }}
+  register: _sd_plan_bootstrap
+  changed_when: false
+  delegate_to: localhost
+  when: _sd_previous_commit | length == 0
+  tags: ['slm', 'deploy']
+
+- name: "{{ sync_deletions_label }} | Deletions: settle on the computed plan"
+  ansible.builtin.set_fact:
+    _sd_plan: "{{ (_sd_plan_diff if _sd_previous_commit | length > 0 else _sd_plan_bootstrap).stdout | from_json }}"
+  tags: ['slm', 'deploy']
+
+- name: "{{ sync_deletions_label }} | Deletions: fail loudly when the plan could not be computed"
+  ansible.builtin.fail:
+    msg: "Deletion plan failed for {{ sync_deletions_target_dir }}: {{ _sd_plan.error }} (#16310)"
+  when: _sd_plan.error is truthy
+  tags: ['slm', 'deploy']
+
+- name: "{{ sync_deletions_label }} | Deletions: remove every path the plan approved"
+  ansible.builtin.file:
+    path: "{{ sync_deletions_target_dir }}/{{ item }}"
+    state: absent
+  loop: "{{ _sd_plan.delete }}"
+  become: true
+  tags: ['slm', 'deploy']
+
+- name: "{{ sync_deletions_label }} | Deletions: write this module's own marker (after deletion succeeds)"
+  ansible.builtin.copy:
+    content: "{{ _sd_new_commit_git.stdout | trim }}\n"
+    dest: "{{ sync_deletions_target_dir }}/.autobot_sync_deletions_commit"
+    owner: "{{ sync_deletions_owner }}"
+    group: "{{ sync_deletions_owner }}"
+    mode: "0644"
+  become: true
+  tags: ['slm', 'deploy']

@@ -20,12 +20,12 @@ from autobot_shared.env_utils import env_float
 from autobot_shared.paths import scrubbed_git_env
 
 # Plain stdlib logging, deliberately -- NOT autobot_shared.logging_manager.
-# This module is imported (via services/sync_deletions.py) by api/code_sync.py,
-# whose test harness (tests/api/test_collect_outdated_node_ids.py) stubs
-# `config` as a MagicMock; logging_manager.get_logger() builds a
-# RotatingFileHandler that compares that MagicMock to an int and raises at
-# logger-CREATION time. Same precedent as
-# autobot_shared/user_management/password_epoch.py:50-58.
+# This module is imported (via services/full_tree_drift.py, api/full_tree_drift.py)
+# by api/code_sync.py, whose test harness
+# (tests/api/test_collect_outdated_node_ids.py) stubs `config` as a MagicMock;
+# logging_manager.get_logger() builds a RotatingFileHandler that compares
+# that MagicMock to an int and raises at logger-CREATION time. Same
+# precedent as autobot_shared/user_management/password_epoch.py:50-58.
 logger = logging.getLogger(__name__)
 
 # Bounds every subprocess below. A cold `git diff`/`git log` over a
@@ -71,3 +71,27 @@ def component_pathspec(repo_root: str, source_dir: str) -> str:
     ``drift_checker._NONSTANDARD_COMPONENT_PATHS``) still diff correctly.
     """
     return Path(source_dir).resolve().relative_to(Path(repo_root).resolve()).as_posix()
+
+
+async def last_commit_for_path(repo_root: str, pathspec: str) -> str | None:
+    """Full SHA of the last commit that touched *pathspec*, or None if never tracked.
+
+    Shared by ``services/full_tree_drift.py`` (removed_from_source verdict) and
+    ``scripts/sync_deletion_planner.py``'s bootstrap plan (#16310): both ask
+    the same question -- "did git ever track this path?" -- against a commit
+    range too wide for a name-status diff to answer.
+    """
+    output, rc = await run_git(repo_root, "log", "-1", "--format=%H", "--", pathspec)
+    sha = output.strip()
+    return sha if rc == 0 and sha else None
+
+
+async def path_exists_at_commit(repo_root: str, commit: str, pathspec: str) -> bool:
+    """True when *pathspec* is present in the tree at *commit*.
+
+    Used by the bootstrap plan to confirm a candidate is genuinely absent
+    from the commit being deployed, not merely absent from a narrower diff
+    range (#16310).
+    """
+    _, rc = await run_git(repo_root, "cat-file", "-e", f"{commit}:{pathspec}")
+    return rc == 0

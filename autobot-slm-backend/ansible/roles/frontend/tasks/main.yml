@@ -79,6 +79,17 @@
       - "--exclude=.git"
   tags: ['frontend', 'deploy']
 
+# #16310: the synchronize task above never deletes -- files removed from
+# source would otherwise pile up on this host forever.
+- name: "Frontend | Delete files removed from source (#16310)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/sync_deletions.yml
+  vars:
+    sync_deletions_label: "Frontend"
+    sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-frontend"
+    sync_deletions_target_dir: "{{ frontend_install_dir }}/autobot-frontend"
+    sync_deletions_owner: "{{ frontend_user }}"
+  tags: ['frontend', 'deploy']
+
 - name: "Frontend | Fix frontend directory ownership after sync"
   ansible.builtin.file:
     path: "{{ frontend_install_dir }}/autobot-frontend"

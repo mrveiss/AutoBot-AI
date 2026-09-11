@@ -227,6 +227,23 @@
   notify: restart slm backend
   tags: ['slm', 'backend', 'deploy']
 
+# #16310: the synchronize task above is already delete-style (`delete: true`)
+# with a hand-mirrored HOST_STATE_EXCLUDES copy (#14231) -- kept as-is here,
+# not removed, since it is a working pre-existing protection and consolidating
+# it into the git-aware mechanism below is a separate, larger change than this
+# fix warrants. This task additionally records the git-proven deletion plan's
+# marker on the SAME schedule as every other role, so slm_backend_dir is
+# covered by the same structural guarantee (deletion tasks run right after
+# the sync, marker written after deletion) as backend/frontend.
+- name: "SLM | Delete files removed from source (#16310)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/sync_deletions.yml
+  vars:
+    sync_deletions_label: "SLM Backend"
+    sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-backend"
+    sync_deletions_target_dir: "{{ slm_backend_dir }}"
+    sync_deletions_owner: "{{ slm_user }}"
+  tags: ['slm', 'backend', 'deploy']
+
 # #12202: record the commit actually installed at slm_backend_dir so the
 # code-sync self-update skip-check (_get_slm_deployed_commit) reads what is
 # really deployed instead of code_source HEAD (which stage 2 of the update

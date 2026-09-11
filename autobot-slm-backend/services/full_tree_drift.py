@@ -46,7 +46,7 @@ from autobot_shared.time_utils import utc_timestamp
 from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
 from services.deployed_dir_resolver import get_live_dir
 from services.drift_checker import VISIBILITY_COMPONENTS, deploy_only_entries, get_default_source_dir, owned_subtrees
-from services.git_subprocess import component_pathspec, run_git
+from services.git_subprocess import component_pathspec, last_commit_for_path
 from services.git_tracker import DEFAULT_REPO_PATH
 from services.host_state_filter import kept_reason
 
@@ -119,37 +119,53 @@ def _prune_reason(rel_dir: str, name: str, owned: frozenset[str]) -> str | None:
     return None
 
 
+def _can_list(root: Path) -> bool:
+    """False when *root* itself cannot even be scanned (unreadable, not merely empty)."""
+    try:
+        next(os.walk(root))
+        return True
+    except (StopIteration, OSError) as exc:
+        logger.error("full_tree_drift: cannot list %s: %s", root, exc)
+        return False
+
+
+def _prune_dirnames(dirpath: Path, root: Path, dirnames: list[str], owned: frozenset[str], exclusions: dict) -> None:
+    """Filter *dirnames* in place, tallying every pruned reason."""
+    rel_dir = dirpath.relative_to(root).as_posix()
+    kept = []
+    for name in dirnames:
+        reason = _prune_reason(rel_dir, name, owned)
+        if reason is None:
+            kept.append(name)
+        else:
+            _bump(exclusions, reason)
+    dirnames[:] = kept
+
+
+def _checksum_files(dirpath: Path, root: Path, filenames: list[str], checksums: dict[str, str]) -> None:
+    for filename in filenames:
+        filepath = dirpath / filename
+        rel = filepath.relative_to(root).as_posix()
+        try:
+            checksums[rel] = _sha256(filepath)
+        except OSError as exc:
+            logger.warning("full_tree_drift: cannot read %s: %s", filepath, exc)
+
+
 def _walk_checksums(root: Path, owned: frozenset[str], exclusions: dict[str, int]) -> dict[str, str] | None:
     """Every file under *root*, sha256'd, minus artifact/owned/bundle dirs.
 
     Returns ``None`` when *root* itself cannot be listed -- an unreadable
     tree, distinct from an empty-but-readable one (#16310).
     """
-    try:
-        next(os.walk(root))
-    except (StopIteration, OSError) as exc:
-        logger.error("full_tree_drift: cannot list %s: %s", root, exc)
+    if not _can_list(root):
         return None
 
     checksums: dict[str, str] = {}
-    for dirpath, dirnames, filenames in os.walk(root, onerror=lambda exc: logger.warning("full_tree_drift: %s", exc)):
-        rel_dir = Path(dirpath).relative_to(root).as_posix()
-        kept = []
-        for name in dirnames:
-            reason = _prune_reason(rel_dir, name, owned)
-            if reason is None:
-                kept.append(name)
-            else:
-                _bump(exclusions, reason)
-        dirnames[:] = kept
-
-        for filename in filenames:
-            filepath = Path(dirpath) / filename
-            rel = filepath.relative_to(root).as_posix()
-            try:
-                checksums[rel] = _sha256(filepath)
-            except OSError as exc:
-                logger.warning("full_tree_drift: cannot read %s: %s", filepath, exc)
+    onerror = lambda exc: logger.warning("full_tree_drift: %s", exc)  # noqa: E731
+    for dirpath, dirnames, filenames in os.walk(root, onerror=onerror):
+        _prune_dirnames(Path(dirpath), root, dirnames, owned, exclusions)
+        _checksum_files(Path(dirpath), root, filenames, checksums)
     return checksums
 
 
@@ -177,13 +193,6 @@ def _classify_host_state(rel_path: str, component: str) -> str:
     return "host_state:unclassified"
 
 
-async def _last_commit_for_path(repo_root: str, pathspec: str) -> str | None:
-    """Short SHA of the last commit that touched *pathspec*, or None if never tracked."""
-    output, rc = await run_git(repo_root, "log", "-1", "--format=%H", "--", pathspec)
-    sha = output.strip()
-    return sha[:12] if rc == 0 and sha else None
-
-
 async def _classify_deployed_only(
     rel_path: str, component: str, repo_root: str, pathspec_prefix: str
 ) -> tuple[str, str | None]:
@@ -200,9 +209,9 @@ async def _classify_deployed_only(
     reason = await kept_reason(rel_path, repo_root, pathspec)
     if reason is not None:
         return VERDICT_HOST_STATE, reason
-    commit = await _last_commit_for_path(repo_root, pathspec)
+    commit = await last_commit_for_path(repo_root, pathspec)
     if commit is not None:
-        return VERDICT_REMOVED_FROM_SOURCE, commit
+        return VERDICT_REMOVED_FROM_SOURCE, commit[:12]
     return VERDICT_HOST_STATE, _classify_host_state(rel_path, component)
 
 

@@ -368,6 +368,37 @@
         - autobot-plugins
       tags: [slm]
 
+    # #16310: `unarchive` above only extracts/overwrites -- it never removes a
+    # path that dropped out of the tarball because it was deleted from
+    # source, so deleted modules piled up here forever. One shared task file,
+    # same contract roles/backend and roles/frontend use.
+    - name: "[PLAY 1] SLM | Delete files removed from source: slm-backend (#16310)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/sync_deletions.yml
+      vars:
+        sync_deletions_label: "SLM Backend (self-update)"
+        sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-backend"
+        sync_deletions_target_dir: "{{ autobot.base_dir }}/autobot-slm-backend"
+        sync_deletions_owner: autobot
+      tags: [slm, slm-backend]
+
+    - name: "[PLAY 1] SLM | Delete files removed from source: slm-frontend (#16310)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/sync_deletions.yml
+      vars:
+        sync_deletions_label: "SLM Frontend (self-update)"
+        sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-frontend"
+        sync_deletions_target_dir: "{{ autobot.base_dir }}/autobot-slm-frontend"
+        sync_deletions_owner: autobot
+      tags: [slm, slm-frontend]
+
+    - name: "[PLAY 1] SLM | Delete files removed from source: autobot_shared (#16310)"
+      ansible.builtin.include_tasks: ../roles/_shared/tasks/sync_deletions.yml
+      vars:
+        sync_deletions_label: "SLM autobot_shared (self-update)"
+        sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot_shared"
+        sync_deletions_target_dir: "{{ autobot.base_dir }}/autobot_shared"
+        sync_deletions_owner: autobot
+      tags: [slm, shared]
+
     # #12223 (#12202): the self-update path deploys the SLM backend via the
     # unarchive above and never runs the slm_manager role — where the #12202
     # marker-write lives — so without this the .deployed_commit marker is never

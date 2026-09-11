@@ -552,6 +552,18 @@
       - restart celery
     tags: ['backend', 'deploy']
 
+  # #16310: files deleted from source pile up forever otherwise -- the
+  # synchronize task above never deletes (no `delete: true`), by design, to
+  # protect host state it cannot enumerate itself.
+  - name: "Backend | Delete files removed from source (#16310)"
+    ansible.builtin.include_tasks: ../../_shared/tasks/sync_deletions.yml
+    vars:
+      sync_deletions_label: "Backend"
+      sync_deletions_source_dir: "{{ code_source_dir }}/autobot-backend"
+      sync_deletions_target_dir: "{{ backend_code_dir }}"
+      sync_deletions_owner: "{{ backend_user }}"
+    tags: ['backend', 'deploy']
+
   - name: "Backend | Fix ownership of backend code dir after sync"
     ansible.builtin.file:
       path: "{{ backend_code_dir }}"
