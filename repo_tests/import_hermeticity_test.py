@@ -387,28 +387,36 @@ def test_every_module_imports_inertly() -> None:
 
 # ---------------------------------------------------------------- which modules a diff reaches
 
-#: Two backends and the shared root, with import edges whose answer is known.
-_TREE = {
-    "autobot-backend/api/__init__.py": "",
-    "autobot-backend/api/a.py": "def f():\n    return 1\n",
-    "autobot-backend/api/b.py": "from api.a import f\n",
-    "autobot-backend/api/c.py": "from . import a\n",
-    "autobot-backend/api/d.py": "import api.b\n",
-    "autobot-backend/api/lazy.py": "def g():\n    import api.a\n",
-    "autobot-backend/api/pkg/__init__.py": "from ..a import f\n",
-    "autobot-backend/api/uses_shared.py": "from autobot_shared.x import y\n",
-    "autobot-backend/api/a_test.py": "from api.a import f\n",
-    "autobot-slm-backend/api/__init__.py": "",
-    "autobot-slm-backend/api/a.py": "",
-    "autobot-slm-backend/api/b.py": "from api.a import f\n",
-    "autobot_shared/__init__.py": "",
-    "autobot_shared/x.py": "y = 1\n",
-}
 _BACKEND, _SLM = "autobot-backend", "autobot-slm-backend"
 
 
+def _fixture_tree() -> dict[str, str]:
+    """Two backends and the shared root, with import edges whose answer is known.
+
+    Returned, not bound at module level: a module-level collection of repo-rooted
+    paths is a recorder to ``stranded_recorder_entries_test.py``, and these paths
+    exist only inside ``tmp_path``.
+    """
+    return {
+        "autobot-backend/api/__init__.py": "",
+        "autobot-backend/api/a.py": "def f():\n    return 1\n",
+        "autobot-backend/api/b.py": "from api.a import f\n",
+        "autobot-backend/api/c.py": "from . import a\n",
+        "autobot-backend/api/d.py": "import api.b\n",
+        "autobot-backend/api/lazy.py": "def g():\n    import api.a\n",
+        "autobot-backend/api/pkg/__init__.py": "from ..a import f\n",
+        "autobot-backend/api/uses_shared.py": "from autobot_shared.x import y\n",
+        "autobot-backend/api/a_test.py": "from api.a import f\n",
+        "autobot-slm-backend/api/__init__.py": "",
+        "autobot-slm-backend/api/a.py": "",
+        "autobot-slm-backend/api/b.py": "from api.a import f\n",
+        "autobot_shared/__init__.py": "",
+        "autobot_shared/x.py": "y = 1\n",
+    }
+
+
 def _plant(root: Path) -> list[scope.Entry]:
-    for rel, text in _TREE.items():
+    for rel, text in _fixture_tree().items():
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text(text, encoding="utf-8")
     return scope.entries(root)
@@ -436,7 +444,9 @@ def test_importers_resolve_in_their_own_tree_first_then_the_root(tmp_path: Path)
     [
         "autobot-backend/api/a.py\nautobot-backend/api/gone.py",  # one of two matches
         "autobot-backend/api/a_test.py",  # a test file is not in the population
-        "docs/README.md",  # matches nothing at all
+        # Matches nothing. Absent from the real tree too, or the python-filter
+        # coverage guard counts the literal as an input this module reads.
+        "docs/no_such_page.md",
     ],
 )
 def test_a_listed_path_matching_no_module_fails_rather_than_narrowing(tmp_path: Path, raw: str) -> None:
