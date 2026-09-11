@@ -420,10 +420,9 @@ class ChatKnowledgeManager:
         if not include_system_messages:
             messages = [m for m in messages if m.get("role") != CategoryDefaults.ROLE_SYSTEM]
 
-        # #15700: the transcript is screened, sanitized, capped and framed as data.
+        # #15700: framed as data. A refused transcript raises TranscriptRefused (a 422),
+        # so no entry is written.
         summary_prompt = build_summary_prompt(messages)
-        if summary_prompt is None:
-            raise ValueError(f"Chat {chat_id} has no conversation that can safely be summarised")
 
         summary_response = await self.llm_interface.chat(
             messages=[{"role": CategoryDefaults.ROLE_USER, "content": summary_prompt}]
