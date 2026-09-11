@@ -417,7 +417,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/tests/test_task_workspace.py": 642,
     "autobot-backend/tests/unit/chat_workflow/test_code_exec.py": 1093,
     "autobot-backend/tests/unit/knowledge/connectors/test_web_crawler.py": 655,
-    "autobot-backend/tests/utils/gpu_optimization/test_gpu_detection.py": 763,
+    "autobot-backend/tests/utils/gpu_optimization/test_gpu_detection.py": 718,
     "autobot-backend/tools/tool_registry.py": 959,
     # #15772: SAVEPOINT insert call, race handled in user_service_conflict.py
     "autobot-backend/user_management/services/user_service.py": 900,
