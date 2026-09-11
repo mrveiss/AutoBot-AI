@@ -80,14 +80,18 @@ _ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(
 #: the exact failure it exists to catch, inside itself.
 #:
 #: MEASURED 2026-09-10 against `origin/Dev_new_gui`: 201 tracked
-#: `repo_tests/*_test.py`, of which **101** match `_ENUMERATOR` (80 before
-#: `.glob(` was added, 21 reachable only through it). The floor sits at 95 rather
-#: than at 101 so that deleting a handful of guards is a test failure about the
-#: guards rather than about this number -- but a collapse, which is what an
-#: enumeration bug produces, still trips it. The previous value of 60 sat 20
-#: below the then-current 80 and 41 below the true population, so it could not
-#: have fired on the very blind spot #16147 reports.
-MIN_GUARDS_EXAMINED = 95
+#: `repo_tests/*_test.py`, of which 101 matched `_ENUMERATOR` (80 before
+#: `.glob(` was added, 21 reachable only through it). The previous value of 60
+#: sat 20 below the then-current 80 and 41 below the true population, so it
+#: could not have fired on the very blind spot #16147 reports.
+#:
+#: RE-MEASURED 2026-09-11: 104 tracked `repo_tests/*_test.py` match
+#: `_ENUMERATOR` -- 3 more than the day before. #16147 AC1 (option A): pin the
+#: floor to the exact measured count instead of trailing it by roughly 6%,
+#: since that gap was the blind spot #16147 was filed for. A legitimate guard
+#: removal now needs a same-PR floor lowering, same as every other reach
+#: floor in this module (#15928).
+MIN_GUARDS_EXAMINED = 104
 
 #: WHAT THIS MODULE CHECKS, AND WHAT IT DOES NOT (#16154).
 #:
