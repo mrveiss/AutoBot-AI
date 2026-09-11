@@ -265,3 +265,19 @@ register_env_var(
         component="slm",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PRICING_POST_SYNC_TIMEOUT_S",
+        type=float,
+        default=120.0,
+        description=(
+            "Timeout, in seconds, for the one-shot pricing refresh a code-sync "
+            "of autobot-backend runs immediately after install/update. A "
+            "refresh that does not finish within it is recorded as timed out "
+            "and the sync proceeds regardless — prices stay unknown until the "
+            "next refresh (autobot-slm-backend/api/_pricing_post_sync.py, #16231)."
+        ),
+        component="slm",
+    )
+)

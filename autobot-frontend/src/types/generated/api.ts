@@ -203,13 +203,13 @@ export interface paths {
         get?: never;
         /**
          * Override Model Pricing
-         * @description Write an emergency pricing override directly to Redis.
+         * @description Store an emergency pricing override; it outranks the refreshed price until removed.
          */
         put: operations["override_model_pricing_api_admin_pricing__provider___model__put"];
         post?: never;
         /**
          * Delete Model Pricing Override
-         * @description Remove a pricing override from Redis (next refresh will re-populate).
+         * @description Remove a pricing override; the refreshed price applies again.
          */
         delete: operations["delete_model_pricing_override_api_admin_pricing__provider___model__delete"];
         options?: never;
@@ -231,6 +231,26 @@ export interface paths {
         get: operations["get_pricing_refresh_status_api_admin_pricing_status_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/pricing/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Pricing Now
+         * @description Refresh pricing on demand and report the per-source result (#16231).
+         */
+        post: operations["refresh_pricing_now_api_admin_pricing_refresh_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -104011,6 +104031,28 @@ export interface operations {
         };
     };
     get_pricing_refresh_status_api_admin_pricing_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    refresh_pricing_now_api_admin_pricing_refresh_post: {
         parameters: {
             query?: never;
             header?: never;
