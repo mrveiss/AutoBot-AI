@@ -4454,31 +4454,6 @@
       "releaseFailed": "Failed to release control: {error}"
     }
   },
-  "redis": {
-    "title": "Redis Service",
-    "stopWarning": "WARNING: This action will affect system functionality. Only administrators can stop the service.",
-    "stopTitle": "Stop Redis Service",
-    "restartMsg": "This will temporarily interrupt Redis service. Active connections will be dropped.",
-    "manualInterventionTitle": "Manual Intervention Required:",
-    "lastCheck": "Last check:",
-    "restartTitle": "Restart Redis Service",
-    "memory": "Memory",
-    "restart": "Restart",
-    "stopMsg": "This will stop Redis service completely. All dependent services will be affected.",
-    "enabled": "Enabled:",
-    "recommendations": "Recommendations",
-    "pid": "PID",
-    "recentRecoveries": "Recent Recoveries:",
-    "processing": "Processing...",
-    "healthStatus": "Health Status",
-    "stop": "Stop",
-    "manualInterventionMsg": "Auto-recovery has failed. Please check service logs.",
-    "connections": "Connections",
-    "uptime": "Uptime",
-    "restartWarning": "All connected clients will be disconnected during restart.",
-    "autoRecoveryStatus": "Auto-Recovery Status",
-    "start": "Start"
-  },
   "charts": {
     "callGraph": {
       "controls": {

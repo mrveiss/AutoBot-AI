@@ -21,7 +21,6 @@
         v-if="isSettingsLoaded"
         :settings="settings"
         :isSettingsLoaded="isSettingsLoaded"
-        :healthStatus="healthStatus"
         :cacheConfig="cacheConfig"
         :cacheActivity="cacheActivity"
         :cacheStats="cacheStats"
@@ -103,7 +102,6 @@ import type {
   PromptsSettings as PromptsSettingsType,
   DeveloperSettings as DeveloperSettingsType,
   BackendSettings as BackendSettingsType,
-  DetailedHealthReport,
   CacheActivityItem,
   CacheStats,
   CacheConfig,
@@ -120,7 +118,6 @@ const isSettingsLoaded = ref<boolean>(false)
 const settingsLoadingStatus = ref<'loading' | 'loaded' | 'offline'>('loading')
 const isSaving = ref<boolean>(false)
 const isClearing = ref<boolean>(false)
-const healthStatus = ref<DetailedHealthReport | null>(null)
 const cacheApiAvailable = ref<boolean>(false)
 
 const activeBackendSubTab = ref('agents')
@@ -373,7 +370,6 @@ const getCurrentLLMDisplay = (): string => {
 provide('settingsData', {
   settings,
   isSettingsLoaded,
-  healthStatus,
   getCurrentLLMDisplay
 })
 
@@ -783,56 +779,12 @@ const revertPromptToDefault = async (promptId: string) => {
   await postRevert()
 }
 
-// Load health status with corrected endpoint
-const loadHealthStatus = async () => {
-  // Try detailed health endpoint first
-  const { execute: getDetailedHealth } = useAsyncHandler(
-    async () => apiClient.get<DetailedHealthReport>(`${getApiBase()}/system/health/detailed`, GET_OPTS),
-    {
-      logErrors: true,
-      errorPrefix: '[SettingsPanel]',
-      onSuccess: (response) => {
-        healthStatus.value = response
-      },
-      onError: async () => {
-        // Fallback to basic health endpoint
-        const { execute: getBasicHealth } = useAsyncHandler(
-          async () => apiClient.get<Record<string, unknown>>(`${getApiBase()}/system/health`, GET_OPTS),
-          {
-            logErrors: true,
-            errorPrefix: '[SettingsPanel]',
-            onSuccess: (fallbackResponse) => {
-              healthStatus.value = {
-                basic_health: fallbackResponse,
-                detailed_available: false
-              } as DetailedHealthReport
-            },
-            onError: () => {
-              healthStatus.value = {
-                status: 'unavailable',
-                message: 'Health endpoints not available'
-              } as DetailedHealthReport
-            }
-          }
-        )
-
-        await getBasicHealth()
-      }
-    }
-  )
-
-  await getDetailedHealth()
-}
-
 onMounted(async () => {
   // Load settings first
   loadSettings()
 
   // Check cache API availability
   await checkCacheApiAvailability()
-
-  // Load health status
-  loadHealthStatus()
 
   // Load cache data only if API is available
   if (cacheApiAvailable.value) {

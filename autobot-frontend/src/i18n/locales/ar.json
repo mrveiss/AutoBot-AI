@@ -4928,31 +4928,6 @@
     "themeAuto": "Auto",
     "tabDevices": "Tab devices"
   },
-  "redis": {
-    "title": "Redis Service",
-    "lastCheck": "Last check:",
-    "uptime": "Uptime",
-    "memory": "Memory",
-    "connections": "Connections",
-    "pid": "PID",
-    "start": "Start",
-    "restart": "Restart",
-    "stop": "Stop",
-    "healthStatus": "Health Status",
-    "recommendations": "Recommendations",
-    "autoRecoveryStatus": "Auto-Recovery Status",
-    "enabled": "Enabled:",
-    "recentRecoveries": "Recent Recoveries:",
-    "manualInterventionTitle": "Manual Intervention Required:",
-    "manualInterventionMsg": "Auto-recovery has failed. Please check service logs.",
-    "processing": "جارٍ المعالجة...",
-    "restartTitle": "Restart Redis Service",
-    "restartMsg": "This will temporarily interrupt Redis service. Active connections will be dropped.",
-    "restartWarning": "All connected clients will be disconnected during restart.",
-    "stopTitle": "Stop Redis Service",
-    "stopMsg": "This will stop Redis service completely. All dependent services will be affected.",
-    "stopWarning": "WARNING: This action will affect system functionality. Only administrators can stop the service."
-  },
   "charts": {
     "base": {
       "loading": "Loading chart...",

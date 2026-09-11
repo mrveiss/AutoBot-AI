@@ -1,6 +1,6 @@
 # Redis Service Management Architecture
 
-> **Freshness:** superseded (partially) — 2026-08-30. `RedisServiceManager` shipped (`autobot-backend/services/redis_service_manager.py`, used in 6 files) but `ServiceManagementRouter` was never built — no route exposes the manager. Tracked in #15198.
+> **Freshness:** superseded (partially) — 2026-09-11. `RedisServiceManager` shipped (`autobot-backend/services/redis_service_manager.py`) and `api/redis_service.py` exposes it at `/api/redis-service` (registered in `initialization/router_registry/feature_routers.py`); the `ServiceManagementRouter` designed here was never built (#15198). The user-GUI client in section 5 (`RedisServiceControl.vue`, `useServiceManagement`, `RedisServiceAPI`) was removed by #16245: nothing mounted it, and its `/service-monitor/services/*` calls had no handler. The Redis service UI is the SLM's `RedisServicePanel`.
 
 
 **Document Version:** 1.0

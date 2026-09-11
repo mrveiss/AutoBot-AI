@@ -4928,31 +4928,6 @@
     "themeAuto": "Automātisks",
     "tabDevices": "Tab devices"
   },
-  "redis": {
-    "title": "Redis serviss",
-    "lastCheck": "Pēdējā pārbaude:",
-    "uptime": "Darbības laiks",
-    "memory": "Atmiņa",
-    "connections": "Savienojumi",
-    "pid": "PID",
-    "start": "Sākt",
-    "restart": "Pārstartēt",
-    "stop": "Apturēt",
-    "healthStatus": "Veselības statuss",
-    "recommendations": "Rekomendācijas",
-    "autoRecoveryStatus": "Automātiskās atjaunošanas statuss",
-    "enabled": "Iespējots:",
-    "recentRecoveries": "Nesenās atjaunošanas:",
-    "manualInterventionTitle": "Nepieciešama manuāla iejaukšanās:",
-    "manualInterventionMsg": "Automātiskā atjaunošana neizdevās. Lūdzu, pārbaudiet servisa žurnālus.",
-    "processing": "Apstrādā...",
-    "restartTitle": "Pārstartēt Redis servisu",
-    "restartMsg": "Tas īslaicīgi pārtrauks Redis servisu. Aktīvie savienojumi tiks pārtraukti.",
-    "restartWarning": "Visi savienotie klienti tiks atvienoti pārstartēšanas laikā.",
-    "stopTitle": "Apturēt Redis servisu",
-    "stopMsg": "Tas pilnībā apturēs Redis servisu. Visi atkarīgie servisi tiks ietekmēti.",
-    "stopWarning": "BRĪDINĀJUMS: Šī darbība ietekmēs sistēmas funkcionalitāti. Tikai administratori var apturēt servisu."
-  },
   "charts": {
     "base": {
       "loading": "Loading chart...",

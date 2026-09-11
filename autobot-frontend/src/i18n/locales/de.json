@@ -4928,31 +4928,6 @@
     "themeAuto": "Automatisch",
     "tabDevices": "Tab devices"
   },
-  "redis": {
-    "title": "Redis-Dienst",
-    "lastCheck": "Letzte Prüfung:",
-    "uptime": "Betriebszeit",
-    "memory": "Speicher",
-    "connections": "Verbindungen",
-    "pid": "PID",
-    "start": "Starten",
-    "restart": "Neustarten",
-    "stop": "Stoppen",
-    "healthStatus": "Dienststatus",
-    "recommendations": "Empfehlungen",
-    "autoRecoveryStatus": "Automatische Wiederherstellung",
-    "enabled": "Aktiviert:",
-    "recentRecoveries": "Letzte Wiederherstellungen:",
-    "manualInterventionTitle": "Manuelle Eingriffe erforderlich:",
-    "manualInterventionMsg": "Die automatische Wiederherstellung ist fehlgeschlagen. Bitte überprüfen Sie die Dienstprotokolle.",
-    "processing": "Wird verarbeitet...",
-    "restartTitle": "Redis-Dienst neustarten",
-    "restartMsg": "Dies unterbricht den Redis-Dienst vorübergehend. Aktive Verbindungen werden getrennt.",
-    "restartWarning": "Alle verbundenen Clients werden während des Neustarts getrennt.",
-    "stopTitle": "Redis-Dienst stoppen",
-    "stopMsg": "Dies stoppt den Redis-Dienst vollständig. Alle abhängigen Dienste werden beeinträchtigt.",
-    "stopWarning": "WARNUNG: Diese Aktion beeinträchtigt die Systemfunktionalität. Nur Administratoren können den Dienst stoppen."
-  },
   "charts": {
     "base": {
       "loading": "Loading chart...",
