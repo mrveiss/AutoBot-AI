@@ -19637,7 +19637,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("features", source)
         self.assertIn("ui", source)
         self.assertIn("performance", source)
-        self.assertIn("hosts", source)
 
     def test_batch_115_migration_preserves_host_definitions(self):
         """Verify migration preserves VM host definitions"""

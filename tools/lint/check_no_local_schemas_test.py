@@ -197,6 +197,40 @@ class OutputBuffer(list):
     assert hits == []
 
 
+def test_test_file_suffix_not_flagged(tmp_path: Path) -> None:
+    """*_test.py: a BaseModel a test method defines is a fixture, not an
+    endpoint schema (#16261) — scanning it made
+    api_endpoint_migrations_test.py's four pre-existing fixtures unfixable."""
+    path, repo_root = _write_api(
+        tmp_path,
+        "api_endpoint_migrations_test.py",
+        """\
+from pydantic import BaseModel
+
+class ChatMessage(BaseModel):
+    text: str
+""",
+    )
+    hits = hook._check_file(path, repo_root)
+    assert hits == []
+
+
+def test_test_file_prefix_not_flagged(tmp_path: Path) -> None:
+    """test_*.py (the other pytest discovery convention) is exempt too."""
+    path, repo_root = _write_api(
+        tmp_path,
+        "test_vnc_ocr.py",
+        """\
+from pydantic import BaseModel
+
+class OcrFixture(BaseModel):
+    text: str
+""",
+    )
+    hits = hook._check_file(path, repo_root)
+    assert hits == []
+
+
 # ---------------------------------------------------------------------------
 # _is_target_file path filtering
 # ---------------------------------------------------------------------------
@@ -214,6 +248,16 @@ def test_is_target_file_schema_file_excluded(tmp_path: Path) -> None:
 
 def test_is_target_file_allowlisted_excluded(tmp_path: Path) -> None:
     path, repo_root = _write_api(tmp_path, "workflow_state.py", "")
+    assert hook._is_target_file(path, repo_root) is False
+
+
+def test_is_target_file_test_suffix_excluded(tmp_path: Path) -> None:
+    path, repo_root = _write_api(tmp_path, "agent_test.py", "")
+    assert hook._is_target_file(path, repo_root) is False
+
+
+def test_is_target_file_test_prefix_excluded(tmp_path: Path) -> None:
+    path, repo_root = _write_api(tmp_path, "test_a2a_stream.py", "")
     assert hook._is_target_file(path, repo_root) is False
 
 
