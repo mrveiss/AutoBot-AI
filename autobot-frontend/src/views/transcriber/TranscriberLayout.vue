@@ -4,14 +4,22 @@
 // Layout shell — full sidebar implemented in Plan 4.
 // Hosts the transcriber settings surface, including the cloud ASR provider
 // selector (#10147c).
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import AsrProviderSelector from '@/components/transcriber/AsrProviderSelector.vue'
+import { useUserStore } from '@/stores/useUserStore'
 
 const settingsOpen = ref(false)
+
+// #15758: the only setting here, the cloud ASR provider, is admin-only on the
+// server (PATCH /providers) because it decides where every user's audio goes.
+// A non-admin would only get a 403, so the settings surface is offered to
+// admins alone.
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.isAdmin)
 </script>
 <template>
   <div class="transcriber-layout">
-    <header class="transcriber-layout-bar">
+    <header v-if="isAdmin" class="transcriber-layout-bar">
       <button
         type="button"
         class="btn btn-sm"
