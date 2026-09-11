@@ -3063,6 +3063,57 @@
         "title": "ComponentBreakdown",
         "type": "object"
       },
+      "ComponentDriftModel": {
+        "description": "One component's full-tree drift result.",
+        "properties": {
+          "compared": {
+            "title": "Compared",
+            "type": "integer"
+          },
+          "component": {
+            "title": "Component",
+            "type": "string"
+          },
+          "drifted": {
+            "items": {
+              "$ref": "#/components/schemas/FileVerdictModel"
+            },
+            "title": "Drifted",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "exclusions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Exclusions",
+            "type": "object"
+          },
+          "skipped": {
+            "default": false,
+            "title": "Skipped",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "component",
+          "compared",
+          "drifted",
+          "exclusions"
+        ],
+        "title": "ComponentDriftModel",
+        "type": "object"
+      },
       "ComponentSyncJobStatus": {
         "description": "Status of an async component-resolve job (#11303).",
         "properties": {
@@ -4226,6 +4277,36 @@
         "title": "FileDriftReport",
         "type": "object"
       },
+      "FileVerdictModel": {
+        "description": "One deployed-relative path and the verdict it earned.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "verdict"
+        ],
+        "title": "FileVerdictModel",
+        "type": "object"
+      },
       "FleetHealthResponse": {
         "description": "Fleet health status response.",
         "properties": {
@@ -4642,6 +4723,54 @@
           "nodes"
         ],
         "title": "FleetUpdateSummaryResponse",
+        "type": "object"
+      },
+      "FullTreeDriftReport": {
+        "description": "Every component, every file, one verdict each (#16310).",
+        "properties": {
+          "checked_at": {
+            "title": "Checked At",
+            "type": "string"
+          },
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/ComponentDriftModel"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "exclusions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Exclusions",
+            "type": "object"
+          },
+          "total_compared": {
+            "title": "Total Compared",
+            "type": "integer"
+          },
+          "total_drift": {
+            "title": "Total Drift",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "components",
+          "total_compared",
+          "total_drift",
+          "exclusions",
+          "checked_at",
+          "errors"
+        ],
+        "title": "FullTreeDriftReport",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -17835,6 +17964,61 @@
           }
         ],
         "summary": "Get File Drift",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/drift/full": {
+      "get": {
+        "description": "Every file under every deployed component, checked in one run (#16310).\n\nAn empty or unreadable component tree is reported through ``errors``, not\nsilently folded into a clean result -- a run that could not look must\nnever read the same as a run that looked and found nothing.",
+        "operationId": "get_full_tree_drift_api_code_sync_drift_full_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullTreeDriftReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Full Tree Drift",
         "tags": [
           "code-sync"
         ]
