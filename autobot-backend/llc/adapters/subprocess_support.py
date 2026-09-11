@@ -278,6 +278,54 @@ def inject_agent_credentials(env: dict, context: dict) -> None:
         env["AUTOBOT_LLC_API_BASE"] = api_base
 
 
+async def spawn_detached(*cmd: str, **kwargs: Any) -> asyncio.subprocess.Process:
+    """Spawn *cmd* as the leader of its own session/process group (GH#13097).
+
+    Every LLC adapter's ``create_subprocess_exec`` call must route through
+    here — or pass ``start_new_session=True`` itself — so that
+    :func:`terminate_pid` can kill the whole tree with ``os.killpg`` instead
+    of orphaning the CLI's descendants (Bash-tool children, MCP servers,
+    npx/node chains) when only its own PID is signalled.
+    """
+    return await asyncio.create_subprocess_exec(*cmd, start_new_session=True, **kwargs)
+
+
+async def spawn_with_workspace_retry(
+    cmd: list[str],
+    *,
+    context: dict,
+    env: dict,
+    workspace_dir: str | None,
+    stdout: Any,
+    stderr: Any,
+    log_name: str,
+) -> tuple[asyncio.subprocess.Process, str | None]:
+    """Spawn *cmd* detached, retrying once without cwd if workspace_dir vanished.
+
+    Every subprocess adapter spawns with ``cwd=workspace_dir`` and, on a
+    ``FileNotFoundError`` whose missing path IS that workspace_dir (not the
+    CLI binary), clears it from *context*/*env* and retries without cwd —
+    the worktree was deleted between schedule and dispatch. Centralised so
+    it can't drift between adapters the way it previously did.
+
+    Returns ``(process, workspace_dir)`` — the second element is ``None``
+    when the retry fired, so the caller's own variable stays in sync.
+    """
+    try:
+        proc = await spawn_detached(*cmd, stdout=stdout, stderr=stderr, env=env, cwd=workspace_dir or None)
+        return proc, workspace_dir
+    except FileNotFoundError as e:
+        missing_ws = workspace_dir and e.filename and os.path.abspath(str(e.filename)) == os.path.abspath(workspace_dir)
+        if not missing_ws:
+            raise  # missing binary or unrelated path
+        _logger.warning("%s: workspace_dir %r missing, retrying without cwd", log_name, workspace_dir)
+        context.pop("workspace_dir", None)
+        env.pop("AUTOBOT_WORKSPACE_DIR", None)
+        env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
+        proc = await spawn_detached(*cmd, stdout=stdout, stderr=stderr, env=env)
+        return proc, None
+
+
 def probe_pid(pid: int) -> AdapterRunStatus:
     """Return an :class:`AdapterRunStatus` reflecting the liveness of *pid*.
 
@@ -299,21 +347,54 @@ def probe_pid(pid: int) -> AdapterRunStatus:
         return AdapterRunStatus(status=LLCRunStatus.FAILED, error=str(exc))
 
 
-async def terminate_pid(pid: int, grace_seconds: int, log_name: str) -> bool:
-    """Send SIGTERM to *pid*, poll for exit, then SIGKILL if needed.
+def _process_group_id(pid: int) -> int | None:
+    """Return *pid*'s process group id, or ``None`` when it must not be killpg'd.
 
-    Returns ``True`` if the process was already gone when SIGTERM was sent
-    (``ProcessLookupError`` on the initial signal), ``False`` otherwise.
-    Callers that want to short-circuit on an already-dead process should
-    check the return value; callers with post-cancel cleanup to do can
-    ignore it.
+    ``None`` tells the caller to fall back to signalling *pid* alone:
 
-    The grace poll uses 0.1 s intervals for *grace_seconds* seconds before
-    escalating to SIGKILL.
+    * ``os.getpgid`` raised ``ProcessLookupError``/``PermissionError`` — the
+      child already exited, or changed its own pgid (e.g. re-execed into a
+      session of its own) so it is no longer reachable through ours; or
+    * the discovered pgid is OUR OWN controlling process group — a child
+      spawned without ``start_new_session`` shares our pgid, and killpg-ing
+      it would signal this backend process too.
     """
     try:
-        os.kill(pid, signal.SIGTERM)
-        _logger.info("%s: SIGTERM -> PID %d", log_name, pid)
+        pgid = os.getpgid(pid)
+    except (ProcessLookupError, PermissionError):
+        return None
+    return None if pgid == os.getpgid(0) else pgid
+
+
+def _signal_target(pid: int, pgid: int | None, sig: int) -> None:
+    """Send *sig* to the process group when known-safe, else to *pid* alone.
+
+    A ``killpg`` that itself races into ``ProcessLookupError``/
+    ``PermissionError`` (the group exited between discovery and signalling)
+    also falls back to the single-PID send rather than raising.
+    """
+    if pgid is not None:
+        try:
+            os.killpg(pgid, sig)
+            return
+        except (ProcessLookupError, PermissionError):
+            pass
+    os.kill(pid, sig)
+
+
+async def terminate_pid(pid: int, grace_seconds: int, log_name: str) -> bool:
+    """Send SIGTERM to *pid*'s process group, poll for exit, then SIGKILL (GH#13097).
+
+    Kills the whole group so a CLI agent's descendants die with it instead of
+    being orphaned; see :func:`_process_group_id` for the single-PID fallback.
+    Returns ``True`` if the process was already gone on the first signal,
+    ``False`` otherwise. The grace poll uses 0.1 s intervals for
+    *grace_seconds* seconds before escalating to SIGKILL.
+    """
+    pgid = _process_group_id(pid)
+    try:
+        _signal_target(pid, pgid, signal.SIGTERM)
+        _logger.info("%s: SIGTERM -> PID %d (pgid=%s)", log_name, pid, pgid)
     except ProcessLookupError:
         return True
 
@@ -325,8 +406,8 @@ async def terminate_pid(pid: int, grace_seconds: int, log_name: str) -> bool:
             return False
 
     try:
-        os.kill(pid, signal.SIGKILL)
-        _logger.warning("%s: SIGKILL -> PID %d", log_name, pid)
+        _signal_target(pid, pgid, signal.SIGKILL)
+        _logger.warning("%s: SIGKILL -> PID %d (pgid=%s)", log_name, pid, pgid)
     except ProcessLookupError:
         pass
 
@@ -343,5 +424,7 @@ __all__ = [
     "serialize_invoke_context",
     "inject_agent_credentials",
     "probe_pid",
+    "spawn_detached",
+    "spawn_with_workspace_retry",
     "terminate_pid",
 ]

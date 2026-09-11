@@ -350,7 +350,10 @@ class TestSharedGracefulTimeout:
             with open(state_file, "w", encoding="utf-8") as f:
                 json.dump({"pid": 123, "session_id": "session-x"}, f)
 
+            # GH#13097: force the single-PID fallback so this test stays about the
+            # SIGTERM/SIGKILL sequence, not process-group resolution (covered separately).
             with (
+                patch("os.getpgid", side_effect=ProcessLookupError),
                 patch("os.kill", side_effect=fake_kill),
                 patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             ):

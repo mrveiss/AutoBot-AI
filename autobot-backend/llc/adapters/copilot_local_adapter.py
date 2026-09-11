@@ -21,7 +21,6 @@ cancel lifecycle is shared via :class:`SubprocessLifecycleAdapter` (GH#9834).
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import shutil
@@ -35,7 +34,7 @@ from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
 from .subprocess_base import SubprocessLifecycleAdapter, placeholder_run_id
 from .subprocess_base import resolve_timeout as _resolve_timeout
-from .subprocess_support import inject_agent_credentials, serialize_invoke_context
+from .subprocess_support import inject_agent_credentials, serialize_invoke_context, spawn_with_workspace_retry
 
 logger = get_logger(__name__)
 
@@ -114,29 +113,15 @@ class CopilotLocalAdapter(SubprocessLifecycleAdapter):
         out_fh = open(output_file, "w", encoding="utf-8")
         err_fh = open(stderr_file, "w", encoding="utf-8")
         try:
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=err_fh,
-                    env=env,
-                    cwd=workspace_dir or None,
-                )
-            except FileNotFoundError as e:
-                if workspace_dir and e.filename and os.path.abspath(str(e.filename)) == os.path.abspath(workspace_dir):
-                    logger.warning("CopilotLocalAdapter: workspace_dir %r missing, retrying without cwd", workspace_dir)
-                    env.pop("AUTOBOT_WORKSPACE_DIR", None)
-                    workspace_dir = None
-                    context.pop("workspace_dir", None)
-                    env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
-                else:
-                    raise
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=err_fh,
-                    env=env,
-                )
+            proc, workspace_dir = await spawn_with_workspace_retry(
+                cmd,
+                context=context,
+                env=env,
+                workspace_dir=workspace_dir,
+                stdout=out_fh,
+                stderr=err_fh,
+                log_name="CopilotLocalAdapter",
+            )
         finally:
             out_fh.close()
             err_fh.close()

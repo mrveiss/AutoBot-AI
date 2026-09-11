@@ -41,7 +41,7 @@ from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 from .claude_code_adapter import ClaudeCodeAdapter, _output_path, _resolve_claude_cli, _state_path
 from .subprocess_base import placeholder_run_id
-from .subprocess_support import inject_agent_credentials, serialize_invoke_context
+from .subprocess_support import inject_agent_credentials, serialize_invoke_context, spawn_with_workspace_retry
 
 logger = get_logger(__name__)
 
@@ -96,32 +96,15 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
 
         out_fh = open(output_file, "w", encoding="utf-8")
         try:
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=env,
-                    cwd=workspace_dir or None,
-                )
-            except FileNotFoundError as e:
-                if workspace_dir and e.filename and os.path.abspath(str(e.filename)) == os.path.abspath(workspace_dir):
-                    logger.warning(
-                        "ClaudeCodeSubscriptionAdapter: workspace_dir %r missing, retrying without cwd",
-                        workspace_dir,
-                    )
-                    context.pop("workspace_dir", None)
-                    env.pop("AUTOBOT_WORKSPACE_DIR", None)
-                    env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
-                    workspace_dir = None
-                else:
-                    raise
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=env,
-                )
+            proc, workspace_dir = await spawn_with_workspace_retry(
+                cmd,
+                context=context,
+                env=env,
+                workspace_dir=workspace_dir,
+                stdout=out_fh,
+                stderr=asyncio.subprocess.PIPE,
+                log_name="ClaudeCodeSubscriptionAdapter",
+            )
         finally:
             out_fh.close()
 

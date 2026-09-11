@@ -41,7 +41,12 @@ from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 from .copilot_local_adapter import CopilotLocalAdapter, _output_path, _resolve_gh_cli, _state_path
 from .subprocess_base import placeholder_run_id
-from .subprocess_support import inject_agent_credentials, serialize_invoke_context
+from .subprocess_support import (
+    inject_agent_credentials,
+    serialize_invoke_context,
+    spawn_detached,
+    spawn_with_workspace_retry,
+)
 
 logger = get_logger(__name__)
 
@@ -89,53 +94,19 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
         # GH#9623/GH#9789: forward the run-scoped LLC bearer token + API base.
         inject_agent_credentials(env, context)
 
-        # Verify GitHub authentication (subscription mode requires logged-in gh CLI)
-        try:
-            proc_check = await asyncio.create_subprocess_exec(
-                gh_cli,
-                "auth",
-                "status",
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-                env=env,
-            )
-            await proc_check.wait()
-            if proc_check.returncode != 0:
-                raise RuntimeError(
-                    "GitHub CLI not authenticated. Run 'gh auth login' to authenticate with your GitHub account."
-                )
-        except Exception as exc:
-            logger.error("CopilotSubscriptionAdapter: GitHub auth check failed: %s", exc)
-            raise
+        await self._verify_gh_authenticated(gh_cli, env)
 
         out_fh = open(output_file, "w", encoding="utf-8")
         try:
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=asyncio.subprocess.DEVNULL,
-                    env=env,
-                    cwd=workspace_dir or None,
-                )
-            except FileNotFoundError as e:
-                if workspace_dir and e.filename and os.path.abspath(str(e.filename)) == os.path.abspath(workspace_dir):
-                    logger.warning(
-                        "CopilotSubscriptionAdapter: workspace_dir %r missing, retrying without cwd",
-                        workspace_dir,
-                    )
-                    env.pop("AUTOBOT_WORKSPACE_DIR", None)
-                    workspace_dir = None
-                    context.pop("workspace_dir", None)
-                    env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
-                else:
-                    raise
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=asyncio.subprocess.DEVNULL,
-                    env=env,
-                )
+            proc, workspace_dir = await spawn_with_workspace_retry(
+                cmd,
+                context=context,
+                env=env,
+                workspace_dir=workspace_dir,
+                stdout=out_fh,
+                stderr=asyncio.subprocess.DEVNULL,
+                log_name="CopilotSubscriptionAdapter",
+            )
         finally:
             out_fh.close()
 
@@ -160,6 +131,30 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
             json.dump(state, fh)
 
         return run_id
+
+    async def _verify_gh_authenticated(self, gh_cli: str, env: dict) -> None:
+        """Verify the gh CLI has a logged-in session (subscription mode requires it).
+
+        Raises ``RuntimeError`` with an actionable message when unauthenticated;
+        any other exception from the check itself is logged and re-raised.
+        """
+        try:
+            proc_check = await spawn_detached(
+                gh_cli,
+                "auth",
+                "status",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+                env=env,
+            )
+            await proc_check.wait()
+            if proc_check.returncode != 0:
+                raise RuntimeError(
+                    "GitHub CLI not authenticated. Run 'gh auth login' to authenticate with your GitHub account."
+                )
+        except Exception as exc:
+            logger.error("CopilotSubscriptionAdapter: GitHub auth check failed: %s", exc)
+            raise
 
     async def _resolve_gh_token(self, agent_config: dict, cfg: dict) -> Optional[str]:
         """Resolve the GitHub token, preferring the LLC secrets vault (GH#10217).

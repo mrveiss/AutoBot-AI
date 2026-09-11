@@ -27,7 +27,6 @@ host commands from untrusted config. It is therefore hardened three ways:
   backend's DB/LLC credentials are never inherited.
 """
 
-import asyncio
 import json
 import os
 import shlex
@@ -36,7 +35,7 @@ from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
-from .subprocess_support import inject_agent_credentials, probe_pid, terminate_pid
+from .subprocess_support import inject_agent_credentials, probe_pid, spawn_detached, terminate_pid
 
 logger = get_logger(__name__)
 
@@ -94,7 +93,7 @@ class ProcessAdapter:
         if not argv:
             raise ValueError("ProcessAdapter: empty command")
 
-        proc = await asyncio.create_subprocess_exec(
+        proc = await spawn_detached(
             *argv,
             env=env,
             cwd=cwd or None,

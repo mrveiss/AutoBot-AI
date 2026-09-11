@@ -317,7 +317,10 @@ class TestCancel:
             if s == 0 and any(s2 == sig_mod.SIGTERM for _, s2 in killed):
                 raise ProcessLookupError
 
+        # GH#13097: pin the single-PID fallback so this stays a SIGTERM/SIGKILL
+        # sequence test, not a process-group one (covered separately).
         with (
+            patch("os.getpgid", side_effect=ProcessLookupError),
             patch("os.kill", side_effect=smart_kill),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
@@ -329,7 +332,10 @@ class TestCancel:
     async def test_cancel_already_dead_does_not_raise(self) -> None:
         adapter = CopilotLocalAdapter()
         with tempfile.TemporaryDirectory() as td:
-            with patch("os.kill", side_effect=ProcessLookupError()):
+            with (
+                patch("os.getpgid", side_effect=ProcessLookupError),
+                patch("os.kill", side_effect=ProcessLookupError()),
+            ):
                 await adapter.cancel(_agent_cfg(agent_id="a2", output_dir=td), "9999/session-r")
 
     async def test_cancel_unparseable_run_id_is_noop(self) -> None:
@@ -346,7 +352,10 @@ class TestCancel:
             with open(state_file, "w", encoding="utf-8") as fh:
                 json.dump({"pid": 4321}, fh)
 
-            with patch("os.kill", side_effect=ProcessLookupError()):
+            with (
+                patch("os.getpgid", side_effect=ProcessLookupError),
+                patch("os.kill", side_effect=ProcessLookupError()),
+            ):
                 await adapter.cancel(_agent_cfg(output_dir=td), run_id)
 
             assert not os.path.exists(state_file)

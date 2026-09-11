@@ -87,9 +87,11 @@ class TestProcessAdapter:
         fake_proc.pid = 7
 
         captured_argv: list = []
+        captured_kwargs: dict = {}
 
-        async def mock_exec(*argv, env, cwd):
+        async def mock_exec(*argv, **kwargs):
             captured_argv.extend(argv)
+            captured_kwargs.update(kwargs)
             return fake_proc
 
         with (
@@ -101,6 +103,8 @@ class TestProcessAdapter:
 
         assert captured_argv == ["python", "run_agent.py", "--flag"]
         shell.assert_not_called()
+        # GH#13097: the spawn goes through spawn_detached, its own session/group.
+        assert captured_kwargs["start_new_session"] is True
 
     async def test_invoke_passes_context_as_env(self) -> None:
         adapter = ProcessAdapter()
@@ -109,8 +113,8 @@ class TestProcessAdapter:
 
         captured_env: dict = {}
 
-        async def mock_exec(*argv, env, cwd):
-            captured_env.update(env)
+        async def mock_exec(*argv, **kwargs):
+            captured_env.update(kwargs["env"])
             return fake_proc
 
         with (
@@ -134,8 +138,8 @@ class TestProcessAdapter:
 
         captured_env: dict = {}
 
-        async def mock_exec(*argv, env, cwd):
-            captured_env.update(env)
+        async def mock_exec(*argv, **kwargs):
+            captured_env.update(kwargs["env"])
             return fake_proc
 
         with (
@@ -190,9 +194,14 @@ class TestProcessAdapter:
                 if sent_sigterm[0]:
                     raise ProcessLookupError  # process gone after SIGTERM
 
-        with patch("os.kill", side_effect=smart_kill):
-            with patch("asyncio.sleep", new_callable=AsyncMock):
-                await adapter.cancel({}, "12345")
+        # GH#13097: force the single-PID fallback so this test stays about the
+        # SIGTERM/SIGKILL sequence, not process-group resolution (covered separately).
+        with (
+            patch("os.getpgid", side_effect=ProcessLookupError),
+            patch("os.kill", side_effect=smart_kill),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            await adapter.cancel({}, "12345")
 
         assert any(s == signal.SIGTERM for _, s in killed)
 
@@ -202,7 +211,7 @@ class TestProcessAdapter:
         def _raise(pid, sig):
             raise ProcessLookupError
 
-        with patch("os.kill", side_effect=_raise):
+        with patch("os.getpgid", side_effect=ProcessLookupError), patch("os.kill", side_effect=_raise):
             await adapter.cancel({}, "99999")  # should not raise
 
 

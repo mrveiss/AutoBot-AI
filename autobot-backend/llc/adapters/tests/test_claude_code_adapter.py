@@ -224,7 +224,7 @@ class TestClaudeCliResolution:
     async def test_invoke_uses_configured_path_over_path(self, tmp_path) -> None:
         """A configured override resolves even when a different `claude` is on PATH."""
         configured = tmp_path / "claude"
-        configured.write_text("#!/bin/sh\n")
+        await asyncio.to_thread(configured.write_text, "#!/bin/sh\n")
         configured.chmod(0o755)
 
         adapter = ClaudeCodeAdapter()
@@ -588,7 +588,7 @@ class TestCancel:
                     return_value=fake_redis,
                 ),
             ):
-                await adapter.cancel(_agent_cfg(agent_id="agent-clear", output_dir=td), "1/session-s")
+                await adapter.cancel(_agent_cfg(agent_id="agent-clear", output_dir=td), "918273/session-s")
 
         fake_redis.delete.assert_awaited_once()
         key_arg = fake_redis.delete.call_args[0][0]

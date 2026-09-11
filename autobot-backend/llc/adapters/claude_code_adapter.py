@@ -28,7 +28,6 @@ The state-file / status / cancel lifecycle is shared via
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import time
@@ -55,6 +54,7 @@ from .subprocess_support import (
     is_rate_limit_output,
     read_output_tail,
     serialize_invoke_context,
+    spawn_with_workspace_retry,
 )
 
 logger = get_logger(__name__)
@@ -255,28 +255,15 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         out_fh = open(output_file, "w", encoding="utf-8")
         err_fh = open(stderr_file, "w", encoding="utf-8")
         try:
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=err_fh,
-                    env=env,
-                    cwd=workspace_dir or None,
-                )
-            except FileNotFoundError as e:
-                if not (workspace_dir and e.filename and os.path.abspath(e.filename) == os.path.abspath(workspace_dir)):
-                    raise  # missing binary or unrelated path
-                logger.warning("ClaudeCodeAdapter: workspace_dir %r missing, retrying without cwd", workspace_dir)
-                context.pop("workspace_dir", None)
-                env.pop("AUTOBOT_WORKSPACE_DIR", None)
-                env["LLC_INVOKE_CONTEXT"] = serialize_invoke_context(context)
-                workspace_dir = None
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=out_fh,
-                    stderr=err_fh,
-                    env=env,
-                )
+            proc, workspace_dir = await spawn_with_workspace_retry(
+                cmd,
+                context=context,
+                env=env,
+                workspace_dir=workspace_dir,
+                stdout=out_fh,
+                stderr=err_fh,
+                log_name="ClaudeCodeAdapter",
+            )
         finally:
             out_fh.close()
             err_fh.close()
