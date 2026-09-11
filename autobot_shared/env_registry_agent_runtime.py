@@ -273,11 +273,12 @@ register_env_var(
         type=int,
         default=3,
         description=(
-            "How many renewal intervals a run may go without reporting progress before its work claims st"
-            "op being renewed and lapse (#15950). Progress is reported by LLM completions, tool SDK execu"
-            "tions and write sites, so a slow run that keeps working keeps its claim and only silence let"
-            "s one lapse. The effective window is never shorter than twice AUTOBOT_LLM_REQUEST_TIMEOUT, b"
-            "ecause one model call reports progress only when it finishes."
+            "How many renewal intervals a run may go without reporting progress before its work claims "
+            "stop being renewed and lapse (#15950). Progress is reported by every LLM attempt, tool SDK "
+            "executions and write sites, so a slow run that keeps working keeps its claim and only silence "
+            "lets one lapse. The effective window is never shorter than twice the larger of "
+            "AUTOBOT_LLM_REQUEST_TIMEOUT and the longest LLM backoff wait, because a working call can go "
+            "silent for one backoff wait plus one request."
         ),
         component="orchestration",
         range=(2, 100),

@@ -35,9 +35,18 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Iterator, Literal
 
-#: ``held``: every declared scope is claimed and being renewed.
-#: ``lapsed``: renewal stopped because the run stalled, or a renew found the
-#: claim gone. Writes under it are refused.
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
+
+#: ``held``: every declared scope is claimed, and the run is not yet proven
+#: stalled -- which is not the same as "renewed a moment ago". After a
+#: cancellation stops renewal, the claim still exists until its TTL, so the run
+#: stays held for that window; cooperative cancellation (#16174) closes it.
+#: ``lapsed``: the claim is no longer safe to write under -- the run stalled, a
+#: renew found the claim gone, or the run ended and released it. A task spawned
+#: inside the run keeps a reference to it, so one that outlives the run sees
+#: this rather than a claim that no longer exists. Writes under it are refused.
 #: ``degraded``: the claim registry was unavailable, so the run proceeds
 #: unclaimed by design; writes are allowed and logged.
 Standing = Literal["held", "lapsed", "degraded"]
@@ -96,4 +105,11 @@ def bound(run: ClaimedRun) -> Iterator[ClaimedRun]:
     try:
         yield run
     finally:
-        _CURRENT.reset(token)
+        try:
+            _CURRENT.reset(token)
+        except ValueError:
+            # Closed from a context other than the one that bound it -- an
+            # abandoned generator finalised by asyncio's shutdown hook. That
+            # context never had *run* set, so there is nothing to undo, and the
+            # claim's own release has already run inside the body's cleanup.
+            logger.warning("claimed run closed outside the context that bound it; nothing to reset")

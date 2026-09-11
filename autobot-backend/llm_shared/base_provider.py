@@ -159,14 +159,11 @@ class BaseProvider(ABC):
                 except Exception as exc:
                     self._notify_error(exc, request)
                     raise
+                finally:
+                    record_progress()
 
         try:
-            try:
-                return await handler.execute_with_retry(_attempt, provider=provider_key)
-            finally:
-                # A finished model call, successful or not, is progress for the claimed run it
-                # belongs to (#15950 AC4). Every provider the registry builds passes through here.
-                record_progress()
+            return await handler.execute_with_retry(_attempt, provider=provider_key)
         except Exception:
             # Backoff exhausted — return the last error response if we have one,
             # otherwise let the exception propagate to the registry for fallback.
