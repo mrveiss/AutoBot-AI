@@ -184,6 +184,7 @@ class TestStallKillsWholeGroup:
             while time.monotonic() < deadline:
                 result = await adapter.status(agent_config, run_id)
                 assert result.status.value == "running", result.error
+                # fixed sleep on purpose (#16255): the subject is surviving a timed window
                 await asyncio.sleep(0.2)
             assert _pid_alive(proc.pid)
         finally:
@@ -205,6 +206,7 @@ class TestStallKillsWholeGroup:
             while time.monotonic() < deadline:
                 result = await adapter.status(agent_config, run_id)
                 assert result.status.value == "running", result.error
+                # fixed sleep on purpose (#16255): the subject is a quiet child surviving a timed window
                 await asyncio.sleep(0.2)
             assert _pid_alive(proc.pid)
         finally:
