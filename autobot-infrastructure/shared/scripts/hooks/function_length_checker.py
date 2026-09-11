@@ -15,14 +15,19 @@ Checks Python functions for length violations according to CLAUDE.md guidelines:
 Issue #620 - Function Length Enforcement
 
 Only the functions a change touches are judged (#16191). A function counts as
-touched when a line the change added falls inside it, so editing a long
-function, or adding one, still fails, while a one-line fix elsewhere in the same
-file is no longer held hostage by a legacy function it never touched. The change
-is the staged diff, or the range pre-commit exports for a ``--from-ref`` run,
-which stages nothing. A file passed in but not part of the staged change
+touched when a line the change added falls inside it, so adding or changing a
+line in a long function, or adding a long function, still fails, while a one-line
+fix elsewhere in the same file is no longer held hostage by a legacy function it
+never touched. A change that only deletes lines from a long function adds none
+there, so it passes: it can only have made that function shorter. The change is
+the staged diff, or the range pre-commit exports for a ``--from-ref`` run, which
+stages nothing. A file passed in but not part of the staged change
 (``--all-files``, ``--files``) has no change to scope to, so it is judged whole
-rather than passed unexamined. ``--whole-file`` judges every file whole, which is
-how the current offenders are enumerated.
+rather than passed unexamined.
+
+``--whole-file`` judges every file whole. It is for invoking this script directly
+-- the bash wrapper never passes arguments through -- and is how the current
+offenders are enumerated.
 """
 
 import ast
@@ -230,16 +235,23 @@ def _scope_to_change(
 def _report_scope(violations: List[FunctionViolation]) -> List[FunctionViolation]:
     """Scope *violations* to the change, and say what was skipped or judged whole.
 
-    Only a file that has a violation costs a git call, so a clean change reads
-    no diff at all.
+    Only a file that has a violation costs a git call, so a clean change reads no
+    diff at all. The repository judged is the one the hook runs in, not the one
+    this script lives in: pre-commit runs hooks from that repository's root, and
+    the hook's own tests run it inside throwaway repositories. In staged mode, run
+    from a subdirectory, the paths it is given no longer match the root-relative
+    staged set, so its files are judged whole -- over-reported, never skipped.
     """
     if not violations:
         return violations
     kept, skipped, whole = _scope_to_change(violations, Path.cwd(), resolve_base())
     if skipped:
         print(f"{CYAN}Skipped {skipped} long function(s) this change did not touch (#16191).{NC}")
-    for path in whole:
-        print(f"{YELLOW}NOTE{NC} {path}: not part of the staged change, so judged whole")
+    if whole:
+        print(
+            f"{YELLOW}NOTE{NC} {len(whole)} file(s) are not part of the staged change, so they were judged whole; "
+            "their long functions may predate it (#16191)."
+        )
     if skipped or whole:
         print()
     return kept

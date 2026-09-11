@@ -14,6 +14,7 @@ genuine, newly-fixed defect here.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 from autobot_shared.paths import scrubbed_git_env
@@ -207,3 +208,28 @@ class TestScopedToTheFunctionsAChangeTouches:
         result = _run_hook(repo, "legacy.py", PRE_COMMIT_FROM_REF=base)
 
         assert result.returncode != 0 and "judged whole" in result.stdout, result.stdout + result.stderr
+
+    def test_a_range_git_cannot_read_fails_closed(self, tmp_path: Path) -> None:
+        """A git failure is not "this change touched nothing": the run must not report clean."""
+        repo = _init_repo(tmp_path)
+        _legacy_file(repo)
+
+        result = _run_hook(repo, "legacy.py", PRE_COMMIT="1", PRE_COMMIT_FROM_REF="0" * 40)
+
+        assert result.returncode != 0 and "refusing to report clean" in result.stdout, result.stdout + result.stderr
+
+    def test_whole_file_mode_judges_a_legacy_function_the_change_did_not_touch(self, tmp_path: Path) -> None:
+        """The enumeration mode, run directly as documented: the same staged change the scope passes is red here."""
+        repo = _init_repo(tmp_path)
+        path = _legacy_file(repo)
+        _edit(path, "return 1", "return 2")
+        _git(repo, "add", "legacy.py")
+        checker = [sys.executable, str(HOOK_PATH.parent / "function_length_checker.py")]
+
+        def _checker(*flags: str) -> subprocess.CompletedProcess:
+            return subprocess.run(
+                [*checker, *flags], cwd=repo, input="legacy.py\n", capture_output=True, text=True, env=_test_git_env()
+            )
+
+        assert _checker().returncode == 0, "scoped, the untouched legacy function is skipped"
+        assert _checker("--whole-file").returncode != 0, "--whole-file must judge it anyway"
