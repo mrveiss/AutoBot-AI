@@ -114,6 +114,11 @@ end
 
 _KEY_PREFIX = "autobot:llm:rl"
 
+#: How long :meth:`LLMCrossWorkerRateLimiter.acquire` waits for a token by
+#: default. Named rather than left as a default literal because a claimed run's
+#: stall window must outlast it (#15950): the wait is silent progress-wise.
+ACQUIRE_TIMEOUT_S = 30.0
+
 
 def _provider_limits(provider: str) -> Tuple[float, float]:
     """Return (capacity, refill_rate_tokens_per_second) for a provider."""
@@ -148,7 +153,7 @@ class LLMCrossWorkerRateLimiter:
     async def acquire(
         self,
         provider: str,
-        timeout: float = 30.0,
+        timeout: float = ACQUIRE_TIMEOUT_S,
     ) -> AsyncIterator[None]:
         """
         Async context manager that blocks until a token is available.
