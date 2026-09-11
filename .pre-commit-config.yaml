@@ -617,6 +617,11 @@ repos:
     hooks:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
+        # #16343: one process at a time. Upstream's manifest sets no
+        # require_serial, so pre-commit ran this hook in parallel batches that each
+        # rewrote .secrets.baseline and raced. The last writer won, and a large
+        # commit (any base merge) failed on every attempt.
+        require_serial: true
 
   # Block commits when branch is shared with a worktree (Issue #1654)
   # Must run BEFORE the stash/restore cycle to prevent branch corruption.
