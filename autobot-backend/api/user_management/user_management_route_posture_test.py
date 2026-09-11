@@ -75,7 +75,8 @@ _ADMIN_ONLY_BY_16276 = frozenset(
 #: route, both fail in ``TestUserManagementRoutePostureIsComplete``.
 _EXPECTED_POSTURE = {
     ("GET", "/user-management/users"): _AUTHENTICATED,  # list_users
-    ("GET", "/user-management/users/search"): _OPEN,  # search_users_for_sharing (#2072)
+    # search_users_for_sharing: login and the caller's own org (#16279). It was open (#2072).
+    ("GET", "/user-management/users/search"): _AUTHENTICATED,
     ("POST", "/user-management/users"): _ADMIN,  # create_user (#15738)
     ("GET", "/user-management/users/me"): _AUTHENTICATED,  # get_current_user_profile
     ("GET", "/user-management/users/{user_id}"): _SELF_OR_ADMIN,  # get_user (#15738)
@@ -193,12 +194,18 @@ class TestUserManagementRoutePostureIsComplete:
 class TestUserManagementRoutePosture:
     """The observed posture of every route matches what is on record."""
 
-    def test_open_routes_carry_no_login_requirement(self):
+    def test_no_route_is_open(self):
+        """Every user-management route requires at least a login. #16279 closed the last open one, ``/users/search``.
+
+        This check can't pass vacuously: it reads the observed posture of every
+        mounted route, and ``TestUserManagementRoutePostureIsComplete`` pins
+        that set to the table.
+        """
         posture = _observed_posture()
-        open_routes = [k for k, v in _EXPECTED_POSTURE.items() if v == _OPEN]
-        assert open_routes, "table lists no _OPEN route -- the check below would be vacuous"
-        for key in open_routes:
-            assert posture.get(key) == _OPEN, f"{key}: expected open, observed {posture.get(key)!r}"
+        assert posture, "no routes observed -- the check below would be vacuous"
+        open_routes = sorted(key for key, tier in posture.items() if tier == _OPEN)
+        assert not open_routes, f"open user-management routes: {open_routes}"
+        assert _OPEN not in _EXPECTED_POSTURE.values(), "the table still records an _OPEN route"
 
     def test_admin_routes_require_platform_admin(self):
         posture = _observed_posture()
