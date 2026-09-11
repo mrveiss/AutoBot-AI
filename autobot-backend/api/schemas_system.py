@@ -2780,13 +2780,10 @@ class WakeWordCheckRequest(BaseModel):
 
 
 class WakeWordCheckResponse(BaseModel):
-    """Response for wake word check"""
+    """Response for wake word check: whether the text matched, and the confidence only (#16247 ruling)."""
 
     detected: bool
-    wake_word: str = ""
     confidence: float = 0.0
-    timestamp: float = 0.0
-    metadata: Metadata = {}
 
 
 class WakeWordConfigRequest(BaseModel):
