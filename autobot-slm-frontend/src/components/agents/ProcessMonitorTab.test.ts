@@ -16,8 +16,10 @@
  * #16374 — the nginx `/autobot-api/` proxy now runs an `auth_request` session
  * check before it forwards anything, and a browser WebSocket handshake cannot
  * carry a custom `Authorization` header. `FakeWebSocket` below pins that the
- * stream URL instead carries the SLM session token as `?slm_ws_token=`, which
- * the template's fallback map reads when the header is absent.
+ * SLM session token instead rides the `Sec-WebSocket-Protocol` subprotocol
+ * list (`new WebSocket(url, ['bearer', token])`), which nginx's dedicated
+ * stream location reads via `$http_sec_websocket_protocol`, and that the URL
+ * itself carries no token.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -34,11 +36,13 @@ vi.mock('@/stores/auth', () => ({
 class FakeWebSocket {
   static instances: FakeWebSocket[] = []
   url: string
+  protocols: string | string[] | undefined
   onmessage: ((event: MessageEvent) => void) | null = null
   onclose: (() => void) | null = null
   onerror: (() => void) | null = null
-  constructor(url: string) {
+  constructor(url: string, protocols?: string | string[]) {
     this.url = url
+    this.protocols = protocols
     FakeWebSocket.instances.push(this)
   }
   close(): void {}
@@ -193,15 +197,17 @@ describe('ProcessMonitorTab transport (#13079)', () => {
     ])
   })
 
-  it('carries the SLM session token on the log-stream WebSocket URL (#16374)', () => {
+  it('carries the SLM session token as a WebSocket subprotocol, never the URL (#16374)', () => {
     FakeWebSocket.instances.length = 0
     const { vm } = mountTab()
 
     vm.streamLogs('p1')
 
     expect(FakeWebSocket.instances).toHaveLength(1)
-    const url = FakeWebSocket.instances[0].url
-    expect(url).toContain('/processes/p1/stream')
-    expect(url).toContain('?slm_ws_token=test-token')
+    const socket = FakeWebSocket.instances[0]
+    expect(socket.url).toContain('/processes/p1/stream')
+    expect(socket.url).not.toContain('test-token')
+    expect(socket.url).not.toContain('?')
+    expect(socket.protocols).toEqual(['bearer', 'test-token'])
   })
 })

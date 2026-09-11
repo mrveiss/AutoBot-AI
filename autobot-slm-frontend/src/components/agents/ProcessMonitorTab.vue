@@ -17,9 +17,11 @@
  * #16374: the nginx `/autobot-api/` location now runs an `auth_request`
  * session check before it forwards anything to the backend. A browser
  * WebSocket handshake cannot carry a custom `Authorization` header, so the
- * stream URL carries the SLM session token as `?slm_ws_token=` instead — the
- * template's `$slm_session_authorization` map falls back to that query
- * argument only when the request has no `Authorization` header.
+ * log-stream socket carries the SLM session token as a `Sec-WebSocket-Protocol`
+ * subprotocol instead (`new WebSocket(url, ['bearer', token])`) — the
+ * dedicated nginx stream location reads it from that header, never the URL,
+ * so the JWT never lands in an access log, browser history, or the request
+ * forwarded to the backend.
  */
 
 import { ref } from 'vue'
@@ -91,31 +93,36 @@ function stopStream() {
   isStreaming.value = false
 }
 
-/**
- * #16374: `slm_ws_token` is the nginx `auth_request` gate's fallback
- * credential for this one native `new WebSocket()` call — it cannot set an
- * `Authorization` header, so the SLM session token rides in the query
- * string instead. Every other caller of `/autobot-api/` keeps sending the
- * header (`useAutobotApi`'s axios interceptor); nginx prefers it and only
- * reads this argument when it is absent.
- */
 function buildWsUrl(path: string): string {
-  const query = authStore.token ? `?slm_ws_token=${encodeURIComponent(authStore.token)}` : ''
   const base = getBackendUrl()
   if (!base) {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${proto}//${window.location.host}${path}${query}`
+    return `${proto}//${window.location.host}${path}`
   }
   const proto = base.startsWith('https') ? 'wss:' : 'ws:'
   const wsBase = base.replace(/^https?:\/\//, '').replace(/\/$/, '')
-  return `${proto}//${wsBase}${path}${query}`
+  return `${proto}//${wsBase}${path}`
 }
 
+/**
+ * #16374: a native `new WebSocket()` handshake cannot set an `Authorization`
+ * header, so the SLM session token rides in the `Sec-WebSocket-Protocol`
+ * subprotocol list instead of the URL — JWT characters (base64url plus the
+ * `.` segment separators) are all valid HTTP token characters (RFC 7230
+ * `tchar`), so the token is a legal subprotocol value. nginx's dedicated
+ * stream location reads it back out of that header (never the URL) to run
+ * the session check, then strips it before proxying to the backend, which
+ * accepts the same `bearer` subprotocol so the browser completes the
+ * handshake (RFC 6455 4.2.2 requires the server to echo one of the offered
+ * subprotocols).
+ */
 function streamLogs(processId: string) {
   stopStream()
   fullLog.value = ''
   isStreaming.value = true
-  const ws = new WebSocket(buildWsUrl(`/processes/${processId}/stream`))
+  const ws = authStore.token
+    ? new WebSocket(buildWsUrl(`/processes/${processId}/stream`), ['bearer', authStore.token])
+    : new WebSocket(buildWsUrl(`/processes/${processId}/stream`))
   streamSocket.value = ws
   ws.onmessage = (event) => {
     try {

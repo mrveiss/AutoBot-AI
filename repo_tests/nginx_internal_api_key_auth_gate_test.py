@@ -23,6 +23,16 @@ parsing from.
 
 The tests are static — they read the templates as text. No nginx and no
 running backend is involved, so they hold in CI.
+
+Round 2 (#16374) adds a second invariant alongside the key gate:
+``find_query_string_derived_credentials`` catches a credential built from a
+``$arg_*`` query-string variable, whether that happens in a top-level ``map``
+or directly in a proxied header on the ``auth_request`` target itself. That
+was exactly the shape round 1 shipped (``map $arg_slm_ws_token
+$slm_ws_token_bearer``, a fallback for the log-stream WebSocket) — a request
+URL, which lands in the same access log and the browser's history the key
+gate does not touch. Round 2 replaced it with the WebSocket
+``Sec-WebSocket-Protocol`` subprotocol instead.
 """
 
 from __future__ import annotations
@@ -57,6 +67,11 @@ class _Location:
     def auth_request_target(self) -> str | None:
         match = re.search(r"auth_request\s+([^\s;]+)\s*;", self.body)
         return match.group(1) if match else None
+
+    @property
+    def proxy_set_headers(self) -> list[tuple[str, str]]:
+        """Every ``proxy_set_header <name> <value>;`` pair in this location."""
+        return re.findall(r"proxy_set_header\s+(\S+)\s+([^;]+);", self.body)
 
     def __repr__(self) -> str:  # pragma: no cover - diagnostics only
         return f"location {self.modifier} {self.pattern}".replace("  ", " ")
@@ -102,6 +117,50 @@ def _server_blocks(text: str) -> list[list[_Location]]:
         body = text[server.end() : _block_end(text, server.end()) - 1]
         out.append(_locations_in(body))
     return out
+
+
+_ARG_VAR = re.compile(r"^\$arg_\w+$")
+
+
+def _maps_in(text: str) -> list[tuple[str, str, str]]:
+    """Every top-level ``map`` directive as ``(source_var, target_var, body)``."""
+    found: list[tuple[str, str, str]] = []
+    for match in re.finditer(r"\bmap\s+(\$\S+)\s+(\$\S+)\s*\{", text):
+        end = _block_end(text, match.end())
+        found.append((match.group(1), match.group(2), text[match.end() : end - 1]))
+    return found
+
+
+def find_query_string_derived_credentials(text: str) -> list[str]:
+    """No auth ``map`` or ``auth_request`` path may derive a credential from ``$arg_*`` (#16374).
+
+    Round 1 of #16374 read the SLM session token from ``?slm_ws_token=`` as a
+    fallback for the log-stream WebSocket, via ``map $arg_slm_ws_token
+    $slm_ws_token_bearer``. A query-string value lands in the vhost's
+    ``combined`` access log and the browser's history — round 2 replaced it
+    with the WebSocket ``Sec-WebSocket-Protocol`` subprotocol, which neither
+    persists. This checks both places a query-string argument could smuggle a
+    credential back in: a top-level ``map`` switching on, or expanding to, a
+    ``$arg_*`` variable, and a proxied header on an ``internal;``
+    ``auth_request`` target that reads one directly.
+    """
+    text = _strip_jinja(text)
+    violations: list[str] = []
+    for source, target, body in _maps_in(text):
+        if _ARG_VAR.match(source) or re.search(r"\$arg_\w+", body):
+            violations.append(f"map {source} {target}: derives a value from the query string")
+
+    for locations in _server_blocks(text):
+        internal_by_name = {loc.pattern: loc for loc in locations if loc.is_internal}
+        auth_targets = {loc.auth_request_target for loc in locations if loc.auth_request_target}
+        for pattern in auth_targets & internal_by_name.keys():
+            for header, value in internal_by_name[pattern].proxy_set_headers:
+                if "$arg_" in value:
+                    violations.append(
+                        f"location {pattern}: proxy_set_header {header} {value.strip()} reads "
+                        "the query string directly"
+                    )
+    return violations
 
 
 def find_ungated_key_injections(text: str) -> list[str]:
@@ -170,6 +229,24 @@ def test_autobot_slm_conf_is_among_the_scanned_templates() -> None:
     ), f"expected autobot-slm.conf.j2 among {len(rels)} discovered templates"
 
 
+def test_every_nginx_template_has_no_query_string_derived_credentials() -> None:
+    """No discovered template may build an auth credential from ``$arg_*`` (#16374 round 2)."""
+    templates = _nginx_template_paths()
+    assert templates, "no nginx-shaped .j2 template found — the discovery glob is broken"
+
+    all_violations: list[str] = []
+    for path in templates:
+        violations = find_query_string_derived_credentials(path.read_text(encoding="utf-8"))
+        rel = path.relative_to(REPO_ROOT)
+        all_violations.extend(f"{rel}: {v}" for v in violations)
+
+    assert not all_violations, (
+        "these auth maps/auth_request targets derive a credential from the query "
+        "string, which nginx's access log and the browser's history both persist "
+        "(#16374): " + "; ".join(all_violations)
+    )
+
+
 # ---------------------------------------------------------------------------
 # Planted self-test: the detector must actually fire, and only on the bug.
 # ---------------------------------------------------------------------------
@@ -231,3 +308,68 @@ def test_self_auth_request_to_a_non_internal_location_is_detected() -> None:
 def test_self_properly_gated_location_passes() -> None:
     """The detector must not flag the shape #16374 actually ships."""
     assert find_ungated_key_injections(_PROPERLY_GATED) == []
+
+
+# ---------------------------------------------------------------------------
+# Planted self-test: find_query_string_derived_credentials (#16374 round 2).
+# ---------------------------------------------------------------------------
+
+_QUERY_STRING_MAP = """
+map $arg_slm_ws_token $slm_ws_token_bearer {
+    default "Bearer $arg_slm_ws_token";
+    ''      '';
+}
+"""
+
+_AUTH_REQUEST_READS_QUERY_STRING_DIRECTLY = """
+server {
+    listen 443 ssl;
+    location = /check {
+        internal;
+        proxy_pass http://backend/api/auth/me;
+        proxy_set_header Authorization $arg_token;
+    }
+    location /autobot-api/ {
+        auth_request /check;
+        proxy_pass http://backend/api/;
+    }
+}
+"""
+
+_PROPERLY_SUBPROTOCOL_GATED = r"""
+map $http_sec_websocket_protocol $slm_stream_authorization {
+    default                    '';
+    "~^bearer,\s*(\S+)$"      "Bearer $1";
+}
+server {
+    listen 443 ssl;
+    location = /check {
+        internal;
+        proxy_pass http://backend/api/auth/me;
+        proxy_set_header Authorization $slm_stream_authorization;
+    }
+    location ~ ^/autobot-api/processes/([^/]+)/stream$ {
+        set $stream_process_id $1;
+        auth_request /check;
+        proxy_pass http://backend/api/processes/$stream_process_id/stream;
+    }
+}
+"""
+
+
+def test_self_query_string_map_is_detected() -> None:
+    """A ``map`` switching on ``$arg_*`` must fail, even with no server block around it."""
+    violations = find_query_string_derived_credentials(_QUERY_STRING_MAP)
+    assert violations, "planted defect (map $arg_* ...) was not detected"
+    assert "query string" in violations[0]
+
+
+def test_self_auth_request_target_reading_query_string_is_detected() -> None:
+    """An ``auth_request`` target reading ``$arg_*`` straight into a header must fail."""
+    violations = find_query_string_derived_credentials(_AUTH_REQUEST_READS_QUERY_STRING_DIRECTLY)
+    assert violations, "planted defect (proxy_set_header Authorization $arg_token) was not detected"
+
+
+def test_self_subprotocol_derived_credential_passes() -> None:
+    """The detector must not flag the shape #16374 round 2 actually ships."""
+    assert find_query_string_derived_credentials(_PROPERLY_SUBPROTOCOL_GATED) == []
