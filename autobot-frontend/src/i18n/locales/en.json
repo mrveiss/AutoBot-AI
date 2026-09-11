@@ -9282,5 +9282,12 @@
     "errorSetRate": "Could not save the rate.",
     "errorClearRate": "Could not clear the rate.",
     "errorSetStepCost": "Could not save this step's cost inputs."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Settings",
+      "hideSettingsButton": "Hide settings",
+      "settingsHeading": "Transcriber settings"
+    }
   }
 }

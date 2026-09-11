@@ -9282,5 +9282,12 @@
     "errorSetRate": "No se pudo guardar la tarifa.",
     "errorClearRate": "No se pudo borrar la tarifa.",
     "errorSetStepCost": "No se pudieron guardar los datos de coste del paso."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Configuración",
+      "hideSettingsButton": "Ocultar configuración",
+      "settingsHeading": "Configuración del transcriptor"
+    }
   }
 }

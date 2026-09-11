@@ -9282,5 +9282,12 @@
     "errorSetRate": "Der Satz konnte nicht gespeichert werden.",
     "errorClearRate": "Der Satz konnte nicht gelöscht werden.",
     "errorSetStepCost": "Die Kostenangaben konnten nicht gespeichert werden."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Einstellungen",
+      "hideSettingsButton": "Einstellungen ausblenden",
+      "settingsHeading": "Transkriptionseinstellungen"
+    }
   }
 }

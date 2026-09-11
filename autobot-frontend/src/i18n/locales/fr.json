@@ -9282,5 +9282,12 @@
     "errorSetRate": "Le taux n'a pas pu être enregistré.",
     "errorClearRate": "Le taux n'a pas pu être effacé.",
     "errorSetStepCost": "Les données de coût de l'étape n'ont pas pu être enregistrées."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Paramètres",
+      "hideSettingsButton": "Masquer les paramètres",
+      "settingsHeading": "Paramètres du transcripteur"
+    }
   }
 }

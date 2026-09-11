@@ -9282,5 +9282,12 @@
     "errorSetRate": "نرخ محفوظ نہیں ہو سکا۔",
     "errorClearRate": "نرخ صاف نہیں ہو سکا۔",
     "errorSetStepCost": "مرحلے کی لاگت کے اعداد محفوظ نہیں ہو سکے۔"
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "ترتیبات",
+      "hideSettingsButton": "ترتیبات چھپائیں",
+      "settingsHeading": "ٹرانسکرائبر کی ترتیبات"
+    }
   }
 }

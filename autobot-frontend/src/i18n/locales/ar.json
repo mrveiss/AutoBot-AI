@@ -9282,5 +9282,12 @@
     "errorSetRate": "تعذّر حفظ الأجر.",
     "errorClearRate": "تعذّر مسح الأجر.",
     "errorSetStepCost": "تعذّر حفظ بيانات تكلفة الخطوة."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "الإعدادات",
+      "hideSettingsButton": "إخفاء الإعدادات",
+      "settingsHeading": "إعدادات الناسخ"
+    }
   }
 }

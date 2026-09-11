@@ -9282,5 +9282,12 @@
     "errorSetRate": "Não foi possível guardar o valor.",
     "errorClearRate": "Não foi possível limpar o valor.",
     "errorSetStepCost": "Não foi possível guardar os dados de custo do passo."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Configurações",
+      "hideSettingsButton": "Ocultar configurações",
+      "settingsHeading": "Configurações do transcritor"
+    }
   }
 }

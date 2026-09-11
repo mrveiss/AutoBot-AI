@@ -9282,5 +9282,12 @@
     "errorSetRate": "לא ניתן היה לשמור את התעריף.",
     "errorClearRate": "לא ניתן היה לנקות את התעריף.",
     "errorSetStepCost": "לא ניתן היה לשמור את נתוני עלות השלב."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "הגדרות",
+      "hideSettingsButton": "הסתר הגדרות",
+      "settingsHeading": "הגדרות התמלול"
+    }
   }
 }

@@ -9282,5 +9282,12 @@
     "errorSetRate": "Nie udało się zapisać stawki.",
     "errorClearRate": "Nie udało się wyczyścić stawki.",
     "errorSetStepCost": "Nie udało się zapisać danych kosztowych kroku."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "Ustawienia",
+      "hideSettingsButton": "Ukryj ustawienia",
+      "settingsHeading": "Ustawienia transkrybera"
+    }
   }
 }

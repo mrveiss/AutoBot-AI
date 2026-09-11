@@ -9282,5 +9282,12 @@
     "errorSetRate": "ذخیرهٔ نرخ ممکن نشد.",
     "errorClearRate": "پاک کردن نرخ ممکن نشد.",
     "errorSetStepCost": "ذخیرهٔ داده‌های هزینهٔ گام ممکن نشد."
+  },
+  "transcriber": {
+    "layout": {
+      "settingsButton": "تنظیمات",
+      "hideSettingsButton": "پنهان کردن تنظیمات",
+      "settingsHeading": "تنظیمات رونویس‌گر"
+    }
   }
 }
