@@ -54,14 +54,20 @@ from __future__ import annotations
 import argparse
 import ast
 import importlib.util
-import os
 import sys
 from pathlib import Path
 from typing import List, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import PY_FLOOR, added_lines, enforce_reach, scan_python_files, staged_paths  # noqa: E402
+from _scan_helpers import (  # noqa: E402
+    PY_FLOOR,
+    added_lines,
+    enforce_reach,
+    resolve_base,
+    scan_python_files,
+    staged_paths,
+)
 
 HOOK_ID = "no-local-schemas"
 
@@ -249,24 +255,6 @@ def _report(new: List[Hit], earlier: List[Hit], repo_root: Path) -> int:
     return 1
 
 
-def _resolve_base(explicit: str | None) -> str | None:
-    """The range to scope to: an explicit --base, else the one pre-commit ran with.
-
-    ``pre-commit run --from-ref A --to-ref B`` stages nothing, so the staged diff is
-    empty and every model would read as pre-existing. pre-commit exports the range
-    as PRE_COMMIT_FROM_REF (commands/run.py); FROM_REF..HEAD then describes the
-    checked-out tree the hook is actually reading (#16178).
-    """
-    if explicit:
-        return explicit
-    # Only trust the range when pre-commit itself exported it. pre-commit always
-    # sets PRE_COMMIT=1 for its hooks, so a PRE_COMMIT_FROM_REF left in a
-    # developer's shell cannot silently re-scope a plain run (#16241 review).
-    if os.environ.get("PRE_COMMIT") == "1":
-        return os.environ.get("PRE_COMMIT_FROM_REF") or None
-    return None
-
-
 def run(files: Sequence[Path], repo_root: Path, *, changed_only: bool, base: str | None) -> int:
     """Check *files* under *repo_root*. Whether to scope is the caller's to state."""
     hits = _collect_hits(files, repo_root)
@@ -305,7 +293,7 @@ def main(argv: List[str]) -> int:
     # hands this hook an argv with no Python in it.
     if enforce_reach(len(files), PY_FLOOR, hook=HOOK_ID, full_repo=full_repo):
         return 1
-    return run(files, repo_root, changed_only=args.changed_lines_only, base=_resolve_base(args.base))
+    return run(files, repo_root, changed_only=args.changed_lines_only, base=resolve_base(args.base))
 
 
 if __name__ == "__main__":

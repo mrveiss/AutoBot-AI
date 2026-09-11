@@ -40,6 +40,7 @@ Two pieces close it, and the split between them is the whole design:
 from __future__ import annotations
 
 import logging
+import os
 import posixpath
 import re
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
@@ -355,3 +356,22 @@ def staged_paths(repo_root: Path) -> set[str]:
     it to, and "nothing added" would be a verdict nobody examined (#16178).
     """
     return {path for path in _git_diff(repo_root, ["--cached", "--name-only", "-z"]).split("\0") if path}
+
+
+def resolve_base(explicit: str | None = None) -> str | None:
+    """The range a scoped hook reads: an explicit base, else the one pre-commit ran with.
+
+    ``pre-commit run --from-ref A --to-ref B`` stages nothing, so the staged diff is
+    empty and everything would read as pre-existing. pre-commit exports the range
+    as PRE_COMMIT_FROM_REF (commands/run.py); FROM_REF..HEAD then describes the
+    checked-out tree the hook is actually reading (#16178). Shared, so every scoped
+    hook resolves it the same way (#16191).
+    """
+    if explicit:
+        return explicit
+    # Only trust the range when pre-commit itself exported it. pre-commit always
+    # sets PRE_COMMIT=1 for its hooks, so a PRE_COMMIT_FROM_REF left in a
+    # developer's shell cannot silently re-scope a plain run (#16241 review).
+    if os.environ.get("PRE_COMMIT") == "1":
+        return os.environ.get("PRE_COMMIT_FROM_REF") or None
+    return None

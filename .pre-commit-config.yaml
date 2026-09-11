@@ -730,7 +730,9 @@ repos:
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-function-length
         language: script
         types: [python]
-        pass_filenames: false
+        # Files are passed so a `--from-ref` run, which stages nothing, still has a
+        # change to judge; the checker scopes to the functions it touched (#16191).
+        pass_filenames: true
         stages: [pre-commit]
         description: "Blocks commits with functions >65 lines, warns for 51-65 lines"
 
