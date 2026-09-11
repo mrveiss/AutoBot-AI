@@ -39,3 +39,33 @@ fb929491ba4d65e92e3f29c5e0790adec7bd976b  # docs(research): Model Hardware Stand
 42c8779f8e0f28c73a2294693c5dfc000c09de50  # fix(hooks): report unlanded worktree branches (#15294, #15295)
 36a1e7d25f64f1df2fff9a9ae02428736f9d0a3f  # ci(perf): stop docs-only PRs running the sweep and image build (#15299, #15300)
 ffc37c6f9cda65783f469f92e91d4cf9978ceca5  # ci(runners): move code-quality and the pre-commit gate to self-hosted (#15310, #15311)
+
+# #16268: ONE-TIME ADDITION by owner decision (11 Sep 2026), against the rule at
+# the top of this file.
+#
+# These eighteen owner-authored squash commits, 2026-09-05 to 2026-09-10, carry a
+# `Co-authored-by: t <...>` trailer naming neither the owner, a bot, nor the
+# commit's own author. They sit in `main..Dev_new_gui`, so the first release-sync
+# PR (#16246) could never pass `No commit trailers`. The owner chose to baseline
+# exactly these commits as full SHAs, and nothing else: the check stays strict
+# for every other commit. The list is the output of
+#   git log --format=%H -i --grep='^co-authored-by: *t <' origin/main..origin/Dev_new_gui
+# which returned exactly these eighteen when they were recorded.
+5f447725070e667ab86c18242a65131404554c7d  # feat(agents): agents hold the scopes they declare, and a guard keeps the declaration honest (#15950) (#16175)
+43359282d0bc59bb7e51479af99193ba0d353e36  # refactor(slm): split four frozen modules so their ceilings stop blocking work (#15495, #15496) (#16099)
+ee796a3de842fcf5071f6de7485c7df03a4827e5  # refactor(agents): extract the exchanged data types so base_agent clears its ceiling (#15950) (#16106)
+3a4ff122385b89f092700d6c5efa139870789609  # security(prompts): no shipped prompt may instruct the model to refuse nothing (#16105) (#16117)
+53771fa3a4b316269d47ef9c0674a29f5bd5ecb0  # ci: make python-suite reportable on stacked PRs and in a merge queue (#14747, #14353) (#16098)
+717831080f81b9109c044f876b073e9692751b3e  # docs(research): prompts.chat source analysis and AutoBot comparison (#16108) (#16119)
+c3b0725e1eb976a978a35f1e610c04ecce02d74f  # guard(git): refuse the hooksPath override that silently disables every hook (#15961) (#16097)
+f4895adb0f976c4f8ea70e768cdbdbf2a39c7ad4  # docs(process): name the selector — an empty result is not a true negative (#15953) (#16102)
+c54c47c507e225f6fed257df72bd2f223cf96932  # security: allow the two unfixable dev-only npm advisories (#16089) (#16103)
+f2b6c473fe9a0c7324f12fd892bda00154d688fa  # ci(duplication-guard): scan the three trees it never opened (#13044) (#16095)
+668e96e3437b74eeb1f730737ce02d00a1acc989  # guard(ci): make the python filter reach the trees its guards read (#15713) (#15715)
+f4c5a0582ccf4f1ca21754117880d3fd17dcd149  # fix(config): clamp module-level env casts against crash-at-import (#15711)
+06b67e33f286b8df782d3f0719e4bd72a93cd377  # fix(test): make the ansible repo_tests resolve role defaults that derive from the SSOT (#15714, #15632) (#15712)
+0c3a04ac685df72b3d6bfe66642a3d4157cb8b3c  # tech-debt(ansible): derive the git_repo_root aliases, keep the sudoers-bound literal (#15705, #15601) (#15706)
+1e40767b4408bd0327b5b857fc4d08fbf6cdb53b  # tech-debt(ansible): derive every code_source_dir fallback from the SSOT (#15632, #15601) (#15704)
+7f60a5ae37015ef5485c698d859e8c47dc2813e6  # chore(browser-worker): retire the orphan playwright config, record why (#15695, #15694) (#15702)
+41a74198f2840f2f30ca2cb06277630a39bceec3  # fix(prompts): give three LLM prompts the inputs they were already promised (#15630, #15681, #15682) (#15699)
+474cead7669923149d2672288b838150b13d587d  # ci(npm): gate four ungated npm test runners and record the measured reason for the rest (#15674, #15675, #15676, #15677) (#15697)

@@ -1,17 +1,31 @@
-# Sync Dev_new_gui → main (manual release trigger only)
+# Sync Dev_new_gui → main (weekly, and on a confirmed manual trigger)
 #
 # Dev_new_gui is the working branch. This workflow opens a release PR from it
-# into main when explicitly triggered. It never runs automatically, to prevent
-# untested code from landing on main.
+# into main, or brings the one already open up to date.
+#
+# Until the owner's decision on #16221 it ran only when triggered by hand. It now
+# also runs weekly (#16246). The schedule only opens or updates a PR: merging is
+# still a person's action, gated by main's checks, so untested code still cannot
+# land on main unreviewed.
 #
 # It opens a PR rather than pushing: main requires status checks, so a direct
 # push is declined by the protected-branch hook (GH006). Detail at the step.
+# The PR itself is opened or updated by pipeline-scripts/release_sync_main.py:
+# at most one sync PR, a body naming the scheduled workflows the merge changes,
+# and the instruction to merge with a merge commit. Nothing here merges.
+# Where GitHub refuses the PR (this repository syncs by hand, #15834), it keeps
+# one tracking issue with the compare link and the command instead.
 #
 # See: https://github.com/mrveiss/AutoBot-AI/issues/2445
 
 name: Sync Dev_new_gui → main
 
 on:
+  schedule:
+    # Weekly, Monday 05:43 UTC, off the top of the hour. GitHub dispatches
+    # `schedule` from the default branch only, so this fires once the file is
+    # on main.
+    - cron: '43 5 * * 1'
   workflow_dispatch:
     inputs:
       confirm:
@@ -31,6 +45,9 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # #15834: where GitHub refuses the PR, the script keeps a tracking issue,
+      # and this repository's default token permission is read-only.
+      issues: write
 
     steps:
       # #13516: `inputs.confirm` reaches the shell through `env:`, not inline
@@ -38,18 +55,26 @@ jobs:
       # privilege-equivalent rather than an escalation — but this job holds
       # `contents: write` (see permissions above), which makes it the one site
       # in the batch worth fixing on its own merits.
+      #
+      # #16246: the confirmation gates MANUAL runs only. A scheduled run has no
+      # inputs, and it only opens or updates the PR; the merge stays a person's.
       - name: Validate confirmation
-        if: inputs.confirm != 'release'
+        if: github.event_name == 'workflow_dispatch' && inputs.confirm != 'release'
         env:
           CONFIRM: ${{ inputs.confirm }}
         run: |
           echo "::error::You must type 'release' to confirm. Got: '$CONFIRM'"
           exit 1
 
+      # #16246: the push below uses this credential. Pushed with GITHUB_TOKEN,
+      # the refreshed PR head is attributed to github-actions[bot] and its runs
+      # park (docs/developer/CI_BOT_ATTRIBUTION.md), so main's required checks
+      # never report on it. Falls back so a missing secret behaves as before.
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          token: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Check if Dev_new_gui is ahead of main
         id: check
@@ -83,80 +108,47 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Dev_new_gui is $AHEAD ahead, $BEHIND behind main ($DIVERGENT non-merge commit(s) only on main)"
 
+      # #15834: no `if:` on the ahead count. With nothing to sync the script still
+      # runs, to close the tracking issue; only the push needs commits to carry.
       - name: Open the release sync PR
         id: sync
-        if: steps.check.outputs.ahead != '0'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # #16246: the push token, for the same reason as the checkout above: a
+          # PR opened with GITHUB_TOKEN starts no checks. The PR body tells a
+          # reader what to do if the fallback was used.
+          GITHUB_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           AHEAD: ${{ steps.check.outputs.ahead }}
           BEHIND: ${{ steps.check.outputs.behind }}
           DIVERGENT: ${{ steps.check.outputs.divergent }}
         run: |
-          if [ "$DIVERGENT" != "0" ]; then
-            echo "::error::main has $DIVERGENT non-merge commit(s) not in Dev_new_gui — work committed straight to main. Resolve manually first."
-            exit 1
-          fi
-          if [ "$BEHIND" != "0" ]; then
-            echo "::notice::main carries $BEHIND merge commit(s) the trunk lacks (from previous promotions). No content of their own, so not a blocker — see #13974."
-          fi
+          if [ "$AHEAD" != "0" ]; then
+            if [ "$DIVERGENT" != "0" ]; then
+              echo "::error::main has $DIVERGENT non-merge commit(s) not in Dev_new_gui — work committed straight to main. Resolve manually first."
+              exit 1
+            fi
+            if [ "$BEHIND" != "0" ]; then
+              echo "::notice::main carries $BEHIND merge commit(s) the trunk lacks (from previous promotions). No content of their own, so not a blocker — see #13974."
+            fi
 
-          # This step used to `git push origin origin/Dev_new_gui:main`, which
-          # can never succeed: `main` requires two status checks ("No open
-          # blocks-merge issues reference this PR", "No commit trailers"), and a
-          # direct push moves the branch to a commit that has neither, so the
-          # protected-branch hook declines it:
-          #
-          #   remote: error: GH006: Protected branch update failed for refs/heads/main.
-          #   ! [remote rejected] origin/Dev_new_gui -> main (protected branch hook declined)
-          #
-          # Routing through a PR lets those checks run against the release head,
-          # which is what the protection is for. Precedent: #13816 synced this
-          # way by hand.
-          git push --force origin "origin/Dev_new_gui:refs/heads/$SYNC_BRANCH"
-
-          EXISTING=$(gh pr list --base main --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number // empty')
-          if [ -n "$EXISTING" ]; then
-            echo "Release sync PR already open: #$EXISTING (refreshed to the current trunk)."
-            echo "url=$(gh pr view "$EXISTING" --json url --jq .url)" >> "$GITHUB_OUTPUT"
-            exit 0
+            # This step used to `git push origin origin/Dev_new_gui:main`, which
+            # can never succeed: `main` requires two status checks ("No open
+            # blocks-merge issues reference this PR", "No commit trailers"), and a
+            # direct push moves the branch to a commit that has neither, so the
+            # protected-branch hook declines it:
+            #
+            #   remote: error: GH006: Protected branch update failed for refs/heads/main.
+            #   ! [remote rejected] origin/Dev_new_gui -> main (protected branch hook declined)
+            #
+            # Routing through a PR lets those checks run against the release head,
+            # which is what the protection is for. Precedent: #13816 synced this
+            # way by hand.
+            git push --force origin "origin/Dev_new_gui:refs/heads/$SYNC_BRANCH"
           fi
 
-          # Body written to a file so it carries no leading indentation.
-          cat > /tmp/sync-pr-body.md <<EOF
-          Opened by the \`Sync Dev_new_gui → main\` workflow.
-
-          \`main\` is $AHEAD commit(s) behind \`Dev_new_gui\` and holds none the trunk lacks.
-
-          Merging this is the release. The checks \`main\` requires run against this head,
-          which a direct push could not satisfy — see the comment in
-          \`.github/workflows/sync-main-to-dev.yml\`.
-          EOF
-          sed -i 's/^          //' /tmp/sync-pr-body.md
-
-          # Creating the PR can be refused by a repository setting:
-          #   GraphQL: GitHub Actions is not permitted to create or approve pull requests
-          # ("Allow GitHub Actions to create and approve pull requests", Settings →
-          # Actions → General). The branch push above is the part that matters and
-          # has already succeeded, so a refusal here must not read as "the sync
-          # failed" — it means one click is left. Observed 2026-08-10.
-          if URL=$(gh pr create \
-            --base main \
-            --head "$SYNC_BRANCH" \
-            --title "release: sync Dev_new_gui into main ($AHEAD commits)" \
-            --body-file /tmp/sync-pr-body.md 2>/tmp/pr-create.err); then
-            echo "Opened $URL"
-            echo "url=$URL" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          cat /tmp/pr-create.err
-          if grep -q "not permitted to create or approve pull requests" /tmp/pr-create.err; then
-            COMPARE="https://github.com/$GITHUB_REPOSITORY/compare/main...$SYNC_BRANCH?expand=1"
-            echo "::warning::Actions may not open PRs in this repository, so the release PR was not created."
-            echo "::warning::The branch is pushed and ready — open it here: $COMPARE"
-            echo "url=$COMPARE" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "::error::Failed to open the release PR for a reason other than the Actions PR restriction."
-          exit 1
+          # #16246, #15834: opens the sync PR, or rewrites the body of the oldest
+          # one open (from $SYNC_BRANCH or from the trunk), and never opens a
+          # second. Where GitHub refuses the PR it keeps ONE tracking issue with
+          # the compare link and the command instead, and fails if it cannot.
+          python3 pipeline-scripts/release_sync_main.py \
+            --head "$SYNC_BRANCH" --source Dev_new_gui --base main
