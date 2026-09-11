@@ -41,6 +41,7 @@ Covers (#16385 acceptance criteria):
 
 import ast
 import importlib.util
+import secrets
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -66,8 +67,8 @@ sys.path.insert(0, str(_ROOT))
 # once the objects this file actually uses have been extracted.
 _PRE_BOOTSTRAP_MODULES = dict(sys.modules)
 
-_SECRET_KEY = "test-auth-me-secret-key-32characters"  # pragma: allowlist secret
-_WRONG_SECRET_KEY = "a-completely-different-secret-32c"  # pragma: allowlist secret
+_SECRET_KEY = secrets.token_hex(32)
+_WRONG_SECRET_KEY = secrets.token_hex(32)
 _EXPIRE_MINUTES = 30
 
 _STUB_MODULE_NAMES = (

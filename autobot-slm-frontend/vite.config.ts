@@ -83,7 +83,8 @@ function coLocatedApiUrlGuard(apiUrl: string): import('vite').Plugin {
  * Never enable this on a machine reachable from outside your own workstation.
  */
 function shouldInjectInternalApiKey(): boolean {
-  return process.env.AUTOBOT_DEV_INJECT_INTERNAL_API_KEY === 'true' && !!process.env.AUTOBOT_INTERNAL_API_KEY // pragma: allowlist secret
+  const optIn = process.env.AUTOBOT_DEV_INJECT_INTERNAL_API_KEY
+  return optIn === 'true' && Boolean(process.env.AUTOBOT_INTERNAL_API_KEY)
 }
 
 export default defineConfig(({ mode }) => {
