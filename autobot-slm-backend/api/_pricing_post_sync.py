@@ -61,12 +61,18 @@ def _load_env_file(env_path: Path) -> Dict[str, str]:
     the guard runs in, not one raised by a helper in another function
     (#16229 review, alerts #1132/#1133). ``deployed_root()`` still supplies
     the root so this stays on the one configured source of truth.
+
+    The check is a single ``startswith(root + os.sep)``, not an
+    ``env_path == root`` branch first: an env file is a *file*, so it can
+    never equal the root directory itself, and CodeQL's sanitiser matcher
+    doesn't accept equality as ruling out traversal, so keeping that
+    branch left #1134/#1135 red on this same guard (#16236).
     """
     from services.deployed_dir_resolver import deployed_root
 
     root = os.path.realpath(deployed_root())
     real = os.path.realpath(str(env_path))
-    if real != root and not real.startswith(root + os.sep):
+    if not real.startswith(root + os.sep):
         raise ValueError(f"env file path resolves outside the deployed root {root!r}")
     real_path = Path(real)
 

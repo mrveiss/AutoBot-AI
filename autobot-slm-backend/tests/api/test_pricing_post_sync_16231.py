@@ -168,9 +168,10 @@ def test_a_timed_out_pricing_refresh_records_the_reason_and_the_sync_still_succe
 
 
 # ---------------------------------------------------------------------------
-# CodeQL py/path-injection (#16229 review, alerts #1132/#1133) — _load_env_file
-# must resolve and contain every candidate path against the deployed root,
-# inline in its own scope, before touching the filesystem with it.
+# CodeQL py/path-injection (#16229 review, alerts #1132/#1133; regressed as
+# #1134/#1135 by an equality branch, fixed by #16236) — _load_env_file must
+# resolve and contain every candidate path against the deployed root, inline
+# in its own scope, before touching the filesystem with it.
 # ---------------------------------------------------------------------------
 
 
@@ -235,3 +236,18 @@ def test_load_env_file_refuses_a_sibling_directory_sharing_the_root_as_a_string_
         pass
     else:
         raise AssertionError("a same-prefix sibling directory must raise ValueError")
+
+
+def test_load_env_file_refuses_the_deployed_root_itself(tmp_path, monkeypatch) -> None:
+    """An env file can never *be* the deployed root directory, so the guard
+    must not special-case that equality (CodeQL #1134/#1135, #16236) -- the
+    single ``startswith(root + os.sep)`` check refuses it like any other
+    path that isn't strictly under the root."""
+    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+
+    try:
+        cs._load_env_file(tmp_path)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("the deployed root itself must raise ValueError, not be read as a file")
