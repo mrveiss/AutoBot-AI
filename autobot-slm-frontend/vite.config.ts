@@ -64,6 +64,28 @@ function coLocatedApiUrlGuard(apiUrl: string): import('vite').Plugin {
   }
 }
 
+/**
+ * #16382: whether the dev proxy is allowed to inject X-Internal-API-Key.
+ *
+ * `autobot-backend/auth_middleware.py`'s `get_current_user` (and its SLM
+ * mirror) treat that key as unconditional admin (`service:slm`) with no
+ * session check at all. Injecting it into every `/autobot-api/*` request by
+ * default — as this proxy used to — hands out backend admin to anyone who
+ * can reach this dev server, and it binds to 0.0.0.0 (see `server.host`
+ * below), so that is anyone on the same network, not just localhost.
+ *
+ * Defaults OFF. A dev flow that genuinely needs the service-auth bypass
+ * (e.g. exercising the full SLM<->backend integration without logging in)
+ * must opt in explicitly:
+ *
+ *   AUTOBOT_DEV_INJECT_INTERNAL_API_KEY=true AUTOBOT_INTERNAL_API_KEY=<key> npm run dev
+ *
+ * Never enable this on a machine reachable from outside your own workstation.
+ */
+function shouldInjectInternalApiKey(): boolean {
+  return process.env.AUTOBOT_DEV_INJECT_INTERNAL_API_KEY === 'true' && !!process.env.AUTOBOT_INTERNAL_API_KEY // pragma: allowlist secret
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const slmTarget = env.VITE_SLM_PROXY_TARGET || 'https://localhost'
@@ -119,15 +141,19 @@ export default defineConfig(({ mode }) => {
           secure: false
         },
         // Main AutoBot backend for admin functionality (Issue #729)
-        // Issue #1779: inject X-Internal-API-Key for service auth
+        // #16382: the developer's own Authorization header is forwarded to the
+        // backend as-is — http-proxy copies the incoming request's headers by
+        // default, so nothing extra is needed for that — and
+        // X-Internal-API-Key is injected ONLY when explicitly opted in (see
+        // shouldInjectInternalApiKey() above). It defaults off.
         '/autobot-api': {
           target: autobotTarget,
           changeOrigin: true,
           ws: true,
           rewrite: (path) => path.replace(/^\/autobot-api/, '/api'),
-          headers: {
-            'X-Internal-API-Key': process.env.AUTOBOT_INTERNAL_API_KEY || '',
-          },
+          ...(shouldInjectInternalApiKey()
+            ? { headers: { 'X-Internal-API-Key': process.env.AUTOBOT_INTERNAL_API_KEY || '' } }
+            : {}),
         }
       }
     },
