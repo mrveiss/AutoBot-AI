@@ -380,11 +380,20 @@ def test_an_unstaged_file_has_no_change_to_scope_to_and_is_judged_whole(tmp_path
 
 def test_pre_commit_from_ref_becomes_the_base(monkeypatch) -> None:
     """``--from-ref``/``--to-ref`` stages nothing, so pre-commit's exported range is used instead."""
+    monkeypatch.setenv("PRE_COMMIT", "1")
     monkeypatch.setenv("PRE_COMMIT_FROM_REF", "abc123")
     assert hook._resolve_base(None) == "abc123"
     assert hook._resolve_base("explicit") == "explicit", "an explicit --base wins"
     monkeypatch.delenv("PRE_COMMIT_FROM_REF")
     assert hook._resolve_base(None) is None, "with no range, the staged diff is what is scoped"
+
+
+def test_a_from_ref_left_in_a_shell_is_ignored_outside_pre_commit(monkeypatch) -> None:
+    """Only pre-commit's own export counts; it always sets PRE_COMMIT=1 alongside the range."""
+    monkeypatch.delenv("PRE_COMMIT", raising=False)
+    monkeypatch.setenv("PRE_COMMIT_FROM_REF", "stale-ref")
+
+    assert hook._resolve_base(None) is None
 
 
 def test_an_unscoped_run_still_reads_the_whole_file(tmp_path: Path) -> None:

@@ -257,7 +257,14 @@ def _resolve_base(explicit: str | None) -> str | None:
     as PRE_COMMIT_FROM_REF (commands/run.py); FROM_REF..HEAD then describes the
     checked-out tree the hook is actually reading (#16178).
     """
-    return explicit or os.environ.get("PRE_COMMIT_FROM_REF") or None
+    if explicit:
+        return explicit
+    # Only trust the range when pre-commit itself exported it. pre-commit always
+    # sets PRE_COMMIT=1 for its hooks, so a PRE_COMMIT_FROM_REF left in a
+    # developer's shell cannot silently re-scope a plain run (#16241 review).
+    if os.environ.get("PRE_COMMIT") == "1":
+        return os.environ.get("PRE_COMMIT_FROM_REF") or None
+    return None
 
 
 def run(files: Sequence[Path], repo_root: Path, *, changed_only: bool, base: str | None) -> int:
