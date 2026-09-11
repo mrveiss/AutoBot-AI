@@ -21,6 +21,7 @@ import pytest_asyncio
 from agents.base_agent_types import AgentRequest
 from agents.scope_enforcement import hold_scopes, refused_response
 from autobot_shared.coordination.work_claims import ClaimMode, ScopeError, list_claims, try_acquire
+from autobot_shared.eventually import eventually
 
 try:
     import fakeredis.aioredis as fakeredis_async
@@ -105,11 +106,13 @@ async def test_the_renewal_stops_when_the_run_does(redis, monkeypatch):
     monkeypatch.setattr("agents.scope_enforcement.CLAIM_TTL_S", 3)
 
     async with hold_scopes(["path:a/b.py"], agent_id="agent-1", task_id="t1", intent="write"):
-        await asyncio.sleep(1.2)
-    after_exit = len(renewals)
+        # Wait for a real renewal, not a fixed window a busy runner can miss (#16255).
+        await eventually(lambda: renewals)
 
-    await asyncio.sleep(1.2)
-    assert len(renewals) == after_exit, "the renewer kept running after the run ended"
+    # The stopper's own state (#16255 review), not a snapshot: a leaked
+    # _renew_forever task is exactly the regression this test is named for.
+    leaked = [t for t in asyncio.all_tasks() if not t.done() and t.get_coro().__name__ == "_renew_forever"]
+    assert not leaked, "the renewer kept running after the run ended"
 
 
 @pytest.mark.asyncio
