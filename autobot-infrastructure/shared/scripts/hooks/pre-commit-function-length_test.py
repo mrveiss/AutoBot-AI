@@ -218,6 +218,18 @@ class TestScopedToTheFunctionsAChangeTouches:
 
         assert result.returncode != 0 and "refusing to report clean" in result.stdout, result.stdout + result.stderr
 
+    def test_a_run_from_a_subdirectory_fails_closed(self, tmp_path: Path) -> None:
+        """Away from the root the paths it is given are not found and pathspecs match nothing: never report clean."""
+        repo = _init_repo(tmp_path)
+        path = _legacy_file(repo)
+        _edit(path, "    x5 = 5\n", "    x5 = 55\n")
+        _git(repo, "add", "legacy.py")
+        (repo / "sub").mkdir()
+
+        result = _run_hook(repo / "sub")
+
+        assert result.returncode != 0 and "repository root" in result.stdout, result.stdout + result.stderr
+
     def test_whole_file_mode_judges_a_legacy_function_the_change_did_not_touch(self, tmp_path: Path) -> None:
         """The enumeration mode, run directly as documented: the same staged change the scope passes is red here."""
         repo = _init_repo(tmp_path)

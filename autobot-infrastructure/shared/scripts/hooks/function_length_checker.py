@@ -238,9 +238,8 @@ def _report_scope(violations: List[FunctionViolation]) -> List[FunctionViolation
     Only a file that has a violation costs a git call, so a clean change reads no
     diff at all. The repository judged is the one the hook runs in, not the one
     this script lives in: pre-commit runs hooks from that repository's root, and
-    the hook's own tests run it inside throwaway repositories. In staged mode, run
-    from a subdirectory, the paths it is given no longer match the root-relative
-    staged set, so its files are judged whole -- over-reported, never skipped.
+    the hook's own tests run it inside throwaway repositories. :func:`main`
+    refuses to scope from anywhere but that root.
     """
     if not violations:
         return violations
@@ -309,6 +308,12 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     print(f"Scanning {len(files)} file(s)...")
     print()
+
+    if not whole_file and not (Path.cwd() / ".git").exists():
+        # From a subdirectory the root-relative paths pre-commit passes are not
+        # found, and git's pathspecs match nothing: a clean verdict, unexamined.
+        print(f"{RED}FATAL{NC}: not at the repository root, cannot scope the change -- refusing to report clean")
+        return 1
 
     all_violations = [v for file_path in files for v in analyze_file(file_path)]
     if not whole_file:
