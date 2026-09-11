@@ -2812,6 +2812,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/monitoring/gpu/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Gpu Nodes
+         * @description Every node's GPU state: not reported, none present, or its devices.
+         */
+        get: operations["list_gpu_nodes_api_monitoring_gpu_nodes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/monitoring/health": {
         parameters: {
             query?: never;
@@ -9050,6 +9070,68 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * GPUDevice
+         * @description One GPU. Metrics are null when the vendor tool could not read them.
+         */
+        GPUDevice: {
+            device_type: components["schemas"]["NPUDeviceType"];
+            /** Index */
+            index?: number | null;
+            /** Memory Total Mb */
+            memory_total_mb?: number | null;
+            /** Memory Used Mb */
+            memory_used_mb?: number | null;
+            /** Monitored */
+            monitored: boolean;
+            /** Name */
+            name?: string | null;
+            /** Power Watts */
+            power_watts?: number | null;
+            /** Temperature Celsius */
+            temperature_celsius?: number | null;
+            /** Utilization Percent */
+            utilization_percent?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GPUNodeListResponse
+         * @description Every node's GPU state.
+         */
+        GPUNodeListResponse: {
+            /** Nodes */
+            nodes: components["schemas"]["GPUNodeStatus"][];
+            /** Total */
+            total: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GPUNodeStatus
+         * @description A node's GPU state from its latest heartbeat.
+         */
+        GPUNodeStatus: {
+            /** Devices */
+            devices?: components["schemas"]["GPUDevice"][];
+            /** Hostname */
+            hostname: string;
+            /** Last Heartbeat */
+            last_heartbeat?: string | null;
+            /** Node Id */
+            node_id: string;
+            /** Node Status */
+            node_status: string;
+            state: components["schemas"]["GPUReportState"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GPUReportState
+         * @description What a node's latest heartbeat said about its GPUs.
+         * @enum {string}
+         */
+        GPUReportState: "not_reported" | "none" | "present";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -9709,6 +9791,12 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * NPUDeviceType
+         * @description NPU device type enumeration.
+         * @enum {string}
+         */
+        NPUDeviceType: "intel-npu" | "nvidia-gpu" | "amd-gpu" | "unknown";
         /**
          * NPUFleetMetricsResponse
          * @description Aggregate NPU fleet performance metrics.
@@ -18876,6 +18964,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_gpu_nodes_api_monitoring_gpu_nodes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GPUNodeListResponse"];
                 };
             };
         };
