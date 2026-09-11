@@ -34,7 +34,9 @@ pulling that in is unrelated scope for a test of one route.
 
 Covers (#16385 acceptance criteria):
 - GET /api/auth/me returns 2xx for a valid session token
-- GET /api/auth/me returns 403 for a missing token (HTTPBearer's own default)
+- GET /api/auth/me returns 401 for a missing token (HTTPBearer's own default,
+  fastapi>=0.141.1's `make_not_authenticated_error` — see
+  `fastapi/security/http.py`)
 - GET /api/auth/me returns 401 for an invalid token (rejected by
   get_current_user itself: malformed, and well-formed-but-wrong-signature)
 """
@@ -203,10 +205,14 @@ class TestAuthMeValidToken:
 
 
 class TestAuthMeMissingOrInvalidToken:
-    def test_missing_token_returns_403(self):
-        """No Authorization header: HTTPBearer's own auto_error default, not get_current_user."""
+    def test_missing_token_returns_401(self):
+        """No Authorization header: HTTPBearer's own auto_error default, not get_current_user.
+
+        fastapi>=0.141.1's `HTTPBase.make_not_authenticated_error` raises
+        `HTTP_401_UNAUTHORIZED` (not 403) when the header is absent.
+        """
         resp = _get_me(headers=None)
-        assert resp.status_code == 403, resp.text
+        assert resp.status_code == 401, resp.text
 
     def test_garbage_token_returns_401(self):
         """A syntactically-invalid token is rejected by get_current_user itself."""
