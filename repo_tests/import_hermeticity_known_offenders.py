@@ -44,9 +44,11 @@ attributed, then checked two ways that share no enumeration with the sweep:
 The first full run of the sweep verifies this attribution: a pair in the wrong tree
 fails that run twice, as a new offender and as a stale entry.
 
-**Shrink-only.** An entry leaves in the change that fixes it: a full run fails on an
-entry that no longer fails the way it is listed. There is no sanctioned route in -- a
-new offender is fixed, not listed.
+**Shrink-only.** An entry leaves in the pull request that fixes it: any run that probes
+a listed module and finds it no longer failing the way it is listed fails, so the fix
+cannot merge with its entry still here. A full run judges every entry; a pull-request
+subset judges the entries it probed. There is no sanctioned route in -- a new offender
+is fixed, not listed.
 """
 
 from __future__ import annotations
