@@ -2775,18 +2775,15 @@ class VisionHealthResponse(BaseModel):
 class WakeWordCheckRequest(BaseModel):
     """Request to check text for wake word"""
 
-    text: str = Field(..., description="Text to check for wake word")
+    text: str = Field(..., max_length=1000, description="Text to check for wake word")
     confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Recognition confidence")
 
 
 class WakeWordCheckResponse(BaseModel):
-    """Response for wake word check"""
+    """Response for wake word check: whether the text matched, and the confidence only (#16247 ruling)."""
 
     detected: bool
-    wake_word: str = ""
     confidence: float = 0.0
-    timestamp: float = 0.0
-    metadata: Metadata = {}
 
 
 class WakeWordConfigRequest(BaseModel):
