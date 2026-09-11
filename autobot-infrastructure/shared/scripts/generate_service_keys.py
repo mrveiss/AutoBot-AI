@@ -10,10 +10,15 @@ Stores keys in Redis and creates backup configuration file.
 
 Usage:
     python3 scripts/generate_service_keys.py
+    python3 scripts/generate_service_keys.py --output-dir /opt/autobot/config/service-keys
 """
 
+from __future__ import annotations
+
+import argparse
 import asyncio
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +26,43 @@ from pathlib import Path
 import yaml
 
 logger = logging.getLogger(__name__)
+
+# Export retention (#16348): the deploy role only ever reads the newest
+# service-keys-*.yaml (deploy-keys.yml, "sort by mtime, take last"), so every
+# older export left on disk after a rotation is one more plaintext copy of
+# live keys with no reader. Override via AUTOBOT_SERVICE_KEYS_KEEP_COUNT;
+# default keeps just the newest.
+_KEYS_EXPORT_RETENTION_ENV = "AUTOBOT_SERVICE_KEYS_KEEP_COUNT"
+_SERVICE_KEYS_KEEP_COUNT_DEFAULT = 1
+
+
+def _resolve_keep_count() -> int:
+    """How many service-keys-*.yaml exports survive a rotation (#16348)."""
+    raw = os.environ.get(_KEYS_EXPORT_RETENTION_ENV)
+    if raw is None:
+        return _SERVICE_KEYS_KEEP_COUNT_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "%s=%r is not an integer; keeping the default of %d",
+            _KEYS_EXPORT_RETENTION_ENV,
+            raw,
+            _SERVICE_KEYS_KEEP_COUNT_DEFAULT,
+        )
+        return _SERVICE_KEYS_KEEP_COUNT_DEFAULT
+    if value < 1:
+        logger.warning(
+            "%s=%d must be at least 1; keeping the default of %d",
+            _KEYS_EXPORT_RETENTION_ENV,
+            value,
+            _SERVICE_KEYS_KEEP_COUNT_DEFAULT,
+        )
+        return _SERVICE_KEYS_KEEP_COUNT_DEFAULT
+    return value
+
+
+SERVICE_KEYS_KEEP_COUNT = _resolve_keep_count()
 
 # Add project paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -99,12 +141,64 @@ async def _generate_all_keys(auth_manager):
     return generated_keys
 
 
-def _save_backup(generated_keys, redis_host, redis_port):
+def _resolve_output_dir(output_dir: str | None) -> Path:
+    """Resolve the service-keys export directory (#16348).
+
+    An explicit ``--output-dir`` wins. Otherwise the SSOT-configured
+    installation root (``config.path.base_dir``) is used — itself anchored
+    to AUTOBOT_BASE_DIR or the checkout root, never to this process's
+    working directory, so there is no cwd fallback to remove here.
+    """
+    if output_dir:
+        return Path(output_dir).expanduser().resolve()
+    if not config.path.base_dir:
+        raise RuntimeError(
+            "No --output-dir given and SSOT has no base_dir configured; "
+            "refusing to fall back to the working directory (#16348)."
+        )
+    return config.path.resolve("config/service-keys").resolve()
+
+
+def _refuse_if_inside_git_worktree(directory: Path) -> None:
+    """Refuse to export live keys into a git checkout (#16348).
+
+    Walks the resolved directory's own ancestry for a ``.git`` entry — a
+    directory in a normal clone, a file (``gitdir: ...``) in a worktree
+    checkout — so a broad ``git add`` can never sweep up live keys again
+    (the exposure behind #16301).
+    """
+    for candidate in (directory, *directory.parents):
+        if (candidate / ".git").exists():
+            raise RuntimeError(
+                f"Refusing to write service keys inside a git work tree: "
+                f"{candidate} contains .git. Point --output-dir (or SSOT's "
+                f"base_dir) outside any checkout (#16348)."
+            )
+
+
+def _prune_old_backups(backup_dir: Path, keep: int = SERVICE_KEYS_KEEP_COUNT) -> None:
+    """Delete all but the newest *keep* service-keys-*.yaml exports (#16348).
+
+    The filename timestamp (``%Y%m%d-%H%M%S``) sorts lexicographically in
+    chronological order, so a plain name sort picks the newest without a
+    stat() call — the deploy role's own "sort by mtime, take last"
+    (deploy-keys.yml) keeps working against whatever survives.
+    """
+    exports = sorted(backup_dir.glob("service-keys-*.yaml"))
+    stale = exports[:-keep] if keep > 0 else exports
+    for path in stale:
+        path.unlink()
+        logger.info("Pruned old service-keys export: %s", path.name)
+
+
+def _save_backup(generated_keys, redis_host, redis_port, output_dir: str | None = None):
     """Write keys backup YAML and return file path.
 
-    Helper for generate_keys (#1734).
+    Helper for generate_keys (#1734). Refuses a git work tree and never
+    falls back to the working directory (#16348).
     """
-    backup_dir = Path("config/service-keys")
+    backup_dir = _resolve_output_dir(output_dir)
+    _refuse_if_inside_git_worktree(backup_dir)
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     backup_file = backup_dir / f"service-keys-{datetime.now().strftime('%Y%m%d-%H%M%S')}.yaml"
@@ -122,6 +216,7 @@ def _save_backup(generated_keys, redis_host, redis_port):
         )
 
     logger.info("Backup saved: %s", backup_file)
+    _prune_old_backups(backup_dir)
     return backup_file
 
 
@@ -139,7 +234,7 @@ async def _verify_keys_in_redis(auth_manager, generated_keys):
             logger.error("  %s: FAILED - Key not found!", service_id)
 
 
-async def generate_keys():
+async def generate_keys(output_dir: str | None = None):
     """Generate API keys for all services and store in Redis."""
     redis_host = config.vms.redis
     redis_port = config.ports.redis
@@ -159,7 +254,7 @@ async def generate_keys():
     logger.info("Generated %d service keys", len(generated_keys))
     logger.info("")
 
-    backup_file = _save_backup(generated_keys, redis_host, redis_port)
+    backup_file = _save_backup(generated_keys, redis_host, redis_port, output_dir)
     logger.info("")
 
     await _verify_keys_in_redis(auth_manager, generated_keys)
@@ -173,9 +268,24 @@ async def generate_keys():
     return generated_keys
 
 
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments (#16348)."""
+    parser = argparse.ArgumentParser(description="Generate AutoBot service API keys.")
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help=(
+            "Directory for the service-keys-*.yaml export. Defaults to SSOT's "
+            "base_dir/config/service-keys; never the working directory."
+        ),
+    )
+    return parser.parse_args(argv)
+
+
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
-    asyncio.run(generate_keys())
+    _cli_args = _parse_args()
+    asyncio.run(generate_keys(_cli_args.output_dir))
