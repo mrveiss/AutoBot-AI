@@ -28,6 +28,16 @@
 # (services/deploy_artifacts.py's SYNC_DELETIONS_MARKER), read here only as
 # a one-time bootstrap when THIS module's own marker is absent.
 #
+# #16310 review round 4, 3(b), accepted residual limitation: a filename
+# containing a literal newline still splits into two lines somewhere in the
+# find -> ansible -> heredoc transport below (the `find`/`read -r` pipeline
+# has no other record separator available here). This fails SAFE -- the
+# corrupted "candidate" resolves to a path that does not exist or is
+# refused, so the real file is left in place, never deleted -- not
+# re-plumbed to a NUL-separated transport, which the ansible module glue
+# (stdout_lines, the present-files copy, the heredoc) does not support end
+# to end without a much larger change.
+#
 # Contract:
 #   sync_deletions_label       (str) Display label, e.g. "Backend".
 #   sync_deletions_source_dir  (str) This component's source dir under

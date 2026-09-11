@@ -196,6 +196,22 @@ async def test_a_host_state_excludes_match_is_kept(tmp_path) -> None:
     assert "data/runtime.db" in plan.kept
 
 
+async def test_a_non_ascii_filename_is_planned_for_deletion(tmp_path) -> None:
+    """#16310 review round 4, 3(a): `-c core.quotePath=false` -- without it
+    git reports this path C-style-quoted and `_name_status_paths` would
+    never match it against a plain filesystem-derived name."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo / "comp" / "café.py")
+    commit_a = _commit_all(repo, "seed")
+    (repo / "comp" / "café.py").unlink()
+    commit_b = _commit_all(repo, "delete café.py")
+
+    plan = await compute_deletion_plan(str(repo / "comp"), str(repo), commit_a, commit_b)
+
+    assert plan.delete == ["café.py"]
+
+
 async def test_a_diff_failure_reports_an_error_not_an_empty_plan(tmp_path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)
@@ -252,6 +268,42 @@ async def test_bootstrap_plans_a_tracked_then_deleted_file(tmp_path) -> None:
     plan = await compute_bootstrap_plan(str(repo / "comp"), str(repo), commit_b, present_paths=["gone.py"])
 
     assert plan.delete == ["gone.py"]
+
+
+async def test_bootstrap_plans_a_rename_only_path_for_deletion(tmp_path) -> None:
+    """#16310 review round 4, HIGH: a path that only ever arrived through a
+    rename -- never a plain add under that exact name -- must still be
+    caught. `git mv old new`, then delete `new` later: `new` was never
+    `--diff-filter=A`, only `--diff-filter=R`'s NEW side."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo / "comp" / "old.py", "content")
+    _commit_all(repo, "seed")
+    _git(repo, "mv", "comp/old.py", "comp/new.py")
+    _commit_all(repo, "rename old.py to new.py")
+    (repo / "comp" / "new.py").unlink()
+    commit_c = _commit_all(repo, "delete new.py")
+
+    plan = await compute_bootstrap_plan(str(repo / "comp"), str(repo), commit_c, present_paths=["new.py"])
+
+    assert plan.delete == ["new.py"]
+
+
+async def test_bootstrap_plans_a_non_ascii_filename_for_deletion(tmp_path) -> None:
+    """#16310 review round 4, 3(a): git C-style-quotes a non-ASCII path by
+    default, so the tracked set (from git) and the present set (from a plain
+    filesystem walk) would disagree for this file without
+    `-c core.quotePath=false`."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo / "comp" / "café.py")
+    _commit_all(repo, "seed")
+    (repo / "comp" / "café.py").unlink()
+    commit_b = _commit_all(repo, "delete café.py")
+
+    plan = await compute_bootstrap_plan(str(repo / "comp"), str(repo), commit_b, present_paths=["café.py"])
+
+    assert plan.delete == ["café.py"]
 
 
 async def test_bootstrap_keeps_a_never_tracked_file(tmp_path) -> None:

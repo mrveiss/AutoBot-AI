@@ -7,9 +7,17 @@ Called by ``ansible/roles/_shared/tasks/sync_deletions.yml`` with
 ``delegate_to: localhost`` -- it runs on the controller (the SLM), which
 holds the git checkout every role's synchronize task deploys from, right
 after that task succeeds. It never touches a filesystem: it only decides
-which component-relative paths are safe to delete, and ansible's own
-``ansible.builtin.file: state=absent`` loop removes them on the target
-(co-located or remote -- one mechanism for both, #16310 owner decision).
+which component-relative paths are safe to delete, and a `realpath`-checked
+shell step removes them on the target (co-located or remote -- one
+mechanism for both, #16310 owner decision), refusing anything that resolves
+outside the target root.
+
+#16310 review round 4, 3(b), accepted residual limitation: a filename
+containing a literal newline splits into two lines in the ``find`` ->
+ansible -> heredoc transport this CLI's output feeds. This fails SAFE (the
+real file is left in place, never deleted) rather than being re-plumbed to
+a NUL-separated transport end to end -- see the ansible task file's header
+for the full reasoning.
 
 Two modes:
 

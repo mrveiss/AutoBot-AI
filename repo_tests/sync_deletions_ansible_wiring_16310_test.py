@@ -217,6 +217,65 @@ def test_the_delete_step_resolves_containment_before_removing_anything() -> None
     )
 
 
+def _delete_step_raw_cmd() -> str:
+    task = _shared_task()
+    delete_step = next((sub for sub in task["block"] if "remove" in str(sub.get("name", "")).lower()), None)
+    assert delete_step is not None, "no deletion step found in the block"
+    return str(delete_step["ansible.builtin.shell"]["cmd"])
+
+
+def _render_delete_cmd(target_dir, delete_list: list[str]) -> str:
+    """Substitute the two Jinja expressions the real task uses, by hand --
+    the same two an ansible run would fill in with sync_deletions_target_dir
+    and _sd_plan.delete."""
+    rendered = _delete_step_raw_cmd().replace("{{ sync_deletions_target_dir }}", str(target_dir))
+    return rendered.replace("{{ _sd_plan.delete | join('\\n') }}", "\n".join(delete_list))
+
+
+def test_the_delete_step_shell_resists_injection_and_path_escapes(tmp_path) -> None:
+    """#16310 review round 4, MEDIUM: pull the REAL `cmd:` body out of the
+    shared task file (the way this file already parses it for the tests
+    above), render it with a crafted delete list, and run it against a real
+    tree with hostile filenames -- proving the quoting holds, not just
+    asserting it by reading the source."""
+    import subprocess
+
+    root = tmp_path / "target"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    injected_marker = outside / "INJECTED"
+
+    ordinary_hostile = [
+        "safe with spaces.txt",
+        "quote'name.txt",
+        "back`tick.txt",
+        f"dollar$(touch {injected_marker}).txt",
+        "semi;colon.txt",
+        "pipe|char.txt",
+        "-leading-dash.txt",
+    ]
+    for name in ordinary_hostile:
+        (root / name).write_text("x", encoding="utf-8")
+
+    escape_link = root / "escape_link"
+    escape_link.symlink_to(outside)
+    escaped_payload = outside / "payload.txt"
+    escaped_payload.write_text("do not delete", encoding="utf-8")
+
+    delete_list = [*ordinary_hostile, "../outside_target.txt", "escape_link/payload.txt"]
+    script = _render_delete_cmd(root, delete_list)
+
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False)
+
+    assert not injected_marker.exists(), f"injection executed a command: {result.stderr}"
+    assert result.returncode == 1, "the script must fail when it refused an escaping candidate"
+    for name in ordinary_hostile:
+        assert not (root / name).exists(), f"{name!r} should have been deleted"
+    assert escaped_payload.exists(), "a path resolving outside the root must survive"
+    assert "REFUSED" in result.stderr
+
+
 # --------------------------------------------------------------------------
 # Standards
 # --------------------------------------------------------------------------

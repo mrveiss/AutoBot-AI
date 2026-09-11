@@ -38,6 +38,13 @@ GIT_TIMEOUT_S = env_float("AUTOBOT_SYNC_GIT_TIMEOUT_S", 30.0)
 async def run_git(repo_root: str, *args: str, timeout: float = GIT_TIMEOUT_S) -> tuple[str, int]:
     """Run ``git -C repo_root <args>`` with a scrubbed env and bounded timeout.
 
+    ``-c core.quotePath=false`` (#16310 review 3a): git C-style-quotes any
+    path with a non-ASCII byte by default (``"fooe\\301.py"`` instead of the
+    literal name), so the tracked set (from git) and the present set (from a
+    plain filesystem walk) would disagree for every such file. Every caller
+    in this repo parses this command's output as a plain path string, so the
+    flag belongs here once rather than on each call site.
+
     Returns ``(stdout, returncode)``. A timeout or spawn failure returns
     ``("", 1)`` -- never raises, so a wedged git process degrades the caller
     to "nothing found" rather than crashing it.
@@ -45,6 +52,8 @@ async def run_git(repo_root: str, *args: str, timeout: float = GIT_TIMEOUT_S) ->
     try:
         proc = await asyncio.create_subprocess_exec(
             "git",
+            "-c",
+            "core.quotePath=false",
             "-C",
             repo_root,
             *args,
@@ -84,14 +93,3 @@ async def last_commit_for_path(repo_root: str, pathspec: str) -> str | None:
     output, rc = await run_git(repo_root, "log", "-1", "--format=%H", "--", pathspec)
     sha = output.strip()
     return sha if rc == 0 and sha else None
-
-
-async def path_exists_at_commit(repo_root: str, commit: str, pathspec: str) -> bool:
-    """True when *pathspec* is present in the tree at *commit*.
-
-    Used by the bootstrap plan to confirm a candidate is genuinely absent
-    from the commit being deployed, not merely absent from a narrower diff
-    range (#16310).
-    """
-    _, rc = await run_git(repo_root, "cat-file", "-e", f"{commit}:{pathspec}")
-    return rc == 0

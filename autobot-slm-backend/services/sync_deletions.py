@@ -11,9 +11,10 @@ module is the PLANNING library only: it decides WHICH component-relative
 paths are safe to delete, using git history plus host-state/gitignore
 filtering plus lexical containment. It never touches a filesystem itself.
 ``scripts/sync_deletion_planner.py`` wraps it as a CLI an ansible task calls
-with ``delegate_to: localhost``; the actual removal is
-``ansible.builtin.file: state=absent`` on the target, and the target's own
-marker is slurped before this runs and written after, by ansible -- see
+with ``delegate_to: localhost``; the actual removal is a `realpath`-checked
+shell step on the target (refusing anything that resolves outside the
+target root), and the target's own marker is slurped before this runs and
+written after, by ansible -- see
 ``ansible/roles/_shared/tasks/sync_deletions.yml``.
 
 Two plans:
@@ -73,23 +74,27 @@ def _is_lexically_contained(rel_path: str) -> bool:
     return ".." not in Path(rel_path).parts
 
 
-def _parse_deleted_paths(output: str, pathspec: str) -> list[str]:
-    """Component-relative paths a ``--diff-filter=DR`` name-status diff reports.
+def _name_status_paths(output: str, pathspec: str, *, take_new: bool) -> list[str]:
+    """Component-relative paths a ``--name-status`` diff reports.
 
-    A rename reports OLD-tab-NEW; the OLD path is what the deployed tree must
-    drop. ``--diff-filter=DR`` combined with the ``-- pathspec`` scoping means
+    An add/delete line is ``STATUS\\tpath``; a rename is
+    ``R###\\told\\tnew``. *take_new* picks which side a rename contributes:
+    False for a DR (delete-side) diff -- the OLD path is what the deployed
+    tree must drop; True for an AR (add-side) diff -- the NEW path is what
+    now (or once) existed under that name. ``-- pathspec`` scoping means
     every line here is already inside *pathspec* -- no further filtering
     needed, only stripping the prefix down to a deployed-relative path.
     """
     prefix = f"{pathspec}/" if pathspec else ""
-    removed: list[str] = []
+    paths: list[str] = []
     for line in output.splitlines():
         if not line:
             continue
-        repo_path = line.split("\t")[1]  # for a rename (R###, old, new) this is the OLD path
+        parts = line.split("\t")
+        repo_path = parts[-1] if take_new else parts[1]
         if not prefix or repo_path.startswith(prefix):
-            removed.append(repo_path[len(prefix) :] if prefix else repo_path)
-    return removed
+            paths.append(repo_path[len(prefix) :] if prefix else repo_path)
+    return paths
 
 
 async def _partition(candidates: list[str], repo_root: str, pathspec_prefix: str) -> tuple[list[str], list[str]]:
@@ -118,12 +123,12 @@ async def compute_deletion_plan(source_dir: str, repo_root: str, previous_commit
 
     pathspec = component_pathspec(repo_root, source_dir)
     diff_output, rc = await run_git(
-        repo_root, "diff", "--name-status", "--diff-filter=DR", f"{previous_commit}..{new_commit}", "--", pathspec
+        repo_root, "diff", "-M", "--name-status", "--diff-filter=DR", f"{previous_commit}..{new_commit}", "--", pathspec
     )
     if rc != 0:
         return DeletionPlan(error=f"git diff {previous_commit[:12]}..{new_commit[:12]} failed")
 
-    candidates = _parse_deleted_paths(diff_output, pathspec)
+    candidates = _name_status_paths(diff_output, pathspec, take_new=False)
     to_delete, kept = await _partition(candidates, repo_root, pathspec)
     return DeletionPlan(delete=to_delete, kept=kept)
 
@@ -142,13 +147,21 @@ async def _tracked_paths_at_commit(repo_root: str, commit: str, pathspec: str) -
 
 
 async def _ever_added_paths(repo_root: str, pathspec: str) -> set[str] | None:
-    """Every component-relative path git has ever added, in ONE call (#16310 review:
-    replaces a `git log -1`/`git cat-file -e` pair PER FILE, which took hours on a
-    real backend/frontend node's first bootstrap)."""
-    output, rc = await run_git(repo_root, "log", "--name-only", "--diff-filter=A", "--format=", "--", pathspec)
+    """Every component-relative path git has ever added OR renamed a file
+    into, in ONE call (#16310 review: replaces a `git log -1`/`git cat-file
+    -e` pair PER FILE, which took hours on a real backend/frontend node's
+    first bootstrap).
+
+    ``--diff-filter=AR`` with ``-M`` (rename detection is NOT on by default),
+    not just ``A`` (#16310 review round 4, HIGH): a path that only ever
+    arrived through a rename -- never a plain add under that exact name --
+    would otherwise never appear in "ever tracked", and its stale copy would
+    survive on every host forever, exactly what AC5 is about.
+    """
+    output, rc = await run_git(repo_root, "log", "-M", "--name-status", "--diff-filter=AR", "--format=", "--", pathspec)
     if rc != 0:
         return None
-    return _strip_prefix([line for line in output.splitlines() if line], pathspec)
+    return set(_name_status_paths(output, pathspec, take_new=True))
 
 
 def _is_artifact_path(rel_path: str) -> bool:
@@ -163,6 +176,19 @@ def _is_artifact_path(rel_path: str) -> bool:
     return any(seg in ARTIFACT_DIRS or seg.endswith(ARTIFACT_DIR_SUFFIXES) for seg in rel_path.split("/"))
 
 
+def _bootstrap_candidates(present_paths: list[str], ever_added: set[str], tracked_now: set[str]) -> list[str]:
+    """*present_paths* git once added (or renamed something into) and does not track now.
+
+    Residual risk, named for the caller: a file deleted from git long ago and
+    put back on the host by other means (not this module's business, not
+    synced content) would ALSO satisfy "added once, absent now". The owner's
+    #16310 decision accepts that risk for the one-time bootstrap only -- see
+    ``scripts/sync_deletion_planner.py``'s ``--help`` and
+    ``ansible/roles/_shared/tasks/sync_deletions.yml``'s comment.
+    """
+    return [rel for rel in present_paths if not _is_artifact_path(rel) and rel in ever_added and rel not in tracked_now]
+
+
 async def compute_bootstrap_plan(
     source_dir: str, repo_root: str, new_commit: str, present_paths: list[str]
 ) -> DeletionPlan:
@@ -172,15 +198,7 @@ async def compute_bootstrap_plan(
     reported present on the target -- this module never touches a
     filesystem, so it cannot enumerate them itself. Exactly two git calls
     total, never one per file: every path tracked at *new_commit*, and every
-    path git has ever added. A present file is a candidate only if it is in
-    the second set and not the first.
-
-    Residual risk, named for the caller: a file deleted from git long ago and
-    put back on the host by other means (not this module's business, not
-    synced content) would ALSO satisfy "added once, absent now". The owner's
-    #16310 decision accepts that risk for the one-time bootstrap only -- see
-    ``scripts/sync_deletion_planner.py``'s ``--help`` and
-    ``ansible/roles/_shared/tasks/sync_deletions.yml``'s comment.
+    path git has ever added or renamed something into.
     """
     pathspec_prefix = component_pathspec(repo_root, source_dir)
     tracked_now = await _tracked_paths_at_commit(repo_root, new_commit, pathspec_prefix)
@@ -188,10 +206,8 @@ async def compute_bootstrap_plan(
         return DeletionPlan(error=f"git ls-tree at {new_commit[:12]} failed")
     ever_added = await _ever_added_paths(repo_root, pathspec_prefix)
     if ever_added is None:
-        return DeletionPlan(error="git log --diff-filter=A failed")
+        return DeletionPlan(error="git log --diff-filter=AR failed")
 
-    candidates = [
-        rel for rel in present_paths if not _is_artifact_path(rel) and rel in ever_added and rel not in tracked_now
-    ]
+    candidates = _bootstrap_candidates(present_paths, ever_added, tracked_now)
     to_delete, kept = await _partition(candidates, repo_root, pathspec_prefix)
     return DeletionPlan(delete=to_delete, kept=kept)
