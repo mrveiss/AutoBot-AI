@@ -354,19 +354,22 @@ export interface ConfigRevision {
   created_at: string | null
 }
 
-/** GET /redis-service/status (#3381). */
-export interface RedisServiceStatus {
-  status: 'running' | 'stopped' | 'unknown'
-  uptime_seconds: number | null
-  memory_used_bytes: number | null
-  memory_peak_bytes: number | null
-  connected_clients: number | null
-  last_checked: string | null
-  error?: string
-}
+/**
+ * `status` of GET /system/health/detailed: the backend's probe vocabulary
+ * (`HealthStatus` in `api/system_health.py`, #6909).
+ */
+export type SystemHealthStatus = 'ok' | 'degraded' | 'down' | 'not_applicable' | 'idle'
 
-/** Lifecycle verbs accepted by POST /redis-service/{action} (#3381). */
-export type RedisServiceAction = 'start' | 'stop' | 'restart'
+/** GET /system/health/detailed as AdminMonitoringView reads it (#997 flattens the percentages). */
+export interface SystemHealthReport {
+  status: SystemHealthStatus
+  cpu_percent?: number
+  memory_percent?: number
+  disk_percent?: number
+  uptime_seconds?: number
+  /** The backend lists each service as `healthy` or `unhealthy`. */
+  services?: { name: string; status: string }[]
+}
 
 /** GET /settings/rbac/status. */
 export interface RbacStatus {
@@ -1098,14 +1101,7 @@ export function useAutobotApi() {
     return response.data
   }
 
-  async function getSystemHealth(): Promise<{
-    status: 'healthy' | 'degraded' | 'critical'
-    cpu_percent?: number
-    memory_percent?: number
-    disk_percent?: number
-    uptime_seconds?: number
-    services?: { name: string; status: string }[]
-  }> {
+  async function getSystemHealth(): Promise<SystemHealthReport> {
     const response = await client.get('/system/health/detailed')
     const data = response.data
     // Issue #997: Backend returns metrics nested in components as "12.5%" strings.
@@ -1560,22 +1556,6 @@ export function useAutobotApi() {
   }
 
   // =============================================================================
-  // Redis Service control (#3381 / #13079)
-  // =============================================================================
-
-  async function getRedisServiceStatus(): Promise<RedisServiceStatus> {
-    const response = await client.get<RedisServiceStatus>('/redis-service/status')
-    return response.data
-  }
-
-  async function performRedisServiceAction(
-    action: RedisServiceAction
-  ): Promise<Record<string, unknown>> {
-    const response = await client.post(`/redis-service/${action}`)
-    return response.data
-  }
-
-  // =============================================================================
   // RBAC bootstrap + Redis cache admin (#13079)
   // =============================================================================
 
@@ -1903,9 +1883,6 @@ export function useAutobotApi() {
     // Config Revisions (#1404 / #13079)
     getConfigRevisions,
     rollbackConfigRevision,
-    // Redis Service control (#3381 / #13079)
-    getRedisServiceStatus,
-    performRedisServiceAction,
     // RBAC bootstrap + Redis cache admin + health probe (#13079)
     getRbacStatus,
     initializeRbac,

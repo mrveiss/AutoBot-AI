@@ -89,9 +89,9 @@ BASELINE = {
     # copy of the design system.
     "components_declaring_styles": 381,
     # Distinct class names declared anywhere in the frontend.
-    "distinct_class_names": 5627,
+    "distinct_class_names": 5625,  # #16245: health-check-card and redis-service-control were RedisServiceControl.vue's alone
     # Total CSS rule declarations.
-    "css_rule_declarations": 9434,
+    "css_rule_declarations": 9431,  # #16245: RedisServiceControl.vue's 3 rules removed with it
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
     "button_definition_files": 102,
@@ -321,9 +321,9 @@ def test_fragmentation_only_shrinks(dimension: str) -> None:
     actual = _measure()[dimension]
     baseline = BASELINE[dimension]
 
-    assert actual <= baseline, (
-        f"{dimension} is {actual}, ratchet allows {baseline} (#12730, #12731).\n{_ADVICE[dimension]}"
-    )
+    assert (
+        actual <= baseline
+    ), f"{dimension} is {actual}, ratchet allows {baseline} (#12730, #12731).\n{_ADVICE[dimension]}"
     assert actual == baseline, (
         f"{dimension} is down to {actual} but the baseline still says {baseline} — "
         "lower it in the commit that did the work, so the number stays a deliberate claim"
