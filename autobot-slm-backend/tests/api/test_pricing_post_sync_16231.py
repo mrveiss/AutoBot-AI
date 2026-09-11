@@ -165,3 +165,57 @@ def test_a_timed_out_pricing_refresh_records_the_reason_and_the_sync_still_succe
     assert any(
         "pricing refresh" in s and "timed out" in s and "unknown" in s for s in steps
     ), f"no step names the pricing refresh timeout: {steps!r}"
+
+
+# ---------------------------------------------------------------------------
+# CodeQL py/path-injection (#16229 review, alerts #1132/#1133) — _load_env_file
+# must route every candidate path through within_deployed_root before touching
+# the filesystem with it.
+# ---------------------------------------------------------------------------
+
+
+def test_load_env_file_accepts_a_path_under_the_deployed_root(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+    deployed = tmp_path / "autobot-backend"
+    deployed.mkdir()
+    (deployed / ".env").write_text("FOO=bar\n", encoding="utf-8")
+
+    result = cs._load_env_file(deployed / ".env")
+
+    assert result == {"FOO": "bar"}
+
+
+def test_load_env_file_refuses_a_dot_dot_escape(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+    escaping = tmp_path / "autobot-backend" / ".." / ".." / "etc" / "passwd"
+
+    try:
+        cs._load_env_file(escaping)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a .. escape outside the deployed root must raise ValueError")
+
+
+def test_load_env_file_refuses_an_absolute_path_outside_the_root(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path / "deployed"))
+    outside = tmp_path / "elsewhere" / ".env"
+    outside.parent.mkdir()
+    outside.write_text("SHOULD_NOT=load\n", encoding="utf-8")
+
+    try:
+        cs._load_env_file(outside)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a path outside the deployed root must raise ValueError, not silently return {}")
+
+
+def test_load_env_file_missing_file_under_the_root_returns_empty(tmp_path, monkeypatch) -> None:
+    """A path that validates but doesn't exist is a normal 'no .env yet' case,
+    not an error — distinct from a path that fails validation entirely."""
+    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+
+    result = cs._load_env_file(tmp_path / "autobot-backend" / ".env")
+
+    assert result == {}

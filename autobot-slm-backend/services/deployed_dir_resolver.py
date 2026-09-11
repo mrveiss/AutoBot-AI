@@ -36,10 +36,38 @@ from pathlib import Path
 from services.drift_checker import _NONSTANDARD_COMPONENT_PATHS
 
 
+def deployed_root() -> str:
+    """The real, resolved deployed root -- read at call time, never import time.
+
+    Read live (not cached at import) so tests can monkeypatch
+    ``SLM_DEPLOYED_ROOT`` per-test. ``os.path.realpath`` so the containment
+    check in :func:`within_deployed_root` compares two resolved paths --
+    comparing a resolved candidate against an unresolved root would let a
+    symlink escape the containment check (CodeQL py/path-injection).
+    """
+    return os.path.realpath(os.environ.get("SLM_DEPLOYED_ROOT", "/opt/autobot"))
+
+
+def within_deployed_root(path: Path | str) -> str:
+    """The real path of *path* if it is the deployed root or lives under it.
+
+    Raises ``ValueError`` naming the path otherwise. This is the sanitiser
+    CodeQL's py/path-injection help documents: ``os.path.realpath`` the
+    candidate, then compare it to the (also-resolved) root by equality or
+    ``startswith(root + os.sep)`` -- never ``Path.is_relative_to``, which
+    CodeQL's dataflow analysis does not recognise as a sanitiser.
+    """
+    root = deployed_root()
+    real = os.path.realpath(str(path))
+    if real != root and not real.startswith(root + os.sep):
+        raise ValueError(f"path {path!r} resolves outside the deployed root {root!r}")
+    return real
+
+
 def _resolve_deployed_dir(component: str = "autobot-slm-backend") -> str:
     """Shared path arithmetic behind both public resolvers below.
 
-    Reads ``SLM_DEPLOYED_ROOT`` from the environment so the path is
+    Reads the deployed root through :func:`deployed_root` so the path is
     configurable without hardcoding. Components listed in
     ``_NONSTANDARD_COMPONENT_PATHS`` (#12450, owned by ``drift_checker``) use
     their verified override sub-path instead of the standard
@@ -50,10 +78,9 @@ def _resolve_deployed_dir(component: str = "autobot-slm-backend") -> str:
     the read/write distinction stays enforced at the one place both funnel
     through, even though today (flat layout) they compute the same value.
     """
-    deployed_root = os.environ.get("SLM_DEPLOYED_ROOT", "/opt/autobot")
     override = _NONSTANDARD_COMPONENT_PATHS.get(component)
     rel_path = override[1] if override else component
-    return str(Path(deployed_root) / rel_path)
+    return str(Path(deployed_root()) / rel_path)
 
 
 def get_live_dir(component: str = "autobot-slm-backend") -> str:

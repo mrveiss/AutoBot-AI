@@ -68,6 +68,8 @@ finally:
 _resolve_deployed_dir = _ddr._resolve_deployed_dir
 get_live_dir = _ddr.get_live_dir
 get_release_component_dir = _ddr.get_release_component_dir
+deployed_root = _ddr.deployed_root
+within_deployed_root = _ddr.within_deployed_root
 ALLOWED_COMPONENTS = _dc.ALLOWED_COMPONENTS
 EXTRA_VISIBILITY_COMPONENTS = _dc.EXTRA_VISIBILITY_COMPONENTS
 _NONSTANDARD_COMPONENT_PATHS = _dc._NONSTANDARD_COMPONENT_PATHS
@@ -184,3 +186,76 @@ class TestNonstandardComponentDeployedPaths:
         with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": str(tmp_path)}):
             assert get_live_dir("autobot-npu-worker") == str(tmp_path / "autobot-npu-worker")
             assert get_live_dir("autobot-browser-worker") == str(tmp_path / "autobot-browser-worker")
+
+
+class TestWithinDeployedRoot:
+    """CodeQL py/path-injection sanitiser (#16229 review, alerts #1132/#1133).
+
+    ``within_deployed_root`` is the one place ``_load_env_file`` (and any
+    future reader) validates a path before touching the filesystem with it —
+    these tests exercise the sanitiser directly rather than only through a
+    caller, so a future caller that forgets to route through it has an
+    obvious gap to fill, not a silent one.
+    """
+
+    def test_a_path_under_the_root_is_accepted(self, tmp_path):
+        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": str(tmp_path)}):
+            candidate = tmp_path / "autobot-backend" / ".env"
+            assert within_deployed_root(candidate) == os.path.realpath(str(candidate))
+
+    def test_the_root_itself_is_accepted(self, tmp_path):
+        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": str(tmp_path)}):
+            assert within_deployed_root(tmp_path) == os.path.realpath(str(tmp_path))
+
+    def test_a_dot_dot_escape_is_refused(self, tmp_path):
+        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": str(tmp_path)}):
+            escaping = tmp_path / "autobot-backend" / ".." / ".." / "etc" / "passwd"
+            try:
+                within_deployed_root(escaping)
+            except ValueError as exc:
+                assert str(escaping) in str(exc) or "outside the deployed root" in str(exc)
+            else:
+                raise AssertionError("a .. escape outside the root must raise ValueError")
+
+    def test_an_absolute_path_outside_the_root_is_refused(self, tmp_path):
+        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": str(tmp_path)}):
+            outside = tmp_path.parent / "not-the-deployed-root" / ".env"
+            try:
+                within_deployed_root(outside)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("an absolute path outside the root must raise ValueError")
+
+    def test_a_sibling_directory_sharing_the_root_as_a_string_prefix_is_refused(self, tmp_path):
+        """The ``startswith`` check must be anchored on ``root + os.sep`` —
+        a naive ``startswith(root)`` would wrongly accept a sibling whose
+        name merely starts with the same characters (e.g. ``/opt/autobot``
+        vs ``/opt/autobot-evil``)."""
+        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": str(tmp_path)}):
+            sibling = Path(str(tmp_path) + "-evil") / ".env"
+            try:
+                within_deployed_root(sibling)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("a same-prefix sibling directory must raise ValueError")
+
+
+class TestDeployedRoot:
+    def test_reads_the_env_var_live_not_at_import_time(self, tmp_path):
+        """A second call under a different env value must see the new value —
+        proves the root is read at call time, so tests (and #13539's future
+        release flip) can retarget it per-call, never once at import."""
+        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": str(tmp_path / "first")}):
+            first = deployed_root()
+        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": str(tmp_path / "second")}):
+            second = deployed_root()
+        assert first != second
+        assert first == os.path.realpath(str(tmp_path / "first"))
+        assert second == os.path.realpath(str(tmp_path / "second"))
+
+    def test_defaults_to_opt_autobot(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SLM_DEPLOYED_ROOT", None)
+            assert deployed_root() == os.path.realpath("/opt/autobot")
