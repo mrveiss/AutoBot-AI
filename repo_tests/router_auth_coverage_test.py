@@ -92,7 +92,7 @@ def test_the_vocabulary_is_derived_and_contains_the_name_that_was_missed() -> No
         ("api.agent_org", "GATED", "router-level APIRouter(dependencies=[...])"),
         ("api.system", "GATED", "per-route check_admin_permission"),
         ("api.websockets", "GATED", "inline in the handler body"),
-        ("api.redis", "UNGATED", "genuinely nothing"),
+        ("api.knowledge_search", "UNGATED", "genuinely nothing"),
         ("api.chat_embed", "UNGATED-BY-DESIGN", "documented in the module docstring"),
     ],
 )
