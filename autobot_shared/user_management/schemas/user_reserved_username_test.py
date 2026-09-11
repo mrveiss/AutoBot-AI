@@ -9,7 +9,9 @@ from pydantic import ValidationError
 
 from autobot_shared.user_management.schemas.user import RESERVED_USERNAMES, UserCreate, UserUpdate
 
-_VALID = {"email": "someone@example.com", "password": "Str0ngPassw0rd"}
+# No credential field: it is optional (SSO accounts) and these tests are about
+# the username. A literal value would also read as a secret to detect-secrets.
+_VALID = {"email": "someone@example.com"}
 
 
 @pytest.mark.parametrize("name", ["default", "Default", "DEFAULT"])
