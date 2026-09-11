@@ -609,6 +609,21 @@ repos:
         exclude: (code_analysis/|_test\.py|\.e2e_test\.py|\.integration_test\.py|\.performance_test\.py|conftest\.py)$
         additional_dependencies: ["bandit[toml]"]
 
+  # Secret scanning over EVERY staged file, any extension, root and extensionless
+  # dotfiles included (#16275). There is deliberately no `files`, `types` or
+  # `exclude` here: upstream declares `files: .*`, and the only filter left is this
+  # config's top-level `exclude`, which matches no tracked file. Findings are
+  # compared with .secrets.baseline, whose every entry carries an audited verdict.
+  # detect-secrets does not see a bare key file (it reads quoted strings), so the
+  # Fernet/PEM shape is checked in CI by pipeline-scripts/tracked_key_material.py.
+  # repo_tests/no_tracked_key_material_test.py holds the rev equal to the CI
+  # install in security.yml and to the baseline's "version".
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+
   # Block commits when branch is shared with a worktree (Issue #1654)
   # Must run BEFORE the stash/restore cycle to prevent branch corruption.
   - repo: local

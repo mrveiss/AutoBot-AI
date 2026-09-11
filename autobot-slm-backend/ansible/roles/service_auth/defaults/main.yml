@@ -20,6 +20,9 @@ service_auth_rotation_timer_enabled: true
 
 # Key storage paths
 service_auth_keys_dir: /etc/autobot/service-keys
+# Where rotate-service-keys.yml writes its service-keys-*.yaml exports (#16275).
+# Never a path inside the repository: the exports hold the live keys.
+service_auth_keys_source_dir: "{{ autobot.base_dir }}/config/service-keys"
 service_auth_config_dir: /etc/autobot
 
 # Service definitions - maps inventory groups to service IDs.
