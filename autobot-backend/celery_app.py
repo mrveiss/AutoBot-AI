@@ -12,6 +12,7 @@ Issue #725: Added mTLS support for Redis connections.
 """
 
 import urllib.parse
+from datetime import timedelta
 from pathlib import Path
 
 from celery import Celery
@@ -187,8 +188,11 @@ celery_app.conf.update(
 # decorators all run at worker/beat startup.
 celery_app.autodiscover_tasks(["tasks", "workers", "llc.scheduler"], related_name=None)
 # GH#6480: pricing refresh lives in services/, outside the discovered packages —
-# import explicitly so workers register pricing.refresh_daily.
+# import explicitly so workers register pricing.refresh_daily and
+# pricing.refresh_if_empty, and connect the worker_ready handler that queues
+# the latter on worker startup (#16231, #16250).
 import services.pricing_refresh  # noqa: F401
+from llm_shared.pricing.redis_store import REFRESH_INTERVAL_HOURS as _PRICING_REFRESH_INTERVAL_HOURS  # noqa: E402
 from utils.celery_schedules import crontab_from_string  # noqa: E402
 
 # =========================================================================
@@ -256,10 +260,12 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=2, minute=0),
         "kwargs": {"max_age_days": 7},
     },
-    # GH#6480: daily pricing refresh from provider sources into Redis (02:15 UTC)
+    # GH#6480: pricing refresh from provider sources into Redis, on an
+    # env-configurable cadence (AUTOBOT_PRICING_REFRESH_INTERVAL_HOURS, default
+    # 24h) rather than a fixed crontab (#16231).
     "pricing-refresh-daily": {
         "task": "pricing.refresh_daily",
-        "schedule": crontab(hour=2, minute=15),
+        "schedule": timedelta(hours=_PRICING_REFRESH_INTERVAL_HOURS),
     },
     # GH#4463: weekly cleanup of stale mobile devices (inactive for 90+ days)
     "mobile-devices-cleanup-weekly": {

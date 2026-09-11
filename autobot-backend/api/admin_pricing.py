@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Admin API: manual pricing override and refresh status (GH#6480).
+"""Admin API: manual pricing override, refresh status, and refresh-now (GH#6480, #16231).
 
 Endpoints:
   PUT  /api/admin/pricing/{provider}/{model}  — emergency override
   DELETE /api/admin/pricing/{provider}/{model} — remove override
   GET  /api/admin/pricing/status              — refresh status per provider
+  POST /api/admin/pricing/refresh             — refresh now, on demand (#16231)
 """
 
 from datetime import datetime, timezone
@@ -84,3 +85,11 @@ async def get_pricing_refresh_status(_admin: bool = Depends(require_role("admin"
     store = PricingRedisStore()
     status = await store.get_refresh_status()
     return {"providers": status}
+
+
+@router.post("/pricing/refresh")
+async def refresh_pricing_now(_admin: bool = Depends(require_role("admin", "superadmin"))) -> dict:
+    """Refresh pricing on demand and report the per-source result (#16231)."""
+    from services.pricing_refresh import refresh_all
+
+    return await refresh_all()
