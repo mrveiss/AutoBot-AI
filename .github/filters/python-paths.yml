@@ -122,6 +122,10 @@ python:
   # adding a fourth by-path load is exactly the change that skips the guard
   # asserting those loads stay package-free.
   - '.github/workflows/slm-migration-gate.yml'
+  # #16246: `release_sync_main_test.py` reads this workflow's triggers, permissions
+  # and steps. Without an entry here, a change confined to it takes the shim's
+  # green while the guard that reads it never runs.
+  - '.github/workflows/sync-main-to-dev.yml'
   - 'autobot-frontend/package.json'
   - 'install.sh'
   # #15983: `ansible_core_pin_frozen_15983_test.py` reads this pin to assert the
