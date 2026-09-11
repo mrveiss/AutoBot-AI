@@ -12,6 +12,12 @@
  * The live-log WebSocket is deliberately NOT migrated — `useAutobotApi` is an
  * HTTP client and has no socket equivalent — so these tests also pin that the
  * plain-text log body still arrives verbatim rather than JSON-parsed.
+ *
+ * #16374 — the nginx `/autobot-api/` proxy now runs an `auth_request` session
+ * check before it forwards anything, and a browser WebSocket handshake cannot
+ * carry a custom `Authorization` header. `FakeWebSocket` below pins that the
+ * stream URL instead carries the SLM session token as `?slm_ws_token=`, which
+ * the template's fallback map reads when the header is absent.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -24,6 +30,20 @@ import en from '@/locales/en.json'
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ token: 'test-token' }),
 }))
+
+class FakeWebSocket {
+  static instances: FakeWebSocket[] = []
+  url: string
+  onmessage: ((event: MessageEvent) => void) | null = null
+  onclose: (() => void) | null = null
+  onerror: (() => void) | null = null
+  constructor(url: string) {
+    this.url = url
+    FakeWebSocket.instances.push(this)
+  }
+  close(): void {}
+}
+vi.stubGlobal('WebSocket', FakeWebSocket)
 
 vi.mock('axios', () => {
   const instance = {
@@ -74,6 +94,7 @@ type Vm = {
   fetchFullLog: (id: string) => Promise<void>
   signalProcess: (id: string, sig: string) => Promise<void>
   spawnProcess: () => Promise<void>
+  streamLogs: (id: string) => void
   spawnForm: { agent_id: string; command: string; args: string; timeout_seconds: number }
 }
 
@@ -170,5 +191,17 @@ describe('ProcessMonitorTab transport (#13079)', () => {
         timeout_seconds: 120,
       },
     ])
+  })
+
+  it('carries the SLM session token on the log-stream WebSocket URL (#16374)', () => {
+    FakeWebSocket.instances.length = 0
+    const { vm } = mountTab()
+
+    vm.streamLogs('p1')
+
+    expect(FakeWebSocket.instances).toHaveLength(1)
+    const url = FakeWebSocket.instances[0].url
+    expect(url).toContain('/processes/p1/stream')
+    expect(url).toContain('?slm_ws_token=test-token')
   })
 })

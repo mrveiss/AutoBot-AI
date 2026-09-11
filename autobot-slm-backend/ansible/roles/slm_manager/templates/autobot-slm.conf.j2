@@ -10,6 +10,22 @@ map $http_upgrade $connection_upgrade {
     ''      close;
 }
 
+# #16374: the Authorization header the SLM session-check subrequest forwards
+# (see location /autobot-api/ below). Every REST call through /autobot-api/
+# already sends one; the process-log WebSocket (native `new WebSocket()`,
+# which cannot set custom headers) sends its token as ?slm_ws_token=
+# instead, so this maps that query argument onto the same header shape,
+# used only when Authorization itself is absent.
+map $arg_slm_ws_token $slm_ws_token_bearer {
+    default "Bearer $arg_slm_ws_token";
+    ''      '';
+}
+
+map $http_authorization $slm_session_authorization {
+    default $http_authorization;
+    ''      $slm_ws_token_bearer;
+}
+
 {% if slm_colocated_frontend | default(false) | bool %}
 # Co-located user backend upstream (#2829)
 # Proxies directly to uvicorn (HTTP) — no intermediate backend nginx.
@@ -404,10 +420,33 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # #16374: session gate for the internal-key injection in /autobot-api/
+    # below. auth_request fires this as a subrequest BEFORE nginx adds
+    # X-Internal-API-Key, reusing the SLM backend's own JWT dependency
+    # (services/auth.py get_current_user, via GET /api/auth/me) so only a
+    # caller holding a live SLM session reaches the backend through this
+    # path. $slm_session_authorization (mapped above) carries either the
+    # caller's own Authorization header or its ?slm_ws_token= fallback.
+    location = /_slm_session_check {
+        internal;
+        proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/auth/me;
+        proxy_http_version 1.1;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Original-URI $request_uri;
+        proxy_set_header Authorization $slm_session_authorization;
+    }
+
     # Main AutoBot backend proxy (user backend skills, cache, etc.)
     # /autobot-api/* → http://main_backend/api/* (strips /autobot-api prefix) (#10378)
     # Issue #1791: inject X-Internal-API-Key for service auth + WebSocket support
     location /autobot-api/ {
+        # #16374: a failed session check returns nginx's own 401/403 to the
+        # client here — ngx_http_auth_request_module never lets a request
+        # past this line reach proxy_pass below on anything but 2xx.
+        auth_request /_slm_session_check;
+
         # #10378: main backend is plain HTTP on its real port. Co-located deploys
         # use the autobot_backend upstream (uvicorn :8001); standalone proxies to
         # the inventory backend host/port over its configured protocol.

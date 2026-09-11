@@ -13,10 +13,18 @@
  * fallback, no 401 cleanup, no timeout). The live-log WebSocket below stays on
  * the native transport — `useAutobotApi` is HTTP-only and a socket has no
  * equivalent there.
+ *
+ * #16374: the nginx `/autobot-api/` location now runs an `auth_request`
+ * session check before it forwards anything to the backend. A browser
+ * WebSocket handshake cannot carry a custom `Authorization` header, so the
+ * stream URL carries the SLM session token as `?slm_ws_token=` instead — the
+ * template's `$slm_session_authorization` map falls back to that query
+ * argument only when the request has no `Authorization` header.
  */
 
 import { ref } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
+import { useAuthStore } from '@/stores/auth'
 import {
   useAutobotApi,
   autobotApiErrorMessage,
@@ -24,6 +32,7 @@ import {
 } from '@/composables/useAutobotApi'
 
 const api = useAutobotApi()
+const authStore = useAuthStore()
 const processes = ref<ProcessRun[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -82,15 +91,24 @@ function stopStream() {
   isStreaming.value = false
 }
 
+/**
+ * #16374: `slm_ws_token` is the nginx `auth_request` gate's fallback
+ * credential for this one native `new WebSocket()` call — it cannot set an
+ * `Authorization` header, so the SLM session token rides in the query
+ * string instead. Every other caller of `/autobot-api/` keeps sending the
+ * header (`useAutobotApi`'s axios interceptor); nginx prefers it and only
+ * reads this argument when it is absent.
+ */
 function buildWsUrl(path: string): string {
+  const query = authStore.token ? `?slm_ws_token=${encodeURIComponent(authStore.token)}` : ''
   const base = getBackendUrl()
   if (!base) {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${proto}//${window.location.host}${path}`
+    return `${proto}//${window.location.host}${path}${query}`
   }
   const proto = base.startsWith('https') ? 'wss:' : 'ws:'
   const wsBase = base.replace(/^https?:\/\//, '').replace(/\/$/, '')
-  return `${proto}//${wsBase}${path}`
+  return `${proto}//${wsBase}${path}${query}`
 }
 
 function streamLogs(processId: string) {
