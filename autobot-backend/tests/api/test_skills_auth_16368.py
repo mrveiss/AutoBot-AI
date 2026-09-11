@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""No route in api/skills.py or api/skills_hub.py serves an unauthenticated caller (#16368).
+"""No route in the skills API serves an unauthenticated caller (#16368).
 
 Every route in both files was reachable anonymously, ``/{name}/execute`` and
 the hub ``/install`` included. Both routers now depend on ``get_current_user``
 at router level, and every route that changes state, fetches from outside or
-executes a skill also depends on ``check_admin_permission``.
+executes a skill also depends on ``check_admin_permission``. The sibling
+``skills_repos`` and ``skills_governance`` routers had the same gap on their reads,
+and are covered here too.
 
 These tests judge that with the REAL dependencies. Under pytest,
 ``auth_middleware`` is the conftest stub, whose ``get_current_user`` always
@@ -26,7 +28,9 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 import api.skills as skills_api
+import api.skills_governance as governance_api
 import api.skills_hub as hub_api
+import api.skills_repos as repos_api
 
 _ADMIN, _USER = "admin", "user"
 
@@ -56,16 +60,37 @@ _POLICY: Dict[Tuple[str, str], str] = {
     ("DELETE", "/api/skills/hub/install/{skill_id}"): _ADMIN,
     ("GET", "/api/skills/hub/installed"): _USER,
     ("GET", "/api/skills/hub/updates"): _USER,
+    ("GET", "/api/skills/repos"): _USER,
+    ("GET", "/api/skills/repos/"): _USER,
+    ("POST", "/api/skills/repos/"): _ADMIN,
+    ("POST", "/api/skills/repos/{repo_id}/sync"): _ADMIN,
+    ("GET", "/api/skills/repos/{repo_id}/browse"): _USER,
+    ("POST", "/api/skills/governance/gaps"): _ADMIN,
+    ("GET", "/api/skills/governance/drafts"): _ADMIN,
+    ("POST", "/api/skills/governance/drafts/{skill_id}/test"): _ADMIN,
+    ("POST", "/api/skills/governance/drafts/{skill_id}/promote"): _ADMIN,
+    ("GET", "/api/skills/governance/approvals"): _ADMIN,
+    ("POST", "/api/skills/governance/approvals/{approval_id}"): _ADMIN,
+    ("GET", "/api/skills/governance/"): _ADMIN,
+    ("PUT", "/api/skills/governance/"): _ADMIN,
 }
-_PATH_VALUES = {"{name}": "demo", "{bundle_id}": "research", "{skill_id}": "demo"}
+_PATH_VALUES = {
+    "{name}": "demo",
+    "{bundle_id}": "research",
+    "{skill_id}": "demo",
+    "{repo_id}": "demo",
+    "{approval_id}": "demo",
+}
 _NON_ADMIN = {"username": "viewer", "role": "user"}
 
 
 def _app() -> FastAPI:
-    """Mounted as the app factory mounts them: ``/api`` plus each registry prefix."""
+    """Mounted as the registry mounts them: sub-routers first, then the base router's ``/{name}``."""
     app = FastAPI()
-    app.include_router(skills_api.router, prefix="/api/skills")
     app.include_router(hub_api.router, prefix="/api/skills/hub")
+    app.include_router(repos_api.router, prefix="/api/skills/repos")
+    app.include_router(governance_api.router, prefix="/api/skills/governance")
+    app.include_router(skills_api.router, prefix="/api/skills")
     return app
 
 
@@ -95,7 +120,7 @@ def client(real_auth_middleware, monkeypatch):
     )
     monkeypatch.setattr(real_auth_middleware, "get_auth_middleware", lambda: middleware)
     app = _app()
-    for module in (skills_api, hub_api):
+    for module in (skills_api, hub_api, repos_api, governance_api):
         app.dependency_overrides[module.get_current_user] = real_auth_middleware.get_current_user
         app.dependency_overrides[module.check_admin_permission] = real_auth_middleware.check_admin_permission
     return TestClient(app), identity
