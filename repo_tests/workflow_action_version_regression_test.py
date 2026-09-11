@@ -13,21 +13,30 @@ standard, and no check caught the divergence before merge.
 
 Scope, deliberately narrow: this compares **tag-pinned** refs only
 (``@v7``, ``@v6``, ...), grouped by the exact ``owner/repo[/subpath]`` string
-before the ``@``. SHA-pinned actions are excluded from the cross-version
-comparison — several (``docker/login-action``, ``docker/build-push-action``,
-``sigstore/cosign-installer``) are genuinely pinned to different releases in
-different workflows today, pre-dating this guard, and asserting consistency
-there requires a resolution this issue's fix does not include. What the
-guard does assert for SHA-pinned actions is narrower and unconditionally
-true today: every SHA pin carries a trailing ``# vX.Y.Z``-shaped comment, so
-its version is at least *readable* even though it cannot be diffed against a
-tag. That is the "low-cost improvement" #15332 asked for in place of
-resolving all sixteen SHA pins to Node runtimes, which would be a much larger
-mechanism for the same annotation this guard is meant to make a real gate.
+before the ``@``. SHA-pinned actions are excluded from that comparison: a SHA
+has no order, and resolving one to its release needs the network. For SHA pins
+the guard asserts two narrower things instead:
+
+* every SHA pin carries a trailing ``# vX.Y.Z``-shaped comment, so its version
+  is at least *readable* -- the "low-cost improvement" #15332 asked for in
+  place of resolving every SHA pin to its Node runtime;
+* every pin of the SAME SHA carries labels that agree: the same version, or one
+  a prefix of the other (``v4`` beside ``v4.37.9``) (#16303).
+
+The second is what the first could not see. ``security.yml`` labelled its
+``github/codeql-action`` pin ``# v3`` on the SHA ``codeql.yml`` labelled
+``# v4``, and ``image-sign.yml`` labelled ``docker/login-action``,
+``docker/build-push-action`` and ``sigstore/cosign-installer`` one major release
+behind the very SHAs ``autoresearch-image.yml`` pins. An earlier version of this
+docstring read those three as "genuinely pinned to different releases in
+different workflows"; each was one commit carrying two labels. A wrong label on
+a SHA pinned nowhere else still passes -- catching that needs the tag
+resolution this guard does not do.
 """
 
 from __future__ import annotations
 
+import itertools
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -118,6 +127,48 @@ def test_every_sha_pinned_action_carries_a_readable_version_comment():
     assert not violations, "SHA-pinned action(s) with no readable version:\n" + "\n".join(violations)
 
 
+def _label_parts(label: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in label.lstrip("v").split("."))
+
+
+def _labels_agree(first: str, second: str) -> bool:
+    """Same version, or one a prefix of the other: `v4` agrees with `v4.37.9`, not with `v3` or `v40`."""
+    a, b = _label_parts(first), _label_parts(second)
+    shorter = min(len(a), len(b))
+    return a[:shorter] == b[:shorter]
+
+
+def _label_disagreements(uses: list[ActionUse]) -> list[str]:
+    """Every pair of pins on one SHA whose version labels disagree, reported together.
+
+    Grouped by SHA alone, across actions and subpaths: `codeql-action/init` and
+    `codeql-action/upload-sarif` pinned to one commit are one release.
+    """
+    by_sha: dict[str, list[tuple[ActionUse, str]]] = {}
+    for use in uses:
+        if SHA_PATTERN.match(use.ref) and use.comment_version:
+            by_sha.setdefault(use.ref.lower(), []).append((use, use.comment_version))
+    violations = []
+    for sha, pins in by_sha.items():
+        for (first, first_label), (second, second_label) in itertools.combinations(pins, 2):
+            if not _labels_agree(first_label, second_label):
+                violations.append(
+                    f"{first.path}:{first.line_no} labels {first.action}@{sha} '# {first_label}', "
+                    f"but {second.path}:{second.line_no} labels the same SHA '# {second_label}'"
+                )
+    return violations
+
+
+def test_every_pin_of_one_sha_carries_agreeing_labels():
+    """#16303: one commit is one release, so every label on its SHA must name that release.
+
+    A label naming the wrong release passes the readability check above, and misleads
+    every reader who trusts it. Resolve the SHA to its tag and correct the wrong label.
+    """
+    violations = _label_disagreements(_extract_uses(_workflow_files()))
+    assert not violations, "Pins of one SHA name different releases:\n" + "\n".join(violations)
+
+
 def _version_regressions(uses: list[ActionUse]) -> list[str]:
     """Every tag pin older than the best version of the same action, reported together."""
     best_by_action: dict[str, tuple[int, int, int]] = {}
@@ -149,13 +200,13 @@ def test_no_tag_pinned_action_is_older_than_the_repo_standard():
     assert not violations, "Action version(s) older than the repo standard:\n" + "\n".join(violations)
 
 
-def _fake(action: str, ref: str, line_no: int = 1) -> ActionUse:
+def _fake(action: str, ref: str, line_no: int = 1, comment_version: str | None = None) -> ActionUse:
     return ActionUse(
         path=Path(f"synthetic/{action.replace('/', '_')}.yml"),
         line_no=line_no,
         action=action,
         ref=ref,
-        comment_version=None,
+        comment_version=comment_version,
     )
 
 
@@ -176,3 +227,26 @@ def test_the_comparison_flags_a_planted_regression():
     assert _version_regressions([_fake("actions/cache", "v6"), _fake("actions/checkout", "v4", 2)]) == []
     # Minor and patch components participate, not just the major.
     assert len(_version_regressions([_fake("a/b", "v1.2.3"), _fake("a/b", "v1.2.2", 2)])) == 1
+
+
+_SHA_A = "a" * 40
+_SHA_B = "b" * 40
+
+
+def test_the_label_agreement_check_flags_a_planted_disagreement():
+    """With #16303's labels fixed the repo has no disagreement, so the live check passes whatever it does.
+
+    These fixtures pin what counts as agreement, and that grouping is by SHA.
+    """
+    planted = _label_disagreements([_fake("docker/login-action", _SHA_A, 1, "v4"), _fake("x/y", _SHA_A, 2, "v3")])
+    assert len(planted) == 1 and "'# v4'" in planted[0] and "'# v3'" in planted[0], planted
+    # A shorter label is a prefix of a longer one, not a disagreement -- and the
+    # comparison is per component, so `v4` is no prefix of `v40`.
+    assert _label_disagreements([_fake("a/b", _SHA_A, 1, "v4"), _fake("a/b", _SHA_A, 2, "v4.37.9")]) == []
+    assert len(_label_disagreements([_fake("a/b", _SHA_A, 1, "v4"), _fake("a/b", _SHA_A, 2, "v40")])) == 1
+    # Prefix agreement is not transitive: `v4` agrees with both, `v4.1` and `v4.2` not with each other.
+    trio = [_fake("a/b", _SHA_A, 1, "v4"), _fake("a/b", _SHA_A, 2, "v4.1"), _fake("a/b", _SHA_A, 3, "v4.2")]
+    assert len(_label_disagreements(trio)) == 1
+    # Different SHAs are different commits; an unlabelled pin is the readability check's concern.
+    assert _label_disagreements([_fake("a/b", _SHA_A, 1, "v3"), _fake("a/b", _SHA_B, 2, "v4")]) == []
+    assert _label_disagreements([_fake("a/b", _SHA_A, 1, "v3"), _fake("a/b", _SHA_A, 2)]) == []

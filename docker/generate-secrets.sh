@@ -4,20 +4,29 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 #
-# Generate per-deployment signing secrets for the docker-compose stack (GH#9775).
+# Generate per-deployment secrets for the docker-compose stack (GH#9775, #16275).
 #
-# OPTIONAL since GH#9905: the compose stack auto-generates unique secrets on the
-# first `up` (autobot-secrets-init + shared autobot_secrets volume), so
-# `docker compose up` works with no manual step. Use this script only to PIN
-# explicit secrets (share one across hosts, or manage them yourself) — an
-# explicit value always overrides the auto-generated one.
+# PASSWORDS (#16275): this also writes AUTOBOT_DB_PASSWORD and
+# GRAFANA_ADMIN_PASSWORD. The tracked docker/.env.docker and .env.docker, and
+# the compose fallbacks, still default both to the application's own name,
+# which anyone can guess. Pass docker/.env.secrets AFTER docker/.env.docker, as
+# shown below, so the generated values win.
 #
-# The compose file ships no static fallback values for AUTOBOT_JWT_SECRET /
-# SECRET_KEY — a committed shared signing secret allows JWT/session forgery
-# against any default deployment. This script writes unique, random secrets to a
-# gitignored docker/.env.secrets that you then pass to compose.
+# EXISTING deployment? Do not hand it a newly generated AUTOBOT_DB_PASSWORD.
+# Postgres keeps the password its volume was created with and ignores a new one,
+# and the signing secrets pinned below would replace the ones the stack
+# generated for itself, signing every session out.
 #
-# Idempotent: existing values are preserved, never overwritten or printed.
+# SIGNING SECRETS: since GH#9905 the compose stack auto-generates them on the
+# first `up` (autobot-secrets-init + shared autobot_secrets volume). This script
+# PINS them (share one across hosts, or manage them yourself) -- an explicit
+# value always overrides the auto-generated one. The compose file ships no
+# static fallback for AUTOBOT_JWT_SECRET / SECRET_KEY: a committed shared
+# signing secret allows JWT/session forgery against any default deployment.
+#
+# Everything is written to a gitignored docker/.env.secrets that you then pass
+# to compose. Idempotent: existing values are preserved, never overwritten or
+# printed.
 #
 # Usage:
 #   bash docker/generate-secrets.sh
@@ -54,12 +63,17 @@ ensure_secret() {
     fi
 }
 
-echo "Writing signing secrets to ${SECRETS_FILE}"
+echo "Writing secrets to ${SECRETS_FILE}"
 ensure_secret AUTOBOT_JWT_SECRET
 ensure_secret SECRET_KEY
 # The canonical envelope secret store is unreachable without this, and every
 # consumer degrades silently, so its absence looked like "no such secret".
 ensure_secret AUTOBOT_SECRETS_ROOT_KEY b64_32
+# #16275: generated so a deployment need not keep the guessable template
+# default. Hex, because the DB password is interpolated into SLM_DATABASE_URL
+# and must need no URL escaping.
+ensure_secret AUTOBOT_DB_PASSWORD
+ensure_secret GRAFANA_ADMIN_PASSWORD
 
 echo ""
 echo "Done. Start the stack with both env files:"

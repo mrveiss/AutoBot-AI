@@ -27,6 +27,8 @@ import pytest
 import pytest_asyncio
 
 from autobot_shared.coordination.work_claims import (
+    RESERVED_KINDS,
+    VALID_KINDS,
     Claim,
     ClaimConflict,
     ClaimConflictError,
@@ -81,6 +83,54 @@ def test_parse_rejects_unusable_scopes(raw):
 def test_parse_accepts_every_valid_kind():
     for kind in ("path", "kb", "device", "project", "config"):
         assert Scope.parse(f"{kind}:a/b").kind == kind
+
+
+# ---------------------------------------------------------------------------
+# Reserved kinds (#15957)
+#
+# `task` was rejected before this too -- by the generic "unknown scope kind"
+# arm, the same answer a typo gets. So a test asserting only that `task:`
+# raises would pass against the old code and pin nothing. These assert on the
+# message, with a contrast case, because the message is the whole change.
+# ---------------------------------------------------------------------------
+
+
+def test_a_reserved_kind_names_where_it_belongs():
+    """Refusing `task` must say it is reserved and point at task_claim."""
+    with pytest.raises(ScopeError) as caught:
+        Scope.parse("task:t-123")
+
+    message = str(caught.value)
+    assert "reserved" in message
+    assert "task_claim" in message
+    assert "unknown scope kind" not in message, "a decision must not read as a typo"
+
+
+def test_an_unknown_kind_is_still_reported_as_unknown():
+    """The contrast pair: the reserved arm must not swallow the generic one."""
+    with pytest.raises(ScopeError) as caught:
+        Scope.parse("bogus:a/b")
+
+    message = str(caught.value)
+    assert "unknown scope kind" in message
+    assert "reserved" not in message
+
+
+def test_no_kind_is_both_usable_and_refused():
+    """A kind in both sets would be accepted by one reader and refused by another."""
+    assert not set(RESERVED_KINDS) & VALID_KINDS
+
+
+@pytest.mark.asyncio
+async def test_listing_a_reserved_kind_is_refused_the_same_way(redis):
+    """`list_claims` is a second entry point that names a kind.
+
+    Before `_require_kind` it had its own copy of the check, so `task` could
+    have been reserved in `Scope.parse` and merely unknown here. One helper for
+    both is what makes the answer the same wherever the question is asked.
+    """
+    with pytest.raises(ScopeError, match="reserved"):
+        await list_claims(kind="task")
 
 
 def test_overlap_is_segment_aligned_not_string_prefix():
