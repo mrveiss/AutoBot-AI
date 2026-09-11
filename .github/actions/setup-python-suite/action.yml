@@ -117,9 +117,10 @@ runs:
     # left dpkg interrupted, so attempts 2 and 3 failed at once ("dpkg was
     # interrupted, you must manually run 'sudo dpkg --configure -a'"). Now:
     # - Packages are fetched first, with `--download-only`. Killing a download
-    #   is harmless and the next attempt resumes it, so the wall-clock bound
-    #   lands on the network rather than on dpkg. apt also retries a failed
-    #   fetch itself and drops a connection that has sent nothing for 30s.
+    #   is harmless and the next attempt resumes it. The install still runs
+    #   under the same bound; a kill there is what the repair below is for.
+    #   apt also retries a failed fetch itself, and drops a connection that
+    #   has sent nothing for a while.
     # - Between attempts, `dpkg --configure -a` repairs an interrupted unpack.
     # - Each failure names its step and apt's own exit code, saved before
     #   anything else runs. The last one is an annotation titled as a
@@ -150,22 +151,31 @@ runs:
         fi
         export DEBIAN_FRONTEND=noninteractive
 
-        # apt_retry LABEL COMMAND...: up to three attempts (#15515, above).
+        # Every bound this step uses, named once (#15515).
+        readonly APT_ATTEMPTS=3           # tries per apt command
+        readonly APT_TIMEOUT_S=300        # wall-clock bound per try, and per dpkg repair
+        readonly APT_BACKOFF_S=15         # the sleep after try N is N times this
+        readonly APT_FETCH_RETRIES=3      # apt's own retries of one failed download
+        readonly APT_HTTP_IDLE_S=30       # drop a connection that sends nothing this long
+        readonly APT_LOCK_WAIT_S=120      # wait this long for the dpkg lock
+        readonly TIMEOUT_KILLED=124       # coreutils timeout's exit status when it kills
+
+        # apt_retry LABEL COMMAND...: up to APT_ATTEMPTS tries (#15515, above).
         apt_retry() {
           local label=$1 attempt rc=0 why=""
           shift
-          for attempt in 1 2 3; do
+          for ((attempt = 1; attempt <= APT_ATTEMPTS; attempt++)); do
             rc=0
             "$@" || rc=$?
             if [ "$rc" -eq 0 ]; then return 0; fi
             why=""
-            if [ "$rc" -eq 124 ]; then why=", timed out"; fi
-            echo "apt: ${label}: attempt ${attempt}/3 failed (exit ${rc}${why})" >&2
-            if [ "$attempt" -eq 3 ]; then break; fi
-            timeout 300 sudo dpkg --configure -a || echo "apt: dpkg --configure -a exited $?; the next attempt reports why" >&2
-            sleep $((attempt * 15))
+            if [ "$rc" -eq "$TIMEOUT_KILLED" ]; then why=", timed out"; fi
+            echo "apt: ${label}: attempt ${attempt}/${APT_ATTEMPTS} failed (exit ${rc}${why})" >&2
+            if [ "$attempt" -eq "$APT_ATTEMPTS" ]; then break; fi
+            timeout "$APT_TIMEOUT_S" sudo dpkg --configure -a || echo "apt: dpkg --configure -a exited $?; the next attempt reports why" >&2
+            sleep $((attempt * APT_BACKOFF_S))
           done
-          echo "::error title=CI toolchain provisioning failed (no tests ran)::${label} failed 3 times, last exit ${rc}${why}" >&2
+          echo "::error title=CI toolchain provisioning failed (no tests ran)::${label} failed ${APT_ATTEMPTS} times, last exit ${rc}${why}" >&2
           return 1
         }
 
@@ -173,14 +183,15 @@ runs:
         # builds (#16291) there is no Error-Mode here: the runner image's own
         # sources are outside this repo, and one of them failing must not fail
         # a shard whose packages come from the Ubuntu archive.
-        printf '%s\n' 'Acquire::Retries "3";' 'Acquire::http::Timeout "30";' 'DPkg::Lock::Timeout "120";' \
+        printf '%s\n' "Acquire::Retries \"${APT_FETCH_RETRIES}\";" "Acquire::http::Timeout \"${APT_HTTP_IDLE_S}\";" \
+          "DPkg::Lock::Timeout \"${APT_LOCK_WAIT_S}\";" \
           | sudo tee /etc/apt/apt.conf.d/80-ci-provisioning >/dev/null
 
-        apt_retry "update" timeout 300 sudo apt-get update -qq
-        apt_retry "download ffmpeg" timeout 300 sudo apt-get install -y --download-only --no-install-recommends ffmpeg
-        apt_retry "download tesseract-ocr" timeout 300 sudo apt-get install -y --download-only tesseract-ocr
-        apt_retry "install ffmpeg" timeout 300 sudo apt-get install -y --no-install-recommends ffmpeg
-        apt_retry "install tesseract-ocr" timeout 300 sudo apt-get install -y tesseract-ocr
+        apt_retry "update" timeout "$APT_TIMEOUT_S" sudo apt-get update -qq
+        apt_retry "download ffmpeg" timeout "$APT_TIMEOUT_S" sudo apt-get install -y --download-only --no-install-recommends ffmpeg
+        apt_retry "download tesseract-ocr" timeout "$APT_TIMEOUT_S" sudo apt-get install -y --download-only tesseract-ocr
+        apt_retry "install ffmpeg" timeout "$APT_TIMEOUT_S" sudo apt-get install -y --no-install-recommends ffmpeg
+        apt_retry "install tesseract-ocr" timeout "$APT_TIMEOUT_S" sudo apt-get install -y tesseract-ocr
         echo "installed: $(ffmpeg -version | head -1); $(tesseract --version 2>&1 | head -1)"
 
     # The venv lives OUTSIDE the workspace on purpose. Inside it, `actions/

@@ -118,7 +118,7 @@ def test_an_exhausted_retry_ends_in_a_titled_annotation_without_a_trailing_sleep
 
 
 def test_both_packages_are_downloaded_before_dpkg_unpacks_anything(tmp_path: Path) -> None:
-    """A kill during a download is harmless; the wall-clock bound should land there, not on dpkg."""
+    """A kill during a download is harmless; fetching first keeps most of the wall clock off dpkg."""
     result, calls, state = _run(tmp_path, kill="")
 
     assert result.returncode == 0, result.stderr
