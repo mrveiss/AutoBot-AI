@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests that the gates added by #16276 (teams) and #15738 (users) refuse the callers they should.
+"""Tests that the gates added by #16276 (teams), #15738 (users) and #16279 (search) refuse the callers they should.
 
 Every request goes through FastAPI with only ``get_current_user``,
 ``get_db_session`` and, for the admitted cases, the service replaced. The
@@ -13,10 +13,10 @@ little.
 """
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from api.user_management.dependencies import (
@@ -27,6 +27,7 @@ from api.user_management.dependencies import (
     get_user_service,
 )
 from api.user_management.router import router as user_management_router
+from user_management.services import TenantContext, UserService
 
 _CALLER = uuid.uuid4()
 _OTHER = uuid.uuid4()
@@ -60,6 +61,9 @@ _SELF_OR_ADMIN = [
     ("GET", "/user-management/users/{user_id}"),
     ("PATCH", "/user-management/users/{user_id}"),
 ]
+
+#: #16279: the sharing search, now login plus the caller's own org.
+_SEARCH = "/user-management/users/search?q=a"
 
 
 async def _no_session():
@@ -119,3 +123,47 @@ def test_my_teams_stays_open_to_a_logged_in_member():
     assert response.status_code == 200, response.text
     assert response.json() == []
     service.get_user_teams.assert_awaited_once_with(_CALLER)
+
+
+def _refuse_login():
+    raise HTTPException(status_code=401, detail="Authentication required")
+
+
+def test_the_search_refuses_an_anonymous_caller():
+    """#16279: the search used to answer anonymous callers with names from every organisation."""
+    app = FastAPI()
+    app.include_router(user_management_router)
+    app.dependency_overrides[get_current_user] = _refuse_login
+    app.dependency_overrides[get_db_session] = _no_session
+    response = TestClient(app, raise_server_exceptions=False).get(_SEARCH)
+    assert response.status_code == 401, response.text
+
+
+def test_the_search_refuses_a_caller_with_no_organisation():
+    """Without an org there is no organisation to confine the search to, so ``require_org_context`` refuses."""
+    response = _client({"role": "user", "user_id": str(_CALLER)}).get(_SEARCH)
+    assert response.status_code == 400, response.text
+
+
+def test_the_search_runs_in_the_callers_own_organisation():
+    """The search's service carries the caller's org, not the org-less admin context it used to build."""
+    seen: list[TenantContext] = []
+
+    async def _capture(self, **_kwargs):
+        seen.append(self.context)
+        return [], 0
+
+    with patch.object(UserService, "list_users", _capture):
+        response = _client(_MEMBER).get(_SEARCH)
+    assert response.status_code == 200, response.text
+    assert response.json()["available"] is True
+    assert len(seen) == 1, f"list_users ran {len(seen)} times"
+    assert seen[0].org_id == _ORG
+    assert seen[0].is_platform_admin is False
+
+
+def test_the_user_query_is_confined_to_the_callers_organisation():
+    """The query-level half of #16279: the WHERE clause binds the caller's org, so another org's users cannot match."""
+    service = UserService(MagicMock(), TenantContext(org_id=_ORG, user_id=_CALLER))
+    query = service._build_user_list_base_query(include_inactive=False, search="a")
+    assert _ORG in query.compile().params.values(), "the user query does not filter on the caller's org"
