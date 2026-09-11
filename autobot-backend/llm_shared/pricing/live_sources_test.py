@@ -59,7 +59,7 @@ def _client(status, body=None, raises=None):
 def test_per_1m_never_turns_an_unknown_into_zero():
     assert per_1m("0.000001") == pytest.approx(1.0)
     assert per_1m("0") == 0.0, "a stated zero is a real (free) price"
-    for unknown in (None, True, "-1", -1, "n/a", {}, float("nan")):
+    for unknown in (None, True, "-1", -1, "n/a", {}, float("nan"), float("inf"), "Infinity"):
         assert per_1m(unknown) is None, f"{unknown!r} must be unknown, not a price"
 
 

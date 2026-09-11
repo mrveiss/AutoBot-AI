@@ -557,9 +557,9 @@ class LLMCostTracker(AsyncRedisClientMixin):
             from llm_shared.pricing.redis_store import PricingRedisStore
 
             store = PricingRedisStore()
-            # #16229: every live price is indexed by bare model name, whatever the provider
-            # key (a fixed provider list missed LiteLLM's "gemini").
-            cached = await store.get_by_model(model_lower)
+            # #16229: an operator's override first, then the live price indexed by bare model
+            # name whatever the provider key (a fixed provider list missed LiteLLM's "gemini").
+            cached = await store.resolve(model_lower)
             if cached is not None:
                 return cached.as_legacy_dict()
         except Exception as exc:

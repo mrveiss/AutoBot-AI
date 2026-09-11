@@ -117,6 +117,58 @@ async def _async_iter(items):
         yield item
 
 
+class _DictRedis:
+    """Just enough of an async Redis for the store's key paths, with each key's TTL recorded."""
+
+    def __init__(self) -> None:
+        self.data: dict[str, str] = {}
+        self.ttl: dict[str, int] = {}
+
+    async def get(self, key):
+        return self.data.get(key)
+
+    async def set(self, key, value):
+        self.data[key] = value
+        self.ttl.pop(key, None)
+        return True
+
+    async def setex(self, key, ttl, value):
+        self.data[key] = value
+        self.ttl[key] = ttl
+        return True
+
+    async def delete(self, key):
+        return 1 if self.data.pop(key, None) is not None else 0
+
+    def pipeline(self):
+        return _DictPipeline(self)
+
+
+class _DictPipeline:
+    def __init__(self, redis: _DictRedis) -> None:
+        self._redis, self._queued = redis, []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return None
+
+    def setex(self, key, ttl, value):
+        self._queued.append((key, ttl, value))
+
+    async def execute(self, raise_on_error=True):
+        return [await self._redis.setex(*queued) for queued in self._queued]
+
+
+@pytest.fixture
+def dict_redis():
+    """A real PricingRedisStore talks to this in-memory Redis for the test's duration."""
+    fake = _DictRedis()
+    with patch("llm_shared.pricing.redis_store.get_async_redis_client", AsyncMock(return_value=fake)):
+        yield fake
+
+
 @pytest.mark.asyncio
 async def test_redis_store_get_hit():
     from llm_shared.pricing.redis_store import PricingRedisStore
@@ -151,17 +203,13 @@ async def test_redis_store_get_miss():
 
 
 @pytest.mark.asyncio
-async def test_redis_store_set():
+async def test_an_override_is_stored_apart_from_refreshed_prices_and_never_expires(dict_redis):
     from llm_shared.pricing.redis_store import PricingRedisStore
 
-    redis_mock = _make_redis_mock()
-    redis_mock.setex = AsyncMock(return_value=True)
-    mp = ModelPricing(provider="openai", model_id="gpt-4.1", input_per_1m=2.0, output_per_1m=8.0)
-    store = PricingRedisStore()
-    with patch("llm_shared.pricing.redis_store.get_async_redis_client", AsyncMock(return_value=redis_mock)):
-        ok = await store.set(mp)
-    assert ok is True
-    redis_mock.setex.assert_called_once()
+    mp = ModelPricing(provider="openai", model_id="GPT-4.1", input_per_1m=2.0, output_per_1m=8.0)
+    assert await PricingRedisStore().set_override(mp) is True
+    assert list(dict_redis.data) == ["model_pricing:override:gpt-4.1"]
+    assert dict_redis.ttl == {}, "an operator's override must not expire on the refresh TTL"
 
 
 # ---------------------------------------------------------------------------
@@ -289,17 +337,49 @@ async def test_the_model_index_skips_reseller_routes_and_variants():
 
 
 @pytest.mark.asyncio
-async def test_cost_tracker_finds_a_live_price_by_model_name():
+async def test_cost_tracker_finds_a_live_price_by_model_name(dict_redis):
     """#16229: LiteLLM files Gemini under "gemini"; the by-model index finds it without a provider key."""
+    from llm_shared.pricing.redis_store import PricingRedisStore
     from services.llm_cost_tracker import LLMCostTracker
 
-    store = MagicMock()
-    store.get_by_model = AsyncMock(return_value=_mp("gemini", "gemini-2.5-pro", 1.25, 10.0, "litellm"))
-    store.get = AsyncMock(return_value=None)
-    with patch("llm_shared.pricing.redis_store.PricingRedisStore", return_value=store):
-        legacy = await LLMCostTracker()._redis_pricing_lookup("gemini-2.5-pro")
+    await PricingRedisStore().set_model_index({"k": _mp("gemini", "gemini-2.5-pro", 1.25, 10.0, "litellm")})
+    legacy = await LLMCostTracker()._redis_pricing_lookup("gemini-2.5-pro")
     assert legacy == {"input": 1.25, "output": 10.0}
-    store.get.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_an_override_outranks_the_refreshed_price_and_survives_the_next_refresh(dict_redis):
+    """#16229 review: an override was written, reported success, and changed nothing."""
+    from llm_shared.pricing.redis_store import PricingRedisStore
+
+    store = PricingRedisStore()
+    live = {"litellm:claude-haiku-4-5": _mp("anthropic", "claude-haiku-4-5", 1.0, 5.0, "litellm")}
+    await store.set_model_index(live)
+    await store.set_override(_mp("anthropic", "claude-haiku-4-5", 2.0, 9.0, "override"))
+    await store.set_model_index(live)  # the next daily refresh
+    assert (await store.resolve("claude-haiku-4-5")).input_per_1m == 2.0
+    assert await store.delete_override("claude-haiku-4-5") is True
+    assert (await store.resolve("claude-haiku-4-5")).input_per_1m == 1.0, "removal restores the live price"
+    assert await store.delete_override("claude-haiku-4-5") is False
+
+
+@pytest.mark.asyncio
+async def test_an_admin_override_changes_what_the_cost_tracker_charges(dict_redis):
+    """End to end: the admin endpoints, the store and the tracker agree on one price."""
+    from api.admin_pricing import delete_model_pricing_override, override_model_pricing
+    from api.schemas_pricing import PricingOverrideRequest
+    from llm_shared.pricing.redis_store import PricingRedisStore
+    from services.llm_cost_tracker import LLMCostTracker
+
+    await PricingRedisStore().set_model_index({"k": _mp("anthropic", "claude-haiku-4-5", 1.0, 5.0, "litellm")})
+    body = PricingOverrideRequest(input_per_1m=2.0, output_per_1m=9.0)
+    response = await override_model_pricing("anthropic", "claude-haiku-4-5", body, _admin=True)
+    assert response["stored"] is True
+    tracker = LLMCostTracker()
+    assert (await tracker._redis_pricing_lookup("claude-haiku-4-5"))["input"] == 2.0
+    removed = await delete_model_pricing_override("anthropic", "claude-haiku-4-5", _admin=True)
+    assert removed["deleted"] is True
+    assert (await tracker._redis_pricing_lookup("claude-haiku-4-5"))["input"] == 1.0
 
 
 # ---------------------------------------------------------------------------
