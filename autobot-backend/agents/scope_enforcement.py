@@ -82,26 +82,32 @@ class ClaimNotHeld(RuntimeError):
     """A write was attempted under a claim that is not, or no longer, held (#15950 AC6)."""
 
 
-def _longest_backoff_wait_s() -> float:
-    """The longest single wait the LLM backoff imposes between attempts: its cap plus full jitter."""
+def _longest_silent_wait_s() -> float:
+    """The longest a working model call waits, outside the request itself, before an attempt ends.
+
+    One backoff wait between retries (its cap plus full jitter) and one wait for a
+    cross-worker rate-limit token (its acquire timeout). Both are read from the
+    code that owns them, never copied.
+    """
+    from llm_shared.cross_worker_rate_limiter import ACQUIRE_TIMEOUT_S
     from llm_shared.rate_limit_backoff import get_backoff_handler
 
     backoff = get_backoff_handler().config
-    return backoff.max_delay * (1 + backoff.jitter_factor)
+    return backoff.max_delay * (1 + backoff.jitter_factor) + ACQUIRE_TIMEOUT_S
 
 
 def _stall_window_s(interval: float) -> float:
     """Seconds without progress before a run counts as stalled.
 
-    A model call reports progress as each attempt ends, so the longest silence
-    of a working call is one backoff wait plus one request: at most twice the
-    larger of the backoff's cap-plus-jitter and the LLM request timeout. The
-    window is never shorter than that, or it would lapse a run doing exactly
-    what it should, including one waiting out a provider's rate limit (owner
-    ruling, #15950). Both bounds are read from configuration, so this stays
-    true when either changes.
+    A model call reports progress whenever an attempt ends, however it ends, so a
+    working call's longest silence is one backoff wait, one token wait and one
+    request. The window is never shorter than that, with the request counted
+    twice as the owner's ruling on #15950 set it; any shorter and it would lapse
+    a run doing exactly what it should, including one waiting out a provider's
+    rate limit. Every term is read from configuration or its owning code, so
+    this stays true when any of them changes.
     """
-    return max(STALL_INTERVALS * interval, 2 * max(float(config.timeout.llm_request), _longest_backoff_wait_s()))
+    return max(STALL_INTERVALS * interval, 2 * float(config.timeout.llm_request) + _longest_silent_wait_s())
 
 
 @dataclass(frozen=True)

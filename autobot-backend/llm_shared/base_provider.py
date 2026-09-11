@@ -134,33 +134,34 @@ class BaseProvider(ABC):
 
         async def _attempt() -> LLMResponse:
             start = time.monotonic()
-            # #11498: if the completion breaker is OPEN and still cooling, fail
-            # fast BEFORE taking a shared cross-worker rate-limit token so a down
-            # provider doesn't burn tokens other workers could use. OPEN-but-
-            # ready-to-probe is NOT rejecting, so it falls through and
-            # _guarded_completion transitions the breaker to HALF_OPEN to recover.
-            if self._completion_circuit_breaker().is_rejecting:
-                return self._breaker_error_response(request, f"{provider_key} circuit breaker open", start)
-            # Issue #14211: only reached once the breaker guarantees a matching
-            # notify_response/notify_error below, so the recorder's in-flight
-            # gauge stays balanced.
-            self._notify_request_started(request, provider_key)
-            # Issue #8170: acquire a rate-limit token shared across all uvicorn
-            # workers via Redis.  Falls back to allow-all when Redis unavailable.
-            async with get_llm_rate_limiter().acquire(provider_key):
-                try:
-                    response = await self._guarded_completion(request)
-                    latency_ms = (time.monotonic() - start) * 1000
-                    response.metadata.setdefault("request_type", self._request_type_label(request))
-                    self._notify_response(response, latency_ms)
-                    # GH#8502: raise so the backoff handler can retry.
-                    raise_if_rate_limited(response)
-                    return response
-                except Exception as exc:
-                    self._notify_error(exc, request)
-                    raise
-                finally:
-                    record_progress()
+            try:
+                # #11498: if the completion breaker is OPEN and still cooling, fail
+                # fast BEFORE taking a shared cross-worker rate-limit token so a down
+                # provider doesn't burn tokens other workers could use. OPEN-but-
+                # ready-to-probe is NOT rejecting, so it falls through and
+                # _guarded_completion transitions the breaker to HALF_OPEN to recover.
+                if self._completion_circuit_breaker().is_rejecting:
+                    return self._breaker_error_response(request, f"{provider_key} circuit breaker open", start)
+                # Issue #14211: only reached once the breaker guarantees a matching
+                # notify_response/notify_error below, so the recorder's in-flight
+                # gauge stays balanced.
+                self._notify_request_started(request, provider_key)
+                # Issue #8170: acquire a rate-limit token shared across all uvicorn
+                # workers via Redis.  Falls back to allow-all when Redis unavailable.
+                async with get_llm_rate_limiter().acquire(provider_key):
+                    try:
+                        response = await self._guarded_completion(request)
+                        latency_ms = (time.monotonic() - start) * 1000
+                        response.metadata.setdefault("request_type", self._request_type_label(request))
+                        self._notify_response(response, latency_ms)
+                        # GH#8502: raise so the backoff handler can retry.
+                        raise_if_rate_limited(response)
+                        return response
+                    except Exception as exc:
+                        self._notify_error(exc, request)
+                        raise
+            finally:
+                record_progress()  # every exit of every attempt is progress (#15950 AC4)
 
         try:
             return await handler.execute_with_retry(_attempt, provider=provider_key)

@@ -187,3 +187,19 @@ class TestAttemptProgress:
 
         assert response.content == "ok" and provider.impl_calls == 2, "the rate-limited attempt was not retried"
         assert reports == ["progress", "progress"], "an attempt went by without reporting progress"
+
+    async def test_a_breaker_rejected_attempt_still_reports_progress(self, monkeypatch):
+        """Failing fast on an open breaker is an attempt that ended, and the run behind it is working."""
+        from types import SimpleNamespace
+
+        from . import base_provider
+
+        reports: List[str] = []
+        monkeypatch.setattr(base_provider, "record_progress", lambda: reports.append("progress"))
+        provider = _ScriptedProvider("cbtest-progress-open", [])
+        monkeypatch.setattr(provider, "_completion_circuit_breaker", lambda: SimpleNamespace(is_rejecting=True))
+
+        response = await provider.chat_completion(_request())
+
+        assert "circuit breaker open" in response.error and provider.impl_calls == 0
+        assert reports == ["progress"], "a breaker-rejected attempt went by without reporting progress"
