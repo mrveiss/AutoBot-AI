@@ -70,7 +70,16 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # carrying noqa. It was wrong because a multi-line call reports as ONE violation
 # spanning a line range, and some occurrences sit inside strings. A count of a proxy
 # is not a count of the thing, and the ratchet is pinned to the thing.
-_KNOWN_REPO_VIOLATIONS = 359
+# 322 since #16263: `pipeline-scripts/ci_dispatch_watchdog.py` routed its print()
+# calls through its own `_emit` helper, the file's one stated exception to #1082,
+# whose single print carries `# noqa: print`. That's a FIX, not a population change.
+# MEASURED, not inferred: this test on #16263's own head (2eb2e1f715, job
+# 103223385562) reported 322 against base's 359. The diff touches neither this hook,
+# its lib, nor the pre-commit config; it deletes or renames no file; and every
+# removed print()/console.* line is in that one file. So the whole drop of 37 is those
+# call sites, with no residue for a lost-reach case to hide in. (The removed LINES
+# number 40, which is the proxy the note above warns about.)
+_KNOWN_REPO_VIOLATIONS = 322
 
 
 def _test_git_env() -> dict[str, str]:
