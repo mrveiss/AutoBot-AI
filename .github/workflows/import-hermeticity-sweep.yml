@@ -169,21 +169,23 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const title = 'ci: the import-hermeticity sweep found modules that are not import-hermetic';
+            // A clean run answers both reports: the offender list, and a night the sweep could not run.
+            const titles = [
+              'ci: the import-hermeticity sweep found modules that are not import-hermetic',
+              'ci: the import-hermeticity sweep could not run',
+            ];
             const existing = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner, repo: context.repo.repo, state: 'open', labels: 'automation', per_page: 100,
             });
-            const open = existing.find((issue) => issue.title === title && !issue.pull_request);
-            if (!open) {
-              return;
+            for (const open of existing.filter((issue) => titles.includes(issue.title) && !issue.pull_request)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: open.number,
+                body: 'The import-hermeticity sweep ran clean as of `' + context.sha + '`. Closing.',
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: open.number, state: 'closed',
+              });
             }
-            await github.rest.issues.createComment({
-              owner: context.repo.owner, repo: context.repo.repo, issue_number: open.number,
-              body: 'The import-hermeticity sweep is clean again as of `' + context.sha + '`. Closing.',
-            });
-            await github.rest.issues.update({
-              owner: context.repo.owner, repo: context.repo.repo, issue_number: open.number, state: 'closed',
-            });
 
       - name: Open or update the could-not-run issue
         # The sweep step never fails (it captures rc), so failure() here means an
