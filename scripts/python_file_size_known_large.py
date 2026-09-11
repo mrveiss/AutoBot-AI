@@ -497,7 +497,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 778,
     "autobot-slm-backend/user_management/services/user_service.py": 863,
-    "autobot_shared/env_registry.py": 1225,  # #15774: logging component split to env_registry_logging.py
+    "autobot_shared/env_registry.py": 1214,  # #13099: LLC vars split to env_registry_llc.py
     "autobot_shared/monitoring/prometheus_metrics.py": 954,
     "autobot_shared/network_constants.py": 616,
     "autobot_shared/npu/integration.py": 929,

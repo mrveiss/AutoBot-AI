@@ -33,6 +33,8 @@ from autobot_shared.logging_manager import get_logger
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
 from .subprocess_base import SubprocessLifecycleAdapter, placeholder_run_id
+from .subprocess_base import resolve_first_output_deadline as _resolve_first_output_deadline
+from .subprocess_base import resolve_stall_deadline as _resolve_stall_deadline
 from .subprocess_base import resolve_timeout as _resolve_timeout
 from .subprocess_support import inject_agent_credentials, serialize_invoke_context, spawn_with_workspace_retry
 
@@ -84,6 +86,8 @@ class CopilotLocalAdapter(SubprocessLifecycleAdapter):
 
         output_dir: str = cfg.get("output_dir", _DEFAULT_OUTPUT_DIR)
         timeout_sec: int = _resolve_timeout(cfg)
+        first_output_sec: int = _resolve_first_output_deadline(cfg)
+        stall_sec: int = _resolve_stall_deadline(cfg)
         gh_token: Optional[str] = cfg.get("gh_token")
         copilot_model: str = cfg.get("copilot_model", _DEFAULT_COPILOT_MODEL)
 
@@ -143,6 +147,8 @@ class CopilotLocalAdapter(SubprocessLifecycleAdapter):
             "output_file": output_file,
             "started_at": time.time(),
             "timeout_seconds": timeout_sec,
+            "first_output_deadline_seconds": first_output_sec,  # GH#13099
+            "stall_deadline_seconds": stall_sec,  # GH#13099
         }
         with open(_state_path(output_dir, run_id), "w", encoding="utf-8") as fh:
             json.dump(state, fh)

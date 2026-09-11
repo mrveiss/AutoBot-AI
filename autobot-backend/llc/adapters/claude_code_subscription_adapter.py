@@ -41,6 +41,8 @@ from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 from .claude_code_adapter import ClaudeCodeAdapter, _output_path, _resolve_claude_cli, _state_path
 from .subprocess_base import placeholder_run_id
+from .subprocess_base import resolve_first_output_deadline as _resolve_first_output_deadline
+from .subprocess_base import resolve_stall_deadline as _resolve_stall_deadline
 from .subprocess_support import inject_agent_credentials, serialize_invoke_context, spawn_with_workspace_retry
 
 logger = get_logger(__name__)
@@ -67,6 +69,8 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
 
         output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
         timeout_sec: int = int(cfg.get("timeout_seconds", 3600))
+        first_output_sec: int = _resolve_first_output_deadline(cfg)
+        stall_sec: int = _resolve_stall_deadline(cfg)
 
         session_id = str(uuid.uuid4())
         run_id_placeholder = placeholder_run_id(session_id)
@@ -124,6 +128,8 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
             "output_file": output_file,
             "started_at": time.time(),
             "timeout_seconds": timeout_sec,
+            "first_output_deadline_seconds": first_output_sec,  # GH#13099
+            "stall_deadline_seconds": stall_sec,  # GH#13099
         }
         with open(_state_path(output_dir, run_id), "w", encoding="utf-8") as fh:
             json.dump(state, fh)

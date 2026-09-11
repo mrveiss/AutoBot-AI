@@ -26,6 +26,7 @@ import asyncio
 import json
 import os
 import signal
+import time
 from typing import Any
 
 from autobot_shared.logging_manager import get_logger
@@ -347,6 +348,40 @@ def probe_pid(pid: int) -> AdapterRunStatus:
         return AdapterRunStatus(status=LLCRunStatus.FAILED, error=str(exc))
 
 
+def check_output_stall(
+    output_file: str,
+    started_at: float,
+    first_output_deadline: float,
+    stall_deadline: float,
+) -> str | None:
+    """Return a distinct stall/first-output failure reason, or ``None`` if healthy (GH#13099).
+
+    The single shared watchdog every adapter's status check routes through.
+    The output file's size and mtime are a free liveness signal for a
+    detached, file-backed run — no in-process polling of the child is
+    needed. Every adapter pre-creates *output_file* empty before spawning
+    (it is the child's stdout target), so an empty file — not a missing one
+    — is what "no output yet" looks like; size, not mtime, is what tells the
+    two conditions apart. Kept distinguishable because they mean different
+    things operationally: never producing output usually means the agent
+    never started (misconfiguration, a signed-out CLI); going quiet after
+    starting usually means it is wedged on a tool call.
+    """
+    now = time.time()
+    try:
+        st = os.stat(output_file)
+    except OSError:
+        st = None
+
+    if st is None or st.st_size == 0:
+        if now - started_at >= first_output_deadline:
+            return f"stalled: no output within {first_output_deadline:g}s of start"
+        return None
+    if now - st.st_mtime >= stall_deadline:
+        return f"stalled: no output for {stall_deadline:g}s"
+    return None
+
+
 def _process_group_id(pid: int) -> int | None:
     """Return *pid*'s process group id, or ``None`` when it must not be killpg'd.
 
@@ -424,6 +459,7 @@ __all__ = [
     "serialize_invoke_context",
     "inject_agent_credentials",
     "probe_pid",
+    "check_output_stall",
     "spawn_detached",
     "spawn_with_workspace_retry",
     "terminate_pid",

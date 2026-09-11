@@ -46,6 +46,8 @@ from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
 from .subprocess_base import SubprocessLifecycleAdapter, placeholder_run_id
 from .subprocess_base import resolve_cli_binary as _resolve_cli_binary
+from .subprocess_base import resolve_first_output_deadline as _resolve_first_output_deadline
+from .subprocess_base import resolve_stall_deadline as _resolve_stall_deadline
 from .subprocess_base import resolve_timeout as _resolve_timeout
 from .subprocess_support import (
     extract_usage,
@@ -213,6 +215,8 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
 
         output_dir: str = cfg.get("output_dir", _DEFAULT_OUTPUT_DIR)
         timeout_sec: int = _resolve_timeout(cfg)
+        first_output_sec: int = _resolve_first_output_deadline(cfg)
+        stall_sec: int = _resolve_stall_deadline(cfg)
 
         session_id = str(uuid.uuid4())
         run_id_placeholder = placeholder_run_id(session_id)
@@ -230,22 +234,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             logger.info("ClaudeCodeAdapter: resuming session %s for agent %s", session_id, agent_id)
 
         cmd = self._build_command(cli, resume_session_id, cfg, prompt, session_id=session_id)
-
-        workspace_dir: str | None = context.get("workspace_dir")
-        env = {**os.environ, "LLC_INVOKE_CONTEXT": serialize_invoke_context(context)}
-        if workspace_dir:
-            env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
-
-        # GH#9624: inject wake env vars for comment-driven wakes
-        wake_reason = context.get("wake_reason")
-        if wake_reason:
-            env["AUTOBOT_LLC_WAKE_REASON"] = wake_reason
-        wake_comment_id = context.get("wake_comment_id")
-        if wake_comment_id:
-            env["AUTOBOT_LLC_WAKE_COMMENT_ID"] = wake_comment_id
-
-        # GH#9623/GH#9789: forward the run-scoped LLC bearer token + API base.
-        inject_agent_credentials(env, context)
+        env, workspace_dir = self._build_env(context)
 
         # GH#9992: redirect stderr to a sidecar file instead of an unread PIPE.
         # The run is detached (we return run_id immediately), so an unread PIPE
@@ -285,12 +274,33 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             "stderr_file": stderr_file,  # GH#9992
             "started_at": time.time(),
             "timeout_seconds": timeout_sec,
+            "first_output_deadline_seconds": first_output_sec,  # GH#13099
+            "stall_deadline_seconds": stall_sec,  # GH#13099
         }
         with open(_state_path(output_dir, run_id), "w", encoding="utf-8") as fh:
             json.dump(state, fh)
 
         await self._store_session(agent_id, session_id)
         return run_id
+
+    def _build_env(self, context: dict) -> tuple[dict, str | None]:
+        """Build the child's environment and resolve its workspace_dir.
+
+        Forwards the workspace dir (GH#9624 wake env vars for comment-driven
+        wakes, GH#9623/GH#9789 the run-scoped LLC bearer token + API base).
+        """
+        workspace_dir: str | None = context.get("workspace_dir")
+        env = {**os.environ, "LLC_INVOKE_CONTEXT": serialize_invoke_context(context)}
+        if workspace_dir:
+            env["AUTOBOT_WORKSPACE_DIR"] = workspace_dir
+        wake_reason = context.get("wake_reason")
+        if wake_reason:
+            env["AUTOBOT_LLC_WAKE_REASON"] = wake_reason
+        wake_comment_id = context.get("wake_comment_id")
+        if wake_comment_id:
+            env["AUTOBOT_LLC_WAKE_COMMENT_ID"] = wake_comment_id
+        inject_agent_credentials(env, context)
+        return env, workspace_dir
 
     async def _status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
         """Extend base status to detect provider rate-limiting on process exit (GH#9773).

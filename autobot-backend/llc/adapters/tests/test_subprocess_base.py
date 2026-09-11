@@ -22,9 +22,13 @@ import pytest
 
 from llc.adapters.subprocess_base import (
     ADAPTER_TIMEOUT_SECONDS,
+    FIRST_OUTPUT_DEADLINE_SECONDS,
     SIGTERM_GRACE_SECONDS,
+    STALL_DEADLINE_SECONDS,
     SubprocessLifecycleAdapter,
     resolve_cli_binary,
+    resolve_first_output_deadline,
+    resolve_stall_deadline,
     resolve_timeout,
 )
 from llc.models.enums import LLCRunStatus
@@ -63,6 +67,39 @@ class TestResolveTimeout:
     def test_adapter_default(self, monkeypatch) -> None:
         monkeypatch.delenv("LLC_DEFAULT_ADAPTER_TIMEOUT_SECONDS", raising=False)
         assert resolve_timeout({}) == ADAPTER_TIMEOUT_SECONDS == 3600
+
+
+# ---------------------------------------------------------------------------
+# resolve_first_output_deadline / resolve_stall_deadline — same 3-tier shape (GH#13099)
+# ---------------------------------------------------------------------------
+
+
+class TestResolveFirstOutputDeadline:
+    def test_per_agent_override(self, monkeypatch) -> None:
+        monkeypatch.setenv("AUTOBOT_LLC_FIRST_OUTPUT_DEADLINE_SECONDS", "9")
+        assert resolve_first_output_deadline({"first_output_deadline_seconds": 3}) == 3
+
+    def test_global_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("AUTOBOT_LLC_FIRST_OUTPUT_DEADLINE_SECONDS", "7")
+        assert resolve_first_output_deadline({}) == 7
+
+    def test_adapter_default(self, monkeypatch) -> None:
+        monkeypatch.delenv("AUTOBOT_LLC_FIRST_OUTPUT_DEADLINE_SECONDS", raising=False)
+        assert resolve_first_output_deadline({}) == FIRST_OUTPUT_DEADLINE_SECONDS == 120
+
+
+class TestResolveStallDeadline:
+    def test_per_agent_override(self, monkeypatch) -> None:
+        monkeypatch.setenv("AUTOBOT_LLC_STALL_DEADLINE_SECONDS", "45")
+        assert resolve_stall_deadline({"stall_deadline_seconds": 5}) == 5
+
+    def test_global_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("AUTOBOT_LLC_STALL_DEADLINE_SECONDS", "30")
+        assert resolve_stall_deadline({}) == 30
+
+    def test_adapter_default(self, monkeypatch) -> None:
+        monkeypatch.delenv("AUTOBOT_LLC_STALL_DEADLINE_SECONDS", raising=False)
+        assert resolve_stall_deadline({}) == STALL_DEADLINE_SECONDS == 600
 
 
 # ---------------------------------------------------------------------------
