@@ -19,6 +19,7 @@ on:
     paths:
       - 'autobot-slm-frontend/**'
       - '.github/workflows/slm-frontend-check.yml'
+      - 'autobot-frontend/scripts/check-i18n-keys.mjs'
   pull_request:
     branches: [main, develop, 'Dev_*']
     # #13388: SAFE — "SLM Frontend Check" is NOT one of the ten required contexts
@@ -29,6 +30,7 @@ on:
     paths:
       - 'autobot-slm-frontend/**'
       - '.github/workflows/slm-frontend-check.yml'
+      - 'autobot-frontend/scripts/check-i18n-keys.mjs'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -56,6 +58,7 @@ jobs:
             slm_frontend:
               - 'autobot-slm-frontend/**'
               - '.github/workflows/slm-frontend-check.yml'
+              - 'autobot-frontend/scripts/check-i18n-keys.mjs'
 
   slm-frontend-check:
     name: SLM Frontend Check
@@ -90,6 +93,13 @@ jobs:
       - name: Lint
         if: needs.changes.outputs.slm_frontend == 'true'
         run: npx eslint .
+
+      # #15665: the SLM console had no i18n gate, so a key used in code but missing
+      # from en.json shipped unnoticed. Same checker as the main GUI, pointed here
+      # with --root/--en; it checks key existence, not bare literals.
+      - name: i18n keys
+        if: needs.changes.outputs.slm_frontend == 'true'
+        run: npm run check:i18n
 
       - name: Build
         if: needs.changes.outputs.slm_frontend == 'true'

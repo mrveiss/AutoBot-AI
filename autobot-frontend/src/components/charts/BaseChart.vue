@@ -44,6 +44,7 @@ import { useI18n } from 'vue-i18n'
 import VueApexCharts from 'vue3-apexcharts'
 import type { ApexOptions, ApexAxisChartSeries, ApexNonAxisChartSeries } from 'apexcharts'
 import { getCssVar } from '@/composables/useCssVars'
+import { useReducedMotion } from '@/composables/useReducedMotion'
 import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
@@ -125,8 +126,9 @@ const darkTheme: Record<string, unknown> = {
       },
       autoSelected: 'zoom'
     },
+    // #15749: no `enabled` here. Whether a chart animates is decided per
+    // render in `mergedOptions`, where the user's motion preference is known.
     animations: {
-      enabled: true,
       easing: 'easeinout',
       speed: 400,
       animateGradually: {
@@ -406,9 +408,25 @@ const deepMerge = (target: Record<string, unknown>, source: Record<string, unkno
   return output
 }
 
+const { prefersReducedMotion } = useReducedMotion()
+
+type ChartAnimations = NonNullable<NonNullable<ApexOptions['chart']>['animations']>
+
+/**
+ * #15749: ApexCharts animates unless told otherwise, and nothing here asked the
+ * user. A caller's options may still switch animation off; only the preference
+ * can switch off an animation a caller left on.
+ */
+const withMotionPreference = (options: ApexOptions): ApexOptions => {
+  const animations: ChartAnimations = options.chart?.animations ?? {}
+  const enabled = animations.enabled !== false && !prefersReducedMotion.value
+  return { ...options, chart: { ...options.chart, animations: { ...animations, enabled } } }
+}
+
 // Merged options with dark theme as base
 const mergedOptions = computed<ApexOptions>(() => {
-  return deepMerge(darkTheme as Record<string, unknown>, props.options as Record<string, unknown>) as ApexOptions
+  const merged = deepMerge(darkTheme as Record<string, unknown>, props.options as Record<string, unknown>) as ApexOptions
+  return withMotionPreference(merged)
 })
 
 // Expose methods
