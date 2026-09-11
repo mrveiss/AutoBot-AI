@@ -419,12 +419,13 @@ def test_a_run_closed_from_another_context_does_not_raise(monkeypatch):
     assert any("outside the context" in w for w in recorder.warnings)
 
 
-def test_the_stall_window_outlasts_the_longest_provider_backoff_wait():
-    """A run waiting out a rate limit is working, so one backoff wait must never lapse it."""
+def test_the_stall_window_outlasts_the_longest_silence_of_a_working_call():
+    """One backoff wait, one rate-limit token wait and one request can pass between two progress reports."""
+    from llm_shared.cross_worker_rate_limiter import ACQUIRE_TIMEOUT_S
     from llm_shared.rate_limit_backoff import get_backoff_handler
 
     backoff = get_backoff_handler().config
-    longest = backoff.max_delay * (1 + backoff.jitter_factor)
+    waits = backoff.max_delay * (1 + backoff.jitter_factor) + ACQUIRE_TIMEOUT_S
 
-    assert enforcement._longest_backoff_wait_s() == longest
-    assert enforcement._stall_window_s(1) >= 2 * longest
+    assert enforcement._longest_silent_wait_s() == waits
+    assert enforcement._stall_window_s(1) >= waits + 2 * float(enforcement.config.timeout.llm_request)
