@@ -6,6 +6,13 @@
 Users API Endpoints
 
 REST API for user management operations.
+
+Authorization for the six routes #15738 found checking no role or ownership:
+creating and deleting accounts and assigning or revoking roles is admin-only,
+matching the SLM backend's ``ADMIN_USERS_WRITE`` gate on the same capability.
+Reading and updating one account is self-or-admin, the shape #15743
+established for change-password. Both gates are declared dependencies, so
+``user_management_route_posture_test.py`` can see them (#15737).
 """
 
 import uuid
@@ -25,6 +32,7 @@ from api.user_management.dependencies import (
     get_current_user,
     get_user_service,
     require_platform_admin,
+    require_self_or_admin,
     user_management_route_marker,
 )
 from autobot_shared.auth.permissions import is_admin_role
@@ -152,7 +160,10 @@ async def _search_users_from_db(q: str, limit: int) -> UserSearchResponse:
     status_code=status.HTTP_201_CREATED,
     summary="Create user",
     description="Create a new user account.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def create_user(
     user_data: UserCreate,
@@ -174,7 +185,7 @@ async def create_user(
             user=_user_to_response(user),
         )
 
-    except DuplicateUserError as exc:  # not admin-gated (#15736)
+    except DuplicateUserError as exc:  # admin-only (#15738): the 409 discloses nothing new (#15736)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"A user with this {exc.field} already exists",
@@ -224,7 +235,10 @@ async def get_current_user_profile(
     response_model=UserResponse,
     summary="Get user",
     description="Get a specific user by ID.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_self_or_admin),
+    ],
 )
 async def get_user(
     user_id: uuid.UUID,
@@ -246,7 +260,10 @@ async def get_user(
     response_model=UserResponse,
     summary="Update user",
     description="Update a user's profile.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_self_or_admin),
+    ],
 )
 async def update_user(
     user_id: uuid.UUID,
@@ -272,7 +289,7 @@ async def update_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
-    except DuplicateUserError as exc:  # not admin-gated either (#15736)
+    except DuplicateUserError as exc:  # self-or-admin (#15738): inherent to the operation (#15736)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"A user with this {exc.field} already exists",
@@ -284,7 +301,10 @@ async def update_user(
     response_model=UserDeletedResponse,
     summary="Delete user",
     description="Delete a user account (soft delete by default).",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def delete_user(
     user_id: uuid.UUID,
@@ -374,7 +394,10 @@ async def deactivate_user(
     response_model=RoleAssignmentResponse,
     summary="Assign role",
     description="Assign a role to a user.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def assign_role(
     user_id: uuid.UUID,
@@ -400,7 +423,10 @@ async def assign_role(
     response_model=RoleAssignmentResponse,
     summary="Revoke role",
     description="Revoke a role from a user.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def revoke_role(
     user_id: uuid.UUID,

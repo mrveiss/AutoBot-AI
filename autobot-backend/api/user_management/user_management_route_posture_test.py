@@ -14,21 +14,20 @@ which performs no check at all, while the real gate --
 alone answers the wrong question. This file answers the right one, from the
 same place the application resolves it: the assembled ``Dependant`` tree.
 
-## The #15738 guardrail
+## #15738 and #16276, landed
 
-Six routes below (``_TRACKED_BY_15738``) observe as ``_AUTHENTICATED`` --
-logged in, but with no admin or ownership gate. That is #15738's finding, a
-confirmed privilege-escalation path, open and ``needs-decision``. Recording
-their posture here is not certifying it: this suite asserts what the code
-does today so a *silent* posture change fails loudly, not that the posture is
-correct. Do not "fix" #15738 by editing this file's table -- add the gate in
-the routes themselves and let the resulting posture change (to ``_ADMIN``)
-update this file as a consequence, not a cause.
+Until these landed, six ``users`` routes (``_GATED_BY_15738``) and nine
+``teams`` routes observed as ``_AUTHENTICATED``: logged in, but with no admin
+or ownership gate. That was a confirmed privilege-escalation path. The gates
+were added in the routes themselves, and the table below changed as a
+consequence, which is the order the guardrail here always asked for.
+``/teams/my-teams`` alone stays login-only, because it returns only the
+caller's own teams.
 """
 
 from __future__ import annotations
 
-from api.user_management.dependencies import get_current_user, require_platform_admin
+from api.user_management.dependencies import get_current_user, require_platform_admin, require_self_or_admin
 from api.user_management.password_change import authorize_password_change
 from api.user_management.router import router as user_management_router
 from autobot_shared.api_routing.router_routes import effective_routes
@@ -38,19 +37,36 @@ _AUTHENTICATED = "authenticated"
 _ADMIN = "admin"
 #: Authenticated, and additionally gated on being the target OR a platform admin.
 #: A conditional posture the flat tiers above cannot express: change-password is
-#: reachable by any authenticated caller but only ACTS for self or an admin (#15743).
+#: reachable by any authenticated caller but only ACTS for self or an admin (#15743),
+#: and reading or updating a user follows the same rule (#15738).
 _SELF_OR_ADMIN = "self-or-admin"
 
-#: (method, path) pairs whose posture is #15738's confirmed finding: logged in,
-#: no admin or ownership check. See the module docstring's guardrail.
-_TRACKED_BY_15738 = frozenset(
+#: #15738's six routes and the gate its decision chose for each. Creating,
+#: deleting and re-roling an account is admin-only, matching the SLM backend's
+#: ADMIN_USERS_WRITE on the same capability. Reading or updating one account
+#: is self-or-admin, the #15743 shape.
+_GATED_BY_15738 = {
+    ("POST", "/user-management/users"): _ADMIN,  # create_user
+    ("GET", "/user-management/users/{user_id}"): _SELF_OR_ADMIN,  # get_user
+    ("PATCH", "/user-management/users/{user_id}"): _SELF_OR_ADMIN,  # update_user
+    ("DELETE", "/user-management/users/{user_id}"): _ADMIN,  # delete_user
+    ("POST", "/user-management/users/{user_id}/roles/{role_id}"): _ADMIN,  # assign_role
+    ("DELETE", "/user-management/users/{user_id}/roles/{role_id}"): _ADMIN,  # revoke_role
+}
+
+#: The nine team routes #16276 found checking no role, now admin-only (owner
+#: ruling 2026-09-11, matching the SLM backend's /api/autobot-teams).
+_ADMIN_ONLY_BY_16276 = frozenset(
     {
-        ("POST", "/user-management/users"),  # create_user
-        ("GET", "/user-management/users/{user_id}"),  # get_user
-        ("PATCH", "/user-management/users/{user_id}"),  # update_user
-        ("DELETE", "/user-management/users/{user_id}"),  # delete_user
-        ("POST", "/user-management/users/{user_id}/roles/{role_id}"),  # assign_role
-        ("DELETE", "/user-management/users/{user_id}/roles/{role_id}"),  # revoke_role
+        ("GET", "/user-management/teams"),
+        ("POST", "/user-management/teams"),
+        ("GET", "/user-management/teams/{team_id}"),
+        ("PATCH", "/user-management/teams/{team_id}"),
+        ("DELETE", "/user-management/teams/{team_id}"),
+        ("GET", "/user-management/teams/{team_id}/members"),
+        ("POST", "/user-management/teams/{team_id}/members/{user_id}"),
+        ("DELETE", "/user-management/teams/{team_id}/members/{user_id}"),
+        ("PATCH", "/user-management/teams/{team_id}/members/{user_id}"),
     }
 )
 
@@ -60,28 +76,28 @@ _TRACKED_BY_15738 = frozenset(
 _EXPECTED_POSTURE = {
     ("GET", "/user-management/users"): _AUTHENTICATED,  # list_users
     ("GET", "/user-management/users/search"): _OPEN,  # search_users_for_sharing (#2072)
-    ("POST", "/user-management/users"): _AUTHENTICATED,  # create_user
+    ("POST", "/user-management/users"): _ADMIN,  # create_user (#15738)
     ("GET", "/user-management/users/me"): _AUTHENTICATED,  # get_current_user_profile
-    ("GET", "/user-management/users/{user_id}"): _AUTHENTICATED,  # get_user
-    ("PATCH", "/user-management/users/{user_id}"): _AUTHENTICATED,  # update_user
-    ("DELETE", "/user-management/users/{user_id}"): _AUTHENTICATED,  # delete_user
+    ("GET", "/user-management/users/{user_id}"): _SELF_OR_ADMIN,  # get_user (#15738)
+    ("PATCH", "/user-management/users/{user_id}"): _SELF_OR_ADMIN,  # update_user (#15738)
+    ("DELETE", "/user-management/users/{user_id}"): _ADMIN,  # delete_user (#15738)
     ("POST", "/user-management/users/{user_id}/activate"): _AUTHENTICATED,
     ("POST", "/user-management/users/{user_id}/deactivate"): _AUTHENTICATED,
     # #15743 closed: the gate is a declared dependency, so it is visible here.
     ("POST", "/user-management/users/{user_id}/change-password"): _SELF_OR_ADMIN,
-    ("POST", "/user-management/users/{user_id}/roles/{role_id}"): _AUTHENTICATED,  # assign_role
-    ("DELETE", "/user-management/users/{user_id}/roles/{role_id}"): _AUTHENTICATED,  # revoke_role
+    ("POST", "/user-management/users/{user_id}/roles/{role_id}"): _ADMIN,  # assign_role (#15738)
+    ("DELETE", "/user-management/users/{user_id}/roles/{role_id}"): _ADMIN,  # revoke_role (#15738)
     ("PUT", "/user-management/users/{user_id}/role"): _ADMIN,  # set_user_role (#1801)
-    ("GET", "/user-management/teams"): _AUTHENTICATED,
-    ("POST", "/user-management/teams"): _AUTHENTICATED,
-    ("GET", "/user-management/teams/{team_id}"): _AUTHENTICATED,
-    ("PATCH", "/user-management/teams/{team_id}"): _AUTHENTICATED,
-    ("DELETE", "/user-management/teams/{team_id}"): _AUTHENTICATED,
-    ("GET", "/user-management/teams/{team_id}/members"): _AUTHENTICATED,
-    ("POST", "/user-management/teams/{team_id}/members/{user_id}"): _AUTHENTICATED,
-    ("DELETE", "/user-management/teams/{team_id}/members/{user_id}"): _AUTHENTICATED,
-    ("PATCH", "/user-management/teams/{team_id}/members/{user_id}"): _AUTHENTICATED,
-    ("GET", "/user-management/teams/my-teams"): _AUTHENTICATED,
+    ("GET", "/user-management/teams"): _ADMIN,  # #16276
+    ("POST", "/user-management/teams"): _ADMIN,  # #16276
+    ("GET", "/user-management/teams/{team_id}"): _ADMIN,  # #16276
+    ("PATCH", "/user-management/teams/{team_id}"): _ADMIN,  # #16276
+    ("DELETE", "/user-management/teams/{team_id}"): _ADMIN,  # #16276
+    ("GET", "/user-management/teams/{team_id}/members"): _ADMIN,  # #16276
+    ("POST", "/user-management/teams/{team_id}/members/{user_id}"): _ADMIN,  # #16276
+    ("DELETE", "/user-management/teams/{team_id}/members/{user_id}"): _ADMIN,  # #16276
+    ("PATCH", "/user-management/teams/{team_id}/members/{user_id}"): _ADMIN,  # #16276
+    ("GET", "/user-management/teams/my-teams"): _AUTHENTICATED,  # the caller's own teams only (#16276)
     ("GET", "/user-management/organizations"): _ADMIN,
     ("POST", "/user-management/organizations"): _ADMIN,
     ("GET", "/user-management/organizations/{org_id}"): _AUTHENTICATED,
@@ -128,7 +144,7 @@ def _classify(names: set[str]) -> str:
     would report the conditional gate as unconditionally admin-only and hide the
     self-service branch entirely.
     """
-    if authorize_password_change.__name__ in names:
+    if names & {authorize_password_change.__name__, require_self_or_admin.__name__}:
         return _SELF_OR_ADMIN
     if require_platform_admin.__name__ in names:
         return _ADMIN
@@ -200,26 +216,29 @@ class TestUserManagementRoutePosture:
                 posture.get(key) == _AUTHENTICATED
             ), f"{key}: expected authenticated-only, observed {posture.get(key)!r}"
 
-    def test_the_15738_tracked_routes_are_recorded_not_certified(self):
-        """The six #15738 endpoints observe as authenticated-only today.
-
-        This is a record of current behaviour, not a certification that it is
-        correct: #15738 is the open, needs-decision finding that these six
-        carry no admin or ownership gate at all. A future fix there (adding
-        ``Depends(require_platform_admin)`` or a self-or-admin check) is
-        expected to change these to ``_ADMIN`` and must update this file --
-        that is #15738 landing, not a regression of this one.
-        """
+    def test_self_or_admin_routes_carry_the_identity_gate(self):
         posture = _observed_posture()
-        assert _TRACKED_BY_15738, "the #15738 tracked-route set is empty"
-        for key in _TRACKED_BY_15738:
-            assert _EXPECTED_POSTURE[key] == _AUTHENTICATED, f"{key} must be on record as _AUTHENTICATED"
-            assert posture.get(key) == _AUTHENTICATED, (
-                f"{key}: expected the #15738-tracked posture (authenticated, no "
-                f"admin gate) but observed {posture.get(key)!r} -- if a gate was "
-                "added here, close #15738 with that change; do not edit this "
-                "file to match a gate added elsewhere"
-            )
+        self_routes = [k for k, v in _EXPECTED_POSTURE.items() if v == _SELF_OR_ADMIN]
+        assert self_routes, "table lists no _SELF_OR_ADMIN route -- the check below would be vacuous"
+        for key in self_routes:
+            assert posture.get(key) == _SELF_OR_ADMIN, f"{key}: expected self-or-admin, observed {posture.get(key)!r}"
+
+    def test_the_15738_routes_carry_the_gate_its_decision_chose(self):
+        """None of #15738's six routes may slide back to login-only."""
+        posture = _observed_posture()
+        assert len(_GATED_BY_15738) == 6, "the #15738 route set changed size -- re-read the issue"
+        for key, tier in _GATED_BY_15738.items():
+            assert _EXPECTED_POSTURE[key] == tier, f"{key}: the table disagrees with the #15738 decision"
+            assert posture.get(key) == tier, f"{key}: expected {tier} (#15738), observed {posture.get(key)!r}"
+
+    def test_the_16276_team_routes_are_admin_only(self):
+        """Every team route but ``/my-teams`` is admin-only, and ``/my-teams`` stays reachable by login."""
+        posture = _observed_posture()
+        assert len(_ADMIN_ONLY_BY_16276) == 9, "the #16276 route set changed size -- re-read the issue"
+        for key in sorted(_ADMIN_ONLY_BY_16276):
+            assert posture.get(key) == _ADMIN, f"{key}: expected admin-only (#16276), observed {posture.get(key)!r}"
+        my_teams = ("GET", "/user-management/teams/my-teams")
+        assert posture.get(my_teams) == _AUTHENTICATED, f"{my_teams}: observed {posture.get(my_teams)!r}"
 
 
 class _FakeDependant:
@@ -275,4 +294,5 @@ class TestClassifyHelperContrastPair:
         both directions: together they are self-or-admin, admin alone is admin.
         """
         assert _classify({"authorize_password_change", "require_platform_admin", "get_current_user"}) == _SELF_OR_ADMIN
+        assert _classify({"require_self_or_admin", "get_tenant_context", "get_current_user"}) == _SELF_OR_ADMIN
         assert _classify({"require_platform_admin", "get_current_user"}) == _ADMIN
