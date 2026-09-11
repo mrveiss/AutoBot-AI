@@ -15,6 +15,7 @@ so peer trust levels evolve continuously from real interaction history.
 from typing import Any, Dict
 
 from agents.scope_enforcement import hold_scopes
+from autobot_shared.coordination.work_claims import ScopeError
 from autobot_shared.logging_manager import get_logger
 
 from .pii_pipeline import PIIBlocked, scrub_outbound
@@ -87,13 +88,52 @@ async def execute_a2a_task(
         task = manager.get_task(task_id)
         return task is None or task.status.state in _TERMINAL_STATES
 
-    async with hold_scopes(
-        declared, agent_id="a2a-executor", task_id=task_id, intent=input_text[:120], stop=_task_is_over
-    ) as held:
-        if not held.granted:
-            _report_refusal(manager, task_id, held.conflict)
-            return
-        await _execute_claimed(task_id, input_text, context, eval_threshold, peer_id, manager)
+    try:
+        async with hold_scopes(
+            declared, agent_id="a2a-executor", task_id=task_id, intent=input_text[:120], stop=_task_is_over
+        ) as held:
+            if not held.granted:
+                _report_refusal(manager, task_id, held.conflict)
+                return
+            await _execute_claimed(task_id, input_text, context, eval_threshold, peer_id, manager)
+    except ScopeError as exc:
+        # `declared_scopes` is caller-supplied, so a typo reaches Scope.parse and
+        # raises ScopeError -- which is not ClaimUnavailable, so hold_scopes does not
+        # catch it. This function is fire-and-forget via BackgroundTasks, so nothing
+        # above catches it either: the task sat in WORKING forever, indistinguishable
+        # from one still working (#16209).
+        #
+        # Failed, not refused. A refusal answers "blocked by what" with a holder; this
+        # has no holder, and reporting it as a conflict would put a fourth meaning on
+        # ClaimConflict, which already renders three incompatible ways (#16208).
+        _report_bad_scope(manager, task_id, declared, exc)
+
+
+def _report_bad_scope(manager, task_id: str, declared: list, exc: Exception) -> None:
+    """Fail the task naming the rejected declaration, not a bare error.
+
+    The submitter's next question is "which one, and why" -- ScopeError already
+    says both, and the declared list says what was sent.
+    """
+    logger.warning("task %s declared an unparseable scope: %s", task_id, exc)
+    manager.add_artifact(
+        task_id,
+        TaskArtifact(
+            artifact_type="json",
+            content={"declared_scopes": list(declared), "reason": str(exc)},
+        ),
+    )
+    manager.update_state(task_id, TaskState.FAILED, message="invalid_declared_scope")
+    manager.publish_event(
+        task_id,
+        {
+            "event": "state_change",
+            "state": "failed",
+            "terminal": True,
+            "message": "invalid_declared_scope",
+            "task_id": task_id,
+        },
+    )
 
 
 def _report_refusal(manager, task_id: str, conflict) -> None:
