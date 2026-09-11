@@ -12,7 +12,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.schemas_skills_hub import InstalledSkillOut, InstallRequest, SkillListingOut, SkillUpdateOut
+from api.schemas_skills_hub import InstalledSkillOut, SkillHubInstallRequest, SkillListingOut, SkillUpdateOut
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
 from skills.hub import get_skill_hub
@@ -39,7 +39,7 @@ async def search_hub(q: str = "") -> List[SkillListingOut]:
 
 
 @router.post("/install", response_model=InstalledSkillOut, summary="Install a hub skill")
-async def install_skill(body: InstallRequest, _: None = Depends(check_admin_permission)) -> InstalledSkillOut:
+async def install_skill(body: SkillHubInstallRequest, _: None = Depends(check_admin_permission)) -> InstalledSkillOut:
     """Install a community skill from the hub registry."""
     hub = await get_skill_hub()
     try:

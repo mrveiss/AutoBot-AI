@@ -62,5 +62,5 @@ class SkillUpdateOut(BaseModel):
     latest_version: str
 
 
-class InstallRequest(BaseModel):
+class SkillHubInstallRequest(BaseModel):
     skill_id: str = Field(..., description="Registry id or name of the skill to install")
