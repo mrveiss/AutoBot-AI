@@ -281,7 +281,7 @@ AutoBot supports environment variable overrides using the `AUTOBOT_` prefix:
 
 Documented under #14145 — every variable below was read from `ssot_config.py` and its
 consumer, not from prose. `AUTOBOT_GATEWAY_REQUIRE_OUTBOUND_APPROVAL` is described in
-[`CLAUDE_RULES.md`](CLAUDE_RULES.md) and is not repeated here.
+[`ENV_VARS.md`](ENV_VARS.md) and is not repeated here.
 
 | Variable | Purpose | Default |
 |----------|---------|---------|

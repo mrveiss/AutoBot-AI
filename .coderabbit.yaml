@@ -83,7 +83,7 @@ reviews:
         That file sits at its recorded size ceiling by design; new entries go in
         a per-component sibling module (`env_registry_<component>.py`), created
         if the component has none. Registering a variable also requires
-        regenerating the table in `docs/developer/CLAUDE_RULES.md` — a stale
+        regenerating the table in `docs/developer/ENV_VARS.md` — a stale
         table fails two tests that look unrelated.
 
     - path: "repo_tests/**"
