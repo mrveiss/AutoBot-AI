@@ -44,47 +44,24 @@ API contract::
 """
 
 from datetime import datetime, timezone
-from typing import Literal
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException
 
+from api.schemas_knowledge_web import ScrapeMetadata, ScrapeRequest, ScrapeResponse
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
 from web_fetch import FetchResult, RenderMode, WebFetcher
 
 logger = get_logger(__name__)
 
-router = APIRouter()
-
-
-class ScrapeRequest(BaseModel):
-    """Request body for POST /knowledge/scrape."""
-
-    url: str = Field(..., min_length=1, max_length=2000, description="Absolute URL to scrape")
-    render: Literal["auto", "fast", "playwright"] = Field(default="auto", description="Render mode")
-    ingest: bool = Field(default=False, description="Index scraped content into ChromaDB")
-    format: Literal["markdown", "html", "json"] = Field(default="markdown", description="Response format")
-
-
-class ScrapeMetadata(BaseModel):
-    """Metadata block returned with every scrape response."""
-
-    title: str
-    fetched_at: str
-
-
-class ScrapeResponse(BaseModel):
-    """Success response for POST /knowledge/scrape."""
-
-    url: str
-    markdown: str | None = None
-    html: str | None = None
-    metadata: ScrapeMetadata
-    indexed: bool
+# #16375: mounted with no auth dependency. Every route needs a signed-in caller;
+# the scrape fetches a caller-chosen URL and can write the knowledge base, so it
+# also needs admin.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.post("/scrape", response_model=ScrapeResponse, summary="Scrape and optionally ingest a URL")
-async def scrape_url(request: ScrapeRequest) -> ScrapeResponse:
+async def scrape_url(request: ScrapeRequest, _: bool = Depends(check_admin_permission)) -> ScrapeResponse:
     """Fetch *request.url* and return markdown content.
 
     The render mode controls which backend is tried:

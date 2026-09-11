@@ -32,40 +32,19 @@ API contract::
 
 from typing import List
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException
 
+from api.schemas_knowledge_web import SiteMapRequest, SiteMapResponse, SiteMapUrlEntry
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
 from web_fetch.site_mapper import SiteMapEntry, SiteMapper, SiteMapResult
 
 logger = get_logger(__name__)
 
-router = APIRouter()
-
-
-class SiteMapRequest(BaseModel):
-    """Request body for POST /knowledge/site-map."""
-
-    domain: str = Field(..., min_length=1, max_length=500, description="Domain to enumerate (bare or with scheme)")
-    max_urls: int = Field(default=500, ge=1, le=5000, description="Maximum URLs to return")
-    respect_robots: bool = Field(default=True, description="Honour robots.txt during crawl fallback")
-
-
-class SiteMapUrlEntry(BaseModel):
-    """A single discovered URL in the site-map response."""
-
-    url: str
-    title: str | None = None
-    depth: int
-
-
-class SiteMapResponse(BaseModel):
-    """Success response for POST /knowledge/site-map."""
-
-    domain: str
-    source: str  # "sitemap" or "crawl"
-    urls: List[SiteMapUrlEntry]
-    count: int
+# #16375: mounted with no auth dependency. Every route needs a signed-in caller;
+# the site map fetches a caller-chosen domain's sitemap or crawls it, so it also
+# needs admin.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _entries_to_response_urls(entries: List[SiteMapEntry]) -> List[SiteMapUrlEntry]:
@@ -74,7 +53,7 @@ def _entries_to_response_urls(entries: List[SiteMapEntry]) -> List[SiteMapUrlEnt
 
 
 @router.post("/site-map", response_model=SiteMapResponse, summary="Enumerate URLs for a domain via sitemap or crawl")
-async def get_site_map(request: SiteMapRequest) -> SiteMapResponse:
+async def get_site_map(request: SiteMapRequest, _: bool = Depends(check_admin_permission)) -> SiteMapResponse:
     """Return a list of URLs discovered for *request.domain*.
 
     Discovery strategy:

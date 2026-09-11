@@ -35,11 +35,12 @@ API contract::
     }
 """
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException
 
+from api.schemas_knowledge_web import CrawlRequest, CrawlResponse
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.web_crawler import WebCrawlerConnector
@@ -47,43 +48,12 @@ from web_fetch import FetchResult, RenderMode
 
 logger = get_logger(__name__)
 
-router = APIRouter()
+# #16375: mounted with no auth dependency. Every route needs a signed-in caller;
+# the crawl fetches caller-chosen URLs and can write the knowledge base, so it
+# also needs admin.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 _CONNECTOR_ID = "api_crawl"
-
-
-class CrawlRequest(BaseModel):
-    """Request body for POST /knowledge/crawl."""
-
-    seeds: List[str] = Field(..., min_length=1, description="Seed URLs to crawl")
-    max_depth: int = Field(default=1, ge=1, le=10, description="Crawl depth (1 = seeds only)")
-    max_pages: int = Field(default=100, ge=1, le=500, description="Hard cap on pages fetched")
-    respect_robots: bool = Field(default=True, description="Honour robots.txt")
-    ingest: bool = Field(default=True, description="Index crawled pages into ChromaDB")
-    same_origin: bool = Field(default=True, description="Restrict crawl to same scheme+host per seed")
-    render: Literal["auto", "fast", "playwright"] = Field(default="auto", description="Render mode")
-    # Issue #5136 Phase 4: run a scrape template on every crawled URL and merge
-    # region-extracted fields into the KB document.
-    scrape_template_id: Optional[str] = Field(
-        default=None, description="UUID of a ScrapeTemplate to apply to every crawled page"
-    )
-
-
-class CrawlPageEntry(BaseModel):
-    """A single crawled page in the response."""
-
-    url: str
-    markdown: str
-    depth: int = 0
-    success: bool
-
-
-class CrawlResponse(BaseModel):
-    """Success response for POST /knowledge/crawl."""
-
-    pages: List[Dict[str, Any]]
-    count: int
-    indexed: bool
 
 
 def _make_connector(request: CrawlRequest) -> WebCrawlerConnector:
@@ -117,7 +87,7 @@ def _fetch_results_to_pages(results: List[FetchResult]) -> List[Dict[str, Any]]:
 
 
 @router.post("/crawl", response_model=CrawlResponse, summary="BFS crawl seed URLs and optionally ingest into KB")
-async def crawl_url_endpoint(request: CrawlRequest) -> CrawlResponse:
+async def crawl_url_endpoint(request: CrawlRequest, _: bool = Depends(check_admin_permission)) -> CrawlResponse:
     """BFS-crawl *request.seeds* and return the fetched pages.
 
     Delegates entirely to :class:`knowledge.connectors.web_crawler.WebCrawlerConnector`
