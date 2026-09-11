@@ -66,6 +66,14 @@ ARTIFACT_FILE_GLOBS: tuple[str, ...] = ("*.pyc", "*.log")
 # a bare `config` would also exclude `autobot-slm-frontend/src/config/`, which
 # is tracked source, and suppressing it would read as permanent drift -- the
 # #11440 failure mode, arriving from the opposite direction.
+# #16310: services/sync_deletions.py's own marker filename, defined here --
+# the dependency-free base module -- rather than in sync_deletions.py, so
+# HOST_STATE_EXCLUDES and sync_deletions.DELETION_MARKER derive from ONE
+# literal. #14231's own lesson, repeated: a delete-style sync that does not
+# exclude a marker file wipes it before the next run can read it
+# (roles/slm_manager/tasks/main.yml's `delete: true` sync did exactly this).
+SYNC_DELETIONS_MARKER = ".autobot_sync_deletions_commit"
+
 HOST_STATE_EXCLUDES: tuple[str, ...] = (
     ".env",  # systemd EnvironmentFile (#2824, #9970) -- service will not start without it
     ".env.*",  # .env.production and siblings; the exact `.env` pattern never matched them
@@ -73,6 +81,7 @@ HOST_STATE_EXCLUDES: tuple[str, ...] = (
     "logs",  # audit trail; a dry run once listed logs/audit/*.jsonl among 55 deletions (#13851)
     "/config/",  # host-rendered service config
     "/.deployed_commit",  # what the self-update skip-check reads (#12202)
+    f"/{SYNC_DELETIONS_MARKER}",  # sync_deletions.py's own marker (#16310)
     "/ansible/enroll.yml",  # the node's rendered enrolment play
 )
 

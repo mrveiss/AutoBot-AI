@@ -41,19 +41,14 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from services.git_subprocess import component_pathspec, last_commit_for_path, path_exists_at_commit, run_git
+from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
+from services.git_subprocess import component_pathspec, run_git
 from services.host_state_filter import kept_reason
 
 # Plain stdlib logging, deliberately -- see services/git_subprocess.py's
 # comment: get_logger() crashes at creation time under a MagicMock `config`,
 # the precedent autobot_shared/user_management/password_epoch.py:50-58 sets.
 logger = logging.getLogger(__name__)
-
-#: This module's own marker name -- distinct from ``.deployed_commit``
-#: (#12202). Ansible slurps/writes it; kept here as the one place the name
-#: is spelled, for the CLI's ``--help`` text and the ansible task file's
-#: comment to both cite.
-DELETION_MARKER = ".autobot_sync_deletions_commit"
 
 
 @dataclass
@@ -133,19 +128,39 @@ async def compute_deletion_plan(source_dir: str, repo_root: str, previous_commit
     return DeletionPlan(delete=to_delete, kept=kept)
 
 
-async def _is_bootstrap_candidate(repo_root: str, new_commit: str, full_pathspec: str) -> bool:
-    """True when *full_pathspec* was tracked once but is absent from *new_commit*.
+def _strip_prefix(paths: list[str], pathspec: str) -> set[str]:
+    prefix = f"{pathspec}/" if pathspec else ""
+    return {p[len(prefix) :] if prefix else p for p in paths if not prefix or p.startswith(prefix)}
 
-    Residual risk, named for the caller: a file deleted from git long ago
-    and put back on the host by other means (not this module's business,
-    not synced content) would ALSO satisfy this check. The owner's #16310
-    decision accepts that risk for the one-time bootstrap only -- see
-    ``scripts/sync_deletion_planner.py``'s ``--help`` and
-    ``ansible/roles/_shared/tasks/sync_deletions.yml``'s comment.
+
+async def _tracked_paths_at_commit(repo_root: str, commit: str, pathspec: str) -> set[str] | None:
+    """Every component-relative path git tracks at *commit*. None on git error."""
+    output, rc = await run_git(repo_root, "ls-tree", "-r", "--name-only", commit, "--", pathspec)
+    if rc != 0:
+        return None
+    return _strip_prefix(output.splitlines(), pathspec)
+
+
+async def _ever_added_paths(repo_root: str, pathspec: str) -> set[str] | None:
+    """Every component-relative path git has ever added, in ONE call (#16310 review:
+    replaces a `git log -1`/`git cat-file -e` pair PER FILE, which took hours on a
+    real backend/frontend node's first bootstrap)."""
+    output, rc = await run_git(repo_root, "log", "--name-only", "--diff-filter=A", "--format=", "--", pathspec)
+    if rc != 0:
+        return None
+    return _strip_prefix([line for line in output.splitlines() if line], pathspec)
+
+
+def _is_artifact_path(rel_path: str) -> bool:
+    """True when any path segment is a build/deploy artifact (venv, node_modules, ...).
+
+    Planner-side defence in depth (#16310 review): the ansible ``find`` that
+    gathers *present_paths* already prunes these directories with the SAME
+    ``ARTIFACT_DIRS``/``ARTIFACT_DIR_SUFFIXES`` vocabulary, so this only fires
+    if that pruning is ever missed or bypassed -- it must never be the only
+    guard.
     """
-    if await path_exists_at_commit(repo_root, new_commit, full_pathspec):
-        return False  # still tracked at the new commit -- not a deletion candidate
-    return await last_commit_for_path(repo_root, full_pathspec) is not None
+    return any(seg in ARTIFACT_DIRS or seg.endswith(ARTIFACT_DIR_SUFFIXES) for seg in rel_path.split("/"))
 
 
 async def compute_bootstrap_plan(
@@ -155,13 +170,28 @@ async def compute_bootstrap_plan(
 
     *present_paths* are component-relative paths ansible's own ``find``
     reported present on the target -- this module never touches a
-    filesystem, so it cannot enumerate them itself.
+    filesystem, so it cannot enumerate them itself. Exactly two git calls
+    total, never one per file: every path tracked at *new_commit*, and every
+    path git has ever added. A present file is a candidate only if it is in
+    the second set and not the first.
+
+    Residual risk, named for the caller: a file deleted from git long ago and
+    put back on the host by other means (not this module's business, not
+    synced content) would ALSO satisfy "added once, absent now". The owner's
+    #16310 decision accepts that risk for the one-time bootstrap only -- see
+    ``scripts/sync_deletion_planner.py``'s ``--help`` and
+    ``ansible/roles/_shared/tasks/sync_deletions.yml``'s comment.
     """
     pathspec_prefix = component_pathspec(repo_root, source_dir)
+    tracked_now = await _tracked_paths_at_commit(repo_root, new_commit, pathspec_prefix)
+    if tracked_now is None:
+        return DeletionPlan(error=f"git ls-tree at {new_commit[:12]} failed")
+    ever_added = await _ever_added_paths(repo_root, pathspec_prefix)
+    if ever_added is None:
+        return DeletionPlan(error="git log --diff-filter=A failed")
+
     candidates = [
-        rel
-        for rel in present_paths
-        if await _is_bootstrap_candidate(repo_root, new_commit, f"{pathspec_prefix}/{rel}" if pathspec_prefix else rel)
+        rel for rel in present_paths if not _is_artifact_path(rel) and rel in ever_added and rel not in tracked_now
     ]
     to_delete, kept = await _partition(candidates, repo_root, pathspec_prefix)
     return DeletionPlan(delete=to_delete, kept=kept)

@@ -222,6 +222,7 @@
       - "--exclude=logs"
       - "--exclude=/config/"
       - "--exclude=/.deployed_commit"
+      - "--exclude=/.autobot_sync_deletions_commit"
       - "--exclude=/ansible/enroll.yml"
     delete: true
   notify: restart slm backend
@@ -756,6 +757,7 @@
       - "--exclude=logs"
       - "--exclude=/config/"
       - "--exclude=/.deployed_commit"
+      - "--exclude=/.autobot_sync_deletions_commit"
       - "--exclude=/ansible/enroll.yml"
     delete: true
   tags: ['slm', 'frontend']
@@ -784,6 +786,7 @@
       - "--exclude=logs"
       - "--exclude=/config/"
       - "--exclude=/.deployed_commit"
+      - "--exclude=/.autobot_sync_deletions_commit"
       - "--exclude=/ansible/enroll.yml"
     delete: true
   tags: ['slm', 'frontend']

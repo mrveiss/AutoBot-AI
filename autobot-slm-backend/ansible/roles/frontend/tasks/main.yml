@@ -129,6 +129,7 @@
       - "--exclude=logs"
       - "--exclude=/config/"
       - "--exclude=/.deployed_commit"
+      - "--exclude=/.autobot_sync_deletions_commit"
       - "--exclude=/ansible/enroll.yml"
     delete: true
   tags: ['frontend', 'deploy']
@@ -152,6 +153,7 @@
       - "--exclude=logs"
       - "--exclude=/config/"
       - "--exclude=/.deployed_commit"
+      - "--exclude=/.autobot_sync_deletions_commit"
       - "--exclude=/ansible/enroll.yml"
     delete: true
   tags: ['frontend', 'deploy']

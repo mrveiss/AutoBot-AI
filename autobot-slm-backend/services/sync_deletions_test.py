@@ -294,3 +294,64 @@ async def test_bootstrap_keeps_a_file_still_tracked_at_the_new_commit(tmp_path) 
     plan = await compute_bootstrap_plan(str(repo / "comp"), str(repo), commit_a, present_paths=["keep.py"])
 
     assert plan.delete == []
+
+
+# --------------------------------------------------------------------------
+# #16310 review, BLOCKING 1: bootstrap enumeration cost
+# --------------------------------------------------------------------------
+
+
+async def test_bootstrap_adds_zero_candidates_for_a_venv_full_of_files(tmp_path, monkeypatch) -> None:
+    """A fixture tree with a venv/ of many files must add zero candidates --
+    planner-side defence in depth even if the ansible `find -prune` that
+    gathers present_paths is ever missed or bypassed."""
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    _write(repo / "comp" / "keep.py")
+    commit_a = _commit_all(repo, "seed")
+
+    present_paths = ["keep.py"] + [f"venv/lib/python3.14/site-packages/pkg{i}/mod.py" for i in range(500)]
+
+    calls = []
+    real_run_git = _sd.run_git
+
+    async def counting_run_git(*args, **kwargs):
+        calls.append(args)
+        return await real_run_git(*args, **kwargs)
+
+    monkeypatch.setattr(_sd, "run_git", counting_run_git)
+
+    plan = await compute_bootstrap_plan(str(repo / "comp"), str(repo), commit_a, present_paths=present_paths)
+
+    assert plan.delete == []
+    assert not any("venv" in p for p in plan.delete)
+    # Exactly two git calls (ls-tree + log --diff-filter=A) -- never one per
+    # file, regardless of len(present_paths).
+    assert len(calls) == 2, f"expected 2 git calls (bounded), got {len(calls)}"
+
+
+async def test_bootstrap_makes_a_bounded_number_of_git_calls_regardless_of_file_count(tmp_path, monkeypatch) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    for i in range(50):
+        _write(repo / "comp" / f"file{i}.py")
+    _commit_all(repo, "seed")
+    for i in range(25):
+        (repo / "comp" / f"file{i}.py").unlink()
+    commit_b = _commit_all(repo, "delete half")
+
+    present_paths = [f"file{i}.py" for i in range(25, 50)]  # the still-tracked half, present on target too
+
+    calls = []
+    real_run_git = _sd.run_git
+
+    async def counting_run_git(*args, **kwargs):
+        calls.append(args)
+        return await real_run_git(*args, **kwargs)
+
+    monkeypatch.setattr(_sd, "run_git", counting_run_git)
+
+    plan = await compute_bootstrap_plan(str(repo / "comp"), str(repo), commit_b, present_paths=present_paths)
+
+    assert plan.delete == []  # all 25 present files are still tracked at commit_b
+    assert len(calls) == 2, f"expected 2 git calls regardless of {len(present_paths)} files, got {len(calls)}"
