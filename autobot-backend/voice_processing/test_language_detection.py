@@ -7,10 +7,19 @@ Tests for Language Detection Service
 
 Tests language detection from audio files and filename hints.
 Part of Issue MVA-2185.
+
+Every filename these tests hand to the detector is fixed, inside pytest's
+``tmp_path`` (#16341). ``tempfile.NamedTemporaryFile`` draws its random part
+from ``a-z0-9_``, and ``_filename_tokens`` in ``language_detection.py`` splits
+on exactly those non-alphanumeric separators -- so a random name can, by
+chance, isolate a token that reads as a language hint nobody asked for. Seen
+in CI: ``test_no_filename_hint`` got a random ``tmpq_lv_3k.wav`` and the
+service correctly found ``lv`` in it, failing an assertion that expected no
+hint at all. A fixed name removes the randomness the assertions never meant
+to depend on.
 """
 
-import os
-import tempfile
+import asyncio
 
 import pytest
 
@@ -29,36 +38,24 @@ class TestLanguageDetectionService:
         assert service is not None
 
     @pytest.mark.asyncio
-    async def test_detect_from_filename_latvian(self):
+    async def test_detect_from_filename_latvian(self, tmp_path):
         """Test detection from Latvian filename hints."""
         service = LanguageDetectionService()
 
-        # Create temp file with Latvian hint
-        with tempfile.NamedTemporaryFile(suffix="_lv_audio.wav", delete=False) as f:
-            temp_path = f.name
+        temp_path = str(tmp_path / "clip_lv_audio.wav")
 
-        try:
-            # Extract text sample should detect Latvian from filename
-            sample = await service._extract_text_sample(temp_path)
-            assert sample is not None
-            assert "latviešu" in sample.lower() or "lv" in temp_path.lower()
-        finally:
-            os.unlink(temp_path)
+        sample = await service._extract_text_sample(temp_path)
+        assert sample == "latviešu valoda"
 
     @pytest.mark.asyncio
-    async def test_detect_from_filename_english(self):
+    async def test_detect_from_filename_english(self, tmp_path):
         """Test detection from English filename hints."""
         service = LanguageDetectionService()
 
-        with tempfile.NamedTemporaryFile(suffix="_en_audio.wav", delete=False) as f:
-            temp_path = f.name
+        temp_path = str(tmp_path / "clip_en_audio.wav")
 
-        try:
-            sample = await service._extract_text_sample(temp_path)
-            assert sample is not None
-            assert "english" in sample.lower() or "en" in temp_path.lower()
-        finally:
-            os.unlink(temp_path)
+        sample = await service._extract_text_sample(temp_path)
+        assert sample == "english language"
 
     @pytest.mark.asyncio
     async def test_missing_file(self):
@@ -69,38 +66,28 @@ class TestLanguageDetectionService:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_no_filename_hint(self):
+    async def test_no_filename_hint(self, tmp_path):
         """Test fallback when no filename hints."""
         service = LanguageDetectionService()
 
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            temp_path = f.name
+        temp_path = str(tmp_path / "recording.wav")
 
-        try:
-            sample = await service._extract_text_sample(temp_path)
-            # Should return None when no hints
-            assert sample is None
-        finally:
-            os.unlink(temp_path)
+        sample = await service._extract_text_sample(temp_path)
+        # Should return None when no hints
+        assert sample is None
 
     @pytest.mark.asyncio
-    async def test_default_to_english(self):
+    async def test_default_to_english(self, tmp_path):
         """Test that detection defaults to English on failure."""
         service = LanguageDetectionService()
 
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            temp_path = f.name
-            # Write minimal valid WAV header
-            f.write(b"RIFF")
-            f.write(b"\x00\x00\x00\x00")  # File size
-            f.write(b"WAVE")
+        temp_path = tmp_path / "recording.wav"
+        # Write minimal valid WAV header: RIFF magic, zeroed file size, WAVE format
+        await asyncio.to_thread(temp_path.write_bytes, b"RIFF\x00\x00\x00\x00WAVE")
 
-        try:
-            result = await service.detect_language(temp_path)
-            # Should default to 'en' when detection fails
-            assert result == "en"
-        finally:
-            os.unlink(temp_path)
+        result = await service.detect_language(str(temp_path))
+        # Should default to 'en' when detection fails
+        assert result == "en"
 
 
 class TestGlobalService:
@@ -122,7 +109,7 @@ class TestFilenamePatterns:
     """Test various filename patterns for language hints."""
 
     @pytest.mark.asyncio
-    async def test_latvian_patterns(self):
+    async def test_latvian_patterns(self, tmp_path):
         """Test various Latvian filename patterns."""
         service = LanguageDetectionService()
 
@@ -134,21 +121,17 @@ class TestFilenamePatterns:
         ]
 
         for pattern in patterns:
-            with tempfile.NamedTemporaryFile(suffix=pattern, delete=False) as f:
-                temp_path = f.name
+            temp_path = str(tmp_path / pattern)
 
-            try:
-                sample = await service._extract_text_sample(temp_path)
-                # #13162: every listed pattern must resolve. The previous
-                # "or '_lv_' in path" clause passed vacuously for the patterns
-                # that already contained a separator on both sides, hiding the
-                # fact that a trailing code ("audio_LV.wav") never matched.
-                assert sample == "latviešu valoda", f"no Latvian hint from {pattern}"
-            finally:
-                os.unlink(temp_path)
+            sample = await service._extract_text_sample(temp_path)
+            # #13162: every listed pattern must resolve. The previous
+            # "or '_lv_' in path" clause passed vacuously for the patterns
+            # that already contained a separator on both sides, hiding the
+            # fact that a trailing code ("audio_LV.wav") never matched.
+            assert sample == "latviešu valoda", f"no Latvian hint from {pattern}"
 
     @pytest.mark.asyncio
-    async def test_english_patterns(self):
+    async def test_english_patterns(self, tmp_path):
         """Test various English filename patterns."""
         service = LanguageDetectionService()
 
@@ -159,13 +142,9 @@ class TestFilenamePatterns:
         ]
 
         for pattern in patterns:
-            with tempfile.NamedTemporaryFile(suffix=pattern, delete=False) as f:
-                temp_path = f.name
+            temp_path = str(tmp_path / pattern)
 
-            try:
-                sample = await service._extract_text_sample(temp_path)
-                # #13162: see test_latvian_patterns — the escape-hatch clause
-                # made "meeting_EN.wav" pass without ever matching.
-                assert sample == "english language", f"no English hint from {pattern}"
-            finally:
-                os.unlink(temp_path)
+            sample = await service._extract_text_sample(temp_path)
+            # #13162: see test_latvian_patterns — the escape-hatch clause
+            # made "meeting_EN.wav" pass without ever matching.
+            assert sample == "english language", f"no English hint from {pattern}"

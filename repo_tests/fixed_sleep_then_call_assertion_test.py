@@ -27,6 +27,15 @@ needs wall clock to pass, and elapsed time IS the subject there. Such a site is
 exempted only by a reasoned comment, ``# fixed sleep on purpose (#16255): <why>``,
 on the sleep's own line or the one directly above it -- an empty reason after the
 colon does not count, so the exemption cannot be used to silence the guard.
+
+AC2 of #16255 names every exempted site rather than trusting the comment alone:
+``_EXEMPT_SITES`` below lists each ``(repo-relative path, test qualname)`` the
+marker is allowed on, with how many exempt sleeps that site carries (1 unless
+noted). A marker anywhere else fails loudly as an unlisted exemption, naming the
+site -- the marker cannot be used to grow the allowlist by itself. A named entry
+whose site no longer carries a marker (the test moved, was renamed, or the sleep
+was removed) fails as stale, so the allowlist cannot silently drift out of sync
+with the code it describes.
 """
 
 from __future__ import annotations
@@ -34,6 +43,7 @@ from __future__ import annotations
 import ast
 import functools
 import re
+from collections import Counter
 
 from repo_tests.collected_test_model import REPO_ROOT, collectable_tests, own_nodes, parse_module, test_modules
 
@@ -47,6 +57,55 @@ _CALL_ASSERTION = re.compile(r"\.assert_(?:called|awaited)\w*\(|\.(?:call|await)
 
 _ANY_ASSERT_WINDOW_STATEMENTS = 3
 _EXEMPTION_MARKER = "# fixed sleep on purpose (#16255):"
+
+#: Every reasoned #16255 exemption in the repo, keyed by ``(repo-relative path,
+#: "Class.method" or "function" qualname)`` rather than line number, which drifts
+#: on any unrelated edit above it in the same file. The value is how many exempt
+#: sleeps that one test carries -- 1 unless the comment says otherwise. Counted by
+#: hand from ``git grep -n "fixed sleep on purpose (#16255):"`` on 2026-09-11: 12
+#: exempt sleeps across these 10 sites.
+_EXEMPT_SITES: dict[tuple[str, str], int] = {
+    (
+        "autobot-backend/knowledge/embedding_cache_test.py",
+        "TestEmbeddingCache.test_ttl_expiration",
+    ): 1,  # TTL expiry via time.time() is the subject; no injectable clock
+    (
+        "autobot-backend/multimodal_processor/multimodal_integration_test.py",
+        "TestMultiModalWorkflowIntegration.test_realtime_multimodal_stream",
+    ): 1,  # paces the simulated stream; excluded from every timing assert below
+    (
+        "autobot-backend/security/threat_intelligence_test.py",
+        "TestThreatIntelligenceCache.test_cache_expiration",
+    ): 1,  # TTL expiry via time.time() is the subject; no injectable clock
+    (
+        "autobot-backend/security/threat_intelligence_test.py",
+        "TestThreatIntelligenceCache.test_clear_expired",
+    ): 1,  # TTL expiry via time.time() is the subject; no injectable clock
+    (
+        "autobot-backend/services/wake_word_detection_test.py",
+        "TestCPUOptimization.test_throttle_triggered_when_cpu_high",
+    ): 1,  # throttle depends on real sampled host CPU; no observable to wait on
+    (
+        "autobot-backend/services/wake_word_detection_test.py",
+        "TestCPUProfileBaseline.test_idle_listening_cpu_baseline",
+    ): 1,  # sustained-operation CPU baseline; wall time is the subject
+    (
+        "autobot-backend/tests/services/test_concurrent_limiter.py",
+        "TestDropOldestCallbackInvoked.test_oldest_workflow_is_evicted_not_newest",
+    ): 1,  # eviction order reads time.time(); no injectable clock, must differ
+    (
+        "autobot-backend/tests/utils/test_pipeline_profiler.py",
+        "TestPipelineProfiler.test_profile_records_stage_timing",
+    ): 2,  # duration_ms is the value under test, paired across two stages
+    (
+        "autobot-backend/tests/utils/test_pipeline_profiler.py",
+        "TestPipelineProfiler.test_total_duration",
+    ): 2,  # total_ms is the value under test, paired across two stages
+    (
+        "autobot-slm-backend/tests/test_provision_progress.py",
+        "TestTaskProgressTracker.test_elapsed_seconds_advances",
+    ): 1,  # elapsed_seconds is a time.monotonic() delta -- time IS the subject
+}
 
 
 def _is_fixed_sleep(node: ast.AST) -> bool:
@@ -106,30 +165,76 @@ def fixed_sleep_then_any_assert(tree: ast.Module, source_lines: list[str]) -> li
     return found
 
 
+def _qualname(tree: ast.Module, function: ast.AST) -> str:
+    """``"Class.method"`` for a test method, or the bare name for a module-level test."""
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and function in node.body:
+            return f"{node.name}.{function.name}"
+    return function.name
+
+
+def _exempted_sites(tree: ast.Module, source_lines: list[str]) -> list[tuple[str, int]]:
+    """``(qualname, line)`` for every fixed sleep this module marks exempt (#16255)."""
+    found: list[tuple[str, int]] = []
+    for function in collectable_tests(tree):
+        for node in own_nodes(function, (ast.stmt,)):
+            if _is_fixed_sleep(node) and _is_exempted(node, source_lines):
+                found.append((_qualname(tree, function), node.lineno))
+    return found
+
+
+def _named_exemption_findings(
+    exempted: list[tuple[str, str, int]], named: dict[tuple[str, str], int]
+) -> tuple[list[str], list[str]]:
+    """``(unlisted, stale)`` for ``exempted`` markers against the ``named`` allowlist.
+
+    Takes both as plain arguments, independent of the real repo sweep, so the
+    self-tests below can drive it with planted data. An occurrence beyond a
+    site's named count is unlisted too -- a known site quietly growing its
+    exemption count is exactly the drift the allowlist exists to catch.
+    """
+    seen: Counter[tuple[str, str]] = Counter()
+    unlisted: list[str] = []
+    for path, qualname, line in exempted:
+        key = (path, qualname)
+        seen[key] += 1
+        if seen[key] > named.get(key, 0):
+            unlisted.append(f"{path}:{line} ({qualname})")
+    stale = [
+        f"{path} ({qualname}): named for {count}, only {seen.get((path, qualname), 0)} found"
+        for (path, qualname), count in named.items()
+        if seen.get((path, qualname), 0) < count
+    ]
+    return unlisted, stale
+
+
 @functools.lru_cache(maxsize=1)
-def _sweep() -> tuple[int, int, tuple[str, ...], tuple[str, ...]]:
+def _sweep() -> tuple[int, int, tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
     modules = test_modules()
     tests = 0
     narrow_offenders: list[str] = []
     wide_offenders: list[str] = []
+    exempted: list[tuple[str, str, int]] = []
     for path in modules:
         tree = parse_module(path)
         tests += len(collectable_tests(tree))
-        relative = path.relative_to(REPO_ROOT)
+        relative = str(path.relative_to(REPO_ROOT))
         narrow_offenders.extend(f"{relative}:{line}" for line in fixed_sleep_call_assertions(tree))
         source_lines = path.read_text(encoding="utf-8").splitlines()
         wide_offenders.extend(f"{relative}:{line}" for line in fixed_sleep_then_any_assert(tree, source_lines))
-    return len(modules), tests, tuple(narrow_offenders), tuple(wide_offenders)
+        exempted.extend((relative, qualname, line) for qualname, line in _exempted_sites(tree, source_lines))
+    unlisted, stale = _named_exemption_findings(exempted, _EXEMPT_SITES)
+    return len(modules), tests, tuple(narrow_offenders), tuple(wide_offenders), tuple(unlisted), tuple(stale)
 
 
 def test_the_population_is_present_and_large_enough_to_mean_anything() -> None:
-    modules, tests, _, _ = _sweep()
+    modules, tests, *_ = _sweep()
     assert modules >= _MIN_MODULES, f"only {modules} test modules found (floor {_MIN_MODULES}): a subtree went missing"
     assert tests >= _MIN_TEST_FUNCTIONS, f"only {tests} tests (floor {_MIN_TEST_FUNCTIONS}): a subtree went missing"
 
 
 def test_no_test_decides_a_call_assertion_with_a_fixed_sleep() -> None:
-    _, _, offenders, _ = _sweep()
+    _, _, offenders, _, _, _ = _sweep()
     assert not offenders, (
         "These tests sleep a fixed interval and then assert that a call happened. A loaded runner "
         "fails them exactly as a regression would (#16224):\n  "
@@ -140,7 +245,7 @@ def test_no_test_decides_a_call_assertion_with_a_fixed_sleep() -> None:
 
 
 def test_no_test_decides_any_assertion_with_a_fixed_sleep() -> None:
-    _, _, _, offenders = _sweep()
+    _, _, _, offenders, _, _ = _sweep()
     assert not offenders, (
         "These tests sleep a fixed interval and then make some assertion. A loaded runner fails "
         "them exactly as a regression would (#16255):\n  "
@@ -148,6 +253,29 @@ def test_no_test_decides_any_assertion_with_a_fixed_sleep() -> None:
         + "\nWait on the observable with `await eventually(...)` from autobot_shared.eventually, "
         "or -- only when elapsed time IS the subject (a TTL, a debounce, a rate limit) -- leave the "
         "sleep and mark it `# fixed sleep on purpose (#16255): <why>` on its own or the preceding line."
+    )
+
+
+def test_no_marker_exempts_a_site_outside_the_named_allowlist() -> None:
+    *_, unlisted, _ = _sweep()
+    assert not unlisted, (
+        "These fixed sleeps carry the #16255 exemption marker but are not in _EXEMPT_SITES "
+        "(repo_tests/fixed_sleep_then_call_assertion_test.py):\n  "
+        + "\n  ".join(unlisted)
+        + "\nEither this is a genuinely new deliberate-time site -- add it to _EXEMPT_SITES with a "
+        "one-phrase reason -- or the marker is being used to dodge the guard, in which case wait on "
+        "the observable instead."
+    )
+
+
+def test_every_named_exemption_still_carries_its_marker() -> None:
+    *_, stale = _sweep()
+    assert not stale, (
+        "These _EXEMPT_SITES entries no longer match a marked sleep in the code (the test moved, was "
+        "renamed, or the sleep was removed):\n  "
+        + "\n  ".join(stale)
+        + "\nUpdate the entry's (path, qualname) to match the current test, or delete the entry if the "
+        "sleep is gone."
     )
 
 
@@ -191,3 +319,29 @@ def test_the_wide_detector_honours_the_reasoned_exemption_only() -> None:
     lines = fixed_sleep_then_any_assert(tree, _PLANTED_ANY_ASSERT.splitlines())
     flagged = {fn.name for fn in collectable_tests(tree) if any(fn.lineno <= ln <= fn.end_lineno for ln in lines)}
     assert flagged == {"test_flagged_plain_assert", "test_flagged_empty_reason"}, flagged
+
+
+_PLANTED_NAMED = (
+    "import asyncio\n\n"
+    "async def test_named_and_marked():\n"
+    "    # fixed sleep on purpose (#16255): named and allowed\n"
+    "    await asyncio.sleep(0.05)\n"
+    "    assert True\n\n"
+    "async def test_marked_but_not_named():\n"
+    "    # fixed sleep on purpose (#16255): not in the allowlist\n"
+    "    await asyncio.sleep(0.05)\n"
+    "    assert True\n"
+)
+
+
+def test_the_named_allowlist_flags_an_unlisted_marker_and_a_stale_entry() -> None:
+    tree = ast.parse(_PLANTED_NAMED)
+    source_lines = _PLANTED_NAMED.splitlines()
+    exempted = [("planted.py", qualname, line) for qualname, line in _exempted_sites(tree, source_lines)]
+    named = {
+        ("planted.py", "test_named_and_marked"): 1,  # in-set marker: must pass
+        ("planted.py", "test_stale_and_gone"): 1,  # no matching marker anywhere: must report stale
+    }
+    unlisted, stale = _named_exemption_findings(exempted, named)
+    assert unlisted == ["planted.py:10 (test_marked_but_not_named)"], unlisted
+    assert stale == ["planted.py (test_stale_and_gone): named for 1, only 0 found"], stale
