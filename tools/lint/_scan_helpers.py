@@ -282,6 +282,40 @@ def iter_python_files(args: List[str], repo_root: Path) -> Iterable[Path]:
 _HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 
+def _git_diff(repo_root: Path, args: Sequence[str]) -> str:
+    """Run ``git diff`` in a scrubbed environment; raise rather than return nothing."""
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "diff", "--no-color", "--no-ext-diff", *args],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=scrubbed_git_env(),
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"git diff {' '.join(args)} failed in {repo_root}: {result.stderr.strip()}")
+    return result.stdout
+
+
+def _rename_source(repo_root: Path, rel: str, span: Sequence[str]) -> str | None:
+    """The path *rel* was renamed from in this change, or None.
+
+    Reads the whole change, not just *rel*: a diff limited to one path cannot pair
+    a rename with its source, so a moved file reads as wholly new and everything
+    in it as added. ``-z`` keeps paths containing spaces or quotes intact.
+    """
+    tokens = _git_diff(repo_root, [*span, "-M", "--name-status", "-z"]).split("\0")
+    i = 0
+    while i < len(tokens) and tokens[i]:
+        if tokens[i].startswith("R"):
+            if tokens[i + 2] == rel:
+                return tokens[i + 1]
+            i += 3
+        else:
+            i += 2
+    return None
+
+
 def added_lines(repo_root: Path, rel: str, base: str | None = None) -> set[int]:
     """Line numbers of *rel* that the change being checked ADDED.
 
@@ -291,23 +325,19 @@ def added_lines(repo_root: Path, rel: str, base: str | None = None) -> set[int]:
     what the change introduced instead of the file's whole backlog (#16178, after
     #13950 did the same for shell hooks in CI).
 
+    A renamed file is diffed against its source, so a ``git mv`` adds only the
+    lines it actually changed. Below git's rename-similarity threshold the file
+    reads as new, which at that point is what it is.
+
     Raises:
         RuntimeError: git failed. A scoped hook must not read that as "added
             nothing", which would report a clean change it never examined.
     """
     span = ["--cached"] if base is None else [base, "HEAD"]
-    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "diff", "-U0", "--no-color", "--no-ext-diff", *span, "--", rel],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-        env=scrubbed_git_env(),
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"git diff for {rel} failed in {repo_root}: {result.stderr.strip()}")
+    source = _rename_source(repo_root, rel, span)
+    paths = [source, rel] if source else [rel]
     lines: set[int] = set()
-    for header in result.stdout.splitlines():
+    for header in _git_diff(repo_root, ["-U0", "-M", *span, "--", *paths]).splitlines():
         match = _HUNK.match(header)
         if match:
             start = int(match.group(1))

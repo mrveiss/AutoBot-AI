@@ -331,6 +331,41 @@ def test_base_mode_judges_the_range_not_the_file(tmp_path: Path) -> None:
     assert hook.run([path], repo, changed_only=True, base=base) == 1
 
 
+def test_a_renamed_file_is_not_blamed_for_the_models_it_carried(tmp_path: Path) -> None:
+    """A ``git mv`` does not introduce the models inside the file it moves.
+
+    A diff limited to one path cannot pair a rename with its source, so the moved
+    file read as wholly added and every model in it as new. Found in review.
+    """
+    repo, path = _repo_with_legacy_model(tmp_path)
+    moved = path.with_name("moved.py")
+    _git(repo, "mv", str(path), str(moved))
+
+    assert hook.run([moved], repo, changed_only=True, base=None) == 0
+
+
+def test_a_renamed_file_that_gains_a_model_still_fails(tmp_path: Path) -> None:
+    """The contrast: following the rename must not hide a model added in the same change."""
+    repo, path = _repo_with_legacy_model(tmp_path)
+    moved = path.with_name("moved.py")
+    _git(repo, "mv", str(path), str(moved))
+    moved.write_text(LEGACY + "\n\nclass Smuggled(BaseModel):\n    x: int\n", encoding="utf-8")
+    _git(repo, "add", str(moved))
+
+    assert hook.run([moved], repo, changed_only=True, base=None) == 1
+
+
+def test_a_rename_in_a_committed_range_is_followed_too(tmp_path: Path) -> None:
+    """The PR stage: the same rename, read from BASE..HEAD."""
+    repo, path = _repo_with_legacy_model(tmp_path)
+    base = _git(repo, "rev-parse", "HEAD")
+    moved = path.with_name("moved.py")
+    _git(repo, "mv", str(path), str(moved))
+    _git(repo, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "move")
+
+    assert hook.run([moved], repo, changed_only=True, base=base) == 0
+
+
 def test_an_unscoped_run_still_reads_the_whole_file(tmp_path: Path) -> None:
     """A direct run is for the backlog, and must still show it."""
     repo, path = _repo_with_legacy_model(tmp_path)
