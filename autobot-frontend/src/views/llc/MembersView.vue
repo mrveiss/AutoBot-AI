@@ -49,7 +49,7 @@
           <tbody>
             <tr v-for="member in members" :key="member.user_id">
               <td>
-                <span class="members-name">{{ member.display_name || member.user_id }}</span>
+                <span class="members-name">{{ member.display_name }}</span>
               </td>
               <td>
                 <BaseBadge :variant="roleBadgeVariant(member.role)">
@@ -95,7 +95,7 @@
           >
             <option value="">{{ t('llcMembers.userPlaceholder') }}</option>
             <option v-for="u in selectableUsers" :key="u.id" :value="u.id">
-              {{ u.display_name || u.username }} ({{ u.email }})
+              {{ displayNameOf(u) }} ({{ u.email }})
             </option>
           </select>
           <p v-if="usersLoading" class="members-hint">{{ t('llcMembers.usersLoading') }}</p>
@@ -135,6 +135,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { displayNameOf } from '@/utils/displayName'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
@@ -152,7 +153,8 @@ type MembershipRole = (typeof MEMBERSHIP_ROLES)[number]
 
 interface Member {
   user_id: string
-  display_name: string | null
+  /** Never null: `list_members` resolves the whole ladder server-side (#14939). */
+  display_name: string
   role: string
 }
 
@@ -267,7 +269,7 @@ async function submitAdd(): Promise<void> {
 }
 
 async function confirmRemove(member: Member): Promise<void> {
-  const name = member.display_name || member.user_id
+  const name = member.display_name
   if (!window.confirm(t('llcMembers.confirmRemove', { name }))) return
   pendingUserId.value = member.user_id
   errorMessage.value = ''

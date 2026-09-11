@@ -110,3 +110,13 @@ export type Severity =
 
 /** Generated alias — same union as `Severity` (#6689 / #7226) */
 export type RiskLevel = Severity;
+
+/** Generated from `autobot_shared.auth.permissions.Role` */
+export type Role =
+  | 'admin'
+  | 'superadmin'
+  | 'operator'
+  | 'analyst'
+  | 'editor'
+  | 'user'
+  | 'readonly';

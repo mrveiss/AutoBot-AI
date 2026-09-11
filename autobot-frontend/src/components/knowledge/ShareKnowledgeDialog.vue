@@ -117,6 +117,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { BaseModal } from '@autobot/ui'
 import { ref, computed, watch } from 'vue'
+import { displayNameOf } from '@/utils/displayName'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { apiService } from '@/services/api'
@@ -205,7 +206,8 @@ const fetchEntityName = async (id: string, type: 'user' | 'group'): Promise<stri
     if (type === 'user') {
       const userData = await apiService.getUserById(id)
       if (userData) {
-        displayName = userData.display_name || userData.email || userData.username || id
+        // #14939: the shared ladder -- no email rung, which put addresses where names go.
+        displayName = displayNameOf(userData, id)
       }
     } else {
       const groupData = await apiService.getGroupById(id)

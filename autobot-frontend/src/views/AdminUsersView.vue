@@ -63,16 +63,19 @@
               <span v-if="user.is_platform_admin" class="badge badge-admin">{{ t('adminUsers.roleAdmin') }}</span>
             </td>
             <td>{{ user.email }}</td>
-            <td>{{ user.display_name || '—' }}</td>
+            <td>{{ user.display_name || t('adminUsers.displayNameNotSet') }}</td>
             <td>
               <select
                 class="role-select"
                 :value="primaryRole(user)"
                 @change="onRoleChange(user, ($event.target as HTMLSelectElement).value)"
               >
-                <option value="admin">{{ t('adminUsers.roleAdmin') }}</option>
-                <option value="user">{{ t('adminUsers.roleUser') }}</option>
-                <option value="readonly">{{ t('adminUsers.roleReadonly') }}</option>
+                <!-- #14937: a role the UI does not assign still shows as itself
+                     instead of leaving the select blank. -->
+                <option v-if="!isAssignableRole(primaryRole(user))" :value="primaryRole(user)" disabled>
+                  {{ roleLabel(primaryRole(user)) }}
+                </option>
+                <option v-for="role in ASSIGNABLE_ROLES" :key="role" :value="role">{{ roleLabel(role) }}</option>
               </select>
             </td>
             <td class="bundle-cell">
@@ -241,6 +244,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { ASSIGNABLE_ROLES, isAssignableRole } from '@/constants/roles'
+import type { Role } from '@/types/_generated/workflow'
 import { createLogger } from '@/utils/debugUtils'
 import apiClient from '@/utils/ApiClient'
 import Icon from '@/components/ui/Icon.vue'
@@ -307,6 +312,22 @@ function primaryRole(user: UserRecord): string {
   if (user.is_platform_admin) return 'admin'
   const sysRole = user.roles.find(r => r.is_system)
   return sysRole?.name ?? 'user'
+}
+
+// #14937: every canonical role has a label, so a role the UI does not assign
+// still renders as itself; `Record<Role, ...>` fails to compile when one is added.
+const roleLabels = computed<Record<Role, string>>(() => ({
+  admin: t('adminUsers.roleAdmin'),
+  superadmin: t('adminUsers.roleSuperadmin'),
+  operator: t('adminUsers.roleOperator'),
+  analyst: t('adminUsers.roleAnalyst'),
+  editor: t('adminUsers.roleEditor'),
+  user: t('adminUsers.roleUser'),
+  readonly: t('adminUsers.roleReadonly'),
+}))
+
+function roleLabel(role: string): string {
+  return (roleLabels.value as Record<string, string>)[role] ?? role
 }
 
 async function loadUsers(): Promise<void> {
