@@ -183,6 +183,18 @@ _ss_spec.loader.exec_module(_ss_mod)
 sys.modules["models.schemas_secrets"] = _ss_mod
 setattr(sys.modules["models"], "schemas_secrets", _ss_mod)
 
+# #16281: models/npu_schemas.py and models/gpu_schemas.py are REAL for the same
+# reason -- services/node_gpu.py builds pydantic responses from them, and a
+# MagicMock model validates nothing. Both import only pydantic; gpu_schemas also
+# imports npu_schemas, hence the order and the sys.modules entry before exec.
+for _schema in ("npu_schemas", "gpu_schemas"):
+    _schema_path = Path(__file__).parent / "models" / f"{_schema}.py"
+    _schema_spec = _ss_importlib_util.spec_from_file_location(f"models.{_schema}", _schema_path)
+    _schema_mod = _ss_importlib_util.module_from_spec(_schema_spec)
+    sys.modules[f"models.{_schema}"] = _schema_mod
+    _schema_spec.loader.exec_module(_schema_mod)
+    setattr(sys.modules["models"], _schema, _schema_mod)
+
 
 # ── services ──────────────────────────────────────────────────────────────────
 # The services.* modules api/code_sync.py and api/setup_wizard.py import are
@@ -280,6 +292,15 @@ for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_M
 # outgrown "eight" twice already (#15462), and a stale number reads as a rule.
 import importlib.util as _importlib_util  # noqa: E402
 
+# #16281: the SLM's top-level status vocabulary (#15495), loaded by path. On
+# pytest.ini's pythonpath `autobot_shared/` itself is a root, so a bare
+# `import status_enums` finds autobot_shared/status_enums.py -- a different
+# module with no NodeStatus. Production resolves the SLM's own; so does the suite.
+_se_spec = _importlib_util.spec_from_file_location("status_enums", Path(__file__).parent / "status_enums.py")
+_se_mod = _importlib_util.module_from_spec(_se_spec)
+_se_spec.loader.exec_module(_se_mod)
+sys.modules["status_enums"] = _se_mod
+
 _REAL_SERVICE_MODULES = (
     "ssh_utils",
     "deploy_artifacts",
@@ -299,6 +320,8 @@ _REAL_SERVICE_MODULES = (
     # line-count ceiling, #14236) into this module; its own tests import it
     # directly and need the real coroutines, not MagicMocks.
     "slm_frontend_build",
+    # #16281: its co-located test drives the real publish/retract logic.
+    "node_gpu",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for

@@ -506,6 +506,7 @@ To add a new variable:
 | `AUTOBOT_GATEWAY_REQUIRE_OUTBOUND_APPROVAL` | gateway | bool | false | Require approval before the Gateway hands an agent-authored message to a channel adapter. Off means audit-only: every governed send is recorded, none is blocked. On fails closed — no registered approver, a denial, or an approver error all deny the send. |
 | `AUTOBOT_GIT_BRANCH` | system | str | `'Dev_new_gui'` | Git branch that the running instance was built from. |
 | `AUTOBOT_GIT_PROBE_TIMEOUT_SECONDS` | backend | int | `30` | Seconds a git subprocess started through autobot_shared.git_probe may run before it is abandoned, so a probe cannot hang on a lock or a prompt (#15783). |
+| `AUTOBOT_GPU_PROBE_TIMEOUT_S` | slm | float | `5.0` | Seconds a GPU vendor tool (nvidia-smi, rocm-smi) may run before the probe gives up. Read by autobot_shared.gpu_telemetry for the SLM agent's heartbeat GPU telemetry (#16280). Range: 0.5–60.0. |
 | `AUTOBOT_GRAFANA_PORT` | monitoring | str | `'3000'` | TCP port of the Grafana instance. Also declared in ssot_config.py; 3000 is Grafana's own default and is NOT the browser service, which is 9001 (#4052, #14198). |
 | `AUTOBOT_GRAPH_PATH_TIMEOUT_SECONDS` | kb | float | `10.0` | Ceiling on a knowledge-graph path search. Path queries are unbounded in the worst case, so this is what stops one request occupying a worker indefinitely. |
 | `AUTOBOT_HEALTH_POLL_CONNECT_TIMEOUT` | slm | float | `3.0` | Per-attempt connect timeout, in seconds, when probing a just-restarted component's health endpoint. Raising it tolerates a service that is slower to accept connections; lowering it fails an unreachable endpoint faster (autobot-slm-backend/api/code_sync.py, #11378). |
@@ -665,5 +666,5 @@ To add a new variable:
 | `AUTOBOT_WORK_CLAIM_WAIT_TTL_S` | orchestration | int | `900` | How long an agent keeps its place in a work-claim queue without renewing (#15948). Deliberately longer than AUTOBOT_WORK_CLAIM_TTL_S: a waiter that expired before the holder it is queued behind would never be promoted, and would look to an operator like a queue that silently drops people. The ceiling bounds how long a dead waiter occupies a position before it is pruned on the next read. Range: 30–7200. |
 | `AUTOBOT_WORK_CLAIM_YIELD_TIMEOUT_S` | orchestration | int | `30` | How long a requester waits for a claim holder to answer a yield request before treating the silence as a refusal (#15948). Short on purpose: the requester is blocked while it waits, and a holder that has not answered in this long is busy working, which is itself the answer. Raising it does not make a yield more likely, it only makes the requester wait longer to be told no. Range: 1–600. |
 
-*219 variables registered as of last generation.*
+*220 variables registered as of last generation.*
 <!-- END_AUTOGEN_ENV_DOCS -->

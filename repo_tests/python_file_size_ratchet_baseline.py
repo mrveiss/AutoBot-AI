@@ -219,7 +219,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/enterprise_feature_manager.py": 955,
     "autobot-backend/events/stream_manager.py": 654,
     "autobot-backend/events/types.py": 885,
-    "autobot-backend/hardware_acceleration.py": 678,
+    "autobot-backend/hardware_acceleration.py": 609,
     "autobot-backend/initialization/lifespan.py": 2769,
     "autobot-backend/initialization/router_registry/feature_routers.py": 779,
     "autobot-backend/integrations/cloud_integration.py": 630,
@@ -508,7 +508,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/user_management/services/user_service.py": 863,
     "autobot_shared/auth/permissions.py": 631,
     "autobot_shared/env_registry.py": 1225,  # #15774: logging component split to env_registry_logging.py
-    "autobot_shared/monitoring/prometheus_metrics.py": 954,
+    "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/network_constants.py": 616,
     "autobot_shared/npu/integration.py": 929,
     "autobot_shared/plugin_sdk/loader.py": 687,

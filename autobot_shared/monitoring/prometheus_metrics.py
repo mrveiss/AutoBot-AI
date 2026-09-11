@@ -16,6 +16,7 @@ Refactoring History:
 """
 
 import threading
+from typing import Any
 
 from prometheus_client import (
     CollectorRegistry,
@@ -461,23 +462,17 @@ class PrometheusMetricsManager:
     # Performance Metrics (Issue #469: Delegates to PerformanceMetricsRecorder)
     # =========================================================================
 
-    def update_gpu_metrics(
-        self,
-        gpu_id: str,
-        gpu_name: str,
-        utilization: float,
-        memory_utilization: float,
-        temperature: float,
-        power_watts: float,
-    ) -> None:
-        """Update GPU metrics."""
-        self._performance.update_gpu_metrics(
-            gpu_id, gpu_name, utilization, memory_utilization, temperature, power_watts
-        )
+    def update_gpu_metrics(self, *args: Any, **kwargs: Any) -> None:
+        """Update GPU metrics; arguments as ``PerformanceMetricsRecorder.update_gpu_metrics``."""
+        self._performance.update_gpu_metrics(*args, **kwargs)
 
-    def set_gpu_available(self, available: bool) -> None:
-        """Set GPU availability status."""
-        self._performance.set_gpu_available(available)
+    def set_gpu_available(self, available: bool, node: str | None = None) -> None:
+        """Set GPU availability status; ``node`` defaults to this host (#16281)."""
+        self._performance.set_gpu_available(available, node)
+
+    def remove_gpu_node(self, node: str) -> None:
+        """Drop every GPU series labelled *node* (#16281)."""
+        self._performance.remove_gpu_node(node)
 
     def record_gpu_throttling(self, gpu_id: str, throttle_type: str) -> None:
         """Record a GPU throttling event."""
