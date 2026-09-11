@@ -473,5 +473,5 @@ jobs:
           {
             echo "## Quick Links:"
             echo "- [View Coverage Report](https://app.codecov.io/gh/${{ github.repository }})"
-            echo "- [Download Test Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            echo "- [Download Test Artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           } >> "$GITHUB_STEP_SUMMARY"

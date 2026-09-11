@@ -243,6 +243,41 @@ class TestRepoTestsSupportModuleExemption:
 
 
 @pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
+class TestWorkflowUrlExemption:
+    """#16260: the URL rule stands down in ``.github/workflows/`` -- and nowhere else.
+
+    A vendor download or a dashboard link in CI is not deployment config, but the
+    exemption is deliberately narrow: the same URL anywhere else is still a finding,
+    and the IP rule still reads workflow files.
+    """
+
+    _VENDOR = "https://github.com/prometheus/prometheus/releases/download/v2.47.0/prometheus.tar.gz"
+
+    def test_allows_a_vendor_url_in_a_workflow(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {".github/workflows/ci.yml": f'      - run: curl -fsSL "{self._VENDOR}" -o p.tgz\n'},
+        )
+        assert result.returncode == 0, result.stdout
+
+    def test_still_blocks_the_same_url_outside_workflows(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {"deploy/install.yml": f'      - run: curl -fsSL "{self._VENDOR}" -o p.tgz\n'},
+        )
+        assert result.returncode != 0
+        assert "prometheus/releases/download" in result.stdout
+
+    def test_still_blocks_an_autobot_ip_in_a_workflow(self, tmp_path: Path) -> None:
+        result = _run_hook_with_staged(
+            tmp_path,
+            {".github/workflows/deploy.yml": "      - run: curl -fsS http://172.16.168.23/health\n"},
+        )
+        assert result.returncode != 0
+        assert "172.16.168.23" in result.stdout
+
+
+@pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
 class TestNonBlockingPatterns:
     """Lines that look like hardcoded IPs but aren't deployment IPs are allowed."""
 
