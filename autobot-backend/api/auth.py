@@ -14,11 +14,11 @@ from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from api.auth_me import router as me_router
 from api.schemas_agent import (
     AuthCheckResponse,
     AuthPermissionResponse,
     AuthRoleEntry,
-    AuthUserInfoResponse,
     AuthValidateClaims,
     AuthValidateRequest,
     AuthValidateResponse,
@@ -297,45 +297,9 @@ async def revoke_rs256_token(
     return {"revoked": result, "message": "Token revoked" if result else "Token already expired"}
 
 
-@router.get("/me", response_model=AuthUserInfoResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_current_user_info",
-    error_code_prefix="AUTH",
-)
-async def get_current_user_info(request: Request):
-    """
-    Get current authenticated user information.
-    """
-    try:
-        from user_management.config import get_deployment_config
-
-        config = get_deployment_config()
-        user_data = get_auth_middleware().get_user_from_request(request)
-
-        if not user_data:
-            raise HTTPException(status_code=401, detail="Not authenticated")
-
-        # #12135: use .get() with safe fallbacks, not hard `[...]` access.
-        # Every _extract_user_from_* path is expected to populate
-        # "username"/"role", but a valid, already-authenticated request
-        # must never 500 on an unexpected claim shape — degrade gracefully
-        # instead (matches the sub/user_id/username fallback convention
-        # used elsewhere, e.g. api/documents.py, api/voice.py).
-        return {
-            "username": user_data.get("username") or user_data.get("sub") or user_data.get("user_id", "unknown"),
-            "role": user_data.get("role", "user"),
-            "email": user_data.get("email", ""),
-            "auth_method": user_data.get("auth_method", "unknown"),
-            "authenticated": True,
-            "deployment_mode": config.mode.value,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Error getting user info: %s", e)
-        raise HTTPException(status_code=500, detail="Error retrieving user information")
+# GET /me lives in api/auth_me.py: it returns effective permissions now (#16270)
+# and this file is at its size ceiling. Included here, so the path is unchanged.
+router.include_router(me_router)
 
 
 @router.get("/check", response_model=AuthCheckResponse)
