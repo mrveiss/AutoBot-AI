@@ -234,18 +234,28 @@ and printed while the verdict read `ssot_violations` alone, so nine hardcoded
 
 ### "STALE baseline entry" — what to do (#14912)
 
-If `ssot-coverage` fails with `N baseline entr(ies) … no longer match anything`,
-you have almost certainly just **fixed or moved** a hardcoded value. That is the
-outcome the guard wants; the baseline simply still lists it. Recover with one
-command:
+If `ssot-coverage` fails with `N baseline entr(ies) … claim more findings than
+the scan found`, you have almost certainly just **fixed or moved** a hardcoded
+value. That is the outcome the guard wants; the baseline simply still lists it.
+The audit lists two cases apart (#16334), and they need different edits:
+
+- `STALE … (matched 0 of N: delete this entry)`: the entry matches nothing any
+  more, so it goes.
+- `OVER … (matched k of N: lower it to k, do not delete)`: the entry still
+  exempts `k` live findings. **Deleting it un-baselines them.** #16298 did
+  exactly that, because the audit used to call this case "no longer match
+  anything" too. Lower the count instead.
+
+Recover from both with one command:
 
 ```bash
 ./pipeline-scripts/detect-hardcoded-values.sh --prune-baseline
 ```
 
-then commit the changed baseline alongside your fix.
+then commit the changed baseline alongside your fix. It deletes the first kind
+and lowers the second.
 
-`--prune-baseline` **only ever removes**. It cannot add a key or raise a count,
+`--prune-baseline` **only ever removes or lowers**. It cannot add a key or raise a count,
 by construction: it iterates the keys already in the baseline and writes
 `min(baseline_count, found_count)`. So it cannot be used to silence a new
 finding — that direction is blocked independently by
