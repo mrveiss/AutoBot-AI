@@ -46,7 +46,7 @@ from pathlib import Path
 import pytest
 
 from autobot_shared.status_enums import CommandRisk, RiskLevel, SecretType, Severity
-from tools.lint._scan_helpers import tracked_paths, TRACKED_PY_FLOOR
+from tools.lint._scan_helpers import TRACKED_PY_FLOOR, tracked_paths
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKEND = REPO_ROOT / "autobot-backend"
