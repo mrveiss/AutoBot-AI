@@ -160,8 +160,8 @@ def test_by_path_target_imports_nothing_unreachable(target: str) -> None:
     assert not problems, (
         f"{target} is exec'd by path by the migration gate with no parent package, "
         f"so these imports fail there:\n  " + "\n  ".join(problems) + "\n"
-        f"Move the dependency to a top-level module beside service_status.py — see #16019 "
-        f"and the comment in models/database.py."
+        "Move the dependency to a top-level module beside service_status.py — see #16019 "
+        "and the comment in models/database.py."
     )
 
 
