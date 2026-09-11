@@ -273,3 +273,40 @@ def iter_python_files(args: List[str], repo_root: Path) -> Iterable[Path]:
         if any(part in EXCLUDED_DIR_NAMES for part in parts):
             continue
         yield repo_root / rel
+
+
+def logical_lines(text: str) -> List[Tuple[int, str]]:
+    """`(first line number, joined line)` with shell `\\`-continuations folded in.
+
+    A matcher that reads physical lines misses the shape a persistent override
+    or a reintroduced flag most plausibly takes, because that is how a long
+    shell invocation actually gets written::
+
+        git config \\
+          core.hooksPath /tmp/x
+
+    Splitting on newlines puts the command on one physical line and its
+    argument on the next, so a matcher requiring both on one line inspects two
+    lines that each look innocent and reports nothing (#16128 review; the same
+    gap recurred in #15961). The line number reported is the FIRST physical
+    line, so a message still points at the invocation rather than at whichever
+    token happened to land on the joined line.
+
+    Extracted from the guard that found the pattern first (#15938) so the
+    guard that found it again (#15961) shares one fold instead of each
+    carrying its own copy to drift independently.
+    """
+    out: List[Tuple[int, str]] = []
+    buffer, start = "", 0
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not buffer:
+            start = number
+        stripped = line.rstrip()
+        if stripped.endswith("\\"):
+            buffer += stripped[:-1] + " "
+            continue
+        out.append((start, buffer + line))
+        buffer = ""
+    if buffer:
+        out.append((start, buffer))
+    return out
