@@ -1125,7 +1125,8 @@
       "recommendationsValue0": "Recommendations ({value0})",
       "refresh": "Refresh",
       "totalAlerts": "Total Alerts",
-      "warning": "Warning"
+      "warning": "Warning",
+      "recommendationsUnavailable": "Recommendations are not available yet: the SLM has no source for them."
     },
     "errorMonitor": {
       "active": "active",
@@ -1288,6 +1289,15 @@
       "cPUUsage": "CPU Usage",
       "disk": "Disk",
       "diskUsage": "Disk Usage",
+      "gpu": "GPU",
+      "gpuMeasured": "{name}: {utilization}",
+      "gpuMemory": "{used} / {total} GB",
+      "gpuMore": "+{count} more",
+      "gpuNone": "None",
+      "gpuNotReported": "Not reported",
+      "gpuUnavailable": "Unavailable",
+      "gpuUnmonitored": "{count} present, not monitored",
+      "gpuUnreadable": "unreadable",
       "memory": "Memory",
       "memoryUsage": "Memory Usage",
       "metricsDashboards": "Metrics Dashboards",

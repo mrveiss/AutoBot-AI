@@ -613,7 +613,9 @@ export type RolePurgeRequest = Partial<
 // NPU Worker Types (Issue #255 - NPU Fleet Integration)
 // =============================================================================
 
-export type NPUDeviceType = 'intel-npu' | 'nvidia-gpu' | 'amd-gpu' | 'unknown'
+// #15226: generated from the SLM schema (models/npu_schemas.py) -- the one
+// vocabulary the schema, the API and this UI share, not a hand-kept copy.
+export type NPUDeviceType = components['schemas']['NPUDeviceType']
 
 export type NPULoadBalancingStrategy = 'round-robin' | 'least-loaded' | 'model-affinity'
 
@@ -630,6 +632,12 @@ export type NPULoadBalancingStrategy = 'round-robin' | 'least-loaded' | 'model-a
  * the set of values that get a friendly label.
  */
 export type NPUCapabilities = components['schemas']['NPUCapabilities']
+
+// Each node's GPUs, from its agent's heartbeat (#16280, #16281, #15226).
+export type GPUReportState = components['schemas']['GPUReportState']
+export type GPUDevice = components['schemas']['GPUDevice']
+export type GPUNodeStatus = components['schemas']['GPUNodeStatus']
+export type GPUNodeListResponse = components['schemas']['GPUNodeListResponse']
 
 export interface NPUNodeStatus {
   node_id: string

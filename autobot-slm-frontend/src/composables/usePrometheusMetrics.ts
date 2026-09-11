@@ -15,6 +15,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 import { POLLED_READ_MAX_RETRIES } from '@/constants/api-timeouts'
+import type { GPUNodeListResponse, GPUNodeStatus } from '@/types/slm'
 // Shared with autobot-frontend's usePrometheusMetrics.ts — see the kit
 // file's doc comment for which fields are main-app-only extensions (#14907).
 // ServiceHealth is used only inside ServicesSummary's shape (not referenced
@@ -201,6 +202,31 @@ interface NpuNodesWire {
   nodes?: Record<string, unknown>[]
 }
 
+/** Mean of the values a tool could read; 0 only when it read none of them. */
+function meanOfKnown(values: (number | null | undefined)[]): number {
+  const known = values.filter((value): value is number => value != null)
+  return known.length ? known.reduce((sum, value) => sum + value, 0) / known.length : 0
+}
+
+/**
+ * The fleet's measured GPUs as one GPUMetrics, or null when none is measured
+ * (#15226): an unmeasured fleet is unknown, not a fleet sitting at 0%.
+ */
+function summariseGpus(nodes: GPUNodeStatus[]): GPUMetrics | null {
+  const devices = nodes.flatMap((node) => (node.devices ?? []).filter((device) => device.monitored))
+  if (devices.length === 0) return null
+  const used = devices.reduce((sum, device) => sum + (device.memory_used_mb ?? 0), 0)
+  const total = devices.reduce((sum, device) => sum + (device.memory_total_mb ?? 0), 0)
+  return {
+    available: true,
+    utilization_percent: meanOfKnown(devices.map((device) => device.utilization_percent)),
+    memory_utilization_percent: total ? (used / total) * 100 : 0,
+    temperature_celsius: Math.max(0, ...devices.map((device) => device.temperature_celsius ?? 0)),
+    power_watts: devices.reduce((sum, device) => sum + (device.power_watts ?? 0), 0),
+    name: devices.length === 1 ? (devices[0].name ?? undefined) : undefined,
+  }
+}
+
 // ===== Composable Implementation =====
 
 export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) {
@@ -210,8 +236,12 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
   const dashboard = ref<DashboardViewModel | null>(null)
   const services = ref<ServicesSummary | null>(null)
   const alerts = ref<AlertsSummary | null>(null)
-  const recommendations = ref<OptimizationRecommendation[]>([])
+  // #15226: null while the SLM has no recommendations source -- unavailable, not "none"
+  const recommendations = ref<OptimizationRecommendation[] | null>(null)
   const gpuDetails = ref<GPUMetrics | null>(null)
+  // #15226: each node's GPU state from its heartbeat; gpuDetails summarises it
+  const gpuNodes = ref<GPUNodeStatus[]>([])
+  const gpuUnavailable = ref(false)
   const npuDetails = ref<NPUMetrics | null>(null)
 
   // New metrics state (Issue #896)
@@ -330,19 +360,23 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
   }
 
   async function fetchRecommendations(): Promise<void> {
-    // SLM doesn't have a recommendations endpoint yet
-    // Return empty recommendations for now
-    recommendations.value = []
+    // #15226: the SLM has no recommendations source yet. Say so (null) rather
+    // than return an empty list, which the UI would read as "nothing to fix".
+    recommendations.value = null
   }
 
   async function fetchGPUDetails(): Promise<void> {
-    // No GPU metrics endpoint in SLM backend - no GPU nodes in fleet
-    gpuDetails.value = {
-      available: false,
-      utilization_percent: 0,
-      memory_utilization_percent: 0,
-      temperature_celsius: 0,
-      power_watts: 0,
+    // #15226: each node's GPUs, as its agent's heartbeat reported them (#16280, #16281)
+    try {
+      const data = await slmApiClient.get<GPUNodeListResponse>('/monitoring/gpu/nodes', POLL_OPTS)
+      gpuNodes.value = data.nodes
+      gpuDetails.value = summariseGpus(data.nodes)
+      gpuUnavailable.value = false
+    } catch (err) {
+      logger.error('Failed to fetch GPU state:', err)
+      gpuNodes.value = []
+      gpuDetails.value = null
+      gpuUnavailable.value = true
     }
   }
 
@@ -536,6 +570,8 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
     alerts,
     recommendations,
     gpuDetails,
+    gpuNodes,
+    gpuUnavailable,
     npuDetails,
     isLoading,
     error,
