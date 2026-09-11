@@ -20,19 +20,27 @@ preamble saying it is data -- the #15651 convention and its shared helpers.
 bare ``;``, ``>`` or backtick as HIGH risk, and its injection list includes
 ``--force``, ``~/.ssh/`` and ``user:``. Blocking on either would refuse nearly
 every coding or ops chat, which is this product's ordinary content, while a
-summary prompt executes nothing. So a transcript is refused only when the
-detector finds a phrase that makes sense solely as an instruction to a model,
-or when a deployment's hard-block fires. The accepted cost: a chat that quotes
-such a phrase -- a security review, say -- is refused, with a reason the user
-can act on, rather than stored where it would later be retrieved into other
-prompts.
+summary prompt executes nothing. So a transcript is refused only for one of the
+detector's instruction-override phrases that ordinary technical chat rarely
+contains (``OVERRIDE_PATTERNS``), or when a deployment's hard-block fires. The
+accepted cost: a chat that quotes such a phrase -- a security review, say -- is
+refused, with a reason the user can act on, rather than stored where it would
+later be retrieved into other prompts.
+
+**Invisible characters are removed before detection, not after.** The detector
+matches its patterns against the text it is given and strips invisible Unicode
+only from its own sanitised copy, so a zero-width space inside "ignore previous
+instructions" would defeat the match. The transcript is serialised with
+``ensure_ascii=False`` for the same reason: escaped, that space arrives as the
+six ASCII characters ``\\u200b``, which no strip can see. Unescaped, the
+summariser also reads a non-English chat as written, not as escape sequences.
 
 It lives beside ``chat_knowledge_manager.py`` rather than in it because that file
 is at its size limit.
 """
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.prompt_rules import frame_untrusted_block, sanitize_injected
@@ -46,16 +54,27 @@ logger = get_logger(__name__)
 #: still well inside a model's context once the instruction is added.
 TRANSCRIPT_MAX = 24000
 
-#: The detector's findings that refuse a transcript: its instruction-override and
-#: prompt-marker patterns, exactly as it spells them. Everything else it flags --
-#: shell syntax, commands, paths, ``user:``/``assistant:`` lines of a pasted log --
-#: is content here, and the frame carries it. A test asserts every entry is still
-#: one of the detector's own patterns, so a rename there cannot silently empty this.
+#: The detector's findings that refuse a transcript: the instruction-override and
+#: prompt-marker patterns that ordinary technical chat rarely contains, exactly as
+#: the detector spells them. Everything else it flags is content here, and the
+#: frame carries it: shell syntax, commands, paths and flags, which a summary
+#: prompt cannot execute, and these override-shaped patterns, for the reason given:
+#:
+#: - ``forget\s+all``: "don't forget all the migrations".
+#: - ``new\s+instructions``: "the new instructions for the installer".
+#: - ``override\s*:``: a YAML or compose key, ``override: true``.
+#: - ``you\s+are\s+now\s+``: tool output, "You are now logged in".
+#: - ``you\s+are\s+a\s+``: "you are a lifesaver".
+#: - ``system:``, ``assistant:``, ``user:``: the role labels of a pasted log.
+#:
+#: The test module pins the complement, every detector pattern not refused here, so
+#: a pattern added to the detector fails a test until someone classifies it.
 OVERRIDE_PATTERNS = frozenset(
     {
         r"ignore\s+previous\s+instructions",
         r"ignore\s+above",
         r"disregard\s+previous",
+        r"forget\s+previous",
         r"forget\s+your\s+system\s+prompt",
         r"override\s+instructions",
         r"\[SYSTEM\]",
@@ -90,14 +109,15 @@ class TranscriptRefused(ValueError):
     """The transcript will not be summarised into the KB. The message is for the user."""
 
 
-def _has_content(messages: List[Dict[str, Any]]) -> bool:
+def _has_content(messages: List[Dict[str, Any]], strip_invisible: Callable[[str], str]) -> bool:
     """Whether any message actually says something.
 
     A filtered-down list can serialise to ``[]`` or to messages with blank bodies,
     which is non-empty text carrying no conversation: #15630's failure mode, a
-    summary of nothing, arriving by a different route.
+    summary of nothing, arriving by a different route. A body of zero-width
+    characters is blank too, once they are stripped.
     """
-    return any(str(m.get("content") or "").strip() for m in messages)
+    return any(strip_invisible(str(m.get("content") or "")).strip() for m in messages)
 
 
 def _override_findings(detected_patterns: List[str]) -> List[str]:
@@ -116,10 +136,12 @@ def build_summary_prompt(messages: List[Dict[str, Any]]) -> str:
         TranscriptRefused: the transcript has no content, carries an instruction to
             the model, or tripped a deployment's hard-block. No KB entry follows.
     """
-    if not _has_content(messages):
-        raise TranscriptRefused(_REFUSED_EMPTY)
-    transcript = json.dumps(messages, indent=2)
     detector = get_prompt_injection_detector(strict_mode=True)
+    if not _has_content(messages, detector.strip_invisible_unicode):
+        raise TranscriptRefused(_REFUSED_EMPTY)
+    # Stripped before detection, and serialised unescaped: see the module docstring.
+    serialised = json.dumps(messages, indent=2, ensure_ascii=False)
+    transcript = detector.strip_invisible_unicode(serialised)
     result = detector.detect_injection(transcript, context="user_input")
     overrides = _override_findings(result.detected_patterns)
     if overrides or result.hard_blocked:
@@ -131,6 +153,5 @@ def build_summary_prompt(messages: List[Dict[str, Any]]) -> str:
         raise TranscriptRefused(_REFUSED_OVERRIDE)
     # Not ``result.sanitized_text``: the detector's sanitizer deletes ``;``, backticks,
     # ``&&`` and ``$(``, which would mangle the code a knowledge entry exists to keep.
-    # Invisible Unicode is still stripped -- it can carry text a reader never sees.
-    body = sanitize_injected(detector._strip_invisible_unicode(transcript), TRANSCRIPT_MAX)
+    body = sanitize_injected(transcript, TRANSCRIPT_MAX)
     return _INSTRUCTION + frame_untrusted_block("CONVERSATION", list(_TRANSCRIPT_FRAME_WARNING), [body])

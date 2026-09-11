@@ -427,7 +427,7 @@ class PromptInjectionDetector:
         # Sanitize and determine blocking
         sanitized_text = self.sanitize_input(text)
         # Issue #4345: Also strip invisible Unicode from sanitized output
-        sanitized_text = self._strip_invisible_unicode(sanitized_text)
+        sanitized_text = self.strip_invisible_unicode(sanitized_text)
         metadata["sanitized_length"] = len(sanitized_text)
         blocked = max_risk in {InjectionRisk.HIGH, InjectionRisk.CRITICAL}
 
@@ -599,7 +599,7 @@ class PromptInjectionDetector:
 
         return len(found_chars) > 0, found_chars
 
-    def _strip_invisible_unicode(self, text: str) -> str:
+    def strip_invisible_unicode(self, text: str) -> str:
         """
         Remove invisible Unicode characters from text.
 
