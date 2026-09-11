@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.coordination.run_progress import record_progress
 from autobot_shared.logging_manager import get_logger
 from circuit_breaker import (
     CircuitBreaker,
@@ -160,7 +161,12 @@ class BaseProvider(ABC):
                     raise
 
         try:
-            return await handler.execute_with_retry(_attempt, provider=provider_key)
+            try:
+                return await handler.execute_with_retry(_attempt, provider=provider_key)
+            finally:
+                # A finished model call, successful or not, is progress for the claimed run it
+                # belongs to (#15950 AC4). Every provider the registry builds passes through here.
+                record_progress()
         except Exception:
             # Backoff exhausted — return the last error response if we have one,
             # otherwise let the exception propagate to the registry for fallback.
