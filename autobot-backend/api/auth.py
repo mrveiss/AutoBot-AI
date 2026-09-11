@@ -133,7 +133,7 @@ async def _authenticate_and_build_user_data(username: str, password: str, ip_add
         user_data = {
             "username": user.username,
             "user_id": str(user.id),
-            "role": "admin" if user.is_platform_admin else "user",
+            "role": role_value(Role.ADMIN) if user.is_platform_admin else role_value(Role.USER),
             "email": user.email,
             "last_login": (user.last_login_at.isoformat() if user.last_login_at else None),
         }
