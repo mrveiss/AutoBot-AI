@@ -23,6 +23,7 @@ from .discovery import router as discovery_router
 from .errors import router as errors_router
 from .events import router as events_router
 from .external_agents import router as external_agents_router
+from .gpu import router as gpu_router
 from .health import router as health_router
 from .infrastructure import router as infrastructure_router
 from .llm_config import router as llm_config_router
@@ -50,6 +51,11 @@ from .tls import node_tls_router, tls_router
 from .updates import router as updates_router
 from .vnc import node_vnc_router, vnc_router
 from .websocket import router as websocket_router
+
+# #16281: a node's GPU state belongs to the monitoring surface, so it is served as
+# /api/monitoring/gpu/nodes under monitoring's guards. Mounted here because
+# api/monitoring.py and main.py are both at their file-size ceilings.
+monitoring_router.include_router(gpu_router)
 
 __all__ = [
     "agents_router",
