@@ -10,7 +10,6 @@ the registration and the rendered text are both asserted here, not assumed.
 
 from __future__ import annotations
 
-
 import pytest
 from repo_tests import dependency_floor_banner as banner
 from repo_tests._paths import repo_root
@@ -94,6 +93,27 @@ class TestTerminalSummary:
         reporter = _FakeReporter()
         banner.pytest_terminal_summary(reporter)
         assert "scripts/setup-ci-parity-env.sh" in reporter.text
+
+    def test_names_ci_as_itself_when_the_ci_env_var_is_set(self, monkeypatch):
+        """#16264: this hook runs inside ci.yml's own pytest invocations too --
+        printed there, the interpreter collecting the run IS CI's environment."""
+        checker = banner._load_checker()
+        monkeypatch.setattr(banner, "_load_checker", lambda: checker)
+        monkeypatch.setattr(checker, "audit", lambda root: ([_shortfall(checker)], 206))
+        monkeypatch.setenv("CI", "true")
+        reporter = _FakeReporter()
+        banner.pytest_terminal_summary(reporter)
+        assert "CI job's own environment" in reporter.text
+        assert "carries no information about CI" not in reporter.text
+
+    def test_points_at_a_different_environment_when_the_ci_env_var_is_absent(self, monkeypatch):
+        checker = banner._load_checker()
+        monkeypatch.setattr(banner, "_load_checker", lambda: checker)
+        monkeypatch.setattr(checker, "audit", lambda root: ([_shortfall(checker)], 206))
+        monkeypatch.delenv("CI", raising=False)
+        reporter = _FakeReporter()
+        banner.pytest_terminal_summary(reporter)
+        assert "carries no information about CI" in reporter.text
 
     def test_an_empty_enumeration_propagates_instead_of_printing_all_clear(self, monkeypatch):
         """#15087 discipline: the banner must never render silence from no data."""

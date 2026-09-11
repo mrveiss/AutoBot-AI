@@ -182,6 +182,18 @@ class TestRender:
         assert "pkg24" not in report
         assert "15 more" in report
 
+    def test_default_points_at_ci_as_a_different_environment(self):
+        """#16264: off CI, the report describes some OTHER interpreter than CI's."""
+        report = "\n".join(checker.render([checker.Shortfall(_declaration(), "0.135.2")], 206))
+        assert "carries no information about CI" in report
+        assert "CI job's own environment" not in report
+
+    def test_in_ci_names_the_running_environment_as_ci_itself(self):
+        """#16264: printed FROM CI, the interpreter making the report IS CI's own."""
+        report = "\n".join(checker.render([checker.Shortfall(_declaration(), "0.135.2")], 206, in_ci=True))
+        assert "CI job's own environment" in report
+        assert "carries no information about CI" not in report
+
 
 class TestMainExitCodes:
     def test_reporting_run_exits_zero_even_when_below_floor(self, tmp_path, monkeypatch, capsys):
@@ -197,6 +209,23 @@ class TestMainExitCodes:
         monkeypatch.setattr(checker, "installed_versions", lambda names: {"fastapi": "0.135.2"})
         _write(tmp_path, "r.txt", "fastapi>=0.141.1\n")
         assert checker.main(["--root", str(tmp_path), "--strict"]) == 1
+
+    def test_main_names_ci_as_itself_when_the_ci_env_var_is_set(self, tmp_path, monkeypatch, capsys):
+        """#16264: this is the wording a CI job's own log actually prints."""
+        monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("r.txt",))
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {"fastapi": "0.135.2"})
+        monkeypatch.setenv("CI", "true")
+        _write(tmp_path, "r.txt", "fastapi>=0.141.1\n")
+        checker.main(["--root", str(tmp_path), "--strict"])
+        assert "CI job's own environment" in capsys.readouterr().out
+
+    def test_main_omits_the_ci_wording_when_the_ci_env_var_is_absent(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("r.txt",))
+        monkeypatch.setattr(checker, "installed_versions", lambda names: {"fastapi": "0.135.2"})
+        monkeypatch.delenv("CI", raising=False)
+        _write(tmp_path, "r.txt", "fastapi>=0.141.1\n")
+        checker.main(["--root", str(tmp_path)])
+        assert "carries no information about CI" in capsys.readouterr().out
 
     def test_strict_run_exits_zero_when_satisfied(self, tmp_path, monkeypatch):
         monkeypatch.setattr(checker, "DECLARATION_ROOTS", ("r.txt",))

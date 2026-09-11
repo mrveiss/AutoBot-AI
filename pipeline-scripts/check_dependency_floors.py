@@ -22,6 +22,7 @@ that satisfies the declared set without touching anything outside its venv;
 from __future__ import annotations
 
 import argparse
+import os
 import platform
 import re
 import sys
@@ -237,15 +238,31 @@ def audit(root: Path, roots: Sequence[str] | None = None, require_present: bool 
     return shortfalls(declarations, installed, require_present), len(declarations)
 
 
-def render(found: Sequence[Shortfall], examined: int, limit: int = MAX_REPORTED) -> list[str]:
-    """The report, one line per element; *limit* caps the per-package detail."""
+def render(found: Sequence[Shortfall], examined: int, limit: int = MAX_REPORTED, *, in_ci: bool = False) -> list[str]:
+    """The report, one line per element; *limit* caps the per-package detail.
+
+    *in_ci* names the reference correctly for where this prints (#16264). Off a
+    developer's box, the interpreter making the report is some OTHER
+    environment than the one CI installs, so the second line points there. A
+    caller that IS CI -- the ``python-shard`` ``--strict`` step, or this
+    plugin's own ``pytest_terminal_summary`` when ``CI`` is set -- passes
+    ``in_ci=True`` instead, because the interpreter making the report there
+    already IS the declared set: saying a pass "carries no information about
+    CI" would be false when the box printing it is CI's own.
+    """
     if not found:
         return [f"dependency floors: {examined} declarations checked, all satisfied"]
     lines = [
         f"{len(found)} of {examined} declared versions are NOT satisfied by the "
-        f"interpreter running this check (python {platform.python_version()}).",
-        "A pass here therefore carries no information about CI, which installs " "the declared set.",
+        f"interpreter running this check (python {platform.python_version()})."
     ]
+    if in_ci:
+        lines.append(
+            "This IS the CI job's own environment -- these are the packages CI itself "
+            "installed, below the floor it declares, not a stand-in for it."
+        )
+    else:
+        lines.append("A pass here therefore carries no information about CI, which installs " "the declared set.")
     lines.extend(f"  {shortfall.describe()}" for shortfall in found[:limit])
     if len(found) > limit:
         remaining = len(found) - limit
@@ -286,7 +303,11 @@ def main(argv: list[str] | None = None) -> int:
     except EmptyEnumerationError as exc:
         print(f"FATAL: {exc}", file=sys.stderr)  # noqa: print
         return 2
-    for line in render(found, examined, len(found) if args.all else MAX_REPORTED):
+    # #16264: GitHub Actions (and every other major CI system) sets CI=true --
+    # the same signal autobot-backend/tests/test_ocr_fallback_13896.py already
+    # keys on for the same distinction.
+    in_ci = bool(os.environ.get("CI"))
+    for line in render(found, examined, len(found) if args.all else MAX_REPORTED, in_ci=in_ci):
         print(line)  # noqa: print
     return 1 if found and args.strict else 0
 

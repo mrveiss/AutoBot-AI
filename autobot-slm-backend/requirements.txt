@@ -34,7 +34,7 @@ redis[asyncio]>=8.1.0
 
 # Async utilities
 aiofiles>=25.1.0
-websockets>=17.1,<18       # Issue #3098: relaxed from >=16.0 (#10386): slm_client uses only API present in 15.x; <16 satisfies langgraph-sdk 0.4.2 on backend side
+websockets>=15.0.1,<16     # Issue #3098 + #16264: floor lowered from >=17.1 -- that pin came from unreviewed dependabot group bumps (#15381 et al.), not from a requirement: SLM's own code never imports websockets, it arrives transitively through uvicorn[standard]>=0.52.4, which only requires >=13.0. ci.yml's python-shard job runs SLM's tests in the same venv as the backend (#13300), so the real floor is the backend's own cap at autobot-backend/requirements.txt -- websockets>=15.0.1,<16, because langgraph-sdk 0.4.2 requires <16 (see that file's comment). Matches requirements-ci/framework.txt's ==15.0.1 pin.
 
 # Ansible integration
 ansible-runner>=2.4.3

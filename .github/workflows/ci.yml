@@ -168,6 +168,18 @@ jobs:
 
     - uses: ./.github/actions/setup-python-suite
 
+    # #16264: requirements-ci.txt drifted below two declared floors
+    # (websockets, langchain-community) with nothing here noticing --
+    # pipeline-scripts/check_dependency_floors.py has carried a --strict mode
+    # since #15091, but no workflow ever called it. Gated to shard 1 only:
+    # every shard restores the identical cached venv keyed off the same
+    # requirements-ci.txt (see setup-python-suite's cache key), so checking
+    # all twelve would report the same drift twelve times for one PR-blocking
+    # signal.
+    - name: Fail on a declared dependency floor the CI install does not meet (#16264)
+      if: matrix.shard == 1
+      run: python pipeline-scripts/check_dependency_floors.py --strict
+
     # #13927: repo_tests/promtool_rules_test.py runs `promtool check rules` over
     # every deployed rule file and `promtool test rules` over every behavioural
     # suite — and on a GitHub-hosted runner it did NONE of that, because nothing
