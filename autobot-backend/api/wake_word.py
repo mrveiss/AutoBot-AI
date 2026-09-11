@@ -9,7 +9,9 @@ Issue #54 - Advanced Wake Word Detection Optimization
 Authorization (#15745): every route here requires admin except
 ``POST /check``, which is unauthenticated by design -- the local voice
 client calls it before any user session exists. Recorded on #15745 as a
-decision rather than left as an ungated route nobody chose.
+decision rather than left as an ungated route nobody chose. That ruling
+predates #16247, which records what an anonymous ``/check`` can do to the
+shared detector -- see it before relying on this exception.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
