@@ -163,8 +163,8 @@ def test_a_refusal_names_the_holder_and_their_intent():
     response = refused_response(_request(), ClaimConflict(requested="path:a/b.py", holder=holder), agent_type="writer")
 
     assert response.status == "refused"
-    assert response.metadata["held_by_agent"] == "agent-9"
-    assert response.metadata["holder_intent"] == "fix the header parse"
+    assert response.metadata["holder"]["agent_id"] == "agent-9"
+    assert response.metadata["holder"]["intent"] == "fix the header parse"
     assert "fix the header parse" in response.error, "the operator reads `error`, not just metadata"
 
 
@@ -220,14 +220,19 @@ class _Recorder:
 
 @pytest.mark.asyncio
 async def test_a_run_that_keeps_reporting_progress_keeps_its_claim(redis, monkeypatch):
-    """Slow but working must never lapse: the ruling's first guarantee."""
-    renewals = _fast(monkeypatch, window=1.5)
+    """Slow but working must never lapse: the ruling's first guarantee.
+
+    Progress every 0.25s against a 2s window leaves 1.75s of scheduling slack per
+    step on a loaded runner. The run lasts 4s, past the window, so the test still
+    fails if progress stopped counting: silence alone would lapse it at the 3s check.
+    """
+    renewals = _fast(monkeypatch, window=2.0)
     async with hold_scopes(["path:a/b.py"], agent_id="agent-1", task_id="t1", intent="write"):
-        for _ in range(8):
-            await asyncio.sleep(0.4)
+        for _ in range(16):
+            await asyncio.sleep(0.25)
             record_progress()
         assert current_run().standing == "held"
-    assert len(renewals) >= 2, "a progressing run's claim was not kept renewed"
+    assert len(renewals) >= 3, "a progressing run's claim was not kept renewed"
 
 
 @pytest.mark.asyncio
@@ -371,3 +376,55 @@ async def test_the_kb_librarian_will_not_write_under_a_lapsed_claim(redis, monke
     async with hold_scopes(scopes, agent_id="kb", task_id="t2", intent="add_knowledge"):
         await agent._handle_add_knowledge(request)
     assert writes == ["Entry"], "a write under a live claim was refused"
+
+
+# ---------------------------------------------------------------------------
+# Edges found by the pre-merge review of #16273
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_task_that_outlives_its_run_cannot_write_under_the_released_claim(redis):
+    """A task spawned inside a run keeps a reference to the run, not to the claim.
+
+    Once the run exits its scopes are released. A leftover task that still read
+    the run as held would write under a claim someone else may already hold.
+    """
+    gate = asyncio.Event()
+
+    async def _late_writer() -> None:
+        await gate.wait()
+        require_held(["path:a/b.py"], site="test-late")
+
+    async with hold_scopes(["path:a/b.py"], agent_id="agent-1", task_id="t1", intent="write"):
+        leftover = asyncio.create_task(_late_writer())
+    gate.set()
+    with pytest.raises(ClaimNotHeld, match="run ended"):
+        await leftover
+
+
+def test_a_run_closed_from_another_context_does_not_raise(monkeypatch):
+    """asyncio finalises an abandoned generator from its own context, where the run was never set."""
+    import contextvars
+
+    from autobot_shared.coordination import run_progress
+
+    recorder = _Recorder()
+    monkeypatch.setattr(run_progress, "logger", recorder)
+    binding = run_progress.bound(run_progress.ClaimedRun(frozenset({"path:a"})))
+    contextvars.copy_context().run(binding.__enter__)
+
+    contextvars.copy_context().run(binding.__exit__, None, None, None)
+
+    assert any("outside the context" in w for w in recorder.warnings)
+
+
+def test_the_stall_window_outlasts_the_longest_provider_backoff_wait():
+    """A run waiting out a rate limit is working, so one backoff wait must never lapse it."""
+    from llm_shared.rate_limit_backoff import get_backoff_handler
+
+    backoff = get_backoff_handler().config
+    longest = backoff.max_delay * (1 + backoff.jitter_factor)
+
+    assert enforcement._longest_backoff_wait_s() == longest
+    assert enforcement._stall_window_s(1) >= 2 * longest
