@@ -364,7 +364,7 @@ class TestSystemPerformanceBenchmarks:
         assert isinstance(config_manager, ConfigManager), "ConfigManager() returned no instance to time"
         assert_within_work_budget(config_startup_time, 8.0, "Config manager startup")
 
-        MultiModalProcessor()  # discard: pays the one-time lazy `import torch`, caches CLIP + BLIP-2 on disk
+        cold = MultiModalProcessor()  # not timed: pays the one-time lazy `import torch`, caches CLIP + BLIP-2
 
         # #15055, #15235: work-unit and baseline-ratio budgets are both unsound here — CLIP + `blip2-opt-2.7b`
         # load from disk every construction (I/O, not CPU), and a baseline ratio would time the SAME construction
@@ -380,9 +380,9 @@ class TestSystemPerformanceBenchmarks:
 
         assert isinstance(processor, MultiModalProcessor), "MultiModalProcessor() returned no instance to time"
         assert not new_imports, f"Multimodal processor startup imported {new_imports} on the WARM construction (#15055)"
-        # #16404: `_load_models` (vision.py) swallows load errors into a log line, so assert what it sets too.
-        assert processor.vision_processor.clip_model is not None, "CLIP model unset — load error swallowed (#16404)"
-        assert processor.vision_processor.blip_model is not None, "BLIP-2 model unset — load error swallowed (#16404)"
+        vps = (cold.vision_processor, processor.vision_processor)  # #16404: _load_models swallows load errors
+        loaded = [(vp.clip_model is None, vp.blip_model is None) for vp in vps]
+        assert loaded[0] == loaded[1], f"online vs offline model load differs: {loaded} (#16404)"
         record_property("perf_multimodal_processor_startup_ms", processor_startup_time)
 
         # Test memory manager startup
