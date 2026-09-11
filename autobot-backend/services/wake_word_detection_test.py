@@ -497,3 +497,23 @@ class TestCPUProfileBaseline:
         assert status["chunks_processed"] >= 0
         # CPU reading should be a valid float (may be 0.0 if psutil unavailable)
         assert detector.stats.cpu_usage_percent >= 0.0
+
+
+class TestMatchTextHasNoSideEffects:
+    """#16247: POST /check evaluates through match_text, which must not change detector state."""
+
+    def test_match_text_detects_like_the_stateful_path(self, detector) -> None:
+        event = detector.match_text("hey autobot", confidence=0.9)
+        assert event is not None
+        assert event.wake_word == "hey autobot"
+
+    def test_match_text_leaves_stats_history_and_state_untouched(self, detector) -> None:
+        before = (detector.stats.total_detections, len(detector._recent_detections), detector.state)
+        assert detector.match_text("hey autobot", confidence=0.9) is not None
+        assert (detector.stats.total_detections, len(detector._recent_detections), detector.state) == before
+
+    def test_match_text_still_answers_during_cooldown(self, detector) -> None:
+        assert detector.check_text_for_wake_word("hey autobot", confidence=0.9) is not None
+        assert detector.state == WakeWordState.COOLDOWN
+        assert detector.check_text_for_wake_word("hey autobot", confidence=0.9) is None
+        assert detector.match_text("hey autobot", confidence=0.9) is not None

@@ -3,23 +3,24 @@
 #
 # Duplication regression guard (#9794).
 #
-# Runs the copy-paste detector (jscpd, the `cpd` 5.x CLI) over the backend and
-# frontend source with the exact flags used for the 2026-06-10 dedup sweep, and
-# fails if the duplication percentage exceeds the documented post-cleanup
-# baseline. This is a *threshold* gate, not a "zero duplication" gate: the repo
-# carries known, deliberately-deferred clusters (broken security package #9856,
-# the Vue CSS/HTML campaign #9859) that need their own PRs. The gate ensures no
-# PR grows duplication past where the sweep left it.
+# Runs the copy-paste detector (jscpd, the `cpd` 5.x CLI) over two scopes with
+# the exact flags used for the 2026-06-10 dedup sweep. A scope fails when its
+# duplicated-line COUNT exceeds its pin. This is a ratchet, not a "zero
+# duplication" gate: the repo carries known, deliberately deferred clusters
+# (the broken security package, #9856, and the Vue CSS/HTML campaign, #9859)
+# that need their own PRs. The gate ensures no PR grows duplication.
 #
-# Post-cleanup baseline (2026-06-10, after PRs landing #9794):
-#   duplication = 1.04%  (14,983 duplicated lines / 776 clones)
-# THRESHOLD is set a hair above (1.05) to absorb measurement jitter from minor
-# jscpd version drift. When a cleanup PR lowers duplication, tighten THRESHOLD
-# in the same PR so the ratchet only ever goes down.
+# #16319: the pins are absolute counts, not percentages. A percentage pinned a
+# hair above its measurement fails a PR that deletes unique code. #16308 kept
+# the same 135 clones and 4,729 duplicated lines but scanned 4.5k fewer lines,
+# so 1.82% became 1.85%. "No new duplication" limits the count, so the count is
+# pinned. jscpd itself is pinned (JSCPD_VERSION), so there is no version jitter
+# to absorb, and each pin sits exactly at its measurement. When a PR lowers a
+# count, lower the pin in the same PR so the ratchet only ever goes down; the
+# gate prints the figure to use.
 #
-# Why --threshold and not bare --exit-code: --exit-code fails whenever ANY
-# duplicate exists (always true here), which can't express "no growth past
-# baseline". --threshold N exits 1 only when the percentage exceeds N.
+# scripts/duplication_gate.py reads jscpd's Total row and applies the pin. It is
+# the only parser: the gate steps and "Explain failure" both call it.
 #
 # Security: no untrusted GitHub event data is interpolated into run: commands;
 # all inputs are static repo paths and constants.
@@ -77,28 +78,23 @@ jobs:
   duplication-guard:
     runs-on: ubuntu-latest
     env:
-      # Maximum allowed duplication percentage. Ratchet DOWN only.
-      THRESHOLD: '1.05'
-      # #13044: the three trees this guard never scanned get their OWN number
-      # rather than being folded into THRESHOLD above. That one is documented
-      # "Ratchet DOWN only", and widening its scope would force it up to absorb
-      # a population it never measured — which is how a down-only ratchet gets
-      # quietly re-licensed. Two scopes, two numbers, each meaning one thing.
+      # Pins: duplicated lines per scope, measured on Dev_new_gui run 34581036896
+      # (2026-09-11, base d5a0c6dcb, jscpd 5.0.6). Ratchet DOWN only (#16319).
       #
-      # Measured on this PR's first run — the first time these trees were
-      # scanned in the repo's history: 754 files, 134 clones, **1.81%**
-      # duplicated lines. Pinned to 1.82, one hundredth above, so the current
-      # state passes and any increase fails.
+      # autobot-backend + autobot-frontend/src: 11,723 duplicated lines, 676
+      # clones, 1,579,997 lines scanned (0.74%). The percentage this replaces
+      # was 1.05%, about 16,590 lines of headroom. It was set on 2026-06-10 and
+      # never tightened as duplication fell, so pinning the count at its
+      # measurement is a deliberate tightening.
+      MAX_DUP_LINES: '11723'
+      # #13044: the three trees this guard used to skip get their OWN pin rather
+      # than being folded into the one above. When first scanned they carried
+      # 2.4x the duplication ratio of the gated trees, and averaging would hide
+      # that. Two scopes, two pins, each meaning one thing.
       #
-      # Worth recording beside the number: the trees nobody was measuring carry
-      # **2.4x** the duplication of the trees that were. The gated scan on the
-      # same run reported 4,168 files at 0.74%. That gap is the cost of the
-      # blind spot, not a coincidence — and it is why this gets its own ratchet
-      # rather than being averaged into THRESHOLD, where 1.81% of a small tree
-      # would disappear inside 0.74% of a large one.
-      #
-      # Ratchet DOWN only, as with THRESHOLD above.
-      SLM_THRESHOLD: '1.82'
+      # autobot_shared + autobot-slm-backend + autobot-slm-frontend/src: 4,729
+      # duplicated lines, 135 clones, 259,937 lines scanned (1.82%).
+      SLM_MAX_DUP_LINES: '4729'
       JSCPD_VERSION: '5.0.6'
     steps:
       - uses: actions/checkout@v7
@@ -116,38 +112,24 @@ jobs:
             -k 70 -l 8 --skip-comments \
             -f python,typescript,javascript,vue \
             -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
-            -r threshold,console \
-            --threshold "${THRESHOLD}" 2>&1 | tee /tmp/main-dup.log
+            -r console 2>&1 | tee /tmp/main-dup.log
+          python3 scripts/duplication_gate.py /tmp/main-dup.log "${MAX_DUP_LINES}"
 
-      - name: Run duplication detector on the previously ungated trees
-        run: |
-          set -o pipefail
-          npx --yes "jscpd@${JSCPD_VERSION}" \
-            autobot_shared autobot-slm-backend autobot-slm-frontend/src \
-            -k 70 -l 8 --skip-comments \
-            -f python,typescript,javascript,vue \
-            -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
-            -r console 2>&1 | tee /tmp/slm-dup.log
-
+      # The report-only scan that used to run before this one existed to print the
+      # figure for an UNMEASURED pin. The gate prints it on every run now, and an
+      # UNMEASURED pin fails with the figure to pin (#16319), so one jscpd run per
+      # scope is enough.
       - name: Gate the previously ungated trees
         id: slm_scope
         run: |
           set -o pipefail
-          if [ "${SLM_THRESHOLD}" = "UNMEASURED" ]; then
-            echo "::error::SLM_THRESHOLD is still UNMEASURED. The scan above printed"
-            echo "the real figure for autobot_shared + autobot-slm-backend +"
-            echo "autobot-slm-frontend/src. Pin SLM_THRESHOLD to it (rounded UP"
-            echo "to 2dp). This step exists so an unmeasured threshold cannot"
-            echo "land as a guard that never fails."
-            exit 1
-          fi
           npx --yes "jscpd@${JSCPD_VERSION}" \
             autobot_shared autobot-slm-backend autobot-slm-frontend/src \
             -k 70 -l 8 --skip-comments \
             -f python,typescript,javascript,vue \
             -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
-            -r threshold,console \
-            --threshold "${SLM_THRESHOLD}" 2>&1 | tee /tmp/slm-gate.log
+            -r console 2>&1 | tee /tmp/slm-gate.log
+          python3 scripts/duplication_gate.py /tmp/slm-gate.log "${SLM_MAX_DUP_LINES}"
 
       - name: Explain failure
         if: failure()
@@ -162,66 +144,32 @@ jobs:
           #
           # It also used to print jscpd's own summary line verbatim:
           #   "found too many duplicates (1.8%) over threshold (1.8%)"
-          # Both sides rounded to 1dp, so a real 1.8203 vs 1.82 rendered as two
-          # IDENTICAL numbers with a failure between them, and the only available
-          # reading was that the guard had misfired. The overage is reported in
-          # LINES below, because "over by 0.7 lines" is actionable where
-          # "1.8% vs 1.8%" is not.
+          # Both sides were rounded to 1dp, so a real 1.8203 against 1.82 showed
+          # two IDENTICAL numbers with a failure between them. Since #16319 the
+          # pins are line counts, and the overage is reported in lines against them.
           report() {
-            local label="$1" log="$2" threshold="$3" scope="$4" var="$5"
-            echo "::error::${label} exceeded its baseline."
+            local label="$1" log="$2" pin="$3" scope="$4" var="$5"
+            echo "::error::${label} exceeded its pin."
             echo "  scope:     ${scope}"
             # Name the env var as well as its value (#16163): the value says how
-            # far over, the name says which knob a maintainer would have to turn.
-            echo "  threshold: ${threshold}%  (env ${var})"
+            # far over, and the name says which knob a maintainer would turn.
+            echo "  pin:       ${pin} duplicated lines  (env ${var})"
             [ -f "${log}" ] || { echo "  (no captured log at ${log})"; return; }
-            local totals dup total pct allowed over
-            # jscpd draws its table with UNICODE box characters (U+2502) wrapped in
-            # ANSI colour codes -- there is not one ASCII pipe in real output.
-            # Verified against run 34414434867: 0 x '|', 8 x '\u2502' on the Total
-            # row. The first version of this parser required '|' and therefore fell
-            # to the cannot-parse branch on EVERY real failure, which is the branch
-            # this whole step exists to eliminate. Normalise before matching.
-            local flat
-            flat=$(sed -e 's/\x1b\[[0-9;]*m//g' -e 's/\xe2\x94\x82/|/g' "${log}")
-            # Split on the column separator rather than matching pipes with a
-            # regex: `grep -oE '\| *[0-9]+ *\|'` consumes the closing pipe of one
-            # field as the opening pipe of the next, so it silently returns every
-            # OTHER column. That read 1,227,700 (tokens) as the line count and
-            # produced 0.3852% instead of 1.8203% -- a wrong number, formatted
-            # to four decimal places, which is worse than the missing one it
-            # replaced. jscpd's Total row is:
-            #   Total: | files | total lines | total tokens | clones | dup lines (pct)
-            totals=$(printf '%s' "${flat}" | grep -a 'Total:' | tail -1)
-            # Field map, verified against run 34414434867's real Total row:
-            #   $1 empty (leading separator) · $2 "Total:" · $3 files
-            #   $4 total lines · $5 total tokens · $6 clones · $7 "N (P%)"
-            # The leading separator makes $1 empty, which is the off-by-one that
-            # read `files` as `total lines` on the previous attempt.
-            total=$(printf '%s' "${totals}" | awk -F'|' '{gsub(/[^0-9]/,"",$4); print $4}')
-            dup=$(printf '%s' "${totals}" | awk -F'|' '{print $7}' | grep -oE '^[^(]*' | tr -dc '0-9')
-            if [ -n "${dup}" ] && [ -n "${total}" ] && [ "${total}" -gt 0 ]; then
-              pct=$(awk -v d="${dup}" -v t="${total}" 'BEGIN{printf "%.4f", d/t*100}')
-              allowed=$(awk -v t="${total}" -v x="${threshold}" 'BEGIN{printf "%.1f", t*x/100}')
-              over=$(awk -v d="${dup}" -v a="${allowed}" 'BEGIN{printf "%.1f", d-a}')
-              echo "  measured:  ${pct}%  (${dup} duplicated lines of ${total})"
-              echo "  allowed:   ${allowed} lines"
-              echo "  OVER BY:   ${over} lines"
-            else
-              echo "  (could not parse jscpd totals from ${log} -- read it directly;"
-              echo "   reporting no figure rather than a guessed one)"
-            fi
+            # The same parser the gate ran (#16319), so the explanation cannot
+            # disagree with the verdict. Its exit code was the gate's; only its
+            # report matters here.
+            python3 scripts/duplication_gate.py "${log}" "${pin}" | sed 's/^/  /'
           }
           failed=0
           if [ "${MAIN_OUTCOME}" = "failure" ]; then
             failed=1
-            report "The backend/frontend duplication scope" /tmp/main-dup.log "${THRESHOLD}" \
-              "autobot-backend + autobot-frontend/src" THRESHOLD
+            report "The backend/frontend duplication scope" "${MAIN_LOG:-/tmp/main-dup.log}" "${MAX_DUP_LINES}" \
+              "autobot-backend + autobot-frontend/src" MAX_DUP_LINES
           fi
           if [ "${SLM_OUTCOME}" = "failure" ]; then
             failed=1
-            report "The shared/SLM duplication scope" /tmp/slm-gate.log "${SLM_THRESHOLD}" \
-              "autobot_shared + autobot-slm-backend + autobot-slm-frontend/src" SLM_THRESHOLD
+            report "The shared/SLM duplication scope" "${SLM_LOG:-/tmp/slm-gate.log}" "${SLM_MAX_DUP_LINES}" \
+              "autobot_shared + autobot-slm-backend + autobot-slm-frontend/src" SLM_MAX_DUP_LINES
           fi
           if [ "${failed}" = "0" ]; then
             echo "::error::This job failed outside both duplication gates."
@@ -231,6 +179,6 @@ jobs:
             echo "the point: a duplication error here would be a guess."
           fi
           echo "Reduce duplication (extract shared modules / shims) or, if the new"
-          echo "duplication is unavoidable and justified, raise the ONE that failed"
+          echo "duplication is unavoidable and justified, raise the pin that failed"
           echo "in .github/workflows/duplication-guard.yml with a documented reason."
           echo "See docs/reports/DEDUP_REPORT.md and the dedup methodology in #9794."

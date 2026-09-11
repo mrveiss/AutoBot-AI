@@ -101071,33 +101071,16 @@ export interface components {
         };
         /**
          * WakeWordCheckResponse
-         * @description Response for wake word check
+         * @description Response for wake word check: whether the text matched, and the confidence only (#16247 ruling).
          */
         WakeWordCheckResponse: {
             /** Detected */
             detected: boolean;
             /**
-             * Wake Word
-             * @default
-             */
-            wake_word: string;
-            /**
              * Confidence
              * @default 0
              */
             confidence: number;
-            /**
-             * Timestamp
-             * @default 0
-             */
-            timestamp: number;
-            /**
-             * Metadata
-             * @default {}
-             */
-            metadata: {
-                [key: string]: unknown;
-            };
         } & {
             [key: string]: unknown;
         };
