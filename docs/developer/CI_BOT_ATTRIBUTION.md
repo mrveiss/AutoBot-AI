@@ -45,28 +45,76 @@ The fallback matters: without the secret configured the workflows behave exactly
 as they do today rather than failing, so this change is safe to land before the
 secret exists.
 
-### Configuring the secret
+### The token is optional, and belongs to one repository
 
-A fine-grained personal access token scoped to this repository:
+`AUTOBOT_PUSH_TOKEN` is a CI secret of whichever repository the workflows run
+in. It is optional, and the AutoBot product never reads it. AutoBot is open
+source and runs on anyone's infrastructure, so nothing in it may depend on this
+repository's secrets (owner ruling, 11 Sep 2026). Leaving it unset is
+supported: every workflow falls back to `GITHUB_TOKEN`. What that means for the
+release sync is in "The release sync in this repository: by hand" below.
+
+### Creating one, for this repository or a fork
+
+A fine-grained personal access token, scoped to that one repository:
 
 | Permission | Level |
 |---|---|
 | Contents | Read and write |
 | Pull requests | Read and write |
-| Workflows | Read and write (only if a pushed change touches `.github/workflows/`) |
+| Workflows | Read and write |
 
-Store it as the repository secret `AUTOBOT_PUSH_TOKEN`.
+Workflows is needed because the release-sync push carries changes under
+`.github/workflows/`. Store the token as the repository secret
+`AUTOBOT_PUSH_TOKEN`. A fork creates its own, or leaves it unset.
 
 ### Applies to
 
 - `.github/workflows/auto-fix-generated-types.yml`
 - `.github/workflows/auto-update-pr-branches.yml`
+- `.github/workflows/sync-main-to-dev.yml` — pushes the `release-sync-main` branch
+  and opens the release-sync PR from it, or, where GitHub refuses the PR, keeps
+  the tracking issue described below (#16246).
+
+## The release sync in this repository: by hand
+
+The owner ruled that this repository syncs `main` by hand (#15834 Q2). It has no
+`AUTOBOT_PUSH_TOKEN`, and "Allow GitHub Actions to create and approve pull
+requests" stays off. Measured 11 Sep 2026: `actions/permissions/workflow` returns
+`default_workflow_permissions: read` and `can_approve_pull_request_reviews:
+false`, and the repository holds no Actions secrets.
+
+So `sync-main-to-dev.yml` pushes `release-sync-main` but can never open the sync
+PR. When GitHub refuses it, the workflow keeps ONE tracking issue instead, titled
+`release: main is behind Dev_new_gui — open the sync PR by hand` and labelled
+`automation`. The issue carries the PR body (the commit count, the scheduled
+workflows the sync activates, changes or stops, and the merge-commit
+instruction), the compare link, and the one command that opens the PR. Each run
+updates it in place, and closes it once a sync PR is open or `main` has nothing
+left to sync. If the issue cannot be written the run fails, so a green run means
+the PR or the issue is current. The job declares `issues: write` because the
+default token here is read-only.
+
+**Owner step, every sync:** open the PR from the issue's link or command, then
+merge it with a merge commit, as its body says. A PR a person opens starts its
+checks normally, so nothing parks.
+
+The watchdog's release of the sync PR's parked runs (#16272) therefore does not
+come into play here. It matters only if the workflow ever opens the PR as the
+bot, which needs "Allow GitHub Actions to create and approve pull requests"
+turned on with no push token set. A push token opens the PR as the token's
+owner, whose runs do not park.
 
 ## The safety net
 
-`ci-dispatch-watchdog.yml` sweeps parked runs every 15 minutes and approves only
-those whose head repository is this repository **and** whose triggering actor is
-the bot — fork PRs are never approved, only reported.
+`ci-dispatch-watchdog.yml` sweeps parked runs and approves only those whose head
+repository is this repository **and** whose triggering actor is the bot — fork
+PRs are never approved, only reported. It sweeps open PRs into `Dev_new_gui`,
+plus the one open release-sync PR into `main` (head `release-sync-main`, from
+this repository), and no other PR into `main` (#16272).
+
+Its cron is `*/15`, but do not count on a release within minutes: measured on
+11 Sep 2026, its scheduled runs fired every 1.5 to 4 hours (#16272).
 
 That cron only fires from the **default branch**. The workflow must therefore
 exist on `main`, not only on `Dev_new_gui`; until it does, the schedule never

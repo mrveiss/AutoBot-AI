@@ -518,7 +518,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/ssot_constants.py": 896,
     "autobot_shared/user_management/team_service.py": 725,
     "pipeline-scripts/check-pre-commit-hook-pr_test.py": 747,
-    "pipeline-scripts/ci_dispatch_watchdog.py": 1487,
+    "pipeline-scripts/ci_dispatch_watchdog.py": 1452,
     "pipeline-scripts/detect-hardcoded-values_test.py": 653,
     "repo_tests/ci_dispatch_watchdog_test.py": 1317,
     "repo_tests/enum_union_guard_test.py": 801,
