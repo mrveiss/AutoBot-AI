@@ -140,7 +140,7 @@ def import_code_sync() -> types.ModuleType:
     return module
 
 
-def patch_real_deployed_root(monkeypatch: "pytest.MonkeyPatch") -> None:
+def patch_real_deployed_root(monkeypatch: "pytest.MonkeyPatch", root: "Path | None" = None) -> None:
     """Swap the stubbed ``services.deployed_dir_resolver`` for the real module (#16236).
 
     ``api/code_sync.py`` imports ``get_live_dir``/``get_release_component_dir``
@@ -162,7 +162,9 @@ def patch_real_deployed_root(monkeypatch: "pytest.MonkeyPatch") -> None:
     and binds it onto both ``sys.modules["services.deployed_dir_resolver"]``
     and the ``services`` stub's attribute (#9780 -- the two ways of reaching
     a submodule must converge on the same object), through ``monkeypatch`` so
-    it reverts after the test and never leaks into another one.
+    it reverts after the test and never leaks into another one. With *root*, it
+    also points ``SLM_DEPLOYED_ROOT`` there, the pairing every guard-reaching
+    test needs.
     """
     spec = importlib.util.spec_from_file_location("services.deployed_dir_resolver", _DEPLOYED_DIR_RESOLVER_SRC)
     real_module = importlib.util.module_from_spec(spec)
@@ -171,3 +173,5 @@ def patch_real_deployed_root(monkeypatch: "pytest.MonkeyPatch") -> None:
     services_stub = sys.modules.get("services")
     if services_stub is not None:
         monkeypatch.setattr(services_stub, "deployed_dir_resolver", real_module, raising=False)
+    if root is not None:
+        monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(root))

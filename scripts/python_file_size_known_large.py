@@ -486,7 +486,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/services/service_orchestrator.py": 955,
     "autobot-slm-backend/services/sync_orchestrator.py": 649,
     "autobot-slm-backend/slm/agent/agent.py": 675,
-    "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 2173,  # #16236: real deployed_dir_resolver per test
+    "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 2166,  # #16229 review: SLM_DEPLOYED_ROOT patches
     "autobot-slm-backend/tests/api/test_drift_resolve.py": 606,
     "autobot-slm-backend/tests/api/test_fleet_node_update_11511.py": 1051,
     "autobot-slm-backend/tests/api/test_prometheus_scrape_is_unauthenticated_14339.py": 973,

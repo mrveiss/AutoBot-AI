@@ -1120,8 +1120,7 @@ def test_pg_dump_invoked_before_alembic(tmp_path, monkeypatch) -> None:
     """_pg_dump_before_migration must be called before alembic upgrade (#11376)."""
     # _run_alembic_migrations itself loads deployed_dir/.env (CodeQL py/path-injection,
     # #16229 review) — that must resolve under SLM_DEPLOYED_ROOT (#16236).
-    patch_real_deployed_root(monkeypatch)
-    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+    patch_real_deployed_root(monkeypatch, tmp_path)
     call_order: list[str] = []
 
     async def _fake_dump(component, deployed_dir, steps):
@@ -1244,8 +1243,7 @@ def test_pg_dump_proceeds_with_warning_when_no_db_config(tmp_path, monkeypatch) 
     is found — deploy proceeds with a warning instead of aborting."""
     # deployed_dir must resolve under SLM_DEPLOYED_ROOT (CodeQL py/path-injection
     # fix, #16229 review) — tmp_path stands in for the deployed root here (#16236).
-    patch_real_deployed_root(monkeypatch)
-    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+    patch_real_deployed_root(monkeypatch, tmp_path)
     (tmp_path / ".env").write_text("FOO=bar\n", encoding="utf-8")
     steps: list[str] = []
     clear_keys = {
@@ -1269,9 +1267,7 @@ def test_pg_dump_proceeds_with_warning_when_no_db_config(tmp_path, monkeypatch) 
 
 def test_pg_dump_uses_arg_list_subprocess(tmp_path, monkeypatch) -> None:
     """pg_dump invocation must use an arg list, never a shell string (#11376)."""
-    # deployed_dir must resolve under SLM_DEPLOYED_ROOT (#16236).
-    patch_real_deployed_root(monkeypatch)
-    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+    patch_real_deployed_root(monkeypatch, tmp_path)
     (tmp_path / ".env").write_text("AUTOBOT_DATABASE_URL=postgresql://user:pw@localhost:5432/mydb\n", encoding="utf-8")
     captured: list = []
 
@@ -1745,9 +1741,7 @@ def test_resolve_pg_db_url_returns_empty_when_nothing_configured() -> None:
 
 def test_pg_dump_resolves_url_from_autobot_postgres_vars(tmp_path, monkeypatch) -> None:
     """#11431: pg_dump succeeds using AUTOBOT_POSTGRES_* vars when DATABASE_URL absent."""
-    # deployed_dir must resolve under SLM_DEPLOYED_ROOT (#16236).
-    patch_real_deployed_root(monkeypatch)
-    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+    patch_real_deployed_root(monkeypatch, tmp_path)
     env_content = (
         "AUTOBOT_POSTGRES_HOST=127.0.0.1\n"
         "AUTOBOT_POSTGRES_PORT=5432\n"
@@ -1788,8 +1782,7 @@ def test_alembic_not_aborted_when_no_db_config(tmp_path, monkeypatch) -> None:
     """#11431: alembic migration proceeds when pg_dump returns NO_BACKUP (no DB config)."""
     # _run_alembic_migrations itself loads deployed_dir/.env (CodeQL py/path-injection,
     # #16229 review) — that must resolve under SLM_DEPLOYED_ROOT (#16236).
-    patch_real_deployed_root(monkeypatch)
-    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+    patch_real_deployed_root(monkeypatch, tmp_path)
     alembic_ran: list[bool] = []
 
     async def _fake_exec(*cmd, **kw):

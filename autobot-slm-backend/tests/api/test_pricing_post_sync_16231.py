@@ -194,8 +194,7 @@ def test_load_env_file_accepts_a_path_under_the_deployed_root(tmp_path, monkeypa
     # Needs the real deployed_dir_resolver (#16236): the conftest stub's
     # deployed_root() is a MagicMock, so SLM_DEPLOYED_ROOT alone has nothing to
     # act on and the guard would reject every path, including this one.
-    patch_real_deployed_root(monkeypatch)
-    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+    patch_real_deployed_root(monkeypatch, tmp_path)
     deployed = tmp_path / "autobot-backend"
     deployed.mkdir()
     (deployed / ".env").write_text("FOO=bar\n", encoding="utf-8")
@@ -210,8 +209,7 @@ def test_load_env_file_refuses_a_dot_dot_escape(tmp_path, monkeypatch) -> None:
     # deployed_root() is a MagicMock and the guard raises for every path
     # regardless of the .. escape, which would pass this test for the wrong
     # reason (it never exercises the escape-detection logic at all).
-    patch_real_deployed_root(monkeypatch)
-    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+    patch_real_deployed_root(monkeypatch, tmp_path)
     escaping = tmp_path / "autobot-backend" / ".." / ".." / "etc" / "passwd"
 
     try:
@@ -226,8 +224,7 @@ def test_load_env_file_refuses_an_absolute_path_outside_the_root(tmp_path, monke
     # Needs the real deployed_dir_resolver (#16236) -- see the .. escape test
     # above for why: without it, the guard raises regardless of this test's
     # specific "outside the root" scenario.
-    patch_real_deployed_root(monkeypatch)
-    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path / "deployed"))
+    patch_real_deployed_root(monkeypatch, tmp_path / "deployed")
     outside = tmp_path / "elsewhere" / ".env"
     outside.parent.mkdir()
     outside.write_text("SHOULD_NOT=load\n", encoding="utf-8")
@@ -248,8 +245,7 @@ def test_load_env_file_missing_file_under_the_root_returns_empty(tmp_path, monke
     deployed_root() is a MagicMock, so SLM_DEPLOYED_ROOT alone has nothing to
     act on and the guard would reject this path too.
     """
-    patch_real_deployed_root(monkeypatch)
-    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+    patch_real_deployed_root(monkeypatch, tmp_path)
 
     result = cs._load_env_file(tmp_path / "autobot-backend" / ".env")
 
@@ -266,8 +262,7 @@ def test_load_env_file_refuses_a_sibling_directory_sharing_the_root_as_a_string_
     above for why: without it the guard raises regardless of the sibling-prefix
     scenario this test names.
     """
-    patch_real_deployed_root(monkeypatch)
-    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+    patch_real_deployed_root(monkeypatch, tmp_path)
     sibling = Path(str(tmp_path) + "-evil") / ".env"
 
     try:
@@ -289,8 +284,7 @@ def test_load_env_file_refuses_the_deployed_root_itself(tmp_path, monkeypatch) -
     near the equality edge case -- raises, so this test would give zero
     regression coverage for #1134/#1135 without it.
     """
-    patch_real_deployed_root(monkeypatch)
-    monkeypatch.setenv("SLM_DEPLOYED_ROOT", str(tmp_path))
+    patch_real_deployed_root(monkeypatch, tmp_path)
 
     try:
         cs._load_env_file(tmp_path)
