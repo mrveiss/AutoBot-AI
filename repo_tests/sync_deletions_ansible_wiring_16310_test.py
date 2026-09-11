@@ -323,20 +323,34 @@ def test_the_delete_step_shell_resists_injection_and_path_escapes(tmp_path) -> N
     shared task file (the way this file already parses it for the tests
     above), render it with a crafted delete list, and run it against a real
     tree with hostile filenames -- proving the quoting holds, not just
-    asserting it by reading the source."""
+    asserting it by reading the source.
+
+    #16310 review round 9: a `/` is not legal inside a single filename --
+    embedding an absolute path in a command-substitution payload made
+    ``Path.write_text`` treat it as a directory that does not exist
+    (``FileNotFoundError``), never reaching the shell at all. The payload
+    below is slash-free (``touch INJECTED``, a relative name); the script
+    runs with ``cwd=tmp_path`` so that relative name resolves somewhere this
+    test controls and can check afterward. The `../` and symlinked-parent
+    escapes stay as real directory structure (a path with a real `../` /
+    a real symlinked dir inside ``root``), not as slashes baked into one
+    filename -- those are legitimate multi-segment deletion candidates, not
+    single hostile names, and are exactly what the delete step's
+    ``realpath`` containment check exists to catch.
+    """
     import subprocess
 
     root = tmp_path / "target"
     root.mkdir()
     outside = tmp_path / "outside"
     outside.mkdir()
-    injected_marker = outside / "INJECTED"
+    injected_marker = tmp_path / "INJECTED"
 
     ordinary_hostile = [
         "safe with spaces.txt",
         "quote'name.txt",
         "back`tick.txt",
-        f"dollar$(touch {injected_marker}).txt",
+        "dollar$(touch INJECTED).txt",
         "semi;colon.txt",
         "pipe|char.txt",
         "-leading-dash.txt",
@@ -352,7 +366,7 @@ def test_the_delete_step_shell_resists_injection_and_path_escapes(tmp_path) -> N
     delete_list = [*ordinary_hostile, "../outside_target.txt", "escape_link/payload.txt"]
     script = _render_delete_cmd(root, delete_list)
 
-    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False)
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False, cwd=str(tmp_path))
 
     assert not injected_marker.exists(), f"injection executed a command: {result.stderr}"
     assert result.returncode == 1, "the script must fail when it refused an escaping candidate"

@@ -109,7 +109,10 @@ def _init_repo(repo: Path) -> None:
 
 def _commit_all(repo: Path, message: str) -> None:
     _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "-m", message)
+    # #16310 review round 9: --allow-empty, matching services/sync_deletions_test.py
+    # and scripts/sync_deletion_planner_test.py's identical helper -- a
+    # future no-op-second-commit fixture here must not exit 1 either.
+    _git(repo, "commit", "--allow-empty", "-q", "-m", message)
 
 
 def _write(path: Path, content: str = "x") -> None:

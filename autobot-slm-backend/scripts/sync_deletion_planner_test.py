@@ -43,7 +43,22 @@ def _real_load(name: str, path: Path):
 # ran after this one. Folded into the same _SWAPPED/_prev_modules/finally
 # cycle as the real-loaded modules below so it is captured and restored (or
 # popped, if it was absent before) exactly like the rest.
+#
+# #16310 review round 9: "services" itself is ALSO captured/restored here --
+# the guard's pre-push run named THIS file's
+# test_diff_mode_prints_the_plan_as_json_and_exits_zero as where it first
+# saw "services" go from conftest's synthetic MagicMock to a genuine module
+# bound to this repo's own services/__init__.py
+# ("exempt-refused: multi-source-root": "services" is a real,
+# independently importable package under both autobot-backend/ and
+# autobot-slm-backend/, so a genuine top-level binding reaching sys.modules
+# here is ambiguous for any test that runs after this file and does an
+# unqualified `import services`). Whatever in this bootstrap or the real
+# CLI run reaches for it, restoring it in the same try/finally as every
+# other name below removes the ambiguity rather than asking the guard to
+# trust which "services" it is.
 _SWAPPED = (
+    "services",
     "services.git_tracker",
     "services.deploy_artifacts",
     "services.drift_checker",
@@ -97,7 +112,10 @@ def _init_repo(repo: Path) -> None:
 
 def _commit_all(repo: Path, message: str) -> str:
     _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "-m", message)
+    # #16310 review round 9: --allow-empty, matching services/sync_deletions_test.py
+    # and services/full_tree_drift_test.py's identical helper -- a future
+    # no-op-second-commit fixture here must not exit 1 either.
+    _git(repo, "commit", "--allow-empty", "-q", "-m", message)
     return _git(repo, "rev-parse", "HEAD")
 
 

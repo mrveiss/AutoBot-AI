@@ -108,7 +108,11 @@ def _init_repo(repo: Path) -> None:
 
 def _commit_all(repo: Path, message: str) -> str:
     _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "-m", message)
+    # #16310 review round 9: --allow-empty. Two fixtures ("no-op") commit a
+    # second time with nothing changed since the previous commit -- a plain
+    # `git commit` with nothing staged exits 1, and the plan-computation
+    # call never even runs.
+    _git(repo, "commit", "--allow-empty", "-q", "-m", message)
     return _git(repo, "rev-parse", "HEAD")
 
 
