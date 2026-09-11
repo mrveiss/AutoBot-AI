@@ -9,10 +9,12 @@ Covers:
 - jti present in minted tokens
 - revoke_jti stores key in Redis with correct TTL (clamped to >= 1)
 - is_jti_revoked returns True after revoke
-- Redis-unavailable path: is_jti_revoked returns False (no crash)
+- Redis-unavailable path: is_jti_revoked raises (fail-closed, #16387)
 - decode_token_async rejects revoked HS256 jti
 - decode_token_async accepts non-revoked HS256 token
-- Redis unavailable: valid token still decodes (fail-open)
+- decode_token_async denies (401) when the jti-denylist check cannot run
+- decode_token_async denies (401) when the password-epoch check cannot run
+- decode_token_async accepts a valid token when both checks succeed (control)
 """
 
 import importlib.util
@@ -46,6 +48,17 @@ sys.path.insert(0, str(_ROOT))
 # developer's real ``config/config.yaml`` (#13083, the severity bar for this
 # issue).
 # ---------------------------------------------------------------------------
+# #16387: import the REAL fastapi (+ fastapi.security) before the snapshot
+# below, so the stub loop's `if _mod_name not in sys.modules` guard for those
+# two names is already satisfied and never replaces them with a MagicMock.
+# Unlike api/auth.py (test_auth_logout.py's target), services/auth.py has no
+# decorated routes or response models, so there is no FastAPIError risk from
+# using the real package here -- and the fail-closed tests below need a real,
+# raise-able ``HTTPException`` from ``decode_token_async``, not a MagicMock
+# call that would raise TypeError instead of the intended 401.
+import fastapi  # noqa: E402,F401
+import fastapi.security  # noqa: E402,F401
+
 _PRE_BOOTSTRAP_MODULES = dict(sys.modules)
 _PRE_BOOTSTRAP_SERVICES_HAD_DENYLIST = "services" in sys.modules and hasattr(sys.modules["services"], "token_denylist")
 
@@ -226,14 +239,14 @@ class TestIsJtiRevoked:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_returns_false_when_redis_unavailable(self):
-        """Fail-open: no crash, returns False."""
+    async def test_raises_when_redis_unavailable(self):
+        """Fail-closed (#16387): no client available raises, never returns False."""
         get_client = AsyncMock(return_value=None)
         with patch.object(_dl_mod, "get_async_redis_client", get_client):
-            result = await is_jti_revoked("jti-no-redis")
+            with pytest.raises(ConnectionError):
+                await is_jti_revoked("jti-no-redis")
 
         get_client.assert_called_once_with()
-        assert result is False
 
 
 # ---------------------------------------------------------------------------
@@ -294,28 +307,53 @@ class TestDecodeTokenAsyncRevocation:
         assert result["sub"] == "carol"
 
     @pytest.mark.asyncio
-    async def test_redis_unavailable_does_not_block_valid_token(self):
-        """Fail-open: Redis down must not block a valid HS256 token."""
+    async def test_both_checks_healthy_accepts_valid_token(self):
+        """Control case (#16387): with both revocation checks healthy and
+        returning "not revoked", a valid token is still accepted."""
         service = AuthService()
         token = service.create_access_token(data={"sub": "dave", "admin": False, "role": "user"})
 
-        with patch.object(_auth_mod, "is_jti_revoked", new=AsyncMock(return_value=False)):
+        with (
+            patch.object(_auth_mod, "is_jti_revoked", new=AsyncMock(return_value=False)),
+            patch.object(_auth_mod, "is_token_revoked_by_password_change", new=AsyncMock(return_value=False)),
+        ):
             result = await service.decode_token_async(token)
 
         assert result is not None
         assert result["sub"] == "dave"
 
     @pytest.mark.asyncio
-    async def test_denylist_exception_treated_as_fail_open(self):
-        """When is_jti_revoked raises, decode_token_async returns claims (fail-open)."""
+    async def test_jti_denylist_exception_denies_token(self):
+        """#16387: when is_jti_revoked raises, decode_token_async fails
+        CLOSED -- 401, not a fail-open pass-through."""
         service = AuthService()
         token = service.create_access_token(data={"sub": "eve", "admin": False, "role": "user"})
 
-        with patch.object(_auth_mod, "is_jti_revoked", new=AsyncMock(side_effect=RuntimeError("redis down"))):
-            result = await service.decode_token_async(token)
+        with patch.object(_auth_mod, "is_jti_revoked", new=AsyncMock(side_effect=ConnectionError("redis down"))):
+            with pytest.raises(fastapi.HTTPException) as exc_info:
+                await service.decode_token_async(token)
 
-        assert result is not None
-        assert result["sub"] == "eve"
+        assert exc_info.value.status_code == fastapi.status.HTTP_401_UNAUTHORIZED
+
+    @pytest.mark.asyncio
+    async def test_password_epoch_exception_denies_token(self):
+        """#16387: when is_token_revoked_by_password_change raises,
+        decode_token_async fails CLOSED -- 401, not a fail-open pass-through."""
+        service = AuthService()
+        token = service.create_access_token(data={"sub": "frank", "admin": False, "role": "user"})
+
+        with (
+            patch.object(_auth_mod, "is_jti_revoked", new=AsyncMock(return_value=False)),
+            patch.object(
+                _auth_mod,
+                "is_token_revoked_by_password_change",
+                new=AsyncMock(side_effect=TimeoutError("redis timed out")),
+            ),
+        ):
+            with pytest.raises(fastapi.HTTPException) as exc_info:
+                await service.decode_token_async(token)
+
+        assert exc_info.value.status_code == fastapi.status.HTTP_401_UNAUTHORIZED
 
 
 # ---------------------------------------------------------------------------
@@ -327,7 +365,7 @@ class TestBoundedRedisAccess:
     @pytest.mark.asyncio
     async def test_hanging_client_acquisition_is_cut_by_deadline(self):
         """A hanging get_async_redis_client (retry-under-lock) must not hang
-        auth: the deadline cuts it and the check fails open (#11443)."""
+        auth: the deadline cuts it and the check fails CLOSED (#11443, #16387)."""
         import asyncio as _asyncio
 
         async def _hang(*a, **kw):
@@ -339,20 +377,23 @@ class TestBoundedRedisAccess:
         ):
             loop = _asyncio.get_event_loop()
             start = loop.time()
-            result = await is_jti_revoked("jti-hang")
+            with pytest.raises(_asyncio.TimeoutError):
+                await is_jti_revoked("jti-hang")
             elapsed = loop.time() - start
 
-        assert result is False
         assert elapsed < 1.0, f"deadline did not bound the call ({elapsed:.2f}s)"
 
     @pytest.mark.asyncio
     async def test_failure_arms_negative_cache_skipping_redis(self):
         """After a failure, subsequent checks skip Redis entirely for the
-        fail-open window instead of re-paying the deadline (#11443)."""
+        window instead of re-paying the deadline -- and keep denying instead
+        of falling back to Redis (#11443, #16387)."""
         get_client = AsyncMock(return_value=None)
         with patch.object(_dl_mod, "get_async_redis_client", get_client):
-            assert await is_jti_revoked("jti-a") is False  # arms the window
-            assert await is_jti_revoked("jti-b") is False  # short-circuits
+            with pytest.raises(ConnectionError):
+                await is_jti_revoked("jti-a")  # arms the window
+            with pytest.raises(ConnectionError):
+                await is_jti_revoked("jti-b")  # short-circuits
 
         get_client.assert_called_once()  # second call never touched Redis
 

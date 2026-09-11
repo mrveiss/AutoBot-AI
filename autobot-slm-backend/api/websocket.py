@@ -13,7 +13,7 @@ import logging
 import time
 from typing import Dict, Set
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from autobot_shared.time_utils import utc_timestamp
 from services.auth import auth_service
@@ -88,7 +88,18 @@ async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
         await websocket.close(code=4001, reason="Authentication required")
         return None
 
-    payload = await auth_service.decode_token_async(token)
+    try:
+        payload = await auth_service.decode_token_async(token)
+    except HTTPException:
+        # #16387: decode_token_async raises (rather than returning None) when
+        # a revocation check could not run at all, so the token is denied the
+        # same as any other invalid token -- just via a WebSocket close frame
+        # instead of an HTTP 401, since no HTTP response can be sent here.
+        _log_ws_reject_context(websocket, "revocation check failed")
+        await websocket.accept()
+        await websocket.close(code=4001, reason="Invalid or expired token")
+        return None
+
     if not payload:
         _log_ws_reject_context(websocket, "invalid token")
         await websocket.accept()

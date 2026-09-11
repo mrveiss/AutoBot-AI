@@ -55,9 +55,8 @@ the one read-side gate · `validate_ownership` (:613).
   construction is never an ownership check; the metadata comparison is.
 - Owner identity is `metadata.owner` = **username**, never a user id. A diff comparing
   against `user_id` is comparing the wrong field.
-- Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent
-  Redis record means "not cached", never "unowned" — `_owner_when_cache_is_empty` (:539) asks
-  disk first and rehydrates **for the real owner, never for the caller** (#14018).
+- Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent Redis record means
+  "not cached", never "unowned" — `_owner_when_cache_is_empty` (:539) asks disk first and rehydrates **for the real owner, never for the caller** (#14018).
 - Undetermined enforcement policy degrades, in
   [`security/enforcement_mode.py`](../../autobot-backend/security/enforcement_mode.py), to
   `DEGRADED_ENFORCEMENT_MODE` (:53) and never to `disabled`: checks still run and violations
@@ -93,12 +92,10 @@ Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-back
 - Extraction goes through `archive_safety`; [`plugin_install.py`](../../autobot-backend/plugin_install.py)
   only re-exports `_validate_zip_metadata` and `_safe_extract`.
   A local `zf.extractall` reintroduces zip-slip and symlink escape.
-- Names match `_NAME_PATTERN` (:36) before any filesystem touch; the target is claimed by
-  `_claim_install_target` (:107) via `mkdir(exist_ok=False)`, which — with the per-name
-  `_install_locks` — is what makes the collision check TOCTOU-free.
-- Git installs: scheme restricted to http(s), `--` before the URL, `protocol.file.allow=never`,
-  no submodule recursion, ref matched against `_GIT_REF_PATTERN` (:39), which rejects a leading `-` and any `..`.
-  Dropping any one of these is a finding on its own.
+- Names match `_NAME_PATTERN` (:36) before any filesystem touch; the target is claimed by `_claim_install_target` (:107)
+  via `mkdir(exist_ok=False)`, which — with the per-name `_install_locks` — is what makes the collision check TOCTOU-free.
+- Git installs: scheme restricted to http(s), `--` before the URL, `protocol.file.allow=never`, no submodule recursion,
+  ref matched against `_GIT_REF_PATTERN` (:39), rejecting a leading `-` or `..`. Dropping any one is a finding on its own.
 - `PluginRegistry._plugins` and `HookRegistry` are process-wide singletons that do not dedupe —
   a load path re-initialising a live plugin double-registers its callbacks (#14000).
 
@@ -113,7 +110,7 @@ AES-GCM + PBKDF2 for data at rest · [`autobot_shared/field_encryption.py`](../.
 [`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py)
 `ConnectorCredentialStore` (:178) for connector/OAuth creds, ownership via `_require_owner` (:604) ·
 [`auth_middleware.py`](../../autobot-backend/auth_middleware.py) `verify_internal_api_key` (:959)
-for service-to-service.
+for service-to-service · [`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:119) for SLM token revocation.
 
 **Invariants**
 
@@ -129,12 +126,15 @@ for service-to-service.
   Exception text counts; a boto3 `ClientError` carries the account number in an ARN (#15324).
 - Keys come from SSOT config, never a literal. A default value for an encryption key is a
   finding even when production overrides it via env var.
+- SLM token revocation fails CLOSED (#16387, owner decision): when the HS256 jti-denylist check
+  (`is_jti_revoked` (:131) in [`token_denylist.py`](../../autobot-slm-backend/services/token_denylist.py))
+  or the password-epoch check can't run because Redis errored, `decode_token_async` denies the token (401)
+  instead of reading "could not check" as "not revoked" — a Redis outage takes SLM login down, including
+  the backend admin path reached through the proxy (#16374).
 
 ## Cross-cutting
 
 - **Egress:** any new outbound HTTP goes through the guarded fetch —
-  [`autobot_shared/security/ssrf_guard.py`](../../autobot_shared/security/ssrf_guard.py)
-  `fetch_safe_url` (:305) / `pinned_request_with_redirects` (:230). A bare `aiohttp`/`requests`
-  call on a user-influenced URL is SSRF (core rule 8).
-- **Refactor fallout** historically outranks new code here: a renamed validator or store with
-  call sites left on the old name silently removes the check. Grep the **old** identifier.
+  [`autobot_shared/security/ssrf_guard.py`](../../autobot_shared/security/ssrf_guard.py) `fetch_safe_url` (:305) /
+  `pinned_request_with_redirects` (:230). A bare `aiohttp`/`requests` call on a user-influenced URL is SSRF (core rule 8).
+- **Refactor fallout** historically outranks new code here: a renamed validator or store with call sites left on the old name silently removes the check. Grep the **old** identifier.
