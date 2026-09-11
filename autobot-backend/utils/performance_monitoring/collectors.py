@@ -23,7 +23,7 @@ from typing import Any, Dict, List
 import aiohttp
 import psutil
 
-from autobot_shared.gpu_telemetry import METRICS_QUERY_FIELDS, parse_nvidia_text, parse_nvidia_value, query_nvidia_gpus
+from autobot_shared.gpu_telemetry import METRICS_QUERY_FIELDS, nvidia_metric_fields, query_nvidia_gpus
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot
@@ -41,12 +41,6 @@ from utils.performance_monitoring.types import AUTOBOT_PROCESS_KEYWORDS
 logger = get_logger(__name__)
 
 
-def _gpu_int(row: Dict[str, str], field: str) -> int | None:
-    """An integer nvidia-smi cell, or None when the tool could not read it (#16289)."""
-    value = parse_nvidia_value(row[field])
-    return None if value is None else int(value)
-
-
 class GPUCollector:
     """Collects GPU performance metrics via nvidia-smi."""
 
@@ -55,38 +49,9 @@ class GPUCollector:
         self.gpu_available = gpu_available
 
     def _build_metrics(self, row: Dict[str, str]) -> GPUMetrics | None:
-        """One GPU's metrics from a METRICS_QUERY_FIELDS row (#16289).
-
-        None when a core value (memory, utilisation, temperature) is unreadable.
-        Throttling keeps its old meaning: thermal is hw_thermal_slowdown, power
-        is hw_slowdown or hw_power_brake_slowdown.
-        """
-        used, total, utilization, temperature = (
-            parse_nvidia_value(row[field])
-            for field in ("memory.used", "memory.total", "utilization.gpu", "temperature.gpu")
-        )
-        if used is None or total is None or utilization is None or temperature is None or not total:
-            return None
-        return GPUMetrics(
-            timestamp=time.time(),
-            name=row["name"],
-            utilization_percent=utilization,
-            memory_used_mb=int(used),
-            memory_total_mb=int(total),
-            memory_free_mb=int(total) - int(used),
-            memory_utilization_percent=round((used / total) * 100, 1),
-            temperature_celsius=int(temperature),
-            power_draw_watts=parse_nvidia_value(row["power.draw"]) or 0.0,
-            gpu_clock_mhz=_gpu_int(row, "clocks.current.graphics") or 0,
-            memory_clock_mhz=_gpu_int(row, "clocks.current.memory") or 0,
-            fan_speed_percent=_gpu_int(row, "fan.speed"),
-            encoder_utilization=_gpu_int(row, "encoder.stats.utilization"),
-            decoder_utilization=_gpu_int(row, "decoder.stats.utilization"),
-            performance_state=parse_nvidia_text(row["pstate"]),
-            thermal_throttling=row["clocks_throttle_reasons.hw_thermal_slowdown"] == "Active",
-            power_throttling="Active"
-            in (row["clocks_throttle_reasons.hw_slowdown"], row["clocks_throttle_reasons.hw_power_brake_slowdown"]),
-        )
+        """One GPU's metrics from a METRICS_QUERY_FIELDS row; the mapping is gpu_telemetry's (#16289)."""
+        fields = nvidia_metric_fields(row)
+        return None if fields is None else GPUMetrics(timestamp=time.time(), **fields)
 
     async def collect(self) -> GPUMetrics | None:
         """The first GPU's metrics.

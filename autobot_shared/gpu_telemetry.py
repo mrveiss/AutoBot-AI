@@ -123,6 +123,55 @@ def parse_nvidia_text(raw: str) -> str | None:
     return None if value in _NVIDIA_UNREADABLE else value
 
 
+def parse_nvidia_int(raw: str) -> int | None:
+    """One nvidia-smi cell as an integer, or None when the tool could not read it."""
+    value = parse_nvidia_value(raw)
+    return None if value is None else int(value)
+
+
+_CORE_METRIC_FIELDS = ("memory.used", "memory.total", "utilization.gpu", "temperature.gpu")
+
+
+def _nvidia_detail_fields(row: Dict[str, str]) -> Dict[str, Any]:
+    """The optional per-GPU readings; a missing one is None (or 0 for clocks and power)."""
+    return {
+        "power_draw_watts": parse_nvidia_value(row["power.draw"]) or 0.0,
+        "gpu_clock_mhz": parse_nvidia_int(row["clocks.current.graphics"]) or 0,
+        "memory_clock_mhz": parse_nvidia_int(row["clocks.current.memory"]) or 0,
+        "fan_speed_percent": parse_nvidia_int(row["fan.speed"]),
+        "encoder_utilization": parse_nvidia_int(row["encoder.stats.utilization"]),
+        "decoder_utilization": parse_nvidia_int(row["decoder.stats.utilization"]),
+        "performance_state": parse_nvidia_text(row["pstate"]),
+        # Throttling keeps its old meaning: thermal is hw_thermal_slowdown, power
+        # is hw_slowdown or hw_power_brake_slowdown.
+        "thermal_throttling": row["clocks_throttle_reasons.hw_thermal_slowdown"] == "Active",
+        "power_throttling": "Active"
+        in (row["clocks_throttle_reasons.hw_slowdown"], row["clocks_throttle_reasons.hw_power_brake_slowdown"]),
+    }
+
+
+def nvidia_metric_fields(row: Dict[str, str]) -> Dict[str, Any] | None:
+    """One GPU's metrics from a ``METRICS_QUERY_FIELDS`` row, as keyword arguments (#16289).
+
+    Both backend performance collectors build their ``GPUMetrics`` from this, so
+    the mapping lives in one place. None when a core value (memory, utilisation,
+    temperature) is unreadable.
+    """
+    used, total, utilization, temperature = (parse_nvidia_value(row[field]) for field in _CORE_METRIC_FIELDS)
+    if used is None or total is None or utilization is None or temperature is None or not total:
+        return None
+    return {
+        "name": row["name"],
+        "utilization_percent": utilization,
+        "memory_used_mb": int(used),
+        "memory_total_mb": int(total),
+        "memory_free_mb": int(total) - int(used),
+        "memory_utilization_percent": round((used / total) * 100, 1),
+        "temperature_celsius": int(temperature),
+        **_nvidia_detail_fields(row),
+    }
+
+
 def parse_nvidia_smi_csv(output: str, fields: Sequence[str]) -> List[Dict[str, str]]:
     """Split ``--format=csv,noheader`` output into one row per GPU, keyed by *fields*.
 

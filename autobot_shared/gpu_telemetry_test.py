@@ -187,3 +187,79 @@ class TestProbeGpus:
         assert first["temperature_celsius"] == 51.0
         assert second["name"] == "NVIDIA RTX A2000"
         assert second["temperature_celsius"] is None
+
+
+def _metrics_row(**overrides):
+    """A METRICS_QUERY_FIELDS row with invented values; *overrides* replace cells."""
+    row = dict(
+        zip(
+            gt.METRICS_QUERY_FIELDS,
+            (
+                "NVIDIA Test GPU A",
+                "2048",
+                "8192",
+                "37",
+                "61",
+                "42.5",
+                "1800",
+                "7000",
+                "33",
+                "5",
+                "0",
+                "P2",
+                "Not Active",
+                "Not Active",
+                "Not Active",
+                "Not Active",
+                "Not Active",
+                "Not Active",
+            ),
+        )
+    )
+    row.update(overrides)
+    return row
+
+
+class TestNvidiaMetricFields:
+    """The one row-to-metrics mapping both backend collectors use (#16289, #16292)."""
+
+    def test_a_full_row_maps_every_field(self):
+        fields = gt.nvidia_metric_fields(_metrics_row())
+
+        assert fields["name"] == "NVIDIA Test GPU A"
+        assert (fields["memory_used_mb"], fields["memory_total_mb"], fields["memory_free_mb"]) == (2048, 8192, 6144)
+        assert fields["memory_utilization_percent"] == 25.0
+        assert (fields["utilization_percent"], fields["temperature_celsius"]) == (37.0, 61)
+        assert (fields["gpu_clock_mhz"], fields["memory_clock_mhz"], fields["fan_speed_percent"]) == (1800, 7000, 33)
+        assert fields["performance_state"] == "P2"
+        assert not fields["thermal_throttling"] and not fields["power_throttling"]
+
+    def test_an_unreadable_core_value_means_no_metrics(self):
+        assert gt.nvidia_metric_fields(_metrics_row(**{"temperature.gpu": "[N/A]"})) is None
+        assert gt.nvidia_metric_fields(_metrics_row(**{"memory.total": "0"})) is None
+
+    def test_unreadable_optional_readings_are_none_not_zero(self):
+        fields = gt.nvidia_metric_fields(
+            _metrics_row(**{"fan.speed": "[N/A]", "encoder.stats.utilization": "[Not Supported]"})
+        )
+
+        assert fields["fan_speed_percent"] is None
+        assert fields["encoder_utilization"] is None
+
+    @pytest.mark.parametrize(
+        ("reason", "thermal", "power"),
+        [
+            ("clocks_throttle_reasons.hw_thermal_slowdown", True, False),
+            ("clocks_throttle_reasons.hw_slowdown", False, True),
+            ("clocks_throttle_reasons.hw_power_brake_slowdown", False, True),
+            ("clocks_throttle_reasons.sw_power_cap", False, False),
+        ],
+    )
+    def test_throttling_keeps_its_old_meaning(self, reason, thermal, power):
+        fields = gt.nvidia_metric_fields(_metrics_row(**{reason: "Active"}))
+
+        assert (fields["thermal_throttling"], fields["power_throttling"]) == (thermal, power)
+
+    def test_parse_nvidia_int(self):
+        assert gt.parse_nvidia_int("1800") == 1800
+        assert gt.parse_nvidia_int("[N/A]") is None
