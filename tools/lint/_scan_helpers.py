@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import logging
 import posixpath
+import re
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
@@ -273,3 +274,43 @@ def iter_python_files(args: List[str], repo_root: Path) -> Iterable[Path]:
         if any(part in EXCLUDED_DIR_NAMES for part in parts):
             continue
         yield repo_root / rel
+
+
+# A unified-diff hunk header. With -U0 each hunk is exactly the changed region,
+# so the new-side range ``+start[,count]`` lists the lines this change added. A
+# missing count means one line; a count of 0 is a pure deletion and adds none.
+_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+
+
+def added_lines(repo_root: Path, rel: str, base: str | None = None) -> set[int]:
+    """Line numbers of *rel* that the change being checked ADDED.
+
+    ``base=None`` reads the staged diff (index against HEAD): the pre-commit
+    stage, where the change has no commit yet. ``base=<rev>`` reads ``rev..HEAD``:
+    the PR stage, with the base the caller resolved. A hook scoped this way judges
+    what the change introduced instead of the file's whole backlog (#16178, after
+    #13950 did the same for shell hooks in CI).
+
+    Raises:
+        RuntimeError: git failed. A scoped hook must not read that as "added
+            nothing", which would report a clean change it never examined.
+    """
+    span = ["--cached"] if base is None else [base, "HEAD"]
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+        ["git", "diff", "-U0", "--no-color", "--no-ext-diff", *span, "--", rel],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=scrubbed_git_env(),
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"git diff for {rel} failed in {repo_root}: {result.stderr.strip()}")
+    lines: set[int] = set()
+    for header in result.stdout.splitlines():
+        match = _HUNK.match(header)
+        if match:
+            start = int(match.group(1))
+            count = 1 if match.group(2) is None else int(match.group(2))
+            lines.update(range(start, start + count))
+    return lines
