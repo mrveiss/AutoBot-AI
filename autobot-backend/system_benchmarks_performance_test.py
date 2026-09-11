@@ -346,7 +346,7 @@ class TestSystemPerformanceBenchmarks:
                 os.environ.pop(name, None)
 
     @pytest.mark.asyncio
-    async def test_system_startup_performance(self, record_property):
+    async def test_system_startup_performance(self, record_property, monkeypatch):
         """Test system component startup performance.
 
         #15055: each component is constructed ONCE before the clock starts; the budget is measured on a second
@@ -372,6 +372,7 @@ class TestSystemPerformanceBenchmarks:
         # (`huggingface_hub` falls back to its on-disk cache on a connection error) — a deterministic pass/fail.
         modules_before_warm_construction = set(sys.modules)
         start_time = time.perf_counter()
+        monkeypatch.setenv("HF_HUB_OFFLINE", "1")  # #16404: a keep-alive connection could evade the socket patch
         with _blocked_sockets():
             processor = MultiModalProcessor()
         processor_startup_time = (time.perf_counter() - start_time) * 1000
@@ -379,6 +380,9 @@ class TestSystemPerformanceBenchmarks:
 
         assert isinstance(processor, MultiModalProcessor), "MultiModalProcessor() returned no instance to time"
         assert not new_imports, f"Multimodal processor startup imported {new_imports} on the WARM construction (#15055)"
+        # #16404: `_load_models` (vision.py) swallows load errors into a log line, so assert what it sets too.
+        assert processor.vision_processor.clip_model is not None, "CLIP model unset — load error swallowed (#16404)"
+        assert processor.vision_processor.blip_model is not None, "BLIP-2 model unset — load error swallowed (#16404)"
         record_property("perf_multimodal_processor_startup_ms", processor_startup_time)
 
         # Test memory manager startup
