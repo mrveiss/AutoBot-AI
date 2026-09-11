@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 
 import npm_audit_gate as gate
 import pytest
@@ -280,4 +281,53 @@ def test_a_crash_inside_the_gate_is_could_not_check_never_found(tmp_path, monkey
     assert gate.main(["--report", str(tmp_path / "audit-results.json")]) == gate.EXIT_CODES[gate.UNAVAILABLE]
     text = summary.read_text(encoding="utf-8")
     assert "**Failed, could not check:**" in text and type(error).__name__ in text
-    assert "::error title=npm audit: could not check::" in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert "::error title=npm audit: could not check::" in captured.out
+    # The traceback reaches the job log: labelled, not swallowed (#16357 review).
+    assert "Traceback" in captured.err and type(error).__name__ in captured.err
+
+
+@pytest.mark.parametrize(
+    "stdout,log,verdict",
+    [
+        (_report(low=1), BULK_LOG, gate.PASSED),
+        (_report(high=1), BULK_LOG, gate.FOUND),
+        (ENDPOINT_ERROR, "", gate.UNAVAILABLE),
+    ],
+    ids=["passed", "found", "unavailable"],
+)
+def test_a_failed_report_or_summary_write_never_changes_the_exit_code(
+    tmp_path, monkeypatch, capsys, stdout, log, verdict
+) -> None:
+    """Real OSErrors, not mocks: the report goes into a directory that does not
+    exist, and the step summary path is a directory. Neither may move the exit
+    code off the verdict's (#16357 review)."""
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path))
+    monkeypatch.setenv("NPM_AUDIT_MAX_ATTEMPTS", "1")
+    monkeypatch.setattr(gate, "_run_npm_audit", _FakeNpm((stdout, log)))
+    report = tmp_path / "missing-dir" / "audit-results.json"
+
+    assert gate.main(["--report", str(report)]) == gate.EXIT_CODES[verdict]
+
+    err = capsys.readouterr().err
+    assert f"Could not write {report}" in err
+    assert "Could not write job summary" in err
+
+
+def test_undecodable_npm_output_is_decoded_not_raised() -> None:
+    """A REAL subprocess writes a non-UTF-8 byte next to an audits/quick log line.
+
+    `errors="replace"` must hand classify() text rather than raise, and the quick
+    endpoint must still read as "could not check".
+    """
+    script = (
+        "import sys; "
+        f"sys.stdout.write({_report()!r}); "
+        "sys.stderr.buffer.write(b'npm http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/audits/quick \\xff\\n')"
+    )
+
+    completed = gate._run_npm_audit([sys.executable, "-c", script])
+
+    assert "\ufffd" in completed.stderr  # the U+FFFD replacement character
+    verdict = gate.classify(completed.stdout, completed.stderr)
+    assert (verdict.result, verdict.endpoint) == (gate.UNAVAILABLE, "audits/quick")
