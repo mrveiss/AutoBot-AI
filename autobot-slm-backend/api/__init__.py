@@ -53,7 +53,11 @@ from .vnc import node_vnc_router, vnc_router
 from .websocket import router as websocket_router
 
 # #16281: a node's GPU state belongs to the monitoring surface, so it is served as
-# /api/monitoring/gpu/nodes under monitoring's guards. Mounted here because
+# /api/monitoring/gpu/nodes. Its guard is NOT inherited from monitoring_router,
+# which declares no dependencies of its own: it is the include-level
+# `dependencies=_SM` (require_service_management) main.py attaches when it
+# includes monitoring_router, plus the route's own get_current_user. A route
+# mounted here gets exactly that and nothing more. Mounted here because
 # api/monitoring.py and main.py are both at their file-size ceilings.
 monitoring_router.include_router(gpu_router)
 
