@@ -16,17 +16,21 @@
 import { describe, it, expect } from 'vitest'
 import { shouldInjectInternalApiKey } from './devProxyAuth'
 
+type Row = [optIn: string | undefined, apiKey: string | undefined, expected: boolean, description: string]
+
+const cases: Row[] = [
+  // [optIn, apiKey, expected, description]
+  [undefined, undefined, false, 'neither var set'],
+  ['true', undefined, false, 'opt-in set but no key'],
+  [undefined, 'secret-key', false, 'key set but no opt-in'],
+  ['false', 'secret-key', false, 'opt-in explicitly false'],
+  ['TRUE', 'secret-key', false, 'opt-in wrong case is not "true"'],
+  ['true', '', false, 'opt-in set but key is empty string'],
+  ['true', 'secret-key', true, 'both vars set correctly'],
+]
+
 describe('shouldInjectInternalApiKey', () => {
-  it.each([
-    // [optIn, apiKey, expected, description]
-    [undefined, undefined, false, 'neither var set'],
-    ['true', undefined, false, 'opt-in set but no key'],
-    [undefined, 'secret-key', false, 'key set but no opt-in'],
-    ['false', 'secret-key', false, 'opt-in explicitly false'],
-    ['TRUE', 'secret-key', false, 'opt-in wrong case is not "true"'],
-    ['true', '', false, 'opt-in set but key is empty string'],
-    ['true', 'secret-key', true, 'both vars set correctly'],
-  ] as const)('%s / %s -> %s (%s)', (optIn, apiKey, expected) => {
+  it.each(cases)('%s / %s -> %s (%s)', (optIn, apiKey, expected) => {
     const env: NodeJS.ProcessEnv = {}
     if (optIn !== undefined) env.AUTOBOT_DEV_INJECT_INTERNAL_API_KEY = optIn
     if (apiKey !== undefined) env.AUTOBOT_INTERNAL_API_KEY = apiKey
