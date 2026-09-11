@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from llm_shared.pricing.sources import ModelPricing
@@ -29,7 +30,17 @@ logger = get_logger(__name__)
 
 _KEY_PREFIX = "model_pricing"
 _STATUS_KEY = f"{_KEY_PREFIX}:refresh_status"
-_TTL_SECONDS = 60 * 60 * 25  # 25 hours — outlasts the 24-hour refresh cadence
+
+# Hours between automatic refreshes (#16231): the beat cadence celery_app.py
+# schedules pricing.refresh_daily at, imported from here rather than the other
+# way round because llm_shared must not import services (celery_app.py lives
+# there). One value, read by both.
+REFRESH_INTERVAL_HOURS: int = env_int("AUTOBOT_PRICING_REFRESH_INTERVAL_HOURS", 24)
+
+# The TTL is the cadence plus one hour, so it can never be shorter than the
+# interval it is meant to outlast — a longer cadence keeps stored prices
+# around for exactly one more refresh's grace period, never less (#16231).
+_TTL_SECONDS = (REFRESH_INTERVAL_HOURS + 1) * 60 * 60
 _BY_MODEL_PREFIX = f"{_KEY_PREFIX}:by_model"
 _CROSSCHECK_KEY = f"{_KEY_PREFIX}:crosscheck"
 _OVERRIDE_PREFIX = f"{_KEY_PREFIX}:override"
