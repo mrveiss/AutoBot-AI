@@ -323,7 +323,7 @@ class TestMultiModalWorkflowIntegration:
             processing_times.append(processing_time)
             results.append(result)
 
-            # Simulate small delay between inputs
+            # fixed sleep on purpose (#16255): paces the simulated stream; excluded from every timing assert below
             await asyncio.sleep(0.1)
 
         # Verify streaming performance

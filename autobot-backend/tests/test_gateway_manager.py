@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autobot_shared.eventually import DEFAULT_DEADLINE_S, eventually
 from services.gateway import (
     DiscordAdapter,
     GatewayManager,
@@ -501,12 +502,9 @@ class TestPlatformRateLimitWiring:
 
         with patch.object(gateway_rate_limiter, "acquire_token", AsyncMock()) as mock_acquire:
             task = asyncio.create_task(queue.process_queue(handler, workers=1))
-            await asyncio.sleep(0.2)
+            await eventually(lambda: processed, watch=task)
             queue.processing = False
-            try:
-                await asyncio.wait_for(task, timeout=2.0)
-            except asyncio.TimeoutError:
-                pass
+            await asyncio.wait_for(task, timeout=DEFAULT_DEADLINE_S)
 
         assert processed == [{"platform": "wiring-test-platform", "data": "value"}]
         mock_acquire.assert_called_once_with("wiring-test-platform", requests_per_second=50, burst_size=10)
@@ -531,15 +529,11 @@ class TestMessageQueue:
 
         # Process with timeout
         process_task = asyncio.create_task(queue.process_queue(handler, workers=1))
-        await asyncio.sleep(0.2)
+        await eventually(lambda: processed, watch=process_task)
         queue.processing = False
-
-        try:
-            await asyncio.wait_for(process_task, timeout=2.0)
-        except asyncio.TimeoutError:
-            pass
-
+        await asyncio.wait_for(process_task, timeout=DEFAULT_DEADLINE_S)
         await queue.shutdown()
+        assert processed == [{"platform": "test", "data": "value"}]
 
 
 class TestGatewayIntegration:
