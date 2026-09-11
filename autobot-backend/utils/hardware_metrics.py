@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import subprocess  # nosec B404  # Required for nvidia-smi GPU queries
 import time
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass, field
@@ -23,7 +22,7 @@ import aiohttp
 import psutil
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.gpu_telemetry import query_nvidia_gpus
+from autobot_shared.gpu_telemetry import METRICS_QUERY_FIELDS, parse_nvidia_text, parse_nvidia_value, query_nvidia_gpus
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_1_HOUR
@@ -159,6 +158,12 @@ class ServicePerformanceMetrics:
     health_score: float  # 0-100
 
 
+def _gpu_int(row: Dict[str, str], field: str) -> int | None:
+    """An integer nvidia-smi cell, or None when the tool could not read it (#16289)."""
+    value = parse_nvidia_value(row[field])
+    return None if value is None else int(value)
+
+
 class HardwarePerformanceMonitor:
     """
     Comprehensive Phase 9 performance monitoring system for AutoBot.
@@ -248,88 +253,46 @@ class HardwarePerformanceMonitor:
         except Exception:
             return False
 
-    def _parse_nvidia_smi_output(self, output: str) -> GPUMetrics | None:
-        """Parse nvidia-smi CSV output into GPUMetrics. Issue #620."""
-        parts = [p.strip() for p in output.strip().split(",")]
-        if len(parts) < 8:
+    def _gpu_metrics_from_row(self, row: Dict[str, str]) -> GPUMetrics | None:
+        """One GPU's metrics from a METRICS_QUERY_FIELDS row (#16289).
+
+        None when a core value (memory, utilisation, temperature) is unreadable.
+        Throttling keeps its old meaning: thermal is hw_thermal_slowdown, power
+        is hw_slowdown or hw_power_brake_slowdown.
+        """
+        used, total, utilization, temperature = (
+            parse_nvidia_value(row[field])
+            for field in ("memory.used", "memory.total", "utilization.gpu", "temperature.gpu")
+        )
+        if used is None or total is None or utilization is None or temperature is None or not total:
             return None
-
-        memory_used = int(float(parts[1]))
-        memory_total = int(float(parts[2]))
-        memory_free = memory_total - memory_used
-
-        # Parse throttling reasons
-        thermal_throttling = False
-        power_throttling = False
-        if len(parts) > 16:
-            thermal_throttling = parts[16] == "Active"
-            power_throttling = parts[15] == "Active" or parts[17] == "Active"
-
-        def _parse_optional_int(val: str) -> int | None:
-            """Parse optional integer value from nvidia-smi. Issue #620."""
-            return int(float(val)) if val != "[Not Supported]" else None
-
-        def _parse_optional_float(val: str) -> float:
-            """Parse optional float value from nvidia-smi. Issue #620."""
-            return float(val) if val != "[Not Supported]" else 0.0
-
         return GPUMetrics(
             timestamp=time.time(),
-            name=parts[0],
-            utilization_percent=float(parts[3]),
-            memory_used_mb=memory_used,
-            memory_total_mb=memory_total,
-            memory_free_mb=memory_free,
-            memory_utilization_percent=round((memory_used / memory_total) * 100, 1),
-            temperature_celsius=int(float(parts[4])),
-            power_draw_watts=_parse_optional_float(parts[5]),
-            gpu_clock_mhz=_parse_optional_int(parts[6]) or 0,
-            memory_clock_mhz=_parse_optional_int(parts[7]) or 0,
-            fan_speed_percent=_parse_optional_int(parts[8]) if len(parts) > 8 else None,
-            encoder_utilization=(_parse_optional_int(parts[9]) if len(parts) > 9 else None),
-            decoder_utilization=(_parse_optional_int(parts[10]) if len(parts) > 10 else None),
-            performance_state=(parts[11] if len(parts) > 11 and parts[11] != "[Not Supported]" else None),
-            thermal_throttling=thermal_throttling,
-            power_throttling=power_throttling,
+            name=row["name"],
+            utilization_percent=utilization,
+            memory_used_mb=int(used),
+            memory_total_mb=int(total),
+            memory_free_mb=int(total) - int(used),
+            memory_utilization_percent=round((used / total) * 100, 1),
+            temperature_celsius=int(temperature),
+            power_draw_watts=parse_nvidia_value(row["power.draw"]) or 0.0,
+            gpu_clock_mhz=_gpu_int(row, "clocks.current.graphics") or 0,
+            memory_clock_mhz=_gpu_int(row, "clocks.current.memory") or 0,
+            fan_speed_percent=_gpu_int(row, "fan.speed"),
+            encoder_utilization=_gpu_int(row, "encoder.stats.utilization"),
+            decoder_utilization=_gpu_int(row, "decoder.stats.utilization"),
+            performance_state=parse_nvidia_text(row["pstate"]),
+            thermal_throttling=row["clocks_throttle_reasons.hw_thermal_slowdown"] == "Active",
+            power_throttling="Active"
+            in (row["clocks_throttle_reasons.hw_slowdown"], row["clocks_throttle_reasons.hw_power_brake_slowdown"]),
         )
 
     async def collect_gpu_metrics(self) -> GPUMetrics | None:
-        """Collect comprehensive GPU performance metrics.
-
-        Issue #620: Refactored to extract _parse_nvidia_smi_output helper.
-        """
+        """The first GPU's metrics; rows parsed by autobot_shared.gpu_telemetry (#16289, #16297)."""
         if not self.gpu_available:
             return None
-
-        try:
-            # Extended nvidia-smi query for comprehensive metrics
-            result = subprocess.run(  # nosec B603 B607  # fixed nvidia-smi argv, no user input
-                [
-                    "nvidia-smi",
-                    "--query-gpu=name,memory.used,memory.total,utilization.gpu,"
-                    "temperature.gpu,power.draw,clocks.current.graphics,"
-                    "clocks.current.memory,fan.speed,encoder.stats.utilization,"
-                    "decoder.stats.utilization,pstate,clocks_throttle_reasons.gpu_idle,"
-                    "clocks_throttle_reasons.applications_clocks_setting,"
-                    "clocks_throttle_reasons.sw_power_cap,"
-                    "clocks_throttle_reasons.hw_slowdown,"
-                    "clocks_throttle_reasons.hw_thermal_slowdown,"
-                    "clocks_throttle_reasons.hw_power_brake_slowdown",
-                    "--format=csv,noheader,nounits",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-
-            if result.returncode == 0:
-                return self._parse_nvidia_smi_output(result.stdout)
-
-            return None
-
-        except Exception as e:
-            self.logger.error(f"Error collecting GPU metrics: {e}")
-            return None
+        rows = await asyncio.to_thread(query_nvidia_gpus, METRICS_QUERY_FIELDS)
+        return self._gpu_metrics_from_row(rows[0]) if rows else None
 
     async def collect_npu_metrics(self) -> NPUMetrics | None:
         """Collect Intel NPU performance metrics"""

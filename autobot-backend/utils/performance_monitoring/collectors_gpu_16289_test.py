@@ -2,32 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""HardwarePerformanceMonitor sees any NVIDIA GPU, not only an RTX 4070 (#16289)."""
+"""GPUCollector parses each GPU's row on its own and still returns the first (#16289).
+
+Reporting every GPU to the consumers is #16297; this pins that the first GPU's
+metrics are built from the first row alone.
+"""
 
 import asyncio
 from unittest.mock import patch
 
 from autobot_shared.gpu_telemetry import METRICS_QUERY_FIELDS
-from utils.hardware_metrics import HardwarePerformanceMonitor
-
-
-def _available(rows) -> bool:
-    monitor = HardwarePerformanceMonitor.__new__(HardwarePerformanceMonitor)
-    with patch("utils.hardware_metrics.query_nvidia_gpus", return_value=rows):
-        return monitor._check_gpu_availability()
-
-
-def test_a_gpu_other_than_an_rtx_4070_is_available():
-    assert _available([{"name": "NVIDIA RTX A2000"}]) is True
-
-
-def test_no_nvidia_smi_is_unavailable():
-    assert _available(None) is False
-
-
-def test_nvidia_smi_reporting_no_gpu_is_unavailable():
-    assert _available([]) is False
-
+from utils.performance_monitoring.collectors import GPUCollector
 
 FIRST = dict(
     zip(
@@ -104,20 +89,32 @@ def _fields(metrics) -> dict:
     return {name: getattr(metrics, name) for name in FIRST_METRICS}
 
 
-def _collect(rows):
-    monitor = HardwarePerformanceMonitor.__new__(HardwarePerformanceMonitor)
-    monitor.gpu_available = True
-    with patch("utils.hardware_metrics.query_nvidia_gpus", return_value=rows):
-        return asyncio.run(monitor.collect_gpu_metrics())
+def _collect(rows, available=True):
+    with patch("utils.performance_monitoring.collectors.query_nvidia_gpus", return_value=rows) as query:
+        metrics = asyncio.run(GPUCollector(available).collect())
+    return metrics, query
 
 
-def test_collect_builds_the_first_gpu_from_its_own_row_and_the_second_leaks_nothing():
-    assert _fields(_collect([FIRST, SECOND])) == FIRST_METRICS
+def test_the_first_gpu_is_built_from_its_own_row_and_the_second_leaks_nothing():
+    metrics, _ = _collect([FIRST, SECOND])
+
+    assert _fields(metrics) == FIRST_METRICS
 
 
-def test_collect_yields_nothing_for_an_unreadable_core_value():
-    assert _collect([{**FIRST, "memory.total": "[N/A]"}]) is None
+def test_an_unreadable_core_value_yields_no_metrics():
+    metrics, _ = _collect([{**FIRST, "temperature.gpu": "[N/A]"}])
+
+    assert metrics is None
 
 
-def test_collect_yields_nothing_without_nvidia_smi():
-    assert _collect(None) is None
+def test_no_nvidia_smi_yields_no_metrics():
+    metrics, _ = _collect(None)
+
+    assert metrics is None
+
+
+def test_an_unavailable_gpu_is_never_queried():
+    metrics, query = _collect([FIRST], available=False)
+
+    assert metrics is None
+    query.assert_not_called()

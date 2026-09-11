@@ -55,6 +55,14 @@ class TestNvidiaParsing:
         assert [row["index"] for row in rows] == ["0"]
         assert rows[0]["name"] == "NVIDIA GeForce RTX 4070 Laptop GPU"
 
+    def test_text_cells_keep_their_value_and_unreadable_ones_become_none(self):
+        assert [gt.parse_nvidia_text(v) for v in (" P2 ", "Active", "[N/A]", "[Not Supported]")] == [
+            "P2",
+            "Active",
+            None,
+            None,
+        ]
+
 
 class TestRunVendorTool:
     def test_a_missing_tool_is_none_and_nothing_is_spawned(self):
