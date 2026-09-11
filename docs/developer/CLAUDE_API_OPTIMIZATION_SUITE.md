@@ -3,7 +3,7 @@
 > **Canonical module:** `autobot-backend/utils/claude_api_integration.py`
 >
 > The former `claude_api_optimization_suite.py` was retired in #10796 (permanently broken
-> import from the SLM-only `monitoring.claude_api_monitor`; zero callers). All unique logic
+> import from the SLM-only `monitoring.claude_api_monitor`, since retired in #16282; zero callers). All unique logic
 > — `OptimizationMode` enum, `OptimizationMetrics` dataclass, TodoWrite optimization,
 > graceful degradation, tool-pattern analysis, dynamic mode switching — has been folded into
 > the canonical module.

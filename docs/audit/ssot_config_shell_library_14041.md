@@ -63,7 +63,7 @@ Found by the full-tree sweep, outside `autobot-infrastructure/` (14):
 `scripts/service-auth/validate-service-auth.sh`,
 `scripts/service-auth/circuit-breaker-ramp.sh`,
 `scripts/service-auth/emergency-rollback.sh`,
-`autobot-slm-backend/monitoring/start_monitoring.sh`,
+`autobot-slm-backend/monitoring/start_monitoring.sh` (since retired, #16282),
 `autobot-slm-backend/ansible/deploy.sh`,
 `autobot-slm-backend/ansible/deploy-native.sh`,
 `autobot-slm-backend/ansible/deploy-hybrid.sh`,
