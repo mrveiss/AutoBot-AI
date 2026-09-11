@@ -317,7 +317,9 @@ def test_same_second_reruns_do_not_collide_on_filename(module, tmp_path, monkeyp
     second = module._save_backup(_fake_generated_keys(), "127.0.0.1", "6379", str(output_dir))
 
     assert first != second
-    assert first.exists()
+    # The default keep count is 1, so the second write prunes the first by
+    # design; what matters is that the second write did not collide.
+    assert not first.exists()
     assert second.exists()
     # Lexicographic filename order must still agree with generation order.
     assert sorted([first.name, second.name]) == [first.name, second.name]
