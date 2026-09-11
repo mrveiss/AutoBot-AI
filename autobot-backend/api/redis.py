@@ -10,19 +10,20 @@ Exposes diagnostic routes for inspecting Redis connectivity, memory usage,
 and runtime configuration without direct redis-cli access.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_system import (
     RedisConfigResponse,
     RedisConnectionStatusResponse,
 )
 from api.system_health import register_redis_probe
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.config_service import ConfigService
 from utils.connection_utils import ConnectionTester
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
 logger = get_logger(__name__)
 

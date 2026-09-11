@@ -34,15 +34,11 @@ from repo_tests.router_auth_enumerator import (
 #: rather than the fixes waiting on a guard that does not exist yet.
 KNOWN_UNGATED: frozenset[str] = frozenset(
     {
-        "api.developer",
         "api.frontend_config",
         "api.knowledge_search",
         "api.knowledge_search_aggregator",
         "api.knowledge_suggestions",
-        "api.redis",
         "api.transcriber",
-        "api.wake_word",
-        "services.knowledge_sync_service",
     }
 )
 
