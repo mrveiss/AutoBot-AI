@@ -7,7 +7,10 @@ Tests performance characteristics, resource usage, and scalability
 
 import asyncio
 import os
+import socket
+import sys
 import time
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, Mock, patch
 
 import psutil
@@ -34,25 +37,32 @@ pytestmark = pytest.mark.performance
 
 # #15055: the budgets below are RUNNER-CALIBRATED WORK UNITS, not milliseconds against a hardcoded constant. The
 # doctrine, the unit and the assertion live in `autobot_shared.perf_work_budget` — read its module docstring before
-# changing any number here. In one line: a millisecond ceiling measures the runner, so each budget is a ratio against a
-# fixed slice of pure-Python work timed in the same process, and a uniformly slow runner scales both sides.
-# DERIVATION. Five local runs gave a highest-observed value per site. Run 33156790797 then measured `Config manager
-# startup` at 1.474 units on CI against a local high of 0.459, so ordinary Python work costs ~3.2x more units on that
-# runner; every local figure is converted by that factor before headroom. Headroom on top: 3x where the measurement is
-# large and steady (cv of units under ~12% across the five runs), 8x where it is single-digit microseconds and timer
-# granularity rather than load sets the spread, floored at 0.20 units.
-# ONE SITE KEEPS A WIDE BUDGET ON PURPOSE. `Multimodal processor startup` read 315.602, 177.909 and 114.306 units on
-# runs 33156790797, 33158382218 and 33161132835 — a 2.76x spread in the RATIO, not merely in the milliseconds.
-# Calibration cannot normalise it: the cost is model-file and HF-cache disk I/O and a CPU-bound yardstick does not track
-# a disk-bound numerator, so its budget is 600, ~1.9x the worst reading. Every other site is CPU-shaped, tracks the unit
-# closely, and is held to 8x its highest observation (3x for the large steady ones). Ratchet DOWN as runs report lower —
-# the only direction allowed.
+# changing any number here: a millisecond ceiling measures the runner, so each budget is a ratio against pure-Python
+# work timed in the same process, and a uniformly slow runner scales both sides. DERIVATION: five local runs per
+# site, converted to CI units by the ~3.2x factor run 33156790797 measured for `Config manager startup`, then given
+# headroom (3x large/steady, 8x single-digit-microsecond, floored at 0.20 units).
+# ONE SITE HAS NO BUDGET HERE AT ALL (#15055, #15235): `Multimodal processor startup` is disk-bound (CLIP + BLIP-2
+# loaded every construction), so a CPU work-unit ratio can't track it. #15342's re-based 2200 budget still failed
+# three later CI runs (33368810264, 33364129751, 33579228276: 2327/4348/3743 units) with no code change; a baseline
+# ratio can't replace it either (it would time its own numerator as the baseline). See
+# `test_system_startup_performance` for the deterministic check that replaced it. Ratchet DOWN elsewhere only.
 
 
 @pytest.fixture(autouse=True)
 def _record_work_units(record_property):
     """#15055: send every measurement to the junit XML, green runs included."""
     with recording_work_units(record_property):
+        yield
+
+
+@contextmanager
+def _blocked_sockets():
+    """Raise on any outbound network connection, for the scope of a `with` block (#15055)."""
+
+    def _refuse_connect(*_args, **_kwargs):
+        raise OSError("network access blocked for a warm-construction no-network check (#15055)")
+
+    with patch.object(socket.socket, "connect", side_effect=_refuse_connect):
         yield
 
 
@@ -336,36 +346,15 @@ class TestSystemPerformanceBenchmarks:
                 os.environ.pop(name, None)
 
     @pytest.mark.asyncio
-    async def test_system_startup_performance(self):
+    async def test_system_startup_performance(self, record_property):
         """Test system component startup performance.
 
-        #15055: each component is constructed ONCE before the clock starts, and
-        the budget is measured on a second construction.
-
-        The discarded construction is what makes the number mean "startup".
-        `MultiModalProcessor.__init__` calls `_get_torch()`, so the first
-        construction in a worker also pays a one-time lazy `import torch` that
-        belongs to the interpreter, happens once per process, and lands on
-        whichever test constructs first — a cost that moves with test ordering
-        rather than with this code. The same holds for `ConfigManager` and
-        `MemoryManager`, whose first construction primes module-level caches and
-        singletons. The second construction is the per-instance cost, which is
-        what a "component startup" budget means and what a regression moves: an
-        eager model load, a network call or a file read added to `__init__` is
+        #15055: each component is constructed ONCE before the clock starts; the budget is measured on a second
+        construction. The discarded first pays one-time costs (lazy `import torch`, primed module caches/
+        singletons for `ConfigManager`/`MemoryManager`) that belong to the interpreter or worker ordering, not
+        to this code. The second construction is the per-instance cost, which is what "component startup" means
+        and what a regression moves: an eager model load, a network call or a file read added to `__init__` is
         paid on EVERY construction, so it lands here.
-
-        MEASURED, and not what the old constant assumed. Run 33156790797 put the
-        WARM construction at 466.351ms — 315.602 work units. The one-time import
-        was therefore only a small part of the old 538.9ms reading: the
-        constructor genuinely costs most of that on EVERY instantiation, so the
-        500ms constant sat ~7% above the real per-construction cost, and a budget
-        with 7% of headroom does not need runner weather to be a coin toss. That
-        is the second defect behind the same symptom, and it is why raising the
-        constant would have bought a green run or two and no more. The 466ms is
-        recorded as suspect rather than blessed: #15054 has `VisionProcessor`'s
-        CLIP load raising `TypeError` on the pinned transformers, so this is
-        timed on an error path, and the budget is a ceiling to ratchet DOWN once
-        that lands.
         """
         ConfigManager()  # discard: primes module-level caches, not startup cost
         start_time = time.perf_counter()
@@ -375,15 +364,22 @@ class TestSystemPerformanceBenchmarks:
         assert isinstance(config_manager, ConfigManager), "ConfigManager() returned no instance to time"
         assert_within_work_budget(config_startup_time, 8.0, "Config manager startup")
 
-        MultiModalProcessor()  # discard: pays the one-time lazy `import torch`
-        start_time = time.perf_counter()
-        processor = MultiModalProcessor()
-        processor_startup_time = (time.perf_counter() - start_time) * 1000
+        MultiModalProcessor()  # discard: pays the one-time lazy `import torch`, caches CLIP + BLIP-2 on disk
 
-        # First-observation ceiling: 315.602 units measured on run 33156790797,
-        # on #15054's error path. Ratchet DOWN, never up.
+        # #15055, #15235: work-unit and baseline-ratio budgets are both unsound here — CLIP + `blip2-opt-2.7b`
+        # load from disk every construction (I/O, not CPU), and a baseline ratio would time the SAME construction
+        # as its own baseline. A WARM construction instead promises no NEW import and no network call
+        # (`huggingface_hub` falls back to its on-disk cache on a connection error) — a deterministic pass/fail.
+        modules_before_warm_construction = set(sys.modules)
+        start_time = time.perf_counter()
+        with _blocked_sockets():
+            processor = MultiModalProcessor()
+        processor_startup_time = (time.perf_counter() - start_time) * 1000
+        new_imports = sorted(set(sys.modules) - modules_before_warm_construction)
+
         assert isinstance(processor, MultiModalProcessor), "MultiModalProcessor() returned no instance to time"
-        assert_within_work_budget(processor_startup_time, 2200.0, "Multimodal processor startup")  # #15342
+        assert not new_imports, f"Multimodal processor startup imported {new_imports} on the WARM construction (#15055)"
+        record_property("perf_multimodal_processor_startup_ms", processor_startup_time)
 
         # Test memory manager startup
         MemoryManager()  # discard: primes the shared memory backend
