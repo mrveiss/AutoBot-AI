@@ -25,6 +25,10 @@ Changed-lines scoping (#16178):
   it is also what used to fail a change for a model it never touched. Scoped, a
   pre-existing model is listed as not counted rather than hidden, and a git
   failure fails the run rather than reading as "added nothing".
+  Under pre-commit's --from-ref/--to-ref (CI's enforce-precommit job) nothing is
+  staged, so the hook reads PRE_COMMIT_FROM_REF..HEAD instead. A file passed but
+  not staged (``--all-files``, ``--files``) has no change to scope to and is
+  judged whole-file.
 
 Where a model goes — companion modules, not a re-split (owner ruling, #16178):
   The seven original domain modules (schemas_agent, _analytics, _chat, _code,
@@ -50,13 +54,14 @@ from __future__ import annotations
 import argparse
 import ast
 import importlib.util
+import os
 import sys
 from pathlib import Path
 from typing import List, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import PY_FLOOR, added_lines, enforce_reach, scan_python_files  # noqa: E402
+from _scan_helpers import PY_FLOOR, added_lines, enforce_reach, scan_python_files, staged_paths  # noqa: E402
 
 HOOK_ID = "no-local-schemas"
 
@@ -159,20 +164,29 @@ def _collect_hits(files: Sequence[Path], repo_root: Path) -> List[Hit]:
     return hits
 
 
-def _split_by_added(hits: List[Hit], repo_root: Path, base: str | None) -> Tuple[List[Hit], List[Hit]]:
-    """Partition *hits* into (added by this change, pre-existing).
+def _split_by_added(hits: List[Hit], repo_root: Path, base: str | None) -> Tuple[List[Hit], List[Hit], List[str]]:
+    """Partition *hits* into (added by this change, pre-existing), plus files judged whole.
 
     Only files that have a hit cost a git call. A model counts as added when its
-    ``class`` line is one the change added — the line that defines it.
+    ``class`` line is one the change added. In staged mode a file with no staged
+    change at all is not part of the commit, so an empty diff for it is not
+    "nothing added": its hits are counted and the file reported as unscoped.
     """
+    staged = staged_paths(repo_root) if base is None else None
     added: dict[str, set[int]] = {}
     new: List[Hit] = []
     earlier: List[Hit] = []
+    unscoped: List[str] = []
     for rel, line, name in hits:
+        if staged is not None and rel not in staged:
+            new.append((rel, line, name))
+            if rel not in unscoped:
+                unscoped.append(rel)
+            continue
         if rel not in added:
             added[rel] = added_lines(repo_root, rel, base)
         (new if line in added[rel] else earlier).append((rel, line, name))
-    return new, earlier
+    return new, earlier, unscoped
 
 
 def _load_module(repo_root: Path, rel: str):
@@ -235,18 +249,31 @@ def _report(new: List[Hit], earlier: List[Hit], repo_root: Path) -> int:
     return 1
 
 
+def _resolve_base(explicit: str | None) -> str | None:
+    """The range to scope to: an explicit --base, else the one pre-commit ran with.
+
+    ``pre-commit run --from-ref A --to-ref B`` stages nothing, so the staged diff is
+    empty and every model would read as pre-existing. pre-commit exports the range
+    as PRE_COMMIT_FROM_REF (commands/run.py); FROM_REF..HEAD then describes the
+    checked-out tree the hook is actually reading (#16178).
+    """
+    return explicit or os.environ.get("PRE_COMMIT_FROM_REF") or None
+
+
 def run(files: Sequence[Path], repo_root: Path, *, changed_only: bool, base: str | None) -> int:
     """Check *files* under *repo_root*. Whether to scope is the caller's to state."""
     hits = _collect_hits(files, repo_root)
     if not changed_only:
         return _report(hits, [], repo_root)
     try:
-        new, earlier = _split_by_added(hits, repo_root, base)
+        new, earlier, unscoped = _split_by_added(hits, repo_root, base)
     except RuntimeError as exc:
         print(
             f"[{HOOK_ID}] FATAL: could not compute the added-line set, refusing to report clean: {exc}", file=sys.stderr
         )
         return 1
+    for rel in unscoped:
+        print(f"[{HOOK_ID}] {rel}: not staged, so there is no change to scope to; judged whole-file", file=sys.stderr)
     return _report(new, earlier, repo_root)
 
 
@@ -271,7 +298,7 @@ def main(argv: List[str]) -> int:
     # hands this hook an argv with no Python in it.
     if enforce_reach(len(files), PY_FLOOR, hook=HOOK_ID, full_repo=full_repo):
         return 1
-    return run(files, repo_root, changed_only=args.changed_lines_only, base=args.base)
+    return run(files, repo_root, changed_only=args.changed_lines_only, base=_resolve_base(args.base))
 
 
 if __name__ == "__main__":

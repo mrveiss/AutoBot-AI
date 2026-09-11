@@ -344,3 +344,14 @@ def added_lines(repo_root: Path, rel: str, base: str | None = None) -> set[int]:
             count = 1 if match.group(2) is None else int(match.group(2))
             lines.update(range(start, start + count))
     return lines
+
+
+def staged_paths(repo_root: Path) -> set[str]:
+    """Repo-relative paths with staged changes, rename destinations included.
+
+    A scoped hook asks this before trusting an empty staged diff. A file that is
+    not staged at all is not part of the change being committed -- the run is
+    ``pre-commit run --all-files`` or ``--files`` -- so there is no change to scope
+    it to, and "nothing added" would be a verdict nobody examined (#16178).
+    """
+    return {path for path in _git_diff(repo_root, ["--cached", "--name-only", "-z"]).split("\0") if path}

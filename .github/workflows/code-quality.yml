@@ -314,8 +314,9 @@ jobs:
 
     - name: Block new local BaseModel definitions in API files (#6056, #16178)
       # --changed-lines-only (#16178), and unlike the two scoped steps above, the
-      # pre-commit stage is scoped too: this hook had no CI step and no baseline,
-      # so its whole-file read blocked the commit itself, failing a change for a
+      # pre-commit stage is scoped too: this hook had no baseline and no blocking
+      # CI step (enforce-precommit.yml runs every hook, but only as warnings), so
+      # its whole-file read blocked the commit itself, failing a change for a
       # model it neither added nor could move (every original domain schemas_*.py
       # is frozen at its size ceiling). With --python the wrapper cannot parse the
       # validator's output, so it hands over the base it resolved and the hook

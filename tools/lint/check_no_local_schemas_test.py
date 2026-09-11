@@ -366,6 +366,27 @@ def test_a_rename_in_a_committed_range_is_followed_too(tmp_path: Path) -> None:
     assert hook.run([moved], repo, changed_only=True, base=base) == 0
 
 
+def test_an_unstaged_file_has_no_change_to_scope_to_and_is_judged_whole(tmp_path: Path, capsys) -> None:
+    """``pre-commit run --all-files`` hands over files that nothing staged.
+
+    An empty staged diff there does not mean "this change added no model": there is
+    no change. Reading it as nothing-added reported every model as pre-existing.
+    """
+    repo, path = _repo_with_legacy_model(tmp_path)
+
+    assert hook.run([path], repo, changed_only=True, base=None) == 1
+    assert "no change to scope to" in capsys.readouterr().err
+
+
+def test_pre_commit_from_ref_becomes_the_base(monkeypatch) -> None:
+    """``--from-ref``/``--to-ref`` stages nothing, so pre-commit's exported range is used instead."""
+    monkeypatch.setenv("PRE_COMMIT_FROM_REF", "abc123")
+    assert hook._resolve_base(None) == "abc123"
+    assert hook._resolve_base("explicit") == "explicit", "an explicit --base wins"
+    monkeypatch.delenv("PRE_COMMIT_FROM_REF")
+    assert hook._resolve_base(None) is None, "with no range, the staged diff is what is scoped"
+
+
 def test_an_unscoped_run_still_reads_the_whole_file(tmp_path: Path) -> None:
     """A direct run is for the backlog, and must still show it."""
     repo, path = _repo_with_legacy_model(tmp_path)
