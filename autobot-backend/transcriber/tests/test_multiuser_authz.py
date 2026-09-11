@@ -21,9 +21,8 @@ import pytest_asyncio
 from fastapi import FastAPI, HTTPException, Request
 from httpx import ASGITransport, AsyncClient
 
-from api.transcripts import _resolve_user_id
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, can_access, get_db
+from transcriber.deps import DEFAULT_USER, authenticate, caller_id_of, can_access, get_db, resolve_user_id
 from transcriber.routes.projects import router as projects_router
 from transcriber.routes.recordings import router as recordings_router
 
@@ -50,6 +49,7 @@ async def client(tmp_path):
 
     await db.connect()
     app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[authenticate] = lambda: None
     app.state.transcriber_upload_dir = str(upload_dir)
     app.include_router(projects_router, prefix="/api/transcriber")
     app.include_router(recordings_router, prefix="/api/transcriber")
@@ -111,26 +111,26 @@ def test_can_access_policy_unit():
     assert can_access({"user_id": ""}, "bob") is False
 
 
-def test_resolve_user_id_returns_real_identity():
-    """_resolve_user_id: returns user_id or username when present."""
-    assert _resolve_user_id({"user_id": "alice"}) == "alice"
-    assert _resolve_user_id({"username": "bob"}) == "bob"
+def testresolve_user_id_returns_real_identity():
+    """resolve_user_id: returns user_id or username when present."""
+    assert resolve_user_id({"user_id": "alice"}) == "alice"
+    assert resolve_user_id({"username": "bob"}) == "bob"
     # user_id takes precedence over username
-    assert _resolve_user_id({"user_id": "alice", "username": "other"}) == "alice"
+    assert resolve_user_id({"user_id": "alice", "username": "other"}) == "alice"
 
 
-def test_resolve_user_id_raises_when_no_identity():
-    """_resolve_user_id: raises 403 — never silently returns DEFAULT_USER (#9968)."""
+def testresolve_user_id_raises_when_no_identity():
+    """resolve_user_id: raises 403 — never silently returns DEFAULT_USER (#9968)."""
     with pytest.raises(HTTPException) as exc_info:
-        _resolve_user_id({})
+        resolve_user_id({})
     assert exc_info.value.status_code == 403
 
     with pytest.raises(HTTPException) as exc_info:
-        _resolve_user_id({"user_id": None, "username": None})
+        resolve_user_id({"user_id": None, "username": None})
     assert exc_info.value.status_code == 403
 
     with pytest.raises(HTTPException) as exc_info:
-        _resolve_user_id({"user_id": "", "username": ""})
+        resolve_user_id({"user_id": "", "username": ""})
     assert exc_info.value.status_code == 403
 
 
@@ -333,3 +333,39 @@ class TestTheFixtureDoesNotLeakConnections:
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "connect":
                     found += 1
         assert found >= 8, f"expected the directory's Database.connect() calls, found {found}"
+
+
+def test_can_access_admin_reaches_only_default_rows():
+    """#15758: an admin may reach DEFAULT_USER rows, and no other row it does not own."""
+    assert can_access({"user_id": DEFAULT_USER}, "admin-1", is_admin=True) is True
+    assert can_access({"user_id": "alice"}, "admin-1", is_admin=True) is False
+    assert can_access({"user_id": DEFAULT_USER}, "bob", is_admin=False) is False
+    assert can_access({"user_id": "admin-1"}, "admin-1", is_admin=True) is True
+
+
+def test_caller_id_of_fails_closed_without_identity():
+    """#15758: no recorded identity is a 401, never a fallback to DEFAULT_USER."""
+    request = SimpleNamespace(state=SimpleNamespace())
+    with pytest.raises(HTTPException) as exc_info:
+        caller_id_of(request)
+    assert exc_info.value.status_code == 401
+
+
+def test_authenticate_records_identity_and_admin_flag():
+    """#15758: the router dependency resolves the caller and whether it is an admin."""
+    request = SimpleNamespace(state=SimpleNamespace())
+    authenticate(request, {"user_id": "alice", "role": "admin"})
+    assert request.state.user.id == "alice"
+    assert request.state.user.is_admin is True
+    authenticate(request, {"user_id": "bob", "role": "user"})
+    assert request.state.user.id == "bob"
+    assert request.state.user.is_admin is False
+
+
+def test_every_transcriber_router_requires_authentication():
+    """#15758: each mounted sub-router carries the authenticate dependency."""
+    from transcriber.routes import ai, export, kb, projects, providers, recordings, transcripts
+
+    for module in (ai, export, kb, projects, providers, recordings, transcripts):
+        deps = [d.dependency for d in module.router.dependencies]
+        assert authenticate in deps, f"{module.__name__} is mounted without authentication"

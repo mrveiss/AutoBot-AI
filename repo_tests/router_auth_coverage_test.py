@@ -40,7 +40,6 @@ KNOWN_UNGATED: frozenset[str] = frozenset(
         "api.knowledge_search_aggregator",
         "api.knowledge_suggestions",
         "api.redis",
-        "api.transcriber",
         "api.wake_word",
         "services.knowledge_sync_service",
     }
