@@ -122,6 +122,12 @@ runs:
     #   apt also retries a failed fetch itself, and drops a connection that
     #   has sent nothing for a while.
     # - Between attempts, `dpkg --configure -a` repairs an interrupted unpack.
+    # - `apt-get update` is advisory. The runner image carries third-party
+    #   sources this step never installs from, and one of them failing fails
+    #   update even when the Ubuntu indexes arrived: a Hash Sum mismatch on
+    #   dl.google.com's Chrome repository failed all twelve shards of five runs
+    #   that way on 2026-09-09. So an exhausted update warns and the installs,
+    #   which fail if the Ubuntu indexes are really missing, stay the gate.
     # - Each failure names its step and apt's own exit code, saved before
     #   anything else runs. The last one is an annotation titled as a
     #   provisioning failure, so a red shard that ran no tests says so.
@@ -161,6 +167,7 @@ runs:
         readonly TIMEOUT_KILLED=124       # coreutils timeout's exit status when it kills
 
         # apt_retry LABEL COMMAND...: up to APT_ATTEMPTS tries (#15515, above).
+        # With APT_ADVISORY=1 an exhausted command warns and returns 0.
         apt_retry() {
           local label=$1 attempt rc=0 why=""
           shift
@@ -175,6 +182,10 @@ runs:
             timeout "$APT_TIMEOUT_S" sudo dpkg --configure -a || echo "apt: dpkg --configure -a exited $?; the next attempt reports why" >&2
             sleep $((attempt * APT_BACKOFF_S))
           done
+          if [ "${APT_ADVISORY:-0}" = 1 ]; then
+            echo "::warning title=apt ${label} failed (continuing)::${label} failed ${APT_ATTEMPTS} times, last exit ${rc}${why}; the installs decide" >&2
+            return 0
+          fi
           echo "::error title=CI toolchain provisioning failed (no tests ran)::${label} failed ${APT_ATTEMPTS} times, last exit ${rc}${why}" >&2
           return 1
         }
@@ -187,7 +198,7 @@ runs:
           "DPkg::Lock::Timeout \"${APT_LOCK_WAIT_S}\";" \
           | sudo tee /etc/apt/apt.conf.d/80-ci-provisioning >/dev/null
 
-        apt_retry "update" timeout "$APT_TIMEOUT_S" sudo apt-get update -qq
+        APT_ADVISORY=1 apt_retry "update" timeout "$APT_TIMEOUT_S" sudo apt-get update -qq
         apt_retry "download ffmpeg" timeout "$APT_TIMEOUT_S" sudo apt-get install -y --download-only --no-install-recommends ffmpeg
         apt_retry "download tesseract-ocr" timeout "$APT_TIMEOUT_S" sudo apt-get install -y --download-only tesseract-ocr
         apt_retry "install ffmpeg" timeout "$APT_TIMEOUT_S" sudo apt-get install -y --no-install-recommends ffmpeg

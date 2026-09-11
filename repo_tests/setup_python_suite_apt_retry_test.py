@@ -30,11 +30,12 @@ _STEP = "Install CI system packages (#14550, #13896)"
 _BASH = shutil.which("bash")
 
 #: The apt-get stand-in. ``KILL`` lists the unpack calls (1-based) to kill, or
-#: ``all``. Updates and ``--download-only`` fetches always succeed.
+#: ``all``. ``UPDATE_EXIT`` is what ``update`` returns; ``--download-only`` fetches succeed.
 _APT_GET = r"""
 printf 'apt-get %s\n' "$*" >> "$STATE/calls"
 case " $* " in
-  *" update "*|*" --download-only "*) exit 0 ;;
+  *" update "*) exit "${UPDATE_EXIT:-0}" ;;
+  *" --download-only "*) exit 0 ;;
 esac
 if [ "$(< "$STATE/dpkg")" = interrupted ]; then
   echo "E: dpkg was interrupted, you must manually run 'sudo dpkg --configure -a' to correct the problem." >&2
@@ -68,7 +69,7 @@ def _step_script() -> str:
     return scripts[0]
 
 
-def _run(tmp_path: Path, kill: str) -> Tuple[subprocess.CompletedProcess, List[str], Path]:
+def _run(tmp_path: Path, kill: str, update_exit: str = "0") -> Tuple[subprocess.CompletedProcess, List[str], Path]:
     """Run the step with only the stand-ins on PATH; return the result, the calls made, and the state dir."""
     bin_dir, state = tmp_path / "bin", tmp_path / "state"
     bin_dir.mkdir()
@@ -81,7 +82,7 @@ def _run(tmp_path: Path, kill: str) -> Tuple[subprocess.CompletedProcess, List[s
         (state / name).write_text(value, encoding="utf-8")
     result = subprocess.run(  # nosec B603  # fixed argv: bash and the action's own step script
         [_BASH, "-c", _step_script()],
-        env={"PATH": str(bin_dir), "STATE": str(state), "KILL": kill},
+        env={"PATH": str(bin_dir), "STATE": str(state), "KILL": kill, "UPDATE_EXIT": update_exit},
         capture_output=True,
         text=True,
         timeout=60,
@@ -130,3 +131,13 @@ def test_both_packages_are_downloaded_before_dpkg_unpacks_anything(tmp_path: Pat
     conf = (state / "apt.conf").read_text(encoding="utf-8")
     assert 'Acquire::Retries "3";' in conf and 'Acquire::http::Timeout "30";' in conf
     assert "Error-Mode" not in conf, "a failing third-party index on the runner image must not fail a shard"
+
+
+def test_a_failing_update_warns_and_the_installs_still_decide(tmp_path: Path) -> None:
+    """The 2026-09-09 shape: a third-party index fails ``update`` on every try, and the shard must not die there."""
+    result, calls, _ = _run(tmp_path, kill="", update_exit="100")
+
+    assert result.returncode == 0, result.stderr
+    assert "::warning title=apt update failed (continuing)::update failed 3 times, last exit 100" in result.stderr
+    assert "::error" not in result.stderr
+    assert sum(call.startswith("apt-get install") for call in calls) == 4, calls
