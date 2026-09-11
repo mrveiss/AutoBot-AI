@@ -300,5 +300,45 @@ class TestGUIControllerPlatformGate:
         assert reloaded.GUI_AUTOMATION_SUPPORTED is False
 
 
+class TestNvidiaSmiDetails:
+    """#16289: WorkerNode reads GPU details through autobot_shared.gpu_telemetry."""
+
+    RTX = {
+        "name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+        "memory.total": "8188",
+        "memory.used": "141",
+        "memory.free": "8047",
+        "utilization.gpu": "3",
+        "utilization.memory": "1",
+    }
+
+    @staticmethod
+    def _details(rows):
+        with patch("worker_node.query_nvidia_gpus", return_value=rows):
+            return WorkerNode._get_nvidia_smi_details(WorkerNode.__new__(WorkerNode))
+
+    def test_each_gpu_row_becomes_its_own_entry(self):
+        second = {**self.RTX, "name": "NVIDIA RTX A2000", "memory.total": "6138"}
+
+        details = self._details([self.RTX, second])
+
+        assert [entry["name"] for entry in details] == ["NVIDIA GeForce RTX 4070 Laptop GPU", "NVIDIA RTX A2000"]
+        assert details[0] == {
+            "name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+            "memory_total_mb": 8188,
+            "memory_used_mb": 141,
+            "memory_free_mb": 8047,
+            "gpu_util_percent": 3,
+            "mem_util_percent": 1,
+        }
+        assert details[1]["memory_total_mb"] == 6138
+
+    def test_a_gpu_with_an_unreadable_value_is_skipped(self):
+        assert self._details([{**self.RTX, "memory.total": "[N/A]"}]) == []
+
+    def test_no_nvidia_smi_is_no_details(self):
+        assert self._details(None) == []
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
