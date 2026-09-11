@@ -19,7 +19,6 @@ from pathlib import Path
 
 import pytest
 
-import services.llm_service as llm_service_module
 from chat_history.context_overflow import ConversationSummarizer, SummarizationFailed
 from llm_shared.models import LLMResponse
 
@@ -38,9 +37,17 @@ class _RecordingService:
         return self._response
 
 
-def _serve(monkeypatch, service: _RecordingService) -> _RecordingService:
-    """Make the accessor ``_get_gateway`` imports hand back *service*."""
-    monkeypatch.setattr(llm_service_module, "get_llm_service", lambda: service, raising=False)
+def _serve(monkeypatch, service):
+    """Make the accessor ``_get_gateway`` imports hand back *service*.
+
+    Patched on the object ``importlib.import_module`` returns, which is the
+    ``sys.modules`` entry that ``from services.llm_service import ...`` reads. The
+    root conftest's ``services`` stub has a catch-all ``__getattr__``, so
+    ``import services.llm_service as x`` can bind a different mock, and a patch on
+    that is inert (#12463).
+    """
+    module = importlib.import_module("services.llm_service")
+    monkeypatch.setattr(module, "get_llm_service", lambda: service, raising=False)
     return service
 
 
