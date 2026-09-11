@@ -169,6 +169,7 @@ _WEBSOCKET_AUTH_NAME = "authenticate_websocket"
 _INTENTIONALLY_OPEN = {
     "chat_embed": "api/chat_embed.py:190 -- unauthenticated by design for embed contexts (GH#9047)",
     "jwks_auth": "api/jwks.py -- public key distribution (RFC 7517); documented unauthenticated by design",
+    "frontend_config": "api/frontend_config.py -- unauthenticated by design, owner ruling on #15745 (#16240)",
 }
 
 # Recorded, not certified -- #15745's own ten. See the module docstring.
@@ -177,15 +178,13 @@ _INTENTIONALLY_OPEN = {
 # reports_to writes additionally carry require_reporting_line_write. Leaving the
 # entry would have recorded a violation that no longer exists, which is the
 # failure #15762 describes from the other side — a record outliving its fix.
+# #16240 did the same for redis, developer, wake_word and knowledge_sync, which
+# it gated admin-only. It also moved frontend_config to _INTENTIONALLY_OPEN
+# above, on the owner's ruling: that entry records a decision, not a pending fix.
 _TRACKED_BY_15745 = {
-    "redis": "api/redis.py",
-    "developer": "api/developer.py",
-    "wake_word": "api/wake_word.py",
-    "knowledge_sync": "services/knowledge_sync_service.py",
     "knowledge_suggestions": "api/knowledge_suggestions.py",
     "knowledge_search": "api/knowledge_search.py",
     "knowledge_search_aggregator": "api/knowledge_search_aggregator.py",
-    "frontend_config": "api/frontend_config.py",
     "voice_stream": "api/voice_stream.py",
 }
 
