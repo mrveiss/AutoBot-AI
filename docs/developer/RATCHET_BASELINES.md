@@ -172,6 +172,20 @@ cannot distinguish *"the subject is broken"* from *"I measured wrong"* — and a
 surviving mutant is the more dangerous of the two, because it presents as a
 finding rather than as a silence.
 
+### 7. Pin the quantity the rule limits, not a ratio of it
+
+A ratio moves when its denominator moves. duplication-guard pinned jscpd's
+duplicated-lines **percentage** one hundredth above its measurement, and #16308
+failed it by deleting about 4.5k lines of dead code. It kept the same 135
+clones and the same 4,729 duplicated lines, but scanned 255,420 lines instead
+of 259,937, and that reads as 1.85% against a 1.82% pin. The rule was "no new
+duplication". The gate measured duplication per line of code, and deleting
+unique code raises that. #16319 moved both scopes to the absolute
+duplicated-line count.
+
+Before freezing a ratio, ask whether a change the rule should welcome can move
+it: deleting unrelated code, or splitting a file.
+
 ## Worked example — the one that passes
 
 `repo_tests/python_file_size_ratchet_baseline.py`, measured against
@@ -255,3 +269,4 @@ rather than coverage.
 - [ ] That comparison was over **sets**, not counts
 - [ ] The second derivation replicated the predicate — anchoring, exemptions, and all
 - [ ] Both the detector and the re-derivation have a known positive they must find before their output is read
+- [ ] The pinned quantity is the one the rule limits, so a change the rule should welcome cannot move it
